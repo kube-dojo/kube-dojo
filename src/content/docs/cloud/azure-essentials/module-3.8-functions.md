@@ -501,7 +501,7 @@ You would configure a single Blob Storage trigger to initiate the function execu
 <details>
 <summary>3. Your media processing application uses a Blob trigger function to resize user profile pictures. Users are complaining that it takes up to a minute for their new profile picture to appear after uploading. What is causing this delay, and how can you re-architect the trigger to solve it?</summary>
 
-The delay is caused by the Blob trigger's internal polling mechanism, which periodically scans the storage container for new or modified blobs. Because it operates on a polling schedule (often every 10 to 60 seconds), it cannot provide immediate execution upon upload. To solve this and achieve real-time processing, you should switch from a Blob trigger to an Event Grid trigger. By configuring the storage account to emit an event to Event Grid the moment a blob is created, the function will be triggered instantly. This completely eliminates the polling delay and ensures profile pictures update immediately for a better user experience.
+The delay is caused by the Blob trigger's internal polling mechanism, which periodically scans the storage container for new or modified blobs. Because it operates on a polling schedule (often every 10 to 60 seconds), it cannot provide immediate execution upon upload. To solve this and achieve real-time processing, you should switch from a Blob trigger to an Event Grid trigger. By configuring the storage account to emit an event to Event Grid the moment a blob is created, the function will usually be triggered within seconds. This removes the polling delay and helps profile pictures update much faster for a better user experience.
 </details>
 
 <details>
@@ -513,7 +513,7 @@ Regular Azure Functions are stateless and have a maximum execution time limit (u
 <details>
 <summary>5. Your web application experiences massive, unpredictable traffic spikes on Black Friday, jumping from zero requests to thousands of requests per second instantly. You are debating between using the Consumption plan and the Premium plan to handle this API. How would the scaling behavior differ between the two plans during this spike?</summary>
 
-On the Consumption plan, Azure manages scaling automatically by rapidly allocating new workers from a shared pool to handle the incoming requests, allowing it to scale from zero to hundreds of instances. However, this reactive scaling introduces cold starts, meaning the first wave of users will experience significant latency while new instances boot up. On the Premium plan, you configure a minimum number of always-warm instances and a maximum burst count. When the spike hits, the pre-warmed instances handle the initial load instantly without cold starts. Azure then rapidly scales out additional instances up to your defined maximum limit, providing a much smoother and faster scaling response.
+On the Consumption plan, Azure manages scaling automatically by rapidly allocating new workers from a shared pool to handle the incoming requests, allowing it to scale from zero to hundreds of instances. However, this reactive scaling introduces cold starts, meaning the first wave of users will experience significant latency while new instances boot up. On the Premium plan, you configure a minimum number of always-warm instances and a maximum burst count. When the spike hits, the pre-warmed instances handle the initial load with much lower startup latency and avoid most cold starts. Azure then rapidly scales out additional instances up to your defined maximum limit, providing a much smoother and faster scaling response.
 </details>
 
 <details>
@@ -812,3 +812,9 @@ rm -rf /tmp/functions-lab /tmp/test-data.json /tmp/readme.txt
 ## Next Module
 
 [Module 3.9: Azure Key Vault](../module-3.9-key-vault/) --- Learn how to securely manage secrets, encryption keys, and certificates with Azure Key Vault, and integrate it with your applications using Managed Identities.
+
+## Sources
+
+- [Azure Functions hosting options](https://learn.microsoft.com/en-us/azure/azure-functions/functions-scale) — This is the primary Microsoft comparison for Consumption, Flex Consumption, Premium, and Dedicated hosting behavior.
+- [Azure Functions triggers and bindings](https://learn.microsoft.com/en-us/azure/azure-functions/functions-triggers-bindings) — It explains the trigger and binding model that underpins most of the module's examples.
+- [Durable Functions overview](https://learn.microsoft.com/en-us/azure/azure-functions/durable-functions/durable-functions-overview) — It is the best starting point for orchestration patterns, checkpoints, and long-running workflow behavior.

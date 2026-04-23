@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2017, a defense contractor accidentally exposed the personal information, security clearance details, and passwords of thousands of government employees. The data was not exfiltrated through a complex network breach. It was sitting in an Amazon S3 bucket named `defense-contractor-internal-data`. The bucket's permissions had been casually modified by a developer trying to fix a deployment script, unintentionally granting `READ` access to the `AllUsers` group—effectively making it public to the entire internet. Anyone who could guess the URL could download the files. The data remained exposed for months before a security researcher found it.
+Publicly accessible S3 buckets have repeatedly exposed sensitive data when administrators or applications granted overly broad access. In practice, a single misconfigured bucket policy or ACL can turn private data into an internet-readable exposure until someone detects and fixes it.
 
-Amazon Simple Storage Service (S3) is the foundational storage layer of the cloud. It is infinitely scalable, highly durable, and handles trillions of objects globally. Because it is so accessible and easy to use, it is the standard destination for application assets, database backups, massive data lakes, and static website hosting.
+Amazon Simple Storage Service (S3) is the foundational storage layer of the cloud. It is infinitely scalable, [highly durable, and handles trillions of objects globally](https://aws.amazon.com/s3). Because it is so accessible and easy to use, it is the standard destination for application assets, database backups, massive data lakes, and static website hosting.
 
 However, this accessibility is a double-edged sword. S3 sits squarely on the public internet by default (in terms of network routing, not permissions). A single misconfigured bucket policy can turn a private data repository into a public data breach instantly. In this module, you will learn the mechanics of object storage versus traditional file storage. You will master the security layers that protect S3 data, implement lifecycle rules to automate cost-saving archiving strategies, and learn how to generate secure, time-limited access mechanisms to share objects without exposing your buckets.
 
@@ -43,7 +43,7 @@ S3 is **Object Storage**. It operates fundamentally differently:
 | **Structure** | Hierarchical (dirs/files) | Raw blocks on a disk | Flat namespace (keys) |
 | **Access** | NFS/SMB protocol | Mounted to one EC2 | HTTP REST API |
 | **Modify in place** | Yes | Yes | No (full overwrite) |
-| **Max object size** | Limited by disk | Limited by volume | 5 TB per object |
+| **Max object size** | Limited by disk | Limited by volume | Up to 50 TB per object |
 | **Metadata** | Basic (permissions, timestamps) | None (raw blocks) | Rich, custom key-value pairs |
 | **Typical use** | Shared home dirs, CMS | Database volumes, OS disks | Backups, data lakes, static assets |
 | **Durability** | Depends on config | 99.999% (within AZ) | 99.999999999% (11 nines) |
@@ -77,13 +77,13 @@ flowchart TD
 
 **Key rules:**
 - Explicit DENY always wins, anywhere in the chain
-- Cross-account: BOTH bucket policy AND caller IAM must Allow
+- [Cross-account: BOTH bucket policy AND caller IAM must Allow](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html)
 - Same account: Either bucket policy OR IAM Allow is sufficient
 - BPA is the master override for public access attempts
 
 ### 1. S3 Block Public Access (BPA)
 
-This is your master switch. BPA operates at the account or bucket level to override any policy that attempts to make data public. If BPA is turned on (and it is by default for all new buckets), even if an administrator writes a bucket policy explicitly granting `s3:GetObject` to `*` (everyone), S3 will block the request. **Never disable Block Public Access on a bucket unless you are intentionally hosting public web assets.**
+This is your master switch. BPA operates at the account or bucket level to override any policy that attempts to make data public. [If BPA is turned on (and it is by default for all new buckets), even if an administrator writes a bucket policy explicitly granting `s3:GetObject` to `*` (everyone), S3 will block the request.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html) **Never disable Block Public Access on a bucket unless you are intentionally hosting public web assets.**
 
 BPA has four independent settings—you can toggle each one:
 
@@ -169,7 +169,7 @@ Example: enforce encryption on all uploads:
 
 ### 4. Access Control Lists (ACLs)
 
-ACLs are a legacy access control mechanism from before IAM existed. They apply to individual objects or the bucket. AWS strongly recommends disabling ACLs entirely (setting the bucket to "Bucket Owner Enforced") and relying exclusively on IAM and Bucket Policies.
+ACLs are a legacy access control mechanism from before IAM existed. They apply to individual objects or the bucket. [AWS strongly recommends disabling ACLs entirely (setting the bucket to "Bucket Owner Enforced")](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html) and relying exclusively on IAM and Bucket Policies.
 
 ### Bucket Policy vs. ACL vs. IAM — When to Use What
 
@@ -215,8 +215,8 @@ aws s3 presign s3://my-bucket/uploads/user-photo.jpg \
 
 Important details about pre-signed URLs:
 
-- The URL inherits the permissions of the IAM identity that generated it. If that identity loses access, existing pre-signed URLs stop working immediately.
-- Maximum expiration: 7 days when signed by an IAM user, 36 hours when signed by STS temporary credentials (roles).
+- [The URL inherits the permissions of the IAM identity that generated it. If that identity loses access, existing pre-signed URLs typically stop working once that change takes effect.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)
+- Maximum expiration: up to 7 days when generated with the AWS CLI or SDKs using IAM user credentials; URLs signed with temporary credentials expire when those credentials expire.
 - Pre-signed URLs work for both GET (download) and PUT (upload) operations.
 
 > **Stop and think**: You generate a pre-signed URL valid for 7 days using your IAM User credentials. Two days later, your IAM User is deleted by an administrator. What happens when someone tries to use the URL on day 3?
@@ -241,7 +241,7 @@ S3 offers different storage classes designed for different data access patterns.
 
 *Note: Prices are approximate and vary by region. Check the [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/) for current rates.*
 
-**S3 Intelligent-Tiering** deserves special attention. It automatically moves objects between an infrequent-access tier and a frequent-access tier based on usage patterns. It charges a small monthly monitoring fee per object (~$0.0025 per 1,000 objects) but can save significantly on large datasets with unpredictable access patterns. There is no retrieval fee.
+**S3 Intelligent-Tiering** deserves special attention. It automatically moves objects between an infrequent-access tier and a frequent-access tier based on usage patterns. [It charges a small monthly monitoring fee per object (~$0.0025 per 1,000 objects) but can save significantly on large datasets with unpredictable access patterns. There is no retrieval fee.](https://aws.amazon.com/pricing/s3/)
 
 > **Pause and predict**: If you use S3 Intelligent-Tiering for a small bucket with only 50 objects that you access constantly, will you save money compared to S3 Standard?
 
@@ -251,12 +251,12 @@ Suppose you store 10 TB of application logs:
 
 | Strategy | Monthly Cost (approx) |
 | :--- | :--- |
-| All in S3 Standard | $235 |
-| All in S3 Standard-IA | $128 |
-| All in Glacier Deep Archive | $10 |
-| Smart tiering with lifecycle (30/90/365 day transitions) | ~$40-80 depending on access |
+| All in S3 Standard | See current AWS pricing for an exact monthly total |
+| All in S3 Standard-IA | See current AWS pricing for an exact monthly total |
+| All in Glacier Deep Archive | See current AWS pricing for an exact monthly total |
+| Smart tiering with lifecycle (30/90/365 day transitions) | Depends heavily on object size, access, and request patterns |
 
-That is a 75-95% cost reduction by using lifecycle rules intelligently.
+Lifecycle rules can materially reduce storage costs when access patterns and retention windows fit colder tiers.
 
 ### Lifecycle Rules
 
@@ -280,7 +280,7 @@ aws s3api delete-bucket-lifecycle --bucket my-bucket
 
 ### Lifecycle Rule Constraints
 
-There are ordering rules you must follow when transitioning between storage classes. S3 enforces a "waterfall" — you can only transition downward:
+There are ordering rules you must follow when transitioning between storage classes. [S3 enforces a "waterfall" — you can only transition downward](https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-transition-general-considerations.html):
 
 ```mermaid
 flowchart TD
@@ -426,7 +426,7 @@ aws s3api head-object \
 
 ## S3 Encryption
 
-S3 offers multiple encryption options. Since January 2023, **all new objects are encrypted by default** with SSE-S3 (AES-256), even if you do not specify encryption settings.
+S3 offers multiple encryption options. Since January 2023, **[all new objects are encrypted by default](https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-encryption-faq.html)** with SSE-S3 (AES-256), even if you do not specify encryption settings.
 
 | Encryption Type | Key Managed By | When to Use |
 | :--- | :--- | :--- |
@@ -435,7 +435,7 @@ S3 offers multiple encryption options. Since January 2023, **all new objects are
 | **SSE-C** | You (provide key in every request) | Regulatory requirement to hold keys |
 | **Client-side** | You (encrypt before upload) | Zero-trust, end-to-end encryption |
 
-**SSE-KMS** is the most popular choice for enterprises because it integrates with CloudTrail (every key usage is logged) and supports automatic annual key rotation.
+**SSE-KMS** is a common enterprise choice because it integrates with AWS KMS and CloudTrail for auditability, and customer-managed KMS keys can use optional automatic rotation.
 
 ---
 
@@ -460,9 +460,9 @@ GET with `?versionId=abc789` returns the Final draft.
 DELETE the delete marker → restores abc789 as current.
 
 Important versioning behaviors:
-- Versioning cannot be disabled once enabled. You can only **suspend** it (new objects get a null version ID, but existing versions remain).
+- [Versioning cannot be disabled once enabled. You can only **suspend** it](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) (new objects get a null version ID, but existing versions remain).
 - Suspended versioning still preserves previously created versions — it does not delete them.
-- You pay for **every** stored version. A 1 GB file overwritten 100 times = 100 GB of storage.
+- You pay for **every** stored version, so frequent overwrites can multiply storage costs quickly.
 - MFA Delete can require multi-factor authentication to delete versions or change versioning state.
 
 > **Stop and think**: If you have a bucket with 1 million objects, and you enable versioning but never overwrite or delete any existing objects, what happens to your storage bill?
@@ -471,13 +471,13 @@ Important versioning behaviors:
 
 ## Did You Know?
 
-1.  S3 provides "read-after-write" consistency for all PUTs and DELETEs. If you write a new object and immediately attempt to read it, S3 will return the new data. (Prior to December 2020, S3 was only eventually consistent, meaning immediate reads might return a 404 or an older version).
+1.  [S3 provides "read-after-write" consistency for all PUTs and DELETEs. If you write a new object and immediately attempt to read it, S3 will return the new data. (Prior to December 2020, S3 was only eventually consistent, meaning immediate reads might return a 404 or an older version).](https://aws.amazon.com/about-aws/whats-new/2020/12/amazon-s3-now-delivers-strong-read-after-write-consistency-automatically-for-all-applications/)
 
 2.  S3 supports static website hosting. By placing an `index.html` file in a bucket, turning off Block Public Access, and adding a public-read bucket policy, S3 acts as a globally distributed, highly available web server without provisioning any EC2 instances.
 
-3.  S3 can process data **in place** using S3 Select and S3 Object Lambda. S3 Select lets you run SQL queries directly against CSV or JSON files stored in S3 — instead of downloading a 10 GB CSV and filtering locally, you send a `SELECT * FROM s3object WHERE status = 'error'` query and S3 returns only the matching rows. This can reduce data transfer by 80-90%.
+3.  S3 has offered ways to reduce data movement by filtering or transforming data closer to storage. For example, S3 Select can return only matching rows from supported object formats, but it is no longer available to new customers; check current AWS guidance before designing around older S3 query features.
 
-4.  S3 is designed for 99.999999999% (11 nines) durability. To put that in perspective: if you store 10 million objects in S3, you can statistically expect to lose a single object once every 10,000 years. S3 achieves this by automatically replicating every object across a minimum of 3 Availability Zones within a region.
+4.  S3 is designed for [99.999999999% (11 nines) durability](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-data-inventory.html). To put that in perspective: S3 is designed for extremely high durability, with data stored redundantly across multiple Availability Zones by default. S3 achieves this by automatically replicating every object across a minimum of 3 Availability Zones within a region.
 
 ---
 
@@ -501,7 +501,7 @@ Important versioning behaviors:
 <details>
 <summary>Question 1: An auditor requires that your company keep application logs for exactly 7 years to meet compliance regulations. The logs are never accessed unless an audit occurs, at which point a 24-hour retrieval delay is perfectly acceptable. How should you store these logs most cost-effectively?</summary>
 
-You should upload the logs directly to the S3 bucket and use a Lifecycle Rule to immediately transition them to the S3 Glacier Deep Archive storage class. Glacier Deep Archive offers the lowest possible storage cost, designed exactly for data that is rarely accessed but must be retained for compliance. Since the auditor accepts a 24-hour retrieval delay, the 12-48 hour retrieval time of Deep Archive perfectly fits the requirement. Finally, you would configure the lifecycle rule to permanently delete the objects after 2,555 days (7 years) to prevent paying for data you no longer legally need to keep.
+You should upload the logs directly to the S3 bucket and use a Lifecycle Rule to transition them to the S3 Glacier Deep Archive storage class as soon as practical. Glacier Deep Archive offers the lowest possible storage cost, designed exactly for data that is rarely accessed but must be retained for compliance. Since the auditor accepts a 24-hour retrieval delay, the 12-48 hour retrieval time of Deep Archive perfectly fits the requirement. Finally, you would configure the lifecycle rule to permanently delete the objects after 2,555 days (7 years) to prevent paying for data you no longer legally need to keep.
 </details>
 
 <details>
@@ -537,7 +537,7 @@ The developer will receive the full object without any corruption or partial dat
 <details>
 <summary>Question 7: Your development team needs to grant a third-party auditor 24-hour read access to a specific confidential report stored in S3. One engineer suggests temporarily modifying the bucket policy to allow their IP address, while another suggests generating a Pre-Signed URL. Why is the Pre-Signed URL the more secure approach for this scenario?</summary>
 
-A Pre-Signed URL is significantly more secure because it uses programmatic cryptography to generate a specific, time-bound signature for a single object operation. Modifying a bucket policy affects the permissions of the bucket broadly and relies entirely on an administrator remembering to manually revert the change later, which often leads to accidental exposure if forgotten. Once the expiration time on a Pre-Signed URL passes, the signature becomes mathematically invalid, requiring no cleanup or state changes to the bucket itself. Furthermore, Pre-Signed URLs operate with the permissions of the identity that created them and apply only to the precise object specified, meaning they never grant more access than intended.
+A Pre-Signed URL is significantly more secure because it uses programmatic cryptography to generate a specific, time-bound signature for a single object operation. Modifying a bucket policy affects the permissions of the bucket broadly and relies entirely on an administrator remembering to manually revert the change later, which often leads to accidental exposure if forgotten. Once the expiration time on a Pre-Signed URL passes, the signature becomes mathematically invalid, requiring no cleanup or state changes to the bucket itself. Furthermore, Pre-Signed URLs operate with the permissions of the identity that created them and apply only to the precise object specified, meaning they are less likely to grant broader access than intended.
 </details>
 
 <details>
@@ -877,3 +877,20 @@ rm -rf ./backup-exercise lifecycle.json bucket-policy.json empty_bucket.py
 ## Next Module
 
 Now that you have mastery over compute and storage, it is time to route users to your applications globally. Head to [Module 1.5: Route 53 & DNS](../module-1.5-route53/).
+
+## Sources
+
+- [aws.amazon.com: s3](https://aws.amazon.com/s3) — AWS's current S3 product page directly states S3 stores hundreds of exabytes and more than 500 trillion objects and emphasizes durability at scale.
+- [docs.aws.amazon.com: access control block public access.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html) — AWS documents that Block Public Access settings override public policies and permissions, and new buckets do not allow public access by default.
+- [docs.aws.amazon.com: how s3 evaluates access control.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-s3-evaluates-access-control.html) — AWS's authorization workflow docs directly describe same-account versus cross-account evaluation and explicit deny behavior.
+- [docs.aws.amazon.com: about object ownership.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html) — AWS explicitly documents Bucket owner enforced as the default and recommends keeping ACLs disabled for most modern S3 use cases.
+- [docs.aws.amazon.com: using presigned url.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html) — The S3 presigned URL guide states that presigned URLs expire when the underlying credential expires or is revoked, deleted, or deactivated.
+- [docs.aws.amazon.com: storage class intro.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/storage-class-intro.html) — AWS's storage class guide directly covers minimum duration rules, 128 KB billing constraints, and retrieval characteristics for the S3 storage classes discussed.
+- [aws.amazon.com: s3](https://aws.amazon.com/pricing/s3/) — Current S3 pricing is published on AWS's official pricing page and is the correct primary source for region-specific storage and retrieval prices.
+- [docs.aws.amazon.com: lifecycle transition general considerations.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/lifecycle-transition-general-considerations.html) — AWS documents the supported lifecycle transition matrix as a waterfall model with explicit allowed transitions.
+- [docs.aws.amazon.com: default encryption faq.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/default-encryption-faq.html) — AWS's default encryption FAQ states that starting January 5, 2023, all new object uploads are automatically encrypted with SSE-S3.
+- [docs.aws.amazon.com: Versioning.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html) — AWS's versioning documentation directly covers versioning-enabled versus suspended states, delete markers, and full-object billing for each version.
+- [aws.amazon.com: amazon s3 now delivers strong read after write consistency automatically for all applications](https://aws.amazon.com/about-aws/whats-new/2020/12/amazon-s3-now-delivers-strong-read-after-write-consistency-automatically-for-all-applications/) — AWS's December 1, 2020 announcement directly documents the shift to strong read-after-write consistency.
+- [docs.aws.amazon.com: s3 data inventory.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-data-inventory.html) — AWS documentation directly states 11 nines durability and redundant storage across a minimum of three Availability Zones by default.
+- [docs.aws.amazon.com: bucket naming](https://docs.aws.amazon.com/console/s3/bucket-naming) — AWS's bucket naming rules explicitly document shared global namespace uniqueness within a partition.
+- [docs.aws.amazon.com: abort mpu.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/abort-mpu.html) — AWS explicitly states that uploaded multipart parts are billed and recommends aborting incomplete uploads, including via lifecycle configuration.

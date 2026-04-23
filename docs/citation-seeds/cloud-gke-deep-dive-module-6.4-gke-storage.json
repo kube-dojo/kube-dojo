@@ -1,0 +1,384 @@
+{
+  "module_key": "cloud/gke-deep-dive/module-6.4-gke-storage",
+  "module_path": "src/content/docs/cloud/gke-deep-dive/module-6.4-gke-storage.md",
+  "research_run_id": "2026-04-23T05:54:28+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening August 2023 gaming-company outage anecdote gives named timing, user-count, outage-duration, and loss figures without a source.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In August 2023, an online gaming company running on GKE lost 6 hours of player progress data for 180,000 active users. Their PostgreSQL database was running on a single-zone Persistent Disk attached to a StatefulSet pod. When `us-central1-a` experienced a partial zone outage, the node hosting the database went offline. Because the PD was zonal, it could not be attached to a node in another zone. The StatefulSet controller created a replacement pod in `us-central1-b`, but it could not mount the volume---zonal PDs are locked to their zone. The database was down for 6 hours until the zone recovered. The company's VP of Engineering later estimated the revenue loss at $420,000 and the player trust damage as \"incalculable.\"",
+      "suggested_rewrite": "A stateful workload that uses a single-zone Persistent Disk can become unavailable during a zonal outage: Kubernetes may recreate the Pod elsewhere, but a zonal disk can't attach outside its zone until that zone recovers.",
+      "lesson_point_url": null,
+      "rationale": "This is a fake-precise outage story with named cloud zones, durations, counts, and dollar loss but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module gives an exact failover-speed and price-delta claim for Regional Persistent Disk.",
+      "claim_class": "pricing",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The fix was straightforward: switch to a **Regional Persistent Disk**, which synchronously replicates data to two zones and can failover in under a minute. It cost 16 cents more per GB per month.",
+      "suggested_rewrite": "The fix was to switch to a **Regional Persistent Disk**, which keeps copies in two zones in the same region for better zonal-failure resilience, at higher cost than a zonal disk.",
+      "lesson_point_url": null,
+      "rationale": "The exact failover timing and price delta are not stably supported as written and should be generalized."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The Compute Engine Persistent Disk CSI driver is GKE's primary block-storage driver and provisions Google Cloud Persistent Disks as Kubernetes PersistentVolumes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Persistent Disk CSI Driver",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gce-pd-csi-driver",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Google's GKE PD CSI driver documentation directly describes the driver and its provisioner."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The module says the PD CSI driver is installed by default on all GKE clusters.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Persistent Disk CSI Driver",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "It is installed by default on all GKE clusters",
+      "suggested_rewrite": "It is always enabled in Autopilot clusters, and Standard clusters can enable it",
+      "lesson_point_url": null,
+      "rationale": "Current GKE docs distinguish Autopilot from Standard clusters rather than saying this is true for all clusters."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "`WaitForFirstConsumer` delays provisioning until a Pod exists, while `Immediate` can create unschedulable Pods for topology-constrained storage.",
+      "claim_class": "standard",
+      "span_hint": "section: Volume Binding Modes",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/storage/storage-classes/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes StorageClass documentation explicitly defines both binding modes and the topology risk."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "The `Immediate`-binding war story uses precise zones and an exact error message without a source.",
+      "claim_class": "war_story",
+      "span_hint": "section: Volume Binding Modes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A team used `Immediate` binding mode in a regional cluster. The PD was provisioned in `us-central1-a`, but the pod was scheduled to `us-central1-c`. The pod hung in `Pending` with the error \"disk is in zone us-central1-a, which does not match the zone of node us-central1-c.\" Always use `WaitForFirstConsumer` in regional clusters.",
+      "suggested_rewrite": "With `Immediate` binding in a multi-zone cluster, Kubernetes can provision a zonal disk before scheduling the Pod, which can leave the Pod unschedulable if the chosen node is in a different zone. Use `WaitForFirstConsumer` for topology-constrained storage.",
+      "lesson_point_url": null,
+      "rationale": "The operational lesson is real, but the specific scenario and quoted error are unattributed."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Regional Persistent Disks replicate data between two zones in the same region and support zonal failover for stateful workloads on GKE.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Regional Persistent Disks",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/kubernetes-engine/docs/concepts/persistent-volumes",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The GKE persistent volumes overview directly describes regional PD replication across two zones and failover behavior."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The failover sequence gives an exact unhealthy-node detection time of about five minutes.",
+      "claim_class": "statistic",
+      "span_hint": "section: Failover Behavior",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "GKE detects the node is unhealthy (~5 minutes by default)",
+      "suggested_rewrite": "Kubernetes eventually detects that the node is unhealthy and begins rescheduling the workload",
+      "lesson_point_url": null,
+      "rationale": "The exact default timing is not something the cited product docs stably promise here."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The failover sequence gives an exact Regional PD detach/attach time of about 30-60 seconds.",
+      "claim_class": "statistic",
+      "span_hint": "section: Failover Behavior",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The Regional PD is detached from the failed zone and attached in the new zone (~30-60 seconds)",
+      "suggested_rewrite": "The Regional PD is detached from the failed node and attached in the healthy zone during failover",
+      "lesson_point_url": null,
+      "rationale": "The exact duration is environment-dependent and not reliably backed by the official docs used here."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "The PD CSI driver supports Kubernetes VolumeSnapshots for point-in-time backups.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Volume Snapshots",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/backup-pd-volume-snapshots",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The GKE PD snapshot documentation explicitly covers PD volume snapshots with the CSI driver."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Filestore provides managed file storage with `ReadWriteMany` access so multiple Pods or nodes can mount the same volume simultaneously.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Filestore CSI Driver (Managed NFS)",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://cloud.google.com/kubernetes-engine/docs/concepts/filestore-for-gke",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Filestore for GKE overview directly states RWX and simultaneous multi-node access."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Cloud Storage FUSE CSI mounts Cloud Storage buckets as local file systems for GKE workloads.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cloud Storage FUSE CSI Driver",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Cloud Storage FUSE CSI driver overview explicitly describes mounting buckets as local file systems."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Cloud Storage FUSE is not POSIX-compliant and is a poor fit for databases or workloads that rely on conventional file-system semantics.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cloud Storage FUSE Limitations",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/storage/docs/cloud-storage-fuse/overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Cloud Storage FUSE overview explicitly says it is not POSIX compliant and should not back databases."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "The limitations table says Cloud Storage FUSE has eventual consistency for listings and suggests `--stat-cache-ttl=0` as the fix.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cloud Storage FUSE Limitations",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Eventual consistency for listings | New files may not appear immediately in `ls` | Use `--stat-cache-ttl=0` for real-time needs |",
+      "suggested_rewrite": "| Cached metadata can delay visibility across clients | Fresh metadata checks reduce stale-cache reads at the cost of more API calls | Tune metadata cache TTLs for your workload |",
+      "lesson_point_url": null,
+      "rationale": "Current Cloud Storage docs describe strong consistency, so the row should be reframed around client-side caching rather than eventual consistency."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The limitations table says Cloud Storage FUSE has no append support.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cloud Storage FUSE Limitations",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| No append support | Cannot append to existing files | Write new files instead of appending |",
+      "suggested_rewrite": "| Limited support for in-place file modification | Object-style semantics remain a poor fit for traditional append-heavy workloads | Prefer writing new objects and treat append behavior as workload-specific rather than POSIX-like |",
+      "lesson_point_url": null,
+      "rationale": "Current Cloud Storage FUSE docs describe limited append behavior for some cases, so the blanket claim is no longer accurate."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Backup for GKE captures Kubernetes resource manifests and volume backups for supported PVCs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Backup for GKE",
+      "disposition": "supported",
+      "source_ids": [
+        "S016"
+      ],
+      "proposed_url": "https://docs.cloud.google.com/kubernetes-engine/docs/add-on/backup-for-gke/concepts/backup-for-gke",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Backup for GKE concept page explicitly distinguishes config backups and volume backups."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "The module broadly says Backup for GKE includes persistent volume data without narrowing that to supported volume types.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Backup for GKE",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Backup for GKE provides managed backup and restore for your entire GKE workloads---including both the Kubernetes configuration (Deployments, Services, ConfigMaps) and the persistent volume data.",
+      "suggested_rewrite": "Backup for GKE provides managed backup and restore for GKE workloads, including Kubernetes resource configuration and, for supported volumes such as Persistent Disk, underlying volume data.",
+      "lesson_point_url": null,
+      "rationale": "Current docs say only Persistent Disk type volumes are backed up directly."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Backup for GKE restores can target a different cluster from the one that produced the backup.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Backup for GKE / Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://cloud.google.com/kubernetes-engine/docs/add-on/backup-for-gke/how-to/restore",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The restore documentation explicitly says the target cluster might be different from the source cluster."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "The Did You Know callout gives an exact 1-2 ms write-latency penalty and an absolute RPO=0 statement for Regional PD failover.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know #1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This adds approximately 1-2ms of write latency compared to a zonal PD, but guarantees zero data loss (RPO=0) during a zone failover.",
+      "suggested_rewrite": "This adds extra write latency compared to a zonal PD while improving zonal-failure resilience and reducing recovery-point risk.",
+      "lesson_point_url": null,
+      "rationale": "The precise latency number and absolute outcome claim are stronger than the official docs here support."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "The Did You Know callout says the two Regional PD zones cannot be manually selected.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know #1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The two zones are chosen automatically by GKE based on the cluster's node topology and cannot be manually selected.",
+      "suggested_rewrite": "In a regional cluster, GKE can automatically choose replica zones when you don't specify topology constraints.",
+      "lesson_point_url": null,
+      "rationale": "Current GKE docs allow topology constraints such as `allowedTopologies`, so the blanket 'cannot be manually selected' claim is too strong."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The GKE CSI integration injects a sidecar container for gcsfuse when the Pod has the `gke-gcsfuse/volumes: \"true\"` annotation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know #2 / Cloud Storage FUSE setup",
+      "disposition": "supported",
+      "source_ids": [
+        "S022"
+      ],
+      "proposed_url": "https://cloud.google.com/kubernetes-engine/docs/how-to/cloud-storage-fuse-csi-driver-sidecar",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Google's sidecar documentation directly describes the injected `gke-gcsfuse-sidecar` and its annotation trigger."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Volume expansion can grow a volume but not shrink it.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know #4",
+      "disposition": "supported",
+      "source_ids": [
+        "S024"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/storage/storage-classes/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes StorageClass documentation explicitly says expansion can grow a volume but not shrink it."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "The Common Mistakes table says Cloud Storage FUSE is '10x cheaper per GB' than Filestore.",
+      "claim_class": "pricing",
+      "span_hint": "section: Common Mistakes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Use Cloud Storage FUSE for read-heavy, large-scale data; it is 10x cheaper per GB",
+      "suggested_rewrite": "Use Cloud Storage FUSE for read-heavy, large-scale data when object-storage semantics fit",
+      "lesson_point_url": null,
+      "rationale": "The exact ratio is too brittle for current pricing and should be removed rather than asserted."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/regional-pd",
+      "title": "Provisioning regional persistent disks on GKE",
+      "tier": "vendor",
+      "why_relevant": "Best primary doc for regional PD topology, provisioning, and failover-oriented storage design."
+    },
+    {
+      "url": "https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/filestore-csi-driver",
+      "title": "Access Filestore instances with the Filestore CSI driver",
+      "tier": "vendor",
+      "why_relevant": "Covers how Filestore integrates with GKE and what the managed CSI path supports."
+    },
+    {
+      "url": "https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver",
+      "title": "About the Cloud Storage FUSE CSI driver for GKE",
+      "tier": "vendor",
+      "why_relevant": "Explains how bucket mounts work in GKE and the limitations that matter for workload design."
+    },
+    {
+      "url": "https://docs.cloud.google.com/kubernetes-engine/docs/add-on/backup-for-gke/concepts/backup-for-gke",
+      "title": "Backup for GKE concepts",
+      "tier": "vendor",
+      "why_relevant": "Defines exactly what Backup for GKE captures, what it does not capture, and how restores work."
+    }
+  ],
+  "notes": "Quiz items, code blocks, Mermaid diagrams, and hands-on exercise steps were excluded per the brief. The module has several stale or overly precise vendor numbers; the claims above focus on prose/table assertions that most clearly need either citation or deterministic rewrite.",
+  "_schema_issues": [
+    "claim[20]:anchor_text_not_in_body:C021"
+  ],
+  "rejected_urls": []
+}

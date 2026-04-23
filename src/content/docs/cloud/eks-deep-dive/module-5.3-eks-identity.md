@@ -29,7 +29,7 @@ EKS offers two mechanisms for this: **IAM Roles for Service Accounts (IRSA)**, w
 
 ## The Problem: Node-Level IAM Is Dangerous
 
-Before IRSA and Pod Identity existed, the only way to give pods AWS access was through the node's IAM instance profile. This is still the default if you do nothing else.
+Before IRSA and Pod Identity existed, the common way to give pods AWS access was through the node's IAM instance profile. This is still the default if you do nothing else.
 
 ```mermaid
 flowchart TD
@@ -567,9 +567,9 @@ k exec -it $(k get pods -n production -l app=order-service -o name | head -1) \
 
 2. The Pod Identity Agent runs as a DaemonSet that listens on `169.254.170.23:80` and `169.254.170.23:2703` on each node. When the AWS SDK inside a pod makes a credential request, it is intercepted and redirected to this local agent rather than hitting the EC2 metadata service. The agent then exchanges the pod's service account token for temporary IAM credentials.
 
-3. Before IRSA existed (2017-2019), the community tool `kiam` and later `kube2iam` were the only options for pod-level IAM. They worked by intercepting metadata requests using iptables rules and a node-level daemon. These tools were notoriously fragile -- iptables race conditions could cause pods to receive the wrong role's credentials. IRSA eliminated this entire class of bugs by using projected service account tokens instead of metadata interception.
+3. Before IRSA existed (2017-2019), the community tools `kiam` and later `kube2iam` were the main options for pod-level IAM. They worked by intercepting metadata requests using iptables rules and a node-level daemon. These tools were notoriously fragile -- iptables race conditions could cause pods to receive the wrong role's credentials. IRSA eliminated this entire class of bugs by using projected service account tokens instead of metadata interception.
 
-4. When you delete a Pod Identity association, existing pods keep their current credentials until those credentials expire (typically within an hour). New credential requests will fail immediately. This gives you a grace period during migrations, but it also means that removing an association does not instantly revoke access -- you must also restart the pods if immediate revocation is required.
+4. When you delete a Pod Identity association, existing pods keep their current credentials until those credentials expire (typically within an hour). New credential requests will usually fail shortly after the change propagates. This gives you a grace period during migrations, but it also means that removing an association does not instantly revoke access -- you must also restart the pods if immediate revocation is required.
 
 ---
 
@@ -922,3 +922,9 @@ aws dynamodb delete-table --table-name dojo-orders
 ## Next Module
 
 Your pods have identity and can authenticate to AWS services. But where do they store data? Head to [Module 5.4: EKS Storage & Data Management](../module-5.4-eks-storage/) to master EBS, EFS, and S3 CSI drivers for stateful workloads.
+
+## Sources
+
+- [Learn how EKS Pod Identity grants pods access to AWS services](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) — This is the main AWS user-guide page for Pod Identity architecture, limitations, and setup.
+- [IAM roles for service accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html) — This is the canonical AWS user-guide page for IRSA behavior, benefits, and security considerations.
+- [Amazon EKS IAM best practices](https://docs.aws.amazon.com/eks/latest/best-practices/identity-and-access-management.html) — This page contains AWS's current recommendation on choosing Pod Identity versus IRSA and operational guidance on quotas, IMDS, and migration concerns.

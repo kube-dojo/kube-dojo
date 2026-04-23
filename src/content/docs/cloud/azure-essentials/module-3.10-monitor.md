@@ -114,7 +114,7 @@ az monitor metrics list \
   -o table
 ```
 
-Common metrics you should always monitor:
+Common metrics you should usually monitor:
 
 | Resource | Critical Metrics | Alert Threshold (suggestion) |
 | :--- | :--- | :--- |
@@ -496,7 +496,7 @@ az monitor data-collection rule association create \
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Not setting up monitoring until after an incident | "We will add monitoring later" is the most expensive sentence in engineering | Set up baseline monitoring (CPU, memory, disk, response time) and alerts on day one, before the application goes to production. |
-| Creating one Log Analytics workspace per resource | Misunderstanding of workspace purpose | Use one workspace per environment (dev, staging, prod) or per team. Multiple resources send logs to the same workspace. Separate workspaces fragment your data and make cross-resource queries impossible. |
+| Creating one Log Analytics workspace per resource | Misunderstanding of workspace purpose | Use one workspace per environment (dev, staging, prod) or per team. Multiple resources send logs to the same workspace. Separate workspaces fragment your data and make cross-resource queries much harder. |
 | Setting alert thresholds too aggressively (e.g., CPU > 50%) | Teams want to catch problems early | Aggressive thresholds cause alert fatigue. The team ignores alerts, and real problems are missed. Set thresholds at actionable levels (CPU > 85%, not 50%). |
 | Not configuring action groups on alerts | Alerts are created but nobody receives them | Every alert must have an action group. At minimum, email the on-call team. Better: integrate with PagerDuty/Opsgenie for proper incident management. |
 | Using the legacy Log Analytics Agent (MMA) instead of Azure Monitor Agent | MMA appears in older documentation and tutorials | MMA is deprecated. Always use the Azure Monitor Agent (AMA) with Data Collection Rules. AMA supports identity-based auth, multiple workspaces, and data transformation. |
@@ -815,3 +815,9 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.11: CI/CD with Azure DevOps & GitHub Actions](../module-3.11-cicd/) --- Learn how to build automated deployment pipelines that securely deploy to Azure using OIDC authentication, Azure Container Registry, and Container Apps.
+
+## Sources
+
+- [Azure Monitor Overview](https://learn.microsoft.com/en-us/azure/azure-monitor/fundamentals/overview) — Best primary starting point for how Azure Monitor fits metrics, logs, traces, and alerting into one monitoring platform.
+- [What Are Azure Monitor Alerts?](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-overview) — Explains alert rule structure, action groups, alert types, and how Azure Monitor handles alerting at scale.
+- [Introduction to Application Insights](https://learn.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) — Good follow-on reading for Application Insights as Azure Monitor's APM feature and for the main investigation experiences it provides.

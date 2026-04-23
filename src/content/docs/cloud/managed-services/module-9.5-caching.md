@@ -19,11 +19,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In November 2023, an e-commerce platform ran their product catalog API on GKE. Every product page required three database queries: product details, pricing, and reviews. During a flash sale, traffic jumped from 3,000 to 45,000 requests per second. Cloud SQL hit its connection limit at 15,000 connections. The auto-scaler was adding pods, but each new pod opened more database connections, making the problem worse. The site went down for 28 minutes during peak sale time. Estimated lost revenue: $2.3 million.
+A flash-sale traffic spike can overwhelm a relational database when each request fans out into multiple queries and every newly scaled pod opens more database connections.
 
-The team had a Redis cluster running in GKE -- but it was a self-managed StatefulSet with 3 nodes and no monitoring. They did not discover until the postmortem that Redis had silently evicted 60% of the cache 20 minutes before the sale started due to a memory limit that nobody had reviewed since initial deployment. The database was hit with the full 45,000 RPS because the cache was effectively empty.
+A self-managed cache with weak observability and poorly reviewed memory settings can silently evict data before peak traffic, pushing the full read load back onto the database.
 
-They migrated to Google Memorystore for Redis with proper memory sizing, connection limits, and eviction monitoring. The next sale handled 62,000 RPS with the database seeing only 800 QPS -- a 98% cache hit rate. Caching is not optional for production Kubernetes workloads. It is the difference between your database being a bottleneck and your database being a safety net.
+After moving to a managed Redis service with deliberate sizing, connection limits, and eviction monitoring, teams can dramatically reduce database load during later traffic spikes.
 
 ---
 
@@ -33,24 +33,24 @@ They migrated to Google Memorystore for Redis with proper memory sizing, connect
 
 | Factor | Redis | Memcached |
 |--------|-------|-----------|
-| Data structures | Strings, hashes, lists, sets, sorted sets, streams | Strings only (key-value) |
+| Data structures | [Strings, hashes, lists, sets, sorted sets, streams](https://github.com/redis/redis) | [Strings only (key-value)](https://github.com/memcached/memcached) |
 | Persistence | Optional (RDB snapshots, AOF) | None (pure cache) |
 | Replication | Primary-replica with automatic failover | None (each node independent) |
 | Clustering | Redis Cluster (data sharding) | Client-side sharding |
 | Pub/Sub | Built-in | Not available |
 | Lua scripting | Yes | No |
-| Max item size | 512 MB | 1 MB (default) |
-| Multi-threaded | Single-threaded (I/O threads since 6.0) | Multi-threaded |
+| Max item size | Supports much larger single values by default | Smaller default item limit |
+| Multi-threaded | Mostly single-threaded command execution | Multi-threaded |
 | Best for | Complex caching, sessions, leaderboards, pub/sub | Simple key-value, large working sets, multi-threaded reads |
 
-**For 90% of Kubernetes workloads, Redis is the right choice.** Memcached is simpler but far less capable. Choose Memcached only when you need pure key-value caching at extremely high throughput with no need for data structures, persistence, or replication.
+**For many Kubernetes workloads, Redis is the more versatile choice.** Memcached is simpler but far less capable. Choose Memcached only when you need pure key-value caching at extremely high throughput with no need for data structures, persistence, or replication.
 
 ### Managed Service Comparison
 
 | Feature | AWS ElastiCache Redis | GCP Memorystore Redis | Azure Cache for Redis |
 |---------|----------------------|----------------------|----------------------|
-| Max memory | 6.1 TB (cluster mode) | 300 GB (standard) | 1.2 TB (Enterprise) |
-| Cluster mode | Yes (up to 500 shards) | Yes (since 2024) | Yes (Premium/Enterprise) |
+| Max memory | Depends on node type and cluster shape | Depends on product and deployment model | Depends on tier and current Azure Redis offering |
+| Cluster mode | Yes | Available through Memorystore for Redis Cluster | Tier-dependent; verify the current Azure Redis product and tier |
 | Multi-AZ failover | Automatic | Automatic (Standard tier) | Automatic (Premium+) |
 | Encryption at rest | Yes (KMS) | Yes (CMEK) | Yes (managed keys) |
 | Encryption in transit | TLS | TLS | TLS |
@@ -124,7 +124,7 @@ def update_product_price(product_id, new_price):
     return product
 ```
 
-**Pros**: Cache is always consistent with the database. No stale reads after writes.
+**Pros**: Cache is typically consistent with the database. No stale reads after writes.
 **Cons**: Write latency increases (two writes per operation). Caches data that may never be read.
 
 ### Write-Behind (Write-Back)
@@ -395,7 +395,7 @@ Managed Redis instances have maximum connection limits based on instance size. E
 
 | Instance Type | Max Connections | With 50 pods (20 conn each) | Remaining |
 |---------------|-----------------|------------------------------|-----------|
-| cache.r7g.large | 65,000 | 1,000 | 64,000 |
+| cache.r7g.large | [65,000](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/TroubleshootingConnections.html) | 1,000 | 64,000 |
 | cache.r7g.xlarge | 65,000 | 1,000 | 64,000 |
 | cache.t4g.micro | 65,000 | 1,000 | 64,000 |
 
@@ -459,8 +459,6 @@ spec:
 ---
 
 ## Envoy Sidecar Caching
-
-For HTTP-based APIs, you can add caching at the proxy layer using Envoy as a sidecar. This caches responses without modifying application code.
 
 ### Architecture
 
@@ -532,7 +530,7 @@ data:
                           port_value: 8081
 ```
 
-Your application must return proper `Cache-Control` headers:
+Your application must return proper [`Cache-Control`](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/cache_filter) headers:
 
 ```python
 from flask import Flask, jsonify
@@ -553,13 +551,13 @@ def get_product(product_id):
 
 ## Did You Know?
 
-1. **Redis processes over 100,000 operations per second on a single core** in typical workloads. Despite being single-threaded for command execution, Redis achieves this throughput because it operates entirely in memory and uses efficient data structures like skip lists and hash tables. Since version 6.0, I/O threading handles network reads/writes on separate threads while command execution remains single-threaded.
+1. **Redis can process very high request rates from memory.** Actual throughput depends heavily on command mix, data size, client behavior, hardware, and benchmark setup.
 
-2. **The term "cache stampede" was formally studied in a 2009 paper** titled "Optimal Probabilistic Cache Stampede Prevention" by Vattani, Chierichetti, and Lowenstein. The "probabilistic early expiration" technique from that paper is now standard practice at companies like Facebook, where cache stampedes on popular content could otherwise bring down entire database clusters.
+2. **Probabilistic early expiration is a documented cache-stampede prevention technique** described in the literature on preventing multiple clients from regenerating the same expired item at once.
 
-3. **AWS ElastiCache Serverless (launched 2023) automatically scales Redis** with no capacity planning required. It charges per ECPU (ElastiCache Compute Unit) and per GB of storage, eliminating the need to choose instance types. For workloads with variable traffic, this can reduce costs by 40-60% compared to provisioned instances.
+3. **AWS ElastiCache Serverless automatically scales Redis workloads** and bills separately for stored data and request processing. For variable traffic patterns, it can sometimes be more cost-efficient than provisioned capacity.
 
-4. **Google Memorystore for Redis Cluster** became generally available in 2024, supporting up to 25 shards with 250 GB total capacity. Before this, GCP customers who needed Redis clustering had to self-manage Redis on GKE or use third-party services -- a gap that existed for over five years.
+4. **Google offers Memorystore for Redis Cluster as a managed clustered Redis service** for workloads that need sharding and replica support. Check the current product limits because they have expanded since launch.
 
 ---
 
@@ -574,7 +572,7 @@ def get_product(product_id):
 | No monitoring of cache hit rate | "It is just a cache, it either works or it does not" | Track hit rate, memory usage, evictions, and connection count |
 | Caching errors/null results | Cache miss returns null, null gets cached | Check for valid data before caching; use "negative cache" with short TTL only intentionally |
 | No circuit breaker when Redis is down | Redis failure cascades to database overload | Implement circuit breaker; serve stale data or degrade gracefully |
-| Storing serialized objects larger than 100 KB | Convenient to cache entire API responses | Cache individual fields or use Redis hashes; large values cause latency spikes |
+| Storing very large serialized objects | Convenient to cache entire API responses | Cache individual fields or use Redis hashes; oversized values can increase latency and memory pressure |
 
 ---
 
@@ -587,7 +585,7 @@ For the product catalog, they should use the cache-aside (lazy loading) pattern.
 </details>
 
 <details>
-<summary>2. Your marketing team sends out a push notification to 5 million users about a 90% off flash sale on a specific gaming console. The console's cache key expires exactly as the notification lands. Your database instantly crashes. What caused this, and how could you have architected the application to prevent it?</summary>
+<summary>2. Your marketing team sends out a push notification to 5 million users about a 90% off flash sale on a specific gaming console. The console's cache key expires exactly as the notification lands. Your database is immediately overwhelmed. What caused this, and how could you have architected the application to prevent it?</summary>
 
 This was caused by a cache stampede. When the popular cache key expired, thousands of concurrent requests all missed the cache and simultaneously queried the database to rebuild it, overwhelming its connection limits. To prevent this, you could implement a distributed locking strategy. When the cache miss occurs, the first request acquires a Redis lock and queries the database, while all other requests either wait briefly or return slightly stale data. Alternatively, you could use probabilistic early expiration, where requests have an increasing chance of refreshing the cache before it actually expires, spreading the database load over time.
 </details>
@@ -601,7 +599,7 @@ This decision is dangerous because caches and persistent data stores have fundam
 <details>
 <summary>4. You are provisioning an ElastiCache Redis instance that supports up to 10,000 connections. Your application runs 100 pods in normal operation, each configured with a connection pool size of 80. During a standard Kubernetes rolling deployment, the database operations team suddenly alerts you that Redis connections are being refused, causing site outages. What went wrong with your connection budgeting, and how does the deployment process affect it?</summary>
 
-Your connection budget failed to account for the overlapping pods that run simultaneously during a Kubernetes rolling deployment. While your normal operation requires 8,000 connections (100 pods × 80 connections), a rolling update can surge the number of pods significantly depending on your `maxSurge` setting, potentially doubling them to 200 pods. This spike would require 16,000 connections, instantly exceeding your 10,000 connection limit and causing the refusal errors. Furthermore, if applications leak connections or if timeouts are configured improperly, terminating pods may not release their connections promptly before new pods spin up. You must always calculate the budget based on the maximum possible simultaneous pods during the most aggressive deployment surge, plus overhead for monitoring and sidecars.
+Your connection budget failed to account for the overlapping pods that run simultaneously during a Kubernetes rolling deployment. While your normal operation requires 8,000 connections (100 pods × 80 connections), a rolling update can surge the number of pods significantly depending on your `maxSurge` setting, potentially doubling them to 200 pods. This spike would require 16,000 connections, quickly exceeding your 10,000 connection limit and causing the refusal errors. Furthermore, if applications leak connections or if timeouts are configured improperly, terminating pods may not release their connections promptly before new pods spin up. You must always calculate the budget based on the maximum possible simultaneous pods during the most aggressive deployment surge, plus overhead for monitoring and sidecars.
 </details>
 
 <details>
@@ -613,7 +611,7 @@ You can implement caching by injecting an Envoy sidecar proxy into the legacy ap
 <details>
 <summary>6. Your cache-aside implementation is throwing intermittent timeouts, and the database is seeing elevated load. You check the Redis cluster and see it is at 100% memory utilization with the `maxmemory-policy` set to `noeviction`. How is this policy directly causing your application's symptoms?</summary>
 
-The `noeviction` policy tells Redis to return an Out of Memory (OOM) error for any write command when it is full, rather than making space. Because your application uses the cache-aside pattern, every cache miss results in a database query followed by an attempt to write the result to Redis. Since Redis rejects the write, the data is never cached. Subsequent requests for the same data result in more cache misses and more database queries, causing the elevated database load. For a cache workload, you must use a policy like `allkeys-lru` or `volatile-lru` so Redis automatically deletes old entries to make room for new ones.
+The `noeviction` policy tells Redis to return an Out of Memory (OOM) error for any write command when it is full, rather than making space. Because your application uses the cache-aside pattern, every cache miss results in a database query followed by an attempt to write the result to Redis. Since Redis rejects the write, the data is not cached on that attempt. Subsequent requests for the same data result in more cache misses and more database queries, causing the elevated database load. For a cache workload, you must use a policy like `allkeys-lru` or `volatile-lru` so Redis automatically deletes old entries to make room for new ones.
 </details>
 
 ---
@@ -984,3 +982,14 @@ kind delete cluster --name cache-lab
 ---
 
 **Next Module**: [Module 9.6: Search & Analytics Engines (OpenSearch / Elasticsearch)](../module-9.6-search/) -- Learn how to ingest Kubernetes logs into managed search engines, configure index lifecycle management, and optimize queries for operational analytics.
+
+## Sources
+
+- [github.com: redis](https://github.com/redis/redis) — The Redis upstream repository overview explicitly describes Redis data structures and messaging/scripting capabilities.
+- [github.com: memcached](https://github.com/memcached/memcached) — The upstream Memcached repository describes Memcached as a multithreaded key/value cache store.
+- [docs.aws.amazon.com: TroubleshootingConnections.html](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/TroubleshootingConnections.html) — AWS documents a hard limit of up to 65,000 simultaneous connections per ElastiCache node.
+- [envoyproxy.io: cache filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/cache_filter) — The Envoy cache-filter documentation explicitly describes freshness calculation and `Cache-Control` behavior.
+- [aws.amazon.com: pricing](https://aws.amazon.com/elasticache/pricing/?loc=ft) — General lesson point for an illustrative rewrite.
+- [Managing Clusters in ElastiCache](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Clusters.html) — Covers shard limits, replication-group structure, and how AWS models clustered Redis deployments.
+- [Memorystore for Redis Tier Capabilities](https://cloud.google.com/memorystore/docs/redis/redis-tiers) — Explains the Basic and Standard tier behavior, read replicas, and failover model for non-cluster Memorystore.
+- [Memorystore for Redis Cluster Overview](https://cloud.google.com/memorystore/docs/cluster/memorystore-for-redis-cluster-overview) — Shows the separate clustered Redis product on Google Cloud and its shard-and-replica architecture.

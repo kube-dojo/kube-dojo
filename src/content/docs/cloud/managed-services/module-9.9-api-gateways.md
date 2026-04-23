@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2023, a B2B SaaS company exposed their API through a Kubernetes NGINX Ingress controller. They had rate limiting configured in NGINX annotations and felt secure. During a product launch, a competitor's automated scraping bot hit their pricing API at 50,000 requests per second from 12,000 different IP addresses -- a distributed scraping attack that looked like legitimate traffic. The NGINX rate limiter, configured per-IP, was useless against distributed attacks. The API pods were overwhelmed, legitimate customers got 503 errors for 45 minutes, and three enterprise deals fell through.
+A public API fronted only by per-IP limits on an ingress controller can still be overwhelmed by distributed scraping or bot traffic that spreads requests across many source addresses.
 
-The postmortem identified the missing layer: a Web Application Firewall (WAF) with bot detection, combined with an API gateway that could enforce global rate limits (not just per-IP), authenticate requests before they reach the cluster, and block known attack patterns. The NGINX Ingress was doing routing -- but routing alone is not security.
+The missing controls were edge protections such as bot-aware WAF rules, rate limiting that can aggregate beyond a single IP, and authentication before traffic reaches the cluster. The NGINX Ingress was doing routing -- but routing alone is not security.
 
 This module teaches you the difference between cloud API gateways and the Kubernetes Gateway API, how to integrate WAF protection with your cluster, rate limiting strategies that actually work against distributed attacks, OAuth2/OIDC integration for API authentication, and how to handle gRPC and WebSocket traffic through gateways.
 
@@ -44,13 +44,13 @@ flowchart TD
 
 | Feature | Cloud API Gateway | K8s Gateway API | K8s Ingress |
 |---------|------------------|-----------------|-------------|
-| WAF integration | Native | Manual (requires sidecar) | Not available |
+| WAF integration | Native on managed edge services | Implementation-specific or external | Not native to the Ingress API |
 | Global rate limiting | Built-in (per key, per plan) | Via extension (e.g., Envoy RLS) | Basic (per-IP annotation) |
-| OAuth2/OIDC | Built-in (JWT validation) | Via extension or middleware | OAuth2 Proxy sidecar |
+| OAuth2/OIDC | Managed JWT/OIDC features vary by provider | Via implementation-specific policies or middleware | Commonly paired with an external auth proxy or middleware |
 | API versioning | Path/header-based routing | HTTPRoute path matching | Path-based only |
 | Usage plans / throttling | Built-in (API keys, quotas) | Not native | Not available |
 | WebSocket support | Yes (with limitations) | Full | Full |
-| gRPC support | Yes (AWS, GCP) | Full (GRPCRoute) | Annotation-dependent |
+| gRPC support | Varies by product and requires gateway-specific configuration | Full via GRPCRoute in supporting implementations | Controller-specific and often annotation- or config-dependent |
 | Cost | Per-request pricing | Compute cost of controller | Compute cost of controller |
 | Custom domain + TLS | Managed certificates | cert-manager integration | cert-manager integration |
 
@@ -58,7 +58,7 @@ flowchart TD
 
 | Scenario | Recommended Approach |
 |----------|---------------------|
-| Public API with usage plans, API keys, monetization | Cloud API Gateway |
+| [Public API with usage plans, API keys, monetization](https://aws.amazon.com/documentation-overview/api-gateway/) | Cloud API Gateway |
 | Internal service-to-service routing | K8s Gateway API |
 | Public-facing web application | Cloud API Gateway (WAF) + K8s Gateway API (routing) |
 | Multi-protocol (HTTP + gRPC + WebSocket) | K8s Gateway API |
@@ -68,7 +68,7 @@ flowchart TD
 
 ## Kubernetes Gateway API
 
-The Gateway API is the successor to the Ingress resource. It provides more expressive routing, protocol support, and role separation.
+The Gateway API is the successor to the Ingress resource. It provides [more expressive routing, protocol support, and role separation](https://kubernetes.io/docs/concepts/services-networking/gateway/).
 
 ### Core Resources
 
@@ -187,7 +187,7 @@ spec:
 
 ## WAF Integration
 
-A Web Application Firewall inspects HTTP traffic and blocks known attack patterns (SQL injection, XSS, path traversal, bot traffic).
+A Web Application Firewall inspects HTTP traffic and blocks known attack patterns ([SQL injection, XSS, path traversal](https://cloud.google.com/armor/docs/waf-rules), [bot traffic](https://docs.aws.amazon.com/waf/latest/developerguide/waf-bot-control.html)).
 
 ### Cloud WAF Architecture
 
@@ -557,7 +557,7 @@ spec:
 
 ### JWT Validation at the Gateway (Without Proxy)
 
-Cloud API Gateways can validate JWT tokens directly without a separate proxy:
+Cloud API Gateways can [validate JWT tokens directly without a separate proxy](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html):
 
 ```bash
 # AWS API Gateway: JWT Authorizer
@@ -579,7 +579,7 @@ aws apigatewayv2 update-route \
   --authorizer-id $AUTH_ID
 ```
 
-### Envoy Gateway JWT Authentication
+### [Envoy Gateway JWT Authentication](https://gateway.envoyproxy.io/latest/concepts/gateway_api_extensions/security-policy/)
 
 ```yaml
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -705,13 +705,13 @@ spec:
 
 ## Did You Know?
 
-1. **AWS WAF processes over 1.5 trillion web requests per month** across all its customers. The top three attack types blocked are SQL injection (34%), cross-site scripting (28%), and path traversal (19%). AWS maintains a team of security researchers who update managed rule sets weekly based on emerging threats.
+1. **Managed WAF services process very large traffic volumes and provide managed rules for common web attacks such as SQL injection and XSS.** Exact fleet-wide request counts, attack-mix percentages, and update cadences should be cited from a dated primary source.
 
-2. **The Kubernetes Gateway API was released as v1.0 (GA) in October 2023** after three years of development. It replaced the Ingress resource, which had been the standard since Kubernetes 1.1 (2015). The main motivation was that Ingress relied heavily on non-standard annotations, making configurations vendor-specific and non-portable.
+2. **The Kubernetes Gateway API reached v1.0 (GA) on October 31, 2023** and is the successor to Ingress, whose API is frozen rather than removed. A key motivation was to reduce reliance on vendor-specific annotations by providing a more expressive standard API.
 
-3. **gRPC was created by Google in 2015** and uses Protocol Buffers for serialization. It is 5-10x faster than REST/JSON for structured data exchange because Protobuf is a binary format (smaller payloads) and HTTP/2 enables multiplexing (multiple requests on one connection). Over 60% of inter-service communication at Google uses gRPC.
+3. **gRPC, introduced by Google, uses Protocol Buffers and HTTP/2-based transport.** Its performance characteristics depend on workload, payload shape, and implementation, so avoid universal speed multipliers or internal adoption percentages unless they are cited from a primary source.
 
-4. **OAuth2 Proxy was originally created by Bitly** (the URL shortening company) in 2014 as "Google Auth Proxy." It was renamed and expanded to support OIDC, GitHub, Azure AD, and other providers. It is now the most widely used authentication proxy in Kubernetes, with over 9,000 GitHub stars and millions of downloads.
+4. **OAuth2 Proxy began as Bitly's `oauth2_proxy` project** and later moved to the community-maintained `oauth2-proxy/oauth2-proxy` project, which supports many providers including OIDC.
 
 ---
 
@@ -722,7 +722,7 @@ spec:
 | Using only per-IP rate limiting | Simplest to configure | Layer multiple strategies: per-IP, per-API-key, per-user, global ceiling |
 | Not putting WAF in front of the cluster | "Our API validates input" | WAF catches attacks that bypass application validation; defense in depth |
 | Implementing auth in every microservice | "Each service should be independent" | Centralize auth at the gateway; pass identity headers downstream |
-| Using Ingress annotations for complex routing | Ingress was designed for simple routing | Migrate to Gateway API for path/header matching, traffic splitting, cross-namespace routing |
+| Using Ingress annotations for complex routing | Ingress was designed for simple routing | [Migrate to Gateway API for path/header matching, traffic splitting, cross-namespace routing](https://kubernetes.io/docs/concepts/services-networking/ingress/) |
 | Setting WebSocket timeouts too low | Default NGINX proxy timeout is 60 seconds | Increase `proxy-read-timeout` and `proxy-send-timeout` to 3600+ for WebSocket |
 | Exposing gRPC without TLS | "It is internal" | gRPC metadata (headers) can contain sensitive data; always use TLS |
 | Not testing WAF rules in count mode first | Eager to block attacks | Deploy WAF rules in count/monitor mode, review false positives, then switch to block |
@@ -747,7 +747,7 @@ The per-IP rate limit failed because the attack was distributed across so many a
 <details>
 <summary>3. A security auditor recommends deploying a WAF to protect your legacy monolithic API running in Kubernetes. The development team immediately deploys the WAF rules in strict "block" mode. The next morning, the customer support queue is flooded with complaints that the main file upload feature is returning 403 Forbidden errors. Why did this happen, and what is the standard operational practice for deploying new WAF rules?</summary>
 
-The WAF likely blocked the file uploads because the payload contained byte sequences or file metadata that matched a known exploit signature, resulting in a false positive. WAF rules rely on pattern matching and do not inherently understand the application's intended context. The standard operational practice is to always deploy new WAF rules in "count" or "monitor" mode first. This allows the security team to observe which requests would be blocked and identify false positives in legitimate traffic. After tuning the rules and adding necessary exceptions, the team can safely switch to "block" mode without causing a self-inflicted outage.
+The WAF likely blocked the file uploads because the payload contained byte sequences or file metadata that matched a known exploit signature, resulting in a false positive. WAF rules rely on pattern matching and do not inherently understand the application's intended context. The standard operational practice is to usually deploy new WAF rules in "count" or "monitor" mode first. This allows the security team to observe which requests would be blocked and identify false positives in legitimate traffic. After tuning the rules and adding necessary exceptions, the team can safely switch to "block" mode without causing a self-inflicted outage.
 </details>
 
 <details>
@@ -1103,3 +1103,14 @@ kind delete cluster --name gateway-lab
 ---
 
 **Next Module**: [Module 9.10: Data Warehousing & Analytics from Kubernetes](../module-9.10-analytics/) -- Learn how to connect Kubernetes workloads to BigQuery, Redshift, and Snowflake, orchestrate data pipelines with Airflow, and control analytics costs.
+
+## Sources
+
+- [kubernetes.io: gateway](https://kubernetes.io/docs/concepts/services-networking/gateway/) — The Kubernetes Gateway API concept page directly describes it as extensible, role-oriented, and protocol-aware.
+- [kubernetes.io: ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/) — The Ingress concept page explicitly says the API is frozen and recommends Gateway instead.
+- [aws.amazon.com: api gateway](https://aws.amazon.com/documentation-overview/api-gateway/) — The API Gateway product documentation directly covers API keys, usage plans, throttling, and WebSocket APIs.
+- [docs.cloud.google.com: ingress configuration](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/ingress-configuration) — The GKE ingress configuration docs explicitly describe Cloud Armor attachment through BackendConfig.
+- [cloud.google.com: waf rules](https://cloud.google.com/armor/docs/waf-rules) — Cloud Armor's preconfigured WAF rules page directly lists SQL injection, XSS, and path traversal-related protections.
+- [docs.aws.amazon.com: waf bot control.html](https://docs.aws.amazon.com/waf/latest/developerguide/waf-bot-control.html) — AWS WAF Bot Control directly documents bot monitoring, blocking, and rate limiting capabilities.
+- [docs.aws.amazon.com: http api jwt authorizer.html](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html) — API Gateway's JWT authorizer docs directly support gateway-side JWT validation.
+- [gateway.envoyproxy.io: security policy](https://gateway.envoyproxy.io/latest/concepts/gateway_api_extensions/security-policy/) — Envoy Gateway's SecurityPolicy documentation explicitly lists JWT auth and route targets including HTTPRoute and GRPCRoute.

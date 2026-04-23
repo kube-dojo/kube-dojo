@@ -74,7 +74,7 @@ When an auditor requests proof that network segmentation is enforced, you don't 
 
 CSPM tools continuously scan your cloud environment for misconfigurations, policy violations, and security risks. They act as the "detective controls" in a defense-in-depth strategy, operating at the cloud infrastructure layer to ensure that your Kubernetes clusters, worker nodes, and underlying network configurations remain secure.
 
-Think of a CSPM as a building inspector who continuously walks through your office holding a rulebook. The moment someone props open a fire door (by disabling a network policy) or unplugs a smoke detector (by turning off audit logging), the inspector immediately flags it and alerts the security desk.
+Think of a CSPM as a building inspector who continuously walks through your office holding a rulebook. The moment someone props open a fire door (by disabling a network policy) or unplugs a smoke detector (by turning off audit logging), the inspector quickly flags it and alerts the security desk.
 
 ### Cloud-Native CSPM Tools
 
@@ -203,7 +203,7 @@ HIPAA focuses on safeguarding Protected Health Information (PHI). Encryption, au
 
 ## Section 4: Automated Evidence Collection in Practice
 
-The key to continuous compliance is automating evidence collection so that auditors never wait for manual data gathering. Every control should have a corresponding evidence pipeline that continuously dumps the state of the cluster to an immutable storage location. 
+The key to continuous compliance is automating evidence collection so that auditors rarely wait for manual data gathering. Every control should have a corresponding evidence pipeline that continuously dumps the state of the cluster to an immutable storage location. 
 
 ### Building an Evidence Collection Pipeline
 
@@ -464,7 +464,7 @@ kubectl get vulnerabilityreport -n production \
 
 ### Integrating Trivy with Cloud Security Hubs
 
-A fundamental principle of enterprise security is visibility. If a finding only exists inside the cluster, the centralized security team will never see it. Exporting these findings to an aggregator like AWS Security Hub ensures that Kubernetes vulnerabilities are tracked alongside IAM misconfigurations and network firewall rule violations.
+A fundamental principle of enterprise security is visibility. If a finding only exists inside the cluster, the centralized security team may never see it. Exporting these findings to an aggregator like AWS Security Hub ensures that Kubernetes vulnerabilities are tracked alongside IAM misconfigurations and network firewall rule violations.
 
 ```yaml
 # trivy-to-securityhub.yaml
@@ -607,7 +607,7 @@ kubectl logs job.batch/kube-bench
 
 ### Automated Remediation
 
-Identifying CIS violations (e.g., exposed kubelet APIs, permissive RBAC) is only the first step. Automated remediation ensures drift is corrected immediately without human intervention:
+Identifying CIS violations (e.g., exposed kubelet APIs, permissive RBAC) is only the first step. Automated remediation helps ensure drift is corrected quickly without human intervention:
 
 1. **Admission Control**: Use Kyverno or Gatekeeper to automatically mutate incoming resources (e.g., dropping capabilities, injecting secure default `SecurityContexts`) so they align with CIS standards.
 2. **GitOps Reconciliation**: When a cluster configuration drifts from the CIS baseline, a controller like ArgoCD or Flux automatically overwrites the manual change with the compliant state stored in Git, self-healing the infrastructure.
@@ -633,7 +633,7 @@ flowchart TD
 
 ## Did You Know?
 
-1. SOC 2 audits cost between $30,000 and $200,000 per engagement, depending on scope and auditor. Companies that implement continuous compliance tooling report spending 60-70% less on audit preparation because evidence is pre-collected and always current. The average "compliance sprint" before a traditional audit consumes 400-600 engineering hours. Continuous compliance reduces this to under 40 hours of auditor interaction time.
+1. SOC 2 audits cost between $30,000 and $200,000 per engagement, depending on scope and auditor. Companies that implement continuous compliance tooling report spending 60-70% less on audit preparation because evidence is pre-collected and usually current. The average "compliance sprint" before a traditional audit consumes 400-600 engineering hours. Continuous compliance reduces this to under 40 hours of auditor interaction time.
 2. PCI-DSS v4.0, released in March 2022, introduced "customized approach" as an alternative to the traditional "defined approach." This means organizations can now propose their own controls as long as they meet the intent of the requirement. For Kubernetes environments, this is significant: you can argue that a service mesh providing mTLS meets PCI requirement 4.2.1 (strong cryptography for transmitting cardholder data) even though the original requirement was written for TLS on web servers.
 3. Trivy, the open-source vulnerability scanner, scans over 1 billion container images per month across its user base. It detects vulnerabilities in OS packages, language-specific dependencies (npm, pip, Go modules), IaC misconfigurations, and Kubernetes manifests. A single Trivy scan of an average container image takes 8-15 seconds and checks against a database of over 150,000 known CVEs.
 4. The average time from CVE publication to exploit availability decreased from 45 days in 2020 to 15 days in 2024, according to Mandiant's threat intelligence reports. This means organizations running quarterly vulnerability scans are almost certainly running exploitable containers. Continuous scanning with tools like Trivy Operator catches new CVEs within hours of database updates, reducing the exposure window from months to hours.
@@ -1065,13 +1065,13 @@ You must provide a combination of configuration artifacts and access logs to pro
 <details>
 <summary>Question 2: A new critical CVE is published affecting the base image used by 80% of your containers. Your current vulnerability scan runs weekly. Is this sufficient for PCI-DSS compliance?</summary>
 
-No, a weekly scanning cadence is not sufficient. PCI-DSS v4.0 requirement 6.3.3 requires that vulnerabilities are identified and addressed in a timely manner. A weekly scan means your environment could be exposed to a known critical vulnerability for up to seven days before you even realize it exists. With exploit availability averaging 15 days from CVE publication, a weekly scan cycle leaves an extremely tight window for remediation. Best practice requires continuous scanning with tools like Trivy Operator, which re-evaluates running workloads immediately whenever the CVE database updates.
+No, a weekly scanning cadence is not sufficient. PCI-DSS v4.0 requirement 6.3.3 requires that vulnerabilities are identified and addressed in a timely manner. A weekly scan means your environment could be exposed to a known critical vulnerability for up to seven days before you even realize it exists. With exploit availability averaging 15 days from CVE publication, a weekly scan cycle leaves an extremely tight window for remediation. Best practice requires continuous scanning with tools like Trivy Operator, which can re-evaluate running workloads shortly after the CVE database updates.
 </details>
 
 <details>
 <summary>Question 3: During a compliance review, your security team discovers that a container deployed yesterday is actively making outbound connections to an unknown IP address on port 4444. The deployment pipeline had successfully run a Trivy scan before deploying, showing zero vulnerabilities. Your compliance manager asks how this could happen and what tool could have detected it. How do you explain the situation and the necessary architectural changes?</summary>
 
-Trivy operates as a static scanner, meaning it only examines container images and manifests for known vulnerabilities or misconfigurations prior to deployment. It cannot detect zero-day exploits, compromised credentials, or malicious behavior that is initiated after the container is already running. In this scenario, the container might have been compromised at runtime via an unpatched application flaw, leading to the unexpected network traffic. To detect this behavior, you need a runtime security tool like Falco deployed in your cluster. Falco monitors system calls in real-time and would have immediately triggered an alert upon detecting the unauthorized outbound network connection, providing the necessary detective controls that static scanning lacks.
+Trivy operates as a static scanner, meaning it only examines container images and manifests for known vulnerabilities or misconfigurations prior to deployment. It cannot detect zero-day exploits, compromised credentials, or malicious behavior that is initiated after the container is already running. In this scenario, the container might have been compromised at runtime via an unpatched application flaw, leading to the unexpected network traffic. To detect this behavior, you need a runtime security tool like Falco deployed in your cluster. Falco monitors system calls in real-time and could have quickly triggered an alert upon detecting the unauthorized outbound network connection, providing the necessary detective controls that static scanning lacks.
 </details>
 
 <details>
@@ -1095,3 +1095,10 @@ A CSPM tool exclusively evaluates the configuration of the cloud infrastructure 
 ## Next Module
 
 With continuous compliance deeply embedded into your infrastructure lifecycle, it is time to bridge the gap between your cloud deployments and on-premises infrastructure. Head to [Module 10.4: Hybrid Cloud Architecture (On-Prem to Cloud)](../module-10.4-hybrid/) to explore the differences between VPN and Direct Connect, learn how to extend cloud identity to on-premises Kubernetes, and discover how to build unified control planes with EKS Anywhere and Azure Arc.
+
+## Sources
+
+- [Kubernetes Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) — Primary upstream reference for audit policy levels, audit logging behavior, and evidence-collection mechanics.
+- [GuardDuty EKS Protection](https://docs.aws.amazon.com/guardduty/latest/ug/kubernetes-protection.html) — Useful for the module's EKS-focused discussion of audit-log monitoring and threat findings.
+- [GKE Security Posture Dashboard](https://cloud.google.com/kubernetes-engine/docs/concepts/about-security-posture-dashboard) — Directly covers GKE posture scanning and workload vulnerability features referenced in the CSPM section.
+- [kube-bench](https://github.com/aquasecurity/kube-bench) — Practical upstream tool reference for running CIS-oriented Kubernetes hardening checks.

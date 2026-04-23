@@ -27,9 +27,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In May 2023, a platform engineering team at Global Freight Logistics—a major international shipping corporation—operated their entire AWS cloud footprint using a single, monolithic Terraform state file managing hundreds of critical resources. What began two years earlier as a convenient way to quickly stand up their initial cloud environment had silently evolved into a massive JSON bottleneck. A routine `terraform plan` took 12 minutes to execute, as the engine meticulously queried the provider API to verify the status of every virtual private cloud, relational database, and Kubernetes node group before it could even begin to compute requested changes.
+A platform engineering team was operating a large AWS footprint from a single monolithic Terraform state file. Over time, that state became a bottleneck, and routine `terraform plan` operations had slowed enough to delay ordinary changes and incident response.
 
-The breaking point arrived during a high-severity production incident when a core application load balancer required an urgent target group update to route traffic away from a failing availability zone. As the engineer initiated the apply sequence, the deployment pipeline froze for twelve agonizing minutes while the monolithic state refreshed. During this delay, the localized degradation cascaded into a complete system outage, halting warehouse routing systems and causing an estimated $1.2 million in SLA penalties and delayed shipments. Out of sheer desperation, the engineer aborted the pipeline and made the configuration change manually via the AWS Management Console—a "break-glass" maneuver that immediately restored service but introduced severe configuration drift that corrupted the next day's automated deployments.
+A monolithic state can become an incident amplifier: when urgent changes are delayed by slow refreshes, teams may resort to manual console edits to restore service, which can then introduce drift and break later automation.
 
 This module fundamentally deconstructs how to scale infrastructure as code safely. You will learn to isolate failure domains by fracturing monolithic state files into decoupled components, design reusable Kubernetes infrastructure modules, and orchestrate automated drift detection to catch console cowboys. By the end of this module, you will understand how to transition from brittle, serialized deployments to resilient, decentralized GitOps workflows using tools like Terraform, Terratest, and Crossplane.
 
@@ -37,7 +37,7 @@ This module fundamentally deconstructs how to scale infrastructure as code safel
 
 ## The Monolithic State Problem
 
-Terraform state is the critical mapping between your declarative configuration files and the real, physical infrastructure residing in your cloud provider. Every resource you manage adds complex metadata to the state file. As the state grows, every operation slows down logarithmically because Terraform refreshes the entire state via API calls before making any localized changes.
+Terraform state maps your configuration to real infrastructure and stores metadata about managed resources. As state grows, operations can slow because Terraform refreshes existing remote objects before proposing changes.
 
 Think of a monolithic state file like maintaining the financial ledger for a massive multinational corporation in a single spreadsheet document. If an accountant wants to update a $10 expense in the marketing department, they must wait for the entire spreadsheet—containing billions of rows across all global departments—to recalculate its formulas. Eventually, the file becomes so unwieldy that it crashes the program entirely.
 
@@ -45,14 +45,14 @@ Think of a monolithic state file like maintaining the financial ledger for a mas
 
 | Resources | State Size | Plan Time | Apply Time | Risk |
 |---|---|---|---|---|
-| 10 | ~100KB | 5 sec | 30 sec | Low |
-| 50 | ~500KB | 30 sec | 2 min | Low |
-| 100 | ~2MB | 2 min | 5 min | Medium |
-| 250 | ~10MB | 8 min | 15 min | High |
-| 500 | ~30MB | 15 min | 25 min | Very High |
-| 1000+ | ~100MB+ | 30+ min | 45+ min | Extreme |
+| Small | Small | Seconds | Under a minute | Low |
+| Dozens | Small | Tens of seconds | Minutes | Low |
+| Around one hundred | Moderate | Minutes | Several minutes | Medium |
+| Hundreds | Larger | Several minutes | Many minutes | High |
+| Many hundreds | Large | Double-digit minutes | Double-digit minutes | Very High |
+| Very large | Very large | Tens of minutes | Tens of minutes or more | Extreme |
 
-**At 250+ resources, you WILL experience:**
+**At larger state sizes, teams often experience:**
 - Unacceptably slow plans that block CI/CD pipeline concurrency.
 - Frequent state lock timeouts during peak deployment hours.
 - Team members waiting idle to apply changes sequentially.
@@ -99,7 +99,7 @@ Once you fragment your state, those independent pieces inevitably need to commun
 
 ### Remote State Data Sources (Tight Coupling)
 
-The `terraform_remote_state` data source reaches directly into another team's state file in the remote backend to read its exported outputs. 
+The `terraform_remote_state` data source reaches directly into another team's state file in the remote backend to [read its exported outputs](https://developer.hashicorp.com/terraform/language/state/remote-state-data). 
 
 ```hcl
 # networking/outputs.tf -- Export values from networking state
@@ -137,7 +137,7 @@ resource "aws_eks_cluster" "main" {
 }
 ```
 
-While functional, this approach generates heavy architectural coupling. The EKS configuration must know exactly where the networking team stores their state and the exact string names of their outputs. If the networking team refactors their state backend or renames `vpc_id` to `primary_vpc_id`, the EKS deployment instantly breaks.
+While functional, this approach generates heavy architectural coupling. The EKS configuration must know exactly where the networking team stores their state and the exact string names of their outputs. If the networking team refactors their state backend or renames `vpc_id` to `primary_vpc_id`, the EKS deployment will likely fail on the next plan or apply.
 
 ### Better Alternative: Use Data Sources Instead of Remote State
 
@@ -180,7 +180,7 @@ This decoupled approach ensures that as long as the networking team maintains th
 
 ## Remote Backends and State Locking
 
-Local state files committed to source control are a critical security vulnerability and an operational anti-pattern. State files contain the plaintext representations of all configured variables, including database master passwords, private TLS keys, and identity provider secrets. Furthermore, Git cannot facilitate atomic locking during deployments.
+Local state files committed to source control are a critical security vulnerability and an operational anti-pattern. [State files contain the plaintext representations of all configured variables](https://developer.hashicorp.com/terraform/language/manage-sensitive-data), including database master passwords, private TLS keys, and identity provider secrets. Furthermore, Git cannot facilitate atomic locking during deployments.
 
 To solve this, enterprise IaC relies on Remote Backends combined with distributed state locking.
 
@@ -205,7 +205,7 @@ sequenceDiagram
     deactivate DB
 ```
 
-The standard AWS pattern pairs an S3 bucket (for encrypted state storage) with a DynamoDB table (for atomic locking). 
+A common AWS setup stores state in S3 and uses a locking mechanism; older Terraform setups often used DynamoDB tables, while current S3 backends also support native lockfiles. 
 
 ```hcl
 # Backend configuration (per-state-file)
@@ -568,7 +568,7 @@ graph TD
 ```
 
 **Model 1: Traditional**
-- **Pros**: Exceptionally mature, universally understood, provides a clear `terraform plan` for PR reviews before any action is executed.
+- **Pros**: Exceptionally mature, widely understood, provides a clear `terraform plan` for PR reviews before any action is executed.
 - **Cons**: Requires synchronization between two disparate tools, independent access management workflows, and separated state systems.
 
 **Model 2: Crossplane**
@@ -576,7 +576,7 @@ graph TD
 - **Cons**: The Upbound ecosystem is newer. Debugging nested resource failures requires strong Kubernetes diagnostics skills as underlying provider mechanics are deeply abstracted.
 
 **Model 3: Terraform Operator**
-- **Pros**: Enables Kubernetes-native deployment workflows while allowing organizations to recycle their existing, heavy investments in HCL modules.
+- **Pros**: Enables Kubernetes-native deployment workflows while allowing organizations to [recycle their existing, heavy investments in HCL modules](https://github.com/crossplane-contrib/provider-terraform).
 - **Cons**: Extreme state management complexity. Embedding an imperative CLI tool (Terraform) inside a declarative scheduling loop (Kubernetes) introduces profound architectural fragility and race conditions.
 
 ### Crossplane Example
@@ -822,13 +822,13 @@ go test -v -timeout 30m -run TestEksCluster
 
 ## Did You Know?
 
-1. **Terraform state files have caused more production incidents than Terraform configurations** according to a 2024 survey by Spacelift. The most common state-related incidents are: state corruption from concurrent applies (31%), state lock not released after a failed apply (28%), sensitive data exposed in state files (22%), and state lost due to backend misconfiguration (19%). This is why state management is not an afterthought -- it is the most operationally critical aspect of Terraform.
+1. **Terraform state handling is often the hardest operational part of Terraform at scale.** Teams commonly run into problems with concurrent changes, stuck locks, secret exposure, and backend mistakes, so state management deserves explicit design and review.
 
-2. **Crossplane has over 200 managed resource types for AWS alone** as of 2025, covering the most commonly used services (EKS, RDS, S3, IAM, VPC, Lambda, DynamoDB, and many more). However, it still has gaps compared to Terraform's AWS provider, which covers over 1,200 resource types. The gap is closing -- the Upbound Marketplace now generates Crossplane providers directly from Terraform providers using a tool called upjet.
+2. **Crossplane's AWS ecosystem covers many common services, and generation tooling like Upjet can derive Crossplane providers from Terraform providers.** Coverage continues to evolve, but Terraform still has broader provider and resource coverage overall.
 
-3. **The average Terraform module in the public registry has 2.3 variables that are never used** according to an analysis by Bridgecrew/Prisma Cloud. Module bloat is a real problem: teams copy modules from the registry, add variables for every possible configuration, and end up with modules that are harder to understand than raw resources. The best modules have 5-10 input variables with sensible defaults, not 50+ variables that try to cover every edge case.
+3. **Public Terraform modules often accumulate inputs that add complexity without delivering real abstraction value.** Module bloat is a common maintenance problem, so small, opinionated interfaces are usually easier to understand and operate.
 
-4. **HashiCorp changed Terraform's license from Mozilla Public License 2.0 to Business Source License (BSL) in August 2023**, which triggered the creation of OpenTofu -- a community-maintained fork under the Linux Foundation. As of 2025, both projects continue active development with diverging feature sets. OpenTofu added client-side state encryption (a long-requested feature) before HashiCorp, while Terraform added native testing and ephemeral values. Most organizations continue using Terraform, but the fork ensures that an open-source alternative exists.
+4. **[HashiCorp changed Terraform's license from Mozilla Public License 2.0 to Business Source License (BSL) in August 2023](https://www.hashicorp.com/ja/blog/hashicorp-adopts-business-source-license)**, which triggered the [creation of OpenTofu -- a community-maintained fork under the Linux Foundation](https://www.linuxfoundation.org/press/announcing-opentofu). Both Terraform and OpenTofu continue to evolve, but detailed feature and adoption comparisons should be checked against current primary sources before making specific claims.
 
 ---
 
@@ -837,13 +837,13 @@ go test -v -timeout 30m -run TestEksCluster
 | Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | One monolithic state file for everything | "It started small and grew" | Split by concern: networking, compute, databases, IAM. Each component in its own directory with its own state. Do this early -- splitting later is painful. |
-| Not using state locking | "We'll coordinate manually" | Always use DynamoDB (AWS), GCS (GCP), or Blob Storage (Azure) for locking. Without locking, concurrent applies WILL corrupt state. |
-| Storing secrets in state | "It's encrypted at rest" | Terraform state contains plaintext values of all managed resources, including passwords. Use separate secret management (Vault, AWS Secrets Manager) and reference secrets by ARN, not value. |
+| Not using state locking | "We'll coordinate manually" | Use a backend that supports locking. On AWS, current S3 backends can use native lockfiles; GCS and Azure Blob Storage also support locking. Without locking, concurrent writers can corrupt state. |
+| Storing secrets in state | "It's encrypted at rest" | Treat Terraform state as sensitive data, avoid using it as a secret store, and use dedicated secret-management patterns where possible. |
 | Writing modules that are too generic | "We'll configure everything through variables" | Write modules for YOUR use case. A module with 50 variables is worse than raw resources. Start specific, generalize only when you have three proven use cases. |
 | No automated drift detection | "We run terraform plan manually before changes" | Drift happens between planned changes. Schedule daily drift detection in CI. Alert on drift immediately -- it is often a security issue. |
-| Using `terraform taint` to force recreation | "The resource is broken, just recreate it" | `terraform taint` is destructive and deprecated in favor of `-replace`. Understand why the resource is broken before recreating. Tainting a node group kills all pods on those nodes. |
-| Not testing modules before use | "It works on my machine" | Use Terratest or `terraform test` (built-in since 1.6) to validate modules create functional infrastructure. Test in an isolated account to avoid production impact. |
-| Manual state manipulation without backup | "I'll just terraform state rm this broken resource" | Always back up state before manipulation: `terraform state pull > backup.tfstate`. State operations are irreversible. One wrong `state rm` and you orphan real resources. |
+| Using `terraform taint` to force recreation | "The resource is broken, just recreate it" | `terraform taint` is deprecated in favor of `-replace`. Review the replacement impact in the plan before recreating infrastructure. |
+| Not testing modules before use | "It works on my machine" | Use Terratest or [`terraform test` (built-in since 1.6)](https://developer.hashicorp.com/terraform/language/tests%23example) to validate modules create functional infrastructure. Test in an isolated account to avoid production impact. |
+| Manual state manipulation without backup | "I'll just terraform state rm this broken resource" | Back up state before manual changes, for example with `terraform state pull`, and treat state edits as high-risk recovery work rather than routine operations. |
 
 ---
 
@@ -1293,3 +1293,14 @@ terraform test
 ## Next Module
 
 Return to the [Advanced Operations hub](/cloud/advanced-operations/) for a summary of all modules in this phase and guidance on what to pursue next. You have comprehensively navigated the full lifecycle of advanced cloud operations: transitioning from monolithic state chaos toward modular GitOps automation, enabling your platform to safely scale without arbitrary operational ceilings.
+
+## Sources
+
+- [developer.hashicorp.com: remote state data](https://developer.hashicorp.com/terraform/language/state/remote-state-data) — HashiCorp's `terraform_remote_state` reference directly describes retrieving root module outputs from another state snapshot.
+- [developer.hashicorp.com: manage sensitive data](https://developer.hashicorp.com/terraform/language/manage-sensitive-data) — HashiCorp documentation explicitly says local state is plaintext and may contain secrets such as database passwords or API tokens.
+- [github.com: provider terraform](https://github.com/crossplane-contrib/provider-terraform) — The provider-terraform README explicitly says it can run Terraform code and work with existing Terraform modules.
+- [hashicorp.com: hashicorp adopts business source license](https://www.hashicorp.com/ja/blog/hashicorp-adopts-business-source-license) — HashiCorp's August 10, 2023 announcement directly states the license change from MPL 2.0 to BSL v1.1.
+- [linuxfoundation.org: announcing opentofu](https://www.linuxfoundation.org/press/announcing-opentofu) — The Linux Foundation launch announcement explicitly describes OpenTofu as a response to Terraform's license change.
+- [developer.hashicorp.com: tests%23example](https://developer.hashicorp.com/terraform/language/tests%23example) — HashiCorp's testing documentation explicitly notes that the framework is available in Terraform v1.6.0 and later.
+- [Terraform State](https://developer.hashicorp.com/terraform/language/state) — This is the core reference for what state is, why Terraform needs it, and how state relates to infrastructure changes.
+- [Crossplane Repository](https://github.com/crossplane/crossplane) — This is the primary upstream project for the Kubernetes-native control-plane model discussed in the module's Crossplane section.

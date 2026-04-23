@@ -716,7 +716,7 @@ gcloud recommender recommendations list \
 <details>
 <summary>1. You are the lead engineer for a financial application spanning two GKE clusters (US and EU). A new compliance rule requires you to scrape custom metrics from a specific subset of payment pods labeled `pci-scope: true` across all namespaces in both clusters, but you must not scrape any other pods. How should you configure Managed Prometheus (GMP) to achieve this efficiently?</summary>
 
-To achieve this, you should deploy a `ClusterPodMonitoring` resource in both clusters with a `matchLabels` selector for `pci-scope: true`. A `ClusterPodMonitoring` resource is required because the pods are distributed across multiple namespaces, and standard `PodMonitoring` is namespace-scoped and would require creating a separate resource for every single namespace. By applying this configuration to both clusters using Fleet management or Config Sync, GMP's collectors will automatically identify and scrape the target pods regardless of their namespace. This approach minimizes configuration overhead and ensures that any new namespaces containing PCI-scoped pods are automatically monitored without manual intervention.
+To achieve this, you should deploy a `ClusterPodMonitoring` resource in both clusters with a `matchLabels` selector for `pci-scope: true`. A `ClusterPodMonitoring` resource is the practical choice here because the pods are distributed across multiple namespaces, and standard `PodMonitoring` is namespace-scoped and would require creating a separate resource in each relevant namespace. By applying this configuration to both clusters using Fleet management or Config Sync, GMP's collectors will automatically identify and scrape the target pods regardless of their namespace. This approach minimizes configuration overhead and ensures that any new namespaces containing PCI-scoped pods are automatically monitored without manual intervention.
 </details>
 
 <details>
@@ -1096,3 +1096,9 @@ You have completed the GKE Deep Dive series. From here, consider exploring:
 - **[Hyperscaler Rosetta Stone](/cloud/hyperscaler-rosetta-stone/)** --- Compare GKE concepts with EKS and AKS for multi-cloud fluency
 - **[Platform Engineering Foundations](/platform/foundations/)** --- Apply what you learned about GKE to build internal developer platforms
 - **[SRE Disciplines](/platform/disciplines/core-platform/sre/)** --- Use GKE observability and Fleet management in an SRE practice
+
+## Sources
+
+- [Managed Service for Prometheus Overview](https://cloud.google.com/stackdriver/docs/managed-prometheus) — Primary reference for GMP architecture, retention, query model, and Monarch-backed storage.
+- [Configure Multi-Cluster Services on GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-services) — Primary reference for ServiceExport, ServiceImport, `.svc.clusterset.local`, and cross-cluster service discovery behavior.
+- [GKE Cost Allocation](https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations) — Primary reference for enabling cost allocation, exported billing labels, and request-based charge attribution.

@@ -27,9 +27,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2019, Monzo, a prominent digital bank, hit the hard limits of AWS VPC Peering. Operating a massive microservices architecture, they had organically built a full-mesh network connecting dozens of VPCs. As their engineering organization scaled, they reached the AWS limit of 125 peering connections per VPC. However, the true bottleneck was route table capacity. Each peering connection required explicit route table entries in every participating VPC. The administrative overhead of managing thousands of static routes became an operational nightmare, severely delaying the rollout of new financial products.
+Teams that outgrow full-mesh VPC peering can hit peering quotas and route-table management overhead, making a later migration to a transit hub slow and risky.
 
-The financial impact of this architectural ceiling was substantial. Dozens of senior platform engineers had to pause product development for weeks to design and execute a live migration to AWS Transit Gateway. This delay in feature delivery cost the company an estimated $1.2M in engineering hours and delayed revenue. The migration itself was perilous; moving the networking backbone of a live bank without dropping active ledger transactions is akin to replacing the engine of an airplane mid-flight. 
+Large-scale network migrations can consume weeks of senior engineering time and delay product delivery, especially in regulated environments. 
 
 The primary lesson is not merely to use a Transit Gateway from the start. The critical lesson is that network topology decisions made at the beginning of a cloud journey become load-bearing walls that are extraordinarily expensive to dismantle later. This module teaches you how to choose the correct network topology from day one, how the three major cloud providers implement transit networking, and how to handle the complex problems that manifest only at scale: overlapping CIDR blocks, transitive routing blackholes, and exorbitant egress costs.
 
@@ -61,7 +61,7 @@ graph TD
 
 **Pros**: This pattern offers the lowest possible latency because traffic takes a direct path without intermediate hops. There is no central router to become a single point of failure, no bandwidth bottleneck, and crucially, no per-gigabyte data processing charges for the transit hop itself (in AWS, intra-region VPC peering is free for the connection).
 
-**Cons**: The architecture scales quadratically. Route tables grow linearly per VPC, creating immense administrative burden. VPC Peering explicitly denies transitive routing (if VPC A peers with B, and B peers with C, VPC A cannot reach C through B). Furthermore, there is no centralized inspection point to enforce universal firewall policies.
+**Cons**: The architecture scales quadratically. Route tables grow linearly per VPC, creating immense administrative burden. [VPC Peering explicitly denies transitive routing](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) (if VPC A peers with B, and B peers with C, VPC A cannot reach C through B). Furthermore, there is no centralized inspection point to enforce universal firewall policies.
 
 **When to use**: Full mesh is appropriate for very small deployments under 10 VPCs. It is also favored in highly cost-sensitive environments where avoiding per-GB processing charges is more important than architectural simplicity.
 
@@ -92,7 +92,7 @@ graph TD
 
 **Pros**: This pattern exhibits linear scaling, making it manageable at enterprise scale. It enables centralized routing policy, transitive routing, and provides a single, logical attachment point for on-premises connectivity (VPN/Direct Connect). It is the foundational pattern for centralized egress and deep security inspection.
 
-**Cons**: The hub acts as a potential bandwidth bottleneck, although managed cloud hubs are designed to handle massive throughput. Cloud providers levy per-GB data processing charges for traffic passing through the hub (e.g., AWS Transit Gateway charges $0.02/GB). A catastrophic hub misconfiguration affects all intra-organization connectivity.
+**Cons**: The hub acts as a potential bandwidth bottleneck, although managed cloud hubs are designed to handle massive throughput. Cloud providers levy per-GB data processing charges for traffic passing through the hub (e.g., [AWS Transit Gateway charges $0.02/GB](https://aws.amazon.com/transit-gateway/pricing/)). A catastrophic hub misconfiguration affects all intra-organization connectivity.
 
 **When to use**: This is the default enterprise standard for environments with 10 or more VPCs. It is mandatory for environments requiring centralized security inspection, extensive on-premises connectivity, or regulated sectors demanding deep traffic visibility.
 
@@ -113,7 +113,7 @@ graph TD
     A ===|Direct VPC Peering<br/>Avoids TGW charge| B
 ```
 
-**Rule of thumb**: Implement direct peering bypasses only when data transfer exceeds 5TB per month between two specific VPCs, heavily optimizing costs without sacrificing the management benefits of the hub for the broader network.
+**Rule of thumb**: Implement direct peering bypasses only when sustained traffic between two specific VPCs is high enough that transit-hub processing fees materially affect your bill.
 
 > **Pause and predict**: You have 30 VPCs that all need to communicate. Why is VPC Peering impractical at this scale?
 >
@@ -251,7 +251,7 @@ The traffic flow executes in a precise sequence:
 4. If allowed, the packet leaves the Firewall VPC and re-enters the TGW, but this time it is evaluated against the "Inspect" Route Table.
 5. The Inspect RT contains the specific route for VPC-B, delivering the packet successfully.
 
-This architecture introduces roughly 1ms of latency but provides massive security dividends:
+This architecture introduces additional hop and inspection latency but provides major security benefits:
 - Centralized Intrusion Detection/Prevention (IDS/IPS) for internal traffic.
 - Consolidated logging of all inter-VPC flows in a single pane of glass.
 - Critical capability to block lateral movement by ransomware or compromised Kubernetes pods.
@@ -312,7 +312,7 @@ flowchart TD
     S1 --> GKE2
 ```
 
-The pivotal distinction from AWS is that there is only ONE network boundary to manage. Resources across all projects communicate via private IPs inherently because they exist within the same routing plane. Firewall rules are administered centrally within the Host Project.
+The pivotal distinction from AWS is that there is only ONE network boundary to manage. [Resources across all projects communicate via private IPs inherently because they exist within the same routing plane. Firewall rules are administered centrally within the Host Project.](https://cloud.google.com/vpc/docs/shared-vpc)
 
 ```bash
 # Enable Shared VPC on the host project
@@ -411,7 +411,7 @@ flowchart TD
     VWAN --- Hub3
 ```
 
-A crucial feature of Virtual WAN Standard tier is its automatic, global meshing. If you deploy regional Hubs across the globe, Microsoft automatically provisions full-mesh transit routing between them over the Azure backbone.
+A crucial feature of Virtual WAN Standard tier is its automatic, global meshing. If you deploy regional Hubs across the globe, [Microsoft automatically provisions full-mesh transit routing between them over the Azure backbone.](https://learn.microsoft.com/en-us/azure/virtual-wan/virtual-wan-faq)
 
 ```bash
 # Create a Virtual WAN
@@ -466,7 +466,7 @@ flowchart TD
     TGW -.- Q(("WHERE DOES<br/>10.0.1.50 GO?<br/>(ambiguous!)"))
 ```
 
-You unequivocally CANNOT peer or transit-connect VPCs featuring overlapping CIDR blocks. This represents a hard mathematical constraint across all cloud providers.
+Overlapping CIDR blocks prevent straightforward peering or hub-based routing, so you must renumber networks or introduce translation or proxy patterns before interconnecting them.
 
 > **Stop and think**: You are merging with another company, and their production VPC uses `10.0.0.0/16`, the exact same CIDR as your production VPC. How can you establish connectivity between these two environments without changing their IP addresses?
 >
@@ -477,7 +477,7 @@ You unequivocally CANNOT peer or transit-connect VPCs featuring overlapping CIDR
 
 ### Prevention: IP Address Management (IPAM)
 
-The preventative cure is instituting centralized IP Address Management (IPAM). By defining authoritative IP pools, you force teams to request allocations programmatically, entirely eliminating human error.
+The preventative cure is instituting [centralized IP Address Management (IPAM). By defining authoritative IP pools, you force teams to request allocations programmatically](https://docs.aws.amazon.com/vpc/latest/ipam/allocate-cidrs-ipam.html), entirely eliminating human error.
 
 ```bash
 # AWS: Use VPC IPAM (IP Address Manager)
@@ -511,7 +511,7 @@ aws ec2 create-vpc \
 
 ### CIDR Allocation Strategy
 
-A robust strategy segments the massive `10.0.0.0/8` master block into logical routing domains before a single line of Terraform is written. Furthermore, deploying Kubernetes requires immense IP space for Pods. Always utilize Carrier-Grade NAT ranges (e.g., `100.64.0.0/10`) for secondary pod subnets to avoid exhausting your primary routing space.
+A robust strategy segments the massive `10.0.0.0/8` master block into logical routing domains before a single line of Terraform is written. Furthermore, deploying Kubernetes requires immense IP space for Pods. In most cases, utilize Carrier-Grade NAT ranges (e.g., `100.64.0.0/10`) for secondary pod subnets to avoid exhausting your primary routing space.
 
 ```mermaid
 flowchart LR
@@ -573,7 +573,7 @@ The architectural benefits are manifold:
 
 ### AWS Network Firewall Rules
 
-By utilizing stateful domain allowlists inspecting TLS SNI headers, administrators can permit access specifically to necessary artifact repositories while discarding malicious outbound requests.
+By utilizing [stateful domain allowlists inspecting TLS SNI headers](https://docs.aws.amazon.com/network-firewall/latest/APIReference/API_RulesSourceList.html), administrators can permit access specifically to necessary artifact repositories while discarding malicious outbound requests.
 
 ```bash
 # Create a rule group for allowed domains
@@ -607,11 +607,11 @@ The most frequently overlooked expenditure in Kubernetes networking is cross-AZ 
 | Traffic Path | AWS Cost/GB | GCP Cost/GB | Azure Cost/GB |
 |---|---|---|---|
 | Same AZ | Free | Free | Free |
-| Cross-AZ (same region) | $0.01 each direction | Free (within same zone group) | Free |
-| Cross-Region (same continent) | $0.02 | $0.01 | $0.02 |
-| Cross-Region (intercontinental) | $0.02-$0.08 | $0.02-$0.08 | $0.02-$0.05 |
-| Internet egress | $0.09 (first 10TB) | $0.12 (first 1TB) | $0.087 |
-| TGW data processing | $0.02 | N/A | ~$0.02 (vHub) |
+| Cross-AZ (same region) | Charge depends on service and traffic path | Charge depends on zones, IP type, and path | Charge depends on service and billing path |
+| Cross-Region (same continent) | Metered; exact rate depends on source and destination regions | Metered; exact rate depends on source and destination regions | Metered; exact rate depends on source and destination regions |
+| Cross-Region (intercontinental) | Metered; typically higher than intra-continent traffic | Metered; typically higher than intra-continent traffic | Metered; typically higher than intra-continent traffic |
+| Internet egress | Metered; varies by source region and usage tier | Metered; varies by destination and usage tier | Metered; varies by source region and pricing path |
+| TGW data processing | AWS Transit Gateway adds per-GB processing charges | Product- and path-dependent; check current NCC or VPC pricing | Product- and path-dependent; check current Virtual WAN and bandwidth pricing |
 
 The AWS cross-AZ charge proves particularly devastating for distributed Kubernetes workloads. If a cluster spans three Availability Zones to maintain high availability, every intra-cluster service request that crosses an AZ boundary incurs a $0.02/GB round-trip charge.
 
@@ -633,7 +633,7 @@ flowchart LR
     DB -- "resp" --> API
 ```
 
-To mitigate this, leverage Kubernetes topology-aware routing (stable in v1.35+) to force `kube-proxy` to prioritize local endpoints within the same Availability Zone.
+To mitigate this, leverage Kubernetes topology-aware routing so traffic prefers same-zone endpoints when the Service and endpoint distribution allow it.
 
 ---
 
@@ -654,20 +654,20 @@ version account-id interface-id srcaddr dstaddr srcport dstport protocol packets
 
 A `REJECT` action occurs for two primary reasons:
 1. **Firewall Block**: The packet arrived at the destination, but a Security Group or Network ACL denied it.
-2. **Missing Route**: The Transit Gateway or VPC router encountered a destination IP without a corresponding route table entry, summarily dropping the packet into the ether. 
+2. **Path Issue**: A missing or incorrect route can blackhole traffic, but you need route analysis tools in addition to flow logs to prove that was the cause. 
 
 ### Route Analysis Tools
 
-To augment manual log parsing, cloud providers offer automated path tracing. AWS Reachability Analyzer and GCP Network Topology perform deep static analysis, mapping out the precise hop-by-hop path your packets will take and instantaneously identifying the specific routing table missing the required entry.
+To augment manual log parsing, cloud providers offer automated path analysis. AWS Reachability Analyzer and GCP Connectivity Tests can model the expected path and highlight blocking components in routing or policy.
 
 ---
 
 ## Did You Know?
 
-1. **AWS Transit Gateway processes over 100 Gbps per attachment** and supports up to 5,000 attachments per gateway. Upon its release in November 2018, it instantly obsoleted complex "transit VPC" solutions reliant on fragile EC2 proxy instances.
-2. **GCP's Shared VPC can host up to 1,000 service projects** per host project. This massive scalability enables a single foundational network to support the entire engineering workforce of a Fortune 500 enterprise natively.
-3. **Azure Virtual WAN Standard tier hubs automatically create full-mesh connectivity** globally. Deploying a hub in West Europe and another in East US immediately establishes a routed, encrypted link across the Microsoft backbone network with absolutely zero manual BGP configuration.
-4. **Cross-AZ data transfer in AWS costs companies more than they realize.** A comprehensive 2023 analysis by Vantage indicated that cross-AZ data transfer constituted the third-highest expenditure for the median AWS customer, exceeded only by compute and storage.
+1. [**AWS Transit Gateway processes over 100 Gbps per attachment** and supports up to 5,000 attachments per gateway](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html). Its release gave AWS customers a managed alternative to self-built transit VPC patterns.
+2. **GCP's Shared VPC is built for large multi-project environments.** Use host projects and shared subnets when multiple teams need centralized network control with delegated project ownership.
+3. **Azure Virtual WAN Standard automatically meshes hubs** within the same Virtual WAN, reducing manual inter-hub routing work over Microsoft's backbone.
+4. **Cross-AZ data transfer in AWS can become a major bill driver at scale.** Track it explicitly instead of assuming it is negligible.
 
 ---
 
@@ -675,13 +675,13 @@ To augment manual log parsing, cloud providers offer automated path tracing. AWS
 
 | Mistake | Why It Happens | How to Fix It |
 |---|---|---|
-| Using VPC Peering when Transit Gateway is needed | Peering is simpler to set up initially | Start with TGW if you have >5 VPCs or need centralized inspection. Migration from peering to TGW is painful. |
+| Using VPC Peering when Transit Gateway is needed | Peering is simpler to set up initially | Start evaluating TGW early if you expect multiple VPCs, centralized inspection, or ongoing network growth. Migration from peering to TGW is usually more disruptive later. |
 | Overlapping CIDR ranges across accounts | No centralized IP planning | Implement AWS IPAM or maintain a CIDR registry in your IaC. Allocate from non-overlapping pools per environment. |
 | Forgetting to update VPC route tables after TGW attachment | TGW handles its routes, but VPCs need routes pointing to TGW | Automate: when attaching a VPC to TGW, also add a route `0.0.0.0/0 -> tgw-id` in the VPC's private route table. |
-| Running NAT Gateways in every VPC | Each VPC needs internet access | Centralize NAT in a shared egress VPC. Route internet-bound traffic through TGW. Saves $32/month per eliminated NAT GW. |
+| Running NAT Gateways in every VPC | Each VPC needs internet access | Centralize NAT in a shared egress VPC when the traffic pattern and failure model fit; this can remove repeated hourly NAT gateway charges, but the exact savings depend on region and usage. |
 | Ignoring cross-AZ data transfer costs | "It's just $0.01/GB" | For high-throughput K8s clusters, this can be thousands per month. Use topology-aware routing and monitor cross-AZ traffic with VPC Flow Logs. |
 | Not enabling TGW route table segmentation | Using the default route table for everything | Create separate route tables per security domain (prod, staging, shared). This prevents staging workloads from routing to production VPCs. |
-| Peering VPCs across regions without considering latency | "The cloud handles it" | Cross-region latency adds 30-120ms per hop. For real-time APIs, this matters. Measure with `ping` or `mtr` before designing cross-region flows. |
+| Peering VPCs across regions without considering latency | "The cloud handles it" | Cross-region latency varies widely by geography and path. For real-time APIs, measure it directly with `ping`, `mtr`, or application-level tests before designing cross-region flows. |
 | Skipping egress filtering | "We trust our workloads" | A compromised pod can exfiltrate data to any IP. Centralized egress with domain allowlists is a critical security control. |
 
 ---
@@ -1045,3 +1045,16 @@ Verify the successful deployment of the hub-and-spoke infrastructure and tear do
 ## Next Module
 
 [Module 8.3: Cross-Cluster & Cross-Region Networking](../module-8.3-cross-cluster-networking/) -- Transition your perspective from raw cloud-level virtual networks to intricate Kubernetes-level networking. You will master how individual pods separated by vast geographic distances discover and talk to each other seamlessly using Cilium Cluster Mesh, the advanced Multi-Cluster Services API, and global DNS load balancing layers.
+
+## Sources
+
+- [docs.aws.amazon.com: vpc peering.html](https://docs.aws.amazon.com/whitepapers/latest/aws-vpc-connectivity-options/vpc-peering.html) — AWS documentation explicitly states that VPC peering does not support transitive peering.
+- [aws.amazon.com: pricing](https://aws.amazon.com/transit-gateway/pricing/) — The AWS Transit Gateway pricing page directly states a $0.02 data-processing charge in its pricing example.
+- [cloud.google.com: shared vpc](https://cloud.google.com/vpc/docs/shared-vpc) — The Shared VPC overview directly describes host and service projects, internal-IP communication, and centralized control of network resources.
+- [docs.aws.amazon.com: API RulesSourceList.html](https://docs.aws.amazon.com/network-firewall/latest/APIReference/API_RulesSourceList.html) — The API reference explicitly says that for HTTPS traffic, domain filtering is SNI-based.
+- [learn.microsoft.com: virtual wan faq](https://learn.microsoft.com/en-us/azure/virtual-wan/virtual-wan-faq) — Microsoft's Virtual WAN FAQ states that hubs in a Standard Virtual WAN are meshed and automatically connected.
+- [docs.aws.amazon.com: allocate cidrs ipam.html](https://docs.aws.amazon.com/vpc/latest/ipam/allocate-cidrs-ipam.html) — AWS IPAM documentation explicitly says it helps strategically assign prefixes and avoid overlapping IP ranges.
+- [docs.aws.amazon.com: transit gateway quotas.html](https://docs.aws.amazon.com/vpc/latest/tgw/transit-gateway-quotas.html) — AWS Transit Gateway quotas directly document both limits.
+- [docs.aws.amazon.com: vpc peering connection quotas.html](https://docs.aws.amazon.com/vpc/latest/peering/vpc-peering-connection-quotas.html) — General lesson point for an illustrative rewrite.
+- [aws.amazon.com: pricing](https://aws.amazon.com/vpc/pricing/) — General lesson point for an illustrative rewrite.
+- [AWS Transit Gateway Route Tables](https://docs.aws.amazon.com/vpc/latest/tgw/tgw-route-tables.html) — Covers TGW associations, propagations, and static routes, which are central to hub-and-spoke segmentation.

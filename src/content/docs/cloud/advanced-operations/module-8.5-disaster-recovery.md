@@ -960,3 +960,10 @@ rm -f /tmp/velero-creds
 ## Next Module
 
 [Module 8.6: Multi-Region Active-Active Deployments](../module-8.6-active-active/) -- Disaster recovery is about surviving failure. Active-active is about eliminating downtime entirely. Learn how to run your Kubernetes workloads in multiple regions simultaneously, handle global state management, and deal with the cost and complexity trade-offs.
+
+## Sources
+
+- [GitLab 2017 Database Outage Postmortem](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/) — Primary incident record for the backup failures, live-streamed recovery, and operational lessons used in this module.
+- [Operating etcd Clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) — Upstream reference for etcd's role in Kubernetes and the supported backup and restore workflow.
+- [Disaster Recovery Options in the Cloud](https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html) — Maps backup-and-restore, pilot light, warm standby, and active-active patterns to RTO/RPO trade-offs.
+- [Route 53 Failover Record Values](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-failover.html) — Authoritative reference for failover-record TTL guidance in the DNS section.

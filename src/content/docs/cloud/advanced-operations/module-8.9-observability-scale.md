@@ -677,7 +677,7 @@ flowchart TD
 
 ### Tail-Based Sampling for Traces
 
-Ingesting and storing 100% of generated distributed traces is financially unviable. Most systems implement sampling strategies. Standard "head-based" sampling makes a random drop-or-keep decision the moment a request starts. However, this means you will frequently drop traces for transactions that eventually fail later in the pipeline.
+Ingesting and storing 100% of generated distributed traces is often financially unviable. Most systems implement sampling strategies. Standard "head-based" sampling makes a random drop-or-keep decision the moment a request starts. However, this means you will frequently drop traces for transactions that eventually fail later in the pipeline.
 
 Tail-based sampling resolves this by holding all constituent spans of a trace in a temporary memory buffer until the entire request completes. Only then does it execute policy decisions, guaranteeing that any trace containing an error or exceeding latency thresholds is preserved.
 
@@ -782,7 +782,7 @@ The core architectural difference lies in how data is transported and queried ac
 <details>
 <summary>3. During a major marketing event, your Prometheus memory usage spikes from 32GB to 128GB in 10 minutes, and queries for `http_requests_total` time out. You discover this metric now has 200 million unique time series. What specific anti-pattern likely caused this sudden cardinality explosion, and how do you resolve it?</summary>
 
-This sudden explosion in time series is almost certainly caused by developers injecting high-cardinality data—such as unique user IDs, transaction IDs, or raw request paths—into metric labels. Because every unique combination of label values creates an entirely new time series in the TSDB, a surge in unique users directly translates to a surge in memory consumption. To resolve this, you must immediately drop the offending labels using Prometheus relabeling rules or OTel Collector processors to stabilize the system. Moving forward, high-cardinality identifiers should be migrated to distributed trace attributes or structured logs, while metrics should only use bounded categories like HTTP status codes or normalized route templates.
+This sudden explosion in time series is almost certainly caused by developers injecting high-cardinality data—such as unique user IDs, transaction IDs, or raw request paths—into metric labels. Because every unique combination of label values creates an entirely new time series in the TSDB, a surge in unique users directly translates to a surge in memory consumption. To resolve this, you should quickly drop the offending labels using Prometheus relabeling rules or OTel Collector processors to stabilize the system. Moving forward, high-cardinality identifiers should be migrated to distributed trace attributes or structured logs, while metrics should only use bounded categories like HTTP status codes or normalized route templates.
 </details>
 
 <details>
@@ -794,7 +794,7 @@ Loki deliberately avoids building full-text inverted indexes of the actual log c
 <details>
 <summary>5. You are implementing distributed tracing for a high-traffic e-commerce site. You configure your OTel Collectors to sample 10% of all traces. The next day, developers complain that whenever a checkout fails, the corresponding trace is almost always missing from Tempo. Why did this sampling strategy fail your team, and what approach would guarantee error traces are kept?</summary>
 
-You implemented head-based sampling, which makes a randomized keep-or-drop decision at the very beginning of the request lifecycle before the system knows whether the transaction will succeed or fail. Because failures are statistically rare, a 10% random sample means there is a 90% chance that the trace for a failed checkout is immediately discarded. To guarantee that valuable traces are retained, you must implement tail-based sampling in your OTel Collector architecture. Tail-based sampling buffers the entire trace in memory until it completes, allowing you to evaluate the full transaction and apply intelligent policies that always keep traces containing errors or high latency while randomly sampling the successful, routine requests.
+You implemented head-based sampling, which makes a randomized keep-or-drop decision at the very beginning of the request lifecycle before the system knows whether the transaction will succeed or fail. Because failures are statistically rare, a 10% random sample means there is a 90% chance that the trace for a failed checkout is immediately discarded. To guarantee that valuable traces are retained, you must implement tail-based sampling in your OTel Collector architecture. Tail-based sampling buffers the entire trace in memory until it completes, allowing you to evaluate the full transaction and apply intelligent policies that typically keep traces containing errors or high latency while randomly sampling the successful, routine requests.
 </details>
 
 <details>
@@ -1138,3 +1138,8 @@ kind delete cluster --name obs-lab
 ## Next Module
 
 [Module 8.10: Scaling IaC & State Management](../module-8.10-iac-scale/) -- Your clusters are now highly observable, your ingestion costs are firmly optimized, and your architecture cleanly spans multiple regions. It is time to learn how to actively manage the infrastructure as code (IaC) that holds it all together. Delve into advanced Terraform state partitioning, robust module design, enterprise GitOps integration, and aggressive drift detection at massive operational scale.
+
+## Sources
+
+- [Grafana Loki Overview](https://grafana.com/docs/loki/latest/get-started/overview/) — Covers Loki's label-based indexing model, storage design, and deployment modes for scalable logging.
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Primary overview of the Collector's role as a vendor-agnostic telemetry ingestion, processing, and export pipeline.

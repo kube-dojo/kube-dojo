@@ -1,0 +1,468 @@
+{
+  "module_key": "cloud/azure-essentials/module-3.6-acr",
+  "module_path": "src/content/docs/cloud/azure-essentials/module-3.6-acr.md",
+  "research_run_id": "2026-04-23T02:06:34+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A specific September 2022 CapitalFlow fintech incident caused a CI/CD outage after a Docker Hub push.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In September 2022, a DevOps team at a mid-size fintech company called CapitalFlow pushed a new container image to their shared Docker Hub account. The image contained a critical fix for a payment processing bug that was causing transaction failures and data corruption. Twenty minutes later, their entire CI/CD pipeline ground to a halt.",
+      "suggested_rewrite": "Teams that rely on a shared public registry can discover at the worst possible time that pull limits or registry availability are constraining their CI/CD pipeline.",
+      "lesson_point_url": null,
+      "rationale": "This is a named anecdote with specific timing and business context but no attributable real incident source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Docker Hub rate limits are 100 pulls per 6 hours for unauthenticated users and 200 per 6 hours for authenticated Personal users.",
+      "claim_class": "statistic",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://www.docker.com/blog/revisiting-docker-hub-policies-prioritizing-developer-experience/",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Docker's official 2025 rate-limit update explicitly states these current limits."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The team lost roughly $8,000 per incident and saw the problem three times that month.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Developers sat idle for hours waiting for rate limits to reset, and the payment bug remained in production while customers complained. The team estimated the productivity loss and failed transaction cost at roughly $8,000 per incident, and it happened three times that month before they initiated a rapid migration.",
+      "suggested_rewrite": "Registry bottlenecks can delay fixes, slow engineering teams, and create real operational and business costs.",
+      "lesson_point_url": null,
+      "rationale": "These are precise loss figures and incident counts attached to an unattributed war story."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Azure Container Registry is a managed private registry that integrates with Microsoft Entra ID/Azure identity.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-intro",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's ACR overview describes ACR as a private registry with Entra authentication integration."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "ACR eliminates arbitrary rate limits and directly provides automated builds, vulnerability scanning, and geo-replication.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "It eliminates arbitrary rate limits, keeps your images close to your compute workloads within the exact same Azure region, and provides enterprise-grade features like automated builds, vulnerability scanning, and global geo-replication that external free-tier registries simply cannot match.",
+      "suggested_rewrite": "It removes dependence on third-party public registry limits, can be deployed close to Azure workloads, and integrates with Azure services for builds, optional vulnerability assessment, and geo-replication.",
+      "lesson_point_url": null,
+      "rationale": "The sentence overstates the product boundary because vulnerability scanning is provided through integrated services such as Defender, not as an unconditional built-in ACR feature."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "ACR SKUs provide different included storage and feature sets, and Premium is required for geo-replication, Private Link, content trust, and customer-managed keys.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ACR SKUs, feature table",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus?source=recommendations",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's SKU page documents included storage and Premium-only features."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "The Premium storage row says the tier is expandable to 50 TiB.",
+      "claim_class": "statistic",
+      "span_hint": "section: ACR SKUs, table row Storage",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Storage** | 10 GiB | 100 GiB | 500 GiB (expandable to 50 TiB) |",
+      "suggested_rewrite": "| **Storage** | 10 GiB | 100 GiB | 500 GiB included (see current Microsoft limits for maximum capacity) |",
+      "lesson_point_url": null,
+      "rationale": "Current Microsoft documentation lists different maximum storage limits, so this exact number should be removed or updated."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The table gives exact read-throughput values of 1,000/3,000/10,000 ReadOps per minute.",
+      "claim_class": "statistic",
+      "span_hint": "section: ACR SKUs, table row Read throughput",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Read throughput** | 1,000 ReadOps/min | 3,000 ReadOps/min | 10,000 ReadOps/min |",
+      "suggested_rewrite": "| **Read throughput** | Lower | Higher | Highest |",
+      "lesson_point_url": null,
+      "rationale": "The current official SKU page no longer presents these exact figures, so the precise numbers fail the support test."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The table gives exact write-throughput values of 100/500/2,000 WriteOps per minute.",
+      "claim_class": "statistic",
+      "span_hint": "section: ACR SKUs, table row Write throughput",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Write throughput** | 100 WriteOps/min | 500 WriteOps/min | 2,000 WriteOps/min |",
+      "suggested_rewrite": "| **Write throughput** | Lower | Higher | Highest |",
+      "lesson_point_url": null,
+      "rationale": "The current official SKU page does not directly back these exact values."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "The table gives approximate monthly prices of about $5, $20, and $50 plus replicas.",
+      "claim_class": "pricing",
+      "span_hint": "section: ACR SKUs, table row Approximate cost",
+      "disposition": "soften_to_illustration",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Approximate cost** | ~$5/month | ~$20/month | ~$50/month + replicas |",
+      "suggested_rewrite": "| **Approximate cost** | Varies by region and agreement | Varies by region and agreement | Varies by region, agreement, and replica count |",
+      "lesson_point_url": "https://azure.microsoft.com/en-us/pricing/details/container-registry/",
+      "rationale": "Azure pricing is dynamic by region and agreement, so fixed monthly numbers are better treated as illustrative than as durable facts."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Microsoft allows SKU changes without downtime or data loss.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ACR SKUs, paragraph after table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Importantly, Microsoft allows you to upgrade your SKU at any time without experiencing downtime or data loss.",
+      "suggested_rewrite": "Microsoft documents that you can change an ACR SKU without registry downtime, subject to the limits and feature constraints of the target tier.",
+      "lesson_point_url": null,
+      "rationale": "The docs explicitly support no downtime, but this sentence adds an uncited no-data-loss claim."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Service principals are appropriate for headless or external CI/CD scenarios and can be scoped with RBAC roles.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Authentication, Service Principals",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-auth-service-principal",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's service principal guidance explicitly positions service principals for headless services with scoped registry permissions."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Managed identities avoid stored passwords and Azure manages the credential lifecycle for Azure-hosted workloads.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Authentication, Managed Identity",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication-managed-identity",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's managed identity docs explicitly say you can authenticate without managing registry credentials."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "AKS attach-acr assigns pull permissions to the AKS kubelet managed identity automatically.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Authentication, Managed Identity code example",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The AKS integration docs state that AKS-ACR integration assigns the AcrPull role to the kubelet identity."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Quick builds run in Azure and can build and push without a local Docker Engine.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ACR Tasks, The Quick Build",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The ACR Tasks overview explicitly describes quick tasks as cloud builds that do not require a local Docker Engine."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "ACR Tasks can rebuild images automatically on base-image updates and also run on a schedule.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ACR Tasks, Base Image Triggers and Automated Patching",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-tasks-overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents base-image triggers and timer triggers as first-class ACR Tasks capabilities."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "A named e-commerce company used ACR Tasks to rebuild 23 microservices in 8 minutes after a zero-day base-image incident.",
+      "claim_class": "war_story",
+      "span_hint": "section: ACR Tasks, War Story",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**War Story**: A prominent e-commerce company discovered a critical zero-day vulnerability in the `node:18-alpine` base image at 2 PM on a Friday. They had over 23 distinct microservices built on top of that specific base image layer. Without ACR Tasks, orchestrating the rebuild and push of all 23 images would have taken their Jenkins CI pipeline nearly 2 hours due to sequential build constraints on a shared agent pool. Because they had configured ACR Tasks with base image triggers, the moment the patched `node` image was published to Docker Hub, ACR automatically spun up 23 parallel ephemeral build environments. All 23 microservices were rebuilt and securely pushed into their registry within 8 minutes. The engineering team merely had to orchestrate the Kubernetes rollout, saving them from a weekend of incident response.",
+      "suggested_rewrite": "**Example**: Base-image triggers can automatically rebuild dependent images when an upstream base image changes, reducing manual patching work during a security event.",
+      "lesson_point_url": null,
+      "rationale": "This is a detailed but unattributed anecdote with precise counts and timings."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Geo-replication requires Premium, replicates content across configured regions, and the global endpoint routes clients to the best or usually closest replica.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Global Distribution with Geo-Replication",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's geo-replication docs explicitly cover Premium-only support, automatic syncing, and global-endpoint routing behavior."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "A gaming studio saw 45-second pulls, thousands in egress, and 4-second pulls after enabling geo-replication.",
+      "claim_class": "war_story",
+      "span_hint": "section: Global Distribution with Geo-Replication, War Story",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**War Story**: A gaming studio deployed their matchmaking service globally. They forgot to enable geo-replication and had their single Standard ACR deployed in East US. When their game launched, clusters in Asia scaled up dynamically. The transatlantic image pulls took upwards of 45 seconds per pod. Worse, at the end of the month, they received an Azure bill with thousands of dollars in unexpected inter-region egress costs. Upgrading to Premium and enabling geo-replication cost them a flat rate but entirely eliminated the egress fees and dropped pod startup time to 4 seconds.",
+      "suggested_rewrite": "**Example**: Without in-region registry access, cross-region pulls can add startup latency and data-transfer costs; geo-replication reduces both for multi-region deployments.",
+      "lesson_point_url": null,
+      "rationale": "This is another unattributed anecdote with specific latency and billing numbers."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Private Link projects ACR into a VNet with a private IP, traffic stays on the Microsoft backbone, and DNS uses privatelink.azurecr.io.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Network Security and Private Link",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-private-link?view=azureml-api-2",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's Private Link guidance covers private IP endpoints, Microsoft-backbone traffic, and the required private DNS zone name."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The latest tag is mutable and should be avoided for production deployments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Image Management Best Practices, Tagging Strategy",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-image-tag-version",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's tagging guidance explicitly recommends avoiding deployments with stable tags such as latest."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "Overwriting a tag can leave untagged manifests that still consume storage until cleaned up.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Image Management Best Practices, Automated Cleanup and Retention",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-concepts",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The ACR concepts page explains how repeatedly pushing identical tags can create untagged artifacts that still use storage."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "acr purge can be run on demand or on a schedule in ACR Tasks to clean up images.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Image Management Best Practices, Automated Cleanup and Retention",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-auto-purge",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents acr purge as an on-demand or scheduled ACR Task, though it is currently preview."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "ACR Tasks can build images without a Dockerfile by simply specifying --pack, and this capability was introduced in 2020.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "1. **ACR Tasks can build images without a Dockerfile** using Cloud Native Buildpacks. Introduced to ACR in 2020, by simply specifying `--pack` in your build command, ACR automatically detects the language runtime (such as Node.js, Python, or Java) and creates an OCI-compliant image. This eliminates hundreds of hours spent maintaining complex Dockerfiles across dozens of microservices.",
+      "suggested_rewrite": "1. **ACR supports preview Cloud Native Buildpacks builds** via the `az acr pack build` command, which can build some applications from source without a Dockerfile.",
+      "lesson_point_url": null,
+      "rationale": "The current official interface is `az acr pack build` in preview, not a generic `--pack` flag, and the dated claim is unnecessary."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "ACR stores OCI artifacts such as Helm charts and other supply-chain artifacts, but the dated-adoption and 100% consolidation wording is overbroad.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "2. **Azure Container Registry stores images as OCI artifacts**, meaning you can store vastly more than just container images. Since the OCI Artifacts specification was adopted in 2019, you can natively store Helm charts, WebAssembly (WASM) modules, and arbitrary configuration files directly in ACR. This allows you to consolidate 100% of your deployment artifacts into a single registry system.",
+      "suggested_rewrite": "2. **Azure Container Registry can store OCI artifacts in addition to container images**, including Helm charts and other artifact types supported by OCI tooling.",
+      "lesson_point_url": null,
+      "rationale": "The broad historical and absolute-consolidation claims are not cleanly backed by the current Microsoft docs."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "A 1 GB in-region ACR pull takes 3 to 6 seconds versus 15 to 30 seconds from Docker Hub, and the difference dictates scale-out recovery time for 50 instances.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "soften_to_illustration",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "3. **Pulling a 1 GB image from ACR in the same Azure region takes approximately 3 to 6 seconds** thanks to direct Azure backbone connectivity. Pulling the exact same image from Docker Hub (which serves from public CDNs) typically takes 15 to 30 seconds due to the additional network hops. For a Virtual Machine Scale Set with 50 instances scaling out simultaneously, this latency difference dictates how fast your application recovers from a traffic spike.",
+      "suggested_rewrite": "3. **In-region ACR pulls are often noticeably faster than pulling the same image from a public registry over the internet**, which becomes more visible during large scale-out events.",
+      "lesson_point_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication",
+      "rationale": "The exact seconds and scenario numbers are benchmark-like teaching figures, but the underlying lesson about network-close pulls is real."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "ACR anonymous pull was introduced in 2021 and is available on any SKU.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "4. **ACR supports anonymous pull** (introduced in 2021) on any SKU. When enabled, anyone can pull images without requiring authentication. This is highly useful for open-source projects distributing images publicly while still using ACR for secure push authentication. However, anonymous pull is disabled by default to prevent accidental corporate data exfiltration.",
+      "suggested_rewrite": "4. **ACR supports anonymous pull** on Standard and Premium registries. When enabled, anyone can pull images without authentication, so it should be used intentionally for public artifacts. Anonymous pull is disabled by default.",
+      "lesson_point_url": null,
+      "rationale": "Current Microsoft docs support anonymous pull only on Standard and Premium, not on any SKU."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "Registries do not have an untagged-manifest retention policy enabled by default.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Common Mistakes, row Not cleaning up old images",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-retention-policy",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's retention-policy docs explicitly say registries do not have a retention policy by default."
+    },
+    {
+      "claim_id": "C029",
+      "claim_text": "Microsoft Defender for Containers can scan images pushed to ACR and report vulnerabilities.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Common Mistakes, row Not enabling vulnerability scanning",
+      "disposition": "supported",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-registry/scan-images-defender",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's Defender guidance explicitly states that images pushed to ACR can be scanned for vulnerabilities through Defender for Cloud."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-registry/",
+      "title": "Azure Container Registry Documentation",
+      "tier": "vendor",
+      "why_relevant": "Canonical Microsoft entry point for ACR concepts, tasks, networking, and operations."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-geo-replication",
+      "title": "Geo-replication in Azure Container Registry",
+      "tier": "vendor",
+      "why_relevant": "Direct reference for Premium-only geo-replication behavior, routing, and multi-region tradeoffs."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication",
+      "title": "Authenticate with Azure Container Registry",
+      "tier": "vendor",
+      "why_relevant": "Primary overview of admin account, service principal, and managed identity authentication options."
+    }
+  ],
+  "notes": "Quiz answers and hands-on exercise steps were intentionally excluded per pipeline rules. Several table rows and Did You Know bullets contain outdated or illustrative specifics that should be rewritten rather than cited verbatim.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

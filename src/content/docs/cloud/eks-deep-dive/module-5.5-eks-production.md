@@ -629,7 +629,7 @@ Kubernetes issues minor releases routinely, and maintaining operational readines
 
 1. Karpenter evaluates over 600 EC2 instance types when deciding what to launch. For each set of pending pods, it simulates packing them onto every compatible instance type, calculates the cost, and selects the cheapest option. This evaluation happens in milliseconds thanks to an in-memory instance type database that Karpenter refreshes from the EC2 pricing API every 6 hours.
 
-2. EKS control plane audit logs record every single API request, including the request body and response. For a cluster with 500 pods and active HPA/VPA controllers, the audit log volume can reach 10-15 GB per day. At CloudWatch's $0.50/GB ingestion rate, that is $5-7.50/day or $150-225/month just for audit log storage. Many teams filter audit logs to only capture write operations and authentication events, reducing volume by 80%.
+2. EKS control plane audit logs can record API requests, including the request body and response at the most detailed audit level. For a cluster with 500 pods and active HPA/VPA controllers, the audit log volume can reach 10-15 GB per day. At CloudWatch's $0.50/GB ingestion rate, that is $5-7.50/day or $150-225/month just for audit log storage. Many teams filter audit logs to only capture write operations and authentication events, reducing volume by 80%.
 
 3. Spot instance interruption rates vary dramatically by instance type and region. In 2024 data, the `m5.xlarge` in us-east-1 had a roughly 5% monthly interruption rate, while the `m6i.xlarge` in the same region was under 3%. By diversifying across 15-20 instance types and 3 AZs, you can achieve an effective interruption rate below 2% per node per month, making Spot viable even for user-facing services behind proper redundancy.
 
@@ -1067,3 +1067,9 @@ helm uninstall karpenter -n kube-system
 ## Next Module
 
 You have completed the EKS Deep Dive series. You now fundamentally understand advanced EKS architecture, complex networking, deep identity integrations, and granular production operations logic. To continue scaling your cloud capabilities across different vendor philosophies, explore the [AKS Deep Dive](/cloud/aks-deep-dive/) or [GKE Deep Dive](/cloud/gke-deep-dive/) series, or compare the nuances of all three providers simultaneously with the [Hyperscaler Rosetta Stone](/cloud/hyperscaler-rosetta-stone/).
+
+## Sources
+
+- [Scale cluster compute with Karpenter and Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) — This is the current Amazon EKS entry point for supported autoscaling options and Karpenter context.
+- [Send control plane logs to CloudWatch Logs](https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html) — It documents the five EKS control-plane log types, defaults, and operational caveats.
+- [Kubernetes Version Skew Policy](https://kubernetes.io/releases/version-skew-policy/) — It is the canonical reference for control-plane and node upgrade order compatibility.

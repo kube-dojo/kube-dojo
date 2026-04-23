@@ -1,0 +1,468 @@
+{
+  "module_key": "cloud/advanced-operations/module-8.7-stateful-migration",
+  "module_path": "src/content/docs/cloud/advanced-operations/module-8.7-stateful-migration.md",
+  "research_run_id": "2026-04-22T22:14:05+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "GitHub's October 2018 incident caused roughly 24 hours of degraded service after a cross-datacenter failover left database state inconsistent.",
+      "claim_class": "incident",
+      "span_hint": "line 27 | section: Why This Module Matters",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://github.blog/2018-10-30-oct21-post-incident-analysis/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The GitHub post-incident analysis directly supports the timeline and database-topology failure, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The outage caused millions in lost productivity and SLA penalties.",
+      "claim_class": "incident",
+      "span_hint": "line 27 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The financial impact was severe, with estimated millions in lost productivity and Service Level Agreement penalties across their enterprise customer base.",
+      "suggested_rewrite": "The outage was severe and disruptive, but the module should not assign unsourced dollar losses or SLA penalties.",
+      "lesson_point_url": null,
+      "rationale": "This is fake-precise impact language without a source and should be collapsed to the operational lesson."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "A major streaming service had a comparable migration incident in late 2022.",
+      "claim_class": "war_story",
+      "span_hint": "line 29 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A similar scenario unfolded for a major streaming service in late 2022.",
+      "suggested_rewrite": "Teams often encounter similar migration blockers when large stateful systems remain after stateless services have moved.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed anecdote about a real company and time period with no verifiable source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "That streaming service's remaining footprint included a 12TB PostgreSQL database, 3TB Elasticsearch, 200GB Redis, and 50TB of media files.",
+      "claim_class": "war_story",
+      "span_hint": "line 29 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The remaining legacy footprint was a 12TB PostgreSQL database, a 3TB Elasticsearch cluster, a Redis cluster with 200GB of hot data, and a media processing service with 50TB of files on local network storage.",
+      "suggested_rewrite": "The remaining legacy footprint included large database, search, cache, and file-storage systems that were impractical to move in a single maintenance window.",
+      "lesson_point_url": null,
+      "rationale": "These concrete capacities are presented as a real case but are not attributable to any source."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Each attempted migration for that service was estimated at two weeks of downtime.",
+      "claim_class": "war_story",
+      "span_hint": "line 29 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Every migration attempt was estimated at two weeks of downtime, which the business flatly rejected.",
+      "suggested_rewrite": "Each proposed cutover exceeded the maintenance window the business was willing to accept.",
+      "lesson_point_url": null,
+      "rationale": "The exact downtime estimate is an uncited quantitative anecdote."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "That database grew from 12TB to 16TB while the migration was delayed.",
+      "claim_class": "war_story",
+      "span_hint": "line 31 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Their 12TB database had grown to 16TB.",
+      "suggested_rewrite": "Meanwhile, the database kept growing, making the eventual migration even harder.",
+      "lesson_point_url": null,
+      "rationale": "This is another fake-precise anecdotal number with no attributable source."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "That team ultimately succeeded with CDC, incremental file synchronization, and the Strangler Fig pattern.",
+      "claim_class": "war_story",
+      "span_hint": "line 31 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "They eventually succeeded by combining Change Data Capture for the database, incremental synchronization for the media files, and the Strangler Fig pattern to route traffic incrementally.",
+      "suggested_rewrite": "A workable approach is to combine CDC for the database, incremental synchronization for file stores, and incremental traffic shifting to reduce cutover risk.",
+      "lesson_point_url": null,
+      "rationale": "The operational lesson is useful, but it is attached to an unattributed composite war story."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The term \"data gravity\" was coined by Dave McCrory.",
+      "claim_class": "standard",
+      "span_hint": "line 35 | section: Understanding Data Gravity and Escape Velocity",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": "https://datagravitas.com/2010/12/07/data-gravity-in-the-clouds/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The primary source is Dave McCrory's original Data Gravitas post, which is off-allowlist."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The Strangler Fig pattern is named after the strangler fig tree and describes incremental replacement of a legacy system.",
+      "claim_class": "standard",
+      "span_hint": "line 77 | section: The Strangler Fig Pattern in Practice",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://martinfowler.com/bliki/OriginalStranglerFigApplication.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Martin Fowler's original write-up is the right primary source, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "A Kubernetes ExternalName Service maps a Service to a DNS name and works as a DNS-level alias rather than a proxied backend.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 106 | section: The Strangler Fig Pattern in Practice",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes Service documentation directly describes ExternalName as DNS CNAME-based mapping."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Istio supports percentage-based traffic shifting to gradually move requests between service versions.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 161 | section: The Strangler Fig Pattern in Practice",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://istio.io/latest/docs/tasks/traffic-management/traffic-shifting/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Istio's traffic shifting task explicitly documents weight-based gradual routing."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Kubernetes volume snapshots are provided through the VolumeSnapshot API and are available only for CSI drivers.",
+      "claim_class": "standard",
+      "span_hint": "line 224 | section: Infrastructure-Level Migration: CSI Volume Snapshots",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/storage/volume-snapshots/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes volume snapshots documentation directly states the CSI-only support model."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Amazon EBS snapshots are point-in-time copies stored in S3 and can be used to restore a new EBS volume.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 226 | section: Infrastructure-Level Migration: CSI Volume Snapshots",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/ebs/latest/userguide/ebs-snapshots.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS documents EBS snapshots as point-in-time copies stored in S3 that can restore new volumes."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Amazon EBS snapshots can be copied to another AWS Region.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 255 | section: Infrastructure-Level Migration: CSI Volume Snapshots",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/ebs/latest/userguide/ebs-copy-snapshot.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS's EBS copy-snapshot documentation directly supports cross-Region copying."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Restoring a PVC from a snapshot fully hydrates the block data before the pod starts.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 280 | section: Infrastructure-Level Migration: CSI Volume Snapshots",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CSI driver handles the allocation of the disk and the hydration of the block data prior to the pod starting.",
+      "suggested_rewrite": "The CSI driver handles provisioning a volume from the snapshot; depending on the backend, blocks may continue initializing after the volume is attached.",
+      "lesson_point_url": null,
+      "rationale": "This overstates backend behavior; AWS explicitly documents post-creation volume initialization from snapshots."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Logical replication is row-level replication that supports INSERT, UPDATE, DELETE, and TRUNCATE, but not schema DDL.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 340 | section: Pattern 2: Logical Replication (Medium Databases)",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-databases-postgresql-ec2/logical-replication.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS Prescriptive Guidance summarizes PostgreSQL logical replication behavior and limits directly."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "PostgreSQL logical replication can target a different operating system, different major version, or a managed cloud platform.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 340 | section: Pattern 2: Logical Replication (Medium Databases)",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://www.postgresql.org/docs/current/logical-replication.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The exact cross-platform wording is best supported by the PostgreSQL manual, which is off-allowlist."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Logical replication begins with initial data synchronization and then continues with ongoing replication from the source.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 372 | section: Pattern 2: Logical Replication (Medium Databases)",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/dms/latest/userguide/dm-migrating-data-postgresql.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS DMS documentation for PostgreSQL homogeneous migrations directly describes initial synchronization followed by ongoing replication."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "CloudNativePG can bootstrap from object-store backups via recovery or from a live source via pg_basebackup.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 464 | section: Pattern 4: Kubernetes Operator Migration",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://cloudnative-pg.io/docs/1.26/bootstrap/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The CloudNativePG bootstrap documentation directly supports this, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Logical replication does not replicate sequence state, so cutovers must explicitly reconcile sequences before write traffic resumes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 525 | section: Zero-Downtime Cutover Runbooks and Verification",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-databases-postgresql-ec2/logical-replication.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS Prescriptive Guidance explicitly lists non-replicated sequences as a logical replication limitation."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The most common AWS DMS migration path is Oracle-to-PostgreSQL, followed by SQL Server-to-Aurora.",
+      "claim_class": "statistic",
+      "span_hint": "line 576 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The most common migration path is Oracle-to-PostgreSQL, followed by SQL Server-to-Aurora.",
+      "suggested_rewrite": "AWS DMS supports common heterogeneous migration paths, but the module should not rank source-target pairs without a cited dataset.",
+      "lesson_point_url": null,
+      "rationale": "This ranking claim needs dataset-level evidence and none was found on the allowlist."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Martin Fowler coined the Strangler Fig pattern in 2004 after seeing strangler fig trees in Australia.",
+      "claim_class": "standard",
+      "span_hint": "line 577 | section: Did You Know?",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://martinfowler.com/bliki/OriginalStranglerFigApplication.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Fowler's original 2004 write-up directly supports the date and Australia anecdote, but it is off-allowlist."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "The Strangler Fig pattern is the default migration strategy for monolith-to-microservices transitions.",
+      "claim_class": "standard",
+      "span_hint": "line 577 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The pattern has become the default migration strategy for monolith-to-microservices transitions.",
+      "suggested_rewrite": "The pattern is widely used for incremental modernization, but the module should avoid calling it the default strategy without evidence.",
+      "lesson_point_url": null,
+      "rationale": "This is an uncited superlative claim about industry practice."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "At 1 Gbps, 1TB transfers in about 2.5 hours.",
+      "claim_class": "statistic",
+      "span_hint": "line 578 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Data transfer over the internet at 1 Gbps takes about 2.5 hours for 1TB of data.**",
+      "suggested_rewrite": "At gigabit-class speeds, transferring multi-terabyte datasets over the network still takes many hours even under ideal conditions.",
+      "lesson_point_url": null,
+      "rationale": "This exact transfer-time number is presented as an authoritative statistic without a cited primary source."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "A 50TB database takes over 5 days to transfer at 1 Gbps, and longer in practice.",
+      "claim_class": "statistic",
+      "span_hint": "line 578 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "For a 50TB database, that's over 5 days of continuous transfer -- assuming the network link is fully saturated, which it won't be.",
+      "suggested_rewrite": "For datasets in the tens of terabytes, network transfer alone can consume multiple days in ideal conditions and longer in practice.",
+      "lesson_point_url": null,
+      "rationale": "This exact duration is uncited arithmetic presented as a fact claim."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "AWS Snowball Edge transfers 80TB via shipping in 4-6 business days and is competitive above about 50TB.",
+      "claim_class": "statistic",
+      "span_hint": "line 578 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "AWS Snowball Edge devices transfer 80TB via physical shipping and typically take 4-6 business days door-to-door, making physical transfer competitive or faster for datasets above ~50TB.",
+      "suggested_rewrite": "Physical transfer appliances can be competitive for very large datasets, but the module should avoid hard-coding device sizes or transit times without a current source.",
+      "lesson_point_url": null,
+      "rationale": "The capacity and transit-time details are unstable and not supported as written by a current allowlisted source."
+    },
+    {
+      "claim_id": "C030",
+      "claim_text": "Built-in PostgreSQL logical replication was introduced in PostgreSQL 10.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 579 | section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.PostgreSQL.CommonDBATasks.pglogical.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "AWS's RDS PostgreSQL documentation explicitly states that logical replication was introduced in PostgreSQL 10."
+    },
+    {
+      "claim_id": "C031",
+      "claim_text": "Before built-in logical replication, the main near-zero-downtime options were physical replication, Slony, or trigger-based CDC.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 579 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Before logical replication, the primary options for near-zero-downtime migration were: physical replication (requires same PG version and OS), third-party tools like Slony (complex, fragile), or CDC via trigger-based capture (high overhead).",
+      "suggested_rewrite": "Before built-in logical replication, teams commonly relied on physical replication or third-party tooling, each with additional compatibility or operational tradeoffs.",
+      "lesson_point_url": null,
+      "rationale": "The categorical ranking and detailed characterizations need stronger source support than was found on the allowlist."
+    },
+    {
+      "claim_id": "C032",
+      "claim_text": "Logical replication made cross-version, cross-platform, and cross-schema PostgreSQL migration routine.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 579 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Logical replication made it possible to replicate between different PG versions, different platforms (on-prem to cloud), and even different schemas -- transforming database migration from a high-risk event to a routine operation.",
+      "suggested_rewrite": "Built-in logical replication expanded PostgreSQL migration options across versions and platforms, but cutovers still depend on schema compatibility and disciplined validation.",
+      "lesson_point_url": null,
+      "rationale": "The concluding rhetoric overstates the evidence even though part of the technical capability is real."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/storage/volume-snapshots/",
+      "title": "Kubernetes Volume Snapshots",
+      "tier": "standards",
+      "why_relevant": "Covers the CSI snapshot model, lifecycle objects, and restoration flow used in the infrastructure migration section."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-databases-postgresql-ec2/logical-replication.html",
+      "title": "AWS Prescriptive Guidance: PostgreSQL Logical Replication",
+      "tier": "vendor",
+      "why_relevant": "Summarizes logical replication behavior and migration limitations, including sequences and schema constraints."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/ebs/latest/userguide/ebs-copy-snapshot.html",
+      "title": "Amazon EBS Snapshot Copy",
+      "tier": "vendor",
+      "why_relevant": "Directly supports the cross-Region snapshot-copy workflow used in the CSI snapshot migration example."
+    }
+  ],
+  "notes": "Source ID map: S001=https://github.blog/2018-10-30-oct21-post-incident-analysis/; S002=https://datagravitas.com/2010/12/07/data-gravity-in-the-clouds/; S003=https://martinfowler.com/bliki/OriginalStranglerFigApplication.html; S004=https://kubernetes.io/docs/concepts/services-networking/service/; S005=https://istio.io/latest/docs/tasks/traffic-management/traffic-shifting/; S006=https://kubernetes.io/docs/concepts/storage/volume-snapshots/; S007=https://docs.aws.amazon.com/ebs/latest/userguide/ebs-snapshots.html; S008=https://docs.aws.amazon.com/ebs/latest/userguide/ebs-copy-snapshot.html; S009=https://docs.aws.amazon.com/ebs/latest/userguide/ebs-creating-volume.html; S010=https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-databases-postgresql-ec2/logical-replication.html; S011=https://docs.aws.amazon.com/dms/latest/userguide/dm-migrating-data-postgresql.html; S012=https://cloudnative-pg.io/docs/1.26/bootstrap/; S013=https://aws.amazon.com/dms/?loc=1&nc=sn; S014=https://aws.amazon.com/fr/about-aws/whats-new/2016/03/aws-database-migration-service-is-now-generally-available/; S015=https://docs.aws.amazon.com/dms/latest/userguide/schema-conversion.html; S016=https://cloud.google.com/transfer-appliance/docs/4.0/overview; S017=https://azure.microsoft.com/en-us/products/databox/data/; S018=https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.PostgreSQL.CommonDBATasks.pglogical.html. The module is citation-dense in the incident/anecdote and Did You Know sections, but most architectural teaching prose can remain uncited.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

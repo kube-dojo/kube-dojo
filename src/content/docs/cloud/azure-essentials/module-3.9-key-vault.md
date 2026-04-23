@@ -19,11 +19,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In December 2022, a widely-used password management company disclosed a major breach. Attackers had stolen encrypted vault data and the encryption keys needed to decrypt it. The root cause was traced back to a developer's home computer that had an old, vulnerable version of a media player installed. The attacker exploited the vulnerability, captured the developer's master credentials, and used them to access the company's cloud storage containing encrypted customer data. The breach affected 25 million users and resulted in an estimated $100 million in damages.
+In December 2022, a widely-used password management company disclosed a major breach. Attackers had stolen encrypted vault data and the encryption keys needed to decrypt it. The root cause was traced back to a developer's home computer that had an old, vulnerable version of a media player installed. The attacker exploited the vulnerability, captured the developer's master credentials, and used them to access the company's cloud storage containing encrypted customer data. The breach affected millions of users and led to substantial legal, remediation, and reputational costs.
 
 This incident drives home a fundamental point: **secrets management is not optional, and it is not a problem you solve with environment variables.** Every application has secrets---database passwords, API keys, encryption keys, TLS certificates. How you store and access these secrets determines whether a single compromised developer laptop leads to a minor inconvenience or a company-ending breach.
 
-Azure Key Vault is a cloud service for securely storing and managing secrets, encryption keys, and certificates. It is backed by FIPS 140-2 Level 2 validated hardware security modules (HSMs), and integrates natively with virtually every Azure service. In this module, you will learn the three object types Key Vault manages, the two access control models (Access Policies vs RBAC), how soft delete and purge protection safeguard against accidental deletion, and how to integrate Key Vault with your applications using Managed Identities. By the end, you will store a database connection string in Key Vault and retrieve it from a Container App without any credentials in your code.
+Azure Key Vault is a cloud service for [securely storing and managing secrets, encryption keys, and certificates](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide). It supports HSM-protected keys and integrates with many Azure services, but the exact hardware validation level depends on the SKU and HSM platform. In this module, you will learn the three object types Key Vault manages, the two access control models (Access Policies vs RBAC), how soft delete and purge protection safeguard against accidental deletion, and how to integrate Key Vault with your applications using Managed Identities. By the end, you will store a database connection string in Key Vault and retrieve it from a Container App without any credentials in your code.
 
 ---
 
@@ -35,9 +35,9 @@ Key Vault manages three distinct categories of cryptographic and sensitive mater
 
 | Object Type | What It Stores | Use Cases | API Endpoint |
 | :--- | :--- | :--- | :--- |
-| **Secrets** | Any string up to 25 KB | DB passwords, API keys, connection strings, config values | `https://myvault.vault.azure.net/secrets/` |
-| **Keys** | RSA or EC cryptographic keys | Data encryption, signing, wrapping other keys | `https://myvault.vault.azure.net/keys/` |
-| **Certificates** | X.509 certificates + private keys | TLS/SSL for web apps, code signing, mTLS | `https://myvault.vault.azure.net/certificates/` |
+| **Secrets** | [Any string up to 25 KB](https://learn.microsoft.com/en-us/azure/key-vault/secrets/about-secrets) | DB passwords, API keys, connection strings, config values | [`https://myvault.vault.azure.net/secrets/`](https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates) |
+| **Keys** | [RSA or EC cryptographic keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) | Data encryption, signing, wrapping other keys | `https://myvault.vault.azure.net/keys/` |
+| **Certificates** | [X.509 certificates + private keys](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates) | TLS/SSL for web apps, code signing, mTLS | `https://myvault.vault.azure.net/certificates/` |
 
 ```mermaid
 graph TD
@@ -88,7 +88,7 @@ az keyvault secret list \
 
 ### Secret Versioning
 
-Every time you update a secret, Key Vault creates a new version. The "current" version is always the latest, but you can access any previous version by its version identifier.
+Every time you update a secret, [Key Vault creates a new version](https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates). The "current" version is always the latest, but you can access any previous version by its version identifier.
 
 ```bash
 # Update a secret (creates a new version)
@@ -112,7 +112,7 @@ az keyvault secret show \
 
 ### Keys: Encryption Without Exposing Key Material
 
-Key Vault keys are special: the key material never leaves the HSM. When you need to encrypt data, you send the data to Key Vault, and it returns the ciphertext. You never see the raw key.
+Key Vault keys are special: [for HSM-protected keys, the private key material stays inside the HSM](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide). When you need to encrypt data, you send the data to Key Vault, and it returns the ciphertext. You never see the raw key.
 
 > **Stop and think**: If the raw key material for a Key Vault key never leaves the HSM, how does an application encrypt a 50 GB video file? Sending a 50 GB payload over the network to Key Vault for encryption would be incredibly slow and inefficient. What pattern might be used instead?
 
@@ -142,7 +142,7 @@ az keyvault key decrypt \
 
 ### Certificates: Automated TLS Management
 
-Key Vault can issue certificates from integrated Certificate Authorities (DigiCert, GlobalSign) or manage self-signed certificates. It handles renewal automatically.
+Key Vault can issue certificates from [integrated Certificate Authorities (DigiCert, GlobalSign) or manage self-signed certificates. It handles renewal automatically.](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates)
 
 ```bash
 # Create a self-signed certificate
@@ -173,7 +173,7 @@ az keyvault certificate download \
 Storing secrets securely is only half the battle; secrets must be rotated regularly to limit the impact of a potential compromise. Azure Key Vault provides native rotation policies for Keys, and integrates with Event Grid to orchestrate rotation for Secrets.
 
 ### Key Vault Rotation Policies (Keys)
-For cryptographic keys, you can define an automated rotation policy directly within Key Vault. This instructs the HSM to generate new key material at a scheduled interval.
+For cryptographic keys, you can [define an automated rotation policy directly within Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/keys/how-to-configure-key-rotation). This instructs the HSM to generate new key material at a scheduled interval.
 
 ```bash
 # Create a rotation policy for a key (rotate 30 days before expiry)
@@ -204,7 +204,7 @@ az keyvault key rotation-policy update \
 > **Pause and predict**: If Key Vault automatically rotates the key material for `data-encryption-key`, what happens to the data that was encrypted using the *old* key version? Does Key Vault automatically re-encrypt your database?
 
 ### Secret Rotation via Event Grid
-For secrets (like database passwords), Key Vault cannot magically change the password in the target system (e.g., Azure SQL). Instead, Key Vault emits an Event Grid event 30 days before a secret expires. This event triggers an Azure Function, which connects to the database, generates a new password, updates the database user, and saves the new version to Key Vault.
+For secrets (like database passwords), Key Vault cannot magically change the password in the target system (e.g., Azure SQL). Instead, Key Vault [emits an Event Grid event 30 days before a secret expires](https://learn.microsoft.com/en-us/azure/event-grid/event-schema-key-vault). This event triggers an Azure Function, which connects to the database, generates a new password, updates the database user, and saves the new version to Key Vault.
 
 ```bash
 # Example flow for Secret Rotation:
@@ -217,7 +217,7 @@ For secrets (like database passwords), Key Vault cannot magically change the pas
 
 ---
 
-## Access Control: Access Policies vs Azure RBAC
+## Access Control: [Access Policies vs Azure RBAC](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-access-policy)
 
 Key Vault supports two access control models. You must choose one at creation time (though you can switch later).
 
@@ -252,7 +252,7 @@ RBAC uses the standard Azure role assignment model with fine-grained built-in ro
 | Role | Scope | Permissions |
 | :--- | :--- | :--- |
 | **Key Vault Administrator** | Vault | Full management of all objects |
-| **Key Vault Secrets Officer** | Vault or secret | Manage secrets (set, delete, rotate) |
+| **Key Vault Secrets Officer** | [Vault or secret](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) | Manage secrets (set, delete, rotate) |
 | **Key Vault Secrets User** | Vault or secret | Read secrets only |
 | **Key Vault Crypto Officer** | Vault or key | Manage keys (create, delete, sign, encrypt) |
 | **Key Vault Crypto User** | Vault or key | Use keys (sign, encrypt) but not manage |
@@ -307,7 +307,7 @@ graph TD
     end
 ```
 
-**War Story**: A company using Access Policies had 150 identities with vault-level secret access. When an audit asked "who can read the production database password specifically?", the answer was "all 150 identities." They could not scope Access Policies to individual secrets. After migrating to RBAC, they granted `Key Vault Secrets User` at the individual secret scope, reducing the blast radius of each identity to only the secrets it needed.
+**War Story**: With Access Policies, permissions are granted at vault scope, so a broad set of identities can end up with access to more secrets than they actually need. They could not scope Access Policies to individual secrets. After migrating to RBAC, they granted `Key Vault Secrets User` at the individual secret scope, reducing the blast radius of each identity to only the secrets it needed.
 
 ---
 
@@ -315,9 +315,9 @@ graph TD
 
 Key Vault has two safety nets against accidental or malicious deletion:
 
-**Soft Delete**: When you delete a secret, key, or certificate, it is not immediately destroyed. Instead, it enters a "soft-deleted" state and can be recovered during the retention period (7-90 days). Soft delete is mandatory for all vaults created after 2020.
+**Soft Delete**: When you delete a secret, key, or certificate, it is not immediately destroyed. Instead, it enters a "soft-deleted" state and can be recovered during the [retention period (7-90 days)](https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview). Soft delete is on by default for newly created key vaults.
 
-**Purge Protection**: When enabled, even a soft-deleted object cannot be permanently destroyed (purged) until the retention period expires. Not even the vault owner or a Global Administrator can purge it early. This protects against a compromised admin account deliberately destroying secrets.
+**Purge Protection**: When enabled, even a soft-deleted object cannot be permanently destroyed (purged) until the retention period expires. When purge protection is enabled, a soft-deleted object cannot be purged until the retention period expires. This protects against a compromised admin account deliberately destroying secrets.
 
 ```bash
 # Delete a secret (soft delete)
@@ -358,7 +358,7 @@ For mission-critical applications deployed across multiple Azure regions (e.g., 
 Behind the scenes, Azure Key Vault automatically replicates its contents within the region and to a paired region (e.g., East US to West US). If a single node fails, traffic is transparently routed to a healthy node.
 
 ### The Active-Active Vault Pattern
-However, if an entire region goes down, the vault in the paired region enters read-only mode. For active-active applications that need to *write* secrets or manage keys during a regional outage, you must deploy independent Key Vaults in each region.
+However, if an entire region goes down, the vault in the [paired region enters read-only mode](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault). For active-active applications that need to *write* secrets or manage keys during a regional outage, you [must deploy independent Key Vaults in each region](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault).
 
 ```mermaid
 graph TD
@@ -407,7 +407,7 @@ for secret in client.list_properties_of_secrets():
 
 ### Pattern 2: Key Vault References in App Configuration
 
-Azure App Service, Functions, and Container Apps can reference Key Vault secrets directly in application settings, without any SDK code:
+Azure App Service and Functions can use Key Vault references in app settings, and Container Apps can consume Key Vault-backed secrets without SDK code:
 
 ```bash
 # Set a Key Vault reference in a Function App
@@ -437,7 +437,7 @@ az containerapp create \
 
 ### Pattern 4: Kubernetes Integration (CSI Driver)
 
-For AKS, the Azure Key Vault Provider for Secrets Store CSI Driver mounts secrets as files in the pod:
+For AKS, the Azure Key Vault Provider for Secrets Store CSI Driver [mounts secrets as files in the pod](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver):
 
 ```yaml
 # SecretProviderClass for AKS
@@ -475,7 +475,7 @@ spec:
 
 ## Key Vault Networking: Private and Secure
 
-By default, Key Vault is accessible from the public internet (with authentication required). For production, restrict network access:
+By default, Key Vault is [accessible from the public internet (with authentication required)](https://learn.microsoft.com/fi-fi/azure/key-vault/general/how-to-azure-key-vault-network-security?tabs=azure-cli). For production, restrict network access:
 
 ```bash
 # Restrict to specific VNets and IPs
@@ -510,13 +510,13 @@ az network private-endpoint create \
 
 ## Did You Know?
 
-1. **Azure Key Vault processes over 200 billion transactions per month** across all Azure customers as of 2024. It is one of the most heavily used services in Azure because virtually every Azure service that needs secrets, keys, or certificates uses Key Vault under the hood. Azure Disk Encryption, App Service certificates, SQL Transparent Data Encryption---they all store their keys in Key Vault.
+1. **Azure Key Vault handles a very large volume of requests** across Azure customers. It is one of the most heavily used services in Azure because virtually every Azure service that needs secrets, keys, or certificates uses Key Vault under the hood. Azure Disk Encryption, App Service certificates, SQL Transparent Data Encryption---they all store their keys in Key Vault.
 
-2. **Key Vault Premium SKU uses FIPS 140-2 Level 3 validated HSMs** (Marvell LiquidSecurity), while Standard uses Level 2. The difference: Level 3 HSMs have physical tamper-evidence mechanisms and identity-based authentication. Level 3 is required for certain compliance frameworks like PCI-DSS in some interpretations. Premium costs approximately $1 per key per month, while Standard key operations are billed per 10,000 operations ($0.03).
+2. **Key Vault tiers differ in protection model and pricing**. Check the current Microsoft documentation and pricing page before making compliance or cost claims about a specific SKU.
 
-3. **Key Vault has a throttling limit of 4,000 transactions per vault per 10 seconds** for secret read operations. A team running 500 microservices that each fetched 3 secrets at startup experienced throttling when deploying all services simultaneously. The fix: cache secrets locally with a reasonable refresh interval (every 5 minutes instead of every request) and stagger deployments.
+3. **Key Vault has a throttling limit of [4,000 transactions per vault per 10 seconds](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits)** for secret read operations. Large microservice rollouts can hit Key Vault throttling if every instance fetches multiple secrets at once. Cache secrets locally, refresh them on a sensible interval, and stagger large deployments.
 
-4. **Once purge protection is enabled on a vault, it cannot be disabled.** This is by design---it prevents an attacker who gains admin access from disabling the protection and then purging secrets. A team accidentally enabled purge protection on a test vault with a 90-day retention period, meaning they cannot fully clean up deleted test secrets for 3 months. Always use a shorter retention period (7 days) for non-production vaults.
+4. **Once purge protection is enabled on a vault, it cannot be disabled.** This is by design---it prevents an attacker who gains admin access from disabling the protection and then purging secrets. If you enable purge protection on a test vault with a long retention period, deleted objects can't be permanently purged until that retention window expires. Use a shorter retention period (such as 7 days) for most non-production vaults.
 
 ---
 
@@ -525,12 +525,12 @@ az network private-endpoint create \
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Storing secrets in environment variables, config files, or code | It is "faster" during development | Use Key Vault from day one. Local dev uses `DefaultAzureCredential` which falls back to Azure CLI login---no secret management needed locally. |
-| Creating one vault per secret | Misunderstanding of vault purpose | A vault is a logical grouping of related secrets. Use one vault per application/environment (e.g., `app-prod-vault`, `app-dev-vault`). |
-| Using Access Policies instead of RBAC on new vaults | Access Policies are the older default | Always create vaults with `--enable-rbac-authorization true`. RBAC provides per-secret scoping, Conditional Access integration, and PIM support. |
+| Creating one vault per secret | Misunderstanding of vault purpose | A vault is a logical grouping of related secrets. [Use one vault per application/environment](https://learn.microsoft.com/en-us/azure/key-vault/general/apps-api-keys-secrets) (e.g., `app-prod-vault`, `app-dev-vault`). |
+For new vaults, create them with `--enable-rbac-authorization true` unless you have a specific reason to use Access Policies. RBAC provides per-secret scoping and uses standard Azure role-assignment and privileged-access workflows. |
 | Not enabling purge protection on production vaults | It seems overly cautious | A compromised admin could delete and purge all secrets. Purge protection ensures deleted secrets can be recovered. Enable it on all production vaults. |
-| Reading secrets from Key Vault on every request | It seems like the "most secure" approach | Cache secrets in memory and refresh periodically (every 5-15 minutes). Key Vault has throttling limits, and each call adds 5-10ms latency. |
-| Granting Key Vault Administrator when Key Vault Secrets User is sufficient | "Administrator" sounds like the right role for an admin | Key Vault Administrator can create, delete, and manage ALL objects. Most applications only need Key Vault Secrets User (read secrets). |
-| Not rotating secrets | The initial secret "works fine" | Implement secret rotation. Use Key Vault's built-in rotation policies (preview), or use Event Grid notifications to trigger rotation logic. |
+| Reading secrets from Key Vault on every request | It seems like the "most secure" approach | Cache secrets in memory and refresh periodically (every 5-15 minutes). Key Vault has throttling limits, and each call adds network latency. |
+| Granting Key Vault Administrator when Key Vault Secrets User is sufficient | "Administrator" sounds like the right role for an admin | [Key Vault Administrator can create, delete, and manage ALL objects. Most applications only need Key Vault Secrets User (read secrets).](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) |
+| Not rotating secrets | The initial secret "works fine" | Implement secret rotation. Use Key Vault rotation policies for keys, or Event Grid notifications to trigger custom secret-rotation logic. |
 | Forgetting to configure firewall rules on production vaults | The vault works from everywhere by default | Set `--default-action Deny` and add only the necessary VNet subnets and IPs. Use Private Endpoint for the strongest isolation. |
 
 ---
@@ -552,7 +552,7 @@ Migrating to Azure RBAC allows you to apply granular access controls down to the
 <details>
 <summary>3. A rogue administrator account executes a script that deletes all secrets from your production Key Vault and then immediately attempts to permanently purge them to cause maximum disruption. Your vault was configured with soft delete and purge protection enabled. Walk through what happens to the secrets and why the attacker's plan fails.</summary>
 
-When the attacker executes the deletion script, the secrets are not permanently destroyed; instead, they are moved into a soft-deleted state. In this state, the applications will immediately lose access (resulting in downtime), but the secrets themselves are safely preserved in the vault's recycle bin. When the attacker attempts to purge the soft-deleted secrets, the Key Vault service rejects the request because purge protection is enabled. Purge protection enforces a mandatory waiting period (between 7 and 90 days, depending on configuration) during which absolutely no one—including Global Administrators—can bypass the retention period. The organization can simply restore the soft-deleted secrets and revoke the rogue administrator's access.
+When the attacker executes the deletion script, the secrets are not permanently destroyed; instead, they are moved into a soft-deleted state. In this state, applications that rely on live Key Vault reads will typically lose access quickly (often resulting in downtime), but the secrets themselves are safely preserved in the vault's recycle bin. When the attacker attempts to purge the soft-deleted secrets, the Key Vault service rejects the request because purge protection is enabled. Purge protection enforces a mandatory waiting period (between 7 and 90 days, depending on configuration) during which absolutely no one—including Global Administrators—can bypass the retention period. The organization can simply restore the soft-deleted secrets and revoke the rogue administrator's access.
 </details>
 
 <details>
@@ -810,3 +810,24 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.10: Azure Monitor & Log Analytics](../module-3.10-monitor/) --- Learn how to observe your Azure infrastructure and applications with metrics, logs, KQL queries, and alerts that notify you before your customers notice problems.
+
+## Sources
+
+- [learn.microsoft.com: developers guide](https://learn.microsoft.com/en-us/azure/key-vault/general/developers-guide) — Microsoft's Key Vault documentation directly describes the service as secure storage and management for keys, secrets, and certificates.
+- [learn.microsoft.com: about secrets](https://learn.microsoft.com/en-us/azure/key-vault/secrets/about-secrets) — Microsoft's secrets documentation explicitly states the 25 KB maximum size.
+- [learn.microsoft.com: about keys secrets certificates](https://learn.microsoft.com/en-us/azure/key-vault/general/about-keys-secrets-certificates) — The Key Vault object overview documents the object-type identifier suffixes for secrets, keys, and certificates.
+- [learn.microsoft.com: about keys](https://learn.microsoft.com/en-us/azure/key-vault/keys/about-keys) — The Key Vault keys documentation directly lists RSA and EC support for vaults.
+- [learn.microsoft.com: about certificates](https://learn.microsoft.com/en-us/azure/key-vault/certificates/about-certificates) — Microsoft's certificate documentation explicitly describes X.509 certificate management and retrieval behavior for private keys.
+- [learn.microsoft.com: how to configure key rotation](https://learn.microsoft.com/en-us/azure/key-vault/keys/how-to-configure-key-rotation) — Microsoft's key rotation documentation directly describes configuring automated rotation policies.
+- [learn.microsoft.com: event schema key vault](https://learn.microsoft.com/en-us/azure/event-grid/event-schema-key-vault) — The Event Grid schema page explicitly states that SecretNearExpiry is triggered 30 days before expiration.
+- [learn.microsoft.com: rbac access policy](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-access-policy) — Microsoft's access-control comparison page explicitly documents the two models and recommends RBAC.
+- [learn.microsoft.com: rbac guide](https://learn.microsoft.com/en-us/azure/key-vault/general/rbac-guide) — The RBAC guide explicitly states that RBAC supports individual-resource scopes, while access policies are vault-level.
+- [learn.microsoft.com: soft delete overview](https://learn.microsoft.com/en-us/azure/key-vault/general/soft-delete-overview) — Microsoft's soft-delete overview explicitly documents the 7-90 day retention window.
+- [learn.microsoft.com: reliability key vault](https://learn.microsoft.com/en-us/azure/reliability/reliability-key-vault) — Microsoft's reliability guidance explicitly documents paired-region replication and read-only behavior after failover.
+- [learn.microsoft.com: overview for developers](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview-for-developers) — Microsoft's managed identity guidance explicitly states that DefaultAzureCredential works in local development and Azure-hosted managed-identity environments without code changes.
+- [learn.microsoft.com: app service key vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references) — Microsoft's App Service Key Vault references page explicitly says the app can use the setting like any other app setting or connection string.
+- [learn.microsoft.com: manage secrets](https://learn.microsoft.com/es-es/azure/container-apps/manage-secrets) — The Container Apps secrets documentation directly shows Key Vault-backed secret definitions and the keyvaultref/identityref CLI syntax.
+- [learn.microsoft.com: csi secrets store driver](https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-driver) — Microsoft's AKS documentation explicitly describes mounting secrets, keys, and certificates into pods through the CSI driver.
+- [learn.microsoft.com: how to azure key vault network security](https://learn.microsoft.com/fi-fi/azure/key-vault/general/how-to-azure-key-vault-network-security?tabs=azure-cli) — Microsoft's Key Vault networking documentation explicitly states that the firewall is disabled by default and clarifies that authentication and permissions still apply.
+- [learn.microsoft.com: service limits](https://learn.microsoft.com/en-us/azure/key-vault/general/service-limits) — Microsoft's service-limits page explicitly documents the 4,000 transactions per 10 seconds threshold.
+- [learn.microsoft.com: apps api keys secrets](https://learn.microsoft.com/en-us/azure/key-vault/general/apps-api-keys-secrets) — Microsoft's current application guidance explicitly recommends separate key vaults for different applications and environments.

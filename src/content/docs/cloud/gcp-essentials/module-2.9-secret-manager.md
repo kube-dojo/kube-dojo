@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In January 2023, a code review at a mid-sized SaaS company revealed that database credentials for their production PostgreSQL instance had been hardcoded in a Kubernetes ConfigMap for over two years. The credentials had been committed to Git, synced to the cluster via ArgoCD, and were visible in plaintext to anyone with `kubectl get configmap` access---which included every developer in the company. When the security team investigated, they found that the same database password had been shared via Slack three times, copied into a local `.env` file on at least 12 developer laptops, and had never been rotated. A former employee who left the company 8 months ago still had a working copy. The company spent six weeks conducting a full credential rotation across 42 services, updating and redeploying each one. During the rotation, three production outages occurred because services failed to pick up the new credentials.
+Hardcoding secrets in Git, Kubernetes objects, local `.env` files, and chat tools can create a wide exposure surface and make emergency credential rotation slow, risky, and outage-prone.
 
-This story is painfully common. Secrets---database passwords, API keys, TLS certificates, encryption keys, OAuth tokens---are the most sensitive data in any organization, yet they are routinely handled with the same care as regular configuration data. They end up in environment variables, ConfigMaps, CI/CD pipelines, and chat messages. Secret Manager exists to solve this problem by providing a **centralized, versioned, IAM-controlled store for all sensitive data**. Secrets are encrypted at rest and in transit, access is audited through Cloud Audit Logs, and rotation can be automated.
+This story is painfully common. Secrets---database passwords, API keys, TLS certificates, encryption keys, OAuth tokens---are the most sensitive data in any organization, yet they are routinely handled with the same care as regular configuration data. They end up in environment variables, ConfigMaps, CI/CD pipelines, and chat messages. Secret Manager exists to solve this problem by providing a **[centralized, versioned, IAM-controlled store for all sensitive data](https://cloud.google.com/secret-manager/docs/overview)**. Secrets are [encrypted at rest and in transit](https://cloud.google.com/secret-manager/docs/encryption), [access is audited through Cloud Audit Logs](https://cloud.google.com/secret-manager/docs/audit-logging), and [rotation can be automated](https://cloud.google.com/secret-manager/docs/secret-rotation).
 
 In this module, you will learn how to create and manage secrets, understand the versioning model, configure fine-grained IAM access, integrate secrets with Cloud Run and Compute Engine, and design a rotation strategy that does not cause outages.
 
@@ -56,9 +56,9 @@ flowchart TD
     style Meta fill:transparent,stroke:none
 ```
 
-**Secret**: A named container that holds versions. The secret itself has IAM policies, labels, and replication settings, but does not contain the actual sensitive data.
+**Secret**: [A named container that holds versions](https://cloud.google.com/secret-manager/docs/creating-and-accessing-secrets). The secret itself has IAM policies, labels, and replication settings, but does not contain the actual sensitive data.
 
-**Version**: The actual secret data (up to 64 KiB per version). Each version is immutable---once created, the data cannot be changed. To update a secret, you add a new version. Versions can be in one of three states:
+**Version**: The actual secret data ([up to 64 KiB per version](https://cloud.google.com/secret-manager/docs/reference/rest/v1/SecretPayload)). [Each version is immutable---once created, the data cannot be changed. To update a secret, you add a new version.](https://cloud.google.com/secret-manager/docs/add-secret-version) [Versions can be in one of three states](https://cloud.google.com/secret-manager/docs/add-secret-version):
 
 | State | Description | Accessible | Billed |
 | :--- | :--- | :--- | :--- |
@@ -137,7 +137,7 @@ gcloud secrets delete prod-db-password --quiet
 
 | Policy | Description | Use Case |
 | :--- | :--- | :--- |
-| **Automatic** | GCP manages replication across regions | Most use cases (recommended) |
+| **Automatic** | GCP manages replication across regions | [Most use cases (recommended)](https://cloud.google.com/secret-manager/docs/choosing-replication) |
 | **User-managed** | You specify which regions store the secret | Data residency compliance |
 
 ```bash
@@ -154,7 +154,7 @@ gcloud secrets create eu-only-secret \
 
 ## IAM Access Control
 
-Secret Manager supports fine-grained IAM at both the project level and the individual secret level.
+Secret Manager supports [fine-grained IAM at both the project level and the individual secret level](https://cloud.google.com/iam/docs/roles-permissions/secretmanager).
 
 ### Secret Manager Roles
 
@@ -186,7 +186,7 @@ gcloud projects add-iam-binding my-project \
   --role="roles/secretmanager.secretAccessor"
 ```
 
-### IAM Conditions for Time-Based Access
+### [IAM Conditions for Time-Based Access](https://cloud.google.com/secret-manager/docs/access-control)
 
 ```bash
 # Grant temporary access (expires after 24 hours)
@@ -200,7 +200,7 @@ gcloud secrets add-iam-policy-binding prod-db-password \
 
 ## Integrating with Cloud Run
 
-Cloud Run has native integration with Secret Manager. You can mount secrets as environment variables or files.
+Cloud Run has native integration with Secret Manager. You can [mount secrets as environment variables or files](https://cloud.google.com/run/docs/configuring/services/secrets).
 
 ### As Environment Variables
 
@@ -243,10 +243,10 @@ gcloud run deploy my-api \
 
 | Approach | Syntax | Behavior | Best For |
 | :--- | :--- | :--- | :--- |
-| **Latest** | `secret:latest` | Always gets newest version | Dev/staging environments |
-| **Pinned** | `secret:3` | Always gets version 3 | Production (deterministic) |
+| **Latest** | `secret:latest` | Refers to a moving target rather than a fixed version | Dev/test only, with care |
+| **Pinned** | `secret:3` | Refers to version 3 | Production (deterministic) |
 
-**Important**: When using `latest`, Cloud Run resolves the version at **deployment time**, not at request time. If you add a new secret version, Cloud Run will not automatically pick it up. You must redeploy the service to get the new version. This is a safety feature that prevents untested secrets from being used in production.
+**Important**: When a Cloud Run secret is exposed as an environment variable, Cloud Run resolves it at instance startup, not per request. For production, pin a specific version and roll out a new revision when you want workloads to adopt a new secret deliberately.
 
 ---
 
@@ -466,7 +466,7 @@ gcloud scheduler jobs create http rotate-db-password-schedule \
 
 ## Audit Logging
 
-Every access to Secret Manager is logged in Cloud Audit Logs.
+Secret Manager integrates with Cloud Audit Logs, and methods such as `AccessSecretVersion` are Data Access events that you should enable and monitor explicitly.
 
 ```bash
 # Query who accessed a secret
@@ -487,13 +487,13 @@ gcloud logging read '
 
 ## Did You Know?
 
-1. **Secret Manager encrypts all secret data with Google-managed AES-256 encryption keys** by default. You can also use Customer-Managed Encryption Keys (CMEK) via Cloud KMS for additional control. With CMEK, you control the encryption key lifecycle---you can rotate it, disable it (making all secrets inaccessible), or even destroy it (permanently losing access to the encrypted secrets).
+1. [**Secret Manager encrypts all secret data with Google-managed AES-256 encryption keys** by default. You can also use Customer-Managed Encryption Keys (CMEK) via Cloud KMS for additional control.](https://cloud.google.com/secret-manager/docs/encryption) With CMEK, you control the encryption key lifecycle---you can rotate it, [disable it (making all secrets inaccessible), or even destroy it (permanently losing access to the encrypted secrets)](https://cloud.google.com/secret-manager/docs/cmek).
 
 2. **The maximum size of a single secret version is 64 KiB**. This is large enough for most secrets (passwords, API keys, certificates) but not for large data blobs. If you need to store larger sensitive data, encrypt it with a Cloud KMS key and store the encrypted data in Cloud Storage; store only the KMS key reference in Secret Manager.
 
-3. **Secret Manager supports automatic replication to 6+ GCP regions** with the "automatic" replication policy. This means your secrets are available even if an entire region goes down. The service's SLA is 99.95%, and Google has maintained 100% availability since the service launched in 2020.
+3. **Secret Manager supports automatic replication** with the "automatic" replication policy, and Google recommends this mode for most use cases. It is designed to improve availability without requiring you to choose storage locations yourself.
 
-4. **You can set expiration dates on secrets**. When a secret expires, it is automatically deleted along with all its versions. This is useful for temporary credentials, short-lived API keys, or access tokens that should not persist beyond a known timeframe. Set it with `--expire-time` or `--ttl` during creation.
+4. **You can set expiration dates on secrets**. [When a secret expires, it is automatically deleted along with all its versions. This is useful for temporary credentials, short-lived API keys, or access tokens that should not persist beyond a known timeframe. Set it with `--expire-time` or `--ttl` during creation.](https://cloud.google.com/secret-manager/docs/creating-and-managing-expiring-secrets)
 
 ---
 
@@ -501,10 +501,10 @@ gcloud logging read '
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Hardcoding secrets in code or ConfigMaps | "Just for now" during development | Always use Secret Manager, even in dev environments |
+| Hardcoding secrets in code or ConfigMaps | "Just for now" during development | Prefer Secret Manager, including in dev environments |
 | Granting `secretmanager.admin` to applications | Quick fix for permission errors | Applications only need `secretmanager.secretAccessor` on specific secrets |
-| Using `latest` in production without redeployment | Expecting automatic pickup of new versions | Pin to a specific version in production; redeploy when rotating |
-| Including a trailing newline in the secret | Using `echo` without `-n` | Always use `echo -n` or `printf` when piping to `--data-file=-` |
+| Using `latest` in production | Treating a moving target as deterministic configuration | Pin a specific version in production and roll out a new revision when you want to adopt a new secret version |
+| Including a trailing newline in the secret | Using `echo` without `-n` | Use `printf` or, if your shell supports it, `echo -n` when piping to `--data-file=-` |
 | Not auditing secret access | Not knowing audit logging exists | Enable Data Access audit logs and monitor for unexpected access |
 | Storing secrets in environment variables in CI/CD | CI/CD platform variables seem equivalent | Use Workload Identity Federation + Secret Manager in CI/CD pipelines |
 | Never rotating secrets | Rotation seems complex and risky | Implement automated rotation; start with a 90-day cadence |
@@ -529,7 +529,7 @@ When using `latest`, Cloud Run resolves the version at **deployment time**, not 
 <details>
 <summary>3. Scenario: A developer accidentally committed a database password to a public repository. You need to immediately invalidate this credential in Secret Manager. You are debating whether to use the `disable` command or the `destroy` command on the affected version. What is the critical difference between these two actions, and why would you choose one over the other in an incident response scenario?</summary>
 
-**Disabling** a version makes it temporarily inaccessible—any attempt to access it returns an error, but the data is preserved and can be re-enabled. You are still billed for disabled versions. **Destroying** a version permanently deletes the secret data in an irrecoverable way, stopping billing. In a panicked incident response, you should always **disable** first. This stops access immediately but provides a rollback safety net if you realize you broke a critical system; you can then destroy it once you are certain the old credential has been safely rotated out of all dependent systems.
+**Disabling** a version makes it temporarily inaccessible—any attempt to access it returns an error, but the data is preserved and can be re-enabled. You are still billed for disabled versions. **Destroying** a version permanently deletes the secret data in an irrecoverable way, stopping billing. In a panicked incident response, you should usually **disable** first. This stops access immediately but provides a rollback safety net if you realize you broke a critical system; you can then destroy it once you are certain the old credential has been safely rotated out of all dependent systems.
 </details>
 
 <details>
@@ -541,7 +541,7 @@ The `echo` command appends a trailing newline character (`\n`) to its output by 
 <details>
 <summary>5. Scenario: Your security policy requires rotating the master database password every 90 days. The database is actively used by a fleet of 50 Compute Engine instances. You need to perform this rotation without causing any dropped connections or application downtime. How do you orchestrate the versioning in Secret Manager and the application updates to achieve zero-downtime rotation?</summary>
 
-To prevent downtime, you must use a **dual-version strategy**. First, generate a new credential and add it as a new version in Secret Manager. Second, update the backend database to accept **both** the old and new passwords simultaneously. This overlap period ensures that instances restarting at different times will always have a valid credential. Third, gradually redeploy or restart your instances so they fetch the new Secret Manager version. Finally, once all 50 instances are verified to be using the new credential, you disable the old version in Secret Manager and remove it from the backend database.
+To prevent downtime, you must use a **dual-version strategy**. First, generate a new credential and add it as a new version in Secret Manager. Second, update the backend database to accept **both** the old and new passwords simultaneously. This overlap period helps ensure that instances restarting at different times still have a valid credential. Third, gradually redeploy or restart your instances so they fetch the new Secret Manager version. Finally, once all 50 instances are verified to be using the new credential, you disable the old version in Secret Manager and remove it from the backend database.
 </details>
 
 <details>
@@ -799,3 +799,10 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.10: Cloud Operations (Monitoring & Logging)](../module-2.10-operations/)** --- Learn Cloud Logging (log routers, sinks, and log-based metrics), Cloud Monitoring (dashboards, PromQL/MQL, alerting), and uptime checks to keep your services observable and reliable.
+
+## Sources
+
+- [Secret Manager overview](https://cloud.google.com/secret-manager/docs/overview) — Covers the service model, encryption, versioning, replication, and integration points at the product level.
+- [Access control with IAM](https://cloud.google.com/secret-manager/docs/access-control) — Explains Secret Manager roles, least-privilege access, and IAM Conditions for time-based controls.
+- [Configure secrets for services](https://cloud.google.com/run/docs/configuring/services/secrets) — Documents the exact Cloud Run behaviors for secret environment variables, mounted files, and version selection.
+- [Create rotation schedules in Secret Manager](https://cloud.google.com/secret-manager/docs/secret-rotation) — Shows the native Secret Manager rotation model and how automated rotation notifications work.

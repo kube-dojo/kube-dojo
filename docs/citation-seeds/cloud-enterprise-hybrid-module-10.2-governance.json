@@ -1,291 +1,329 @@
 {
   "module_key": "cloud/enterprise-hybrid/module-10.2-governance",
   "module_path": "src/content/docs/cloud/enterprise-hybrid/module-10.2-governance.md",
-  "research_run_id": "2026-04-20T08:47:24+00:00-codex-gpt-5.3-codex-spark",
-  "schema_version": 2,
+  "research_run_id": "2026-04-23T03:24:06+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
   "claims": [
     {
       "claim_id": "C001",
-      "claim_text": "The 2019 Capital One cyber incident affected roughly 100 million people in the U.S. and 6 million in Canada.",
+      "claim_text": "Capital One's 2019 breach affected about 106 million people in the U.S. and Canada.",
       "claim_class": "incident",
       "span_hint": "section: Why This Module Matters, paragraph 1",
       "disposition": "needs_allowlist_expansion",
-      "proposed_url": "https://www.capitalone.com/digital/facts2019/",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://www.capitalone.com/about/newsroom/capital-one-announces-data-security-incident",
       "proposed_tier": null,
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "Capital One's incident page gives the breach scope, but capitalone.com is off the current allowlist."
+      "rationale": "The scale is real and directly stated by Capital One, but the primary source host is outside the current allowlist."
     },
     {
       "claim_id": "C002",
-      "claim_text": "The Capital One intrusion occurred through a misconfigured web application firewall.",
+      "claim_text": "The intrusion path involved a misconfigured web application firewall.",
       "claim_class": "incident",
       "span_hint": "section: Why This Module Matters, paragraph 1",
       "disposition": "needs_allowlist_expansion",
-      "proposed_url": "https://www.justice.gov/usao-wdwa/pr/seattle-tech-worker-arrested-data-theft-involving-large-financial-services-company",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": "https://www.justice.gov/usao-wdwa/united-states-v-paige-thompson",
       "proposed_tier": null,
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "The DOJ press release directly states the misconfigured WAF detail, but justice.gov is off-allowlist."
+      "rationale": "The DOJ case summary directly describes the misconfigured WAF, but justice.gov is not on the allowlist."
     },
     {
       "claim_id": "C003",
-      "claim_text": "The module attributes the breach blast radius to an overly permissive IAM role on the WAF with S3 access.",
-      "claim_class": "security_claim",
-      "span_hint": "section: Why This Module Matters, paragraph 1",
-      "disposition": "cannot_be_salvaged",
-      "proposed_url": null,
-      "proposed_tier": null,
-      "anchor_text": "However, the blast radius was massive specifically because the IAM role assigned to the WAF had overly permissive S3 access.",
-      "suggested_rewrite": "However, overly broad IAM permissions can greatly increase the blast radius of a cloud intrusion.",
-      "lesson_point_url": null,
-      "rationale": "The role-specific attribution is too precise for an uncited teaching anecdote; keep the least-privilege lesson and drop the unsupported implementation detail."
-    },
-    {
-      "claim_id": "C004",
-      "claim_text": "The module claims a specific SCP or Kubernetes admission control measure would have stopped the Capital One attack outright.",
-      "claim_class": "security_claim",
-      "span_hint": "section: Why This Module Matters, paragraph 1",
-      "disposition": "cannot_be_salvaged",
-      "proposed_url": null,
-      "proposed_tier": null,
-      "anchor_text": "An AWS Service Control Policy (SCP) limiting cross-account access, or a Kubernetes admission controller restricting access to the cloud metadata service, could have stopped the attack in its tracks.",
-      "suggested_rewrite": "Guardrails such as tighter IAM policies and metadata-service protections can reduce the impact of SSRF-style cloud attacks.",
-      "lesson_point_url": null,
-      "rationale": "This is an unsupported counterfactual and overstates certainty about what would have prevented a real breach."
-    },
-    {
-      "claim_id": "C005",
-      "claim_text": "The Capital One breach led to an $80 million regulatory fine.",
+      "claim_text": "The breach led to an $80 million regulatory penalty.",
       "claim_class": "incident",
       "span_hint": "section: Why This Module Matters, paragraph 1",
       "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S020"
+      ],
       "proposed_url": "https://www.occ.gov/news-issuances/news-releases/2020/nr-occ-2020-101.html",
       "proposed_tier": null,
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "The OCC notice directly supports the fine amount, but occ.gov is off the allowlist."
+      "rationale": "The OCC news release directly states the $80 million penalty, but occ.gov is outside the allowlist."
     },
     {
-      "claim_id": "C006",
-      "claim_text": "The Capital One breach was later resolved with a $190 million class-action settlement fund.",
+      "claim_id": "C004",
+      "claim_text": "The breach led to a $190 million class-action settlement.",
       "claim_class": "incident",
       "span_hint": "section: Why This Module Matters, paragraph 1",
       "disposition": "needs_allowlist_expansion",
-      "proposed_url": "https://www.capitalonesettlement.com/Content/Documents/Notice.pdf",
+      "source_ids": [
+        "S021"
+      ],
+      "proposed_url": "https://www.capitalonesettlement.com/",
       "proposed_tier": null,
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "The settlement notice states the $190 million fund, but the settlement host is off the allowlist."
+      "rationale": "The official settlement site directly states the settlement, but the host is outside the allowlist."
     },
     {
-      "claim_id": "C007",
-      "claim_text": "AWS SCPs do not grant permissions, do not apply to the management account, and participate in hierarchical allow/deny evaluation.",
+      "claim_id": "C005",
+      "claim_text": "An SCP or a Kubernetes admission controller could have stopped the Capital One attack outright.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "An AWS Service Control Policy (SCP) limiting cross-account access, or a Kubernetes admission controller restricting access to the cloud metadata service, could have stopped the attack in its tracks.",
+      "suggested_rewrite": "Tighter IAM guardrails and workload controls around metadata access can reduce the blast radius of SSRF-style cloud breaches.",
+      "lesson_point_url": null,
+      "rationale": "This is a speculative counterfactual about a specific real incident and is too strong to support as written."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "AWS SCPs define maximum permissions, do not grant permissions, do not affect the management account, and require explicit Allow coverage through the org hierarchy.",
       "claim_class": "vendor_capability",
-      "span_hint": "section: AWS Service Control Policies (SCPs), paragraphs after example JSON",
+      "span_hint": "section: AWS Service Control Policies (SCPs)",
       "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S002"
+      ],
       "proposed_url": "https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html",
       "proposed_tier": "vendor",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "AWS Organizations documentation directly covers each of these SCP behaviors."
+      "rationale": "AWS Organizations documentation directly covers all four SCP semantics used in this section."
     },
     {
-      "claim_id": "C008",
-      "claim_text": "Azure Policy supports effects such as Deny, Audit, DeployIfNotExists, Modify, Disabled, and DenyAction.",
+      "claim_id": "C007",
+      "claim_text": "Azure Policy supports effects including Deny, Audit, DeployIfNotExists, Modify, Disabled, and DenyAction.",
       "claim_class": "vendor_capability",
       "span_hint": "section: Azure Policy, effects table",
       "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
       "proposed_url": "https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effect-basics",
       "proposed_tier": "vendor",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "Microsoft Learn explicitly lists the supported Azure Policy effects."
+      "rationale": "Microsoft Learn lists these Azure Policy effects and describes their behavior."
     },
     {
-      "claim_id": "C009",
-      "claim_text": "Azure Policy for Kubernetes deploys constraint templates and constraints to clusters and uses Gatekeeper components.",
+      "claim_id": "C008",
+      "claim_text": "Azure Policy for AKS extends Gatekeeper and can be installed as an Azure Policy add-on or extension for Kubernetes governance.",
       "claim_class": "vendor_capability",
       "span_hint": "section: Azure Policy, paragraph after effects table",
       "disposition": "supported",
+      "source_ids": [
+        "S005",
+        "S006"
+      ],
       "proposed_url": "https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes",
       "proposed_tier": "vendor",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "Microsoft Learn states that Azure Policy for Kubernetes deploys constraints and Gatekeeper-related components on cluster installation."
+      "rationale": "Microsoft's AKS and Azure Policy docs directly describe the add-on/extension model and its Gatekeeper basis."
     },
     {
       "claim_id": "C010",
-      "claim_text": "GCP custom organization policy constraints are defined with CEL conditions.",
-      "claim_class": "vendor_capability",
-      "span_hint": "section: GCP Organization Policies, paragraph after example YAML",
-      "disposition": "supported",
-      "proposed_url": "https://docs.cloud.google.com/organization-policy/create-custom-constraints",
-      "proposed_tier": "vendor",
-      "anchor_text": null,
-      "suggested_rewrite": null,
-      "lesson_point_url": null,
-      "rationale": "Google Cloud's custom-constraints guide directly states that custom constraints use Common Expression Language (CEL)."
-    },
-    {
-      "claim_id": "C011",
-      "claim_text": "Kyverno is a Kubernetes-native policy engine that can validate, mutate, generate, and verify image signatures.",
+      "claim_text": "Kyverno is a Kubernetes-native policy engine that can validate, mutate, generate, and verify container images while working with familiar Kubernetes tooling.",
       "claim_class": "vendor_capability",
       "span_hint": "section: Kyverno",
       "disposition": "supported",
+      "source_ids": [
+        "S009",
+        "S010"
+      ],
       "proposed_url": "https://github.com/kyverno/kyverno",
       "proposed_tier": "upstream",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "Kyverno's upstream repository README lists these capabilities directly."
+      "rationale": "Kyverno's official GitHub materials directly describe these core capabilities and positioning."
     },
     {
-      "claim_id": "C012",
-      "claim_text": "Gatekeeper provides constraints, constraint templates, mutation support, audit functionality, and external data support.",
+      "claim_id": "C011",
+      "claim_text": "Gatekeeper provides native Kubernetes CRDs for ConstraintTemplates and Constraints, along with mutation and audit functionality.",
       "claim_class": "vendor_capability",
       "span_hint": "section: OPA Gatekeeper",
       "disposition": "supported",
+      "source_ids": [
+        "S011",
+        "S012"
+      ],
       "proposed_url": "https://github.com/open-policy-agent/gatekeeper",
       "proposed_tier": "upstream",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "Gatekeeper's upstream repository README enumerates these platform features."
+      "rationale": "The official Gatekeeper repository and library directly describe constraint templates, constraints, mutation, and audit."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Kyverno PolicyException is a real exception mechanism and can affect background scanning and PolicyReport results.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Exception Management, paragraph after anti-pattern",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S017"
+      ],
+      "proposed_url": "https://kyverno.io/docs/exceptions/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Kyverno's primary documentation directly supports this claim, but kyverno.io is not on the current allowlist."
     },
     {
       "claim_id": "C013",
-      "claim_text": "The comparison table says Kyverno's CNCF status is Incubating.",
+      "claim_text": "The comparison table's Gatekeeper mutation row is inaccurate as written.",
       "claim_class": "vendor_capability",
-      "span_hint": "section: Kubernetes Policy Engines: Kyverno vs OPA Gatekeeper, comparison table",
+      "span_hint": "section: Kyverno vs OPA Gatekeeper, feature comparison table",
       "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011",
+        "S012"
+      ],
       "proposed_url": null,
       "proposed_tier": null,
-      "anchor_text": "| **CNCF status** | Incubating | Graduated (via OPA) |",
-      "suggested_rewrite": "| **CNCF status** | Graduated | Graduated (via OPA) |",
+      "anchor_text": "| **Mutation** | Yes (native) | Yes (external data, more complex) |",
+      "suggested_rewrite": "| **Mutation** | Yes | Yes (via Gatekeeper mutator CRDs) |",
       "lesson_point_url": null,
-      "rationale": "This row is stale as of March 16, 2026, when CNCF moved Kyverno to Graduated status."
+      "rationale": "Gatekeeper does support mutation natively through mutator CRDs, so the current wording is misleading."
     },
     {
       "claim_id": "C014",
-      "claim_text": "The module says SCPs launched with a 2,048-character limit and that AWS raised it to 5,120 in 2019.",
-      "claim_class": "statistic",
-      "span_hint": "section: Did You Know, item 1",
+      "claim_text": "The comparison table's CNCF status row is outdated and inaccurate as of March 24, 2026.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Kyverno vs OPA Gatekeeper, feature comparison table",
       "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S013",
+        "S014"
+      ],
       "proposed_url": null,
       "proposed_tier": null,
-      "anchor_text": "AWS SCPs were originally strictly limited to a mere 2,048 characters when they were first launched in 2017. Enterprise customers consistently hit this severe limit so frequently that AWS officially increased it to 5,120 characters in 2019. Even at 5,120 characters, complex organizations regularly collide with the ceiling and must strategically split single logical policies across multiple SCP documents.",
-      "suggested_rewrite": "AWS Organizations currently limits an SCP document to 5,120 characters, so large organizations often split broad guardrails across multiple SCPs.",
+      "anchor_text": "| **CNCF status** | Incubating | Graduated (via OPA) |",
+      "suggested_rewrite": "| **CNCF status** | Graduated | Part of the OPA ecosystem; OPA is a CNCF graduated project |",
       "lesson_point_url": null,
-      "rationale": "Current AWS docs support the 5,120-character limit, but the module's precise historical timeline is not supported on an allowlisted source."
+      "rationale": "Kyverno graduated on March 24, 2026, and Gatekeeper is best described via the OPA ecosystem rather than as a separate graduated CNCF project."
     },
     {
       "claim_id": "C015",
-      "claim_text": "The module says OPA evaluates over 10 billion policy decisions per day globally.",
+      "claim_text": "The module's historical SCP size timeline is too specific as written.",
       "claim_class": "statistic",
-      "span_hint": "section: Did You Know, item 2",
+      "span_hint": "section: Did You Know, item 1",
       "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S003"
+      ],
       "proposed_url": null,
       "proposed_tier": null,
-      "anchor_text": "OPA (Open Policy Agent) systematically evaluates over 10 billion policy decisions per day across its massive production deployments globally. The Rego language was engineered specifically because existing, simpler policy languages could not adequately express the complex cross-resource relationships absolutely required for modern, cloud-scale authorization.",
-      "suggested_rewrite": "OPA is used at large scale in production, and Rego is a purpose-built declarative language for expressing policy over structured data.",
+      "anchor_text": "1. AWS SCPs were originally strictly limited to a mere 2,048 characters when they were first launched in 2017. Enterprise customers consistently hit this severe limit so frequently that AWS officially increased it to 5,120 characters in 2019. Even at 5,120 characters, complex organizations regularly collide with the ceiling and must strategically split single logical policies across multiple SCP documents.",
+      "suggested_rewrite": "1. AWS Organizations currently enforces a 5,120-character maximum size for each SCP document, so large organizations often need to split broad guardrails across multiple policies.",
       "lesson_point_url": null,
-      "rationale": "The exact throughput statistic is unsupported on an allowlisted primary source, but the broader lesson about OPA and Rego can be preserved without the number."
+      "rationale": "The current 5,120-character quota is citable, but the historical 2017/2019 timeline needs a stronger primary source than was found on the allowlist."
     },
     {
       "claim_id": "C016",
-      "claim_text": "The module cites a 2024 CNCF survey saying 58% of organizations running Kubernetes policy engines chose Kyverno because they already knew YAML.",
+      "claim_text": "OPA evaluates over 10 billion policy decisions per day and Rego was created because simpler policy languages were insufficient.",
       "claim_class": "statistic",
-      "span_hint": "section: Did You Know, item 3",
+      "span_hint": "section: Did You Know, item 2",
       "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S013"
+      ],
       "proposed_url": null,
       "proposed_tier": null,
-      "anchor_text": "Kyverno was initially created by Nirmata specifically because OPA Gatekeeper's complex Rego language represented a formidable barrier to adoption for standard Kubernetes platform teams. In a comprehensive 2024 CNCF survey, 58% of organizations running Kubernetes policy engines chose Kyverno, explicitly citing \"we already know YAML\" as their primary operational motivation.",
-      "suggested_rewrite": "Kyverno was originally created by Nirmata, and its Kubernetes-native YAML approach has made it attractive to teams that prefer not to adopt a separate policy language.",
+      "anchor_text": "2. OPA (Open Policy Agent) systematically evaluates over 10 billion policy decisions per day across its massive production deployments globally. The Rego language was engineered specifically because existing, simpler policy languages could not adequately express the complex cross-resource relationships absolutely required for modern, cloud-scale authorization.",
+      "suggested_rewrite": "2. OPA is a general-purpose policy engine used for authorization and policy enforcement across Kubernetes, CI/CD, APIs, and other systems, with Rego as its policy language.",
       "lesson_point_url": null,
-      "rationale": "The quoted survey statistic and motivation need a source; the broader adoption rationale can be retained without unsupported numbers or quotes."
+      "rationale": "The exact usage statistic and design-history claim need stronger primary sourcing than was found, but the broader teaching point is well supported."
     },
     {
       "claim_id": "C017",
-      "claim_text": "HashiCorp launched Sentinel as a policy-as-code framework in 2017.",
-      "claim_class": "vendor_capability",
-      "span_hint": "section: Did You Know, item 4",
-      "disposition": "supported",
-      "proposed_url": "https://www.hashicorp.com/en/blog/sentinel-announcement-policy-as-code-framework",
-      "proposed_tier": "vendor",
-      "anchor_text": null,
-      "suggested_rewrite": null,
+      "claim_text": "Kyverno was created specifically because Gatekeeper's Rego learning curve blocked adoption, and a 2024 CNCF survey found 58% of policy-engine users chose Kyverno.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S009",
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "3. Kyverno was initially created by Nirmata specifically because OPA Gatekeeper's complex Rego language represented a formidable barrier to adoption for standard Kubernetes platform teams. In a comprehensive 2024 CNCF survey, 58% of organizations running Kubernetes policy engines chose Kyverno, explicitly citing \"we already know YAML\" as their primary operational motivation.",
+      "suggested_rewrite": "3. Kyverno was originally created by Nirmata and became popular with Kubernetes teams because it lets them define many policies using Kubernetes-native resources and familiar tooling.",
       "lesson_point_url": null,
-      "rationale": "HashiCorp's announcement gives the release date and explicitly describes Sentinel as a policy-as-code framework."
-    },
-    {
-      "claim_id": "C018",
-      "claim_text": "SELinux was released to the open source community in 2000 and integrated into the upstream Linux kernel in 2003.",
-      "claim_class": "vendor_capability",
-      "span_hint": "section: Did You Know, item 4",
-      "disposition": "supported",
-      "proposed_url": "https://www.redhat.com/en/topics/linux/what-is-selinux",
-      "proposed_tier": "vendor",
-      "anchor_text": null,
-      "suggested_rewrite": null,
-      "lesson_point_url": null,
-      "rationale": "Red Hat's SELinux overview directly provides both dates."
+      "rationale": "The exact survey percentage and motivation quote were not located in an authoritative allowlisted primary source."
     },
     {
       "claim_id": "C019",
-      "claim_text": "AWS allows up to five SCPs per OU.",
+      "claim_text": "AWS Organizations allows up to five SCPs to be attached to an OU.",
       "claim_class": "statistic",
-      "span_hint": "section: Common Mistakes, row 'SCP character limit workarounds using wildcards'",
+      "span_hint": "section: Common Mistakes, SCP workaround row",
       "disposition": "supported",
-      "proposed_url": "https://docs.aws.amazon.com/general/latest/gr/ao.html",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/en_en/organizations/latest/userguide/orgs_reference_limits.html",
       "proposed_tier": "vendor",
       "anchor_text": null,
       "suggested_rewrite": null,
       "lesson_point_url": null,
-      "rationale": "AWS General Reference directly lists the quota of five SCPs per organizational unit."
+      "rationale": "AWS quota documentation directly states the per-entity SCP attachment quota."
     },
     {
       "claim_id": "C020",
-      "claim_text": "The module says a public Kubernetes LoadBalancer can bypass cloud firewall rules entirely.",
+      "claim_text": "A public Kubernetes LoadBalancer can bypass cloud firewall rules entirely.",
       "claim_class": "security_claim",
-      "span_hint": "section: Common Mistakes, row 'Over-relying on cloud policies, ignoring K8s'",
+      "span_hint": "section: Common Mistakes, over-relying on cloud policies row",
       "disposition": "cannot_be_salvaged",
+      "source_ids": [],
       "proposed_url": null,
       "proposed_tier": null,
       "anchor_text": "A public LoadBalancer can bypass cloud firewall rules entirely.",
-      "suggested_rewrite": "Cloud-account guardrails do not replace Kubernetes-native controls for Service exposure, so you still need in-cluster policies for public LoadBalancers.",
+      "suggested_rewrite": "A Kubernetes Service of type `LoadBalancer` can expose workloads externally, so cloud-account guardrails alone are not sufficient without Kubernetes-level policy.",
       "lesson_point_url": null,
-      "rationale": "The absolute 'bypass entirely' wording overclaims; the safer lesson is that cloud-account guardrails do not replace Kubernetes service-exposure controls."
+      "rationale": "The original sentence is too absolute and can be misleading across providers and network designs."
     }
   ],
   "further_reading": [
     {
       "url": "https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html",
-      "title": "AWS Service Control Policies",
+      "title": "AWS Organizations Service Control Policies",
       "tier": "vendor",
-      "why_relevant": "Primary reference for SCP semantics, hierarchy, and management-account limitations."
+      "why_relevant": "Authoritative reference for SCP behavior, scope, and evaluation."
     },
     {
       "url": "https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes",
-      "title": "Azure Policy for Kubernetes",
+      "title": "Understand Azure Policy for Kubernetes Clusters",
       "tier": "vendor",
-      "why_relevant": "Explains how Azure Policy integrates with Kubernetes and Gatekeeper for cluster governance."
+      "why_relevant": "Explains how Azure Policy governs AKS and how it integrates with Gatekeeper-based enforcement."
     },
     {
-      "url": "https://docs.cloud.google.com/organization-policy/create-custom-constraints",
-      "title": "Create Custom Constraints for Google Cloud Organization Policy",
+      "url": "https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints",
+      "title": "Google Cloud Organization Policy Constraints",
       "tier": "vendor",
-      "why_relevant": "Primary guide for CEL-based custom organization constraints in Google Cloud."
+      "why_relevant": "Covers built-in constraints and the governance model used across folders, projects, and organizations."
+    },
+    {
+      "url": "https://github.com/kyverno/kyverno",
+      "title": "Kyverno Official Repository",
+      "tier": "upstream",
+      "why_relevant": "Provides the upstream project overview for Kyverno's policy model and core capabilities."
     }
   ],
-  "notes": "Excluded quiz answers, hands-on exercise steps, Mermaid diagrams, and code blocks per pipeline rules. Table rows were only flagged when they carried hard factual, numeric, or vendor-capability claims.",
+  "notes": "Source ID map: S001=https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html; S002=https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps_evaluation.html; S003=https://docs.aws.amazon.com/en_en/organizations/latest/userguide/orgs_reference_limits.html; S004=https://learn.microsoft.com/en-us/azure/governance/policy/concepts/effect-basics; S005=https://learn.microsoft.com/en-us/azure/governance/policy/concepts/policy-for-kubernetes; S006=https://learn.microsoft.com/en-us/azure/aks/policy-reference; S007=https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints; S008=https://cloud.google.com/resource-manager/docs/organization-policy/creating-managing-custom-constraints; S009=https://github.com/kyverno/kyverno; S010=https://github.com/kyverno; S011=https://github.com/open-policy-agent/gatekeeper; S012=https://github.com/open-policy-agent/gatekeeper-library; S013=https://github.com/open-policy-agent/opa; S014=https://www.cncf.io/announcements/2026/03/24/cloud-native-computing-foundation-announces-kyvernos-graduation/; S015=https://www.hashicorp.com/blog/sentinel-announcement-policy-as-code-framework; S016=https://www.redhat.com/en/topics/linux/what-is-selinux; S017=https://kyverno.io/docs/exceptions/; S018=https://www.capitalone.com/about/newsroom/capital-one-announces-data-security-incident; S019=https://www.justice.gov/usao-wdwa/united-states-v-paige-thompson; S020=https://www.occ.gov/news-issuances/news-releases/2020/nr-occ-2020-101.html; S021=https://www.capitalonesettlement.com/. Exact date correction: Kyverno graduated on March 24, 2026.",
   "_schema_issues": [],
   "rejected_urls": []
 }

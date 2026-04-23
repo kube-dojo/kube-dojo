@@ -1,0 +1,509 @@
+{
+  "module_key": "cloud/azure-essentials/module-3.7-aci-aca",
+  "module_path": "src/content/docs/cloud/azure-essentials/module-3.7-aci-aca.md",
+  "research_run_id": "2026-04-23T02:18:55+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "ACI supports GPU workloads as a current learning objective.",
+      "claim_class": "vendor_capability",
+      "span_hint": "learning objectives",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Deploy Azure Container Instances for burst workloads with virtual network integration and GPU support**",
+      "suggested_rewrite": "- **Deploy Azure Container Instances for burst workloads with virtual network integration**",
+      "lesson_point_url": null,
+      "rationale": "Microsoft Learn now marks ACI GPU support as retired, so the objective is outdated."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The 2023 media-streaming migration story with 500+ tasks, $2,800 to $340 spend, 88% savings, and 90-second scale-out is a real incident.",
+      "claim_class": "war_story",
+      "span_hint": "Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In early 2023, a media streaming company needed to process video transcoding jobs during live events. Their traffic was extremely spiky---zero jobs during off-hours, then 500+ concurrent transcoding tasks during a live broadcast. Their existing solution used a pool of 20 always-on VMs that cost $2,800/month. During events, the pool was overwhelmed and jobs queued for 15+ minutes. During off-hours, the VMs sat idle burning money. They migrated the transcoding workers to Azure Container Apps with KEDA scaling triggered by Azure Service Bus queue depth. During live events, Container Apps scaled from zero to 200 instances in under 90 seconds. After the event, it scaled back to zero. Their monthly compute bill dropped from $2,800 to $340---an 88% reduction---while simultaneously eliminating the 15-minute queue backlog entirely.",
+      "suggested_rewrite": "For spiky event-driven workloads, always-on VMs often waste money off-peak and still struggle during bursts. A queue-driven worker on Azure Container Apps can scale out during busy periods and scale back down afterward, reducing idle spend while improving backlog handling.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed anecdote with precise operational and cost numbers, so it cannot remain as a factual case study without a real source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Azure positions ACI as a lower-level container building block and Container Apps as a higher-level managed platform with scaling, revisions, and application features.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Why This Module Matters, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/compare-options",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's comparison page directly contrasts ACI as the lower-level option with Container Apps' higher-level application features."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "ACI lacks built-in app-level features such as autoscaling and traffic management, making Container Apps or AKS better fits for long-running web services and more complex app topologies.",
+      "claim_class": "vendor_capability",
+      "span_hint": "When to Use ACI, final sentence",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/compare-options",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official comparison doc explicitly says ACI doesn't provide concepts like scale, load balancing, and certificates."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "An ACI container group is pod-like: containers are scheduled on the same host and share lifecycle, local network, and storage volumes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Container Groups: The ACI Pod",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-instances/container-instances-container-groups",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The container-groups documentation states these shared-host, network, volume, and lifecycle properties directly."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "ACI can run with a public endpoint or inside a VNet, and VNet-deployed container groups do not directly expose a public IP or FQDN.",
+      "claim_class": "vendor_capability",
+      "span_hint": "ACI Networking",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-instances/container-instances-virtual-network-concepts",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The networking concepts doc directly covers VNet deployment behavior and the lack of direct public IP/FQDN exposure in that mode."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "The table's ACI max CPU value of 4 cores is current.",
+      "claim_class": "vendor_capability",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Max CPU per group** | 4 cores | 4 cores |",
+      "suggested_rewrite": "| **Max CPU per group** | Check current ACI quota docs | Check current ACI quota docs |",
+      "lesson_point_url": null,
+      "rationale": "Current Microsoft limits documentation shows materially different resource ceilings, so this hard-coded number is stale."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The table's ACI max memory value of 16 GiB is current.",
+      "claim_class": "vendor_capability",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Max Memory per group** | 16 GiB | 16 GiB |",
+      "suggested_rewrite": "| **Max Memory per group** | Check current ACI quota docs | Check current ACI quota docs |",
+      "lesson_point_url": null,
+      "rationale": "Current ACI quota documentation no longer matches this fixed 16 GiB limit."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "The table's ACI max containers-per-group value of 60 is current.",
+      "claim_class": "vendor_capability",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Max containers per group** | 60 | 60 |",
+      "suggested_rewrite": "| **Max containers per group** | Check current ACI service limits | Check current ACI service limits |",
+      "lesson_point_url": null,
+      "rationale": "The module presents a precise service limit without a stable current Microsoft citation in the same form, so the stale precision should be removed."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "ACI currently supports GPU workloads in limited regions.",
+      "claim_class": "vendor_capability",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **GPU support** | Yes (limited regions) | No |",
+      "suggested_rewrite": "| **GPU support** | Retired in ACI | No |",
+      "lesson_point_url": null,
+      "rationale": "Microsoft Learn marks ACI GPU support as retired, so the row is no longer accurate."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "The exact ACI per-vCPU-second prices shown in the table are current and stable enough to cite inline.",
+      "claim_class": "pricing",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Pricing (per vCPU/sec)** | ~$0.0000135 | ~$0.0000180 |",
+      "suggested_rewrite": "| **Pricing (per vCPU/sec)** | See current pricing page | See current pricing page |",
+      "lesson_point_url": null,
+      "rationale": "Exact Azure prices are time- and region-sensitive and shouldn't be hard-coded without a stable snapshot source."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "The exact ACI per-GB-memory-second prices shown in the table are current and stable enough to cite inline.",
+      "claim_class": "pricing",
+      "span_hint": "ACI Resource Limits and Pricing table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Pricing (per GB memory/sec)** | ~$0.0000015 | ~$0.0000020 |",
+      "suggested_rewrite": "| **Pricing (per GB memory/sec)** | See current pricing page | See current pricing page |",
+      "lesson_point_url": null,
+      "rationale": "These exact rates are volatile vendor pricing, so the module should point learners to the live pricing page instead of freezing numbers."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "The worked ACI cost example of $0.06/hour and about $43/month is current.",
+      "claim_class": "pricing",
+      "span_hint": "ACI Resource Limits and Pricing, paragraph after table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A container running 1 vCPU and 2 GB for an hour costs approximately: (0.0000135 x 3600) + (0.0000015 x 2 x 3600) = $0.049 + $0.011 = **$0.06/hour** or about **$43/month** if running 24/7.",
+      "suggested_rewrite": "A continuously running ACI workload should be priced against the current Azure pricing page, because the effective hourly and monthly cost depends on the current rates, region, and OS.",
+      "lesson_point_url": null,
+      "rationale": "The calculation depends on stale hard-coded prices and shouldn't remain as a factual cost statement."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Container Apps supports KEDA-based autoscaling, scale-to-zero, revisions/traffic splitting, and built-in Dapr integration, while ACI is the lower-level building block and AKS gives direct Kubernetes control.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Container Apps vs ACI vs AKS table",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/compare-options",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's comparison docs and FAQ cover this capability split directly."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "The comparison table's monthly cost baseline row, especially 'Free tier (180K vCPU-sec)' and '~$73 (1 node min)', is stable as written.",
+      "claim_class": "pricing",
+      "span_hint": "Container Apps vs ACI vs AKS table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| **Monthly cost baseline** | Pay per second | Free tier (180K vCPU-sec) | ~$73 (1 node min) |",
+      "suggested_rewrite": "| **Monthly cost baseline** | Pay per use | Consumption plan includes a monthly free grant, then pay per use | Non-zero baseline because cluster nodes must run |",
+      "lesson_point_url": null,
+      "rationale": "The AKS dollar figure is not a stable invariant, and the Container Apps row omits the full current free-grant terms."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Container Apps revisions are immutable snapshots, and traffic can be split across active revisions for canary or blue/green deployments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Revisions and Traffic Splitting",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/revisions",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The revisions documentation directly describes immutable revisions and weighted traffic splitting."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Container Apps scaling is powered by KEDA, supports scale-to-zero, and supports queue-based scaling rules such as Azure Service Bus and Azure Queue.",
+      "claim_class": "vendor_capability",
+      "span_hint": "KEDA Auto-Scaling",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/scale-app",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The scaling documentation directly states KEDA-backed scaling, min-replica behavior, and Azure queue/service-bus examples."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "The exact trigger inventory in the 'Available KEDA scale triggers in Container Apps' table needs a source for the full supported matrix, especially Cron and Prometheus-backed custom metrics.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Available KEDA scale triggers table",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S016"
+      ],
+      "proposed_url": "https://keda.sh/docs/latest/scalers/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The precise scaler inventory is maintained in KEDA documentation, which is off the current allowlist."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Container Apps offers managed Dapr capabilities such as service invocation, pub/sub, state management, bindings, and secrets through a sidecar model.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Dapr Integration",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/dapr-overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Dapr overview page lists these managed Dapr APIs and features directly."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The logistics-startup Dapr war story with 8 services, P99 dropping from 2.3 seconds to 180 milliseconds, and circuit breakers eliminating cascading failures is a real sourced incident.",
+      "claim_class": "war_story",
+      "span_hint": "Dapr Integration, war story paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**War Story**: A logistics startup had 8 microservices communicating via direct HTTP calls. When one service was slow, the calling services would timeout and retry, creating cascading failures. They enabled Dapr on Container Apps, which added automatic retries with exponential backoff, circuit breaking, and distributed tracing---all without changing application code. Their P99 latency dropped from 2.3 seconds to 180 milliseconds, and cascading failures stopped entirely because Dapr's circuit breaker would trip before the cascade could propagate.",
+      "suggested_rewrite": "**Example pattern**: In a microservice architecture, direct service-to-service HTTP calls can amplify slowdowns and retries into cascading failures. Dapr on Container Apps can reduce custom plumbing by adding service invocation, mTLS, and optional resiliency features such as retries and circuit breakers.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed anecdote with precise performance numbers and outcome claims, so it cannot remain as factual history."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The COVID-era European government ACI case study with 2 million applications, 3,000 instances, 6 hours, and $240 total cost is a real documented incident.",
+      "claim_class": "war_story",
+      "span_hint": "Did You Know, item 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "1. **Azure Container Instances can burst to thousands of simultaneous container groups.** During the first weeks of the COVID-19 pandemic, a European government agency used ACI to process 2 million pandemic benefit applications. They spun up 3,000 container instances simultaneously, processed the applications in 6 hours, and shut everything down. Total cost: approximately $240. Running equivalent VMs 24/7 for a week would have cost over $12,000.",
+      "suggested_rewrite": "1. **Azure Container Instances is designed for burstable, on-demand container workloads.** Teams can use ACI to spin up large numbers of short-lived container groups for batch processing and then shut them down when the work is finished.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsourced incident narrative with named context and precise numbers, so the specifics must be removed."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "Container Apps' free grant covers approximately 6.2 million requests per month at 50 ms average execution time.",
+      "claim_class": "pricing",
+      "span_hint": "Did You Know, item 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "2. **Container Apps' free grant covers approximately 6.2 million requests per month** at 50ms average execution time. The free tier includes 180,000 vCPU-seconds and 360,000 GiB-seconds per subscription per month. For a lightweight API that processes requests in 50ms with 0.25 vCPU, you get roughly 720,000 seconds of runtime per month before paying anything.",
+      "suggested_rewrite": "2. **Container Apps includes a monthly free grant on the Consumption plan.** The current grant includes 180,000 vCPU-seconds, 360,000 GiB-seconds, and 2 million requests per subscription per month; how far that goes depends on your app's CPU, memory, and request profile.",
+      "lesson_point_url": null,
+      "rationale": "The 6.2 million figure is not backed by the current pricing page and conflicts with the current 2 million free-request grant."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Container Apps can scale from zero to 200 replicas in under 2 minutes, with 5-10 second cold starts and faster reaction than adding AKS nodes in 3-5 minutes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know, item 3",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "3. **KEDA can scale Container Apps from zero to 200 replicas in under 2 minutes.** The scale-from-zero cold start adds approximately 5-10 seconds (image pull + container startup), which is significantly faster than the 3-5 minutes it takes to add a new AKS node via cluster autoscaler. For event-driven workloads with bursty traffic, this responsiveness is transformative.",
+      "suggested_rewrite": "3. **Container Apps can scale from zero to many replicas for bursty workloads.** Exact startup and scale-out times depend on factors such as image size, networking, environment state, and the scaling trigger, but the platform is designed for responsive event-driven scaling.",
+      "lesson_point_url": "https://learn.microsoft.com/en-us/azure/container-apps/scale-app",
+      "rationale": "The operational lesson is valid, but the precise timing benchmarks are not stably documented on the allowlisted source."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "Container Apps runs on a fully managed AKS cluster, each environment maps to a dedicated Kubernetes namespace, and the Kubernetes API is completely hidden.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "4. **Container Apps runs on a fully managed AKS cluster** that Microsoft operates. Each Container Apps environment maps to a dedicated Kubernetes namespace in this cluster. You can see evidence of this in the resource IDs and in the way networking is configured. However, you have zero direct access to the underlying Kubernetes API---Container Apps exposes only its own simplified API surface.",
+      "suggested_rewrite": "4. **Container Apps is a fully managed platform that does not expose the underlying Kubernetes API directly.** You work through the Container Apps resource model and tooling rather than managing the cluster yourself.",
+      "lesson_point_url": null,
+      "rationale": "The no-direct-Kubernetes-API claim is documented, but the namespace-mapping and AKS-cluster specifics are not cleanly backed here and should be removed."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "ACI has no built-in autoscaling or load balancing, so Container Apps is the better fit for HTTP workloads that need scaling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/compare-options",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official comparison page directly says ACI lacks scale and load-balancing concepts."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "For event-driven workloads, min-replicas can be set to 0 and exact cold-start time is typically 5-10 seconds.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 2",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S007",
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Setting min-replicas to 1 when the workload can tolerate cold starts | Fear of cold start latency | If your workload is event-driven (queue processor, scheduled job), set min-replicas to 0. You only pay when processing events. The 5-10 second cold start is usually acceptable. |",
+      "suggested_rewrite": "| Setting min-replicas to 1 when the workload can tolerate cold starts | Fear of cold start latency | If your workload is event-driven (queue processor, scheduled job), set min-replicas to 0. You only pay when the app is actively processing work. Cold-start latency is often acceptable for background jobs, but exact startup time depends on image size and environment. |",
+      "lesson_point_url": "https://learn.microsoft.com/en-us/azure/container-apps/scale-app",
+      "rationale": "Scale-to-zero behavior is documented, but the fixed 5-10 second startup number is better treated as an illustration than a guaranteed benchmark."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "Health probes help Container Apps detect unhealthy or unready replicas, and liveness/readiness probes are available.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 3",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/health-probes",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The health-probes documentation directly covers startup, liveness, and readiness behavior."
+    },
+    {
+      "claim_id": "C029",
+      "claim_text": "Workloads needing CRDs, direct pod scheduling, DaemonSets, StatefulSets with complex storage, or host-level access require AKS rather than Container Apps.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S010",
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Using Container Apps for workloads that need Kubernetes-level control | Container Apps seems easier than AKS | If you need custom CRDs, direct pod scheduling, DaemonSets, StatefulSets with complex storage, or host-level access, you need AKS. Container Apps is not a Kubernetes replacement for complex scenarios. |",
+      "suggested_rewrite": "| Using Container Apps for workloads that need Kubernetes-level control | Container Apps seems easier than AKS | If you need direct access to the Kubernetes API or cluster-level control, you need AKS. Container Apps is not intended to replace full Kubernetes control-plane scenarios. |",
+      "lesson_point_url": null,
+      "rationale": "The general boundary is documented, but the detailed list of Kubernetes constructs is presented more precisely than the allowlisted source supports."
+    },
+    {
+      "claim_id": "C030",
+      "claim_text": "Container Apps secrets map to Kubernetes secrets, and Managed Identity can replace connection strings.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 5",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S013",
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Hardcoding connection strings in container environment variables | It works and is easy to set up | Use Container Apps secrets (which map to Kubernetes secrets) and reference them in env vars. Better yet, use Managed Identity to eliminate connection strings entirely. |",
+      "suggested_rewrite": "| Hardcoding connection strings in container environment variables | It works and is easy to set up | Use Container Apps secrets and reference them in env vars. Better yet, use Managed Identity where the target Azure service supports it so you do not have to manage credentials in your app. |",
+      "lesson_point_url": null,
+      "rationale": "Managed Identity guidance is documented, but the specific 'map to Kubernetes secrets' statement is not cleanly backed by the allowlisted docs used here."
+    },
+    {
+      "claim_id": "C031",
+      "claim_text": "Inactive revisions accumulate, old ones count toward revision limits, and Container Apps keeps up to 100 inactive revisions by default.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Common Mistakes, row 6",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/container-apps/revisions",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The revisions doc explicitly describes the inactive-revision cap and default behavior."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-apps/compare-options",
+      "title": "Comparing Container Apps with Other Azure Container Options",
+      "tier": "vendor",
+      "why_relevant": "Best primary source for choosing between ACI, Container Apps, and AKS."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-apps/scale-app",
+      "title": "Set Scaling Rules in Azure Container Apps",
+      "tier": "vendor",
+      "why_relevant": "Explains KEDA-backed scaling, scale-to-zero behavior, and Azure queue/service-bus examples."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/container-apps/dapr-overview",
+      "title": "Microservice APIs Powered by Dapr",
+      "tier": "vendor",
+      "why_relevant": "Covers the Dapr capabilities Azure Container Apps exposes and how they are presented to apps."
+    }
+  ],
+  "notes": "Quiz prompts and hands-on exercise steps were intentionally excluded per pipeline rules. Several high-precision anecdotes, timings, and price figures in the prose are better treated as rewrites than citations because they are either unsourced or materially stale.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

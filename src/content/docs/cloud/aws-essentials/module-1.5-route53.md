@@ -14,7 +14,7 @@ sidebar:
 Before starting this module, you should have completed:
 - [Module 1.2: VPC & Networking Foundations](../module-1.2-vpc/)
 - Basic understanding of domain names and how browsers resolve URLs
-- AWS account with at least one registered domain (or willingness to register one ~$12/year)
+- AWS account with at least one registered domain (or willingness to register one; domain pricing varies by TLD)
 - AWS CLI configured with appropriate permissions
 
 ## What You'll Be Able to Do
@@ -30,11 +30,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2021, Facebook disappeared from the internet. Not figuratively -- literally. For six hours, the company's DNS records were unreachable because a routine BGP configuration change accidentally withdrew the routes to Facebook's DNS servers. The result: 3.5 billion users locked out, an estimated $100 million in lost revenue, and employees unable to enter their own buildings because badge systems depended on internal DNS. The stock dropped 4.9% that day.
+In October 2021, Facebook disappeared from the internet. Not figuratively -- literally. For six hours, the company's DNS records were unreachable because a routine BGP configuration change accidentally withdrew the routes to Facebook's DNS servers. The result was a major global outage that disrupted users, affected the business, and complicated internal recovery work.
 
 DNS is the invisible foundation of every internet application. When it works, nobody thinks about it. When it fails, nothing else matters -- your beautifully architected microservices, your multi-region deployment, your zero-downtime release strategy -- all of it becomes unreachable if users cannot resolve your domain name.
 
-AWS Route 53 is Amazon's managed DNS service, named after the port that DNS traffic runs on (port 53). It handles over a trillion DNS queries per month across AWS's global network of edge locations. In this module, you will learn how Route 53 works, how to configure hosted zones and records, how to implement sophisticated routing policies for multi-region architectures, and how to keep your DNS infrastructure healthy with automated health checks. By the end, you will have built a multi-region active-passive failover configuration -- the kind of setup that would have saved Facebook's engineers a very bad day.
+AWS Route 53 is Amazon's managed DNS service, [named after the port that DNS traffic runs on (port 53)](https://aws.amazon.com/route53/features/). It is designed to handle very large query volumes across AWS's global DNS network. In this module, you will learn how Route 53 works, how to configure hosted zones and records, how to implement sophisticated routing policies for multi-region architectures, and how to keep your DNS infrastructure healthy with automated health checks. By the end, you will have built a multi-region active-passive failover configuration -- the kind of setup that would have saved Facebook's engineers a very bad day.
 
 ---
 
@@ -78,7 +78,7 @@ Route 53 lives at step 4-5 in this chain. It is the **authoritative name server*
 | SRV | Service locator | `_sip._tcp.example.com -> sip.example.com:5060` | Service discovery |
 | CAA | Certificate Authority Authorization | `example.com -> 0 issue "letsencrypt.org"` | Restrict who can issue TLS certs |
 
-The **ALIAS record** deserves special attention. Standard DNS does not allow a CNAME at the zone apex (the naked domain like `example.com`). But you often want your naked domain pointing to a load balancer or CloudFront distribution. Route 53's ALIAS record solves this -- it functions like a CNAME but returns an A/AAAA record, so it works at the zone apex. And queries against ALIAS records pointing to AWS resources are free.
+The **ALIAS record** deserves special attention. Standard DNS does not allow a CNAME at the zone apex (the naked domain like `example.com`). But you often want your naked domain pointing to a load balancer or CloudFront distribution. [Route 53's ALIAS record solves this -- it functions like a CNAME but returns an A/AAAA record, so it works at the zone apex. And queries against ALIAS records pointing to AWS resources are free.](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html)
 
 ---
 
@@ -104,7 +104,7 @@ aws route53 list-hosted-zones
 aws route53 get-hosted-zone --id Z0123456789ABCDEFGHIJ
 ```
 
-When Route 53 creates a public hosted zone, it automatically assigns four name servers from different TLD domains (e.g., `ns-123.awsdns-45.com`, `ns-456.awsdns-78.net`, `ns-789.awsdns-12.org`, `ns-1012.awsdns-34.co.uk`). This four-TLD spread ensures that even if one TLD's infrastructure has issues, your DNS still works.
+When Route 53 creates a public hosted zone, [it automatically assigns four name servers from different TLD domains](https://aws.amazon.com/documentation-overview/route53/) (e.g., `ns-123.awsdns-45.com`, `ns-456.awsdns-78.net`, `ns-789.awsdns-12.org`, `ns-1012.awsdns-34.co.uk`). This four-TLD spread is designed to improve availability.
 
 ### Private Hosted Zones
 
@@ -126,7 +126,7 @@ aws route53 associate-vpc-with-hosted-zone \
 
 > **Pause and predict**: You have a public hosted zone for `example.com` and a private hosted zone for `example.com` associated with your VPC. If an EC2 instance inside that VPC queries `api.example.com`, which zone answers the query, and why?
 
-A common pattern is split-horizon DNS: the same domain name resolves to different IPs depending on whether the query comes from inside or outside your VPC. For example, `api.yourapp.com` might resolve to a public ALB IP for external users, but to a private IP for services running inside the VPC. This reduces latency and avoids unnecessary trips through the internet gateway.
+A common pattern is [split-horizon DNS: the same domain name resolves to different IPs depending on whether the query comes from inside or outside your VPC](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zone-private-considerations.html). For example, `api.yourapp.com` might resolve to a public ALB IP for external users, but to a private IP for services running inside the VPC. This reduces latency and avoids unnecessary trips through the internet gateway.
 
 ```mermaid
 flowchart TD
@@ -164,10 +164,10 @@ Route 53 pricing is straightforward but can surprise you at scale:
 | Standard queries | $0.40 per million queries |
 | Latency-based routing queries | $0.60 per million queries |
 | ALIAS queries to AWS resources | Free |
-| Health checks | $0.50/month (basic), $0.75/month (HTTPS + string matching) |
-| Domain registration | $12-40/year depending on TLD |
+| Health checks | Pricing depends on endpoint type and optional features; check the current Route 53 pricing page |
+| Domain registration | Pricing varies by TLD and is billed in annual increments |
 
-That ALIAS-queries-are-free detail matters. If you can use an ALIAS record instead of a CNAME, you save on query costs and get zone-apex support. Always prefer ALIAS for AWS resources.
+That ALIAS-queries-are-free detail matters. If you can use an ALIAS record instead of a CNAME, you save on query costs and get zone-apex support. Prefer ALIAS for AWS resources when Route 53 supports it.
 
 ---
 
@@ -260,7 +260,7 @@ aws route53 change-resource-record-sets \
   }'
 ```
 
-Notice the `UPSERT` action in the second example. This is idempotent -- it creates the record if it does not exist, or updates it if it does. Production automation should always prefer `UPSERT` over `CREATE` to avoid failures when re-running scripts.
+Notice the `UPSERT` action in the second example. This is idempotent -- [it creates the record if it does not exist, or updates it if it does](https://docs.aws.amazon.com/Route53/latest/APIReference/API_ChangeResourceRecordSets.html). Production automation should usually prefer `UPSERT` over `CREATE` to avoid failures when re-running scripts.
 
 ### TTL: The Caching Knob You Must Understand
 
@@ -273,7 +273,7 @@ TTL (Time to Live) controls how long resolvers cache your DNS records, in second
 | 60 seconds | Active failover, during migrations | High query volume, higher cost |
 | 300 seconds (5 min) | Standard production records | Good balance for most apps |
 | 3600 seconds (1 hour) | Stable records (MX, TXT) | Lower cost, slower changes |
-| 86400 seconds (24 hours) | Records that never change | Lowest cost, very slow propagation |
+| 86400 seconds (24 hours) | Records that rarely change | Lowest cost, very slow propagation |
 
 A critical lesson: **lower your TTL before making changes.** If your TTL is 24 hours and you need to migrate to a new IP, some resolvers will not see the change for a full day. The standard playbook:
 
@@ -382,11 +382,11 @@ aws route53 change-resource-record-sets \
   }'
 ```
 
-A weight of 0 means the record is never returned unless all other records also have weight 0. This is useful for "dark launching" -- creating a record you can activate later by changing its weight.
+[A weight of 0 means the record is never returned unless all other records also have weight 0](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-weighted.html). This is useful for "dark launching" -- creating a record you can activate later by changing its weight.
 
 ### Latency-Based Routing
 
-Route 53 routes traffic to the region with the lowest latency for the requester. AWS maintains a database of latency measurements between internet networks and AWS regions.
+Route 53 routes traffic to the region with the lowest latency for the requester. [AWS maintains a database of latency measurements between internet networks and AWS regions](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-latency.html).
 
 ```bash
 # Latency-based: US East endpoint
@@ -593,7 +593,7 @@ aws route53 create-health-check \
 
 ### How Health Checks Work
 
-Route 53 health checkers run from data centers in multiple AWS regions. By default, they check your endpoint every 30 seconds from about 15 locations worldwide. The endpoint is considered healthy if at least 18% of health checkers (roughly 3 out of 15) report it as healthy.
+Route 53 health checkers run from data centers in multiple AWS regions. By default, health checkers run from multiple locations worldwide and can check every 30 seconds. [The endpoint is considered healthy if at least 18% of health checkers (roughly 3 out of 15) report it as healthy](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-determining-health-of-endpoints.html).
 
 ```mermaid
 flowchart TD
@@ -630,7 +630,7 @@ flowchart TD
 | CALCULATED | Aggregates child health checks | Complex multi-component systems |
 | CLOUDWATCH_METRIC | Based on CloudWatch alarm state | Internal resources not reachable from internet |
 
-The `CLOUDWATCH_METRIC` type is crucial for private resources. Health checkers run from the public internet and cannot reach resources inside your VPC. For those, you create a CloudWatch alarm that monitors the resource, then create a health check that watches that alarm.
+The `CLOUDWATCH_METRIC` type is crucial for private resources. [Health checkers run from the public internet and cannot reach resources inside your VPC. For those, you create a CloudWatch alarm that monitors the resource, then create a health check that watches that alarm.](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-private-hosted-zones.html)
 
 ---
 
@@ -638,7 +638,7 @@ The `CLOUDWATCH_METRIC` type is crucial for private resources. Health checkers r
 
 DNSSEC (Domain Name System Security Extensions) protects against DNS spoofing by cryptographically signing records. Without DNSSEC, an attacker performing a man-in-the-middle attack could return false DNS records, redirecting your users to malicious servers.
 
-Route 53 supports DNSSEC for public hosted zones. Enabling it involves creating a Key Signing Key (KSK) backed by AWS KMS:
+[Route 53 supports DNSSEC for public hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec.html). Enabling it involves creating a Key Signing Key (KSK) backed by AWS KMS:
 
 ```bash
 # Step 1: Create a KMS key for DNSSEC (must be in us-east-1)
@@ -679,7 +679,7 @@ aws route53 enable-hosted-zone-dnssec \
   --hosted-zone-id Z0123456789ABCDEFGHIJ
 ```
 
-After enabling DNSSEC, you must establish a chain of trust by adding a DS (Delegation Signer) record to the parent zone (your domain registrar). If your domain is registered with Route 53, this is straightforward. If it is registered elsewhere, you will need to add the DS record manually through your registrar's interface.
+After enabling DNSSEC, [you must establish a chain of trust by adding a DS (Delegation Signer) record to the parent zone (your domain registrar)](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec-enable-signing.html). If your domain is registered with Route 53, this is straightforward. If it is registered elsewhere, you will need to add the DS record manually through your registrar's interface.
 
 A warning: enabling DNSSEC is easy, but getting it wrong can make your domain unreachable. Always test with a staging domain first.
 
@@ -687,13 +687,13 @@ A warning: enabling DNSSEC is easy, but getting it wrong can make your domain un
 
 ## Did You Know?
 
-1. **Route 53 has a 100% uptime SLA** -- one of the very few AWS services with this guarantee. It achieves this through a global anycast network of over 200 edge locations. AWS has never had a complete Route 53 outage since its launch in December 2010, making it one of the most reliable services in all of cloud computing.
+1. **Route 53 is designed for high availability and global resilience.**
 
-2. **The name "Route 53" is a double reference.** Obviously, DNS runs on port 53. But it is also a nod to US Route 66, the famous American highway -- connecting the concept of "routing" traffic across the internet to routing cars across the country. AWS engineers love their naming easter eggs.
+2. **The name "Route 53" is a double reference.** Obviously, DNS runs on port 53. The name also fits the service's role in routing internet traffic.
 
-3. **Route 53 processes over 1 trillion DNS queries per month**, making it one of the largest authoritative DNS systems on Earth. Despite this scale, the median query response time is under 1 millisecond from the nearest edge location. For comparison, blinking your eye takes about 300 milliseconds.
+3. **Route 53 operates at very large scale** and is designed for low-latency DNS responses from a global network.
 
-4. **ALIAS records were invented by AWS** because standard DNS could not solve the zone-apex CNAME problem. The IETF later formalized a similar concept as the ANAME record type in RFC drafts, but as of 2026, ALIAS remains an AWS-specific extension. Other providers have their own variants: Cloudflare calls theirs "CNAME flattening" and Google Cloud DNS uses "routing records."
+4. **ALIAS records solve a practical root-domain aliasing problem in Route 53.**
 
 ---
 
@@ -703,7 +703,7 @@ A warning: enabling DNSSEC is easy, but getting it wrong can make your domain un
 |---------|---------------|---------------|
 | Forgetting to lower TTL before migrations | TTL is set-and-forget for most teams | Create a migration runbook that starts with TTL reduction 48 hours before any DNS change |
 | Using CNAME at zone apex | CNAME seems like the right record type for aliasing | Use Route 53 ALIAS records for zone apex. They function like CNAMEs but return A/AAAA records |
-| No health checks on failover records | Health checks cost extra and seem optional | Failover routing without health checks is pointless -- Route 53 will never trigger failover. Always attach health checks to primary records |
+| No health checks on failover records | Health checks cost extra and seem optional | Failover routing without health checks usually will not trigger failover as intended. Always attach health checks to primary records |
 | Health check endpoint behind security group | Health checkers come from AWS public IPs that are blocked | Add Route 53 health checker IP ranges to your security group. AWS publishes these in their ip-ranges.json |
 | DNSSEC enabled without DS record at registrar | You enable signing but forget the chain of trust | Incomplete DNSSEC is worse than no DNSSEC -- DNSSEC-validating resolvers will refuse to resolve your domain. Always complete the DS record step |
 | Private hosted zone not associated with VPC | Zone created but queries return NXDOMAIN | Associate the private hosted zone with every VPC that needs to resolve those records |
@@ -1007,3 +1007,20 @@ aws sns delete-topic --topic-arn ${TOPIC_ARN}
 ## Next Module
 
 Next up: **[Module 1.6: Elastic Container Registry (ECR)](../module-1.6-ecr/)** -- Learn to store, manage, and secure your container images with AWS's native registry. You will set up lifecycle policies, vulnerability scanning, and cross-account sharing -- essential foundations before deploying containers to ECS or EKS.
+
+## Sources
+
+- [aws.amazon.com: features](https://aws.amazon.com/route53/features/) — AWS's Route 53 features page explicitly explains the product name as a reference to DNS port 53.
+- [docs.aws.amazon.com: resource record sets choosing alias non alias.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-choosing-alias-non-alias.html) — AWS docs directly compare alias and CNAME behavior, including zone-apex support and free alias queries to supported AWS resources.
+- [aws.amazon.com: route53](https://aws.amazon.com/documentation-overview/route53/) — AWS documentation overview states that Route 53 populates hosted zones with four name servers across four different top-level domains.
+- [docs.aws.amazon.com: hosted zone private considerations.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zone-private-considerations.html) — AWS docs explicitly describe split-view DNS with public and private hosted zones of the same name.
+- [aws.amazon.com: pricing](https://aws.amazon.com/route53/pricing/) — AWS pricing lists these current hosted-zone, query, and alias-query charges directly.
+- [docs.aws.amazon.com: API ChangeResourceRecordSets.html](https://docs.aws.amazon.com/Route53/latest/APIReference/API_ChangeResourceRecordSets.html) — The Route 53 API reference explicitly defines UPSERT with this create-or-update behavior.
+- [docs.aws.amazon.com: resource record sets values weighted.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-weighted.html) — AWS weighted-record docs directly describe both zero-weight behaviors.
+- [docs.aws.amazon.com: routing policy latency.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-latency.html) — AWS docs explain that latency-based routing relies on latency measurements to Regions and can differ from geography.
+- [docs.aws.amazon.com: dns failover determining health of endpoints.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-determining-health-of-endpoints.html) — AWS health-check docs state the 18% threshold directly.
+- [docs.aws.amazon.com: dns failover private hosted zones.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover-private-hosted-zones.html) — AWS docs explicitly say health checkers are outside the VPC and recommend CloudWatch-alarm-based checks for private endpoints.
+- [docs.aws.amazon.com: dns configuring dnssec.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec.html) — AWS DNSSEC docs describe signed responses and document DNSSEC signing support for public hosted zones.
+- [docs.aws.amazon.com: dns configuring dnssec enable signing.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-configuring-dnssec-enable-signing.html) — AWS's DNSSEC enablement docs explicitly require establishing the chain of trust with DS records.
+- [docs.aws.amazon.com: resource record sets values failover.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-failover.html) — AWS failover docs explain that health checks are the mechanism Route 53 uses when choosing among failover records.
+- [docs.aws.amazon.com: route 53 ip addresses.html](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/route-53-ip-addresses.html) — AWS docs explicitly direct users to ip-ranges.json for ROUTE53_HEALTHCHECKS ranges.

@@ -117,7 +117,7 @@ Resources:
           CidrIp: 10.0.0.0/8
 ```
 
-The logical name (`WebServerSecurityGroup`) is how you reference this specific resource elsewhere inside the same template. In contrast, the physical name (the actual AWS resource ID generated in the cloud) is generated autonomously by CloudFormation unless you explicitly define it. You should almost never hardcode physical names, because doing so explicitly prevents replacement updates from functioning correctly.
+The logical name (`WebServerSecurityGroup`) is how you reference this specific resource elsewhere inside the same template. In contrast, the physical name (the actual AWS resource ID generated in the cloud) is generated autonomously by CloudFormation unless you explicitly define it. You should almost never hardcode physical names, because doing so can prevent some replacement updates from functioning correctly.
 
 > **Stop and think**: If CloudFormation automatically appends random alphanumeric suffixes to your physical resource names, how can you efficiently locate a specific DynamoDB table or S3 bucket in the AWS Console without manually searching through dozens of similarly named resources?
 
@@ -344,7 +344,7 @@ flowchart TD
     A ~~~ B ~~~ C
 ```
 
-It is imperative that you always verify the official AWS documentation for a specific resource type to truly understand which property changes trigger a destructive replacement. The CloudFormation documentation prominently marks each property with "Update requires: No interruption," "Some interruption," or "Replacement."
+It is imperative that you verify the official AWS documentation for a specific resource type to understand which property changes trigger a destructive replacement. The CloudFormation documentation prominently marks each property with "Update requires: No interruption," "Some interruption," or "Replacement."
 
 > **Stop and think**: During a stack update, CloudFormation determines that an EC2 instance must be replaced. By default, it attempts to create the new instance before deleting the old one. If your template also provisions an Elastic IP address and attaches it directly to this instance, why might this "create-before-delete" replacement update immediately fail?
 
@@ -529,7 +529,7 @@ Navigating infrastructure as code requires immense discipline. Be highly vigilan
 | Mistake | Why It Happens | How to Fix It |
 |---------|---------------|---------------|
 | Hardcoding resource names | Wanting predictable names | Let CloudFormation generate names; hardcoded names prevent replacement updates and cause conflicts across environments |
-| Not using change sets for production updates | "I know what changed" confidence | Always create and review a change set; the 30 seconds it takes has prevented countless outages |
+Create and review a change set for production updates; the brief extra step has prevented countless outages
 | Monolithic templates with 400+ resources | Starting small and never splitting | Plan stack boundaries early; split by layer (network/app/data) or by service boundary |
 | Forgetting `--capabilities CAPABILITY_NAMED_IAM` | Template creates IAM roles but deploy command omits the flag | Add `CAPABILITY_NAMED_IAM` (or `CAPABILITY_IAM`) whenever your template creates IAM resources |
 | Not setting `DeletionPolicy: Retain` on databases | Assuming delete protection is enough | Set `DeletionPolicy: Retain` on RDS instances, S3 buckets with data, and DynamoDB tables so accidental stack deletion does not destroy data |
@@ -544,19 +544,19 @@ Navigating infrastructure as code requires immense discipline. Be highly vigilan
 <details>
 <summary>1. You are deploying a massive infrastructure update involving 50 new resources. During the deployment, the 45th resource fails to create due to an insufficient permissions error. What state will the first 44 resources be in after the deployment process fully concludes?</summary>
 
-CloudFormation will automatically roll back the entire deployment, meaning the first 44 resources will be completely deleted if this was a new stack, or reverted to their previous state if this was an update. This "all-or-nothing" transaction model ensures your infrastructure never gets stuck in an inconsistent, partially deployed state. Once the rollback finishes, the stack will reach the `UPDATE_ROLLBACK_COMPLETE` or `ROLLBACK_COMPLETE` state, representing the last known good configuration. This automatic safety mechanism is a key differentiator from tools like Terraform, where a failed apply often leaves resources in a partial state that requires manual cleanup.
+CloudFormation will automatically roll back the entire deployment, meaning the first 44 resources will be completely deleted if this was a new stack, or reverted to their previous state if this was an update. This "all-or-nothing" transaction model usually prevents your infrastructure from getting stuck in an inconsistent, partially deployed state. Once the rollback finishes, the stack will reach the `UPDATE_ROLLBACK_COMPLETE` or `ROLLBACK_COMPLETE` state, representing the last known good configuration. This automatic safety mechanism is a key differentiator from tools like Terraform, where a failed apply often leaves resources in a partial state that requires manual cleanup.
 </details>
 
 <details>
 <summary>2. Your company is expanding its network and you need to increase the size of an existing production VPC. You update the `CidrBlock` property in your CloudFormation template from `10.0.0.0/16` to `10.0.0.0/15` and execute the update. What is the immediate impact on the resources currently running inside this VPC?</summary>
 
-Updating the CIDR block of an existing VPC is a change that strictly requires replacement, meaning CloudFormation will attempt to create a brand new VPC and delete the old one. Because a VPC cannot be deleted while it still contains active subnets, instances, and network interfaces, the update will almost certainly fail and roll back unless you have orchestrated a complex migration strategy. This destructive behavior occurs because the fundamental networking boundary of the resources is changing, preventing an in-place modification. You should always use change sets to catch `Replacement: True` actions on foundational resources before they cause widespread outages or failed updates.
+Updating the CIDR block of an existing VPC is a change that strictly requires replacement, meaning CloudFormation will attempt to create a brand new VPC and delete the old one. Because a VPC cannot be deleted while it still contains active subnets, instances, and network interfaces, the update will almost certainly fail and roll back unless you have orchestrated a complex migration strategy. This destructive behavior occurs because the fundamental networking boundary of the resources is changing, preventing an in-place modification. You should use change sets to catch `Replacement: True` actions on foundational resources before they cause widespread outages or failed updates.
 </details>
 
 <details>
 <summary>3. You are writing a CloudFormation template that deploys an EC2 instance and a configuration script. You need to pass the instance's private IP address to the script as an environment variable, but using `!Ref MyInstance` is causing the script to fail. Why is this happening, and how do you resolve it?</summary>
 
-The script is failing because `!Ref` applied to an EC2 instance returns the instance's primary identifier, which is its Instance ID (e.g., `i-0abc123def456789`), not its IP address. To retrieve secondary attributes like IP addresses or DNS names, you must use the `!GetAtt` intrinsic function instead. By changing your template to use `!GetAtt MyInstance.PrivateIp`, CloudFormation will correctly resolve and inject the private IP address into your configuration script. Always consult the CloudFormation resource reference documentation, as each resource type defines exactly what `!Ref` returns and which specific attributes are exposed via `!GetAtt`.
+The script is failing because `!Ref` applied to an EC2 instance returns the instance's primary identifier, which is its Instance ID (e.g., `i-0abc123def456789`), not its IP address. To retrieve secondary attributes like IP addresses or DNS names, you must use the `!GetAtt` intrinsic function instead. By changing your template to use `!GetAtt MyInstance.PrivateIp`, CloudFormation will correctly resolve and inject the private IP address into your configuration script. Consult the CloudFormation resource reference documentation, as each resource type defines exactly what `!Ref` returns and which specific attributes are exposed via `!GetAtt`.
 </details>
 
 <details>
@@ -574,7 +574,7 @@ You should use cross-stack references (Outputs with `Export` and `!ImportValue`)
 <details>
 <summary>6. Your team is adopting AWS CDK to replace raw YAML templates. A developer argues that since CDK uses TypeScript, they no longer need to understand CloudFormation concepts like logical IDs, stack rollbacks, or change sets. How would you correct this architectural misunderstanding?</summary>
 
-You must correct this misunderstanding by explaining that CDK is not an alternative infrastructure engine, but rather a higher-level abstraction layer that compiles directly down into standard CloudFormation templates. When you run `cdk deploy`, AWS is still executing a CloudFormation stack under the hood. This means all the fundamental rules of CloudFormation—including resource replacement behaviors, stack state machines, and drift detection—still entirely govern your deployment. Furthermore, when deployments fail, AWS returns errors referencing the generated CloudFormation logical IDs and property structures, making it impossible to effectively debug CDK applications without a solid understanding of the underlying CloudFormation engine.
+You must correct this misunderstanding by explaining that CDK is not an alternative infrastructure engine, but rather a higher-level abstraction layer that compiles directly down into standard CloudFormation templates. When you run `cdk deploy`, AWS is still executing a CloudFormation stack under the hood. This means all the fundamental rules of CloudFormation—including resource replacement behaviors, stack state machines, and drift detection—still entirely govern your deployment. Furthermore, when deployments fail, AWS returns errors referencing the generated CloudFormation logical IDs and property structures, making it much harder to effectively debug CDK applications without a solid understanding of the underlying CloudFormation engine.
 </details>
 
 <details>
@@ -993,3 +993,9 @@ aws cloudformation list-stacks \
 You have completed the exhaustive AWS DevOps Essentials infrastructure modules. Returning to the core fundamentals proves that robust systems demand uncompromising automation structures.
 
 Ready to examine the deeper organizational contexts regarding standard architecture distribution? Return to the foundational documentation and strongly consider exploring the [Platform Engineering Track](/platform/) to comprehensively learn how these AWS CloudFormation declarative frameworks directly support large-scale enterprise platform operations.
+
+## Sources
+
+- [CloudFormation Template Sections](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/template-anatomy.html) — This is the canonical reference for what each top-level template section does and which sections are required.
+- [Update Stacks Using Change Sets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html) — It covers the safest operational workflow for previewing updates, replacements, and deletes before execution.
+- [Split Templates with Nested Stacks](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html) — It shows how to decompose larger CloudFormation architectures once a single template becomes hard to manage.

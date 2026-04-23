@@ -21,7 +21,7 @@ After completing this module, you will be able to:
 
 In August of 2019, a massive data breach hit a major financial institution, exposing the personal information of over 100 million customers. The root cause was not a sophisticated zero-day exploit or a nation-state hacking group. It was a misconfigured web application firewall that allowed a server-side request forgery (SSRF) attack. The SSRF allowed the attacker to query the AWS EC2 instance metadata service, retrieving the credentials of the IAM role attached to the instance. Because that IAM role was overly permissive and had read access to dozens of sensitive S3 buckets containing customer data, the attacker simply synced the buckets to their own environment. The financial impact exceeded hundreds of millions of dollars in fines, settlements, and reputational damage.
 
-This incident underscores a fundamental truth about cloud security: **identity is the new perimeter**. In a traditional on-premises data center, security often meant building a strong network perimeter with firewalls and intrusion detection systems. Once inside the network, lateral movement was relatively easy. In AWS, the network perimeter still matters, but it is secondary to the identity perimeter. Every API call---whether it is launching an EC2 instance, reading an object from S3, or deleting a database---is authenticated and authorized by Identity and Access Management (IAM).
+This incident underscores a fundamental truth about cloud security: **identity is the new perimeter**. In a traditional on-premises data center, security often meant building a strong network perimeter with firewalls and intrusion detection systems. Once inside the network, lateral movement was relatively easy. In AWS, the network perimeter still matters, but it is secondary to the identity perimeter. In AWS, most authenticated control-plane requests and many service-to-service actions are evaluated through IAM policies and related authorization mechanisms.
 
 If you get IAM wrong, nothing else matters. You can build the most secure Virtual Private Cloud (VPC) with locked-down security groups and private subnets, but if an attacker compromises an IAM key with administrative privileges, they can bypass all of those network controls with a single API call. In this module, you will learn the mechanics of AWS IAM, moving beyond basic users and groups to understand the power of roles, the nuance of policy evaluation, and the critical importance of least privilege. You will learn how to design access control for complex, multi-account environments, ensuring that both human operators and machine identities have exactly the permissions they need---and absolutely nothing more.
 
@@ -35,17 +35,17 @@ To answer this, AWS uses two primary concepts: **Principals** (the "who") and **
 
 ### Principals: Users, Groups, and Roles
 
-A principal is an entity that can make a request for an action or operation on an AWS resource. Understanding the differences between the three principal types is essential---they are not interchangeable, and choosing the wrong one is a top source of security incidents.
+A principal is an entity that can make a request for an action or operation on an AWS resource. Understanding the differences between the three principal types is essential because they are not interchangeable and the wrong choice can create serious security and operational problems.
 
-1.  **IAM Users**: Think of a user as a specific person or an application that needs long-term credentials. Users have a name, a password (for console access), and access keys (for programmatic access via CLI/SDK). However, creating long-term IAM users for human operators is increasingly considered an anti-pattern. Access keys leak. Passwords get reused. AWS itself now recommends IAM Identity Center for all human access.
-2.  **IAM Groups**: A collection of IAM users. Groups simplify administration. Instead of attaching a policy to ten individual developers, you attach the policy to the "Developers" group and add the users to the group. Note: A group is *not* a principal; it cannot make requests itself. It is purely an administrative grouping. You cannot reference a group in a `Principal` block of a resource policy.
-3.  **IAM Roles**: This is the most powerful and important concept in IAM. A role is similar to a user, in that it is an identity with permission policies that determine what the identity can and cannot do. However, instead of being uniquely associated with one person, a role is intended to be assumable by anyone (or any service) that needs it. Roles do *not* have standard long-term credentials (passwords or access keys). Instead, when you assume a role, AWS provides you with temporary security credentials for your role session.
+1.  **IAM Users**: Think of a user as a specific person or an application that needs long-term credentials. Users have a name, a password (for console access), and access keys (for programmatic access via CLI/SDK). However, [creating long-term IAM users for human operators is increasingly considered an anti-pattern. Access keys leak. Passwords get reused. AWS itself now recommends IAM Identity Center for all human access.](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
+2.  **IAM Groups**: A collection of IAM users. Groups simplify administration. Instead of attaching a policy to ten individual developers, you attach the policy to the "Developers" group and add the users to the group. Note: [A group is *not* a principal; it cannot make requests itself. It is purely an administrative grouping. You cannot reference a group in a `Principal` block of a resource policy.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html)
+3.  **IAM Roles**: This is the most powerful and important concept in IAM. A role is similar to a user, in that it is an identity with permission policies that determine what the identity can and cannot do. However, instead of being uniquely associated with one person, a role is intended to be assumable by anyone (or any service) that needs it. [Roles do *not* have standard long-term credentials (passwords or access keys). Instead, when you assume a role, AWS provides you with temporary security credentials for your role session.](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html)
 
 #### Comparison: IAM Users vs Roles vs Service-Linked Roles
 
 | Feature | IAM User | IAM Role | Service-Linked Role |
 | :--- | :--- | :--- | :--- |
-| **Credentials** | Long-term (password, access keys) | Temporary (STS tokens, 1-12 hrs) | Temporary (managed by AWS) |
+| **Credentials** | Long-term (password, access keys) | [Temporary (STS tokens, 1-12 hrs)](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) | Temporary (managed by AWS) |
 | **Who uses it** | Humans, legacy apps | EC2, Lambda, cross-account, federation | AWS services (e.g., ELB, RDS) |
 | **Created by** | You (admin) | You (admin) | AWS (automatically or on demand) |
 | **Trust policy** | N/A | You define who can assume it | Predefined by AWS, immutable |
@@ -54,7 +54,7 @@ A principal is an entity that can make a request for an action or operation on a
 | **Rotation required** | Yes (keys, passwords) | No (auto-rotated by STS) | No (managed by AWS) |
 | **Max session duration** | Indefinite | 1-12 hours (configurable) | Service-dependent |
 
-**Service-Linked Roles** deserve special attention. These are roles that AWS services create in your account to perform actions on your behalf. For example, when you create an Application Load Balancer, AWS automatically creates a service-linked role (`AWSServiceRoleForElasticLoadBalancing`) that lets the ELB service manage ENIs and security groups in your VPC. You cannot modify their permissions policy or trust policy---both are predefined and controlled by AWS. To list them:
+**Service-Linked Roles** deserve special attention. These are roles that AWS services create in your account to perform actions on your behalf. For example, when you create an Application Load Balancer, [AWS automatically creates a service-linked role (`AWSServiceRoleForElasticLoadBalancing`) that lets the ELB service manage ENIs and security groups in your VPC. You cannot modify their permissions policy or trust policy---both are predefined and controlled by AWS.](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/elb-service-linked-roles.html) To list them:
 
 ```bash
 # List all service-linked roles in your account
@@ -88,7 +88,7 @@ sequenceDiagram
 Step by step:
 
 1.  The requester calls `AssumeRole`, specifying the Amazon Resource Name (ARN) of the role it wants to assume.
-2.  STS checks the target role's **Trust Policy** (also known as the assume role policy). This policy defines *who* is allowed to assume the role. If the requester is not listed in the trust policy, the request is denied.
+2.  [STS checks the target role's **Trust Policy** (also known as the assume role policy). This policy defines *who* is allowed to assume the role.](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_update-role-trust-policy.html) If the requester is not listed in the trust policy, the request is denied.
 3.  If the trust policy allows it, STS generates temporary, short-lived credentials (an Access Key ID, a Secret Access Key, and a Session Token).
 4.  The requester uses these temporary credentials to make subsequent AWS API calls. These calls are evaluated against the **Permissions Policy** attached to the role, not the requester's original permissions.
 
@@ -153,7 +153,7 @@ Policies are JSON documents that define permissions. When a principal makes a re
 ### Managed vs. Inline Policies
 
 *   **AWS Managed Policies**: Created and maintained by AWS (e.g., `AdministratorAccess`, `AmazonS3ReadOnlyAccess`). They are convenient but often violate the principle of least privilege because they are designed to cover broad use cases. AWS updates them when new services or actions are released.
-*   **Customer Managed Policies**: Standalone policies created and managed by you in your AWS account. You can attach these to multiple users, groups, or roles. This is the recommended approach for reusability and version control. You can have up to 5 versions of a customer managed policy, allowing you to roll back if a change causes issues.
+*   **Customer Managed Policies**: Standalone policies created and managed by you in your AWS account. You can attach these to multiple users, groups, or roles. This is the recommended approach for reusability and version control. [You can have up to 5 versions of a customer managed policy, allowing you to roll back if a change causes issues.](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-versioning.html)
 *   **Inline Policies**: Policies that are embedded directly into a single user, group, or role. They maintain a strict 1-to-1 relationship. Use these only when you want to ensure the policy cannot be accidentally attached to another entity.
 
 ```bash
@@ -204,7 +204,7 @@ Every IAM policy statement requires a few key elements: `Effect`, `Action`, and 
 }
 ```
 
-*   **Version**: Always use `"2012-10-17"`. This is the current policy language version. The older `"2008-10-17"` version lacks support for policy variables like `${aws:username}` and some condition operators. There is no reason to use it.
+*   **Version**: [Always use `"2012-10-17"`. This is the current policy language version. The older `"2008-10-17"` version lacks support for policy variables like `${aws:username}` and some condition operators.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_version.html) There is no reason to use it.
 *   **Sid** (Statement ID, optional): A human-readable label for the statement. Useful for debugging when a policy has many statements.
 *   **Effect**: Either `Allow` or `Deny`. (Default is Deny).
 *   **Action**: The specific API calls being permitted or restricted (e.g., `ec2:StartInstances`, `dynamodb:PutItem`). Wildcards are supported: `s3:Get*` matches all S3 Get actions.
@@ -226,7 +226,7 @@ arn:aws:iam::123456789012:user/alice          # IAM user (no region - global)
 arn:aws:lambda:eu-west-1:123456789012:function:my-func  # Lambda function
 ```
 
-A common mistake: for S3, you need *two* resource entries---one for the bucket itself (for `ListBucket`) and one for objects within it (for `GetObject`, `PutObject`). The bucket ARN and the object ARN are different resources.
+A common mistake: [for S3, you need *two* resource entries---one for the bucket itself (for `ListBucket`) and one for objects within it (for `GetObject`, `PutObject`).](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) The bucket ARN and the object ARN are different resources.
 
 #### Powerful Condition Keys
 
@@ -344,7 +344,7 @@ The four key rules:
 3.  **Explicit Allow**: If no explicit deny is found, the engine looks for an explicit `Allow` statement. If one is found (and passes all boundary/SCP checks), the request proceeds.
 4.  **Implicit Deny**: If the engine finishes evaluating all policies and finds neither an explicit deny nor an explicit allow, the request is denied (falling back to the default deny).
 
-*War Story: A team once spent three days troubleshooting why their Jenkins pipeline could not write to an S3 bucket. They had attached a policy granting `s3:PutObject` to the Jenkins IAM role. They checked bucket policies and ACLs. Everything looked perfect. It turned out someone had applied an SCP (Service Control Policy) at the AWS Organizations level that explicitly denied all S3 writes outside the `us-east-1` region, and Jenkins was running in `us-west-2`. Because Explicit Deny overrides all allows, the localized IAM role permission was irrelevant.*
+A permissions problem that looks local to a role or bucket can actually be caused by an organization-level guardrail such as an SCP, so IAM troubleshooting must include higher-level policy controls.
 
 #### Cross-Account Evaluation: A Different Beast
 
@@ -353,7 +353,7 @@ When the requester and the resource are in *different* AWS accounts, the evaluat
 - The **identity-based policy** in the requester's account must allow the action.
 - The **resource-based policy** on the target resource must also allow the requester's principal.
 
-Think of it like visiting another country: you need both an exit visa (your account's permission) and an entry visa (the resource owner's permission). If either side says no, access is denied.
+Think of it like visiting another country: [you need both an exit visa (your account's permission) and an entry visa (the resource owner's permission). If either side says no, access is denied.](https://docs.aws.amazon.com/IAM/latest/UserGuide/intro-structure.html)
 
 ```bash
 # Example: Bucket policy allowing cross-account access
@@ -413,7 +413,7 @@ As organizations scale, managing individual IAM users across dozens of AWS accou
 
 IAM Identity Center is the modern successor to standard IAM users. Instead of creating users directly in AWS, you connect AWS to an external Identity Provider (IdP) like Okta, Azure AD, or Google Workspace.
 
-Users log into a portal using their standard corporate credentials. The portal then presents them with the AWS accounts and roles they are authorized to access. When they click a role, the Identity Center uses SAML federation to seamlessly call `sts:AssumeRoleWithSAML`, dropping the user directly into the AWS console (or providing short-lived CLI credentials) without ever creating a permanent AWS IAM user.
+Users log into a portal using their standard corporate credentials. [The portal then presents them with the AWS accounts and roles they are authorized to access. When they click a role, the Identity Center uses SAML federation to seamlessly call `sts:AssumeRoleWithSAML`, dropping the user directly into the AWS console (or providing short-lived CLI credentials) without ever creating a permanent AWS IAM user.](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html)
 
 Why this matters for Kubernetes engineers: if you are running EKS, Identity Center integrates with `aws eks get-token` to provide short-lived credentials for `kubectl` access. No more shared kubeconfigs with embedded long-term tokens.
 
@@ -440,7 +440,7 @@ Think of it like a fence around a playground. The kids (developers) can play any
 
 Imagine a developer wants to create a role for a Lambda function. You grant the developer the `iam:CreateRole` permission, but you enforce a Condition: they *must* attach a specific Permission Boundary policy (e.g., `Boundary-Developer-Max-Access`) to any role they create.
 
-If `Boundary-Developer-Max-Access` allows S3 and DynamoDB, but denies EC2, then even if the developer attaches `AdministratorAccess` to their new Lambda role, the effective permissions will only be S3 and DynamoDB. The boundary restricts the maximum possible ceiling of access.
+[If `Boundary-Developer-Max-Access` allows S3 and DynamoDB, but denies EC2, then even if the developer attaches `AdministratorAccess` to their new Lambda role, the effective permissions will only be S3 and DynamoDB. The boundary restricts the maximum possible ceiling of access.](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html)
 
 > **Pause and predict**: What happens if a developer creates a role with a permission boundary attached, but does not attach any permissions policy to the role? Will the role have any permissions?
 
@@ -491,7 +491,7 @@ aws iam get-role --role-name LambdaDataProcessorRole \
 
 If Permission Boundaries are the fences for individual identities, Service Control Policies (SCPs) are the walls around entire AWS accounts. SCPs are a feature of AWS Organizations and define the *maximum available permissions* for all principals in a member account.
 
-SCPs do not grant any permissions---they only restrict. Even the root user of a member account is bound by the SCP.
+[SCPs do not grant any permissions---they only restrict. Even the root user of a member account is bound by the SCP.](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html)
 
 Common SCP patterns:
 
@@ -540,7 +540,7 @@ Never start with broad permissions and plan to tighten later---you will not. Sta
 
 ### Step 2: Use IAM Access Analyzer
 
-AWS provides tools to help you right-size permissions based on actual CloudTrail activity:
+[AWS provides tools to help you right-size permissions based on actual CloudTrail activity:](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html)
 
 ```bash
 # Generate a policy based on actual API calls made by a role
@@ -590,16 +590,16 @@ Instead of creating a separate policy for each project, use tags to create dynam
 }
 ```
 
-This single policy works for every team. If Alice is tagged with `Project: payments` and Bob with `Project: search`, they can each only manage EC2 instances tagged with their respective project. No policy updates needed when a new project is created.
+[This single policy works for every team. If Alice is tagged with `Project: payments` and Bob with `Project: search`, they can each only manage EC2 instances tagged with their respective project. No policy updates needed when a new project is created.](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html)
 
 ---
 
 ## Did You Know?
 
-1.  The AWS IAM system processes over **half a billion API calls per second** globally, evaluating complex JSON policies in milliseconds without adding noticeable latency to requests. This makes it one of the highest-throughput authorization systems ever built.
-2.  IAM is a globally distributed service. However, because it relies heavily on eventual consistency, changes to IAM policies can sometimes take a minute or two to propagate to all AWS endpoints worldwide. This is why you might create a role and immediately get "AccessDenied" when trying to use it---the change has not propagated yet. The workaround is a brief retry with exponential backoff.
-3.  You can use the `aws:PrincipalOrgID` condition key in a resource policy (like an S3 bucket policy) to instantly restrict access to only principals originating from accounts within your specific AWS Organization, creating a powerful defense-in-depth layer. This single condition key replaces the need to list every account ID individually.
-4.  The maximum size of an IAM policy document is **6,144 characters** for inline policies and **6,144 characters** per version for managed policies. This might sound like a lot until you start writing fine-grained policies for complex applications. When you hit this limit, the solution is to split into multiple policies (up to 10 managed policies per role) or use wildcard patterns strategically. You can also use policy variables like `${aws:username}` to reduce repetition.
+1.  The AWS IAM system [processes over **half a billion API calls per second** globally](https://aws.amazon.com/blogs/security/how-to-monitor-and-query-iam-resources-at-scale-part-1/), evaluating complex JSON policies in milliseconds without adding noticeable latency to requests. This makes it one of the highest-throughput authorization systems ever built.
+2.  IAM is a globally distributed service, and policy or role changes can take time to propagate. If a newly created or updated identity fails immediately, retry with backoff before assuming the policy is wrong.
+3.  [You can use the `aws:PrincipalOrgID` condition key in a resource policy (like an S3 bucket policy) to instantly restrict access to only principals originating from accounts within your specific AWS Organization, creating a powerful defense-in-depth layer. This single condition key replaces the need to list every account ID individually.](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html)
+4.  IAM policy size and attachment quotas are real design constraints, but the exact limits vary by policy type and by entity; check the current IAM quotas before assuming a single universal size cap.
 
 ## Common Mistakes
 
@@ -610,9 +610,9 @@ This single policy works for every team. If Alice is tagged with `Project: payme
 | **Ignoring the Trust Policy** | Teams focus on what the role can *do* (Permissions Policy) and forget to secure who can *assume* it (Trust Policy). | Review Trust Policies rigorously. Never use `Principal: "*"` in a trust policy unless strictly necessary and protected by strong Condition blocks (like `sts:ExternalId`). |
 | **Failing to rotate Access Keys** | Human users with permanent keys keep them for years because "they still work" and rotating them requires updating local `.aws/credentials` files. | Enforce key rotation via AWS Config rules. Better yet, eliminate permanent keys entirely by migrating to IAM Identity Center for CLI access. |
 | **Testing permissions in production** | Developers tweak JSON policies directly in the console until the error goes away, often over-provisioning access in the process. | Use the IAM Policy Simulator (`aws iam simulate-principal-policy`). Use AWS CloudTrail logs to see exactly which API call failed and why, then grant only that specific action. |
-| **Misunderstanding Implicit vs Explicit Deny** | Believing that removing an `Allow` statement actively prevents an action, forgetting that another policy might still grant it. | Understand that access requires an explicit Allow and NO explicit Deny anywhere in the evaluation chain (Identity policies, Resource policies, Boundaries, SCPs). |
+| **Misunderstanding Implicit vs Explicit Deny** | Believing that removing an `Allow` statement actively prevents an action, forgetting that another policy might still grant it. | [Understand that access requires an explicit Allow and NO explicit Deny anywhere in the evaluation chain (Identity policies, Resource policies, Boundaries, SCPs).](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html) |
 | **Forgetting the S3 dual-ARN problem** | Granting `s3:GetObject` on a bucket ARN (without `/*`) or `s3:ListBucket` on the objects ARN (with `/*`). | Remember: `ListBucket` acts on the bucket (`arn:aws:s3:::bucket`), `GetObject`/`PutObject` act on objects (`arn:aws:s3:::bucket/*`). Always include both resource entries. |
-| **Not using session tags or ExternalId for third parties** | Blindly trusting a cross-account role assumption because "the vendor told us to set it up this way." | Always require `sts:ExternalId` in trust policies for third-party access. Without it, you are vulnerable to the Confused Deputy attack. Generate a unique, random ExternalId per vendor. |
+| **Not using session tags or ExternalId for third parties** | Blindly trusting a cross-account role assumption because "the vendor told us to set it up this way." | [Always require `sts:ExternalId` in trust policies for third-party access. Without it, you are vulnerable to the Confused Deputy attack.](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html) Generate a unique, random ExternalId per vendor. |
 
 ---
 
@@ -627,7 +627,7 @@ This single policy works for every team. If Alice is tagged with `Project: payme
 <details>
 <summary>Question 2: A developer proposes creating an IAM User with long-term access keys for a new microservice running on EC2, arguing it is simpler than configuring instance profiles. You must defend the use of an IAM Role instead. What is the primary security advantage of the IAM Role in this specific scenario?</summary>
 
-**Answer**: IAM Roles use temporary security credentials generated dynamically by STS, which is a major security advantage over IAM Users. These credentials expire automatically (typically within 1 hour, configurable up to 12 hours), significantly reducing the blast radius if an attacker manages to steal them. Because the credentials cannot be used beyond their expiration time, the window of opportunity for an exploit is extremely limited. In contrast, IAM Users rely on long-term Access Keys that remain valid indefinitely until manually rotated or deleted. Furthermore, role credentials are automatically rotated by the AWS infrastructure (like the EC2 metadata service), meaning the application never has to manage credential rotation logic itself.
+**Answer**: IAM Roles use temporary security credentials generated dynamically by STS, which is a major security advantage over IAM Users. These credentials expire automatically (typically within 1 hour, configurable up to 12 hours), significantly reducing the blast radius if an attacker manages to steal them. Because the credentials cannot be used beyond their expiration time, the window of opportunity for an exploit is extremely limited. In contrast, IAM Users rely on long-term Access Keys that remain valid indefinitely until manually rotated or deleted. Furthermore, role credentials are automatically rotated by the AWS infrastructure (like the EC2 metadata service), meaning the application usually does not have to manage credential rotation logic itself.
 </details>
 
 <details>
@@ -981,3 +981,25 @@ echo "All resources cleaned up successfully."
 ## Next Module
 
 Ready to build the network foundation where your identities will operate? Head to [Module 1.2: VPC & Core Networking](../module-1.2-vpc/).
+
+## Sources
+
+- [docs.aws.amazon.com: best practices.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html) — AWS's IAM best-practices page recommends federation and IAM Identity Center for human users and temporary credentials over long-term IAM-user credentials.
+- [docs.aws.amazon.com: reference policies elements principal.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_principal.html) — The Principal element reference explicitly says IAM user groups cannot be identified as principals in a policy.
+- [docs.aws.amazon.com: id roles.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html) — The IAM roles guide directly states that roles lack long-term credentials and issue temporary credentials when assumed.
+- [docs.aws.amazon.com: elb service linked roles.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/elb-service-linked-roles.html) — The ELB service-linked-role guide covers the exact role name, automatic creation behavior, and IAM editing limits.
+- [docs.aws.amazon.com: id roles update role trust policy.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_update-role-trust-policy.html) — AWS's trust-policy documentation directly defines trust policy as the mechanism that controls who can assume a role.
+- [docs.aws.amazon.com: API AssumeRole.html](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) — The `AssumeRole` API reference documents the returned temporary credentials and the 1-12 hour maximum session-duration setting.
+- [docs.aws.amazon.com: access policies managed versioning.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_managed-versioning.html) — AWS's managed-policy versioning documentation explicitly states the five-version limit and rollback behavior.
+- [docs.aws.amazon.com: reference policies elements version.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements_version.html) — The IAM `Version` element reference directly compares `2012-10-17` and `2008-10-17` and notes policy-variable support.
+- [docs.aws.amazon.com: reference policies examples s3 rw bucket.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_examples_s3_rw-bucket.html) — The S3 IAM policy example shows `s3:ListBucket` on the bucket ARN and object actions on the `bucket/*` ARN.
+- [docs.aws.amazon.com: reference policies evaluation logic.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html) — AWS's policy-evaluation documentation describes default deny, explicit deny precedence, and intersection behavior with boundaries and SCPs.
+- [docs.aws.amazon.com: intro structure.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/intro-structure.html) — The IAM 'How IAM works' guide explicitly states that cross-account access requires a policy in the other account and an identity-based allow for the caller.
+- [docs.aws.amazon.com: manage your identity source idp.html](https://docs.aws.amazon.com/singlesignon/latest/userguide/manage-your-identity-source-idp.html) — The IAM Identity Center external-IdP documentation states that users sign in with corporate credentials and get automatic short-term credential generation and rotation.
+- [docs.aws.amazon.com: access policies boundaries.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_boundaries.html) — AWS's permissions-boundaries guide states both the maximum-permissions model and the intersection semantics.
+- [docs.aws.amazon.com: orgs manage policies scps.html](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html) — The AWS Organizations SCP guide directly states these three behaviors.
+- [docs.aws.amazon.com: access analyzer policy generation.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-policy-generation.html) — AWS documents policy generation from CloudTrail events on the IAM Access Analyzer policy-generation page.
+- [docs.aws.amazon.com: tutorial attribute based access control.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html) — AWS's ABAC tutorial explicitly says tag-based policies let teams and resources grow with fewer policy changes.
+- [aws.amazon.com: how to monitor and query iam resources at scale part 1](https://aws.amazon.com/blogs/security/how-to-monitor-and-query-iam-resources-at-scale-part-1/) — An AWS Security Blog post states that AWS Identity handles over half a billion API calls per second worldwide.
+- [docs.aws.amazon.com: reference policies condition keys.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_condition-keys.html) — The global condition-keys reference explicitly describes `aws:PrincipalOrgID` as an alternative to listing all account IDs.
+- [docs.aws.amazon.com: confused deputy.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/confused-deputy.html) — AWS's confused-deputy guidance directly explains the role of `ExternalId` in third-party cross-account access.

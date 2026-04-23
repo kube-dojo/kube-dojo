@@ -10,7 +10,7 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Deploy Azure Container Instances for burst workloads with virtual network integration and GPU support**
+- **Deploy Azure Container Instances for burst workloads with virtual network integration**
 - **Configure Azure Container Apps with Dapr integration, KEDA-based autoscaling, and revision traffic splitting**
 - **Implement event-driven container architectures using Container Apps with Azure Storage Queue triggers**
 - **Evaluate ACI vs Container Apps vs AKS to select the right container platform for each workload pattern**
@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In early 2023, a media streaming company needed to process video transcoding jobs during live events. Their traffic was extremely spiky---zero jobs during off-hours, then 500+ concurrent transcoding tasks during a live broadcast. Their existing solution used a pool of 20 always-on VMs that cost $2,800/month. During events, the pool was overwhelmed and jobs queued for 15+ minutes. During off-hours, the VMs sat idle burning money. They migrated the transcoding workers to Azure Container Apps with KEDA scaling triggered by Azure Service Bus queue depth. During live events, Container Apps scaled from zero to 200 instances in under 90 seconds. After the event, it scaled back to zero. Their monthly compute bill dropped from $2,800 to $340---an 88% reduction---while simultaneously eliminating the 15-minute queue backlog entirely.
+For spiky event-driven workloads, always-on VMs often waste money off-peak and still struggle during bursts. A queue-driven worker on Azure Container Apps can scale out during busy periods and scale back down afterward, reducing idle spend while improving backlog handling.
 
-Containers have become the standard unit of deployment, but not every workload needs the complexity of Kubernetes. Azure offers two serverless container platforms that abstract away cluster management: **Azure Container Instances (ACI)**, a raw container execution engine for simple workloads, and **Azure Container Apps (ACA)**, a higher-level platform built on Kubernetes that handles scaling, traffic routing, and service-to-service communication automatically.
+Containers have become the standard unit of deployment, but not every workload needs the complexity of Kubernetes. Azure offers two serverless container platforms that abstract away cluster management: [**Azure Container Instances (ACI)**, a raw container execution engine for simple workloads, and **Azure Container Apps (ACA)**, a higher-level platform built on Kubernetes that handles scaling, traffic routing, and service-to-service communication automatically](https://learn.microsoft.com/en-us/azure/container-apps/compare-options).
 
 In this module, you will learn when to use ACI versus Container Apps, how container groups work in ACI, how Container Apps manages revisions and traffic splitting, how KEDA auto-scaling responds to event-driven triggers, and how Dapr simplifies microservice communication. By the end, you will build an event-driven worker on Container Apps that scales based on queue length.
 
@@ -40,7 +40,7 @@ ACI is ideal for:
 - **Sidecar scenarios**: Running a container alongside another (container groups)
 - **Burstable workloads from AKS**: Virtual Kubelet integration for overflow
 
-ACI is **not** ideal for long-running web services (use Container Apps), complex microservice architectures (use AKS), or workloads needing auto-scaling (use Container Apps or AKS).
+[ACI is **not** ideal for long-running web services (use Container Apps), complex microservice architectures (use AKS), or workloads needing auto-scaling (use Container Apps or AKS)](https://learn.microsoft.com/en-us/azure/container-apps/compare-options).
 
 ```bash
 # Run a simple container
@@ -70,7 +70,7 @@ az container delete -g myRG -n hello-world --yes
 
 ### Container Groups: The ACI Pod
 
-A **container group** is ACI's equivalent of a Kubernetes Pod. It is a collection of containers that are scheduled on the same host, share the same network namespace (they can reach each other on `localhost`), and can share volumes.
+A **container group** is ACI's equivalent of a Kubernetes Pod. It is a [collection of containers that are scheduled on the same host, share the same network namespace (they can reach each other on `localhost`), and can share volumes](https://learn.microsoft.com/en-us/azure/container-instances/container-instances-container-groups).
 
 ```mermaid
 flowchart TD
@@ -138,7 +138,7 @@ az container logs -g myRG -n web-with-sidecar --container-name log-shipper
 
 ### ACI Networking
 
-ACI containers can be deployed with a **public IP** (internet-accessible) or into a **VNet subnet** (private, for internal workloads).
+[ACI containers can be deployed with a **public IP** (internet-accessible) or into a **VNet subnet** (private, for internal workloads)](https://learn.microsoft.com/en-us/azure/container-instances/container-instances-virtual-network-concepts).
 
 ```bash
 # Deploy ACI into a VNet (private, no public IP)
@@ -159,14 +159,14 @@ az container create \
 
 | Resource | Linux | Windows |
 | :--- | :--- | :--- |
-| **Max CPU per group** | 4 cores | 4 cores |
-| **Max Memory per group** | 16 GiB | 16 GiB |
-| **Max containers per group** | 60 | 60 |
-| **GPU support** | Yes (limited regions) | No |
-| **Pricing (per vCPU/sec)** | ~$0.0000135 | ~$0.0000180 |
-| **Pricing (per GB memory/sec)** | ~$0.0000015 | ~$0.0000020 |
+| **Max CPU per group** | Check current ACI quota docs | Check current ACI quota docs |
+| **Max Memory per group** | Check current ACI quota docs | Check current ACI quota docs |
+| **Max containers per group** | Check current ACI service limits | Check current ACI service limits |
+| **GPU support** | Retired in ACI | No |
+| **Pricing (per vCPU/sec)** | See current pricing page | See current pricing page |
+| **Pricing (per GB memory/sec)** | See current pricing page | See current pricing page |
 
-A container running 1 vCPU and 2 GB for an hour costs approximately: (0.0000135 x 3600) + (0.0000015 x 2 x 3600) = $0.049 + $0.011 = **$0.06/hour** or about **$43/month** if running 24/7.
+A continuously running ACI workload should be priced against the current Azure pricing page, because the effective hourly and monthly cost depends on the current rates, region, and OS.
 
 > **Pause and predict**: If you had a monolithic web application that receives consistent, heavy traffic 24/7, would ACI be a cost-effective hosting choice compared to a standard VM? Why or why not?
 
@@ -204,7 +204,7 @@ flowchart TD
     style SharedInfo fill:none,stroke:none
 ```
 
-### Container Apps vs ACI vs AKS
+### [Container Apps vs ACI vs AKS](https://learn.microsoft.com/en-us/azure/container-apps/compare-options)
 
 | Feature | ACI | Container Apps | AKS |
 | :--- | :--- | :--- | :--- |
@@ -217,7 +217,7 @@ flowchart TD
 | **Persistent volumes** | Azure Files | Azure Files | Full PV/PVC support |
 | **Max CPU per container** | 4 cores | 4 cores (Consumption) | Unlimited (node size) |
 | **Ideal for** | Batch jobs, simple tasks | Web APIs, workers, microservices | Complex platforms, full K8s control |
-| **Monthly cost baseline** | Pay per second | Free tier (180K vCPU-sec) | ~$73 (1 node min) |
+| **Monthly cost baseline** | Pay per use | Consumption plan includes a monthly free grant, then pay per use | Non-zero baseline because cluster nodes must run |
 
 ```bash
 # Create a Container Apps Environment
@@ -245,7 +245,7 @@ az containerapp show -g myRG -n web-api --query properties.configuration.ingress
 
 ### Revisions and Traffic Splitting
 
-Every time you update a Container App's configuration or image, a new **revision** is created. You can control how traffic is split between revisions, enabling canary deployments and blue/green deployments.
+Every time you update a Container App's configuration or image, [a new **revision** is created. You can control how traffic is split between revisions, enabling canary deployments and blue/green deployments](https://learn.microsoft.com/en-us/azure/container-apps/revisions).
 
 ```bash
 # Enable multiple active revisions
@@ -280,7 +280,7 @@ az containerapp revision list -g myRG -n web-api \
 
 ### KEDA Auto-Scaling
 
-Container Apps uses KEDA (Kubernetes Event-Driven Autoscaling) to scale based on event sources, not just CPU/memory. This is the killer feature for event-driven architectures.
+[Container Apps uses KEDA (Kubernetes Event-Driven Autoscaling) to scale based on event sources, not just CPU/memory](https://learn.microsoft.com/en-us/azure/container-apps/scale-app). This is the killer feature for event-driven architectures.
 
 ```bash
 # Scale based on HTTP concurrent requests
@@ -326,7 +326,7 @@ Available KEDA scale triggers in Container Apps:
 
 ### Dapr Integration
 
-Dapr (Distributed Application Runtime) is built into Container Apps and provides building blocks for microservice communication without requiring you to learn Kubernetes networking.
+[Dapr (Distributed Application Runtime) is built into Container Apps and provides building blocks for microservice communication without requiring you to learn Kubernetes networking](https://learn.microsoft.com/en-us/azure/container-apps/dapr-overview).
 
 ```mermaid
 flowchart TB
@@ -384,7 +384,7 @@ az containerapp env dapr-component set \
   }'
 ```
 
-**War Story**: A logistics startup had 8 microservices communicating via direct HTTP calls. When one service was slow, the calling services would timeout and retry, creating cascading failures. They enabled Dapr on Container Apps, which added automatic retries with exponential backoff, circuit breaking, and distributed tracing---all without changing application code. Their P99 latency dropped from 2.3 seconds to 180 milliseconds, and cascading failures stopped entirely because Dapr's circuit breaker would trip before the cascade could propagate.
+**Example pattern**: In a microservice architecture, direct service-to-service HTTP calls can amplify slowdowns and retries into cascading failures. Dapr on Container Apps can reduce custom plumbing by adding service invocation, mTLS, and optional resiliency features such as retries and circuit breakers.
 
 > **Stop and think**: If your team is migrating a complex microservices architecture to Azure and wants to avoid the operational overhead of managing a full Kubernetes cluster, how does ACA's built-in Dapr integration reduce the custom code you need to write?
 
@@ -392,13 +392,13 @@ az containerapp env dapr-component set \
 
 ## Did You Know?
 
-1. **Azure Container Instances can burst to thousands of simultaneous container groups.** During the first weeks of the COVID-19 pandemic, a European government agency used ACI to process 2 million pandemic benefit applications. They spun up 3,000 container instances simultaneously, processed the applications in 6 hours, and shut everything down. Total cost: approximately $240. Running equivalent VMs 24/7 for a week would have cost over $12,000.
+1. **Azure Container Instances is designed for burstable, on-demand container workloads.** Teams can use ACI to spin up large numbers of short-lived container groups for batch processing and then shut them down when the work is finished.
 
-2. **Container Apps' free grant covers approximately 6.2 million requests per month** at 50ms average execution time. The free tier includes 180,000 vCPU-seconds and 360,000 GiB-seconds per subscription per month. For a lightweight API that processes requests in 50ms with 0.25 vCPU, you get roughly 720,000 seconds of runtime per month before paying anything.
+2. **Container Apps includes a monthly free grant on the Consumption plan.** The current grant includes 180,000 vCPU-seconds, 360,000 GiB-seconds, and 2 million requests per subscription per month; how far that goes depends on your app's CPU, memory, and request profile.
 
-3. **KEDA can scale Container Apps from zero to 200 replicas in under 2 minutes.** The scale-from-zero cold start adds approximately 5-10 seconds (image pull + container startup), which is significantly faster than the 3-5 minutes it takes to add a new AKS node via cluster autoscaler. For event-driven workloads with bursty traffic, this responsiveness is transformative.
+3. **Container Apps can scale from zero to many replicas for bursty workloads.** Exact startup and scale-out times depend on factors such as image size, networking, environment state, and the scaling trigger, but the platform is designed for responsive event-driven scaling.
 
-4. **Container Apps runs on a fully managed AKS cluster** that Microsoft operates. Each Container Apps environment maps to a dedicated Kubernetes namespace in this cluster. You can see evidence of this in the resource IDs and in the way networking is configured. However, you have zero direct access to the underlying Kubernetes API---Container Apps exposes only its own simplified API surface.
+4. **Container Apps is a fully managed platform that does not expose the underlying Kubernetes API directly.** You work through the Container Apps resource model and tooling rather than managing the cluster yourself.
 
 ---
 
@@ -406,12 +406,12 @@ az containerapp env dapr-component set \
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Using ACI for long-running web services that need auto-scaling | ACI is the first container service teams discover | Use Container Apps for HTTP workloads that need scaling. ACI has no built-in auto-scaling or load balancing. |
-| Setting min-replicas to 1 when the workload can tolerate cold starts | Fear of cold start latency | If your workload is event-driven (queue processor, scheduled job), set min-replicas to 0. You only pay when processing events. The 5-10 second cold start is usually acceptable. |
-| Not configuring health probes on Container Apps | The app "works" without them | Without health probes, Container Apps cannot detect unhealthy replicas. Configure both liveness and readiness probes at minimum. |
-| Using Container Apps for workloads that need Kubernetes-level control | Container Apps seems easier than AKS | If you need custom CRDs, direct pod scheduling, DaemonSets, StatefulSets with complex storage, or host-level access, you need AKS. Container Apps is not a Kubernetes replacement for complex scenarios. |
-| Hardcoding connection strings in container environment variables | It works and is easy to set up | Use Container Apps secrets (which map to Kubernetes secrets) and reference them in env vars. Better yet, use Managed Identity to eliminate connection strings entirely. |
-| Ignoring revision cleanup | Old revisions accumulate and count toward limits | Deactivate old revisions after promoting new ones. Container Apps has a limit on the number of revisions per app. |
+| Using ACI for long-running web services that need auto-scaling | ACI is the first container service teams discover | Use Container Apps for HTTP workloads that need scaling. [ACI has no built-in auto-scaling or load balancing](https://learn.microsoft.com/en-us/azure/container-apps/compare-options). |
+| Setting min-replicas to 1 when the workload can tolerate cold starts | Fear of cold start latency | If your workload is event-driven (queue processor, scheduled job), set min-replicas to 0. You only pay when the app is actively processing work. Cold-start latency is often acceptable for background jobs, but exact startup time depends on image size and environment. |
+| Not configuring health probes on Container Apps | The app "works" without them | [Without health probes, Container Apps cannot detect unhealthy replicas. Configure both liveness and readiness probes at minimum.](https://learn.microsoft.com/en-us/azure/container-apps/health-probes) |
+| Using Container Apps for workloads that need Kubernetes-level control | Container Apps seems easier than AKS | If you need direct access to the Kubernetes API or cluster-level control, you need AKS. Container Apps is not intended to replace full Kubernetes control-plane scenarios. |
+| Hardcoding connection strings in container environment variables | It works and is easy to set up | Use Container Apps secrets and reference them in env vars. Better yet, use Managed Identity where the target Azure service supports it so you do not have to manage credentials in your app. |
+| Ignoring revision cleanup | Old revisions accumulate and count toward limits | Deactivate old revisions after promoting new ones. [Container Apps has a limit on the number of revisions per app.](https://learn.microsoft.com/en-us/azure/container-apps/revisions) |
 | Not setting resource limits (CPU/memory) per container | Defaults "seem fine" in dev | Without limits, a misbehaving container can consume all available resources and affect other apps in the same environment. Set realistic CPU and memory limits based on load testing. |
 | Using Dapr for simple point-to-point HTTP calls between two services | Dapr sounds beneficial and is free to enable | Dapr adds a sidecar container that consumes CPU and memory. For simple architectures with 2-3 services, direct HTTP is simpler. Dapr shines when you have many services and need pub/sub, state management, or cross-cutting concerns. |
 
@@ -446,7 +446,7 @@ Users currently processing payments on revision v1 will not experience drops or 
 <details>
 <summary>5. Scenario: Your architecture consists of an order service, an inventory service, and a shipping service communicating via standard REST calls over HTTP. During a recent outage, a database slowdown in the inventory service caused cascading timeouts that brought down the entire application. How would enabling Dapr on your Container Apps have mitigated this specific failure?</summary>
 
-Direct HTTP calls between services lack inherent resilience mechanisms; if a downstream service slows down, upstream services simply wait and time out, quickly exhausting connection pools and causing cascading system failures. By enabling Dapr in Container Apps, a sidecar proxy is injected alongside your application container that intercepts these inter-service calls. Dapr automatically provides a robust service mesh layer that includes retries with exponential backoff, circuit breakers, and distributed tracing without requiring any changes to your application code. In the scenario of a slow inventory database, Dapr's circuit breaker would quickly trip, immediately rejecting calls from the order service to prevent connection pool exhaustion and allowing the rest of the system to remain stable while the inventory service recovers.
+Direct HTTP calls between services lack inherent resilience mechanisms; if a downstream service slows down, upstream services simply wait and time out, quickly exhausting connection pools and causing cascading system failures. By enabling Dapr in Container Apps, a sidecar proxy is injected alongside your application container that intercepts these inter-service calls. Dapr automatically provides a robust service mesh layer that includes retries with exponential backoff, circuit breakers, and distributed tracing without requiring any changes to your application code. In the scenario of a slow inventory database, Dapr's circuit breaker would typically trip quickly, rejecting calls from the order service to help prevent connection pool exhaustion and allowing the rest of the system to remain stable while the inventory service recovers.
 </details>
 
 <details>
@@ -659,3 +659,9 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.8: Azure Functions & Serverless](../module-3.8-functions/) --- Learn Azure's function-as-a-service platform with triggers, bindings, and Durable Functions for orchestrating complex serverless workflows.
+
+## Sources
+
+- [learn.microsoft.com: scale app](https://learn.microsoft.com/en-us/azure/container-apps/scale-app) — General lesson point for an illustrative rewrite.
+- [Comparing Container Apps with Other Azure Container Options](https://learn.microsoft.com/en-us/azure/container-apps/compare-options) — Best primary source for choosing between ACI, Container Apps, and AKS.
+- [Microservice APIs Powered by Dapr](https://learn.microsoft.com/en-us/azure/container-apps/dapr-overview) — Covers the Dapr capabilities Azure Container Apps exposes and how they are presented to apps.

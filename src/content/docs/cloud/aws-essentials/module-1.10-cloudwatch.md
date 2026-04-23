@@ -315,7 +315,7 @@ This drastically reduces alert fatigue. A transient CPU spike alone is often har
 
 ## CloudWatch Logs: Centralized Log Management
 
-Every application produces logs, but accessing them across hundreds of instances via SSH is impossible at scale. CloudWatch Logs gives you a centralized data store to securely hold, search, and parse those logs.
+Every application produces logs, but accessing them across hundreds of instances via SSH becomes impractical at scale. CloudWatch Logs gives you a centralized data store to securely hold, search, and parse those logs.
 
 ### Core Concepts
 
@@ -683,7 +683,7 @@ The three catastrophic cost drivers are almost always:
 | Mistake | Why It Happens | How to Fix It |
 |---------|---------------|---------------|
 | Not setting log group retention | Default is "never expire" and it accumulates silently | Set retention on every log group at creation time; audit with `describe-log-groups` regularly |
-| Monitoring only CPU on EC2 | It is the only visible metric without agent setup | Install CloudWatch Agent on day one; memory and disk are essential signals |
+| Monitoring only CPU on EC2 | It is often the primary metric teams focus on before agent setup, while several other basic EC2 metrics are also available | Install CloudWatch Agent on day one; memory and disk are essential signals |
 | High-cardinality custom metric dimensions | Adding request ID, user ID, or IP as dimensions | Dimensions should have low cardinality (environment, service, region); put high-cardinality data in logs |
 | Setting alarm evaluation period too short | Wanting to catch issues fast | A single 1-minute breach is often noise; use 3+ evaluation periods to reduce false alarms |
 | Using `treat-missing-data` = `breaching` on metrics that naturally gap | Sporadic batch jobs or infrequent Lambda invocations | Use `notBreaching` or `ignore` for intermittent data sources |
@@ -716,7 +716,7 @@ Calling the `put-metric-data` API directly within a high-throughput Lambda funct
 <details>
 <summary>4. You inherit an AWS environment where the monthly CloudWatch bill has inexplicably jumped from $50 to $800. The application architecture has not changed, but traffic has doubled. What are the first three areas you should investigate to identify the root cause?</summary>
 
-First, you should investigate log ingestion volume, as doubled traffic often means doubled logs, and verbose logging quickly consumes terabytes of expensive ingestion data. Second, you must check the log group retention policies; if the default "Never expire" is set, storage costs will compound infinitely over time as old logs are never deleted. Third, review the custom metrics for high-cardinality dimensions, such as a developer accidentally adding a unique Request ID or User ID as a dimension. This mistake generates millions of unique billable metrics, which is one of the most common causes of massive CloudWatch billing spikes. Checking these three areas will quickly isolate the source of the unexpected charges.
+First, you should investigate log ingestion volume, as doubled traffic often means doubled logs, and verbose logging quickly consumes terabytes of expensive ingestion data. Second, you must check the log group retention policies; if the default "Never expire" is set, storage costs will continue growing over time as old logs are not deleted automatically. Third, review the custom metrics for high-cardinality dimensions, such as a developer accidentally adding a unique Request ID or User ID as a dimension. This mistake generates millions of unique billable metrics, which is one of the most common causes of massive CloudWatch billing spikes. Checking these three areas will quickly isolate the source of the unexpected charges.
 </details>
 
 <details>
@@ -1055,3 +1055,9 @@ aws iam delete-role --role-name cw-lab-ec2-role
 ## Next Module
 
 Continue to [Module 1.11: CI/CD on AWS](../module-1.11-cicd/) — where you will progress from observing operations to automating them, leveraging AWS CodeBuild, CodeDeploy, and CodePipeline to safely deploy applications into the very infrastructure you have now successfully instrumented.
+
+## Sources
+
+- [Collect metrics, logs, and traces using the CloudWatch agent](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Install-CloudWatch-Agent.html) — This is the primary AWS guide for what the agent collects and where it runs.
+- [Analyzing log data with CloudWatch Logs Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/AnalyzingLogData.html) — It covers Logs Insights capabilities, query behavior, and charging by queried data volume.
+- [Amazon CloudWatch Pricing](https://aws.amazon.com/cloudwatch/pricing/) — Use this for current custom metric, alarm, dashboard, log ingestion, storage, and Logs Insights pricing.

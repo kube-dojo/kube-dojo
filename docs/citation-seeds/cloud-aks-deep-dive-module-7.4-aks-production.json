@@ -1,0 +1,332 @@
+{
+  "module_key": "cloud/aks-deep-dive/module-7.4-aks-production",
+  "module_path": "src/content/docs/cloud/aks-deep-dive/module-7.4-aks-production.md",
+  "research_run_id": "2026-04-22T22:58:07+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The module opens with a specific November 2023 Black Friday AKS outage at an unnamed online retailer.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In November 2023, an online retailer running on AKS experienced a catastrophic failure during their Black Friday sale.",
+      "suggested_rewrite": "A common AKS production failure mode is hitting a storage bottleneck during a major traffic surge.",
+      "lesson_point_url": null,
+      "rationale": "This is a named-by-time incident anecdote with no attributable primary source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The outage involved a 15x traffic spike exhausting disk IOPS and queuing writes.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "When traffic spiked to 15x normal levels, the disk IOPS ceiling was hit and writes started queuing.",
+      "suggested_rewrite": "When traffic spikes sharply, a disk IOPS ceiling can cause writes to queue.",
+      "lesson_point_url": null,
+      "rationale": "The precise multiplier is uncited and should be removed while preserving the operational lesson."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The on-call engineer scaled from 6 to 30 replicas, worsening contention for one disk's IOPS budget.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Without visibility into the real bottleneck, the on-call engineer scaled the deployment from 6 to 30 replicas, which made things dramatically worse: 30 pods now competed for the same disk's IOPS budget.",
+      "suggested_rewrite": "Without visibility into the real bottleneck, scaling the deployment can make the problem worse by increasing contention for the same storage resource.",
+      "lesson_point_url": null,
+      "rationale": "The specific replica counts are part of an unsourced incident narrative."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The order pipeline froze for 90 minutes and caused $4.2 million in lost revenue.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The queue grew, timeouts cascaded, and the entire order pipeline froze for 90 minutes during peak sales hours. Post-incident analysis estimated $4.2 million in lost revenue.",
+      "suggested_rewrite": "The queue grew, timeouts cascaded, and the order pipeline stalled during a peak-sales window, creating significant business impact.",
+      "lesson_point_url": null,
+      "rationale": "These are fake-precise outage and revenue figures without a citable source."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The retailer's remediation was Ultra Disks, disk I/O Grafana metrics, and KEDA scaling on queue depth.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The fix for the retailer was straightforward: migrate to Ultra Disks with provisioned IOPS, add disk I/O metrics to their Grafana dashboards, and implement KEDA-based scaling that responded to queue depth rather than CPU utilization.",
+      "suggested_rewrite": "A practical remediation is to provision storage for the required IOPS, add disk I/O observability, and scale workers on a workload signal such as queue depth instead of CPU alone.",
+      "lesson_point_url": null,
+      "rationale": "This is still part of the unsourced retailer story and should be generalized."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Azure Files provides shared storage for AKS workloads with `ReadWriteMany` access across pods on different nodes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Azure Files: Shared Storage for Multi-Pod Access",
+      "disposition": "supported",
+      "source_ids": [
+        "S004",
+        "S003"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/storage/files/azure-kubernetes-service-workloads",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents Azure Files for AKS as RWX shared storage and Kubernetes defines RWX semantics."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Azure Shared Disks are for clustered applications, require coordination, and do not provide a managed shared filesystem.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Shared Disks for High Availability",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/virtual-machines/disks-shared",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft states that shared disks are for clustered applications and do not natively provide an SMB/NFS-style managed filesystem."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Mounting a shared Azure disk with `ext4` or `xfs` from multiple Linux nodes will immediately corrupt data.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Shared Disks for High Availability",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "If you merely mount a shared disk using `ext4` or `xfs` from multiple Linux nodes, the kernel's in-memory caching will immediately corrupt your data.",
+      "suggested_rewrite": "Do not mount a shared block disk from multiple nodes unless the application or filesystem is explicitly designed for coordinated multi-writer access.",
+      "lesson_point_url": null,
+      "rationale": "The exact corruption wording is stronger and more specific than the cited shared-disk guidance supports, so it should be generalized."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "By default, Container Insights captures every line from every container's standard output.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cost Control for Container Insights",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "By default, it captures every single line of text from every container's standard output.",
+      "suggested_rewrite": "By default, Container insights can ingest a large volume of stdout and stderr logs, so noisy workloads should be filtered to control Log Analytics cost.",
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents broad default log collection, but not this absolute phrasing."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Container Insights supports ConfigMap-based filtering such as excluding noisy namespaces and disabling environment-variable collection.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cost Control for Container Insights",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/azure-monitor/containers/kubernetes-data-collection-configmap",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents `container-azm-ms-agentconfig`, namespace exclusions, and `env_var.enabled` settings."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Azure Monitor managed service for Prometheus is a fully managed Prometheus-compatible service with up to 18 months of retention at no additional storage cost.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Managed Prometheus and Grafana: Cloud-Native Monitoring",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/prometheus-metrics-overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft explicitly documents the managed service behavior and retention policy."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Azure Managed Grafana integrates with Microsoft Entra ID and Azure RBAC.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Setting Up Managed Grafana",
+      "disposition": "supported",
+      "source_ids": [
+        "S008",
+        "S009"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/managed-grafana/overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents Entra-based authentication and Azure RBAC role assignments for Azure Managed Grafana."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Adding standard Prometheus pod annotations is enough for Azure Managed Prometheus to automatically scrape application metrics.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Custom Prometheus Metrics from Your Application",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The Managed Prometheus agent will automatically discover these endpoints and begin scraping.",
+      "suggested_rewrite": "Azure Managed Prometheus can scrape application metrics once you configure scraping for annotated pods or use PodMonitor or ServiceMonitor resources.",
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents annotation-based scraping as a configured option rather than an automatic default for all annotated pods."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "KEDA supports scale-to-zero on AKS.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: KEDA: Event-Driven Autoscaling",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/aks/keda-about",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft's AKS KEDA documentation explicitly calls out scale-to-zero as a capability."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "KEDA provides over 60 custom scalers.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: KEDA: Event-Driven Autoscaling",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": "https://keda.sh/docs/2.19/scalers",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This appears real in the upstream KEDA docs, but `keda.sh` is outside the current allowlist."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "The cluster autoscaler watches unschedulable pods and scales node pools up or down accordingly.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Combining KEDA with Cluster Autoscaler",
+      "disposition": "supported",
+      "source_ids": [
+        "S012"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler-overview",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft explicitly documents AKS cluster autoscaler behavior around unschedulable pods and node scale-down."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "AKS Spot node pools are labeled and tainted with `kubernetes.azure.com/scalesetpriority=spot`, requiring corresponding tolerations for scheduling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Spot Node Pools",
+      "disposition": "supported",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": "https://learn.microsoft.com/en-us/azure/aks/spot-node-pool",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Microsoft documents the Spot node pool label, taint, and scheduling requirements."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "A 64 GiB Ultra Disk can be provisioned for 50,000 IOPS.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Ultra Disk lets you provision 50,000 IOPS on a 64 GB disk.",
+      "suggested_rewrite": "Ultra Disk and Premium SSD v2 let you provision higher performance more independently than Premium SSD v1, but the exact IOPS limits still depend on the disk type and size.",
+      "lesson_point_url": null,
+      "rationale": "Current Microsoft disk performance documentation does not support this exact number for a 64 GiB Ultra Disk."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "The standard HPA cannot scale to zero and requires at least one replica.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "KEDA can scale to zero replicas, which the standard HPA cannot do.** The HPA requires a minimum of 1 replica.",
+      "suggested_rewrite": "KEDA is commonly used when you need reliable scale-to-zero behavior for event-driven workloads; plain HPA does not typically provide that in standard configurations.",
+      "lesson_point_url": null,
+      "rationale": "The blanket statement is too strong given Kubernetes' `HPAScaleToZero` feature gate history and should be qualified."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "A single Azure Files NFS connection tops out around 300-400 MB/s and `nconnect=4` effectively quadruples throughput.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A single NFS connection typically tops out at 300-400 MB/s due to TCP window limitations. Setting `nconnect=4` in your StorageClass mount options opens 4 parallel TCP connections per mount, effectively quadrupling throughput.",
+      "suggested_rewrite": "Using `nconnect=4` is the current Azure Files recommendation for NFS and can materially improve throughput, but the exact gain depends on the client, workload, and share configuration.",
+      "lesson_point_url": null,
+      "rationale": "Microsoft recommends `nconnect=4` and reports variable gains, but this exact throughput ceiling and guaranteed 4x result are too specific."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://learn.microsoft.com/en-us/Azure/aks/azure-disk-csi",
+      "title": "Azure Disk CSI Driver on AKS",
+      "tier": "vendor",
+      "why_relevant": "Authoritative reference for AKS disk provisioning, topology-aware binding, and Azure Disk CSI behavior."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/aks/monitor-aks",
+      "title": "Monitor AKS",
+      "tier": "vendor",
+      "why_relevant": "Microsoft's overview for AKS observability, including Container insights, managed Prometheus, and Managed Grafana."
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/aks/keda-about",
+      "title": "KEDA on AKS",
+      "tier": "vendor",
+      "why_relevant": "Explains what the AKS KEDA add-on supports and when to use event-driven autoscaling instead of basic HPA patterns."
+    }
+  ],
+  "notes": "Code blocks, Mermaid diagrams, quiz content, and lab solution steps were excluded per the task rules. I also left table cells out of the seed; the prose around them already captures the highest-risk citation gaps, but the storage and KEDA tables may warrant a separate pass if your validator treats factual table rows as citation-bearing content.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

@@ -26,11 +26,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-**January 2023. A Fortune 500 financial services company.**
+**A large-enterprise identity breach scenario.**
 
 An engineer needed to debug a production issue in a Kubernetes cluster running in a different AWS account. The standard process: log into the management console, switch roles to the production account, navigate to EKS, download the kubeconfig, and authenticate with the cluster. The "role switch" used a long-lived IAM user with `AdministratorAccess` in the production account because the team had never gotten around to building proper cross-account role assumption chains.
 
-That IAM user's access keys were stored in a shared `.env` file in a private GitHub repo. When an employee left the company and their personal GitHub account was compromised three months later, the attacker found the keys, assumed the production role, and had full admin access to production infrastructure for 11 hours before CloudTrail alerts triggered. The attacker exfiltrated 2.3 million customer records. The breach cost $18 million in regulatory fines, legal fees, and customer notification.
+Shared long-lived credentials in repositories can be abused after an unrelated account compromise, leading to unauthorized production access, data exposure, and major incident-response costs.
 
 This catastrophic failure wasn't due to a complex zero-day vulnerability or an unpatched kernel. Every component of this failure was fundamentally an identity problem: long-lived credentials were used instead of temporary tokens, overly broad permissions existed instead of least privilege, there were no just-in-time access controls in place, and the architecture failed to enforce any separation between human and machine identities. 
 
@@ -68,11 +68,11 @@ The critical insight for platform engineers: in a Kubernetes world, **workload i
 
 ## Cross-Account Role Assumption (AWS)
 
-The fundamental mechanism for cross-account access in AWS is role assumption using the Security Token Service (STS). Account A creates a role with a trust policy that explicitly allows Account B's principals (users or roles) to assume it. When assumed, STS returns temporary, time-bound credentials.
+The fundamental mechanism for cross-account access in AWS is role assumption using the Security Token Service (STS). Account A creates a role with a trust policy that explicitly allows Account B's principals (users or roles) to assume it. When assumed, [STS returns temporary, time-bound credentials](https://docs.aws.amazon.com/cli/latest/reference/sts/assume-role.html).
 
 ### The Role Chain Pattern
 
-In a well-architected environment, you never have users directly inside your workload accounts. Instead, you utilize a Hub-and-Spoke model where all human and pipeline identities live in centralized accounts and *assume roles* into the spoke workload accounts.
+In a well-architected environment, you generally do not have users directly inside your workload accounts. Instead, you utilize a Hub-and-Spoke model where all human and pipeline identities live in centralized accounts and *assume roles* into the spoke workload accounts.
 
 ```mermaid
 flowchart LR
@@ -99,7 +99,7 @@ flowchart LR
 ```
 
 > **Stop and think**: What would happen if the Workload Account role (`EKS-Admin`) omitted the `aws:PrincipalOrgID` condition in its trust policy? If an attacker somehow guessed the role ARN, could they assume it?
-> *Without the org condition, any AWS account that explicitly allows its users to assume your role could potentially do so if they know the ARN and the trust policy only specifies `arn:aws:iam::111111111111:root` without external IDs. Always restrict trust to your organization.*
+> *Without the `aws:PrincipalOrgID` condition, the role relies only on the principals named in the trust policy; adding the org condition gives you an additional organization-level boundary around who can assume it.*
 
 ### Setting Up Cross-Account Roles
 
@@ -189,7 +189,7 @@ By heavily relying on `sts:AssumeRole`, we eliminate long-lived keys. If the dev
 
 ## IAM Identity Center (AWS SSO)
 
-Managing thousands of cross-account roles manually via the CLI or basic Terraform scripts quickly becomes an unmaintainable nightmare. AWS IAM Identity Center (formerly AWS SSO) is the recommended way to manage human access to multiple AWS accounts. It provides a centralized single sign-on portal where users authenticate once (often against an external Identity Provider like Okta) and then can seamlessly switch between accounts and permission sets.
+Managing thousands of cross-account roles manually via the CLI or basic Terraform scripts quickly becomes an unmaintainable nightmare. [AWS IAM Identity Center (formerly AWS SSO) is the recommended way to manage human access to multiple AWS accounts.](https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture-identity-management/workforce-iam-identity-center.html) It provides a centralized single sign-on portal where users authenticate once (often against an external Identity Provider like Okta) and then can seamlessly switch between accounts and permission sets.
 
 ```mermaid
 flowchart LR
@@ -220,7 +220,7 @@ flowchart LR
 
 ### Setting Up IAM Identity Center with Terraform
 
-Instead of managing individual IAM roles per account, you manage `PermissionSets` centrally. When you assign a PermissionSet to a group for a specific account, Identity Center automatically provisions and manages the necessary IAM roles in the target account.
+Instead of managing individual IAM roles per account, you manage `PermissionSets` centrally. When you assign a PermissionSet to a group for a specific account, [Identity Center automatically provisions and manages the necessary IAM roles in the target account.](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-and-iam-roles.html)
 
 ```hcl
 # Configure the Identity Center instance
@@ -292,7 +292,7 @@ Notice how `prod_admin` uses a highly restricted session duration (`PT1H`). Admi
 
 ## GCP Workload Identity Federation Across Projects
 
-Google Cloud Platform's approach to cross-project identity elegantly leverages Workload Identity Federation. This mechanism allows GKE workloads in one project to natively impersonate service accounts in an entirely different project without manually managing or rotating keys.
+Google Cloud Platform's approach to cross-project identity elegantly leverages Workload Identity Federation. [This mechanism allows GKE workloads in one project to natively impersonate service accounts in an entirely different project without manually managing or rotating keys.](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-providers)
 
 ```mermaid
 flowchart LR
@@ -316,7 +316,7 @@ flowchart LR
 ```
 
 > **Pause and predict**: In the GCP Workload Identity binding below, we specify `serviceAccount:team-a-prod.svc.id.goog[analytics/data-reader]`. What would happen if a developer in the same GKE cluster created a pod in the `default` namespace using a service account also named `data-reader`?
-> *The pod in the `default` namespace would be denied access. The trust binding explicitly requires the `analytics` namespace. This namespace-level isolation prevents cross-tenant privilege escalation within a shared cluster.*
+> *The pod in the `default` namespace would be denied access. [The trust binding explicitly requires the `analytics` namespace.](https://cloud.google.com/iam/docs/workload-identity-federation-with-kubernetes) This namespace-level isolation prevents cross-tenant privilege escalation within a shared cluster.*
 
 To implement Workload Identity Federation, you create a direct binding between a specific Kubernetes ServiceAccount and a GCP IAM ServiceAccount.
 
@@ -389,10 +389,10 @@ EOF
 
 ## Azure Entra ID and Workload Identity
 
-Azure utilizes Entra ID (formerly known as Azure Active Directory) as the central identity provider. For Kubernetes workloads running on Azure Kubernetes Service (AKS), Microsoft provides Workload Identity Federation via OIDC, completely doing away with the legacy AAD Pod Identity mechanism.
+Azure utilizes Entra ID (formerly known as Azure Active Directory) as the central identity provider. For Kubernetes workloads running on Azure Kubernetes Service (AKS), [Microsoft provides Workload Identity Federation via OIDC](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview), completely doing away with [the legacy AAD Pod Identity mechanism](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity).
 
 > **Pause and predict**: Why do we specify the audience as `api://AzureADTokenExchange` when creating the federated credential?
-> *This audience restricts the token usage specifically to the Azure AD token exchange process. If a token were intercepted, it couldn't be used to directly access other Azure APIs like ARM or Key Vault, limiting the impact of token theft to just the identity federation endpoint.*
+> *[This audience restricts the token usage specifically to the Azure AD token exchange process.](https://learn.microsoft.com/en-us/entra/workload-id/workload-identities-set-up-flexible-federated-identity-credential) If a token were intercepted, it couldn't be used to directly access other Azure APIs like ARM or Key Vault, limiting the impact of token theft to just the identity federation endpoint.*
 
 The setup in Azure involves creating a Federated Credential that natively maps an OIDC token issued by the Kubernetes API server directly to an Azure Managed Identity.
 
@@ -471,7 +471,7 @@ As organizations scale to hundreds of clusters and accounts, standard RBAC creat
 
 ### AWS ABAC with Tags
 
-With ABAC in AWS, you rely heavily on resource tagging. Your IAM policies utilize condition keys like `aws:ResourceTag` to compare attributes on the fly.
+With ABAC in AWS, you rely heavily on resource tagging. [Your IAM policies utilize condition keys like `aws:ResourceTag` to compare attributes on the fly.](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html)
 
 ```json
 {
@@ -511,7 +511,7 @@ aws eks tag-resource \
 
 ### GCP ABAC with IAM Conditions
 
-GCP allows for incredibly expressive ABAC using Common Expression Language (CEL) conditions directly in the IAM bindings.
+GCP allows for incredibly expressive ABAC using [Common Expression Language (CEL) conditions](https://cloud.google.com/iam/docs/conditions-overview) directly in the IAM bindings.
 
 ```bash
 # Grant access to GKE cluster only during business hours
@@ -533,7 +533,7 @@ When identities span multiple cloud accounts and Kubernetes clusters, distribute
 You must aggregate identity events into a centralized, immutable security account.
 
 > **Stop and think**: Why is S3 Object Lock (WORM) critical for the central logging bucket, even if only security admins have access to it?
-> *If an attacker manages to compromise a security admin's identity or assumes a role with broad permissions in the security account, they would typically try to delete the logs to cover their tracks. Object Lock enforces immutability at the storage layer, meaning that even a root user or an administrator cannot delete or modify the logs until the retention period expires.*
+> *If an attacker manages to compromise a security admin's identity or assumes a role with broad permissions in the security account, they would typically try to delete the logs to cover their tracks. Object Lock enforces immutability at the storage layer, meaning that [even a root user or an administrator cannot delete or modify the logs until the retention period expires.](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)*
 
 ```mermaid
 flowchart LR
@@ -562,8 +562,8 @@ flowchart LR
 
 ### Key Configurations for Identity Auditing
 
-1. **Organizational CloudTrail**: Never rely on individual account trails. Deploy an Organization Trail from your management account that automatically covers all existing and future member accounts. This captures all `AssumeRole`, `AssumeRoleWithWebIdentity` (IRSA), and `ConsoleLogin` events universally.
-2. **Kubernetes Audit Logs**: Enable EKS/GKE/AKS control plane audit logging. In Kubernetes, the `kube-apiserver` audit logs show *who* did *what* to *which* resource. Forward these to your central logging account.
+1. **Organizational CloudTrail**: Do not rely solely on individual account trails. Deploy an Organization Trail from your management account that [automatically covers all existing and future member accounts.](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/creating-trail-organization.html) This is intended to capture `AssumeRole`, `AssumeRoleWithWebIdentity` (IRSA), and `ConsoleLogin` events across the organization.
+2. **Kubernetes Audit Logs**: Enable EKS/GKE/AKS control plane audit logging. In Kubernetes, [the `kube-apiserver` audit logs show *who* did *what* to *which* resource.](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) Forward these to your central logging account.
 3. **Log Immutability**: Store centralized logs in an S3 bucket configured with **S3 Object Lock** (WORM - Write Once Read Many). If an attacker gains admin access to a spoke account, they cannot delete their tracks in the central security bucket.
 
 ### Tracing a Cross-Account Kubernetes Event
@@ -606,7 +606,7 @@ By querying your SIEM for `user.extra.sessionName = "alice-session"`, you can tr
 
 ## Just-In-Time (JIT) Access
 
-Just-In-Time (JIT) access grants elevated permissions only when absolutely needed, for a limited duration, and usually requires an explicit approval workflow. It actively eliminates "standing privileges" -- the most dangerous security anti-pattern in cloud environments.
+[Just-In-Time (JIT) access grants elevated permissions only when absolutely needed, for a limited duration, and usually requires an explicit approval workflow.](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-deployment-plan) It actively eliminates "standing privileges" -- the most dangerous security anti-pattern in cloud environments.
 
 ```mermaid
 sequenceDiagram
@@ -727,13 +727,13 @@ spec:
 
 ## Did You Know?
 
-1. **AWS IAM evaluates an average of 2.5 billion authorization requests per second** across all AWS accounts globally. Every API call, every S3 object access, every Lambda invocation goes through IAM evaluation. The system has a design target of sub-millisecond evaluation latency, which is why IAM policies are evaluated locally at the service endpoint rather than at a central authorization server.
+1. **AWS IAM evaluates authorization for a massive volume of requests across AWS services.** IAM decisions are designed to be fast enough that authorization does not become a practical bottleneck for normal service operations.
 
-2. **GCP's Workload Identity Federation supports external identity providers beyond GCP.** You can configure a GKE workload in one cloud to authenticate to GCP services using an OIDC token issued by an AWS EKS cluster. This means an EKS pod can access BigQuery without any GCP service account keys -- the EKS OIDC issuer is registered as a trusted identity provider in GCP. This is how true multi-cloud workload identity works.
+2. **[GCP's Workload Identity Federation supports external identity providers beyond GCP.](https://cloud.google.com/iam/docs/workload-identity-federation)** You can configure a GKE workload in one cloud to authenticate to GCP services using an OIDC token issued by an AWS EKS cluster. This means an EKS pod can access BigQuery without any GCP service account keys -- the EKS OIDC issuer is registered as a trusted identity provider in GCP. This is how true multi-cloud workload identity works.
 
-3. **The concept of "confused deputy" attacks** was first described by Norm Hardy in 1988. In cloud IAM, it applies when a service (the "deputy") is tricked into using its own permissions on behalf of an unauthorized caller. AWS mitigates this with the `aws:SourceArn` and `aws:SourceAccount` conditions on trust policies. Every cross-account role should include these conditions to prevent confused deputy attacks.
+3. **The "confused deputy" problem** applies in cloud IAM when a more-privileged service or third party is tricked into acting for an unauthorized caller. In AWS, mitigations depend on the scenario: service principals commonly use `aws:SourceArn` or `aws:SourceAccount`, while third-party cross-account role assumption often relies on `sts:ExternalId`.
 
-4. **Azure Entra ID processes over 90 billion authentications per day** as of 2025, making it the largest identity provider in the world by transaction volume. This includes not just Azure cloud access but Microsoft 365, third-party SaaS applications, and on-premises Active Directory hybrid scenarios. When you federate AKS workload identity through Entra ID, your Kubernetes pods are participating in this same massively distributed identity fabric.
+4. **Microsoft Entra ID operates at very large global scale.** When you federate AKS workload identity through Entra ID, your workloads rely on the same identity platform used across Microsoft's cloud and SaaS ecosystem.
 
 ---
 
@@ -741,14 +741,14 @@ spec:
 
 | Mistake | Why It Happens | How to Fix It |
 |---|---|---|
-| Using long-lived access keys for cross-account access | "AssumeRole is complicated" | Always use STS temporary credentials. If your tool doesn't support AssumeRole, the tool is not ready for multi-account. |
+| Using long-lived access keys for cross-account access | "AssumeRole is complicated" | Prefer STS temporary credentials for cross-account access. If your tool doesn't support AssumeRole, the tool is not ready for multi-account. |
 | Granting `*` permissions on cross-account roles | "We'll tighten it later" | Define the minimum required permissions from day one. Use CloudTrail to identify which APIs are actually called, then scope down. |
 | Not using MFA for human cross-account role assumption | "SSO handles authentication" | Even with SSO, require MFA via the `aws:MultiFactorAuthPresent` condition on trust policies for production account roles. |
 | Sharing GCP service account keys between projects | "Workload Identity is too complex" | Workload Identity eliminates key management entirely. The setup complexity is a one-time cost; managing keys is a forever cost with ongoing risk. |
-| No session duration limits on admin roles | Default is 1 hour for SSO, 12 hours for IAM roles | Set aggressive session durations: 1h for admin, 4h for read-only, 15 minutes for break-glass. Force re-authentication. |
+| No session duration limits on admin roles | [Default is 1 hour for SSO, 12 hours for IAM roles](https://docs.aws.amazon.com/singlesignon/latest/userguide/howtosessionduration.html) | Set aggressive session durations: 1h for admin, 4h for read-only, 15 minutes for break-glass. Force re-authentication. |
 | Using the same K8s service account for multiple workloads | "It's easier to manage one SA" | Each workload should have its own service account with its own cloud IAM binding. Shared SAs mean shared blast radius. |
 | Not logging cross-account role assumptions | "CloudTrail is enabled" | Verify that AssumeRole events are captured in your centralized log archive. Create alerts for role assumptions into production accounts outside business hours. |
-| Forgetting to add `aws:SourceAccount` to trust policies | "The role ARN in the trust policy is enough" | Without source conditions, any account that can construct the right principal ARN could assume your role. Always add `aws:PrincipalOrgID` or `aws:SourceAccount`. |
+| Forgetting to add `aws:SourceAccount` to trust policies | "The role ARN in the trust policy is enough" | Use source conditions such as `aws:SourceArn` or `aws:SourceAccount` for AWS service principals where supported; for third-party cross-account access, use controls such as `sts:ExternalId`, and use `aws:PrincipalOrgID` when you want to constrain access to your organization. |
 
 ---
 
@@ -781,7 +781,7 @@ This is a classic "confused deputy" attack, where a service with cross-account p
 <details>
 <summary>5. **Scenario:** A junior engineer creates a single Kubernetes ServiceAccount named `cloud-access-sa` in the `default` namespace, binds it to an IAM role with S3 and DynamoDB permissions, and configures all 15 microservices in the cluster to use this ServiceAccount. Explain why this design violates core security principles and what the blast radius implications are.</summary>
 
-Sharing a single service account across multiple workloads fundamentally violates the principle of least privilege, as every microservice now possesses the combined permissions of all workloads (S3 and DynamoDB), regardless of whether they actually need them. If any one of those 15 microservices is compromised via an application vulnerability, the attacker instantly gains full access to all cloud resources associated with the shared ServiceAccount. With individual, per-workload service accounts, a compromised pod can only access the specific cloud resources that particular workload requires. The operational overhead of creating per-workload SAs is minimal when automated through Infrastructure as Code, making the security benefits of a reduced blast radius highly worthwhile.
+Sharing a single service account across multiple workloads fundamentally violates the principle of least privilege, as every microservice now possesses the combined permissions of all workloads (S3 and DynamoDB), regardless of whether they actually need them. If any one of those 15 microservices is compromised via an application vulnerability, the attacker can quickly gain access to the cloud resources permitted by the shared ServiceAccount. With individual, per-workload service accounts, a compromised pod can only access the specific cloud resources that particular workload requires. The operational overhead of creating per-workload SAs is minimal when automated through Infrastructure as Code, making the security benefits of a reduced blast radius highly worthwhile.
 </details>
 
 <details>
@@ -1059,3 +1059,24 @@ roleRef:
 ## Next Module
 
 [Module 8.5: Disaster Recovery: RTO/RPO for Kubernetes](../module-8.5-disaster-recovery/) -- Your multi-account architecture is secure, your clusters can securely communicate, and your identity federation is solid. Now learn what happens when everything falls over. Dive deep into RTO, RPO, etcd snapshots, Velero, and the intricate art of recovering from the unthinkable.
+
+## Sources
+
+- [docs.aws.amazon.com: assume role.html](https://docs.aws.amazon.com/cli/latest/reference/sts/assume-role.html) — AWS STS documentation directly says AssumeRole returns temporary credentials and is typically used for cross-account access.
+- [docs.aws.amazon.com: workforce iam identity center.html](https://docs.aws.amazon.com/prescriptive-guidance/latest/security-reference-architecture-identity-management/workforce-iam-identity-center.html) — AWS Prescriptive Guidance explicitly calls IAM Identity Center the recommended approach for centrally managed access to multiple AWS accounts.
+- [docs.aws.amazon.com: identity center and iam roles.html](https://docs.aws.amazon.com/singlesignon/latest/userguide/identity-center-and-iam-roles.html) — The IAM Identity Center documentation directly describes creation and ongoing management of these account-local roles.
+- [cloud.google.com: workload identity federation with other providers](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-providers) — Google's federation guide explicitly covers short-lived credential exchange and service account impersonation where the service account is in a different project.
+- [cloud.google.com: workload identity federation with kubernetes](https://cloud.google.com/iam/docs/workload-identity-federation-with-kubernetes) — Google's Kubernetes federation docs define the subject format as namespace plus ServiceAccount name.
+- [learn.microsoft.com: workload identity overview](https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview) — Microsoft's AKS overview explicitly describes OIDC federation using service account tokens.
+- [learn.microsoft.com: use azure ad pod identity](https://learn.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity) — Microsoft's pod-managed identity page says Workload ID replaces pod-managed identity and records the deprecation.
+- [learn.microsoft.com: workload identities set up flexible federated identity credential](https://learn.microsoft.com/en-us/entra/workload-id/workload-identities-set-up-flexible-federated-identity-credential) — Microsoft's federated credential documentation directly explains this audience value and its meaning.
+- [docs.aws.amazon.com: tutorial attribute based access control.html](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_attribute-based-access-control.html) — The AWS ABAC tutorial directly shows policies that match principal tags and resource tags.
+- [cloud.google.com: conditions overview](https://cloud.google.com/iam/docs/conditions-overview) — Google's IAM Conditions overview explicitly says conditions use a subset of CEL.
+- [docs.aws.amazon.com: object lock.html](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html) — The S3 Object Lock documentation directly states this compliance-mode behavior.
+- [docs.aws.amazon.com: creating trail organization.html](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/creating-trail-organization.html) — CloudTrail's organization-trail docs directly describe member-account copies and automatic onboarding for newly added accounts.
+- [kubernetes.io: audit](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/) — The Kubernetes auditing docs enumerate those exact questions that audit records help answer.
+- [learn.microsoft.com: pim deployment plan](https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-deployment-plan) — Microsoft's PIM guidance directly describes time-based and approval-based role activation for JIT access.
+- [cloud.google.com: workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation) — Google's Workload Identity Federation overview explicitly lists AWS, Azure, and OIDC/SAML providers and positions federation as an alternative to service account keys.
+- [docs.aws.amazon.com: howtosessionduration.html](https://docs.aws.amazon.com/singlesignon/latest/userguide/howtosessionduration.html) — AWS documents both the 1-hour default for new permission sets and the 12-hour maximum configured on the generated IAM roles.
+- [Delegate access across AWS accounts using IAM roles](https://docs.aws.amazon.com/IAM/latest/UserGuide/tutorial_cross-account-with-roles.html) — Good primary reference for STS role assumption and temporary credentials in cross-account AWS setups.
+- [About Workload Identity Federation for GKE](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity) — Covers how GKE workload identity works, principal identifiers, and keyless access to Google Cloud APIs.

@@ -19,9 +19,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2019, a healthcare analytics company discovered that an internal GCS bucket containing patient diagnostic data had been publicly readable for over four months. The misconfiguration was traced to a single IAM binding: `allUsers` had been granted `roles/storage.objectViewer` on the bucket. An engineer had set this permission during development to share files with an external contractor and never revoked it. The data was exposed for months before an automated compliance scan flagged it. The ensuing investigation, security audit, and remediation cost the company over $2 million in fines and legal fees.
+Misconfigured public bucket access can expose sensitive data for extended periods until review or scanning catches it, and the cleanup can be costly.
 
-This was not an isolated incident. Publicly exposed cloud storage buckets have been responsible for some of the largest data breaches in cloud computing history. The common thread is always the same: cloud storage is trivially easy to use, which makes it trivially easy to misconfigure. Google Cloud Storage is the backbone of almost every GCP architecture. It stores application artifacts, database backups, logs, ML training data, static website assets, and Terraform state files. If you do not understand storage classes, lifecycle policies, versioning, and access control, you will eventually either overspend on storage or leak data publicly.
+This was not an isolated incident. Publicly exposed cloud storage buckets have been responsible for some of the largest data breaches in cloud computing history. The common thread is often the same: cloud storage is trivially easy to use, which makes it trivially easy to misconfigure. Google Cloud Storage is the backbone of almost every GCP architecture. It stores application artifacts, database backups, logs, ML training data, static website assets, and Terraform state files. If you do not understand storage classes, lifecycle policies, versioning, and access control, you will eventually either overspend on storage or leak data publicly.
 
 In this module, you will learn how GCS organizes data, how to choose the right storage class to optimize costs, how lifecycle rules automate data management, how versioning protects against accidental deletion, and how signed URLs provide time-limited access without modifying IAM policies.
 
@@ -31,7 +31,7 @@ In this module, you will learn how GCS organizes data, how to choose the right s
 
 ### Buckets and Objects
 
-GCS has a flat namespace despite appearing hierarchical. There are no directories---object names like `logs/2024/01/app.log` are just strings that happen to contain slashes. The console and `gcloud storage` simulate folder-like navigation, but under the hood it is a flat key-value store.
+GCS has a [flat namespace](https://cloud.google.com/storage/docs/folders) despite appearing hierarchical. There are no directories---object names like `logs/2024/01/app.log` are just strings that happen to contain slashes. The console and `gcloud storage` simulate folder-like navigation, but under the hood it is a flat key-value store.
 
 ```mermaid
 graph TD
@@ -44,9 +44,9 @@ graph TD
 ```
 
 Key rules:
-- **Bucket names are globally unique** across all of GCP (not just your project).
+- [**Bucket names are globally unique**](https://cloud.google.com/storage/docs/buckets) across all of GCP (not just your project).
 - Bucket names must be 3-63 characters, lowercase letters, numbers, hyphens, and underscores.
-- Object names can be up to 1024 characters and can contain any UTF-8 character.
+- [Object names can be up to 1024 characters and can contain any UTF-8 character](https://cloud.google.com/storage/quotas).
 - Maximum object size is 5 TiB.
 - There is no limit on the number of objects in a bucket.
 
@@ -82,7 +82,7 @@ gcloud storage rm gs://my-company-data-prod/uploads/old-file.txt
 gcloud storage rm -r gs://my-company-data-prod/temp/
 ```
 
-### Bucket Locations
+### [Bucket Locations](https://cloud.google.com/storage/docs/bucket-locations)
 
 | Location Type | Example | Redundancy | Latency | Cost | Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -108,7 +108,7 @@ gcloud storage buckets create gs://my-static-global \
 
 ### Turbo Replication
 
-For dual-region buckets used in disaster recovery, standard geo-replication is asynchronous and offers no hard guarantees on replication time. If a regional outage occurs immediately after an upload, the data might not yet be in the second region. **Turbo Replication** provides a 15-minute recovery point objective (RPO) guarantee, ensuring 100% of newly written objects are replicated across regions within 15 minutes.
+For dual-region buckets used in disaster recovery, standard geo-replication is asynchronous and offers no hard guarantees on replication time. If a regional outage occurs immediately after an upload, the data might not yet be in the second region. **Turbo Replication** provides a [15-minute recovery point objective (RPO) guarantee](https://cloud.google.com/storage/docs/availability-durability), ensuring 100% of newly written objects are replicated across regions within 15 minutes.
 
 ```bash
 # Create a dual-region bucket with Turbo Replication enabled
@@ -124,14 +124,14 @@ gcloud storage buckets create gs://my-critical-dr-bucket \
 
 ## Storage Classes: Matching Cost to Access Patterns
 
-GCS offers four storage classes. The key insight is that **cheaper storage has higher retrieval costs and minimum storage durations**.
+GCS offers four storage classes. The key insight is that [**cheaper storage has higher retrieval costs and minimum storage durations**](https://cloud.google.com/storage/pricing).
 
 | Storage Class | Monthly Cost (per GB) | Retrieval Cost (per GB) | Min Duration | Availability SLA | Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **STANDARD** | $0.020-0.026 | $0.00 | None | 99.95% (multi-region) | Frequently accessed data |
-| **NEARLINE** | $0.010-0.013 | $0.01 | 30 days | 99.9% | Monthly access (backups) |
-| **COLDLINE** | $0.004-0.006 | $0.02 | 90 days | 99.9% | Quarterly access (archives) |
-| **ARCHIVE** | $0.0012 | $0.05 | 365 days | 99.9% | Yearly access (compliance) |
+| **STANDARD** | varies by location | $0.00 | None | [99.95% (multi-region)](https://cloud.google.com/storage/docs/storage-classes) | Frequently accessed data |
+| **NEARLINE** | varies by location | $0.01 | 30 days | 99.9% | Monthly access (backups) |
+| **COLDLINE** | varies by location | $0.02 | 90 days | 99.9% | Quarterly access (archives) |
+| **ARCHIVE** | starts at a very low per-GB monthly rate | $0.05 | 365 days | 99.9% | Yearly access (compliance) |
 
 **Critical concept**: The minimum storage duration means you are **billed for the full period** even if you delete the object early. If you upload a file to COLDLINE and delete it after 10 days, you are still charged for the remaining 80 days of storage as an early deletion fee.
 
@@ -150,7 +150,7 @@ gcloud storage ls -L gs://my-bucket/archive.tar.gz 2>&1 | grep "Storage class"
 
 ### Autoclass
 
-Autoclass automatically moves objects between storage classes based on access patterns. It eliminates the need to manually manage lifecycle rules for class transitions.
+[Autoclass automatically moves objects between storage classes based on access patterns](https://cloud.google.com/storage/docs/autoclass). It eliminates the need to manually manage lifecycle rules for class transitions.
 
 ```bash
 # Enable Autoclass on a new bucket
@@ -169,7 +169,7 @@ With Autoclass enabled:
 - After 90 days without access, they move to COLDLINE.
 - After 365 days without access, they move to ARCHIVE.
 - If accessed again, they automatically move back to STANDARD.
-- No retrieval fees apply when Autoclass moves objects between classes.
+- [No retrieval fees apply when Autoclass moves objects between classes.](https://cloud.google.com/storage/pricing)
 
 ---
 
@@ -177,7 +177,7 @@ With Autoclass enabled:
 
 ## Lifecycle Management
 
-Lifecycle rules automate actions on objects based on age, storage class, versioning status, or other conditions. This is how you prevent storage costs from growing unbounded.
+[Lifecycle rules automate actions on objects based on age, storage class, versioning status, or other conditions.](https://cloud.google.com/storage/docs/lifecycle) This is how you prevent storage costs from growing unbounded.
 
 ```bash
 # Set lifecycle rules using a JSON file
@@ -248,7 +248,7 @@ gcloud storage buckets update gs://my-bucket \
 
 ## Object Versioning
 
-Versioning keeps a history of every change to every object. When you overwrite or delete an object, the previous version is preserved as a "non-current" version.
+Versioning keeps a history of every change to every object. When you overwrite or delete an object, [the previous version is preserved as a "non-current" version](https://cloud.google.com/storage/docs/object-versioning).
 
 ```bash
 # Enable versioning on a bucket
@@ -276,9 +276,9 @@ gcloud storage buckets update gs://my-bucket \
   --no-versioning
 ```
 
-**War Story**: A platform engineer at a media company accidentally ran `gcloud storage rm -r gs://prod-assets/` and deleted 2.3 million production images. Because versioning was enabled, the objects became "non-current" instead of permanently deleted. The team restored all objects within an hour using a script that copied non-current versions back. Without versioning, recovery would have required restoring from a 12-hour-old backup, losing an entire morning of uploaded content.
+**War Story**: Accidental large-scale deletion is much easier to recover from when Object Versioning is enabled, because deleted live objects become noncurrent versions that can be restored.
 
-### Object Holds and Retention
+### [Object Holds and Retention](https://cloud.google.com/storage/docs/using-bucket-lock)
 
 For compliance use cases, you can lock objects to prevent deletion.
 
@@ -308,7 +308,7 @@ gcloud storage objects update gs://my-bucket/evidence.pdf \
 
 ### Uniform Bucket-Level Access (Recommended)
 
-Uniform bucket-level access means that all access control is managed exclusively through IAM. Object-level ACLs are disabled. This is the recommended mode because it simplifies auditing and eliminates the confusion of having two access control systems.
+[Uniform bucket-level access means that all access control is managed exclusively through IAM.](https://cloud.google.com/storage/docs/uniform-bucket-level-access) Object-level ACLs are disabled. This is the recommended mode because it simplifies auditing and eliminates the confusion of having two access control systems.
 
 ```bash
 # Enable uniform bucket-level access (recommended for all new buckets)
@@ -329,7 +329,7 @@ gcloud storage buckets add-iam-policy-binding gs://my-bucket \
 gcloud storage buckets get-iam-policy gs://my-bucket
 ```
 
-### Common Storage IAM Roles
+### [Common Storage IAM Roles](https://cloud.google.com/storage/docs/access-control/iam-roles)
 
 | Role | Permissions | Typical User |
 | :--- | :--- | :--- |
@@ -339,7 +339,7 @@ gcloud storage buckets get-iam-policy gs://my-bucket
 | `roles/storage.admin` | Full control over buckets and objects | Platform engineers |
 | `roles/storage.legacyBucketReader` | List bucket contents | Legacy compatibility |
 
-### Preventing Public Access
+### [Preventing Public Access](https://cloud.google.com/storage/docs/public-access-prevention)
 
 ```bash
 # Set organization policy to prevent public access on ALL buckets
@@ -362,7 +362,7 @@ gcloud storage buckets get-iam-policy gs://my-bucket \
 
 ## Signed URLs: Time-Limited Access
 
-Signed URLs allow you to grant temporary access to a specific object without modifying IAM policies. They are ideal for sharing files with external users or providing download links in web applications.
+Signed URLs allow you to [grant temporary access to a specific object without modifying IAM policies](https://cloud.google.com/storage/docs/access-control/signed-urls). They are ideal for sharing files with external users or providing download links in web applications.
 
 ```bash
 # Generate a signed URL valid for 1 hour
@@ -419,7 +419,7 @@ print(f"Download URL (valid for 30 minutes): {url}")
 
 ## gsutil vs gcloud storage
 
-Google has been migrating commands from `gsutil` to `gcloud storage`. Both work, but `gcloud storage` is the recommended tool going forward.
+Google has been migrating commands from `gsutil` to `gcloud storage`. Both work, but [`gcloud storage` is the recommended tool going forward](https://cloud.google.com/storage/docs/gsutil-transition-to-gcloud).
 
 | Operation | gsutil (legacy) | gcloud storage (recommended) |
 | :--- | :--- | :--- |
@@ -452,13 +452,13 @@ gcloud storage rsync gs://source-bucket/ gs://dest-bucket/ \
 
 ## Did You Know?
 
-1. **GCS processes over 2 trillion objects per day** across all customers. The service has been running since 2010 and has achieved 99.999999999% (11 nines) durability. This means that if you store 10 million objects, you can statistically expect to lose one object every 10 million years.
+1. **GCS processes over 2 trillion objects per day** across all customers. The service has been running since 2010 and has achieved [99.999999999% (11 nines) durability](https://cloud.google.com/storage/docs/availability-durability). In practical terms, annual object loss due to underlying storage durability is expected to be extremely rare.
 
-2. **The "flat namespace" design means listing millions of objects is expensive**. A `gcloud storage ls gs://my-bucket/` on a bucket with 50 million objects will take minutes and consume significant API quota. Use prefixes to narrow your listing (`gs://my-bucket/logs/2024/01/`), or use Cloud Storage Inventory Reports for bulk analysis.
+2. **The "flat namespace" design means listing millions of objects is expensive**. A `gcloud storage ls gs://my-bucket/` against a very large bucket can be slow and consume operations quota. Use prefixes to narrow your listing (`gs://my-bucket/logs/2024/01/`), or use Cloud Storage Inventory Reports for bulk analysis.
 
-3. **Cloud Storage has a hidden "requester pays" feature** that shifts download costs to the requester instead of the bucket owner. This is commonly used for public datasets where the dataset provider does not want to pay for bandwidth. The Human Genome Project and many scientific datasets on GCS use requester pays.
+3. **Cloud Storage has a hidden "requester pays" feature** that [shifts download costs to the requester instead of the bucket owner](https://cloud.google.com/storage/docs/requester-pays). This is commonly used for public datasets where the dataset provider does not want to pay for bandwidth. Public and shared datasets often use requester-pays billing when the publisher does not want to absorb access charges.
 
-4. **Object names that begin with a period (`.`) are not hidden**---GCS does not have a concept of hidden files. The name `.env` is just a regular object name. However, some tools (like `gcloud storage rsync`) have flags to skip dotfiles, which can cause confusion when `.env` files are not synced as expected.
+4. **[Object names that begin with a period (`.`) are not hidden](https://cloud.google.com/storage/docs/objects)**---GCS does not have a concept of hidden files. The name `.env` is just a regular object name. However, local sync tooling can still exclude files based on command options or patterns, so verify how your chosen tool handles dot-prefixed filenames.
 
 ---
 
@@ -472,7 +472,7 @@ gcloud storage rsync gs://source-bucket/ gs://dest-bucket/ \
 | Using Fine-Grained ACLs instead of Uniform IAM | Legacy tutorials still show ACLs | Enable Uniform Bucket-Level Access on all buckets |
 | Not co-locating buckets with compute | Creating all buckets in US multi-region | Use regional buckets in the same region as your VMs for lowest latency and cost |
 | Deleting without versioning enabled | "Delete means delete" | Enable versioning first, then deletes create non-current versions instead of permanent loss |
-| Listing entire large buckets | Using `gcloud storage ls` without a prefix | Always use a prefix filter; use Inventory Reports for bulk analysis |
+| Listing entire large buckets | Using `gcloud storage ls` without a prefix | Prefer a prefix filter; use Inventory Reports for bulk analysis |
 | Ignoring minimum storage duration charges | Uploading to COLDLINE then deleting after 10 days | You are billed for 90 days regardless; use STANDARD for short-lived objects |
 
 ---
@@ -482,7 +482,7 @@ gcloud storage rsync gs://source-bucket/ gs://dest-bucket/ \
 <details>
 <summary>1. Your backup pipeline uploads a 5 TB database dump to a COLDLINE bucket on the 1st of the month. Due to a script error, a cleanup job deletes this dump on the 15th of the same month. Calculate the financial impact regarding storage duration and explain the billing mechanics.</summary>
 
-You will be billed for the 15 days the object existed, plus an early deletion fee equivalent to the remaining 75 days of Coldline storage for the 5 TB file. Coldline storage has a strict minimum storage duration of 90 days built into its pricing model to offset the cheaper monthly rate. Even though the object only existed for 15 days, Google Cloud automatically calculates and applies this early deletion charge to ensure that users do not exploit archival storage classes for short-lived temporary data. If a workload involves creating and deleting files within a month, Standard or Nearline storage will mathematically always be the cheaper option because they have shorter or zero minimum duration requirements.
+You will be billed for the 15 days the object existed, plus an early deletion fee equivalent to the remaining 75 days of Coldline storage for the 5 TB file. Coldline storage has a strict minimum storage duration of 90 days built into its pricing model to offset the cheaper monthly rate. Even though the object only existed for 15 days, Google Cloud automatically calculates and applies this early deletion charge to ensure that users do not exploit archival storage classes for short-lived temporary data. If a workload involves creating and deleting files within a month, Standard or Nearline storage will usually be the cheaper option because they have shorter or zero minimum duration requirements.
 </details>
 
 <details>
@@ -500,7 +500,7 @@ Because versioning is enabled, the GCS bucket did not destroy the original confi
 <details>
 <summary>4. You are building a web application where users can download their monthly PDF invoices. The users do not have Google Cloud accounts, and the invoices must remain strictly confidential between the application and the specific user. Evaluate the options and justify the most secure method to serve these files.</summary>
 
-The most secure and appropriate method is to dynamically generate Signed URLs on the backend when a user explicitly requests a download. Granting an IAM role directly is impossible because the end users lack Google Cloud identities, and making the entire bucket or objects public would catastrophically violate strict confidentiality requirements. A Signed URL uses a backend service account's credentials to cryptographically sign a link that grants temporary, time-limited access exclusively to one specific object. This ensures the user can only download their exact invoice for a brief window (e.g., 15 minutes), keeping the bucket entirely private while securely bridging the identity gap.
+The most secure and appropriate method is to dynamically generate Signed URLs on the backend when a user explicitly requests a download. Granting an IAM role directly is usually not practical because the end users lack Google Cloud identities, and making the entire bucket or objects public would catastrophically violate strict confidentiality requirements. A Signed URL uses a backend service account's credentials to cryptographically sign a link that grants temporary, time-limited access exclusively to one specific object. This ensures the user can only download their exact invoice for a brief window (e.g., 15 minutes), keeping the bucket entirely private while securely bridging the identity gap.
 </details>
 
 <details>
@@ -737,3 +737,25 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.5: Cloud DNS](../module-2.5-dns/)** --- Learn how to manage DNS zones (public and private), configure DNS forwarding for hybrid environments, and set up peering zones for cross-VPC name resolution.
+
+## Sources
+
+- [cloud.google.com: folders](https://cloud.google.com/storage/docs/folders) — The Cloud Storage namespace docs explicitly describe flat namespace buckets and simulated folder behavior.
+- [cloud.google.com: buckets](https://cloud.google.com/storage/docs/buckets) — The bucket documentation defines global uniqueness and naming requirements.
+- [cloud.google.com: quotas](https://cloud.google.com/storage/quotas) — The quotas and limits reference gives the object-name and object-size limits; Cloud Storage object docs state there is no object-count limit per bucket.
+- [cloud.google.com: bucket locations](https://cloud.google.com/storage/docs/bucket-locations) — The bucket-locations docs compare the location types and their tradeoffs.
+- [cloud.google.com: availability durability](https://cloud.google.com/storage/docs/availability-durability) — The availability and durability documentation states the 15-minute turbo replication RPO target.
+- [cloud.google.com: pricing](https://cloud.google.com/storage/pricing) — The pricing page lists retrieval fees and minimum storage durations for the four storage classes.
+- [cloud.google.com: storage classes](https://cloud.google.com/storage/docs/storage-classes) — The storage-classes documentation breaks out availability SLA and typical availability by class and location type.
+- [cloud.google.com: autoclass](https://cloud.google.com/storage/docs/autoclass) — The Autoclass docs describe the transition behavior and access-triggered move back to Standard.
+- [cloud.google.com: lifecycle](https://cloud.google.com/storage/docs/lifecycle) — The lifecycle docs define the lifecycle actions/conditions and the exception for live objects in versioned buckets.
+- [cloud.google.com: object versioning](https://cloud.google.com/storage/docs/object-versioning) — The Object Versioning docs describe noncurrent-version behavior and what happens when versioning is disabled.
+- [cloud.google.com: using bucket lock](https://cloud.google.com/storage/docs/using-bucket-lock) — The Bucket Lock documentation states that locked retention policies cannot be removed or shortened.
+- [cloud.google.com: uniform bucket level access](https://cloud.google.com/storage/docs/uniform-bucket-level-access) — The uniform bucket-level access documentation says ACLs are disabled and access is granted exclusively through IAM, and it recommends the feature generally.
+- [cloud.google.com: iam roles](https://cloud.google.com/storage/docs/access-control/iam-roles) — The IAM roles reference defines these predefined Cloud Storage roles and their bundled permissions.
+- [cloud.google.com: public access prevention](https://cloud.google.com/storage/docs/public-access-prevention) — The public-access-prevention docs describe both enforcement mechanisms and their effect on public principals.
+- [cloud.google.com: signed urls](https://cloud.google.com/storage/docs/access-control/signed-urls) — The signed-URLs docs cover scope, XML API usage, and the V4 expiration limit.
+- [cloud.google.com: gsutil transition to gcloud](https://cloud.google.com/storage/docs/gsutil-transition-to-gcloud) — Google's transition guide explicitly states that `gcloud storage` is the recommended command-line tool.
+- [cloud.google.com: inventory reports](https://cloud.google.com/storage/docs/insights/inventory-reports) — General lesson point for an illustrative rewrite.
+- [cloud.google.com: requester pays](https://cloud.google.com/storage/docs/requester-pays) — The Requester Pays docs explain the billing shift and this usage pattern.
+- [cloud.google.com: objects](https://cloud.google.com/storage/docs/objects) — The object model docs treat object names as ordinary names in the namespace, without a hidden-file concept.

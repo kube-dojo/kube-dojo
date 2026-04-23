@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In late 2021, an e-commerce startup launched their highly anticipated Black Friday sale. They had built their application on large EC2 instances and anticipated heavy traffic, so they provisioned twenty massive servers manually the night before. However, the traffic surge was three times larger than expected. The servers hit 100% CPU utilization within minutes. By the time the engineering team logged in, spun up new instances manually, installed the application dependencies, and registered them with the load balancer, two hours had passed. The website was unresponsive, carts were abandoned, and the startup lost an estimated two million dollars in sales.
+A team that manually provisions EC2 capacity ahead of a major traffic event can still be overwhelmed if demand exceeds forecasts and new instances take too long to bring online.
 
 This disaster was entirely preventable. The engineers treated their cloud servers like physical hardware—static, precious, and requiring manual care. They failed to leverage the "Elastic" in Elastic Compute Cloud.
 
@@ -31,8 +31,8 @@ To launch an EC2 instance, you must make a series of configuration choices that 
 
 ### Instance Types and Families
 
-AWS offers hundreds of instance types optimized to fit different use cases. They are categorized by family:
-*   **General Purpose (e.g., t3, m6i)**: Balanced compute, memory, and network resources. Good for web servers, code repositories, and small to medium databases. T-series instances are "burstable"—they accumulate CPU credits during idle time and spend them during bursts. If your application has steady moderate usage with occasional spikes, T-series can be significantly cheaper than fixed-performance instances.
+AWS offers many instance types optimized for different use cases. They are [categorized by family](https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-type-specifications.html):
+*   **General Purpose (e.g., t3, m6i)**: Balanced compute, memory, and network resources. Good for web servers, code repositories, and small to medium databases. [T-series instances are "burstable"—they accumulate CPU credits during idle time and spend them during bursts.](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/burstable-credits-baseline-concepts.html) If your application has steady moderate usage with occasional spikes, T-series can be significantly cheaper than fixed-performance instances.
 *   **Compute Optimized (e.g., c6i, c6g)**: High ratio of vCPUs to memory. Ideal for batch processing, media transcoding, scientific modeling, machine learning inference, and high-performance web servers that need raw CPU horsepower.
 *   **Memory Optimized (e.g., r6i, x2idn)**: Designed for workloads that process large data sets in memory, such as relational databases, Redis/Memcached caches, in-memory analytics, and real-time big data processing with Apache Spark.
 *   **Storage Optimized (e.g., i3, d3)**: High sequential read/write access to very large data sets on local storage. Designed for data warehousing, distributed file systems (HDFS), and log processing systems.
@@ -40,7 +40,7 @@ AWS offers hundreds of instance types optimized to fit different use cases. They
 
 #### Decoding the Instance Name
 
-An instance name like `m6i.xlarge` follows a consistent naming scheme:
+An [instance name like `m6i.xlarge` follows a consistent naming scheme](https://docs.aws.amazon.com/ec2/latest/instancetypes/instance-type-names.html):
 
 ```mermaid
 flowchart TD
@@ -51,11 +51,11 @@ flowchart TD
     ID --> S["xlarge : Size<br/>(nano, micro, small, medium, large, xlarge, 2xlarge...)"]
 ```
 
-Understanding the naming convention lets you read any instance type at a glance, even ones you have never encountered before.
+Understanding the naming convention lets you interpret most instance types at a glance, even ones you have not encountered before.
 
 ### Instance Type Comparison Table
 
-The table below compares commonly used instance types across the four most popular families. Prices shown are approximate On-Demand hourly rates in `us-east-1` as of 2025 and will vary over time.
+The table below compares commonly used instance types across the four most popular families. The table below uses representative `us-east-1` Linux On-Demand prices for a few common instance types; always verify current pricing before making production cost decisions.
 
 | Instance Type | Family | vCPUs | Memory (GiB) | Network (Gbps) | On-Demand $/hr | Best Use Cases |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
@@ -72,21 +72,21 @@ The table below compares commonly used instance types across the four most popul
 | `r6i.xlarge` | Memory Optimized | 4 | 32 | Up to 12.5 | ~$0.252 | PostgreSQL/MySQL, medium caches, real-time analytics |
 | `r6i.2xlarge` | Memory Optimized | 8 | 64 | Up to 12.5 | ~$0.504 | Large relational databases, Elasticsearch, SAP HANA |
 
-**Key insight**: Notice how `t3.medium` and `m6i.large` both offer 2 vCPUs—but the `m6i.large` provides 8 GiB of memory (double the `t3.medium`'s 4 GiB at the same vCPU count) and consistent performance without credit-based throttling. For production workloads that need reliable performance, General Purpose M-series instances usually make more sense than burstable T-series, despite the slightly higher hourly cost.
+**Key insight**: Notice how `t3.medium` and `m6i.large` both offer 2 vCPUs—but the `m6i.large` provides 8 GiB of memory (double the `t3.medium`'s 4 GiB at the same vCPU count) and consistent performance without credit-based throttling. For production workloads that need reliable, steady CPU performance, fixed-performance instance families are often a better fit than burstable T-series instances.
 
 > **Stop and think**: You are migrating a legacy, monolithic application that requires 32 GiB of memory. It idles at 15% CPU utilization 95% of the time, but during monthly reporting runs, it hits 100% CPU for several hours. Which instance family and size provides the most cost-effective baseline without risking CPU throttling during the reporting runs?
 
-*Note on Graviton: Instance families ending in 'g' (like m6g, c6g, r6g) use AWS Graviton processors (ARM architecture) rather than x86. They generally offer 20-40% better price-performance ratios compared to their Intel equivalents. If your application stack supports ARM (most Linux workloads, containers, and interpreted languages do), Graviton instances are almost always the smarter choice.*
+*Note on Graviton: Instance families ending in 'g' (like m6g, c6g, r6g) use AWS Graviton processors (ARM architecture) rather than x86. They can often offer better price-performance than comparable x86-based instances, depending on workload, generation, and region. If your application stack supports ARM (most Linux workloads, containers, and interpreted languages do), Graviton instances are almost always the smarter choice.*
 
 ### Purchasing Options
 
 How you pay for compute dramatically impacts your architecture and your monthly bill. Choosing the wrong purchasing model for a workload is one of the easiest ways to burn money in AWS.
 
-*   **On-Demand**: Pay for compute capacity by the second with no long-term commitments. Most expensive, but maximum flexibility. Use for spiky, unpredictable workloads and applications that cannot be interrupted.
-*   **Reserved Instances (RIs)**: Commit to a specific instance type in a specific region for a 1-year or 3-year term. Offers significant discounts compared to On-Demand. Standard RIs can be sold in the Reserved Instance Marketplace if your needs change.
-*   **Savings Plans**: A more flexible alternative to RIs. Instead of committing to a specific instance type, you commit to a consistent amount of usage measured in dollars per hour (e.g., "$10/hour of compute for 1 year"). This commitment applies across any instance family, size, OS, or region. Typically the best default choice for steady-state workloads.
-*   **Spot Instances**: Request spare Amazon EC2 computing capacity at steep discounts. The catch? AWS can reclaim the instance with a 2-minute warning if capacity is needed elsewhere. Use for stateless, fault-tolerant, flexible workloads (e.g., image processing queues, CI/CD runners, big data analytics).
-*   **Dedicated Hosts**: A physical EC2 server dedicated for your use. Required for licensing models that require per-socket or per-core visibility (e.g., Windows Server, Oracle Database), or for compliance requirements that prohibit multi-tenant hardware.
+*   **On-Demand**: [Pay for compute capacity by the second with no long-term commitments.](https://aws.amazon.com/ec2/pricing/on-demand/) Most expensive, but maximum flexibility. Use for spiky, unpredictable workloads and applications that cannot be interrupted.
+*   **Reserved Instances (RIs)**: Commit to a specific instance type in a specific region for a 1-year or 3-year term. Offers significant discounts compared to On-Demand. [Standard RIs can be sold in the Reserved Instance Marketplace](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/reserved-instances-types.html) if your needs change.
+*   **Savings Plans**: A more flexible alternative to RIs. Instead of committing to a specific instance type, [you commit to a consistent amount of usage measured in dollars per hour (e.g., "$10/hour of compute for 1 year"). This commitment applies across any instance family, size, OS, or region.](https://aws.amazon.com/savingsplans/faq//) Typically the best default choice for steady-state workloads.
+*   **Spot Instances**: Request spare Amazon EC2 computing capacity at steep discounts. The catch? [AWS can reclaim the instance with a 2-minute warning if capacity is needed elsewhere.](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html) Use for stateless, fault-tolerant, flexible workloads (e.g., image processing queues, CI/CD runners, big data analytics).
+*   **Dedicated Hosts**: [A physical EC2 server dedicated for your use.](https://aws.amazon.com/ec2/pricing/) Required for licensing models that require per-socket or per-core visibility (e.g., Windows Server, Oracle Database), or for compliance requirements that prohibit multi-tenant hardware.
 
 #### Purchasing Options Comparison Table
 
@@ -100,17 +100,17 @@ How you pay for compute dramatically impacts your architecture and your monthly 
 | **Spot Instances** | ~60-90% | None | **Yes** (2-min warning) | Batch jobs, CI/CD, data processing |
 | **Dedicated Hosts** | Varies | 1 or 3 years (or On-Demand) | None | License compliance, regulatory isolation |
 
-**Cost example**: A single `m6i.xlarge` running 24/7 for a year at On-Demand rates costs approximately $0.192/hr x 8,760 hrs = **$1,682/year**. With a 3-year Savings Plan (all upfront), that same compute drops to roughly **$672/year**—a 60% savings. With Spot pricing (assuming ~70% average discount), an equivalent workload costs roughly **$504/year**, but you must design for interruptions.
+**Cost example**: A continuously running `m6i.xlarge` can cost well over a thousand dollars per year on On-Demand pricing, while commitment-based discounts and Spot pricing can lower costs substantially depending on the workload design and plan you choose.
 
 > **Pause and predict**: A data science team runs a massive, parallel data processing job every night. The job takes 4 hours to complete, but it is heavily checkpointed—if a server shuts down, the job simply resumes from the last checkpoint with a 5-minute penalty. If they switch from On-Demand to Spot instances and experience 3 interruptions per night, will this architectural change save money?
 
-*The golden rule of EC2 cost optimization: use Savings Plans for your baseline, On-Demand for unpredictable burst, and Spot for anything that can tolerate interruption. Never run a stable production workload on pure On-Demand for more than a few weeks without evaluating a commitment.*
+*The golden rule of EC2 cost optimization: use Savings Plans for your baseline, On-Demand for unpredictable burst, and Spot for anything that can tolerate interruption. For a stable production workload, avoid staying on pure On-Demand for more than a few weeks without evaluating a commitment.*
 
 ### Storage: Elastic Block Store (EBS)
 
 While instances have temporary local storage (Instance Store), persistent storage requires Amazon EBS. EBS volumes are network-attached block storage drives that persist independently from the life of an instance. Think of them as USB drives you can plug into any server in the same Availability Zone.
 
-*   **gp3 (General Purpose SSD)**: The default for most workloads. Provides a baseline of 3,000 IOPS and 125 MiB/s throughput, with the ability to provision up to 16,000 IOPS and 1,000 MiB/s independently of storage capacity. This decoupling is a major improvement over gp2, which tied IOPS directly to volume size.
+*   **gp3 (General Purpose SSD)**: The default for most workloads. It includes baseline IOPS and throughput, and lets you provision additional performance independently of storage capacity. This decoupling is a major improvement over gp2, which tied IOPS directly to volume size.
 *   **gp2 (General Purpose SSD, Legacy)**: The previous generation. IOPS scale with volume size (3 IOPS per GiB). Still widely used, but gp3 is almost always cheaper and more flexible for new deployments.
 *   **io2 Block Express (Provisioned IOPS SSD)**: Designed for mission-critical, high-performance databases requiring sub-millisecond latency and up to 256,000 IOPS. Expensive, but necessary for I/O-intensive transactional workloads.
 *   **st1 (Throughput Optimized HDD)**: Low-cost magnetic storage optimized for large sequential workloads like log processing, data warehousing, and streaming. Cannot be a boot volume.
@@ -118,13 +118,13 @@ While instances have temporary local storage (Instance Store), persistent storag
 
 #### EBS Snapshots
 
-You can create point-in-time backups of EBS volumes, which are stored incrementally in Amazon S3. The first snapshot captures the entire volume; subsequent snapshots only capture changed blocks, making them storage-efficient.
+[You can create point-in-time backups of EBS volumes, which are stored incrementally in Amazon S3. The first snapshot captures the entire volume; subsequent snapshots only capture changed blocks, making them storage-efficient.](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSSnapshots.html)
 
 Key capabilities:
 *   **Cross-AZ**: Use a snapshot to create a new volume in any AZ within the same region.
 *   **Cross-Region**: Copy a snapshot to another region for disaster recovery.
 *   **Sharing**: Share snapshots with other AWS accounts.
-*   **Fast Snapshot Restore (FSR)**: Pre-warm a snapshot so that volumes created from it deliver full performance immediately, without the usual first-access latency penalty.
+*   **Fast Snapshot Restore (FSR)**: [Pre-warm a snapshot so that volumes created from it deliver full performance immediately, without the usual first-access latency penalty.](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-fast-snapshot-restore.html)
 
 ```bash
 # Create a snapshot of an EBS volume
@@ -191,7 +191,7 @@ aws ec2 describe-images --owners self \
 
 If you don't want to bake a custom AMI for every minor configuration change, use **User Data**.
 
-When launching an instance, you can pass a shell script in the User Data field. The `cloud-init` service running on the EC2 instance executes this script with root privileges during the final stages of the initial boot process. It is the perfect place to fetch the latest application code from S3, start services, or register the instance with a configuration management tool.
+When launching an instance, you can pass a shell script in the User Data field. [The `cloud-init` service running on the EC2 instance executes this script with root privileges during the final stages of the initial boot process.](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) It is the perfect place to fetch the latest application code from S3, start services, or register the instance with a configuration management tool.
 
 ```bash
 #!/bin/bash
@@ -252,7 +252,7 @@ echo "User Data script completed at $(date)"
 
 > **Stop and think**: If a critical zero-day vulnerability is discovered in the OpenSSL library, how does your patching strategy differ if you rely entirely on a Golden AMI versus relying entirely on User Data for OS configuration? Which approach allows for faster emergency remediation across a fleet of 1,000 instances?
 
-The hybrid approach is what most production teams adopt. Bake the OS, security agents, and application runtime into the AMI (things that rarely change). Use User Data to pull the latest application version and environment-specific configuration at boot time (things that change frequently).
+A hybrid approach is a common production pattern because it balances fast boot times with runtime flexibility. Bake the OS, security agents, and application runtime into the AMI (things that rarely change). Use User Data to pull the latest application version and environment-specific configuration at boot time (things that change frequently).
 
 ## Scaling the Fleet: ASG and ALB
 
@@ -287,15 +287,15 @@ flowchart TD
 
 ### Application Load Balancer (ALB)
 
-An ALB operates at Layer 7 (HTTP/HTTPS). It receives incoming traffic and distributes it across multiple targets (like EC2 instances) in multiple Availability Zones. ALBs are themselves highly available—AWS runs them across multiple AZs behind the scenes.
+[An ALB operates at Layer 7 (HTTP/HTTPS). It receives incoming traffic and distributes it across multiple targets (like EC2 instances) in multiple Availability Zones.](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) ALBs are themselves highly available—AWS runs them across multiple AZs behind the scenes.
 
 Key features:
 
-*   **Health Checks**: The ALB constantly polls a specific endpoint (e.g., `/health`) on your instances. If an instance fails the check, the ALB stops sending traffic to it until it recovers. You configure the path, port, protocol, healthy/unhealthy thresholds, and check interval.
+*   **Health Checks**: The ALB constantly polls a specific endpoint (e.g., `/health`) on your instances. If an instance fails the check, the ALB stops sending traffic to it until it recovers. [You configure the path, port, protocol, healthy/unhealthy thresholds, and check interval.](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html)
 *   **Path-Based Routing**: ALBs can inspect the URL path to route traffic to different target groups. For example, `/api/*` goes to backend instances while `/images/*` goes to a separate rendering fleet.
-*   **Host-Based Routing**: Route traffic based on the `Host` header. A single ALB can serve `api.example.com`, `app.example.com`, and `admin.example.com`, each routing to a different target group.
+*   **Host-Based Routing**: [Route traffic based on the `Host` header.](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-condition-types.html) A single ALB can serve `api.example.com`, `app.example.com`, and `admin.example.com`, each routing to a different target group.
 *   **Sticky Sessions**: When enabled, the ALB uses a cookie to route a user's requests to the same target for the duration of their session. Useful for stateful applications, but consider externalizing session state to ElastiCache or DynamoDB instead.
-*   **Connection Draining**: When a target is deregistered (e.g., during scale-in or deployment), the ALB waits for in-flight requests to complete before fully removing it. The default deregistration delay is 300 seconds.
+*   **Connection Draining**: When a target is deregistered (e.g., during scale-in or deployment), the ALB waits for in-flight requests to complete before fully removing it. [The default deregistration delay is 300 seconds.](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/modify-target-group-health-settings.html)
 
 ```bash
 # Create a target group with custom health check settings
@@ -324,7 +324,7 @@ An ASG contains a collection of EC2 instances that are treated as a logical grou
 You define a **Launch Template** (specifying the AMI, instance type, security groups, and user data) and attach it to the ASG.
 
 The ASG monitors the health of its instances and ensures the group maintains a specified state:
-*   **Self-Healing (Desired Capacity)**: If you set Desired Capacity to 3, and an instance crashes or is terminated, the ASG automatically launches a replacement using the Launch Template to bring the count back to 3.
+*   **Self-Healing (Desired Capacity)**: [If you set Desired Capacity to 3, and an instance crashes or is terminated, the ASG automatically launches a replacement using the Launch Template to bring the count back to 3.](https://docs.aws.amazon.com/en_us/autoscaling/ec2/userguide/ec2-auto-scaling-health-checks.html)
 *   **Dynamic Scaling**: You can configure scaling policies tied to CloudWatch metrics. For example: "If average CPU utilization exceeds 70% for 3 minutes, launch 2 more instances. If it drops below 30%, terminate 1 instance."
 *   **Predictive Scaling**: AWS can analyze historical traffic patterns and proactively scale the fleet before a predicted traffic surge, rather than reacting after the fact. Useful for workloads with predictable daily or weekly patterns.
 *   **Scheduled Scaling**: If you know traffic spikes every weekday at 9 AM, you can pre-schedule scale-out actions. Cheaper and more responsive than reactive scaling.
@@ -369,7 +369,7 @@ aws autoscaling describe-scaling-activities \
     --output table --max-items 5
 ```
 
-**Cooldown periods matter**: The `ScaleOutCooldown` (default 300s) prevents the ASG from launching a storm of new instances before the previous batch has had time to warm up and reduce load. Setting it too low causes thrashing; setting it too high causes sluggish response. For web apps behind an ALB, 60-120 seconds for scale-out and 300 seconds for scale-in is a reasonable starting point.
+**Warmup and scaling timing matter**: if you scale too aggressively you can thrash, and if you scale too slowly you can respond sluggishly. Tune warmup and scaling timing to match how long your instances actually take to become useful.
 
 ## EC2 Lifecycle Management with the CLI
 
@@ -417,7 +417,7 @@ aws ssm start-session --target i-0123456789abcdef0
 
 ## Instance Metadata Service (IMDS)
 
-Every EC2 instance has access to a special HTTP endpoint at `169.254.169.254` that provides information about the instance itself. This metadata is invaluable for bootstrapping scripts that need to know "who am I?" and "where am I?"
+Every EC2 instance has access to a [special HTTP endpoint at `169.254.169.254`](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html) that provides information about the instance itself. This metadata is invaluable for bootstrapping scripts that need to know "who am I?" and "where am I?"
 
 ```bash
 # IMDSv2 (token-based, more secure — always use this)
@@ -458,10 +458,10 @@ aws ec2 create-launch-template \
 
 ## Did You Know?
 
-1.  Amazon EC2 Mac instances actually utilize physically unmodified Apple Mac mini computers integrated directly into the AWS Nitro System, allowing developers to natively run macOS workloads in the cloud for iOS application compilation. You rent the entire physical Mac mini for a minimum of 24 hours.
-2.  If you use an Elastic IP (EIP) address and it is attached to a running EC2 instance, it is free. However, if you reserve an EIP and let it sit idle (unattached), AWS charges you an hourly fee to prevent IPv4 address hoarding. As of February 2024, AWS also charges $0.005/hr for *every* public IPv4 address, even those actively attached to running instances—a change that caught many teams off guard.
-3.  The AWS Nitro System is a combination of dedicated hardware and a lightweight hypervisor. It offloads network, storage, and security functions to dedicated custom chips, delivering nearly all of the server's compute and memory resources directly to your instances, eliminating traditional hypervisor overhead. Pre-Nitro instances (like m4, c4) lost 5-10% of resources to the hypervisor.
-4.  A single Auto Scaling Group can use mixed instance types and mixed purchasing options simultaneously. You can configure an ASG to run 60% On-Demand (for baseline capacity) and 40% Spot (for cost-optimized burst capacity) across multiple instance families, letting AWS pick the cheapest available Spot option at any given moment. This "instance diversification" strategy dramatically reduces the chance of Spot interruptions.
+1.  [Amazon EC2 Mac instances actually utilize physically unmodified Apple Mac mini computers integrated directly into the AWS Nitro System, allowing developers to natively run macOS workloads in the cloud for iOS application compilation. You rent the entire physical Mac mini for a minimum of 24 hours.](https://aws.amazon.com/about-aws/whats-new/2020/11/announcing-amazon-ec2-mac-instances-for-macos/)
+2.  If you use an Elastic IP (EIP) address and it is attached to a running EC2 instance, it is free. However, if you reserve an EIP and let it sit idle (unattached), AWS charges you an hourly fee to prevent IPv4 address hoarding. [As of February 2024, AWS also charges $0.005/hr for *every* public IPv4 address, even those actively attached to running instances](https://aws.amazon.com/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/)—a change that caught many teams off guard.
+3.  The AWS Nitro System is a combination of dedicated hardware and a lightweight hypervisor. It offloads networking, storage, and security functions, reducing virtualization overhead and leaving more host resources available to instances.
+4.  [A single Auto Scaling Group can use mixed instance types and mixed purchasing options simultaneously.](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-autoscaling-autoscalinggroup-mixedinstancespolicy.html) You can configure an ASG to run 60% On-Demand (for baseline capacity) and 40% Spot (for cost-optimized burst capacity) across multiple instance families, letting AWS pick the cheapest available Spot option at any given moment. This "instance diversification" strategy dramatically reduces the chance of Spot interruptions.
 
 ## Common Mistakes
 
@@ -473,8 +473,8 @@ aws ec2 create-launch-template \
 | **Ignoring Spot Instances for stateless workloads** | "We just use On-Demand for everything because it is simpler." | CI/CD build agents, batch processing jobs, and worker queues are inherently interruptible. Using Spot instances for these workloads can slash compute costs by 60-90%. |
 | **Baking secrets into AMIs** | Setting passwords or API keys during the image build process because it "keeps things simple." | Anyone who can launch the AMI has the secrets. Inject secrets at runtime using User Data scripts that fetch them from AWS Secrets Manager or Systems Manager Parameter Store. |
 | **Failing to configure ASG health checks** | The ASG relies on standard EC2 status checks, which only verify if the VM is running, not if the application is healthy. | Configure the ASG to use ELB Health Checks. If the web server crashes but the VM stays up, the ASG will terminate and replace the zombie instance. |
-| **Using IMDSv1 instead of IMDSv2** | IMDSv1 is the legacy default and "just works" without tokens. Teams never update the setting. | Enforce IMDSv2 (`http-tokens required`) on all instances and in all Launch Templates. IMDSv1 is vulnerable to SSRF attacks that can leak IAM credentials. |
-| **Not setting a Health Check Grace Period** | The ASG starts health checking immediately after launch, before the application has finished bootstrapping. | Set `--health-check-grace-period` to at least the time your User Data script takes to complete (typically 120-300 seconds). Without this, the ASG terminates healthy instances that are still booting. |
+| **Using IMDSv1 instead of IMDSv2** | IMDSv1 is the legacy default and "just works" without tokens. Teams often leave the setting unchanged. | Enforce IMDSv2 (`http-tokens required`) on all instances and in all Launch Templates. IMDSv1 is vulnerable to SSRF attacks that can leak IAM credentials. |
+| **Not setting a Health Check Grace Period** | The ASG can start health checking soon after launch, before the application has finished bootstrapping. | Set `--health-check-grace-period` to at least the time your User Data script takes to complete (typically 120-300 seconds). Without this, the ASG terminates healthy instances that are still booting. |
 
 ## Quiz
 
@@ -485,7 +485,7 @@ Spot Instances are the correct choice because the workload is completely statele
 
 <details>
 <summary>Question 2: You launch an EC2 instance with a User Data script that updates the OS packages and installs Node.js. An hour later, you stop the instance and start it again. Will the User Data script run a second time?</summary>
-No, the User Data script will not run a second time. By default, the `cloud-init` service that processes User Data scripts only executes during the very first boot lifecycle of the instance. Stopping and starting the instance simply reboots the operating system; it does not trigger the initialization phase again. If you require a script to run on every single boot (such as pulling the latest configuration from Parameter Store), you must explicitly configure it using a `cloud-init` `#cloud-boothook` directive, or place the script in the `/var/lib/cloud/scripts/per-boot/` directory on the instance.
+No, the User Data script will not run a second time. By default, the `cloud-init` service that processes User Data scripts only executes during the very first boot lifecycle of the instance. Stopping and starting the instance simply reboots the operating system; it does not trigger the initialization phase again. If you require a script to run on every boot (such as pulling the latest configuration from Parameter Store), you should explicitly configure it using a `cloud-init` `#cloud-boothook` directive, place the script in the `/var/lib/cloud/scripts/per-boot/` directory on the instance, or use another boot-time mechanism such as `systemd`.
 </details>
 
 <details>
@@ -877,3 +877,27 @@ echo "Cleanup complete!"
 ## Next Module
 
 Now that you have stateless compute, you need a place to store massive amounts of unstructured data. Head to [Module 1.4: S3 & Object Storage](../module-1.4-s3/).
+
+## Sources
+
+- [docs.aws.amazon.com: ec2 instance type specifications.html](https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-type-specifications.html) — AWS instance-type documentation explicitly defines these categories and their intended workload profiles.
+- [docs.aws.amazon.com: burstable credits baseline concepts.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/burstable-credits-baseline-concepts.html) — AWS burstable-instance documentation directly explains CPU credit accrual and spending.
+- [docs.aws.amazon.com: instance type names.html](https://docs.aws.amazon.com/ec2/latest/instancetypes/instance-type-names.html) — AWS documents the instance naming convention and each component of the identifier.
+- [aws.amazon.com: on demand](https://aws.amazon.com/ec2/pricing/on-demand/) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: what is aws graviton.html](https://docs.aws.amazon.com/id_id/whitepapers/latest/aws-graviton-performance-testing/what-is-aws-graviton.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: reserved instances types.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/reserved-instances-types.html) — AWS's RI documentation explicitly distinguishes marketplace eligibility for Standard versus Convertible RIs.
+- [aws.amazon.com: faq](https://aws.amazon.com/savingsplans/faq//) — AWS Savings Plans documentation directly describes the commitment model and flexibility scope.
+- [docs.aws.amazon.com: spot instance termination notices.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html) — AWS Spot interruption documentation directly states the two-minute notice behavior.
+- [aws.amazon.com: pricing](https://aws.amazon.com/ec2/pricing/) — AWS's EC2 pricing page directly describes Dedicated Hosts as fully dedicated physical servers for your use.
+- [docs.aws.amazon.com: EBSSnapshots.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EBSSnapshots.html) — AWS snapshot documentation directly states that EBS snapshots are point-in-time, incremental backups stored in S3.
+- [docs.aws.amazon.com: ebs fast snapshot restore.html](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-fast-snapshot-restore.html) — AWS FSR documentation directly describes these behaviors.
+- [docs.aws.amazon.com: user data.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) — The EC2 user-data guide directly covers these execution and debugging details.
+- [docs.aws.amazon.com: introduction.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html) — AWS ALB documentation directly describes the OSI layer, multi-AZ targeting, and health-based routing.
+- [docs.aws.amazon.com: target group health checks.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html) — The target-group health-check guide documents these exact settings.
+- [docs.aws.amazon.com: rule condition types.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/rule-condition-types.html) — AWS listener-rule condition documentation explicitly covers host-header and path-pattern routing.
+- [docs.aws.amazon.com: modify target group health settings.html](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/modify-target-group-health-settings.html) — AWS target-group attribute documentation directly states both capabilities.
+- [docs.aws.amazon.com: ec2 auto scaling health checks.html](https://docs.aws.amazon.com/en_us/autoscaling/ec2/userguide/ec2-auto-scaling-health-checks.html) — AWS Auto Scaling health-check documentation directly describes replacement behavior for unhealthy instances.
+- [docs.aws.amazon.com: configuring instance metadata service.html](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html) — AWS's IMDS documentation directly covers the endpoint, token flow, and enforcement behavior.
+- [aws.amazon.com: announcing amazon ec2 mac instances for macos](https://aws.amazon.com/about-aws/whats-new/2020/11/announcing-amazon-ec2-mac-instances-for-macos/) — AWS's launch announcement directly states the Mac mini/Nitro integration and the 24-hour minimum host allocation.
+- [aws.amazon.com: new aws public ipv4 address charge public ip insights](https://aws.amazon.com/blogs/aws/new-aws-public-ipv4-address-charge-public-ip-insights/) — AWS's announcement directly states the February 1, 2024 pricing change and rate.
+- [docs.aws.amazon.com: aws properties autoscaling autoscalinggroup mixedinstancespolicy.html](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-properties-autoscaling-autoscalinggroup-mixedinstancespolicy.html) — AWS mixed-instances-policy documentation directly supports this capability and its launch-template requirement.

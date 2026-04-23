@@ -92,9 +92,9 @@ This is a subtle but important setting:
 | `Immediate` | PV is provisioned as soon as PVC is created | Pre-provisioning, when zone does not matter |
 | `WaitForFirstConsumer` | PV is provisioned when a pod mounts it | Regional clusters (ensures disk is in the same zone as the pod) |
 
-> **Stop and think**: You just created a PVC using a StorageClass with `Immediate` binding in a regional cluster spanning three zones. The disk provisions instantly in zone A. What happens if the Kubernetes scheduler later decides the only node with enough CPU for your pod is in zone B?
+> **Stop and think**: You just created a PVC using a StorageClass with `Immediate` binding in a regional cluster spanning three zones. The disk is provisioned right away in zone A. What happens if the Kubernetes scheduler later decides the only node with enough CPU for your pod is in zone B?
 
-**War Story**: A team used `Immediate` binding mode in a regional cluster. The PD was provisioned in `us-central1-a`, but the pod was scheduled to `us-central1-c`. The pod hung in `Pending` with the error "disk is in zone us-central1-a, which does not match the zone of node us-central1-c." Always use `WaitForFirstConsumer` in regional clusters.
+**War Story**: A team used `Immediate` binding mode in a regional cluster. The PD was provisioned in `us-central1-a`, but the pod was scheduled to `us-central1-c`. The pod hung in `Pending` with the error "disk is in zone us-central1-a, which does not match the zone of node us-central1-c." In regional clusters, prefer `WaitForFirstConsumer` so the disk is created in the pod's zone.
 
 ---
 
@@ -656,13 +656,13 @@ flowchart TD
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
 | Using zonal PD for production databases | Default StorageClass creates zonal disks | Create a StorageClass with `replication-type: regional-pd` |
-| Using `Immediate` volume binding in regional clusters | Copied from single-zone examples | Always use `WaitForFirstConsumer` to match disk zone with pod zone |
+| Using `Immediate` volume binding in regional clusters | Copied from single-zone examples | Use `WaitForFirstConsumer` in most regional-cluster cases to match disk zone with pod zone |
 | Setting reclaim policy to `Delete` on production PVs | Default StorageClass behavior | Use `Retain` for production; manually delete PVs after confirming data is safe |
 | Not planning IP ranges for pod CIDR (storage-related) | Forgetting that Filestore needs VPC access | Ensure Filestore network matches the GKE cluster's VPC |
 | Choosing Filestore for object storage workloads | Assuming NFS is always better | Use Cloud Storage FUSE for read-heavy, large-scale data; it is 10x cheaper per GB |
 | Skipping backup configuration for stateful workloads | "We have replication, we are fine" | Replication protects against hardware failure; backups protect against human error and data corruption |
-| Not testing restore procedures | Creating backups but never testing restores | Schedule quarterly restore drills to a test cluster; an untested backup is not a backup |
-| Using Cloud Storage FUSE for database storage | Seeing "ReadWriteMany" and assuming POSIX compliance | Cloud Storage FUSE lacks atomic renames and file locking; never use it for databases |
+| Not testing restore procedures | Creating backups but never testing restores | Schedule quarterly restore drills to a test cluster; an untested backup may not be restorable when you need it |
+| Using Cloud Storage FUSE for database storage | Seeing "ReadWriteMany" and assuming POSIX compliance | Cloud Storage FUSE lacks atomic renames and file locking; avoid using it for databases |
 
 ---
 
@@ -677,7 +677,7 @@ With a zonal Persistent Disk, your database goes completely offline and cannot b
 <details>
 <summary>2. You deploy a new application to a regional GKE cluster using a StorageClass with `Immediate` volume binding. The PersistentVolumeClaim bounds successfully, but the pod remains in a `Pending` state indefinitely, with an error citing a zone mismatch. Why did this happen, and how does changing the binding mode resolve the underlying issue?</summary>
 
-This happens because `Immediate` binding forces the Persistent Disk CSI driver to provision the storage instantly, picking a zone for the disk before the Kubernetes scheduler has decided where the pod will run. If the scheduler later places the pod on a node in a different zone than the newly created disk, the pod cannot mount it due to the strict zonal affinity of standard persistent disks. By changing the StorageClass to use `WaitForFirstConsumer`, you instruct the CSI driver to delay volume creation until the pod is actually scheduled. This ensures the scheduler picks the optimal node first, and the disk is subsequently provisioned in the exact same zone, guaranteeing they are physically co-located and mountable.
+This happens because `Immediate` binding causes the Persistent Disk CSI driver to provision the storage early, picking a zone for the disk before the Kubernetes scheduler has decided where the pod will run. If the scheduler later places the pod on a node in a different zone than the newly created disk, the pod cannot mount it due to the strict zonal affinity of standard persistent disks. By changing the StorageClass to use `WaitForFirstConsumer`, you instruct the CSI driver to delay volume creation until the pod is actually scheduled. This ensures the scheduler picks the optimal node first, and the disk is subsequently provisioned in the exact same zone, guaranteeing they are physically co-located and mountable.
 </details>
 
 <details>
@@ -1005,3 +1005,10 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 6.5: GKE Observability and Fleet Management](../module-6.5-gke-fleet/)** --- Learn how to monitor GKE with Cloud Operations Suite and Managed Prometheus, manage multiple clusters with Fleet, enable cross-cluster communication with Multi-Cluster Services, and implement cost allocation.
+
+## Sources
+
+- [Provisioning regional persistent disks on GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/regional-pd) — Best primary doc for regional PD topology, provisioning, and failover-oriented storage design.
+- [Access Filestore instances with the Filestore CSI driver](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/filestore-csi-driver) — Covers how Filestore integrates with GKE and what the managed CSI path supports.
+- [About the Cloud Storage FUSE CSI driver for GKE](https://docs.cloud.google.com/kubernetes-engine/docs/concepts/cloud-storage-fuse-csi-driver) — Explains how bucket mounts work in GKE and the limitations that matter for workload design.
+- [Backup for GKE concepts](https://docs.cloud.google.com/kubernetes-engine/docs/add-on/backup-for-gke/concepts/backup-for-gke) — Defines exactly what Backup for GKE captures, what it does not capture, and how restores work.

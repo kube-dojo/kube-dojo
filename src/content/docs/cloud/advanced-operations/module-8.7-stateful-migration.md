@@ -34,7 +34,7 @@ After months of delay, the streaming service engineers realized they were fighti
 
 Data gravity is a concept originally coined by Dave McCrory. The core insight relies on a physics analogy: data has mass. As data accumulates in one centralized location, it becomes progressively harder and more expensive to move. Applications, auxiliary services, reporting pipelines, and users are pulled toward the data, much like objects drawn toward a gravitational body. Attempting to move the data requires breaking these gravitational bonds, which demands significant engineering "escape velocity."
 
-When a database is small, the applications connecting to it orbit loosely. You can take the database offline, move the files, update the connection strings, and bring the systems back online within a brief maintenance window. However, when a dataset grows into the tens or hundreds of terabytes, taking it offline is no longer feasible. The sheer physics of network transfer speeds means copying the data will take days or weeks. During that transfer window, the original database continues to receive new writes, creating a moving target that is impossible to catch without specialized replication tooling.
+When a database is small, the applications connecting to it orbit loosely. You can take the database offline, move the files, update the connection strings, and bring the systems back online within a brief maintenance window. However, when a dataset grows into the tens or hundreds of terabytes, taking it offline is no longer feasible. The sheer physics of network transfer speeds means copying the data will take days or weeks. During that transfer window, the original database continues to receive new writes, creating a moving target that is extremely difficult to catch without specialized replication tooling.
 
 ```mermaid
 graph TD
@@ -943,3 +943,9 @@ kind delete cluster --name migration-lab
 ## Next Module
 
 [Module 8.8: Cloud Cost Optimization (Advanced)](../module-8.8-cloud-cost/) — Your stateful workloads have been cleanly migrated, continuously replicated, and are currently running smoothly across multiple regions. Now, it is time to learn how to stop hemorrhaging money. You will explore advanced multi-tenant cost allocation techniques, spot instance arbitrage, strategic savings plans, and the observability tools that grant you visibility into where every compute dollar is directed.
+
+## Sources
+
+- [Kubernetes Volume Snapshots](https://kubernetes.io/docs/concepts/storage/volume-snapshots/) — Covers the CSI snapshot model, lifecycle objects, and restoration flow used in the infrastructure migration section.
+- [AWS Prescriptive Guidance: PostgreSQL Logical Replication](https://docs.aws.amazon.com/prescriptive-guidance/latest/migration-databases-postgresql-ec2/logical-replication.html) — Summarizes logical replication behavior and migration limitations, including sequences and schema constraints.
+- [Amazon EBS Snapshot Copy](https://docs.aws.amazon.com/ebs/latest/userguide/ebs-copy-snapshot.html) — Directly supports the cross-Region snapshot-copy workflow used in the CSI snapshot migration example.

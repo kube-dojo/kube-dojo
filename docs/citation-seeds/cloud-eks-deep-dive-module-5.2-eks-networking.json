@@ -1,0 +1,434 @@
+{
+  "module_key": "cloud/eks-deep-dive/module-5.2-eks-networking",
+  "module_path": "src/content/docs/cloud/eks-deep-dive/module-5.2-eks-networking.md",
+  "research_run_id": "2026-04-23T02:52:20+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening March 2023 e-commerce outage story names a specific incident, scale, timestamp, duration, and revenue loss without a source.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, opening paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In March 2023, a major European e-commerce platform running 800 pods across 40 EKS nodes hit a wall during their annual spring sale. At 09:12 AM, just as traffic peaked, Kubernetes completely halted the scheduling of new pods. The error was not related to CPU or memory exhaustion. Instead, the control plane logs screamed: `FailedCreatePodSandBox: failed to setup network for sandbox: no available IP addresses`. Their VPC subnets had mathematically run out of IP addresses. The VPC CNI plugin assigns a real VPC IP address to every single pod, and with each `m5.xlarge` node consuming up to 58 IP addresses (14 ENIs multiplied by 4 secondary IPs, plus the node's primary IPs), their `/24` subnets were instantly exhausted. The sale was live, customers were clicking, and the platform was paralyzed. The engineering team spent 90 minutes frantically adding secondary CIDR blocks and reconfiguring subnets while losing an estimated EUR 2.3 million in revenue.",
+      "suggested_rewrite": "A common EKS failure mode is subnet IP exhaustion: when a cluster scales quickly and the VPC CNI cannot allocate more pod IPs, new pods can fail with `FailedCreatePodSandBox` errors until you free or add address space.",
+      "lesson_point_url": null,
+      "rationale": "This is a war story with named timing and financial impact but no attributable primary source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Subnet IP exhaustion is the most common and most devastating EKS-specific production failure mode.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This scenario represents the most common and devastating production failure mode specific to Elastic Kubernetes Service (EKS).",
+      "suggested_rewrite": "This scenario illustrates a high-impact EKS failure mode: subnet IP exhaustion can stop new pods from starting even when CPU and memory remain available.",
+      "lesson_point_url": null,
+      "rationale": "The superlative is not backed by an authoritative AWS source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Amazon EKS uses the Amazon VPC CNI, which gives Pods VPC-native IP addresses instead of overlay-only pod addresses.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS VPC CNI guide directly states that Pods have the same IP address on the VPC network."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Because Pods have VPC-native IPs, they can be routed directly from Transit Gateway, targeted directly by ALBs, and monitored natively with VPC Flow Logs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Architecture of AWS VPC CNI, last paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Because EKS pods receive native VPC IPs, they exist as first-class citizens on your AWS network. They can be routed to directly from an AWS Transit Gateway, they can be targeted directly by Application Load Balancers, and their traffic can be monitored natively using VPC Flow Logs.",
+      "suggested_rewrite": "Because EKS pods receive VPC-native IP addresses, they integrate directly with AWS networking and load-balancing constructs without an overlay network.",
+      "lesson_point_url": null,
+      "rationale": "The sentence bundles several specific integrations that are not all directly backed by a single allowlisted primary source."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The VPC CNI maintains a warm pool, and by default IPAMD attempts to keep an additional ENI attached; warm-pool behavior is controlled by WARM_ENI_TARGET, WARM_IP_TARGET, and MINIMUM_IP_TARGET.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Warm Pool",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The VPC CNI best-practices page documents the warm pool model and these environment variables."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Allocating ENIs or IPs takes 1 to 3 seconds and a 10-to-500 pod burst would cause 490 simultaneous EC2 API calls and RateExceeded throttling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Warm Pool, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Assigning a new secondary IP or attaching a new ENI requires an API call to the AWS control plane, which can take anywhere from 1 to 3 seconds to complete. If a sudden traffic spike causes a deployment to scale from 10 to 500 pods, executing 490 simultaneous EC2 API calls would not only introduce massive pod startup latency but would also result in severe API throttling (RateExceeded errors).",
+      "suggested_rewrite": "Allocating new IP capacity requires EC2 API calls, so an undersized warm pool can delay pod startup and increase the chance of API throttling during rapid scale-outs.",
+      "lesson_point_url": null,
+      "rationale": "The exact latency window and 490-call scenario are not directly supported by AWS documentation."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "An empty 100-node cluster will immediately consume thousands of IP addresses because of default warm-pool behavior.",
+      "claim_class": "statistic",
+      "span_hint": "section: The Warm Pool, paragraph after command example",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A 100-node cluster sitting entirely empty will immediately consume thousands of IP addresses simply to satisfy the default warm pool requirements.",
+      "suggested_rewrite": "A large cluster can consume a substantial number of IP addresses just to satisfy default warm-pool behavior.",
+      "lesson_point_url": null,
+      "rationale": "The exact magnitude is derived arithmetic rather than a directly stated source fact."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Prefix mode assigns /28 IPv4 prefixes to ENI slots, and each /28 provides 16 IPv4 addresses.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prefix Delegation Mode",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/prefix-mode-linux.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS prefix-mode guide directly states that prefix mode uses /28 IPv4 prefixes and that each prefix contains 16 IPs."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "An m5.xlarge can theoretically reach 960 Pods in prefix mode, but EKS caps it at 110 because the control plane, kubelet, container runtime, and kernel would otherwise be exhausted.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prefix Delegation Mode, paragraph after stop-and-think callout",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Even though the networking stack can theoretically support 960 pods on an `m5.xlarge`, EKS enforces a logical ceiling of 110 pods for most instance types (and up to 250 for extremely large instances). This is because the Kubernetes control plane, the local `kubelet`, the container runtime (containerd), and the Linux kernel itself would be severely exhausted trying to manage 960 concurrent containers on a 4 vCPU instance. The `max-pods` cap ensures cluster stability.",
+      "suggested_rewrite": "Even when prefix delegation makes far more IPs available, Amazon EKS still applies lower practical pod caps; managed node groups without a custom AMI cap nodes under 30 vCPUs at 110 pods and larger nodes at 250.",
+      "lesson_point_url": null,
+      "rationale": "The documented cap is real, but the exact 960 derivation and resource-exhaustion rationale are not directly stated together by AWS."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "RFC 6598 defines 100.64.0.0/10 as Shared Address Space for Carrier-Grade NAT use.",
+      "claim_class": "standard",
+      "span_hint": "section: Solving IP Exhaustion, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": "https://www.rfc-editor.org/rfc/rfc6598",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "RFC 6598 is the primary source for the Shared Address Space definition."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "AWS recommends CG-NAT ranges such as 100.64.0.0/10 or 198.19.0.0/16 for EKS custom networking secondary CIDRs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Solving IP Exhaustion, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/custom-networking.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS custom-networking guide explicitly recommends CG-NAT ranges for this use case."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "With custom networking, pod IPs come from ENIConfig-defined secondary subnets, the primary ENI is not used for Pod IP assignment, max pod density decreases, and existing nodes must be replaced or drained to adopt the feature.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Solving IP Exhaustion, custom networking paragraphs",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/custom-networking.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS custom-networking guide documents ENIConfig usage, the primary-ENI limitation, and the need to roll to new nodes."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Security Groups for Pods uses a trunk-and-branch ENI model and applies SecurityGroupPolicy selections to Pods.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Pod-Level Isolation",
+      "disposition": "supported",
+      "source_ids": [
+        "S007"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/sgpp.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS security-groups-per-pod guide documents the trunk ENI, branch ENIs, and SecurityGroupPolicy workflow."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Security Groups for Pods works on modern Nitro instances including t3 and strictly forbids NodePort or HostPort on affected Pods.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Pod-Level Isolation, final paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This functionality is heavily dependent on modern Nitro instances (m5, c5, r5, t3, and newer) and strictly prohibits the use of NodePort or HostPort services on the affected pods.",
+      "suggested_rewrite": "This functionality requires supported Nitro-based instance types, and you should review the current EKS service-mode limitations for Pods that use pod-level security groups.",
+      "lesson_point_url": null,
+      "rationale": "AWS currently documents that no `t` family instance types are supported for this feature and the service restrictions are narrower than an absolute NodePort/HostPort ban."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The legacy in-tree AWS service controller is legacy-only, while AWS recommends the out-of-tree AWS Load Balancer Controller for EKS Service and Ingress reconciliation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: AWS Load Balancer Controller, opening paragraph",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/load-balancing.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS load-balancing guide explicitly labels the service controller legacy and recommends the AWS Load Balancer Controller."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "With AWS Load Balancer Controller, target-type ip routes directly to Pod IPs, while instance mode targets nodes and NodePorts.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ALB for HTTP/HTTPS Traffic",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/best-practices/load-balancing.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS load-balancing guide directly contrasts instance and IP target types and their traffic paths."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Instance target mode introduces massive latency, asymmetric load distribution, and obscures Pod health.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: ALB for HTTP/HTTPS Traffic, paragraph after annotation table",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In legacy `instance` mode, the ALB sends traffic to a random NodePort on an EC2 instance, and `kube-proxy` (via iptables or IPVS) blindly forwards that traffic across the cluster network to the actual pod. This introduces massive latency, asymmetric load distribution, and obscures pod-level health.",
+      "suggested_rewrite": "In legacy `instance` mode, the load balancer targets a node and NodePort, adding an extra hop through the node proxy path and shifting health checks to the node-level target rather than the pod IP itself.",
+      "lesson_point_url": null,
+      "rationale": "AWS documents the extra hop and node-level targeting, but not the stronger claims in this wording."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Amazon EKS IPv6 clusters require selecting the IP family at cluster creation time, and the setting can't be changed later.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Future-Proofing: IPv6 on EKS",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": "https://docs.aws.amazon.com/eks/latest/userguide/cni-ipv6.html",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The EKS IPv6 user guide directly states that the IP family is selected at cluster creation and can't be changed afterward."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "A VPC /56 IPv6 allocation gives over 4.7 sextillion pod addresses and makes IP exhaustion mathematically impossible.",
+      "claim_class": "statistic",
+      "span_hint": "section: Future-Proofing: IPv6 on EKS, opening paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "By assigning pods unique IPv6 addresses from your VPC's globally unique `/56` range, you unlock over 4.7 sextillion IP addresses. IP exhaustion becomes a mathematical impossibility.",
+      "suggested_rewrite": "By assigning Pods IPv6 addresses from the VPC's IPv6 allocation, you get a vastly larger address space than in IPv4-based designs and greatly reduce IPv4 exhaustion pressure.",
+      "lesson_point_url": null,
+      "rationale": "The exact figure is derived math rather than a directly stated source fact, and the impossibility claim is overstated."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "In an EKS IPv6 cluster, Services are dual-stack and receive both IPv4 and IPv6 cluster IPs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Future-Proofing: IPv6 on EKS, bullet list",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- Kubernetes Services are configured as dual-stack, receiving both IPv4 and IPv6 cluster IPs to facilitate backward compatibility.",
+      "suggested_rewrite": "- In EKS IPv6 clusters, Pods and Services use IPv6 addressing; Amazon EKS does not support dual-stacked Pods or Services.",
+      "lesson_point_url": null,
+      "rationale": "The EKS IPv6 documentation explicitly says EKS doesn't support dual-stacked Pods or Services."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "In IPv6 mode, the CNI no longer performs complex SNAT and therefore dramatically improves CPU efficiency on high-throughput nodes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Future-Proofing: IPv6 on EKS, bullet list",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- The CNI no longer performs complex SNAT translation, dramatically improving CPU efficiency on high-throughput network nodes.",
+      "suggested_rewrite": "- IPv6 changes how Pod addressing works, but you should verify your egress and compatibility requirements against the current EKS IPv6 networking model.",
+      "lesson_point_url": null,
+      "rationale": "AWS still documents IPv4 compatibility paths in IPv6 clusters, so this sentence overstates the behavior and performance outcome."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "Some third-party operators and older logging daemons may crash when they encounter IPv6 sockets.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Future-Proofing: IPv6 on EKS, final paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Furthermore, be rigorously vigilant regarding your dependencies: while AWS fully supports IPv6 for ELB and EC2, certain specialized third-party operators and older logging daemons may violently crash when encountering an IPv6 address socket.",
+      "suggested_rewrite": "Furthermore, verify that your add-ons and operators support IPv6 before rolling it out cluster-wide.",
+      "lesson_point_url": null,
+      "rationale": "The specific compatibility failure claim is unattributed and too concrete for an unsourced warning."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "On 100 m5.xlarge nodes, the default warm-ENI behavior wastes about 1,400 IPs and switching to WARM_IP_TARGET=2 recovers about 1,200 immediately.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know, item 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The VPC CNI's default behavior of pre-allocating one warm ENI per node means a 100-node cluster with `m5.xlarge` instances wastes approximately 1,400 IP addresses just on warm pools (14 IPs per warm ENI x 100 nodes). By switching `WARM_IP_TARGET=2` and `WARM_ENI_TARGET=0`, you can recover roughly 1,200 of those IPs immediately. For teams hitting IP exhaustion, this is often the fastest fix before migrating to Prefix Delegation.",
+      "suggested_rewrite": "The default warm-pool behavior can consume a substantial amount of IPv4 address space on large clusters, and switching from whole warm ENIs to warm IP targets can reclaim addresses quickly.",
+      "lesson_point_url": null,
+      "rationale": "The exact numbers are derived calculations rather than directly stated AWS figures."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Prefix Delegation was introduced in 2021, is now the AWS-recommended default for new clusters, moves an m5.xlarge from 58 to 110 Pods, and reduces API throttling because prefixes are allocated atomically.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Prefix Delegation was introduced in 2021 and is now the AWS-recommended default for new clusters. A single `m5.xlarge` node goes from supporting 58 pods to 110 pods (the EKS-imposed cap), while consuming fewer IP reservation calls because a `/28` prefix is allocated atomically rather than 15 individual IPs. This also reduces EC2 API throttling during large-scale node launches.",
+      "suggested_rewrite": "Prefix Delegation was introduced in 2021 and is the newer VPC CNI mode for increasing Pod density by assigning `/28` prefixes instead of individual secondary IPv4 addresses.",
+      "lesson_point_url": null,
+      "rationale": "This sentence combines a dated product-history claim with several derived and performance claims that are not directly stated together by one primary source."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "Without ALB sharing, every Ingress creates its own ALB at $16/month minimum, so 30 services would cost $480/month.",
+      "claim_class": "pricing",
+      "span_hint": "section: Did You Know, item 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The AWS Load Balancer Controller's `group.name` annotation lets you share a single ALB across dozens of Ingress resources. Without it, every Ingress creates its own ALB at $16/month minimum. A team with 30 microservices each exposing an Ingress could be paying $480/month in ALB charges when a single shared ALB with path-based routing would cost $16/month plus traffic.",
+      "suggested_rewrite": "The AWS Load Balancer Controller can share a single ALB across multiple Ingress resources, which can materially reduce fixed load balancer costs when host-based or path-based routing is acceptable.",
+      "lesson_point_url": null,
+      "rationale": "The exact dollar figures are dated pricing claims and no longer safe to state without a time-specific source."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "Security Groups for Pods reuses Nitro branch ENI technology from ECS and allows up to 110 branch ENIs on one node depending on instance type.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, item 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Security Groups for Pods use Nitro's \"branch ENI\" capability, which was originally designed for AWS ECS. The trunk/branch architecture allows up to 110 branch ENIs on a single node (depending on instance type), each with its own security group. This is the same technology that makes ECS task-level networking work, repurposed for Kubernetes pods.",
+      "suggested_rewrite": "Security Groups for Pods use Nitro trunk and branch ENI capabilities, and the amount of branch-interface capacity varies by instance type.",
+      "lesson_point_url": null,
+      "rationale": "The exact origin story and 110-interface figure are not directly documented in a single allowlisted primary source."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html",
+      "title": "Amazon VPC CNI",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for EKS pod IP allocation, warm pools, and max-pods behavior."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/prefix-mode-linux.html",
+      "title": "Prefix Mode for Linux",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for Prefix Delegation, /28 prefixes, warm prefixes, and prefix-mode caveats."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/custom-networking.html",
+      "title": "Custom Networking",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for secondary CIDRs, ENIConfig, and the primary-ENI trade-off."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/sgpp.html",
+      "title": "Security Groups Per Pod",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for trunk/branch ENIs, SecurityGroupPolicy, and compatibility limits."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/best-practices/load-balancing.html",
+      "title": "Load Balancing",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for AWS Load Balancer Controller, legacy controller status, and IP vs instance target types."
+    },
+    {
+      "url": "https://docs.aws.amazon.com/eks/latest/userguide/cni-ipv6.html",
+      "title": "IPv6 Addresses to Clusters, Pods, and Services",
+      "tier": "vendor",
+      "why_relevant": "Primary AWS guide for EKS IPv6 behavior, immutability, and current dual-stack limitations."
+    }
+  ],
+  "notes": "Excluded Mermaid diagrams, code blocks, tables, quiz items, and hands-on exercise solution steps per pipeline rules. The opening outage anecdote appears unsourced and should be treated as fabricated unless a real primary source is supplied.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

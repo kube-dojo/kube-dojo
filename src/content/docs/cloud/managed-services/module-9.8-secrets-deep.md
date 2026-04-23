@@ -222,7 +222,7 @@ spec:
 
 ## Secrets Store CSI Driver
 
-The Secrets Store CSI Driver mounts secrets directly from a vault as files in a pod, bypassing Kubernetes Secrets entirely. The secret exists only in the pod's filesystem and the vault -- it never lands in etcd.
+The Secrets Store CSI Driver mounts secrets directly from a vault as files in a pod, bypassing Kubernetes Secrets entirely. The secret exists only in the pod's filesystem and the vault -- in the standard CSI-only pattern, it does not land in etcd.
 
 ### Architecture Difference from ESO
 
@@ -606,7 +606,7 @@ graph TD
 | Using the same secret across all environments | "Simpler to manage one secret" | Separate secrets per environment; use ESO with environment-specific paths |
 | Not monitoring secret access | "We have RBAC, that is enough" | Enable Kubernetes audit logging; alert on secret read events from unexpected sources |
 | Committing plaintext secrets to Git then deleting them | "I removed it, so it is gone" | Git history preserves everything; rotate the secret immediately, use git-filter-repo to purge |
-| Running Vault without HA | "It is just a dev cluster" | Vault is a critical dependency; always run HA mode (3+ replicas) in production |
+| Running Vault without HA | "It is just a dev cluster" | Vault is a critical dependency; in production, run HA mode (typically 3+ replicas) |
 | Setting ESO refreshInterval too low | "Faster sync is better" | Below 1 minute creates unnecessary API calls and costs; 5-15 minutes is usually fine |
 
 ---
@@ -616,13 +616,13 @@ graph TD
 <details>
 <summary>1. You are auditing a newly provisioned Kubernetes cluster and notice that the team is storing database passwords in standard Kubernetes Secret objects. The lead developer argues this is safe because the values are unreadable when viewed in the manifest. Why is this assumption dangerous, and what minimal configuration changes must you enforce to secure these secrets?</summary>
 
-The developer's assumption is dangerous because Kubernetes Secrets are merely base64-encoded, not encrypted, meaning anyone with `kubectl get secret` permissions can instantly decode them. Furthermore, these secrets are stored in plaintext within the etcd database by default. To secure these secrets minimally, you must enable etcd encryption at rest using an `EncryptionConfiguration` with AES-CBC or a KMS provider. You must also strictly restrict RBAC permissions to ensure only necessary ServiceAccounts and users can read the secrets, and enable Kubernetes API audit logging to track access. Finally, implementing an external secrets manager like ESO or the CSI driver ensures the true source of the secret is never natively housed in etcd.
+The developer's assumption is dangerous because Kubernetes Secrets are merely base64-encoded, not encrypted, meaning anyone with `kubectl get secret` permissions can instantly decode them. Furthermore, these secrets are stored in plaintext within the etcd database by default. To secure these secrets minimally, you must enable etcd encryption at rest using an `EncryptionConfiguration` with AES-CBC or a KMS provider. You must also strictly restrict RBAC permissions to ensure only necessary ServiceAccounts and users can read the secrets, and enable Kubernetes API audit logging to track access. Finally, implementing an external secrets manager like ESO or the CSI driver means the true source of the secret remains external, even though ESO still syncs a Kubernetes Secret into etcd.
 </details>
 
 <details>
 <summary>2. Your platform engineering team needs to integrate an external cloud vault with your Kubernetes cluster. One engineer suggests using the External Secrets Operator (ESO), while another insists on the Secrets Store CSI Driver to satisfy a strict "zero-trust" compliance requirement. What fundamental architectural difference between these two tools justifies the CSI Driver for zero-trust environments?</summary>
 
-The fundamental architectural difference lies in how the secret data is surfaced to the application pod. The External Secrets Operator (ESO) fetches the secret from the external vault and creates a standard Kubernetes Secret object stored in the etcd database, which is then mounted or read by the pod. In contrast, the Secrets Store CSI Driver mounts the secret directly from the external vault into the pod's ephemeral filesystem, entirely bypassing the creation of a Kubernetes Secret. This satisfies the strict zero-trust requirement because the secret never lands in the cluster's etcd datastore, significantly reducing the attack surface and eliminating the risk of etcd compromise exposing the credentials.
+The fundamental architectural difference lies in how the secret data is surfaced to the application pod. The External Secrets Operator (ESO) fetches the secret from the external vault and creates a standard Kubernetes Secret object stored in the etcd database, which is then mounted or read by the pod. In contrast, the Secrets Store CSI Driver mounts the secret directly from the external vault into the pod's ephemeral filesystem, entirely bypassing the creation of a Kubernetes Secret. This better aligns with a strict zero-trust requirement because the secret does not typically land in the cluster's etcd datastore, significantly reducing the attack surface and the risk of etcd compromise exposing the credentials.
 </details>
 
 <details>
@@ -941,3 +941,11 @@ kind delete cluster --name secrets-lab
 ---
 
 **Next Module**: [Module 9.9: Cloud-Native API Gateways & WAF](../module-9.9-api-gateways/) -- Learn how cloud API gateways compare to Kubernetes Gateway API, how to integrate WAF protection, and how to handle OAuth2/OIDC proxying for your services.
+
+## Sources
+
+- [Good practices for Kubernetes Secrets](https://kubernetes.io/docs/concepts/security/secrets-good-practices/) — Authoritative baseline for how Kubernetes Secret storage, access, and encryption-at-rest actually work.
+- [External Secrets Operator](https://github.com/external-secrets/external-secrets) — Primary upstream reference for ESO's role, supported providers, and high-level behavior.
+- [Secrets Store CSI Driver](https://github.com/kubernetes-sigs/secrets-store-csi-driver) — Primary upstream reference for CSI-based secret mounts and optional Kubernetes Secret sync behavior.
+- [Vault Database Secrets Engine](https://developer.hashicorp.com/vault/docs/secrets/databases) — Primary source for dynamic database credentials, leases, and revocation semantics in Vault.
+- [Flux Kustomization Decryption with SOPS](https://fluxcd.io/flux/components/kustomize/kustomizations/) — Useful current reference for SOPS-backed GitOps decryption workflows in Kubernetes.

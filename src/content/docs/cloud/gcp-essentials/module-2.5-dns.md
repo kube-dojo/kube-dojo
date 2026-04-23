@@ -19,7 +19,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2021, a major social media company experienced a worldwide outage lasting over six hours. Billions of users could not access any of the company's services. The root cause was a routine BGP configuration change that accidentally withdrew the routes advertising the company's DNS nameservers. Because their DNS was unreachable, every subsequent DNS lookup for their domain failed. Even their internal tools for diagnosing and fixing the issue relied on the same DNS infrastructure, creating a devastating feedback loop. Engineers could not access internal dashboards, could not SSH into servers, and even physical access to data centers was impacted because the badge entry systems depended on the same network. The estimated revenue loss exceeded $100 million.
+A control-plane or routing failure can make authoritative DNS unreachable, which can take dependent services and even recovery tooling offline. The operational lesson is to design DNS and break-glass access paths so they do not depend on the same failing control plane.
 
 This incident is the most dramatic demonstration of a simple truth: **DNS is the foundation of everything on the internet.** When DNS works, nobody thinks about it. When DNS breaks, nothing works. Every HTTP request, every API call, every service-to-service communication in a microservices architecture begins with a DNS lookup. If you are running workloads on GCP, Cloud DNS is the managed service that resolves names for both your public-facing applications and your internal infrastructure.
 
@@ -68,7 +68,7 @@ sequenceDiagram
 
 ## Public Zones: Internet-Facing DNS
 
-A public DNS zone in Cloud DNS makes your domain resolvable from anywhere on the internet. When you create a public zone, Google assigns it four authoritative nameservers from the `googledomains.com` pool.
+A public DNS zone in Cloud DNS makes your domain resolvable from anywhere on the internet. When you create a public zone, Google assigns it [four authoritative nameservers from the `googledomains.com` pool](https://cloud.google.com/dns/docs/update-name-servers).
 
 ### Creating a Public Zone
 
@@ -173,7 +173,7 @@ TTL (Time to Live) controls how long resolvers cache a DNS response. Choosing th
 | **3600** | 1 hour | Stable records (MX, NS) | Fewer queries, slow to change |
 | **86400** | 1 day | Records that rarely change | Most efficient, very slow to propagate changes |
 
-**Pro tip**: Before a planned migration, lower the TTL to 60 seconds at least 24 hours in advance (equal to the current TTL). This ensures that by migration time, all caches have the short TTL and will pick up the new IP quickly.
+**Pro tip**: Before a planned migration, lower the TTL at least one full current-TTL interval in advance so existing cached answers can expire before the cutover.
 
 > **Stop and think**: You are planning to switch a critical database to a new instance this coming Saturday at midnight. The current `db.example.com` A record has a TTL of 86400 (24 hours). What specific action should you take on Friday, and what should you do after the migration is complete?
 
@@ -181,7 +181,7 @@ TTL (Time to Live) controls how long resolvers cache a DNS response. Choosing th
 
 ## DNS Routing Policies
 
-Cloud DNS allows you to configure routing policies that intelligently direct traffic based on weight, geolocation, or health checks. This is essential for building highly available, multi-region architectures.
+Cloud DNS allows you to configure [routing policies that intelligently direct traffic based on weight, geolocation, or health checks](https://cloud.google.com/dns/docs/routing-policies-overview). This is essential for building highly available, multi-region architectures.
 
 ### Weighted Round Robin
 Weighted routing distributes traffic across multiple IP addresses based on weights you define. This is incredibly useful for A/B testing, canary deployments, or gradually shifting traffic to a new environment (e.g., sending 10% of traffic to a new version of your application).
@@ -230,7 +230,7 @@ gcloud dns record-sets transaction add "34.120.55.200,34.120.55.203" \
 
 ## Private Zones: Internal DNS
 
-Private DNS zones are visible only from within specified VPC networks. They are essential for internal service discovery---allowing you to give friendly names to internal resources without exposing those names to the internet.
+Private DNS zones are [visible only from within specified VPC networks](https://cloud.google.com/dns/docs/key-terms). They are essential for internal service discovery---allowing you to give friendly names to internal resources without exposing those names to the internet.
 
 ```mermaid
 flowchart LR
@@ -299,11 +299,11 @@ gcloud dns managed-zones update internal-zone \
 ```
 
 ### Integration with Kubernetes (GKE)
-When you create a private DNS zone in a VPC, Google Kubernetes Engine (GKE) clusters in that VPC automatically inherit this resolution capability. By default, the cluster's DNS provider (like `kube-dns` or Cloud DNS for GKE) forwards queries for non-cluster domains to the VPC network's metadata server. This allows your Kubernetes pods to seamlessly resolve and connect to legacy VMs, Cloud SQL instances, and other GCP services using your private Cloud DNS records.
+GKE nodes participate in Google Cloud DNS resolution for their network, and Cloud DNS for GKE integrates cluster DNS records with Google Cloud's DNS path. In practice, cluster workloads can resolve VPC-visible names when the cluster's DNS mode and scope are configured to expose them.
 
 ### Private Zone Resolution Order
 
-When a VM in a VPC makes a DNS query, Cloud DNS resolves it in this order:
+When a VM or GKE node uses Google Cloud DNS, the official resolution order includes alternative name servers and response policies before private, forwarding, peering, internal, and public DNS lookups; use the Google Cloud documentation for the exact sequence:
 
 ```text
 1. Private zones attached to the VM's VPC
@@ -323,7 +323,7 @@ When a VM in a VPC makes a DNS query, Cloud DNS resolves it in this order:
 
 ## DNS Forwarding: Hybrid Cloud DNS
 
-DNS forwarding allows you to forward queries for specific domains to external DNS servers. This is critical in hybrid environments where on-premises resources have DNS records in on-premises DNS servers.
+DNS forwarding allows you to [forward queries for specific domains to external DNS servers](https://cloud.google.com/dns/docs/zones/zones-overview). This is critical in hybrid environments where on-premises resources have DNS records in on-premises DNS servers.
 
 ### Outbound Forwarding (GCP to On-Premises)
 
@@ -364,7 +364,7 @@ gcloud dns managed-zones create corp-forwarding-private \
 
 ### Inbound Forwarding (On-Premises to GCP)
 
-For on-premises systems to resolve GCP private DNS zones, you need to set up an **inbound DNS policy** that creates a forwarding IP in your VPC. On-premises DNS servers then forward queries to this IP.
+For on-premises systems to resolve GCP private DNS zones, you need to set up an [**inbound DNS policy** that creates a forwarding IP in your VPC](https://cloud.google.com/dns/docs/server-policies-overview). On-premises DNS servers then forward queries to this IP.
 
 ```bash
 # Create a DNS server policy with inbound forwarding enabled
@@ -405,7 +405,7 @@ gcloud dns policies delete custom-dns
 
 ## DNS Peering: Cross-VPC Resolution
 
-DNS peering zones allow one VPC to resolve DNS names using another VPC's private zones, without creating a full VPC peering or sharing the zones directly. This is useful when you have a central "DNS hub" VPC.
+DNS peering zones [allow one VPC to resolve DNS names using another VPC's private zones, without creating a full VPC peering](https://cloud.google.com/dns/docs/zones/zones-overview) or sharing the zones directly. This is useful when you have a central "DNS hub" VPC.
 
 ```mermaid
 flowchart LR
@@ -450,7 +450,7 @@ gcloud dns managed-zones create peer-to-hub \
 
 ## DNSSEC: Securing DNS
 
-DNSSEC (Domain Name System Security Extensions) protects against DNS spoofing by digitally signing DNS records. Cloud DNS supports DNSSEC for public zones.
+DNSSEC (Domain Name System Security Extensions) [protects against DNS spoofing by digitally signing DNS records. Cloud DNS supports DNSSEC for public zones](https://cloud.google.com/dns/docs/dnssec).
 
 ```bash
 # Enable DNSSEC on a public zone
@@ -487,13 +487,13 @@ gcloud logging read 'resource.type="dns_query"' \
 
 ## Did You Know?
 
-1. **Cloud DNS guarantees 100% availability SLA**---one of the highest SLAs in all of GCP. It achieves this by using Google's global Anycast network, which means DNS queries are served from the nearest of hundreds of Google Points of Presence worldwide. Even if an entire region goes down, DNS continues to resolve from other locations.
+1. **Cloud DNS publishes a high serving-DNS-queries SLO in its SLA** and uses anycast name servers to serve zones from multiple locations around the world for high availability and low latency.
 
-2. **The maximum TTL you can set in Cloud DNS is 86,400 seconds (24 hours)**, but many recursive resolvers cache records for longer if the SOA record's minimum TTL suggests it. In practice, when you change a DNS record, expect full propagation to take up to 48 hours for some edge cases, even if your TTL is set to 300 seconds, because some resolvers do not respect TTLs strictly.
+2. **Resolvers can continue serving cached answers until the relevant TTLs expire**, and some resolvers or client-side caches might not refresh exactly when you expect. For planned changes, lower TTLs ahead of time and verify propagation against authoritative name servers.
 
-3. **Private zones override public zones for the same domain**. If you create a private zone for `example.com` in your VPC, VMs in that VPC will resolve `example.com` using the private zone and will NOT be able to reach the public `example.com` records. This is both a feature (for split-horizon DNS) and a trap (if you accidentally create a private zone for a domain you also need to reach publicly).
+3. **Private zones override public zones for the same domain**. If you create a private zone for `example.com` in your VPC, [VMs in that VPC will resolve `example.com` using the private zone and will NOT be able to reach the public `example.com` records](https://cloud.google.com/dns/docs/zones/zones-overview). This is both a feature (for split-horizon DNS) and a trap (if you accidentally create a private zone for a domain you also need to reach publicly).
 
-4. **Cloud DNS supports Response Policy Zones (RPZs)**, which let you override DNS responses for specific domains. This is effectively a DNS-level firewall---you can block known malicious domains by returning `NXDOMAIN` or redirect them to a sinkhole IP. Enterprises use RPZs to enforce security policies without deploying additional infrastructure.
+4. **Cloud DNS supports response policies**, which let you override answers for selected names inside your network by serving local DNS data or using passthrough exceptions.
 
 ---
 
@@ -501,7 +501,7 @@ gcloud logging read 'resource.type="dns_query"' \
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| Forgetting the trailing dot on DNS names | Not familiar with DNS convention | Always append `.` to fully qualified domain names in Cloud DNS |
+| Forgetting the trailing dot on DNS names | Not familiar with DNS convention | Use a trailing `.` for fully qualified domain names in Cloud DNS when you need to specify an absolute name |
 | Creating a private zone for a public domain | Wanting split-horizon DNS without understanding the override | Only create private zones for domains you do not need to resolve publicly, or carefully manage the split |
 | Setting TTL too high before a migration | Not planning the migration in advance | Lower TTL to 60 seconds at least 24 hours before the change |
 | Not configuring DNS forwarding for hybrid setups | Assuming on-premises names "just work" | Create forwarding zones for each on-premises domain |
@@ -541,7 +541,7 @@ The operation fails because the fundamental DNS specification (RFC 1034) strictl
 <details>
 <summary>5. Your security team alerts you that several developer VMs in your GCP environment have been compromised and are attempting to communicate with a known malicious command-and-control server at `c2.hacker-network.com`. You need to immediately prevent any further communication with this domain across your entire GCP organization without modifying individual VM firewalls. How can Cloud DNS Response Policy Zones (RPZs) solve this immediate crisis?</summary>
 
-Response Policy Zones (RPZs) provide a mechanism to intercept and override normal DNS resolution behavior for specific domains at the network level. In this crisis scenario, you can create a response policy rule that explicitly matches the malicious domain `c2.hacker-network.com` and configures it to return an NXDOMAIN (not found) response or redirect traffic to a safe internal sinkhole IP address. Because Cloud DNS evaluates RPZs before standard resolution, this effectively creates a network-wide DNS firewall. The compromised VMs will immediately fail to resolve the command-and-control server's IP address, severing the communication channel without requiring any agent deployments or complex firewall rule updates.
+Response Policy Zones (RPZs) provide a mechanism to intercept and override normal DNS resolution behavior for specific domains at the network level. In this crisis scenario, you can create a response policy rule that explicitly matches the malicious domain `c2.hacker-network.com` and configures it to return an NXDOMAIN (not found) response or redirect traffic to a safe internal sinkhole IP address. Because Cloud DNS evaluates RPZs before standard resolution, this effectively creates a network-wide DNS firewall. The compromised VMs will typically fail to resolve the command-and-control server's IP address for new lookups once the policy is in effect, disrupting the communication channel without requiring any agent deployments or complex firewall rule updates.
 </details>
 
 <details>
@@ -826,3 +826,15 @@ echo "Cleanup complete."
 ## Next Module
 
 Next up: **[Module 2.6: Artifact Registry](../module-2.6-artifact-registry/)** --- Learn how to store container images, scan for vulnerabilities, configure IAM-based access control, and set up upstream caching for public registries.
+
+## Sources
+
+- [cloud.google.com: update name servers](https://cloud.google.com/dns/docs/update-name-servers) — Google Cloud documentation shows Cloud DNS returning four `ns-cloud-*.googledomains.com` nameservers for a managed public zone.
+- [cloud.google.com: routing policies overview](https://cloud.google.com/dns/docs/routing-policies-overview) — Google's routing-policies overview explicitly documents weighted round robin, geolocation routing, and health-check-based failover behavior.
+- [cloud.google.com: key terms](https://cloud.google.com/dns/docs/key-terms) — Google's Cloud DNS terminology defines private zones as queryable only by the VPC networks you authorize.
+- [cloud.google.com: zones overview](https://cloud.google.com/dns/docs/zones/zones-overview) — Google documents forwarding zones as a private-zone type that targets on-premises or other DNS servers for outbound forwarding.
+- [cloud.google.com: server policies overview](https://cloud.google.com/dns/docs/server-policies-overview) — Google's server-policies documentation describes inbound server policy entry points sourced from subnet ranges to expose VPC name resolution to on-premises networks.
+- [cloud.google.com: dnssec](https://cloud.google.com/dns/docs/dnssec) — Google's DNSSEC overview explains the security property and documents DNSSEC support for Cloud DNS managed public zones.
+- [Cloud DNS overview](https://cloud.google.com/dns/docs/overview) — Covers the core service model, public versus private zones, anycast serving, and propagation behavior.
+- [Name resolution order](https://cloud.google.com/dns/docs/vpc-name-res-order) — Documents the exact lookup sequence for VMs and GKE nodes, including policies, private zones, peering, and public DNS.
+- [Use Cloud DNS for GKE](https://cloud.google.com/kubernetes-engine/docs/how-to/cloud-dns) — Explains Cloud DNS integration modes for GKE, including cluster scope, VPC scope, and how GKE DNS resolution works.

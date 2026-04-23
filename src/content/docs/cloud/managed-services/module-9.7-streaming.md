@@ -10,7 +10,7 @@ sidebar:
 
 After completing this module, you will be able to:
 
-- **Configure Kubernetes consumers for managed streaming platforms (Amazon MSK, Confluent Cloud, Azure Event Hubs with Kafka protocol)**
+- **Configure Kubernetes consumers for managed streaming platforms (Amazon MSK, Confluent Cloud, [Azure Event Hubs with Kafka protocol](https://learn.microsoft.com/en-us/azure/event-hubs/azure-event-hubs-apache-kafka-overview))**
 - **Implement exactly-once processing patterns with Kafka transactions and Kubernetes StatefulSet consumer groups**
 - **Deploy stream processing applications (Kafka Streams, Flink) on Kubernetes with managed streaming backends**
 - **Design data pipeline architectures that combine managed streaming with Kubernetes batch and real-time processing workloads**
@@ -19,11 +19,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In February 2024, an online marketplace processed 850,000 orders per day. Their event pipeline -- order-placed, payment-confirmed, inventory-updated, shipment-created -- ran through a self-managed Kafka cluster on EKS. Six brokers, each on r6i.2xlarge instances with 2 TB of gp3 storage. Total monthly cost: $9,400. The platform team spent 15 hours per week on Kafka operations: broker rolling restarts, partition rebalancing, disk monitoring, ZooKeeper maintenance, and upgrading between Kafka versions.
+A team running a self-managed Kafka cluster on Kubernetes can spend significant engineering time on broker maintenance, storage operations, and version upgrades.
 
-One Tuesday, a broker lost its EBS volume due to an AZ-level storage event. Kafka's under-replicated partitions jumped to 340. The cluster's ISR (In-Sync Replicas) dropped below the minimum for 28 topic-partitions, blocking producers. The team spent 6 hours manually reassigning partitions and rebuilding replicas. During that time, the order pipeline was partially degraded -- 12% of orders were delayed by up to 4 hours.
+A broker or storage failure in a self-managed Kafka cluster can degrade producers and delay downstream processing if replication health drops and recovery is slow.
 
-They evaluated Amazon MSK (Managed Streaming for Kafka) and Confluent Cloud. The migration to MSK took five weeks. The same 6-broker cluster now costs $7,200/month (cheaper because MSK handles the control plane), and the platform team spends 2 hours per week on Kafka-related tasks instead of 15. Broker replacements happen automatically. ZooKeeper is gone (MSK uses KRaft since 2024). The operational difference is transformative.
+Managed Kafka services can materially reduce day-to-day operational work compared with self-managing brokers, but migration timelines and cost outcomes depend on workload, retention, region, and service choice. ZooKeeper is gone ([MSK uses KRaft since 2024](https://aws.amazon.com/about-aws/whats-new/2024/05/amazon-msk-kraft-mode-apache-kafka-clusters/)). The operational difference is transformative.
 
 This module teaches you when to use managed Kafka versus running Strimzi in-cluster, how partitioning and consumer groups work at scale, how exactly-once semantics prevent duplicate processing, how to monitor consumer lag and prevent data loss, how schema registries maintain data contracts, and how to build stream processing pipelines on Kubernetes.
 
@@ -36,12 +36,12 @@ This module teaches you when to use managed Kafka versus running Strimzi in-clus
 | Factor | Managed (MSK/Confluent) | In-Cluster (Strimzi on K8s) |
 |--------|------------------------|-----------------------------|
 | Operational burden | Provider handles brokers, patching, storage | You handle everything |
-| Cost at small scale | Higher (minimum 2-3 brokers) | Lower (share cluster resources) |
+| Cost at small scale | Often higher, depending on the managed offering and pricing model | Lower if you can efficiently share cluster resources |
 | Cost at large scale | Often cheaper (no ops engineer time) | Higher (hidden ops costs) |
-| Network latency | 1-5ms (VPC connectivity) | < 1ms (in-cluster) |
+| Network latency | Typically low, but depends on network path and deployment topology | Often lowest when producers and consumers stay in-cluster |
 | Customization | Limited (provider-defined configs) | Full control |
 | Multi-cluster | Each cluster is independent | Strimzi MirrorMaker2 for replication |
-| Kafka version | Provider cadence (1-3 months behind) | Any version you want |
+| Kafka version | Provider-supported versions on the provider's release cadence | You choose and operate the version yourself |
 | ZooKeeper | Gone (KRaft mode on MSK since 2024) | Strimzi manages for you |
 
 ### When to Choose Each
@@ -217,7 +217,7 @@ graph TD
     P5 --> Pod3
 ```
 
-Each pod gets an equal share of partitions. Adding a 4th pod triggers rebalancing. A 7th pod would be idle (6 partitions, 7 consumers).
+Each pod gets an equal share of partitions. Adding a 4th pod triggers rebalancing. [A 7th pod would be idle (6 partitions, 7 consumers)](https://kafka.apache.org/10/getting-started/introduction/).
 
 ### Kubernetes Consumer Deployment
 
@@ -362,7 +362,7 @@ spec:
 
 ## Exactly-Once Processing and Stateful Consumers
 
-For financial transactions or inventory updates, processing a message more than once (at-least-once semantics) or dropping it (at-most-once) is unacceptable. Kafka achieves exactly-once semantics (EOS) through the combination of idempotent producers and transactional APIs.
+For financial transactions or inventory updates, processing a message more than once (at-least-once semantics) or dropping it (at-most-once) is unacceptable. [Kafka achieves exactly-once semantics (EOS) through the combination of idempotent producers and transactional APIs.](https://kafka.apache.org/41/design/design/)
 
 ### The Transactional Pipeline
 
@@ -402,7 +402,7 @@ if msg:
 
 > **Stop and think**: What happens to a stream processing application's local state (like a RocksDB cache) if it is deployed as a standard Kubernetes Deployment instead of a StatefulSet during a pod restart? How would this affect recovery time?
 
-When using frameworks like Kafka Streams that maintain local state (e.g., using RocksDB to aggregate windowed data or join topics), Deployments are an anti-pattern. If a Deployment pod is restarted, its local state is wiped out. When the new pod joins the consumer group, it must download the entire state from Kafka's changelog topic before it can process a single new message, which can take hours for large states.
+When a stream processor keeps local state on ephemeral pod storage, a restarted pod loses that local state and must restore it from the changelog before normal processing resumes.
 
 Instead, stream processors with local state should be deployed as a `StatefulSet` with persistent volume claims:
 
@@ -547,7 +547,7 @@ curl -XPUT "http://schema-registry:8081/config/order-events-value" \
 | **FULL** | Both backward and forward | Only adding/removing optional fields with defaults |
 | **NONE** | No compatibility checking | Any change allowed (dangerous) |
 
-For most pipelines, **BACKWARD** compatibility is the safest choice. It ensures that new consumers can always read messages produced by older producers.
+For many event pipelines, **BACKWARD** compatibility is a common default because it lets newer consumers read messages produced by older producers.
 
 > **Stop and think**: Your team decides to deploy a new schema that changes an integer field `quantity` to a string field `quantity_str` to support formats like "1 dozen". If you are using BACKWARD compatibility, what will the schema registry do when the producer tries to register this schema?
 
@@ -562,7 +562,7 @@ For most pipelines, **BACKWARD** compatibility is the safest choice. It ensures 
 | Kafka Streams | Library (runs in your pods) | Simple transformations, joins | Low |
 | Apache Flink | Operator (FlinkDeployment) | Complex event processing, windows | High |
 | ksqlDB | Deployment | SQL-like stream processing | Medium |
-| Google Dataflow | Managed (GCP only) | Batch + stream unified | Medium |
+| [Google Dataflow](https://docs.cloud.google.com/dataflow/docs/overview) | Managed (GCP only) | Batch + stream unified | Medium |
 
 ### Kafka Streams Application on Kubernetes
 
@@ -684,13 +684,13 @@ aws kafka create-cluster \
 
 ## Did You Know?
 
-1. **Apache Kafka processes over 7 trillion messages per day at LinkedIn**, where it was originally created. LinkedIn's Kafka clusters handle over 35 PB of data per day across 100+ clusters. The project was open-sourced in 2011 and is now the most widely deployed streaming platform in the world.
+1. **Apache Kafka originated at LinkedIn and has been used there at very large scale**. Exact throughput, footprint, and adoption figures should be cited to current primary sources.
 
-2. **Amazon MSK Serverless eliminates cluster capacity planning entirely**. You create a topic, produce and consume data, and AWS automatically provisions and scales the underlying infrastructure. Pricing is per-partition-hour and per-GB of data, which can save 30-50% for workloads with variable throughput compared to provisioned MSK.
+2. **Amazon MSK Serverless eliminates cluster capacity planning entirely**. You create a topic, produce and consume data, and [AWS automatically provisions and scales the underlying infrastructure](https://docs.aws.amazon.com/msk/latest/developerguide/serverless.html). [Pricing is per-partition-hour and per-GB of data](https://aws.amazon.com/msk/pricing/), which can be cost-effective for variable workloads compared with provisioned clusters, depending on usage patterns, retention, and region.
 
-3. **The KRaft mode (Kafka Raft) replaced ZooKeeper** starting with Kafka 3.3 (2022) and became production-ready in Kafka 3.5. ZooKeeper was the #1 operational pain point for Kafka clusters -- it required separate monitoring, backup, and scaling. KRaft eliminates ZooKeeper entirely by embedding metadata management in Kafka brokers themselves.
+3. **KRaft replaces ZooKeeper-based metadata management with a controller quorum inside Kafka**. Kafka's 3.x releases progressively moved production deployments toward KRaft and away from ZooKeeper.
 
-4. **Schema Registry compatibility checking has prevented billions of dollars in downstream damage** according to Confluent's estimates. A single incompatible schema change in a high-throughput pipeline can corrupt millions of messages before anyone notices. The registry acts as a gatekeeper, rejecting incompatible schemas at registration time rather than at consumption time.
+4. **Schema Registry compatibility checks help catch incompatible schema changes before producers publish data that downstream consumers cannot safely read**. The registry acts as a gatekeeper by rejecting incompatible schemas at registration time.
 
 ---
 
@@ -700,12 +700,12 @@ aws kafka create-cluster \
 |---------|---------------|---------------|
 | More consumers than partitions | "More pods = more throughput" | Extra consumers sit idle; scale partitions first, then consumers |
 | Not using a partition key when ordering matters | Null key gives best throughput | Use customer/order ID as key for ordered event processing |
-| Setting `auto.offset.reset=latest` in production | "We only want new messages" | Use `earliest` and let the consumer group track its position; `latest` loses messages on restart |
+| Setting `auto.offset.reset=latest` in production | "We only want new messages" | Use an explicit offset strategy for your use case; `latest` can skip earlier data when no committed offset exists or when partitions are added |
 | Not monitoring consumer lag | "If messages are flowing, everything is fine" | Deploy kafka-exporter and alert on lag > threshold |
 | Skipping schema registry | "We will coordinate schema changes manually" | Manual coordination fails at scale; registry enforces compatibility |
-| Under-replicating topics (replication factor = 1) | Testing configuration leaked to production | Always use replication factor >= 3 and `min.insync.replicas >= 2` |
+| Under-replicating topics (replication factor = 1) | Testing configuration leaked to production | [For most production topics, use replication factor >= 3 and `min.insync.replicas >= 2` where the cluster size supports it](https://kafka.apache.org/41/configuration/topic-configs/) |
 | Running Kafka Streams without persistent state store volumes | Using `emptyDir` for state | State is lost on pod restart, causing full reprocessing; use PVCs for state stores |
-| Not setting producer `acks=all` for critical data | Default was `acks=1` before Kafka 3.0 | Always set `acks=all` and `enable.idempotence=true` for data safety |
+| Not setting producer `acks=all` for critical data | [Default was `acks=1` before Kafka 3.0](https://kafka.apache.org/42/streams/developer-guide/config-streams/) | Always set `acks=all` and `enable.idempotence=true` for data safety |
 
 ---
 
@@ -732,13 +732,13 @@ Your payment processing pods are failing to keep pace with the incoming surge of
 <details>
 <summary>4. The data engineering team proposes changing the schema compatibility mode from BACKWARD to FORWARD in the Confluent Schema Registry. They argue this will force producers to update their applications before consumers can read the new data formats. In a decoupled microservices architecture where you manage the consumer but another team manages the producer, why is switching away from BACKWARD compatibility a dangerous anti-pattern?</summary>
 
-Switching away from BACKWARD compatibility severely jeopardizes deployment safety because it destroys the guarantee that an updated consumer can read historical data. In event-driven architectures, topics act as ledgers containing older messages. If the producer team introduces a schema change and you deploy a new version of your consumer, your consumer will immediately encounter older messages on the topic that were serialized with the previous schema. If the new schema is not backward compatible, your consumer will fail to deserialize those older messages, resulting in a catastrophic pipeline crash or a poison-pill loop. BACKWARD compatibility is strictly required to ensure that consumers can be safely upgraded at any time without coordinating downtime with the producers.
+Switching away from BACKWARD compatibility severely jeopardizes deployment safety because it destroys the guarantee that an updated consumer can read historical data. In event-driven architectures, topics act as ledgers containing older messages. If the producer team introduces a schema change and you deploy a new version of your consumer, your consumer may soon encounter older messages on the topic that were serialized with the previous schema. If the new schema is not backward compatible, your consumer will fail to deserialize those older messages, resulting in a catastrophic pipeline crash or a poison-pill loop. BACKWARD compatibility is strictly required to ensure that consumers can be safely upgraded at any time without coordinating downtime with the producers.
 </details>
 
 <details>
 <summary>5. You configured a standard Kubernetes HPA targeting 80% CPU utilization for a legacy inventory syncing consumer. During a database slowdown, the inventory consumers spend all their time waiting for the database to respond (I/O bound). The Kafka topic backs up with 200,000 unprocessed messages, but the HPA does not scale up the deployment. Why did the CPU-based HPA fail to scale, and how would replacing it with KEDA solve this exact problem?</summary>
 
-The CPU-based HPA failed because threads blocked on network I/O (waiting for a database response) do not consume CPU cycles. The pods appeared idle to the Kubernetes metrics server, hovering well below the 80% threshold, so the HPA saw no reason to scale out, despite the massive backlog of work. Replacing the standard HPA with KEDA solves this by shifting the scaling metric from internal resource utilization (CPU) to external queue depth (Kafka lag). KEDA directly queries the Kafka cluster for the consumer group lag and scales the deployment proportionally. If the lag crosses the configured threshold, KEDA will immediately spawn new pods to help chew through the backlog, entirely bypassing the misleading CPU metrics.
+The CPU-based HPA failed because threads blocked on network I/O (waiting for a database response) do not consume CPU cycles. The pods appeared idle to the Kubernetes metrics server, hovering well below the 80% threshold, so the HPA saw no reason to scale out, despite the massive backlog of work. Replacing the standard HPA with KEDA solves this by shifting the scaling metric from internal resource utilization (CPU) to external queue depth (Kafka lag). KEDA directly queries the Kafka cluster for the consumer group lag and scales the deployment proportionally. If the lag crosses the configured threshold, KEDA will scale out the deployment based on lag to help chew through the backlog, bypassing the misleading CPU metrics.
 </details>
 
 <details>
@@ -1006,3 +1006,15 @@ kind delete cluster --name kafka-lab
 ---
 
 **Next Module**: [Module 9.8: Secrets Management Deep Dive](../module-9.8-secrets-deep/) -- Learn how External Secrets Operator, Secrets Store CSI, and HashiCorp Vault integrate with Kubernetes to manage dynamic secrets, TTLs, and credential rotation at scale.
+
+## Sources
+
+- [aws.amazon.com: amazon msk kraft mode apache kafka clusters](https://aws.amazon.com/about-aws/whats-new/2024/05/amazon-msk-kraft-mode-apache-kafka-clusters/) — AWS's launch announcement directly states that Amazon MSK began supporting KRaft mode for new clusters on May 29, 2024.
+- [learn.microsoft.com: azure event hubs apache kafka overview](https://learn.microsoft.com/en-us/azure/event-hubs/azure-event-hubs-apache-kafka-overview) — Microsoft Learn explicitly documents Azure Event Hubs' Kafka endpoint and Kafka-protocol compatibility.
+- [kafka.apache.org: introduction](https://kafka.apache.org/intro) — Apache Kafka's introduction explains that partitions are exclusively assigned within a consumer group and that there cannot be more active consumer instances than partitions.
+- [kafka.apache.org: design](https://kafka.apache.org/41/design/design/) — Kafka's design documentation directly describes transactions, idempotence, and offset updates as the basis for exactly-once processing.
+- [docs.cloud.google.com: overview](https://docs.cloud.google.com/dataflow/docs/overview) — Google Cloud's Dataflow overview directly describes Dataflow as a managed service for unified stream and batch processing.
+- [docs.aws.amazon.com: serverless.html](https://docs.aws.amazon.com/msk/latest/developerguide/serverless.html) — The MSK Serverless developer guide explicitly says the service automatically provisions and scales capacity.
+- [aws.amazon.com: pricing](https://aws.amazon.com/msk/pricing/) — AWS pricing documentation directly lists partition-hour and per-GB pricing dimensions for MSK Serverless.
+- [kafka.apache.org: topic configs](https://kafka.apache.org/41/configuration/topic-configs/) — Apache Kafka topic configuration docs explicitly describe replication factor 3 plus `min.insync.replicas=2` with `acks=all` as a typical stronger-durability scenario.
+- [kafka.apache.org: config streams](https://kafka.apache.org/42/streams/developer-guide/config-streams/) — Kafka's Streams configuration guide explicitly notes that `acks=all` has been the default since the 3.0 release.

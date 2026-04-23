@@ -443,14 +443,14 @@ graph TD
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **No resource requests on pods** | Developers do not set requests. All pods are "best effort." Cost allocation is impossible. | Enforce requests via Kyverno/Gatekeeper admission policy. Pods without requests should be rejected. |
+| **No resource requests on pods** | Developers do not set requests. All pods are "best effort." Cost allocation becomes much less accurate. | Enforce requests via Kyverno/Gatekeeper admission policy. Pods without requests should be rejected. |
 | **Reserved Instances purchased without analysis** | Finance buys RIs based on current spend snapshot without understanding utilization patterns. RIs go unused when workloads are right-sized. | Analyze 90-day usage patterns before purchasing. Buy RIs for the FLOOR of usage, not the ceiling. Use Savings Plans for flexibility. |
 | **Chargeback without context** | Teams receive a bill but cannot understand why it increased. No breakdown by service, workload, or time period. | Use OpenCost/Kubecost with per-service granularity. Show cost per deployment, not just per namespace. Include efficiency metrics alongside costs. |
-| **Spot instances for stateful workloads** | Over-enthusiastic cost optimization. "Everything on Spot saves 70%." Then Spot reclamation takes down the database. | Use Spot only for stateless, fault-tolerant workloads (batch jobs, stateless web servers with multiple replicas). Never for databases, single-replica services, or services with long startup times. |
+| **Spot instances for stateful workloads** | Over-enthusiastic cost optimization. "Everything on Spot saves 70%." Then Spot reclamation takes down the database. | Use Spot only for stateless, fault-tolerant workloads (batch jobs, stateless web servers with multiple replicas). Generally avoid Spot for databases, single-replica services, or services with long startup times. |
 | **Ignoring data transfer costs** | Compute dominates the bill, so data transfer is overlooked. Then it grows to 15-25% of total spend. | Monitor data transfer costs separately. Use VPC endpoints for AWS service communication. Colocate high-traffic services in the same AZ. Use S3 gateway endpoints (free). |
 | **Cost optimization as a one-time project** | "We did a right-sizing exercise last quarter." But workloads change constantly. | Treat FinOps as a continuous practice, not a project. Monthly cost reviews. Automated anomaly detection. VPA running continuously. |
 | **No team ownership of costs** | Cloud bill goes to "IT department." No team knows or cares about their cost contribution. | Implement chargeback or showback. Every team sees their monthly cost. Set cost efficiency goals alongside delivery goals. |
-| **Multi-cloud for negotiation without tracking** | "We will use Azure to negotiate with AWS." But the Azure spend is never large enough to matter, and the overhead of managing two clouds exceeds any discount gained. | If using multi-cloud for negotiation leverage, the secondary cloud spend must be credible (>20% of total). Otherwise, the leverage argument is hollow and the multi-cloud overhead is pure waste. |
+| **Multi-cloud for negotiation without tracking** | "We will use Azure to negotiate with AWS." But the Azure spend is often not large enough to matter, and the overhead of managing two clouds exceeds any discount gained. | If using multi-cloud for negotiation leverage, the secondary cloud spend must be credible (>20% of total). Otherwise, the leverage argument is hollow and the multi-cloud overhead is pure waste. |
 
 ---
 
@@ -994,3 +994,10 @@ rm /tmp/efficiency-report.sh /tmp/chargeback-report.sh /tmp/optimization-plan.sh
 ## Next Module
 
 Congratulations on completing the Enterprise & Hybrid phase of the Cloud Deep Dive track. You now have the knowledge to design, secure, and optimize enterprise Kubernetes architectures across cloud and on-premises environments. Return to the [Enterprise & Hybrid README]() to review the full phase and explore advanced topics.
+
+## Sources
+
+- [OpenCost Project Overview](https://www.cncf.io/projects/opencost/) — Gives the CNCF project status and the current high-level scope of OpenCost for Kubernetes cost allocation.
+- [Topology Aware Routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) — Explains how Kubernetes can keep traffic within the originating zone, which matters for hidden cross-zone network costs.
+- [Amazon EC2 Billing and Purchasing Options](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-purchasing-options.html) — Covers the core tradeoffs between On-Demand, Savings Plans, Reserved Instances, and Spot pricing.
+- [AWS Cost Anomaly Detection](https://docs.aws.amazon.com/cost-management/latest/userguide/getting-started-ad.html) — Shows the native AWS anomaly-detection concepts behind the module's forecasting and alerting section.

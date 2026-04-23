@@ -19,11 +19,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In June 2023, an e-commerce platform running on Azure experienced a complete outage during their biggest sale of the year. The root cause was breathtakingly simple: a developer in the platform team had changed the address space of a spoke VNet from `10.1.0.0/16` to `10.2.0.0/16` to "clean up the IP scheme." What they did not realize was that this change broke the VNet peering connection to the hub network, which contained the shared DNS resolver and the VPN gateway connecting to their on-premises payment processing system. Every microservice lost DNS resolution simultaneously. The payment gateway became unreachable. The outage lasted 4 hours and 22 minutes, costing the company an estimated $3.8 million in lost revenue and eroding customer trust during their most critical business period.
+Changes to VNet address space or peering dependencies can break shared services such as DNS, gateways, and on-premises connectivity, causing broad outages across a platform.
 
 Networking in Azure is invisible when it works and catastrophic when it breaks. Unlike compute resources that you can scale up with a button click, or storage that you can provision in seconds, networking mistakes often cascade across your entire infrastructure. A misconfigured Network Security Group can silently block traffic for hours before anyone notices. An overlapping address space between two VNets makes peering impossible. A missing route table entry sends production traffic into a black hole.
 
-In this module, you will learn Azure networking from the ground up. You will understand VNets and subnets, how Network Security Groups filter traffic, how VNet peering connects separate networks, and how to design the hub-and-spoke topology that forms the backbone of enterprise Azure deployments. By the end, you will be able to design and implement a multi-VNet architecture where spoke networks route all egress traffic through a central hub---a pattern you will encounter in virtually every production Azure environment.
+In this module, you will learn Azure networking from the ground up. You will understand VNets and subnets, how Network Security Groups filter traffic, how VNet peering connects separate networks, and how to design the hub-and-spoke topology that forms the backbone of enterprise Azure deployments. By the end, you will be able to design and implement a multi-VNet architecture where spoke networks route all egress traffic through a central hub---a common pattern in enterprise Azure environments.
 
 ---
 
@@ -41,7 +41,7 @@ Every VNet has an **address space** defined using CIDR notation. This is the ran
 | 172.16.0.0 - 172.31.255.255 | 172.16.0.0/12 | ~1 million | Medium-sized deployments |
 | 192.168.0.0 - 192.168.255.255 | 192.168.0.0/16 | ~65,000 | Small networks, labs |
 
-A VNet is **regional**---it exists in a single Azure region. A VNet in East US and a VNet in West Europe are completely separate, isolated networks. To connect them, you need VNet peering (which we will cover shortly).
+A VNet is **regional**---it exists in a [single Azure region](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq). A VNet in East US and a VNet in West Europe are completely separate, isolated networks. To connect them, you need VNet peering (which we will cover shortly).
 
 ```bash
 # Create a VNet with a /16 address space (65,536 addresses)
@@ -81,19 +81,19 @@ flowchart TB
     end
 ```
 
-**Note:** Azure reserves 5 IPs per subnet: `.0` (network), `.1` (gateway), `.2` & `.3` (DNS), `.255` (broadcast). So a /24 gives 256 - 5 = 251 usable addresses.
+**Note:** [Azure reserves 5 IPs per subnet](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq): `.0` (network), `.1` (gateway), `.2` & `.3` (DNS), `.255` (broadcast). So a /24 gives 256 - 5 = 251 usable addresses.
 
-**Critical detail**: Azure reserves **5 IP addresses** in every subnet. For a /24 subnet (256 addresses), you get 251 usable. For a /27 (32 addresses), you get 27. For a /29 (8 addresses), you get only 3. This matters when you are sizing subnets for services like AKS that consume many IPs.
+**Critical detail**: Azure reserves **5 IP addresses** in every subnet. [For a /24 subnet (256 addresses), you get 251 usable. For a /27 (32 addresses), you get 27.](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/integrated-multiservices/virtual-network-integration) [For a /29 (8 addresses), you get only 3.](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-subnet) This matters when you are sizing subnets for services like AKS that consume many IPs.
 
 Some subnets have **special names** that Azure requires for specific services:
 
 | Subnet Name | Required For | Minimum Size |
 | :--- | :--- | :--- |
-| `GatewaySubnet` | VPN Gateway, ExpressRoute Gateway | /27 recommended |
-| `AzureFirewallSubnet` | Azure Firewall | /26 required |
-| `AzureFirewallManagementSubnet` | Azure Firewall (forced tunneling) | /26 required |
-| `AzureBastionSubnet` | Azure Bastion | /26 or larger |
-| `RouteServerSubnet` | Azure Route Server | /27 required |
+| [`GatewaySubnet`](https://learn.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-vpn-faq) | VPN Gateway, ExpressRoute Gateway | /27 recommended |
+| [`AzureFirewallSubnet`](https://learn.microsoft.com/en-us/azure/well-architected/service-guides/azure-firewall) | Azure Firewall | /26 required |
+| [`AzureFirewallManagementSubnet`](https://learn.microsoft.com/en-us/azure/firewall/management-nic) | Azure Firewall (forced tunneling) | /26 required |
+| [`AzureBastionSubnet`](https://learn.microsoft.com/en-us/azure/bastion/configuration-settings) | Azure Bastion | /26 or larger |
+| `RouteServerSubnet` | Azure Route Server | /26 or larger |
 
 ```bash
 # Create subnets within the VNet
@@ -130,7 +130,7 @@ A Network Security Group is a stateful firewall that filters network traffic to 
 
 ### How NSG Rules Are Evaluated
 
-NSG rules have a **priority** (100-4096, lower number = higher priority). Azure evaluates rules from lowest priority number to highest and stops at the first match.
+[NSG rules have a **priority** (100-4096, lower number = higher priority). Azure evaluates rules from lowest priority number to highest and stops at the first match.](https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-network/virtual-network-troubleshoot-nsg-blocking-traffic)
 
 ```mermaid
 flowchart LR
@@ -152,7 +152,7 @@ flowchart LR
 
 **Note:** For outbound, NIC NSG is evaluated FIRST, then Subnet NSG.
 
-Every NSG includes **default rules** that you cannot delete:
+[Every NSG includes **default rules**](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview) that you cannot delete:
 
 | Priority | Name | Direction | Action | Source | Destination |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -163,7 +163,7 @@ Every NSG includes **default rules** that you cannot delete:
 | 65001 | AllowInternetOutBound | Outbound | Allow | * | Internet |
 | 65500 | DenyAllOutBound | Outbound | Deny | * | * |
 
-The `VirtualNetwork` service tag includes the VNet address space, all peered VNet address spaces, and on-premises address spaces connected via VPN/ExpressRoute. This is important---by default, all traffic within the VNet (and peered VNets) is allowed.
+[The `VirtualNetwork` service tag includes the VNet address space, all peered VNet address spaces, and on-premises address spaces connected via VPN/ExpressRoute.](https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview) This is important---by default, all traffic within the VNet (and peered VNets) is allowed.
 
 ```bash
 # Create an NSG
@@ -241,17 +241,17 @@ az network nic ip-config update \
   --application-security-groups web-servers
 ```
 
-**War Story**: A team at a healthcare company had 200+ NSG rules referencing individual IP addresses. Every time a VM was replaced (which happened weekly due to immutable infrastructure practices), someone had to update the NSG rules. They frequently forgot, causing intermittent connectivity failures that took hours to diagnose. Switching to ASGs reduced their NSG rules from 200+ to 18, and new VMs automatically inherited the correct network access by simply being associated with the right ASG.
+Teams that encode NSG rules with individual IP addresses often create brittle operations. Using Application Security Groups lets new or replaced VMs inherit the intended policy through group membership instead of manual IP-based rule edits.
 
 ---
 
 ## VNet Peering: Connecting Networks
 
-VNet peering creates a direct, high-bandwidth, low-latency connection between two VNets. Traffic between peered VNets travels over the Microsoft backbone network---it never touches the public internet. Peering works across regions (called **global VNet peering**) and even across Azure subscriptions and Entra ID tenants.
+VNet peering creates a direct, high-bandwidth, low-latency connection between two VNets. [Traffic between peered VNets travels over the Microsoft backbone network---it never touches the public internet. Peering works across regions (called **global VNet peering**) and even across Azure subscriptions and Entra ID tenants.](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview)
 
 ### How Peering Works
 
-Peering is **non-transitive**. If VNet A is peered with VNet B, and VNet B is peered with VNet C, VNet A **cannot** reach VNet C through VNet B (unless you configure User-Defined Routes to force it, which is exactly what the hub-and-spoke topology does).
+[Peering is **non-transitive**.](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq) If VNet A is peered with VNet B, and VNet B is peered with VNet C, VNet A **cannot** reach VNet C through VNet B (unless you configure User-Defined Routes to force it, which is exactly what the hub-and-spoke topology does).
 
 ```mermaid
 flowchart LR
@@ -320,7 +320,7 @@ Key peering flags explained:
 | `--allow-gateway-transit` | Set on the hub---lets spokes use the hub's VPN/ExpressRoute gateway |
 | `--use-remote-gateways` | Set on the spoke---tells it to use the hub's gateway for on-prem connectivity |
 
-**Critical rule**: Peered VNets **cannot have overlapping address spaces**. If hub-vnet uses `10.0.0.0/16` and spoke1-vnet also uses `10.0.0.0/16`, peering creation will fail. Plan your IP address scheme carefully before you start building.
+**Critical rule**: [Peered VNets **cannot have overlapping address spaces**](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq). If hub-vnet uses `10.0.0.0/16` and spoke1-vnet also uses `10.0.0.0/16`, peering creation will fail. Plan your IP address scheme carefully before you start building.
 
 ---
 
@@ -328,9 +328,9 @@ Key peering flags explained:
 
 ### User-Defined Routes (UDRs)
 
-By default, Azure routes traffic between subnets within a VNet and between peered VNets automatically using **system routes**. But in a hub-and-spoke topology, you want spoke traffic to go through a firewall or network virtual appliance (NVA) in the hub. This is where User-Defined Routes come in.
+By default, Azure routes traffic between subnets within a VNet and between peered VNets automatically using **system routes**. But in a hub-and-spoke topology, [you want spoke traffic to go through a firewall or network virtual appliance (NVA) in the hub. This is where User-Defined Routes come in.](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview)
 
-A **Route Table** is a collection of routes that you associate with a subnet. When a route table is associated with a subnet, it overrides the default system routes.
+A **Route Table** is a collection of routes that you associate with a subnet. [When a route table is associated with a subnet, it overrides the default system routes.](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview)
 
 ```bash
 # Create a route table for spoke subnets
@@ -358,16 +358,16 @@ az network vnet subnet update \
 
 ### Azure Firewall
 
-Azure Firewall is a managed, cloud-based network security service. Unlike NSGs (which operate at Layer 3/4), Azure Firewall can inspect traffic at Layer 7 (application level), performing URL filtering, TLS inspection, and threat intelligence-based filtering.
+Azure Firewall is a managed, cloud-based network security service. Unlike NSGs (which operate at Layer 3/4), [Azure Firewall can inspect traffic at Layer 7 (application level), performing URL filtering, TLS inspection, and threat intelligence-based filtering.](https://learn.microsoft.com/en-us/azure/firewall/features-by-sku)
 
 | Feature | NSG (Layer 3/4) | Azure Firewall (Layer 3-7) |
 | :--- | :--- | :--- |
 | **Rules** | IP-based rules | IP, FQDN, URL-based rules |
 | **Filtering** | Port filtering | Port + protocol + app inspection |
 | **Engine** | Stateful | Stateful + threat intelligence |
-| **Cost** | Free | ~$912/month (Standard) + data costs |
+| **Cost** | No direct NSG service charge | Azure Firewall has recurring SKU and data-processing costs |
 | **Placement** | Per-subnet | Centralized (hub) |
-| **Logging** | No logging | Full diagnostic logging |
+| **Logging** | Flow logging is available via Network Watcher or VNet flow logs | Diagnostic logging is available via Azure Monitor |
 | **Inspection** | No TLS inspect | TLS inspection (Premium) |
 
 ```bash
@@ -442,7 +442,7 @@ When you need to connect your Azure VNets to an on-premises data center (or anot
 | Feature | VPN Gateway | ExpressRoute |
 | :--- | :--- | :--- |
 | **Connection type** | IPSec/IKE over public internet | Private, dedicated connection via partner |
-| **Bandwidth** | Up to 10 Gbps (VpnGw5) | Up to 100 Gbps |
+| **Bandwidth** | Up to 10 Gbps, depending on VPN Gateway SKU | Higher bandwidth options than VPN, with standard ExpressRoute circuits up to 10 Gbps and larger capacities available through ExpressRoute Direct |
 | **Latency** | Variable (internet-dependent) | Predictable, low latency |
 | **Encryption** | Built-in IPSec | Not encrypted by default (add MACsec or VPN) |
 | **Cost** | Lower (~$140-1,250/month for gateway) | Higher ($200-10,000+/month for circuit) |
@@ -467,7 +467,7 @@ az network vnet-gateway create \
 az network vnet-gateway show -g myRG -n hub-vpn-gateway --query provisioningState -o tsv
 ```
 
-**War Story**: A retail company chose VPN Gateway for their production Azure connectivity to save money. During Black Friday, the IPSec tunnel became saturated at 1.2 Gbps, causing database replication lag between on-premises and Azure that led to inventory discrepancies. Customers were buying items that were already out of stock. The company switched to ExpressRoute within three weeks, but the damage to customer trust during the holiday season was already done. The lesson: for production workloads with significant data transfer, the cost of ExpressRoute is almost always justified.
+For production workloads with sustained throughput requirements and strict latency expectations, internet-based VPN connectivity can become a bottleneck. Evaluate ExpressRoute when predictable performance and private connectivity are business-critical.
 
 ---
 
@@ -513,13 +513,13 @@ Benefits of hub-and-spoke:
 
 ## Did You Know?
 
-1. **Azure VNet peering traffic between regions is not free.** Intra-region peering (same region) has no data transfer charges, but global VNet peering (cross-region) costs $0.01-$0.035 per GB depending on the regions involved. A company running 50 TB of cross-region replication per month learned this the hard way when they received a $1,750 networking bill they had not budgeted for.
+1. **VNet peering traffic should be priced explicitly during design.** Azure bills peering traffic according to the current Virtual Network pricing page, and cross-region replication can create meaningful networking costs if you do not model them up front.
 
 2. **Azure reserves exactly 5 IP addresses in every subnet**, regardless of size. In a /28 subnet (16 addresses), you lose 5 to Azure, leaving only 11 usable. The reserved addresses are: the network address (.0), Azure's default gateway (.1), Azure DNS mapping (.2 and .3), and the broadcast address (last address). This is more than AWS reserves (which takes only the first 4 and the last 1).
 
-3. **NSG flow logs can generate enormous amounts of data.** A moderately busy VNet with 50 VMs can produce over 200 GB of NSG flow logs per month. At Log Analytics ingestion rates of roughly $2.76 per GB, that is $552/month just for network flow logging. Many teams enable flow logs during an investigation and forget to turn them off, leading to surprise bills months later.
+3. **Network flow logs can generate substantial data and ingestion costs.** In busy environments, leaving flow logs enabled continuously can create noticeable Log Analytics charges if you do not scope retention and collection carefully.
 
-4. **Azure Firewall's minimum cost is approximately $912 per month** (Standard SKU) even with zero traffic, because you pay for the deployment hours. Premium SKU starts at roughly $1,278 per month. For dev/test environments, many teams use NSGs alone or deploy a Linux VM running iptables as a lightweight alternative, saving thousands per month at the cost of operational complexity.
+4. **Azure Firewall has meaningful fixed and usage-based cost even at low traffic levels.** For dev/test environments, teams sometimes choose simpler alternatives such as NSGs alone or a self-managed network appliance, trading lower cost for more operational work.
 
 ---
 
@@ -529,12 +529,12 @@ Benefits of hub-and-spoke:
 | :--- | :--- | :--- |
 | Overlapping address spaces between VNets that need to peer | Poor IP address planning, especially when multiple teams create VNets independently | Create a centralized IP Address Management (IPAM) spreadsheet or use Azure IPAM. Plan your entire address scheme before creating any VNets. |
 | Not enabling "Allow Forwarded Traffic" on peering | The default is disabled, and the peering "works" for direct traffic, so it seems fine | For hub-and-spoke with transit routing, both sides of the peering need `--allow-forwarded-traffic`. The hub also needs `--allow-gateway-transit`. |
-| Putting the Azure Firewall in a subnet not named "AzureFirewallSubnet" | The requirement is not obvious until deployment fails | Azure Firewall requires the subnet to be named exactly `AzureFirewallSubnet` with a minimum size of /26. This is a hard-coded requirement. |
-| Creating subnets that are too small for the workload | Developers estimate VM count but forget about internal load balancers, private endpoints, and future growth | Size subnets at least 2x your current need. For AKS, remember each pod gets an IP (Azure CNI), so a 50-node cluster with 30 pods per node needs 1,500+ IPs. |
+| Putting the Azure Firewall in a subnet not named "AzureFirewallSubnet" | The requirement is not obvious until deployment fails | [Azure Firewall requires the subnet to be named exactly `AzureFirewallSubnet` with a minimum size of /26.](https://learn.microsoft.com/en-us/azure/well-architected/service-guides/azure-firewall) This is a hard-coded requirement. |
+| Creating subnets that are too small for the workload | Developers estimate VM count but forget about internal load balancers, private endpoints, and future growth | Size subnets at least 2x your current need. For AKS, remember each pod gets an IP (Azure CNI), so [a 50-node cluster with 30 pods per node needs 1,500+ IPs](https://learn.microsoft.com/en-us/azure/aks/concepts-network-ip-address-planning). |
 | Not associating NSGs with subnets (relying only on NIC-level NSGs) | NIC-level NSGs seem more granular and therefore "better" | Subnet-level NSGs provide a consistent security baseline. Use ASGs for per-VM differentiation within a subnet. NIC-level NSGs should be the exception, not the rule. |
 | Forgetting to create the return peering (only creating one direction) | VNet peering requires a link in both directions, but Azure does not warn you until traffic fails | Always create peering in pairs. Script it so both sides are created in the same deployment. |
-| Using the default `AllowInternetOutBound` without a firewall in production | The default NSG rule allows all outbound internet traffic | In production, create a route table with `0.0.0.0/0` pointing to a firewall/NVA. This overrides the default outbound route through Azure's internet gateway. |
-| Not planning for DNS resolution across peered VNets | VMs in peered VNets cannot resolve each other's private DNS names by default | Deploy Azure Private DNS Zones linked to all VNets, or use a centralized DNS resolver in the hub VNet. |
+| Relying on implicit outbound internet access in production | Default outbound behavior and subnet defaults can change, so explicit outbound design is safer | In production, choose an explicit outbound pattern such as a firewall/NVA, NAT Gateway, or private subnets with the routes you need |
+| Not planning DNS resolution across connected VNets | Name resolution across connected VNets usually requires explicit DNS design, such as Private DNS Zones linked to the relevant VNets or a centralized resolver in the hub |
 
 ---
 
@@ -561,7 +561,7 @@ No, the developer's solution will fail because NSGs cannot filter traffic based 
 <details>
 <summary>4. An infrastructure-as-code deployment pipeline is failing. The error occurs when attempting to deploy an Azure Firewall into a subnet named "hub-firewall-snet" (prefix 10.0.3.0/26). The developer insists the subnet size is correct. Why is the deployment failing, and what is the underlying reason Azure enforces this?</summary>
 
-The deployment is failing because Azure requires the firewall's subnet to be named exactly "AzureFirewallSubnet" without exception. This is a hard-coded requirement within the Azure resource provider responsible for provisioning the firewall service. By enforcing a specific, reserved subnet name, Azure ensures that the service is placed in a dedicated space with appropriate sizing parameters (a minimum of /26). This strict naming convention also fundamentally prevents other infrastructure resources from being accidentally deployed alongside the firewall, which could disrupt its operation. Renaming the subnet from "hub-firewall-snet" to the required name will immediately resolve the deployment error.
+The deployment is failing because Azure requires the firewall's subnet to be named exactly "AzureFirewallSubnet" without exception. This is a hard-coded requirement within the Azure resource provider responsible for provisioning the firewall service. By enforcing a specific, reserved subnet name, Azure ensures that the service is placed in a dedicated space with appropriate sizing parameters (a minimum of /26). This strict naming convention also fundamentally prevents other infrastructure resources from being accidentally deployed alongside the firewall, which could disrupt its operation. Renaming the subnet from "hub-firewall-snet" to the required name should resolve the deployment error when you redeploy.
 </details>
 
 <details>
@@ -832,3 +832,23 @@ az group delete --name "$RG" --yes --no-wait
 ## Next Module
 
 [Module 3.3: VMs & VM Scale Sets](../module-3.3-vms/) --- Learn how to deploy and manage virtual machines in Azure, from choosing the right VM size to building highly available workloads with VM Scale Sets and Availability Zones.
+
+## Sources
+
+- [learn.microsoft.com: hub spoke network topology](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/hub-spoke-network-topology) — General lesson point for an illustrative rewrite.
+- [learn.microsoft.com: virtual networks faq](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-faq) — Microsoft's VNet FAQ explicitly states that a virtual network cannot span regions.
+- [learn.microsoft.com: virtual network integration](https://learn.microsoft.com/en-us/azure/architecture/example-scenario/integrated-multiservices/virtual-network-integration) — Microsoft's subnet-sizing guidance includes /24 = 251 usable and /27 = 27 usable.
+- [learn.microsoft.com: virtual network manage subnet](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-subnet) — Microsoft's subnet management documentation explicitly says a /29 gives three usable IPs.
+- [learn.microsoft.com: vpn gateway vpn faq](https://learn.microsoft.com/en-us/azure/vpn-gateway/vpn-gateway-vpn-faq) — The VPN Gateway FAQ says the subnet must be named GatewaySubnet and recommends /27 or larger.
+- [learn.microsoft.com: azure firewall](https://learn.microsoft.com/en-us/azure/well-architected/service-guides/azure-firewall) — Microsoft's Azure Firewall guidance states the firewall needs a dedicated subnet named AzureFirewallSubnet with /26 address space.
+- [learn.microsoft.com: management nic](https://learn.microsoft.com/en-us/azure/firewall/management-nic) — Microsoft's management NIC documentation explicitly gives AzureFirewallManagementSubnet a minimum subnet size of /26.
+- [learn.microsoft.com: configuration settings](https://learn.microsoft.com/en-us/azure/bastion/configuration-settings) — Azure Bastion documentation explicitly requires the AzureBastionSubnet name and a /26-or-larger subnet.
+- [learn.microsoft.com: virtual network troubleshoot nsg blocking traffic](https://learn.microsoft.com/en-us/troubleshoot/azure/virtual-network/virtual-network-troubleshoot-nsg-blocking-traffic) — Microsoft's troubleshooting guide explicitly documents the evaluation order and the requirement that both NSGs allow the traffic.
+- [learn.microsoft.com: network security groups overview](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview) — Microsoft's NSG overview lists these default rules and their priorities.
+- [learn.microsoft.com: service tags overview](https://learn.microsoft.com/en-us/azure/virtual-network/service-tags-overview) — Microsoft's service-tags documentation explicitly defines what the VirtualNetwork tag contains.
+- [learn.microsoft.com: virtual network peering overview](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview) — The VNet peering overview explicitly covers the Microsoft backbone, same-region performance, and cross-subscription/tenant support.
+- [learn.microsoft.com: virtual networks udr overview](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview) — Microsoft's routing documentation explicitly says custom routes can override some system routes.
+- [learn.microsoft.com: features by sku](https://learn.microsoft.com/en-us/azure/firewall/features-by-sku) — Microsoft's features-by-SKU documentation directly describes these capabilities and their SKU boundaries.
+- [azure.microsoft.com: log analytics](https://azure.microsoft.com/en-us/pricing/details/log-analytics/) — General lesson point for an illustrative rewrite.
+- [learn.microsoft.com: firewall faq](https://learn.microsoft.com/en-us/azure/firewall/firewall-faq) — General lesson point for an illustrative rewrite.
+- [learn.microsoft.com: concepts network ip address planning](https://learn.microsoft.com/en-us/azure/aks/concepts-network-ip-address-planning) — Microsoft's AKS IP-planning documentation gives a closely matching worked example and subnet-sizing formula.
