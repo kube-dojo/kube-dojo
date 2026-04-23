@@ -2,7 +2,81 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-23 night — 6 PRs out today, all merged; cross-family reviewer rule codified)
+## Active Work (2026-04-24 past-midnight — concurrency lock in re-review, pilot diagnosis landed, residuals audit in-flight)
+
+**Continuation from earlier tonight (2026-04-23, see below).** After the 6-PR push, user asked me to run the phase-1.5 re-pilot and keep pushing overnight. Current state:
+
+### 3-module re-pilot result
+
+Resolver + quote-match ran on the reset 3-module set. **Raw numbers: 1 resolved / 4 attempted = 25%**, not the projected 60–75%. But **the failures were correct behavior, not resolver weakness** — diagnosis below.
+
+### Diagnosis (key insight — captured here because it reframes the whole pilot plan)
+
+3 of 4 failures died at `no_candidates_returned` — the LLM refused to propose URLs — **before** quote-match could act. Inspecting the finding excerpts:
+
+- **fine-tuning-llms** finding: `signal: price_usd`, excerpt is a narrative case study (*"abandoned shopping carts incident"*, *"foundation models global endpoint throttling provisioned throughput revenue impact"*). **Pedagogical fiction** — no real public incident to cite.
+- **cloud-ai-services** finding 1: same pattern, fictional scenario.
+- **cloud-ai-services** finding 2 (`all_candidates_failed`, 3 attempts): module claims *"Azure's classic Foundry Agent Service docs were officially marked as deprecated as of 2027-03-31"* — a **hallucinated future date** (today is 2026-04-24). Microsoft's proposed URL correctly rejected at `no_anchor_match` because 2027 can't be found on the real page.
+- **multi-account** finding: resolved successfully (the one happy path).
+
+Reframe: the resolver is doing its job. It refused to polish fabrications (exactly per `feedback_advisory_vs_enforced_constraints.md`). The 25% isn't a resolver problem — it's a content problem. These findings belong in #344's lane (soften/delete claim), not #343's (source citation).
+
+The 3-module pilot set was also selection-biased: these were phase-1 flunks. A fresh 10-module sample from the 64 batch-c residuals would give a real resolve-rate distribution.
+
+### PR #363 — per-module write lock (IN RE-REVIEW)
+
+Branch: `feat/343-resolver-concurrency-lock` @ `bb131700`
+URL: https://github.com/kube-dojo/kube-dojo.github.io/pull/363
+
+Unblocks phase-2 bulk by adding a DB-backed advisory lock so two resolvers can't clobber the same module. New `scripts/pipeline_common/module_lock.py` primitive (acquire / complete / release / sweep / context manager), wired into `citation_residuals.py resolve` with new flags `--worker-id`, `--lease-seconds`, `--no-lock`. 63/63 tests including a threaded stress test. Ruff clean.
+
+Codex first-round review caught a real must-fix: I was keying the lock on `qp.stem` (flattened filename) but the canonical `module_key` contains slashes — other writers using the canonical form wouldn't coordinate. Fixed at `bb131700`: lock now keys on `data["module_key"]` with stem fallback for legacy files. Added regression test using production-shaped fixture (filename `track-topic-module-1.json` + JSON key `track/topic/module-1`).
+
+**Re-review dispatched, awaiting response.** Task ID `pr-363-rereview`, bridge message ≥ 2711. Next session: `scripts/ab inbox show claude` → if APPROVE, `gh pr merge 363 --merge --delete-branch` and clean up worktree `.worktrees/citation-residuals-lock`. If NEEDS CHANGES, fix + re-dispatch.
+
+My 5 open review questions from the first round (holder identity, contention UX, TTL default, partial-write crash, schema race) were not answered in round 1 — restated in the re-review prompt.
+
+### Residuals audit — in-flight, HEADLESS Codex
+
+Task ID: `audit-residuals-classification`, bridge message 2709, dispatched via `scripts/ab ask-codex` in workspace-write mode.
+
+Codex is classifying all ~64 `needs_citation` findings across the batch-c residuals files into:
+- A. Sourceable (resolver should succeed)
+- B. Pedagogical fiction (no real source exists)
+- C. Hallucinated fact (content bug — future date, nonexistent product)
+- D. Ambiguous
+
+Output target: `.worktrees/residuals-audit/docs/residuals-audit-2026-04-24.md`. Branch: `audit/residuals-classification`. Codex will commit + push when done but NOT open a PR.
+
+**Status at handoff: the .md file does not yet exist in the worktree — Codex still running.** Next session: check `ls -la .worktrees/residuals-audit/docs/residuals-audit-2026-04-24.md`. If present, read it and decide whether to promote to a content-bugs issue for #344 scope. If `scripts/ab read 2710+` (whatever the response ID ends up being) shows Codex's summary reply, that has the headline counts and top-3 Category C modules.
+
+### WIP: pilot-n flag (UNPUSHED, in worktree)
+
+Worktree: `.worktrees/pilot-n` on branch `feat/343-pilot-n-flag`. **Uncommitted change** adds `--limit-modules N` arg definition to `citation_residuals.py` `resolve` subcommand. Loop wiring NOT yet done. Purpose: cap `--all` runs at N modules for safe gradual rollout (postmortem followup from STATUS.md). Will conflict with #363 on citation_residuals.py — plan is to rebase on main after #363 merges, finish the loop wiring, add tests, open PR.
+
+Next session action: either `git -C .worktrees/pilot-n diff` to resume the work or `git worktree remove --force .worktrees/pilot-n && git branch -D feat/343-pilot-n-flag` to abandon.
+
+### Tech-debt delta this push
+
+| Issue | Was | Now |
+|---|---|---|
+| #343 concurrency lock | deferred | PR #363 in re-review |
+| #343 phase-1.5 pilot | not run | run — 25%, diagnosis done (content-quality issue, not resolver) |
+| #344 input data | no categorized list | audit in-flight → will produce Categories A/B/C/D counts + per-module breakdown |
+| `--pilot-n N` | postmortem followup | WIP in worktree (unfinished) |
+
+### Cold-start for next session (UPDATED)
+
+1. **Check #363 re-review** — `scripts/ab inbox show claude` → read the latest response on task `pr-363-rereview`. If APPROVE → merge. If NEEDS CHANGES → fix at `.worktrees/citation-residuals-lock`, push, re-dispatch.
+2. **Read the residuals audit** — `ls .worktrees/residuals-audit/docs/residuals-audit-2026-04-24.md`. If present: read the summary counts, extract Category C findings (hallucinated facts) into a new issue for #344 content-fix scope. Consider promoting the audit doc to `docs/` via a follow-up PR.
+3. **Decide on pilot-n WIP** — finish or abandon per above.
+4. **Phase-2 bulk prep** (only after #363 merges):
+   - Fresh-sample pilot on 10 untouched batch-c residuals modules (expected real distribution, not the selection-biased 3).
+   - If ≥60% resolve on Category A findings, run bulk at `--workers 3` (hard cap per `feedback_batch_worker_cap.md`).
+
+---
+
+## Prior active work — 2026-04-23 night (6 PRs out today, all merged; cross-family reviewer rule codified)
 
 **Session deliverables (chronological):**
 
@@ -44,7 +118,7 @@
 
 ---
 
-## Cold-start for next session
+## Cold-start (earlier version — superseded by the top of this file for 2026-04-24)
 
 **1. Re-pilot the 3-module set** — #360 (quote-match verification) merged, so the anchorless-findings class (`named_incident` / `attribution`) should now resolve. Expected: 60–75% resolve rate (up from 20% on phase-1). Reset the queue files first — previous pilot moved findings to `unresolvable_findings[]`:
 
