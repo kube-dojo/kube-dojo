@@ -404,3 +404,153 @@ def test_cli_exit_code_failure_on_error(
 
     monkeypatch.setattr(pipeline_v4_batch, "run_batch", _fake_run_batch)
     assert pipeline_v4_batch.main(["--limit", "1"]) == 1
+
+
+# ---- GH #351 — post-batch missing-Sources audit ---------------------------
+
+
+def _write_module_351(repo_root: Path, module_key: str, body: str) -> Path:
+    path = repo_root / "src" / "content" / "docs" / f"{module_key}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_audit_missing_sources_clean_module_with_sources_passes(
+    tmp_path: Path,
+) -> None:
+    _write_module_351(
+        tmp_path,
+        "ai/demo/module-1.0-ok",
+        "# Title\n\nBody.\n\n## Sources\n\n- [x](https://ex) — note\n",
+    )
+    results = [
+        {
+            "module_key": "ai/demo/module-1.0-ok",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert (
+        pipeline_v4_batch.audit_missing_sources(results, repo_root=tmp_path) == []
+    )
+
+
+def test_audit_missing_sources_clean_module_without_sources_flagged(
+    tmp_path: Path,
+) -> None:
+    _write_module_351(
+        tmp_path,
+        "ai/demo/module-1.0-missing",
+        "# Title\n\nBody with no sources block.\n",
+    )
+    results = [
+        {
+            "module_key": "ai/demo/module-1.0-missing",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert pipeline_v4_batch.audit_missing_sources(
+        results, repo_root=tmp_path
+    ) == ["ai/demo/module-1.0-missing"]
+
+
+def test_audit_missing_sources_skips_non_clean_outcomes(tmp_path: Path) -> None:
+    """A module not marked `clean` (needs_human / failed / skipped_locked)
+    is out of audit scope — those are expected to be incomplete."""
+    _write_module_351(
+        tmp_path,
+        "ai/demo/module-1.0-needs-human",
+        "# Title\n\nNo sources.\n",
+    )
+    results = [
+        {"module_key": "ai/demo/module-1.0-needs-human", "outcome": "needs_human"},
+        {"module_key": "ai/demo/module-1.0-needs-human", "outcome": "failed"},
+        {
+            "module_key": "ai/demo/module-1.0-needs-human",
+            "outcome": pipeline_v4_batch.OUTCOME_SKIPPED_LOCKED,
+        },
+    ]
+    assert pipeline_v4_batch.audit_missing_sources(
+        results, repo_root=tmp_path
+    ) == []
+
+
+def test_audit_missing_sources_flags_missing_file(tmp_path: Path) -> None:
+    """A clean result whose module file doesn't exist is also a
+    violation — the pipeline claimed something it can't back."""
+    results = [
+        {
+            "module_key": "ai/demo/module-that-does-not-exist",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert pipeline_v4_batch.audit_missing_sources(
+        results, repo_root=tmp_path
+    ) == ["ai/demo/module-that-does-not-exist"]
+
+
+def test_audit_missing_sources_rejects_inline_sources_string(tmp_path: Path) -> None:
+    """'## Sources' as a substring (not at start-of-line) must not
+    count as having a Sources section."""
+    _write_module_351(
+        tmp_path,
+        "ai/demo/module-1.0-tricky",
+        "# Title\n\nSomeone wrote '## Sources' inline in prose here.\n",
+    )
+    results = [
+        {
+            "module_key": "ai/demo/module-1.0-tricky",
+            "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+        }
+    ]
+    assert pipeline_v4_batch.audit_missing_sources(
+        results, repo_root=tmp_path
+    ) == ["ai/demo/module-1.0-tricky"]
+
+
+def test_cli_exit_code_failure_on_missing_sources(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Integration: clean result whose module has no Sources → CLI exits 1."""
+    _patch_db(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipeline_v4_batch, "REPO_ROOT", tmp_path)
+    _write_module_351(tmp_path, "demo/module-missing", "# Title\n\nNo sources.\n")
+
+    def _fake_run_batch(**kwargs):
+        return {
+            "processed": 1,
+            "by_outcome": {"clean": 1},
+            "results": [
+                {
+                    "module_key": "demo/module-missing",
+                    "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(pipeline_v4_batch, "run_batch", _fake_run_batch)
+    assert pipeline_v4_batch.main(["--limit", "1"]) == 1
+
+
+def test_cli_dry_run_skips_missing_sources_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """--dry-run doesn't write to modules, so the audit would produce
+    spurious violations. Skip it."""
+    _patch_db(monkeypatch, tmp_path)
+    monkeypatch.setattr(pipeline_v4_batch, "REPO_ROOT", tmp_path)
+
+    def _fake_run_batch(**kwargs):
+        return {
+            "processed": 1,
+            "by_outcome": {"clean": 1},
+            "results": [
+                {
+                    "module_key": "demo/module-missing",
+                    "outcome": pipeline_v4_batch.OUTCOME_CLEAN,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(pipeline_v4_batch, "run_batch", _fake_run_batch)
+    assert pipeline_v4_batch.main(["--limit", "1", "--dry-run"]) == 0
