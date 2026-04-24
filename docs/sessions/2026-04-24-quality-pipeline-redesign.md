@@ -21,7 +21,7 @@ If the count of state JSONs is 742, bootstrap already ran — fine to resume fro
 1. **Git hygiene via worktrees.** Primary checkout stays on `main`, clean. Every module runs in `.worktrees/quality-<slug>/` on its own branch. Rebase before merge. Worktree + branch cleaned up on all exit paths (success, failure, SIGKILL recovery).
 2. **Full sweep.** Process all 742 English content modules (`src/content/docs/**/*.md`, exclude `uk/` and `index.md`). Idempotent resumption.
 3. **Skip score ≥ 4.0.** Modules scoring ≥4.0 on the teaching audit skip the rewrite stage, but still run citation verification.
-4. **Citation verify-or-remove.** For every module touched: Lightpanda-fetch each URL in `## Sources`, LLM-verify it supports the nearest claim. Remove unverifiable. Applies to existing citations AND new ones added by a writer.
+4. **Citation verify-or-remove (STRICT).** For every module touched: Lightpanda-fetch each URL in `## Sources`, LLM-verify it supports the nearest claim. Keep **only** on a clear `supports` verdict. Everything else (`partial`, `no`, fetch-fail, ambiguous) → remove. Burden of proof is on keeping. Applies uniformly to existing citations, writer-added citations, and the 189 findings already queued — no grandfathering. We don't publish lies.
 5. **Equal Codex/Claude delegation.** Writers alternate by module index: odd → Codex writes + Claude reviews, even → Claude writes + Codex reviews. Gemini used only for the pre-classification teaching audit and as a tiebreaker if a Codex↔Claude retry loop stalls. Budget memo ("Claude disqualified for bulk") is overridden by this explicit user directive for this pipeline.
 
 ## Architecture (per Codex's design concern)
@@ -131,16 +131,19 @@ Gemini roles:
 
 ## Citation verify-or-remove details
 
+**Rule (user-confirmed strict, 2026-04-24 evening)**: burden of proof is on keeping. If we cannot prove the page supports the claim, we remove the citation. An unverified citation is a potential lie — not acceptable to publish. No grandfathering: applies to existing entries, writer-added entries, and the 189 findings in `.pipeline/v3/human-review/`.
+
 For each URL in `## Sources`:
 
 1. Lightpanda: `lightpanda fetch --dump markdown --strip-mode full <url>` (timeout 30s)
 2. Extract the claim: the description after `— ` on the source line, OR the surrounding paragraph in the module body if the source line is title-only.
 3. Dispatch to Gemini flash:
    ```
-   Given this page content [markdown dump], does it support this claim [claim text]?
+   Given this page content [markdown dump], does it CLEARLY AND EXPLICITLY support this claim [claim text]?
    Return JSON: {"verdict": "supports|partial|no", "excerpt": "<60-word cite>"}
+   Only use "supports" when the page states or demonstrates the claim directly. If it only implies, touches on, or is tangentially related, use "partial".
    ```
-4. If `supports`: keep. If `partial`: keep with a flag. If `no` or Lightpanda fetch failed: remove the line from `## Sources`.
+4. **KEEP only on `supports`**. **REMOVE on anything else** — `partial`, `no`, fetch failed, 404, page changed, ambiguous, or any tool error. No "flag + keep" path.
 
 If after removal the `## Sources` section is empty, remove the heading too.
 
