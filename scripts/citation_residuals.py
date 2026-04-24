@@ -514,11 +514,21 @@ def short_id_for(url: str) -> str:
 
 
 def build_source_line(url: str, finding: dict[str, Any], *, title: str | None = None) -> str:
-    """Render one `- [title](url) — note` bullet for the Sources list."""
+    """Render one ``- [title](url)`` bullet for the Sources list.
+
+    ``finding`` is retained in the signature for call-site compatibility
+    but is intentionally unused: earlier versions appended a "description"
+    derived from the finding's excerpt, which was the *claim being cited*
+    rather than a description of what the source actually says (see #364).
+    A URL-derived title is sufficient provenance; richer per-source
+    descriptions — if wanted — should come from the cited page itself
+    (``<title>``, ``<meta description>``) or an LLM summary of the page
+    body, never from the module text.
+    """
+    del finding  # intentionally unused; see docstring
     display_title = title or _derive_title_from_url(url)
-    note = _summarize_finding(finding)
     safe_title = display_title.replace("[", r"\[").replace("]", r"\]")
-    return f"- [{safe_title}]({url}) — {note}"
+    return f"- [{safe_title}]({url})"
 
 
 def _derive_title_from_url(url: str) -> str:
@@ -528,23 +538,17 @@ def _derive_title_from_url(url: str) -> str:
     host = (parsed.hostname or "").removeprefix("www.")
     path_segments = [seg for seg in parsed.path.split("/") if seg]
     tail = path_segments[-1] if path_segments else ""
+    # Strip the document extension (.html/.htm) so the title reads as a
+    # page name rather than a filename. Non-doc extensions (.pdf, .json)
+    # are preserved because they carry meaningful format signal.
+    for ext in (".html", ".htm"):
+        if tail.lower().endswith(ext):
+            tail = tail[: -len(ext)]
+            break
     readable = tail.replace("-", " ").replace("_", " ").strip()
     if host and readable:
         return f"{host}: {readable}"
     return host or url
-
-
-def _summarize_finding(finding: dict[str, Any]) -> str:
-    excerpt = (finding.get("excerpt") or "").strip()
-    # First sentence of excerpt, capped at 160 chars — enough for context
-    # without duplicating the whole paragraph.
-    first_sentence = re.split(r"(?<=[.!?])\s+", excerpt, maxsplit=1)[0]
-    summary = first_sentence[:160].strip()
-    if not summary:
-        return "Supporting citation for the flagged claim."
-    if not summary.endswith((".", "!", "?")):
-        summary += "."
-    return summary
 
 
 def inject_source(module_text: str, source_line: str) -> tuple[str, bool]:

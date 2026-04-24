@@ -871,7 +871,15 @@ def test_resolve_module_marks_unresolvable_when_no_candidates(
 # ---- source_line rendering -----------------------------------------------
 
 
-def test_build_source_line_safe_title_and_summary() -> None:
+def test_build_source_line_omits_finding_excerpt() -> None:
+    """Regression guard for #364. The Sources-line description MUST NOT
+    derive from the finding's excerpt — the excerpt is the claim being
+    cited, not a description of what the source documents. Earlier
+    resolver versions shipped the excerpt verbatim as the description,
+    producing lines that read as though the cited source authored the
+    original claim. The Sources line is now title-only; richer
+    per-source descriptions should come from the page itself, not from
+    the module text."""
     finding = {
         "excerpt": "Amazon scrapped its AI recruiting tool in 2018. Further details here.",
         "signals": ["year_reference"],
@@ -881,9 +889,52 @@ def test_build_source_line_safe_title_and_summary() -> None:
     )
     assert line.startswith("- [")
     assert "https://www.reuters.com/article/idUSKCN1MK08G" in line
-    # Summary uses first sentence only.
+    # No trailing description dash + text: "- [title](url)" only.
+    assert " — " not in line, f"unexpected description separator in: {line!r}"
+    # Absolutely no excerpt text in the output — this is the #364 failure
+    # mode. If this assertion ever regresses, every phase-2 bulk resolve
+    # will ship claim-text-as-description lines again.
+    assert "Amazon scrapped" not in line
     assert "Further details" not in line
-    assert "Amazon scrapped its AI recruiting tool in 2018." in line
+
+
+def test_build_source_line_escapes_brackets_in_derived_title() -> None:
+    line = citation_residuals.build_source_line(
+        "https://example.com/docs/foo-[bar]-baz", {"excerpt": "anything"}
+    )
+    # Bracket chars in the derived title must be escaped so the Markdown
+    # link syntax stays unambiguous.
+    assert r"\[bar\]" in line
+
+
+def test_build_source_line_respects_explicit_title() -> None:
+    line = citation_residuals.build_source_line(
+        "https://example.com/doc",
+        {"excerpt": "anything"},
+        title="AWS Well-Architected: Reliability Pillar",
+    )
+    assert "[AWS Well-Architected: Reliability Pillar]" in line
+    assert "(https://example.com/doc)" in line
+    assert " — " not in line
+
+
+def test_derive_title_strips_html_extension() -> None:
+    # The resolver targets vendor docs that often end in .html; stripping
+    # the document extension makes the title read as a page name rather
+    # than a filename ("foo bar" rather than "foo bar.html").
+    title = citation_residuals._derive_title_from_url(
+        "https://docs.aws.amazon.com/whitepapers/latest/"
+        "organizing-your-aws-environment/benefits-of-using-multiple-aws-accounts.html"
+    )
+    assert title == "docs.aws.amazon.com: benefits of using multiple aws accounts"
+
+
+def test_derive_title_preserves_non_doc_extension() -> None:
+    # .pdf carries format signal the reader cares about — keep it.
+    title = citation_residuals._derive_title_from_url(
+        "https://example.com/whitepapers/reliability.pdf"
+    )
+    assert title.endswith("reliability.pdf")
 
 
 # ---- CLI: --limit-modules ------------------------------------------------
