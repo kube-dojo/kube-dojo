@@ -6,8 +6,8 @@ Audited: 92 files, 195 needs_citation findings.
 
 | Category | Count | % |
 |---|---:|---:|
-| A. Sourceable | 111 | 56.9% |
-| B. Pedagogical fiction | 65 | 33.3% |
+| A. Sourceable | 112 | 57.4% |
+| B. Pedagogical fiction | 64 | 32.8% |
 | C. Hallucinated fact | 1 | 0.5% |
 | D. Ambiguous | 18 | 9.2% |
 
@@ -24,9 +24,6 @@ Audited: 92 files, 195 needs_citation findings.
 
 ### `ai-ml-engineering/advanced-genai/module-1.7-ai-red-teaming`
 - Line 798: If a large healthcare organization recklessly trains an internal LLM on raw, unanonymized private patient medical records to seamlessly provide...
-
-### `ai-ml-engineering/deep-learning/module-1.3-training-neural-networks`
-- Line 1219: Similarly, consider the "Million-Dollar Gradient Explosion" incident.
 
 ### `ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision`
 - Line 35: Imagine you are trying to pass a message through a chain of 100 people playing telephone. By the time the...
@@ -175,3 +172,8 @@ Audited: 92 files, 195 needs_citation findings.
 - I reserved Category C for claims that appear historically impossible as written, not merely anonymous, estimated, or hard to source.
 - I used Category D sparingly for broad synthesis claims that may be defensible but do not point cleanly to one discoverable public citation from the excerpt alone.
 - Closest borderline calls: Netflix multi-region cost/throughput figures, enterprise discount program thresholds, and several “industry lesson” statements. I left those in A or D rather than C because they are plausibly sourceable or interpretive, not impossible.
+
+## Post-review corrections
+
+- **Reclassified B → A** (2026-04-24, per Gemini review of PR #366): `ai-ml-engineering/deep-learning/module-1.3-training-neural-networks` line 1219 ("Million-Dollar Gradient Explosion"). The excerpt appears under `## Real-World Failures: Zillow and the Gradient Explosion` followed by `San Francisco. November 2021. 3:47 AM.` — it references the real, publicly-reported November 2021 Zillow Offers shutdown. The surface wording ("Million-Dollar Gradient Explosion" incident) read as anonymous on a line-only pass; reading surrounding context promotes it to sourceable. Counts updated: A 111→112, B 65→64.
+- Spot-check lesson for future audits: excerpt-only classification is lossy when a module's section header supplies the name/date that the sentence itself abstracts away. When a Category B excerpt is terse, pull one paragraph of surrounding context before deciding.
