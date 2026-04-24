@@ -79,6 +79,19 @@ def test_main_acquires_and_completes_per_module(
     assert "mod-alpha" in out
     assert "mod-beta" in out
     assert "skipped_locked=0" in out
+    # Heartbeat: start → resolving → summary, in that order. Order is the
+    # contract, not string presence — a refactor that prints heartbeats
+    # after resolve_module() returns would still leak silent stdout.
+    assert (
+        out.index("[1/2] mod-alpha: start")
+        < out.index("[1/2] mod-alpha: resolving")
+        < out.index("mod-alpha: considered=1")
+    )
+    assert (
+        out.index("[2/2] mod-beta: start")
+        < out.index("[2/2] mod-beta: resolving")
+        < out.index("mod-beta: considered=1")
+    )
     # Lock table has both rows completed.
     import sqlite3
 

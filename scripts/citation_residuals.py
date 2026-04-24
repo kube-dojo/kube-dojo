@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import sys
@@ -807,6 +808,14 @@ def _queue_path_for(module_key: str) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Line-buffer so heartbeat prints survive pipes (tee/>log) — block-buffered
+    # stdout hid a 16 min hang in the 2026-04-24 pilot run.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        try:
+            reconfigure(line_buffering=True)
+        except (io.UnsupportedOperation, ValueError):
+            pass
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -944,7 +953,8 @@ def main(argv: list[str] | None = None) -> int:
         # --dry-run does not mutate files; lock not required. --no-lock is
         # an explicit operator opt-out (use only in tests).
         use_lock = not (args.dry_run or args.no_lock)
-        for qp in useful_targets:
+        total_modules = len(useful_targets)
+        for i, qp in enumerate(useful_targets, 1):
             t0 = time.time()
             # Lock on the CANONICAL module key (e.g. "ai/foo/module-1.1"),
             # not the flattened queue filename (e.g. "ai-foo-module-1.1").
@@ -959,6 +969,7 @@ def main(argv: list[str] | None = None) -> int:
                 canonical_key = _queue_data.get("module_key") or qp.stem
             except Exception:  # noqa: BLE001
                 canonical_key = qp.stem
+            print(f"[{i}/{total_modules}] {canonical_key}: start")
             if use_lock:
                 conflict = module_lock.acquire_module_lock(
                     canonical_key,
@@ -974,6 +985,7 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     continue
             outcome = "ok"
+            print(f"[{i}/{total_modules}] {canonical_key}: resolving")
             try:
                 stats = resolve_module(qp, dry_run=args.dry_run)
             except BaseException:
