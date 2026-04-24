@@ -279,6 +279,87 @@ kubectl get pods
     assert "truncated" in (st.get("failure_reason") or "").lower()
 
 
+def test_write_one_extract_failure_persists_raw_diag(fake_repo, monkeypatch):
+    """When the extractor rejects the writer's output, ``_write_in_worktree``
+    must persist the raw stdout/stderr to
+    ``.pipeline/quality-pipeline/<slug>.write.<attempt_id>.failed.json``
+    so the failure is debuggable without re-dispatching the same prompt.
+
+    Regression guard for the v2 first-real-module smoke (k8s-capa
+    module-1.2-argo-events) where ``failure_reason`` only said
+    "no frontmatter delimiter found" and we had no way to see what
+    Claude actually returned.
+    """
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+
+    bogus_output = "I think the user wants me to refuse this rewrite."
+
+    def bad_dispatch(agent, prompt, *, timeout, model=None, cwd=None):
+        return DispatchResult(
+            ok=True, stdout=bogus_output, stderr="some chatter",
+            returncode=0, duration_sec=0.42, agent=agent, model=model,
+        )
+
+    monkeypatch.setattr(stages, "dispatch", bad_dispatch)
+    stages.write_one(slug, timeout=10)
+
+    st = state.load_state(slug)
+    assert st["stage"] == "FAILED"
+    reason = (st.get("failure_reason") or "").lower()
+    assert "frontmatter" in reason or "extractor" in reason
+    assert ".failed.json" in reason, "failure_reason should reference the diag artifact"
+
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
+    assert len(diag_files) == 1, f"expected exactly one diag file, got {diag_files}"
+    payload = json.loads(diag_files[0].read_text())
+    assert payload["slug"] == slug
+    assert payload["error"].startswith("extract_failed")
+    assert payload["stdout"] == bogus_output
+    assert payload["stderr"] == "some chatter"
+    assert payload["dispatch"]["returncode"] == 0
+    assert payload["prompt_sha256"] and len(payload["prompt_sha256"]) == 64
+    assert payload["prompt_len_chars"] > 0
+
+
+def test_write_one_dispatch_nonzero_persists_raw_diag(fake_repo, monkeypatch):
+    """Dispatcher non-zero exit (not a refusal — those are
+    ``DispatcherUnavailable``) is a real failure. The raw stdout/stderr
+    must be persisted alongside the FAILED transition.
+    """
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+
+    def crashing_dispatch(agent, prompt, *, timeout, model=None, cwd=None):
+        return DispatchResult(
+            ok=False, stdout="partial output before crash",
+            stderr="Traceback (most recent call last): RuntimeError: kaboom",
+            returncode=1, duration_sec=2.7, agent=agent, model=model,
+        )
+
+    monkeypatch.setattr(stages, "dispatch", crashing_dispatch)
+    stages.write_one(slug, timeout=10)
+
+    st = state.load_state(slug)
+    assert st["stage"] == "FAILED"
+    reason = (st.get("failure_reason") or "")
+    assert "dispatch failed" in reason.lower()
+    assert ".failed.json" in reason
+
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
+    assert len(diag_files) == 1
+    payload = json.loads(diag_files[0].read_text())
+    assert payload["error"] == "dispatch_failed"
+    assert payload["dispatch"]["returncode"] == 1
+    assert payload["dispatch"]["ok"] is False
+    assert "kaboom" in payload["stderr"]
+    assert payload["stdout"] == "partial output before crash"
+
+
 def test_write_one_dispatcher_unavailable_reverts_to_pending(fake_repo, monkeypatch):
     """Peak-hours / budget refusal must REVERT to WRITE_PENDING so the
     module stays retryable. v1's failure mode silently drained the queue."""

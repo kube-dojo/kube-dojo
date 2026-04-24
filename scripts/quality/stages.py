@@ -26,9 +26,11 @@ And the crash-resume correctness:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -275,6 +277,59 @@ def write_one(slug: str, *, timeout: int = 900) -> None:
         )
 
 
+def _save_write_diag(
+    *,
+    slug: str,
+    writer: str,
+    attempt_id: str,
+    result: DispatchResult,
+    prompt: str,
+    error: str,
+) -> Path:
+    """Persist the writer's raw stdout/stderr after a write failure.
+
+    The state file's ``failure_reason`` says WHAT failed (e.g.,
+    ``no frontmatter delimiter found``); this artifact says WHY — what
+    the writer actually returned. Without it, postmortem requires
+    re-dispatching the same prompt, which is wasteful and may not
+    reproduce when the dispatcher (Claude/Codex) is non-deterministic.
+
+    Failure modes saved:
+    * dispatcher non-zero exit (rc != 0) — typically a tool crash or
+      refusal not detected as DispatcherUnavailable.
+    * extractor rejected the output (``ModuleExtractError``) — output
+      missing frontmatter, truncated, prose-only, etc.
+
+    Returns the artifact path so the caller can include it in error
+    messages for human follow-up.
+    """
+    out_dir = _REPO_ROOT / ".pipeline" / "quality-pipeline"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{slug}.write.{attempt_id}.failed.json"
+    payload = {
+        "slug": slug,
+        "writer": writer,
+        "attempt_id": attempt_id,
+        "failed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "error": error,
+        "dispatch": {
+            "ok": result.ok,
+            "returncode": result.returncode,
+            "duration_sec": round(result.duration_sec, 2),
+            "agent": result.agent,
+            "model": result.model,
+        },
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "prompt_len_chars": len(prompt),
+    }
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    return path
+
+
 def _write_in_worktree(
     st: dict[str, Any], *, timeout: int, attempt_id: str
 ) -> tuple[Path, str]:
@@ -322,11 +377,24 @@ def _write_in_worktree(
     try:
         result = dispatch(writer, prompt, timeout=timeout, cwd=wt)
         if not result.ok:
+            diag = _save_write_diag(
+                slug=slug, writer=writer, attempt_id=attempt_id,
+                result=result, prompt=prompt, error="dispatch_failed",
+            )
             raise StageError(
                 f"{writer} dispatch failed (rc={result.returncode}): "
-                f"{result.stderr.strip()[:400]}"
+                f"{result.stderr.strip()[:400]} — raw saved to {diag.name}"
             )
-        extract = extract_module_markdown(result.stdout)
+        try:
+            extract = extract_module_markdown(result.stdout)
+        except ModuleExtractError as exc:
+            diag = _save_write_diag(
+                slug=slug, writer=writer, attempt_id=attempt_id,
+                result=result, prompt=prompt, error=f"extract_failed: {exc}",
+            )
+            raise ModuleExtractError(
+                f"{exc} — raw saved to {diag.name}"
+            ) from exc
         target = wt / module_rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(extract.text, encoding="utf-8")
@@ -776,7 +844,6 @@ def _merge_lock(timeout: float = 120.0):
     """Global git-main lock. merge_one holds it for rebase + ff-merge so
     two workers can't clobber main concurrently (Codex must #5)."""
     import fcntl
-    import time
     path = _merge_lock_path()
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
     deadline = time.monotonic() + timeout
