@@ -1111,3 +1111,44 @@ def test_limit_modules_rejects_non_integer(capsys: pytest.CaptureFixture[str]) -
     assert exc_info.value.code == 2
     err = capsys.readouterr().err
     assert "must be a positive integer" in err
+
+
+# ---- per-finding timeout wiring ------------------------------------------
+
+
+def test_candidate_dispatcher_passes_short_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-finding wrapper must forward GEMINI_PER_FINDING_TIMEOUT to
+    dispatch_gemini. Anchors the pilot's protection against a single
+    stuck Gemini call blocking the whole run."""
+    captured: dict[str, Any] = {}
+
+    def fake_dispatch(prompt: str, *, timeout: int) -> tuple[bool, str]:
+        captured["timeout"] = timeout
+        return True, "{}"
+
+    monkeypatch.setattr(citation_residuals, "dispatch_gemini", fake_dispatch)
+    citation_residuals._dispatch_gemini_for_candidate("hi")
+    assert captured["timeout"] == citation_residuals.GEMINI_PER_FINDING_TIMEOUT
+    assert captured["timeout"] <= 180
+
+
+def test_resolve_module_default_dispatcher_is_short_timeout_wrapper() -> None:
+    """Regression: the default dispatcher in resolve_module and
+    request_candidates must be the short-timeout wrapper, not the
+    shared dispatch_gemini (which still defaults to 900s for
+    research/inject in citation_backfill and would reintroduce the
+    15-min-per-finding hang if re-wired by accident)."""
+    import inspect
+
+    for fn in (
+        citation_residuals.resolve_module,
+        citation_residuals.request_candidates,
+    ):
+        sig = inspect.signature(fn)
+        default = sig.parameters["dispatcher"].default
+        assert default is citation_residuals._dispatch_gemini_for_candidate, (
+            f"{fn.__name__} default dispatcher is {default!r}, expected "
+            "the short-timeout wrapper"
+        )

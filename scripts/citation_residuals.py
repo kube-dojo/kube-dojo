@@ -37,6 +37,24 @@ HUMAN_REVIEW_DIR = REPO_ROOT / ".pipeline" / "v3" / "human-review"
 DEFAULT_MAX_CANDIDATES = 3
 MIN_SIGNAL_ANCHORS_REQUIRED = 1
 HEAD_CHECK_TIMEOUT_SECONDS = 5.0
+
+#: Per-finding Gemini timeout. URL-candidate generation is a small prompt
+#: with a structured JSON response; normal Flash/Pro responses are 1-30s.
+#: The default dispatch_gemini timeout (900s, inherited from the write-
+#: path pipeline) meant one stuck LLM call would block a 10-module pilot
+#: for 15 min with no progress. Matches the precedent in
+#: scripts/dedupe_audit.py, which does similar short-prompt work at 120s.
+GEMINI_PER_FINDING_TIMEOUT = 120
+
+
+def _dispatch_gemini_for_candidate(prompt: str) -> tuple[bool, str]:
+    """dispatch_gemini wrapper with the short per-finding timeout.
+
+    Kept as the default dispatcher for request_candidates /
+    resolve_module so research/inject paths in citation_backfill are
+    unaffected by the pilot's per-finding budget.
+    """
+    return dispatch_gemini(prompt, timeout=GEMINI_PER_FINDING_TIMEOUT)
 MIN_QUOTE_MATCH_LENGTH = 12
 # Default lease is generous — a single module can take several minutes
 # when the LLM dispatch stalls or the network is slow; a tight TTL would
@@ -272,7 +290,7 @@ def head_check(
 def request_candidates(
     finding: dict[str, Any],
     *,
-    dispatcher=dispatch_gemini,
+    dispatcher=_dispatch_gemini_for_candidate,
     allowlist_tier=fetch_citation.allowlist_tier,
     head_checker=None,
 ) -> list[dict[str, Any]]:
@@ -589,7 +607,7 @@ def resolve_module(
     queue_path: Path,
     *,
     dry_run: bool = False,
-    dispatcher=dispatch_gemini,
+    dispatcher=_dispatch_gemini_for_candidate,
     fetcher=fetch_citation.fetch,
     cached_text_path=fetch_citation.cached_text_path,
     allowlist_tier=fetch_citation.allowlist_tier,

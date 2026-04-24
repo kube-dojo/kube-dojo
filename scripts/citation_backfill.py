@@ -713,20 +713,18 @@ def _extract_bridge_response(stdout: str) -> tuple[bool, str]:
     return True, (parts[1] if len(parts) == 2 else body).strip()
 
 
-#: Per-finding Gemini timeout. URL-candidate generation is a small prompt
-#: with a structured JSON response; normal Flash/Pro responses are 1-30s.
-#: 900s here (inherited from the write-path pipeline that does whole-
-#: module generation) meant one stuck LLM call would block a 10-module
-#: pilot for 15 min with no progress. Matches the precedent in
-#: dedupe_audit.py which does similar short-prompt work at 120s.
-GEMINI_PER_FINDING_TIMEOUT = 120
+#: Default Gemini timeout, correct for whole-module research/inject
+#: prompts invoked from run_research / run_inject. Per-finding callers
+#: (URL-candidate generation) should pass a shorter value explicitly —
+#: one stuck short call should never block a whole pilot for 15 min.
+GEMINI_DEFAULT_TIMEOUT = 900
 
 
-def dispatch_gemini(prompt: str) -> tuple[bool, str]:
+def dispatch_gemini(prompt: str, *, timeout: int = GEMINI_DEFAULT_TIMEOUT) -> tuple[bool, str]:
     cmd = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "dispatch.py"),
-        "gemini", "-", "--timeout", str(GEMINI_PER_FINDING_TIMEOUT),
+        "gemini", "-", "--timeout", str(timeout),
     ]
     try:
         proc = subprocess.run(
@@ -735,11 +733,11 @@ def dispatch_gemini(prompt: str) -> tuple[bool, str]:
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
-            timeout=GEMINI_PER_FINDING_TIMEOUT,
+            timeout=timeout,
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return False, f"timeout_after_{GEMINI_PER_FINDING_TIMEOUT}s"
+        return False, f"timeout_after_{timeout}s"
     if proc.returncode != 0:
         return False, proc.stderr or proc.stdout
     return True, proc.stdout
