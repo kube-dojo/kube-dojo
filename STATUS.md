@@ -2,6 +2,43 @@
 
 > **Read this first every session. Update before ending.**
 
+## Active Work (2026-04-24 afternoon — quality pipeline v1 REJECTED, v2 redesign handoff)
+
+**Status**: mid-session handoff. Requirements locked with user. v2 implementation not started. Primary repo clean on main; no in-flight worktrees; no uncommitted changes.
+
+**Read the handoff first**: [`docs/sessions/2026-04-24-quality-pipeline-redesign.md`](docs/sessions/2026-04-24-quality-pipeline-redesign.md). It is a cold-start function — decisions, Codex must-fix list with file:line refs, smoketest commands.
+
+### What happened this afternoon
+
+1. **Citation pilot reverted** — morning `--agent claude` pilot resolved 73 findings at 41.5% rate but spot-check showed lazy LLM fallbacks (same Capital One Wikipedia URL cited in both IAM and EC2 modules). 57 module edits reverted to HEAD; 73 resolved + 116 unresolvable findings requeued to `needs_citation` via one-off `scripts/requeue_pilot_findings.py`. Primary clean.
+2. **Quality pipeline v1 built and rejected** — wrote `scripts/quality_pipeline.py` (~600 LOC, resumable state machine for Track 1 + Track 2). Smoke-tested safe stages only. Told user it was ready. User asked "did codex review it?" — it had not. Codex REJECTED with 10 must-fixes, including fatal bugs (reviewer reads wrong file; ff-merge breaks after first merge; REVIEW_CHANGES state is dead). New memory filed: `feedback_codex_review_before_running.md`.
+3. **Requirements for v2 locked** (see handoff doc):
+   - Worktrees per module — primary stays on main, clean.
+   - Full sweep of all 742 modules; skip those scoring ≥4.0 on teaching audit.
+   - Citation verify-or-remove — every URL Lightpanda-fetched + LLM-verified, unverifiable deleted (NOT left in place).
+   - Equal Codex/Claude delegation as writers, cross-family review; budget memo overridden by explicit directive.
+4. **Other durable learnings** — rubric `/api/quality/scores` is a structural regex, NOT a teaching-quality metric (see `reference_rubric_heuristic_structural.md`). Teaching-quality signal comes from `scripts/audit_teaching_quality.py` instead.
+
+### Artifacts left on disk (untracked pre-handoff, committed at handoff)
+
+- `scripts/quality_pipeline.py` — v1, REJECTED by Codex. Kept as historical reference for v2.
+- `scripts/audit_teaching_quality.py` — audit-only, good; reused by v2. Produces `.pipeline/teaching-audit/<slug>.json`.
+- `scripts/requeue_pilot_findings.py` — one-off citation-revert helper. Per "no staging scaffolding" memory, can be deleted after v2 lands.
+- `.pipeline/teaching-audit/*.json` (21) — audits from the aborted 742-module batch (workers=3 lagged user's Mac during Zoom call).
+- `.pipeline/quality-pipeline/*.json` (742) — state JSONs from v1 bootstrap. Idempotent; v2 may reuse or reset.
+
+### Next session
+
+Per the handoff doc:
+1. Implement pipeline v2 per the locked requirements + Codex must-fix list.
+2. Re-submit to Codex for a second review pass.
+3. Smoke-test 1 module end-to-end (the `--only k8s-capa-module-1.2-argo-events` case).
+4. Scale to all 742.
+
+### Prior session content — preserved below
+
+---
+
 ## Active Work (2026-04-24 morning — 4 PRs merged, phase-2 pilot unblocked via Claude dispatcher)
 
 **Session context**: user pivoted from "start phase-2" to a broader "we have git problems all the time, need a durable solution" concern after I surfaced a 13-day-old stash on cold-start. Infrastructure-level response below. No curriculum or content changes this session.
