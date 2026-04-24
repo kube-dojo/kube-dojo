@@ -2,7 +2,7 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-24 morning — 3 infra PRs merged, liveness-probe EPIC filed, pilot inconclusive on AI/ML batch)
+## Active Work (2026-04-24 morning — 4 PRs merged, phase-2 pilot unblocked via Claude dispatcher)
 
 **Session context**: user pivoted from "start phase-2" to a broader "we have git problems all the time, need a durable solution" concern after I surfaced a 13-day-old stash on cold-start. Infrastructure-level response below. No curriculum or content changes this session.
 
@@ -11,6 +11,7 @@
 - **PR #370** (`fix(resolver): line-buffer stdout + per-module heartbeat (#343)`). Root cause of the morning pilot's apparent 16-min freeze: Python block-buffers stdout when piped to `tee`, so the first line flushed but all subsequent lines never reached the log. Fix: `sys.stdout.reconfigure(line_buffering=True)` at `main()` entry, plus `[i/N] <key>: start` / `: resolving` heartbeat per module so any future hang localizes to a specific phase. Codex APPROVE with one NIT (lock ordering, not just string presence) — addressed in follow-up commit.
 - **PR #371** (`feat(briefing): surface silent-drift git hygiene signals`). Adds three alerts to `/api/briefing/session`: forgotten stashes (warn >24 h, escalate >7 d), detached-HEAD worktrees, uncommitted files on `main` only. None need rate-limiting — each is a real drift signal we've hit before. Codex APPROVE with two test-coverage NITs — both addressed. 107/107 `test_local_api.py` pass. The briefing service will surface these on next restart.
 - **PR #372** (`fix(resolver): cap per-finding Gemini timeout at 120 s (#343)`). Second round with Codex — first rev was scoped too broadly (would have dropped `run_research` / `run_inject` paths from 900 s to 120 s). Rescoped to a `_dispatch_gemini_for_candidate` wrapper in `citation_residuals.py`; `citation_backfill.dispatch_gemini` keeps the 900 s default so research/inject are unaffected. Test locks in `inspect.signature` default-dispatcher wiring as a regression guard. 61/61 tests pass.
+- **PR #374** (`feat(resolver): add --agent claude alternate dispatcher (#343, #373)`). The decisive pilot-unblocker. Empirical motivation: on `cloud/aws-essentials/module-1.1-iam` (Category-A, extremely well-documented) Gemini returned **0/2 resolved in 240 s** (2 × 120 s cap, every call killed mid-thought). Same module with `--agent claude`: **1/2 resolved in 85 s** (50% rate, 3× faster). Confirmed on `module-1.3-ec2`: **1/1 resolved in 176 s** (100%). Ships `dispatch_claude` mirror of `dispatch_gemini`, `CLAUDE_PER_FINDING_TIMEOUT=180`, `CANDIDATE_DISPATCHERS={gemini,claude}` registry, `--agent {gemini,claude}` flag, and a typed `DispatcherUnavailable` exception so Claude peak-hours / budget refusals abort the run cleanly (rc=3) without flipping in-flight findings to unresolvable. Four review rounds with Codex: retryability bug fixed, `sys.executable` → `.venv/bin/python` per AGENTS.md §3 (both Gemini and Claude paths), `_primary_checkout_root(repo_root)` helper for worktree safety (REPO_ROOT parents[1] resolves to the worktree dir, not the primary). 70/70 tests pass.
 
 ### Filed, not started — #373 liveness-probe EPIC
 
@@ -45,21 +46,22 @@ What this does and doesn't tell us:
 - `py-spy` installed (`brew install py-spy`) but needs `sudo` on macOS. SIGINT → Python traceback was cleaner.
 - Stale module-write lock from killed pilot-2 on `module-1.4-rlhf-alignment` explicitly released via `module_lock.release_module_lock` so next run isn't gated on the lease.
 
-### Cold-start for next session — the one clean move
+### Cold-start for next session — phase-2 bulk is ready with `--agent claude`
 
-**Pick one Category A module and run `resolve` against it** — binary data point:
-- **Resolves**: the 120 s cap is fine; #373 stays "someday." Phase-2 bulk is go on Cloud / Platform / On-Prem where Category A is dense.
-- **Doesn't resolve**: the cap is killing productive calls; #373 jumps up in priority.
+Today's Category-A probes confirmed the 120 s Gemini cap was killing productive calls (not just Category-B refusals). Claude dispatcher resolves them.
 
-Fast way to pick one (avoid AI/ML advanced-genai — it's ~100% Category B):
 ```bash
-# Scan residuals audit for a Category A finding on a non-AI module.
-rg -n '^\| A \|' docs/residuals-audit-2026-04-24.md | rg -v 'ai-ml' | head -5
-# Then resolve just that module's queue file:
-.venv/bin/python scripts/citation_residuals.py resolve <module_key> --dry-run --no-lock
+# 10-module pilot, Claude backend, dry-run first:
+.venv/bin/python scripts/citation_residuals.py resolve \
+  --all --agent claude --worker-id pilot-claude \
+  --limit-modules 10 --dry-run
 ```
 
-AI/ML advanced-genai is where the Category B modules cluster per the audit; the bulk pilot will have a much higher signal-to-noise on the other tracks.
+Spot-check 2-3 resolved Sources lines from `--dry-run` output for quality. If good, drop `--dry-run` and run again to actually write. Claude peak hours (14:00-20:00 local Mon-Fri, 2× pricing) will trigger `DispatcherUnavailable` and abort with rc=3 — findings stay in `needs_citation` for a post-peak retry.
+
+**Category mix reminder**: AI/ML advanced-genai is ~100% Category B (audit calls it out) — expect 0% resolve there by design. Cloud / On-Prem / Platform are where the 112 Category-A findings cluster.
+
+**#373 reprioritization trigger**: if Claude also produces suspiciously low resolve rates at bulk scale, or if peak-hours aborts become disruptive, move the composite-probe EPIC (#373) up. For now Claude is the pragmatic unblock.
 
 ### Prior session content — preserved below
 
