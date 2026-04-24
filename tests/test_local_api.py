@@ -2868,6 +2868,52 @@ def test_git_hygiene_ignores_fresh_stash(tmp_path: Path) -> None:
     assert not any("stash(es)" in a for a in alerts)
 
 
+def test_git_hygiene_ancient_suppresses_stale_message(tmp_path: Path) -> None:
+    # When a repo has BOTH >7-day and >24h stashes, only the >7-day line
+    # fires — we'd rather the operator see the worst offender than two
+    # competing lines about the same pile. The ancient-count excludes
+    # stale-only stashes (counts aren't double-counted).
+    _seed_commit(tmp_path)
+    _stash_with_date(tmp_path, int(time.time()) - 10 * 86400, "ancient")
+    _stash_with_date(tmp_path, int(time.time()) - 2 * 86400, "merely-stale")
+    worktree = local_api.build_worktree_status(tmp_path)
+    worktrees = local_api.build_worktrees_list(tmp_path)
+    alerts = local_api._git_hygiene_signals(tmp_path, worktree, worktrees)
+    ancient_lines = [a for a in alerts if "older than 7 days" in a]
+    stale_lines = [a for a in alerts if "older than 24h" in a]
+    assert len(ancient_lines) == 1
+    assert stale_lines == []
+    assert "1 stash(es)" in ancient_lines[0]  # only the >7d one counted
+
+
+def test_git_hygiene_tolerates_malformed_stash_list_output(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # `git stash list --format=%ct` should always be one unix-timestamp
+    # per line, but we guard against weird states (half-broken stash
+    # ref, future git version) so a freak output never crashes the
+    # briefing. Pin that best-effort behavior.
+    _seed_commit(tmp_path)
+    worktree = local_api.build_worktree_status(tmp_path)
+    worktrees = local_api.build_worktrees_list(tmp_path)
+
+    ancient_ts = int(time.time()) - 10 * 86400
+    real_run = local_api.subprocess.run
+
+    def fake_run(cmd, **kwargs):
+        if list(cmd[:4]) == ["git", "stash", "list", "--format=%ct"]:
+            class _R:
+                returncode = 0
+                stdout = f"garbage\n{ancient_ts}\n\nnot-a-number\n"
+            return _R()
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(local_api.subprocess, "run", fake_run)
+    alerts = local_api._git_hygiene_signals(tmp_path, worktree, worktrees)
+    # One valid numeric line interpreted as a real >7d stash; junk ignored.
+    assert any("older than 7 days" in a and "1 stash(es)" in a for a in alerts)
+
+
 def test_git_hygiene_flags_detached_worktree(tmp_path: Path) -> None:
     _seed_commit(tmp_path)
     worktree = local_api.build_worktree_status(tmp_path)
