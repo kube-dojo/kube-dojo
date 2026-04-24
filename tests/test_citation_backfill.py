@@ -11,6 +11,58 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import citation_backfill  # noqa: E402
 
 
+def test_primary_checkout_root_strips_worktree_layout() -> None:
+    """From `<repo>/.worktrees/<name>/` (AGENTS.md §1 mandated layout)
+    the helper must return `<repo>` — otherwise `_VENV_PYTHON` points
+    at a non-existent `<worktree>/.venv/bin/python` and the subprocess
+    launch fails inside a worktree.
+
+    Pure function over paths; no filesystem required.
+    """
+    # Primary checkout case: no worktree, returns input unchanged.
+    primary = Path("/home/user/kubedojo")
+    assert citation_backfill._primary_checkout_root(primary) == primary
+
+    # Worktree case: step up past .worktrees/<name>/ to the primary.
+    worktree = Path("/home/user/kubedojo/.worktrees/feature-x")
+    assert (
+        citation_backfill._primary_checkout_root(worktree)
+        == Path("/home/user/kubedojo")
+    )
+
+    # Edge: a directory literally named ".worktrees" as the parent of
+    # a non-worktree path (unlikely but possible) — still handled
+    # correctly by stepping up. Documents the name-based heuristic.
+    nested = Path("/tmp/.worktrees/foo")
+    assert (
+        citation_backfill._primary_checkout_root(nested) == Path("/tmp")
+    )
+
+
+def test_venv_python_points_at_primary_even_when_loaded_from_worktree() -> None:
+    """Regression guard for the #374 round-3 finding: _VENV_PYTHON
+    must resolve to <primary>/.venv/bin/python, not
+    <worktree>/.venv/bin/python. This test doesn't reload the module
+    from a worktree (expensive) — it recomputes what the module would
+    compute and asserts the shape.
+    """
+    pretend_worktree_root = Path("/home/u/kubedojo/.worktrees/feat-x")
+    expected_interpreter = (
+        citation_backfill._primary_checkout_root(pretend_worktree_root)
+        / ".venv" / "bin" / "python"
+    )
+    assert expected_interpreter == Path("/home/u/kubedojo/.venv/bin/python"), (
+        f"worktree lookup must resolve to primary .venv, got "
+        f"{expected_interpreter}"
+    )
+    # And for the module's own _VENV_PYTHON in the primary checkout,
+    # it must not contain '.worktrees' at all.
+    assert ".worktrees" not in citation_backfill._VENV_PYTHON, (
+        f"module-level _VENV_PYTHON leaked a worktree segment: "
+        f"{citation_backfill._VENV_PYTHON}"
+    )
+
+
 def test_dispatch_gemini_launches_dispatch_with_venv_python_and_absolute_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -37,12 +37,31 @@ from fetch_citation import allowlist_tier, fetch  # type: ignore[import-not-foun
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+
+def _primary_checkout_root(repo_root: Path) -> Path:
+    """Resolve the primary checkout root, even from a worktree.
+
+    AGENTS.md §1 mandates the ``.worktrees/<name>/`` layout inside the
+    primary checkout. When invoked from a worktree, ``REPO_ROOT``
+    resolves to ``<primary>/.worktrees/<name>``, so the venv isn't
+    co-located there. Detect that layout by name and step up two
+    levels to the primary checkout where ``.venv`` actually lives.
+
+    Pure function kept testable so a regression can assert both the
+    primary-case and the worktree-case without touching the filesystem.
+    """
+    if repo_root.parent.name == ".worktrees":
+        return repo_root.parent.parent
+    return repo_root
+
+
 #: Absolute path to the primary-checkout venv's Python. AGENTS.md §3
 #: forbids sys.executable for subprocess.run because it misses
-#: .venv-only deps. Derived from __file__ so it survives calls from
-#: git worktrees — the primary checkout's venv is always co-located
-#: with the scripts/ directory.
-_VENV_PYTHON = str(REPO_ROOT / ".venv" / "bin" / "python")
+#: .venv-only deps. Derived from __file__ AND normalized for the
+#: worktree layout so the interpreter resolves to the primary venv
+#: whether the script is called from the primary checkout or a
+#: worktree (worktrees share the primary .venv).
+_VENV_PYTHON = str(_primary_checkout_root(REPO_ROOT) / ".venv" / "bin" / "python")
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 SEED_DIR = REPO_ROOT / "docs" / "citation-seeds"
 CITATION_POOL_DIR = REPO_ROOT / "docs" / "citation-pools"
