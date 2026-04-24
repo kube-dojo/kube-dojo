@@ -816,18 +816,36 @@ def main(argv: list[str] | None = None) -> int:
         help="Module key or slug. Use --all instead to process every queued file.",
     )
     p_resolve.add_argument("--all", action="store_true", help="Process every queue file")
+
+    def _positive_int(raw: str) -> int:
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"--limit-modules must be a positive integer, got {raw!r}"
+            ) from exc
+        if value <= 0:
+            raise argparse.ArgumentTypeError(
+                f"--limit-modules must be >= 1 (got {value}); "
+                "silently treating 0 or negative as 'no limit' would let a "
+                "typo unleash the full bulk run"
+            )
+        return value
+
     p_resolve.add_argument(
         "--limit-modules",
-        type=int,
+        type=_positive_int,
         default=None,
         metavar="N",
         help=(
-            "Cap the number of modules processed in an --all run to N. Useful "
-            "for gradual rollout / pilot runs before a full bulk batch — see "
-            "the 2026-04-23 postmortem. Applied AFTER the empty-queue filter, "
-            "so N=10 means 10 modules with actual needs_citation findings, "
-            "not 10 scanned files. Has no effect when a specific module_key is "
-            "given instead of --all."
+            "Cap the number of modules processed in an --all run to N (>=1). "
+            "Useful for gradual rollout / pilot runs before a full bulk "
+            "batch — see the 2026-04-23 postmortem. Applied AFTER the "
+            "empty-queue filter, so N=10 means 10 modules with actual "
+            "needs_citation findings, not 10 scanned files. Has no effect "
+            "when a specific module_key is given instead of --all. "
+            "0 or negative is rejected up front — an invalid cap must not "
+            "silently degrade to 'no limit'."
         ),
     )
     p_resolve.add_argument(
@@ -902,7 +920,8 @@ def main(argv: list[str] | None = None) -> int:
             print("No residuals with needs_citation findings.")
             return 0
 
-        if args.all and args.limit_modules is not None and args.limit_modules > 0:
+        if args.all and args.limit_modules is not None:
+            # argparse type=_positive_int already rejected 0/negative.
             total_before = len(useful_targets)
             useful_targets = useful_targets[: args.limit_modules]
             print(

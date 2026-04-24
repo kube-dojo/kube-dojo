@@ -977,3 +977,86 @@ def test_limit_modules_ignored_when_module_key_given(
     )
     assert rc == 0
     assert len(called) == 1
+
+
+def test_limit_modules_applied_after_empty_queue_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cap must slice the useful (non-empty) modules, not the raw scanned files.
+
+    Mixes empty and non-empty queue files in alphabetical order so that a
+    buggy "slice before filter" would pick up an empty file in the first N
+    slots. After-filter behavior must process N modules with real findings.
+    """
+    queue_dir = tmp_path / ".pipeline" / "v3" / "human-review"
+    queue_dir.mkdir(parents=True)
+    finding = {
+        "line": 3,
+        "signals": ["year_reference"],
+        "excerpt": "In 2023 something happened.",
+        "search_hint": ["2023 event"],
+    }
+    # Filenames chosen so the scan order is: a-empty, b-real, c-empty, d-real.
+    # With --limit-modules 2, slice-before-filter would pick {a, b} (1 real),
+    # slice-after-filter must pick {b, d} (2 real).
+    _write_queue_file(queue_dir / "a-empty.json", "a/empty", [])
+    _write_queue_file(queue_dir / "b-real.json", "b/real", [finding])
+    _write_queue_file(queue_dir / "c-empty.json", "c/empty", [])
+    _write_queue_file(queue_dir / "d-real.json", "d/real", [finding])
+
+    monkeypatch.setattr(citation_residuals, "HUMAN_REVIEW_DIR", queue_dir)
+
+    called: list[str] = []
+
+    def fake_resolve_module(qp: Path, **_: Any) -> dict[str, Any]:
+        called.append(qp.stem)
+        return {
+            "module_key": qp.stem,
+            "considered": 1,
+            "resolved": 0,
+            "unresolvable": 0,
+            "module_edited": False,
+        }
+
+    monkeypatch.setattr(citation_residuals, "resolve_module", fake_resolve_module)
+
+    rc = citation_residuals.main(
+        ["resolve", "--all", "--limit-modules", "2", "--no-lock"]
+    )
+    assert rc == 0
+    assert called == ["b-real", "d-real"], (
+        "cap must filter empty queues first; got "
+        f"{called} — if 'a-empty' appears, the slice ran before the filter"
+    )
+
+
+def test_limit_modules_rejects_zero(capsys: pytest.CaptureFixture[str]) -> None:
+    """0 must not silently degrade to 'no limit'. A typo that would unleash
+    the full bulk run is the exact failure mode to prevent."""
+    with pytest.raises(SystemExit) as exc_info:
+        citation_residuals.main(
+            ["resolve", "--all", "--limit-modules", "0", "--no-lock"]
+        )
+    assert exc_info.value.code == 2
+    err = capsys.readouterr().err
+    assert "--limit-modules must be >= 1" in err
+
+
+def test_limit_modules_rejects_negative(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        citation_residuals.main(
+            ["resolve", "--all", "--limit-modules", "-3", "--no-lock"]
+        )
+    assert exc_info.value.code == 2
+    err = capsys.readouterr().err
+    assert "--limit-modules must be >= 1" in err
+
+
+def test_limit_modules_rejects_non_integer(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        citation_residuals.main(
+            ["resolve", "--all", "--limit-modules", "abc", "--no-lock"]
+        )
+    assert exc_info.value.code == 2
+    err = capsys.readouterr().err
+    assert "must be a positive integer" in err
