@@ -331,7 +331,7 @@ def test_reviewer_reads_module_from_worktree_not_primary(fake_repo, monkeypatch)
     # No-op citations so we reach review.
     monkeypatch.setattr(
         stages, "process_module_citations",
-        lambda p, *, verifier=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
+        lambda p, *, verifier=None, fetcher=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
     )
 
     stages.write_one(slug, timeout=10)
@@ -361,7 +361,7 @@ def test_review_changes_routes_back_to_write_pending_with_retry_count(fake_repo,
     )
     monkeypatch.setattr(
         stages, "process_module_citations",
-        lambda p, *, verifier=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
+        lambda p, *, verifier=None, fetcher=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
     )
 
     stages.write_one(slug, timeout=10)
@@ -424,7 +424,7 @@ def test_ff_merge_after_main_advances_with_real_pipeline_modules(fake_repo, monk
     )
     monkeypatch.setattr(
         stages, "process_module_citations",
-        lambda p, *, verifier=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
+        lambda p, *, verifier=None, fetcher=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
     )
 
     modules = sorted(pipeline.iter_all_modules())
@@ -512,7 +512,7 @@ def test_full_pipeline_single_module_ends_committed(fake_repo, monkeypatch):
     )
     monkeypatch.setattr(
         stages, "process_module_citations",
-        lambda p, *, verifier=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
+        lambda p, *, verifier=None, fetcher=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
     )
 
     terminal = stages.run_module(slug)
@@ -584,6 +584,362 @@ def test_bootstrap_migrates_v1_state_missing_module_index(fake_repo, monkeypatch
     assert migrated["stage"] == "AUDITED"
     assert migrated["audit"]["teaching_score"] == 3.0
     assert migrated["history"][0]["note"] == "v1"
+
+
+# ---- Codex v2-review fatals + musts --------------------------------
+
+
+def _high_score_module_setup(fake_repo: Path) -> str:
+    """Helper: seed a module at high audit score + complete structure
+    so route_one sends it to CITATION_CLEANUP_ONLY.
+
+    COMMITS the module content — the cleanup-only path creates a
+    worktree from ``main``'s tip, so uncommitted primary changes would
+    be invisible to the citation pass.
+    """
+    slug = _bootstrap(fake_repo)
+    st = state.load_state(slug)
+    assert st is not None
+    st["audit"] = {"teaching_score": 4.5, "teaching_gaps": []}
+    st["stage"] = "AUDITED"
+    state.save_state(st)
+    module_path = fake_repo / st["module_path"]
+    module_path.write_text("""---
+title: Pods
+sidebar:
+  order: 1
+---
+
+# Body
+
+## Quiz
+
+Q.
+
+## Hands-On Exercise
+
+Do.
+
+## Common Mistakes
+
+Table.
+
+## Did You Know?
+
+Facts.
+
+## Sources
+
+- [Official docs](https://kubernetes.io/docs/) — authoritative reference
+
+## Next
+""")
+    subprocess.run(["git", "add", st["module_path"]], cwd=fake_repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "seed high-score module"],
+        cwd=fake_repo, check=True, capture_output=True,
+    )
+    stages.route_one(slug)
+    return slug
+
+
+def test_cleanup_only_never_writes_primary_checkout(fake_repo, monkeypatch):
+    """Codex fatal #1 regression guard.
+
+    CITATION_CLEANUP_ONLY path must NOT mutate the primary module file.
+    All work happens in a throwaway worktree from main.
+    """
+    slug = _high_score_module_setup(fake_repo)
+    st = state.load_state(slug)
+    assert st["stage"] == "CITATION_CLEANUP_ONLY"
+    primary_module = fake_repo / st["module_path"]
+    primary_content_before = primary_module.read_text()
+
+    # Citation has a removal, so result.changed is True.
+    def partial_verifier(_prompt):
+        return DispatchResult(
+            ok=True,
+            stdout=json.dumps({"verdict": "partial", "reasoning": "weak", "excerpt": ""}),
+            stderr="", returncode=0, duration_sec=0.1, agent="gemini", model=None,
+        )
+
+    stages.citation_verify_one(
+        slug, verifier_fn=partial_verifier, fetcher_fn=lambda _u: "page"
+    )
+    # Primary must be byte-identical through the cleanup-only stage.
+    assert primary_module.read_text() == primary_content_before
+
+    # The work landed on a worktree branch, not main.
+    st = state.load_state(slug)
+    assert st["stage"] == "REVIEW_APPROVED"
+    assert worktree.current_branch(fake_repo) == "main"
+    assert not worktree.has_uncommitted(fake_repo)
+    wt = worktree.worktree_dir(fake_repo, slug)
+    assert wt.exists()
+    # Worktree version has the removed citation; primary still does not.
+    assert "kubernetes.io/docs" not in (wt / st["module_path"]).read_text()
+    assert "kubernetes.io/docs" in primary_content_before
+
+
+def test_cleanup_only_no_changes_ends_at_skipped_without_merge(fake_repo, monkeypatch):
+    """Codex fatal #2 regression guard.
+
+    When every citation verifies as 'supports', the cleanup-only path
+    must NOT create a mergeable branch. It terminates at SKIPPED and
+    tears down the throwaway worktree.
+    """
+    slug = _high_score_module_setup(fake_repo)
+
+    def supports_verifier(_prompt):
+        return DispatchResult(
+            ok=True,
+            stdout=json.dumps({"verdict": "supports", "reasoning": "direct", "excerpt": "q"}),
+            stderr="", returncode=0, duration_sec=0.1, agent="gemini", model=None,
+        )
+
+    stages.citation_verify_one(
+        slug, verifier_fn=supports_verifier, fetcher_fn=lambda _u: "page"
+    )
+    st = state.load_state(slug)
+    assert st["stage"] == "SKIPPED"
+    # Worktree torn down — no merge required.
+    assert not worktree.worktree_dir(fake_repo, slug).exists()
+    # No branch left over.
+    import subprocess as _sp
+    branch = worktree.branch_name(slug)
+    rc = _sp.run(
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+    ).returncode
+    assert rc != 0, "branch should be cleaned up"
+
+
+def test_citation_verify_is_resumable_after_sigkill(fake_repo, monkeypatch):
+    """Codex must #3 regression guard.
+
+    If a SIGKILL lands after CITATION_VERIFY transition but before
+    completion, re-running citation_verify_one should resume (not
+    raise and not duplicate the transition).
+    """
+    slug = _high_score_module_setup(fake_repo)
+    # Simulate "entered CITATION_VERIFY, then process died" by manually
+    # setting the state without completing the work.
+    st = state.load_state(slug)
+    st["stage"] = "CITATION_VERIFY"
+    st["citation_origin"] = "CITATION_CLEANUP_ONLY"
+    state.save_state(st)
+
+    def partial_verifier(_prompt):
+        return DispatchResult(
+            ok=True,
+            stdout=json.dumps({"verdict": "partial", "reasoning": "weak", "excerpt": ""}),
+            stderr="", returncode=0, duration_sec=0.1, agent="gemini", model=None,
+        )
+
+    # Resume — must not raise, must complete.
+    stages.citation_verify_one(
+        slug, verifier_fn=partial_verifier, fetcher_fn=lambda _u: "page"
+    )
+    st = state.load_state(slug)
+    assert st["stage"] in ("REVIEW_APPROVED", "SKIPPED")  # depends on changes
+    # _STAGE_FN also has CITATION_VERIFY handler so run_module can drive it.
+    assert "CITATION_VERIFY" in stages._STAGE_FN
+
+
+def test_recovery_does_not_trust_stale_branch_at_old_main(fake_repo, monkeypatch):
+    """Codex must #4 regression guard.
+
+    A branch sitting at the old main tip (no writer commit appended)
+    should NOT falsely count as a completed write after main advances.
+    """
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+
+    import subprocess as _sp
+    # Create the worktree/branch at current main, simulating the
+    # writer's worktree just after create_worktree but before commit.
+    worktree.create_worktree(fake_repo, slug)
+    # Advance main via an unrelated commit on the primary.
+    (fake_repo / "UNRELATED.md").write_text("advance\n")
+    _sp.run(["git", "add", "UNRELATED.md"], cwd=fake_repo, check=True)
+    _sp.run(["git", "commit", "-m", "unrelated"], cwd=fake_repo, check=True, capture_output=True)
+
+    # Mark state WRITE_IN_PROGRESS as if a SIGKILL had landed pre-commit.
+    st = state.load_state(slug)
+    st["stage"] = "WRITE_IN_PROGRESS"
+    st["attempt_id"] = "deadbeef"
+    state.save_state(st)
+
+    stages.recover_in_progress(slug)
+    st = state.load_state(slug)
+    # Branch never had a commit AHEAD of main, so recovery MUST revert.
+    assert st["stage"] == "WRITE_PENDING"
+
+
+def test_failed_modules_have_branches_cleaned_up(fake_repo, monkeypatch):
+    """Codex must #9 regression guard.
+
+    record_failure via _fail_and_cleanup must delete the worktree branch
+    so FAILED modules don't leak branches forever.
+    """
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+
+    # Force a write failure by making Codex output malformed.
+    def bad_dispatch(agent, prompt, *, timeout, model=None, cwd=None):
+        return DispatchResult(
+            ok=True, stdout="garbage no frontmatter",
+            stderr="", returncode=0, duration_sec=0.1, agent=agent, model=model,
+        )
+    monkeypatch.setattr(stages, "dispatch", bad_dispatch)
+
+    stages.write_one(slug, timeout=10)
+    st = state.load_state(slug)
+    assert st["stage"] == "FAILED"
+
+    # Branch deleted.
+    import subprocess as _sp
+    branch = worktree.branch_name(slug)
+    rc = _sp.run(
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+    ).returncode
+    assert rc != 0, "FAILED module must not leak its branch"
+    # Worktree gone.
+    assert not worktree.worktree_dir(fake_repo, slug).exists()
+
+
+def test_approve_verdict_demoted_when_score_below_gate() -> None:
+    """Codex must #7 regression guard.
+
+    ``verdict=approve`` with numeric rubric_score < 4.0 must be
+    demoted to ``changes_requested`` with a must_fix note.
+    """
+    payload = json.dumps({
+        "verdict": "approve",
+        "rubric_score": 3.0,
+        "teaching_score": 4.5,
+        "must_fix": [],
+    })
+    result = DispatchResult(
+        ok=True, stdout=payload, stderr="", returncode=0,
+        duration_sec=0.1, agent="claude", model=None,
+    )
+    verdict = stages._parse_review_verdict(result)
+    assert verdict is not None
+    assert verdict["verdict"] == "changes_requested"
+    assert verdict.get("score_gate_demotion") is True
+    assert any("scores don't meet" in m or "score" in m.lower() for m in verdict["must_fix"])
+
+
+def test_approve_verdict_demoted_when_score_missing() -> None:
+    payload = json.dumps({
+        "verdict": "approve",
+        "rubric_score": "n/a",  # non-numeric
+        "teaching_score": 4.5,
+        "must_fix": [],
+    })
+    result = DispatchResult(
+        ok=True, stdout=payload, stderr="", returncode=0,
+        duration_sec=0.1, agent="claude", model=None,
+    )
+    verdict = stages._parse_review_verdict(result)
+    assert verdict is not None
+    assert verdict["verdict"] == "changes_requested"
+
+
+def test_approve_verdict_kept_when_both_scores_meet_gate() -> None:
+    payload = json.dumps({
+        "verdict": "approve",
+        "rubric_score": 4.2,
+        "teaching_score": 4.0,
+        "must_fix": [],
+    })
+    result = DispatchResult(
+        ok=True, stdout=payload, stderr="", returncode=0,
+        duration_sec=0.1, agent="claude", model=None,
+    )
+    verdict = stages._parse_review_verdict(result)
+    assert verdict is not None
+    assert verdict["verdict"] == "approve"
+    assert verdict.get("score_gate_demotion") is not True
+
+
+def test_merge_retries_on_transient_rebase_failure(fake_repo, monkeypatch):
+    """Codex must #5 regression guard for the retry aspect.
+
+    When rebase/ff fails (simulating a lost race — another worker landed
+    on main first), merge_one should re-enter the lock + re-rebase +
+    re-merge up to ``_MERGE_RETRY_CAP`` times rather than marking FAILED
+    on first failure. This lets workers>1 operate without incorrectly
+    killing racing modules.
+    """
+    slug = _bootstrap(fake_repo)
+    monkeypatch.setattr(
+        stages, "dispatch",
+        _stubbed_dispatch(_writer_stub_output(), _review_approve_output()),
+    )
+    monkeypatch.setattr(
+        stages, "process_module_citations",
+        lambda p, *, verifier=None, fetcher=None: CitationResult(new_text=p.read_text(), had_sources_section=False),
+    )
+    stages.audit_one(slug)
+    stages.route_one(slug)
+    stages.write_one(slug, timeout=10)
+    stages.citation_verify_one(slug)
+    stages.review_one(slug, timeout=10)
+
+    calls = {"rebase": 0}
+    real_rebase = stages.rebase_onto_main
+
+    def flaky_rebase(primary, slug_arg, **kw):
+        calls["rebase"] += 1
+        if calls["rebase"] == 1:
+            raise worktree.WorktreeError("simulated race: another merge landed first")
+        return real_rebase(primary, slug_arg, **kw)
+
+    monkeypatch.setattr(stages, "rebase_onto_main", flaky_rebase)
+    stages.merge_one(slug)
+
+    st = state.load_state(slug)
+    assert st["stage"] == "COMMITTED", f"retry should succeed after transient failure, got {st['stage']}"
+    assert calls["rebase"] == 2, "rebase should have been retried once"
+
+
+def test_write_cleanup_even_when_commit_fails(fake_repo, monkeypatch):
+    """Codex must #8 regression guard.
+
+    If git add/commit/rev-parse (post-dispatch operations) raise, the
+    worktree + branch must still be cleaned up — the write path's
+    try/except BaseException catches all exception classes.
+    """
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+    # Writer dispatch succeeds with valid module content.
+    monkeypatch.setattr(stages, "dispatch", _stubbed_dispatch(_writer_stub_output(), ""))
+
+    # But let git commit raise — simulate a post-dispatch git failure.
+    original_run = subprocess.run
+
+    def boomy_run(args, *a, **k):
+        if args[:2] == ["git", "commit"]:
+            raise subprocess.CalledProcessError(1, args, stderr="simulated commit failure")
+        return original_run(args, *a, **k)
+
+    monkeypatch.setattr(stages.subprocess, "run", boomy_run)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        stages.write_one(slug, timeout=10)
+
+    # Worktree + branch removed despite the crash mid-stage.
+    assert not worktree.worktree_dir(fake_repo, slug).exists()
+    import subprocess as _sp
+    branch = worktree.branch_name(slug)
+    rc = _sp.run(
+        ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
+    ).returncode
+    assert rc != 0
 
 
 def test_run_order_is_worst_first(fake_repo, monkeypatch):

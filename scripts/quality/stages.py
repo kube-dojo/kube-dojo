@@ -27,7 +27,9 @@ And the crash-resume correctness:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -151,7 +153,7 @@ def audit_one(slug: str, *, timeout: int = 600) -> None:
                 cmd, cwd=str(_REPO_ROOT), capture_output=True, text=True, timeout=timeout + 30
             )
             if proc.returncode != 0 or not audit_file.exists():
-                state.record_failure(st, f"audit failed: {proc.stderr.strip()[:400]}")
+                _fail_and_cleanup(st, f"audit failed: {proc.stderr.strip()[:400]}")
                 return
 
         audit = json.loads(audit_file.read_text(encoding="utf-8"))
@@ -255,8 +257,10 @@ def write_one(slug: str, *, timeout: int = 900) -> None:
             )
             raise
         except (ModuleExtractError, WorktreeError, StageError) as exc:
-            remove_worktree(_primary(), slug, delete_branch=False)
-            state.record_failure(st, f"write: {exc}")
+            # _write_in_worktree already calls remove_worktree in its
+            # BaseException handler; call _fail_and_cleanup so any
+            # residual branch metadata is also scrubbed.
+            _fail_and_cleanup(st, f"write: {exc}")
             return
 
         state.transition(
@@ -307,140 +311,228 @@ def _write_in_worktree(
 
     # Worktree PERSISTS through the whole module lifecycle (write → citation
     # verify → review → merge). Only teardown paths are:
-    # 1. write_one() failure → remove_worktree(delete_branch=False) for postmortem
+    # 1. write_one() failure or DispatcherUnavailable → remove_worktree(
+    #    delete_branch=True) so retry starts from a clean branch. The
+    #    locked requirement says cleanup on success AND failure AND
+    #    SIGKILL — so branches don't leak even for FAILED modules.
     # 2. merge_one() success → remove_worktree(delete_branch=True)
-    # 3. DispatcherUnavailable → remove_worktree(delete_branch=True) so retry is clean
     # Using ``worktree_session`` here would destroy the worktree before
     # the reviewer (Codex must-fix #1) could read from it.
     wt = create_worktree(_primary(), slug)
     try:
         result = dispatch(writer, prompt, timeout=timeout, cwd=wt)
+        if not result.ok:
+            raise StageError(
+                f"{writer} dispatch failed (rc={result.returncode}): "
+                f"{result.stderr.strip()[:400]}"
+            )
+        extract = extract_module_markdown(result.stdout)
+        target = wt / module_rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(extract.text, encoding="utf-8")
+        commit_msg = (
+            f"quality({track}): {writer} rewrite {slug} (attempt {attempt_id})\n"
+            f"\nRefs #375."
+        )
+        subprocess.run(
+            ["git", "add", module_rel], cwd=wt, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg], cwd=wt, check=True, capture_output=True
+        )
+        sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=wt, check=True, capture_output=True, text=True
+        ).stdout.strip()
+        return wt, sha
     except BaseException:
+        # Single broad cleanup handler — git add/commit/rev-parse,
+        # file writes, and dispatch can all raise, and all must reach
+        # remove_worktree(delete_branch=True) before re-raising. Codex
+        # must-fix #6/#8 — v1 and earlier v2 only wrapped dispatch.
         remove_worktree(_primary(), slug, delete_branch=True)
         raise
-    if not result.ok:
-        remove_worktree(_primary(), slug, delete_branch=False)
-        raise StageError(
-            f"{writer} dispatch failed (rc={result.returncode}): "
-            f"{result.stderr.strip()[:400]}"
-        )
-    try:
-        extract = extract_module_markdown(result.stdout)
-    except ModuleExtractError:
-        remove_worktree(_primary(), slug, delete_branch=False)
-        raise
-    target = wt / module_rel
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(extract.text, encoding="utf-8")
-    commit_msg = (
-        f"quality({track}): {writer} rewrite {slug} (attempt {attempt_id})\n"
-        f"\nRefs #375."
-    )
-    subprocess.run(
-        ["git", "add", module_rel], cwd=wt, check=True, capture_output=True
-    )
-    subprocess.run(
-        ["git", "commit", "-m", commit_msg], cwd=wt, check=True, capture_output=True
-    )
-    sha = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=wt, check=True, capture_output=True, text=True
-    ).stdout.strip()
-    return wt, sha
 
 
 # ---- citation verify stage --------------------------------------------
 
 
-def citation_verify_one(slug: str, *, verifier_fn=None) -> None:
-    """WRITE_DONE → CITATION_VERIFY → REVIEW_PENDING (or CITATION_CLEANUP_ONLY
-    when the skip-rewrite path leads here directly).
+def citation_verify_one(slug: str, *, verifier_fn=None, fetcher_fn=None) -> None:
+    """Run the strict verify-or-remove citation pass for one module.
+
+    Handles two entry paths + resume:
+
+    * **Rewrite path** — entered at ``WRITE_DONE``. The writer's worktree
+      already exists with the rewrite committed. Citation pass runs
+      inside it; changes get amended into the writer's commit. Exit:
+      ``REVIEW_PENDING``.
+    * **Cleanup-only path** — entered at ``CITATION_CLEANUP_ONLY``
+      (score ≥ 4.0 + structure complete). No worktree exists yet; we
+      create one fresh from ``main`` so the primary checkout never
+      mutates (Codex fatal #1). If nothing changes, we tear down the
+      worktree and exit ``SKIPPED``. If something changes, we commit
+      in the worktree and exit ``REVIEW_APPROVED`` — reviewer is
+      skipped because the writer is the citation verifier itself.
+    * **Resume** — if a SIGKILL landed after the stage entered
+      ``CITATION_VERIFY``, the saved ``citation_origin`` field tells us
+      which of the above paths to continue. The work is idempotent
+      (re-fetching URLs + re-verifying produces the same verdicts) so
+      re-running is safe. Closes Codex must #3.
 
     ``verifier_fn`` is injectable for testing; defaults to the live
     Gemini-flash verifier in :mod:`citations`.
     """
-    from .citations import default_verifier  # local import avoids import-time side effects
-
-    with state.state_lease(slug) as lease:
-        st = lease.load()
-        if st is None or st["stage"] not in ("WRITE_DONE", "CITATION_CLEANUP_ONLY"):
-            return
-
-        from_stage = st["stage"]
-        to_stage = "CITATION_VERIFY"
-        state.transition(st, from_stage, to_stage, note=f"verifying citations (from {from_stage})")
-
-    # Citation work outside the lease — it's long and independent of state.
-    module_rel = st["module_path"]
-    slug = st["slug"]
-    if from_stage == "WRITE_DONE":
-        module_file = _module_path_in_worktree(slug, module_rel)
-    else:
-        module_file = _module_path(st)
-    if not module_file.exists():
-        with state.state_lease(slug) as lease:
-            st = lease.load()
-            if st is not None:
-                state.record_failure(st, f"module file missing at {module_file}")
-        return
-
-    result = process_module_citations(
-        module_file, verifier=verifier_fn or default_verifier
-    )
+    from .citations import default_verifier, fetch_page  # local import avoids import-time side effects
 
     with state.state_lease(slug) as lease:
         st = lease.load()
         if st is None:
             return
-        citations_meta = {
-            "had_sources": result.had_sources_section,
-            "kept": len(result.kept),
-            "removed": len(result.removed),
-            "section_dropped": result.section_dropped,
-            "removed_details": [
-                {"url": p.entry.url, "verdict": p.verdict.value, "reason": p.reasoning[:200]}
-                for p in result.removed
-            ],
-        }
+        current = st["stage"]
+        if current == "CITATION_VERIFY":
+            # Resume — origin was captured on first entry.
+            from_stage = st.get("citation_origin") or "WRITE_DONE"
+        elif current in ("WRITE_DONE", "CITATION_CLEANUP_ONLY"):
+            from_stage = current
+            state.transition(
+                st, from_stage, "CITATION_VERIFY",
+                citation_origin=from_stage,
+                note=f"verifying citations (from {from_stage})",
+            )
+        else:
+            return
 
-        if result.changed:
-            module_file.write_text(result.new_text, encoding="utf-8")
+    module_rel = st["module_path"]
+
+    # Ensure a worktree exists. On the rewrite path it's already there
+    # (carries the writer's commit). On the cleanup-only path we create
+    # one fresh from ``main`` — NEVER mutate primary (Codex fatal #1).
+    wt = worktree_dir(_primary(), slug)
+    worktree_created_here = False
+    if not wt.exists():
+        if from_stage != "CITATION_CLEANUP_ONLY":
+            # A missing worktree on the rewrite path is unrecoverable.
+            with state.state_lease(slug) as lease:
+                st2 = lease.load()
+                if st2 is not None:
+                    _fail_and_cleanup(st2, f"citation_verify: worktree missing for {slug}")
+            return
+        try:
+            wt = create_worktree(_primary(), slug)
+            worktree_created_here = True
+        except WorktreeError as exc:
+            with state.state_lease(slug) as lease:
+                st2 = lease.load()
+                if st2 is not None:
+                    _fail_and_cleanup(st2, f"citation_verify: {exc}")
+            return
+
+    module_file = wt / module_rel
+    if not module_file.exists():
+        with state.state_lease(slug) as lease:
+            st2 = lease.load()
+            if st2 is not None:
+                _fail_and_cleanup(st2, f"citation_verify: module file missing at {module_file}")
+        return
+
+    try:
+        result = process_module_citations(
+            module_file,
+            verifier=verifier_fn or default_verifier,
+            fetcher=fetcher_fn or fetch_page,
+        )
+    except BaseException:
+        if worktree_created_here:
+            remove_worktree(_primary(), slug, delete_branch=True)
+        raise
+
+    citations_meta = {
+        "had_sources": result.had_sources_section,
+        "kept": len(result.kept),
+        "removed": len(result.removed),
+        "section_dropped": result.section_dropped,
+        "removed_details": [
+            {"url": p.entry.url, "verdict": p.verdict.value, "reason": p.reasoning[:200]}
+            for p in result.removed
+        ],
+    }
+
+    # Apply changes + commit if needed. All file + git ops run inside the
+    # worktree; primary is never touched.
+    if result.changed:
+        module_file.write_text(result.new_text, encoding="utf-8")
+        try:
             if from_stage == "WRITE_DONE":
-                # Amend the writer's commit inside the worktree.
-                wt = worktree_dir(_primary(), slug)
                 subprocess.run(["git", "add", module_rel], cwd=wt, check=True, capture_output=True)
                 subprocess.run(
                     ["git", "commit", "--amend", "--no-edit"],
                     cwd=wt, check=True, capture_output=True,
                 )
             else:
-                # CLEANUP_ONLY path: worktree needed for a clean commit.
-                _commit_cleanup_in_worktree(slug, module_rel, citations_meta)
+                msg = (
+                    f"quality(citations): verify-or-remove for {slug}\n\n"
+                    f"Removed {citations_meta['removed']} unverifiable citation(s).\n"
+                    f"Refs #375."
+                )
+                subprocess.run(["git", "add", module_rel], cwd=wt, check=True, capture_output=True)
+                subprocess.run(["git", "commit", "-m", msg], cwd=wt, check=True, capture_output=True)
+        except BaseException:
+            if worktree_created_here:
+                remove_worktree(_primary(), slug, delete_branch=True)
+            raise
 
-        next_stage = "REVIEW_PENDING" if from_stage == "WRITE_DONE" else "REVIEW_APPROVED"
-        state.transition(
-            st, "CITATION_VERIFY", next_stage,
-            citations=citations_meta,
-            note=f"kept={len(result.kept)} removed={len(result.removed)}",
-        )
+    # Advance state. Cleanup-only with no citation change is a SKIP —
+    # no branch to merge, tear down the throwaway worktree.
+    with state.state_lease(slug) as lease:
+        st2 = lease.load()
+        if st2 is None:
+            return
+        if from_stage == "WRITE_DONE":
+            state.transition(
+                st2, "CITATION_VERIFY", "REVIEW_PENDING",
+                citations=citations_meta,
+                note=f"kept={len(result.kept)} removed={len(result.removed)}",
+            )
+        elif result.changed:
+            state.transition(
+                st2, "CITATION_VERIFY", "REVIEW_APPROVED",
+                citations=citations_meta,
+                write={
+                    "agent": "citation-verify",
+                    "commit_sha": _branch_tip_sha(slug),
+                    "worktree": f".worktrees/quality-{slug}",
+                },
+                note=f"cleanup-only commit; kept={len(result.kept)} removed={len(result.removed)}",
+            )
+        else:
+            # No changes needed — skip merge entirely.
+            remove_worktree(_primary(), slug, delete_branch=True)
+            state.transition(
+                st2, "CITATION_VERIFY", "SKIPPED",
+                citations=citations_meta,
+                note="cleanup-only: all citations verified, no changes",
+            )
 
 
-def _commit_cleanup_in_worktree(slug: str, module_rel: str, meta: dict[str, Any]) -> None:
-    """For the CITATION_CLEANUP_ONLY path, we need a worktree to commit in.
-
-    The module file was already edited in the primary checkout by the
-    caller; we copy the cleaned version into a fresh worktree, commit,
-    and let :func:`merge_one` merge it back.
-    """
+def _branch_tip_sha(slug: str) -> str:
     wt = worktree_dir(_primary(), slug)
     if not wt.exists():
-        from .worktree import create_worktree  # local import to avoid cycle
-        create_worktree(_primary(), slug)
-    # Re-read the post-cleanup text from primary and overwrite in worktree.
-    primary_text = (_REPO_ROOT / module_rel).read_text(encoding="utf-8")
-    (wt / module_rel).write_text(primary_text, encoding="utf-8")
-    msg = f"quality(citations): verify-or-remove for {slug}\n\nRemoved {meta['removed']} unverifiable citation(s).\nRefs #375."
-    subprocess.run(["git", "add", module_rel], cwd=wt, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", msg], cwd=wt, check=True, capture_output=True)
+        return ""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _fail_and_cleanup(st: dict[str, Any], reason: str) -> None:
+    """Mark a module FAILED and tear down its worktree + branch.
+
+    Codex must #9: the locked handoff required worktree + branch
+    cleanup on success, failure, AND SIGKILL recovery. v2 initially
+    left branches behind for postmortem; Codex treated that as a
+    must-fix on its own — we clean up both.
+    """
+    slug = st["slug"]
+    remove_worktree(_primary(), slug, delete_branch=True)
+    state.record_failure(st, reason)
 
 
 # ---- review stage ------------------------------------------------------
@@ -465,7 +557,7 @@ def review_one(slug: str, *, timeout: int = 900) -> None:
         module_rel = st["module_path"]
         module_file = _module_path_in_worktree(slug, module_rel)
         if not module_file.exists():
-            state.record_failure(st, f"review: module missing at {module_file}")
+            _fail_and_cleanup(st, f"review: module missing at {module_file}")
             return
         module_text = module_file.read_text(encoding="utf-8")
 
@@ -488,7 +580,7 @@ def review_one(slug: str, *, timeout: int = 900) -> None:
             raise
 
         if not result.ok:
-            state.record_failure(
+            _fail_and_cleanup(
                 st,
                 f"review: {reviewer} dispatch failed (rc={result.returncode}): "
                 f"{result.stderr.strip()[:400]}",
@@ -497,7 +589,7 @@ def review_one(slug: str, *, timeout: int = 900) -> None:
 
         verdict = _parse_review_verdict(result)
         if verdict is None:
-            state.record_failure(st, "review: could not parse verdict JSON")
+            _fail_and_cleanup(st, "review: could not parse verdict JSON")
             return
 
         review_meta = {
@@ -519,6 +611,18 @@ def review_one(slug: str, *, timeout: int = 900) -> None:
             )
 
 
+APPROVE_SCORE_GATE = 4.0
+"""Numeric score floor enforced on an ``approve`` verdict (Codex must #7).
+
+v1 and earlier v2 trusted the verdict string alone, so a malformed
+payload with ``verdict="approve"`` but a 2.5 rubric_score (or a missing
+score) would merge a bad module. v2 now demotes any ``approve`` that
+doesn't present numeric scores ≥ 4.0 on both axes to
+``changes_requested``, with an explicit ``must_fix`` note so the writer
+gets the retry signal.
+"""
+
+
 def _parse_review_verdict(result: DispatchResult) -> dict[str, Any] | None:
     try:
         payload = extract_last_json(
@@ -531,6 +635,23 @@ def _parse_review_verdict(result: DispatchResult) -> dict[str, Any] | None:
     if verdict not in ("approve", "changes_requested"):
         return None
     payload["verdict"] = verdict
+
+    # Score gate — approve is conditional on numeric ≥ 4.0 on both axes.
+    if verdict == "approve":
+        rubric = payload.get("rubric_score")
+        teaching = payload.get("teaching_score")
+        numeric_rubric = isinstance(rubric, (int, float))
+        numeric_teaching = isinstance(teaching, (int, float))
+        if not (numeric_rubric and numeric_teaching and float(rubric) >= APPROVE_SCORE_GATE and float(teaching) >= APPROVE_SCORE_GATE):
+            # Demote to changes_requested with an explicit diagnostic.
+            payload["verdict"] = "changes_requested"
+            payload.setdefault("must_fix", []).insert(
+                0,
+                f"Review claimed approve but scores don't meet the {APPROVE_SCORE_GATE:.1f} gate "
+                f"(rubric={rubric!r}, teaching={teaching!r}). "
+                "Re-address the audit gaps and resubmit.",
+            )
+            payload["score_gate_demotion"] = True
     return payload
 
 
@@ -570,10 +691,64 @@ def handle_review_changes(slug: str) -> None:
 # ---- merge stage -------------------------------------------------------
 
 
+MERGE_LOCK_PATH = None  # type: ignore[assignment]
+"""Lazy-initialized; computed on first use so tests that monkey-patch
+``_REPO_ROOT`` get the tmp-dir lock rather than the import-time one."""
+
+_MERGE_RETRY_CAP = 3
+"""Per-module merge retries when rebase/ff fails because of a race.
+
+Codex must #5 noted that workers>1 would incorrectly mark a racing
+module FAILED on the first conflict. With this cap, the module retries
+after re-rebase — only persistent failure (real conflict, not a race)
+reaches FAILED.
+"""
+
+
+def _merge_lock_path() -> Path:
+    global MERGE_LOCK_PATH
+    if MERGE_LOCK_PATH is None:
+        MERGE_LOCK_PATH = _REPO_ROOT / ".pipeline" / "quality-pipeline" / ".merge.lock"
+    MERGE_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return MERGE_LOCK_PATH
+
+
+@contextmanager
+def _merge_lock(timeout: float = 120.0):
+    """Global git-main lock. merge_one holds it for rebase + ff-merge so
+    two workers can't clobber main concurrently (Codex must #5)."""
+    import fcntl
+    import time
+    path = _merge_lock_path()
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"merge lock contended (>{timeout}s)")
+                time.sleep(0.05)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
+
 def merge_one(slug: str) -> None:
     """REVIEW_APPROVED → COMMITTED. Rebase worktree branch, ff-merge, tear down.
 
-    The rebase makes sure successive modules in a batch can all merge
+    Holds a global ``_merge_lock`` for the rebase + ff-merge sequence so
+    that when two workers land on ``merge_one`` concurrently, they
+    serialize on the primary ``main`` mutation (Codex must #5). Retries
+    on rebase/ff failure up to :data:`_MERGE_RETRY_CAP` — a lost race
+    just means ``main`` advanced; re-rebase and try again.
+
+    The rebase ensures successive modules in a batch can all merge
     ff-only even as ``main`` advances between them (Codex must-fix #3).
     """
     with state.state_lease(slug) as lease:
@@ -582,20 +757,30 @@ def merge_one(slug: str) -> None:
             return
         primary = _primary()
         if current_branch(primary) != "main":
-            state.record_failure(st, "merge: primary not on main — manual intervention")
+            _fail_and_cleanup(st, "merge: primary not on main — manual intervention")
             return
         if has_uncommitted(primary):
-            state.record_failure(st, "merge: primary has uncommitted changes — manual intervention")
+            _fail_and_cleanup(st, "merge: primary has uncommitted changes — manual intervention")
             return
-        try:
-            rebase_onto_main(primary, slug)
-            merge_sha = merge_ff_only(primary, slug)
-        except WorktreeError as exc:
-            # Rebase or merge failed — could be a race (another merge landed
-            # on main). Leave the branch for retry; mark FAILED only after
-            # repeated retries would — but that's a run-loop concern.
-            state.record_failure(st, f"merge: {exc}")
+
+        last_error: Exception | None = None
+        merge_sha: str | None = None
+        for attempt in range(_MERGE_RETRY_CAP):
+            try:
+                with _merge_lock():
+                    rebase_onto_main(primary, slug)
+                    merge_sha = merge_ff_only(primary, slug)
+                break
+            except WorktreeError as exc:
+                last_error = exc
+                continue  # likely race — retry after re-rebase
+            except TimeoutError as exc:
+                last_error = exc
+                break  # contention timeout — don't spin
+        if merge_sha is None:
+            _fail_and_cleanup(st, f"merge: {last_error}")
             return
+
         remove_worktree(primary, slug, delete_branch=True)
         state.transition(
             st, "REVIEW_APPROVED", "COMMITTED",
@@ -608,63 +793,83 @@ def merge_one(slug: str) -> None:
 
 
 def recover_in_progress(slug: str) -> None:
-    """Reconcile a state stuck at ``WRITE_IN_PROGRESS`` / ``REVIEW_IN_PROGRESS``.
+    """Reconcile a state stuck at an in-progress stage.
 
-    Called by pipeline startup. Idempotent — safe to call on any state.
+    Handles ``WRITE_IN_PROGRESS`` and ``REVIEW_IN_PROGRESS`` on startup.
+    Idempotent — safe to call on any state. ``CITATION_VERIFY`` doesn't
+    need explicit recovery because the citation work itself is
+    idempotent (re-fetching URLs + re-verifying is safe) and is
+    registered in :data:`_STAGE_FN` so the run loop picks it up.
     """
     with state.state_lease(slug) as lease:
         st = lease.load()
         if st is None:
             return
-        if st["stage"] == "WRITE_IN_PROGRESS":
+        stage = st["stage"]
+        if stage == "WRITE_IN_PROGRESS":
             _recover_write_in_progress(st)
-        elif st["stage"] == "REVIEW_IN_PROGRESS":
+        elif stage == "REVIEW_IN_PROGRESS":
             # No durable side effect from a half-done review; just revert.
             state.transition(
                 st, "REVIEW_IN_PROGRESS", "REVIEW_PENDING",
-                note="recovered from WRITE_IN_PROGRESS SIGKILL",
+                note="recovered from REVIEW_IN_PROGRESS SIGKILL",
             )
 
 
 def _recover_write_in_progress(st: dict[str, Any]) -> None:
-    """If the worktree's branch has the module commit, advance to WRITE_DONE.
-    Otherwise revert to WRITE_PENDING."""
+    """If the worktree's branch has a commit AHEAD of main, advance to
+    WRITE_DONE. Otherwise scrub and revert to WRITE_PENDING.
+
+    Codex must #4: the v1-v2 "sha != main" check was too loose. A branch
+    that was cut from an old main tip but never got a commit appended
+    still has a SHA different from the current main (which advanced via
+    other merges) — and that would falsely count as a completed write.
+
+    Correct check: ``git rev-list --count main..<branch>``. A value ≥ 1
+    means the branch has at least one commit AHEAD of main, which only
+    happens if the writer actually committed.
+    """
     slug = st["slug"]
     primary = _primary()
-    try:
-        sha = subprocess.run(
-            ["git", "rev-parse", "--verify", branch_name(slug)],
+    branch = branch_name(slug)
+    branch_exists = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", branch],
+        cwd=primary, capture_output=True,
+    ).returncode == 0
+    ahead = 0
+    if branch_exists:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", f"main..{branch}"],
             cwd=primary, capture_output=True, text=True, check=False,
-        ).stdout.strip()
-    except Exception:
-        sha = ""
+        )
+        try:
+            ahead = int((result.stdout or "0").strip())
+        except ValueError:
+            ahead = 0
 
-    if sha and sha != _main_sha():
-        # There's a commit on the branch that isn't already on main — trust it.
+    if ahead >= 1:
+        # Branch has genuine writer commit(s) ahead of main — trust them.
+        tip = subprocess.run(
+            ["git", "rev-parse", branch], cwd=primary, capture_output=True, text=True, check=False,
+        ).stdout.strip()
         state.transition(
             st, "WRITE_IN_PROGRESS", "WRITE_DONE",
             write={
                 "agent": st.get("writer"),
                 "attempt_id": st.get("attempt_id"),
-                "commit_sha": sha,
+                "commit_sha": tip,
                 "worktree": f".worktrees/quality-{slug}",
                 "recovered": True,
             },
-            note="recovered WRITE_IN_PROGRESS: branch had a commit",
+            note=f"recovered WRITE_IN_PROGRESS: branch {ahead} commit(s) ahead",
         )
     else:
-        # Nothing to salvage — scrub and retry.
+        # No real progress — scrub worktree and branch, retry from scratch.
         remove_worktree(primary, slug, delete_branch=True)
         state.transition(
             st, "WRITE_IN_PROGRESS", "WRITE_PENDING",
-            note="recovered WRITE_IN_PROGRESS: nothing on branch, requeued",
+            note="recovered WRITE_IN_PROGRESS: no commits ahead of main, requeued",
         )
-
-
-def _main_sha() -> str:
-    return subprocess.run(
-        ["git", "rev-parse", "main"], cwd=_primary(), capture_output=True, text=True, check=False
-    ).stdout.strip()
 
 
 # ---- driver (single module through all stages) ------------------------
@@ -677,6 +882,11 @@ _STAGE_FN = {
     "WRITE_PENDING": write_one,
     "WRITE_DONE": citation_verify_one,
     "CITATION_CLEANUP_ONLY": citation_verify_one,
+    # Codex must #3: CITATION_VERIFY is crash-resumable. process_module_citations
+    # is idempotent — re-fetching URLs and re-verifying produces the same
+    # kept/removed set, so re-running after a SIGKILL mid-stage completes
+    # correctly.
+    "CITATION_VERIFY": citation_verify_one,
     "REVIEW_PENDING": review_one,
     "REVIEW_CHANGES": handle_review_changes,
     "REVIEW_APPROVED": merge_one,

@@ -298,6 +298,9 @@ def verify_citation(
 # ---- Module-level rewrite ----------------------------------------------
 
 
+_URL_RE = re.compile(r"https?://\S+")
+
+
 def rebuild_section(
     text: str,
     start: int,
@@ -306,14 +309,18 @@ def rebuild_section(
 ) -> tuple[str, bool]:
     """Return ``(new_text, section_dropped)`` after filtering entries.
 
-    If ``kept_entries`` is empty, the whole ``## Sources`` section is
-    removed — heading, bullets, and any blank-line padding that would
-    otherwise strand. ``section_dropped`` signals this to the caller so
-    the returning :class:`CitationResult` can record it.
+    Strict-policy reconstruction (Codex must #6):
 
-    Non-bullet lines inside the section (blank lines, prose paragraphs)
-    are preserved — they're not entries we can verify, and some modules
-    use them to introduce the ``## Sources`` list.
+    * If ``kept_entries`` is empty, the whole ``## Sources`` section is
+      removed — heading, content, and any leading blank-line padding.
+      The section is also dropped when it contains zero bullets we
+      could parse AND any URL is present somewhere — those URLs weren't
+      verified, so they can't stay.
+    * Non-bullet lines inside the section are preserved ONLY if they
+      contain no URL. A line like "See https://... for details" that
+      our parser missed is treated as a bypass attempt and removed —
+      the strict policy says every URL in ``## Sources`` must be
+      bullet-shaped AND verified, no exceptions.
     """
     lines = text.splitlines(keepends=True)
 
@@ -326,15 +333,16 @@ def rebuild_section(
         new_lines = lines[:cut_start] + lines[end:]
         return "".join(new_lines), True
 
-    # Reconstruct with kept entries only. Preserve non-bullet lines
-    # (intro prose, blanks) in their original position by walking the
-    # original section and keeping anything that isn't a rejected bullet.
+    # Reconstruct with kept entries only. Drop ANY non-bullet line that
+    # contains a URL — our parser missed it, so it's unverified.
     kept_urls = {e.url for e in kept_entries}
     rebuilt: list[str] = [lines[start]]  # heading line
     for line in lines[start + 1 : end]:
         parsed = _parse_bullet(line.rstrip("\n"))
         if parsed is None:
-            rebuilt.append(line)  # non-bullet: preserve
+            if _URL_RE.search(line):
+                continue  # unverified URL in a non-bullet — drop
+            rebuilt.append(line)  # pure prose / blank — preserve
             continue
         if parsed.url in kept_urls:
             rebuilt.append(line)
@@ -364,10 +372,22 @@ def process_module_citations(
     result = CitationResult(had_sources_section=True)
 
     if not entries:
-        # Section exists but has no parseable entries — either empty or
-        # all prose. Treat as no-op, though a later "drop empty heading"
-        # pass could remove it. For now, conservative: leave alone.
-        result.new_text = text
+        # No parseable bullets found — either the section is pure prose
+        # with no sources, or it contains URL lines our parser missed.
+        # Strict policy (Codex must #6): any URL in the section that
+        # wasn't parsed as a bullet is unverifiable, so the whole
+        # section must go. Drop the section entirely.
+        section_text = "\n".join(text.splitlines()[start:end])
+        has_url = bool(_URL_RE.search(section_text))
+        if has_url:
+            new_text, dropped = rebuild_section(text, start, end, kept_entries=[])
+            result.new_text = new_text
+            result.section_dropped = dropped
+        else:
+            # Pure prose — a conservative no-op is fine. A later prompt
+            # can remove empty Sources headings if we want to; for now
+            # leave alone.
+            result.new_text = text
         return result
 
     for entry in entries:

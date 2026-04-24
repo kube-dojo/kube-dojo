@@ -7,8 +7,11 @@ Subcommands:
   create one state file per module. Idempotent.
 * ``status`` — counts by stage, useful for health-check and briefing.
 * ``audit`` — drive every ``UNAUDITED`` module to ``AUDITED``.
-* ``route`` — drive every ``AUDITED`` module to ``ROUTED`` / ``SKIPPED`` /
-  ``CITATION_CLEANUP_ONLY``.
+* ``route`` — drive every ``AUDITED`` module to ``WRITE_PENDING`` (rewrite
+  or structural track) or ``CITATION_CLEANUP_ONLY`` (score ≥ 4.0 +
+  complete structure). ``SKIPPED`` is reached later by
+  :func:`stages.citation_verify_one` on the cleanup-only path when
+  nothing needed removal.
 * ``run`` — drive a queue of modules through the full pipeline until
   a terminal state. Processes worst-score-first; writer alternation is
   determined by each module's permanent index (not processing order).
@@ -334,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
     p_audit.add_argument("--only", nargs="*")
     p_audit.set_defaults(func=cmd_audit)
 
-    p_route = sub.add_parser("route", help="drive AUDITED → ROUTED/SKIPPED/CITATION_CLEANUP_ONLY")
+    p_route = sub.add_parser("route", help="drive AUDITED → WRITE_PENDING or CITATION_CLEANUP_ONLY")
     p_route.add_argument("--limit", type=int, default=None)
     p_route.add_argument("--only", nargs="*")
     p_route.set_defaults(func=cmd_route)

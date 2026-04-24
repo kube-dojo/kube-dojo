@@ -385,3 +385,90 @@ def test_process_strict_never_keeps_anything_but_supports(module_file: Path) -> 
         )
         assert len(result.kept) == 0, f"{bad!r} was incorrectly kept"
         assert len(result.removed) == 2
+
+
+# ---- Codex v2-review must #6: strict policy for unparseable Sources --
+
+
+def test_rebuild_drops_non_bullet_url_lines() -> None:
+    """Codex must #6 regression guard.
+
+    A line like ``See https://... for details`` that the bullet parser
+    skipped is still an unverified URL. Strict policy: remove it.
+    """
+    text = """---
+title: T
+---
+
+## Sources
+
+Intro prose.
+
+- [Verified](https://keep.example/) — good
+See https://sneaky.example/ for details
+
+## Next
+"""
+    parsed = citations.parse_sources_section(text)
+    assert parsed is not None
+    start, end, entries = parsed
+    # All entries verify as supports.
+    new_text, dropped = citations.rebuild_section(text, start, end, entries)
+    assert "keep.example" in new_text
+    # The prose line with the URL is UNVERIFIED — must be dropped.
+    assert "sneaky.example" not in new_text
+    # Pure intro prose (no URL) survives.
+    assert "Intro prose." in new_text
+
+
+def test_process_drops_section_with_only_unparseable_urls(tmp_path: Path) -> None:
+    """Codex must #6: if ## Sources has no parseable bullets but has
+    URLs embedded in prose, the whole section must go."""
+    mod = tmp_path / "mod.md"
+    mod.write_text("""---
+title: T
+---
+
+# Body
+
+## Sources
+
+See more at https://example.com/a and https://example.com/b for context.
+
+## Next
+""")
+    result = citations.process_module_citations(
+        mod,
+        verifier=lambda _p: _verdict_result("supports"),
+        fetcher=lambda _u: "page",
+    )
+    # No bullets were verified, but the section had URLs → section dropped.
+    assert result.had_sources_section is True
+    assert result.section_dropped is True
+    assert "## Sources" not in result.new_text
+    assert "example.com/a" not in result.new_text
+
+
+def test_process_preserves_pure_prose_sources_section(tmp_path: Path) -> None:
+    """Edge case of #6: if ## Sources has no bullets AND no URLs (pure
+    prose like 'Adapted from Kleppmann's DDIA'), leaving it is fine —
+    there's nothing to verify and nothing to mis-publish."""
+    mod = tmp_path / "mod.md"
+    mod.write_text("""---
+title: T
+---
+
+## Sources
+
+Adapted from Kleppmann's DDIA and personal production experience.
+
+## Next
+""")
+    result = citations.process_module_citations(
+        mod,
+        verifier=lambda _p: _verdict_result("supports"),
+        fetcher=lambda _u: "page",
+    )
+    assert result.had_sources_section is True
+    assert result.section_dropped is False
+    assert "Kleppmann's DDIA" in result.new_text
