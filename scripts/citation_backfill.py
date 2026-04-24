@@ -713,11 +713,20 @@ def _extract_bridge_response(stdout: str) -> tuple[bool, str]:
     return True, (parts[1] if len(parts) == 2 else body).strip()
 
 
+#: Per-finding Gemini timeout. URL-candidate generation is a small prompt
+#: with a structured JSON response; normal Flash/Pro responses are 1-30s.
+#: 900s here (inherited from the write-path pipeline that does whole-
+#: module generation) meant one stuck LLM call would block a 10-module
+#: pilot for 15 min with no progress. Matches the precedent in
+#: dedupe_audit.py which does similar short-prompt work at 120s.
+GEMINI_PER_FINDING_TIMEOUT = 120
+
+
 def dispatch_gemini(prompt: str) -> tuple[bool, str]:
     cmd = [
         sys.executable,
         str(REPO_ROOT / "scripts" / "dispatch.py"),
-        "gemini", "-", "--timeout", "900",
+        "gemini", "-", "--timeout", str(GEMINI_PER_FINDING_TIMEOUT),
     ]
     try:
         proc = subprocess.run(
@@ -726,11 +735,11 @@ def dispatch_gemini(prompt: str) -> tuple[bool, str]:
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
-            timeout=900,
+            timeout=GEMINI_PER_FINDING_TIMEOUT,
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return False, "timeout_after_900s"
+        return False, f"timeout_after_{GEMINI_PER_FINDING_TIMEOUT}s"
     if proc.returncode != 0:
         return False, proc.stderr or proc.stdout
     return True, proc.stdout
