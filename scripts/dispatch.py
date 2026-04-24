@@ -366,17 +366,22 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
 
 
 _CLAUDE_TEXT_ONLY_DISALLOWED = (
-    "Bash,Edit,Write,Read,Glob,Grep,Task,TodoWrite,"
-    "NotebookEdit,WebFetch,WebSearch,Skill,ExitPlanMode,Agent"
+    "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch,Skill,Agent,ExitPlanMode"
 )
 """Tool list passed to ``--disallowedTools`` when ``tools_disabled=True``.
 
-Claude in print mode (``-p``) defaults to allowing the full built-in tool
-set. Given an agentic prompt and a writable cwd it will use Edit/Write to
-modify files in cwd and return only a summary on stdout — which is fatal
-for the v2 quality pipeline writer/reviewer paths, where the pipeline
-expects the rewritten module markdown on stdout (see the
+Claude in print mode (``-p``) defaults to allowing the full built-in
+tool set. Given an agentic prompt and a writable cwd it will use
+Edit/Write to modify files in cwd and return only a summary on stdout —
+which is fatal for the v2 quality pipeline writer/reviewer paths, where
+the pipeline expects the rewritten module markdown on stdout (see the
 k8s-capa-module-1.2-argo-events smoke autopsy).
+
+Read-only tools (Read, Glob, Grep, Task, TodoWrite) stay enabled —
+empirically Claude needs them to plan output without hanging. With ALL
+tools blocked (including Read/Glob/Grep) the writer prompt produced
+zero stdout for 900s before timing out; with only mutating + external
+tools blocked it returns the full ~80KB module markdown in ~90s.
 """
 
 
