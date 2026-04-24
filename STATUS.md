@@ -24,16 +24,14 @@ The working tree had an uncommitted line appended to `src/content/docs/cloud/adv
 
 ### Blockers still open
 
-- **#364 — PR #368 OPEN, Codex review dispatched.** Minimum-viable fix: drop `_summarize_finding`, emit `- [title](url)` only, strip `.html`/`.htm` from derived titles. 47/47 tests pass. Once merged, #343 phase-2 bulk is unblocked.
+- **#364 — MERGED (PR #368, Codex APPROVE with smoke-test).** Minimum-viable fix: `_summarize_finding` dropped, `build_source_line` emits `- [title](url)` only, `.html`/`.htm` stripped from derived titles. 47/47 tests pass. **#343 phase-2 bulk is now unblocked** — next move is a `--limit-modules 10` pilot on a fresh sample.
+- **Codex model preference (2026-04-24):** user instruction — use `gpt-5.5` at `model_reasoning_effort=high` for Codex dispatches going forward. Invocation: `codex exec -m gpt-5.5 -c model_reasoning_effort="high" …`, or pin via `~/.codex/config.toml` so the bridge's `ask-codex` inherits automatically. The #368 review used the pre-instruction default (codex CLI default); subsequent dispatches should use gpt-5.5 high. Memory saved at `reference_codex_models.md`.
 
 ### Cold-start for next session
 
-1. **Fix #364** — unblocks everything downstream. Two approaches:
-   - **A (quickest)**: drop `_summarize_finding` and have `build_source_line` emit URL-title only. Update `test_build_source_line_safe_title_and_summary` which currently locks in the buggy behavior. Minimum-viable fix; unblocks phase-2 bulk.
-   - **B (preferred if time)**: add an LLM one-liner ("one sentence: what does this page document?") cached alongside the URL. Adds ~150 LLM calls for the 64-module bulk — modest cost for meaningful Sources descriptions.
-   - Per review protocol, Claude-authored → Codex reviewer.
-2. **Fix #365** — correct the CloudWatch/EC2 date claim in `module-1.10-cloudwatch.md:41`. Also verify the "1 trillion metrics/day" statistic while you're there. Small content edit; cross-family review per protocol.
-3. **Phase-2 pilot** (only after #364 lands): fresh 10-module sample with `citation_residuals.py resolve --all --worker-id pilot-2 --limit-modules 10` (now shipped). Target ≥60% resolve on Category A findings (~112 of 195 findings total). If green, authorize bulk at `--workers 3`.
+1. **Fix #365** — correct the CloudWatch/EC2 date claim in `module-1.10-cloudwatch.md:41` ("launching alongside EC2 in 2009" — EC2 launched 2006). Also verify the "1 trillion metrics/day" statistic while you're there. Small content edit; cross-family review via Codex (gpt-5.5 high) per protocol.
+2. **Phase-2 pilot** (now unblocked after #368): fresh 10-module sample with `citation_residuals.py resolve --all --worker-id pilot-2 --limit-modules 10`. Target ≥60% resolve on Category A findings (~112 of 195 total). If green, authorize bulk at `--workers 3`. Spot-check the first couple of Sources lines produced to confirm the title-only output reads well in context.
+3. **Consider follow-up**: per #364's PR body, the higher-quality fix is an LLM one-liner for Sources descriptions (describing what the page documents, not the claim). Defer until the phase-2 pilot validates the minimum-viable title-only output is acceptable at scale.
 
 ### Worktree hygiene
 
