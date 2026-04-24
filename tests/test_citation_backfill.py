@@ -11,16 +11,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import citation_backfill  # noqa: E402
 
 
-def test_dispatch_gemini_uses_sys_executable_and_absolute_path(
+def test_dispatch_gemini_launches_dispatch_with_venv_python_and_absolute_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: dispatch_gemini must launch dispatch.py with sys.executable
-    and an absolute path. The previous implementation probed
-    `Path("scripts/dispatch.py")` and `Path(".venv/bin/python")` relative to
-    cwd — which silently succeeded in the primary repo but failed in git
-    worktrees (no `.venv`) with `PermissionError: scripts/dispatch.py`
-    because subprocess.run tried to exec the .py file directly without an
-    interpreter."""
+    """Regression: dispatch_gemini must launch dispatch.py with the
+    primary-checkout venv's Python (AGENTS.md §3 forbids sys.executable
+    — it misses venv-only deps) and an absolute path to dispatch.py.
+
+    An earlier revision used `sys.executable`; PR #374 review (Codex)
+    caught the rule violation. The interpreter path is derived from
+    REPO_ROOT (i.e. from __file__), so it stays correct when the
+    script is invoked from a git worktree — the worktree shares the
+    primary checkout's .venv via this absolute path.
+    """
     captured: dict[str, object] = {}
 
     class _Completed:
@@ -40,7 +43,15 @@ def test_dispatch_gemini_uses_sys_executable_and_absolute_path(
     assert ok is True
     cmd = captured["cmd"]
     assert isinstance(cmd, list) and cmd
-    assert cmd[0] == sys.executable, f"expected sys.executable, got {cmd[0]!r}"
+    interpreter = Path(cmd[0])
+    assert interpreter.is_absolute(), f"interpreter must be absolute, got {cmd[0]!r}"
+    assert interpreter.name == "python", f"expected .venv/bin/python, got {cmd[0]!r}"
+    assert ".venv" in interpreter.parts, (
+        f"must use .venv python (AGENTS.md §3 bans sys.executable), got {cmd[0]!r}"
+    )
+    assert cmd[0] != sys.executable or sys.executable.endswith("/.venv/bin/python"), (
+        "dispatch_gemini must not use sys.executable (AGENTS.md §3)"
+    )
     dispatch_arg = Path(cmd[1])
     assert dispatch_arg.is_absolute(), f"dispatch.py path must be absolute, got {cmd[1]!r}"
     assert dispatch_arg.name == "dispatch.py"

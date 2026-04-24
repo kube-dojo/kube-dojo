@@ -36,6 +36,13 @@ from fetch_citation import allowlist_tier, fetch  # type: ignore[import-not-foun
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+#: Absolute path to the primary-checkout venv's Python. AGENTS.md §3
+#: forbids sys.executable for subprocess.run because it misses
+#: .venv-only deps. Derived from __file__ so it survives calls from
+#: git worktrees — the primary checkout's venv is always co-located
+#: with the scripts/ directory.
+_VENV_PYTHON = str(REPO_ROOT / ".venv" / "bin" / "python")
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 SEED_DIR = REPO_ROOT / "docs" / "citation-seeds"
 CITATION_POOL_DIR = REPO_ROOT / "docs" / "citation-pools"
@@ -722,7 +729,7 @@ GEMINI_DEFAULT_TIMEOUT = 900
 
 def dispatch_gemini(prompt: str, *, timeout: int = GEMINI_DEFAULT_TIMEOUT) -> tuple[bool, str]:
     cmd = [
-        sys.executable,
+        _VENV_PYTHON,
         str(REPO_ROOT / "scripts" / "dispatch.py"),
         "gemini", "-", "--timeout", str(timeout),
     ]
@@ -796,7 +803,7 @@ def dispatch_claude(prompt: str, *, timeout: int = CLAUDE_DEFAULT_TIMEOUT) -> tu
     operationally retryable.
     """
     cmd = [
-        sys.executable,
+        _VENV_PYTHON,
         str(REPO_ROOT / "scripts" / "dispatch.py"),
         "claude", "-", "--timeout", str(timeout),
     ]
