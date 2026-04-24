@@ -2,21 +2,30 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-24 evening — pipeline v2 implemented through Phase C; Codex re-review in flight)
+## Active Work (2026-04-24 late evening — v2 done-pending-final-approve; handoff ready)
 
-**Status**: v2 shipped as `scripts/quality/` package across 4 commits (A→B→C→migration). 17 integration + 111 unit tests pass (128 total for quality/, 592 repo-wide). Primary clean on main; 5 commits ahead of origin/main.
+**Status**: v2 mechanically complete; 4 rounds of Codex review iterated and addressed. 610 tests green; ruff clean. 10 commits ahead of origin/main on main. Primary clean. Not pushed.
 
-**Phase D in flight**: Codex review of v2 dispatched in background to `gpt-5.5 reasoning=high`. Started 2026-04-24 23:17; expected 10-20 min to produce the verdict JSON. Output to `/tmp/kd_v2_review_output.txt`; stderr traces to `/tmp/kd_v2_review_err.txt`.
+**Read this first**: [`docs/sessions/2026-04-24-v2-implementation-handoff.md`](docs/sessions/2026-04-24-v2-implementation-handoff.md) — cold-start function with Codex must-fix→file:line→test mapping, smoke commands, and the "what NOT to do" list.
 
-**Tracking issue**: [#375](https://github.com/kube-dojo/kube-dojo.github.io/issues/375) — full phase checklist + Codex must-fix mapping.
+**Next session task** (per the handoff):
+1. Optionally run one more Codex pass on `ec681076` (round 4 found 2 more leak windows which round 5's commit addressed; round-5 prompt re-usable at `/tmp/kd_v2_fourthreview.md`).
+2. Smoke on `k8s-capa-module-1.2-argo-events` via `scripts.quality.pipeline run-module`.
+3. 3-module showcase (AWS IAM 1.1, CKA Pods 1.1, Platform Foundations 1.1).
+4. Scale to 742 under `--workers 1`.
 
-**Commits shipped this session**:
-- `8e7be95b` Phase A — state + worktree + extractors (closes Codex #2, #3, #5, #6, #7, #8, #9, #10)
-- `b9798ed9` Phase B — dispatchers + prompts + citations (strict verify-or-remove)
-- `26bd0fed` Phase C — stages + pipeline orchestrator (closes Codex #1, #4, #5 runtime)
-- `eb705026` v1→v2 state migration in bootstrap
+**Tracking issue**: [#375](https://github.com/kube-dojo/kube-dojo.github.io/issues/375).
 
-**After Codex review**: address any new must-fixes, then smoke on `k8s-capa-module-1.2-argo-events`, then 3-module showcase (`cloud/aws-essentials/module-1.1-iam`, `k8s/cka/part1-cluster-architecture/module-1.1-control-plane`, `platform/foundations/systems-thinking/module-1.1-what-is-systems-thinking`), then full 742.
+**Codex review rounds this session**:
+
+| Round | Verdict | Findings | Closed by |
+|-------|---------|----------|-----------|
+| 1 | changes_requested | 2 fatal + 7 must + 3 nit | `6c62584b` |
+| 2 | changes_requested | 1 must (write_text leak) | `b50cfe2e` |
+| 3 | changes_requested | 1 must (post-create finalization) | `59001cbc` |
+| 4 | changes_requested | 2 must (post-create window + st2-None) | `ec681076` |
+
+**Key memory**: `feedback_codex_review_before_running` reinforced — four rounds caught progressively subtler leaks that self-smoke would have shipped.
 
 **Prior handoff preserved**: [`docs/sessions/2026-04-24-quality-pipeline-redesign.md`](docs/sessions/2026-04-24-quality-pipeline-redesign.md) — requirements still locked.
 
