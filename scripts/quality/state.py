@@ -35,9 +35,9 @@ from typing import Any, Iterator
 
 from .worktree import primary_checkout_root
 
-_REPO_ROOT = primary_checkout_root(Path(__file__).resolve().parents[2])
-STATE_DIR = _REPO_ROOT / ".pipeline" / "quality-pipeline"
-CONTENT_ROOT = _REPO_ROOT / "src" / "content" / "docs"
+REPO_ROOT = primary_checkout_root(Path(__file__).resolve().parents[2])
+STATE_DIR = REPO_ROOT / ".pipeline" / "quality-pipeline"
+CONTENT_ROOT = REPO_ROOT / "src" / "content" / "docs"
 
 # Full state machine. Ordered by the expected forward path; terminal states
 # (``COMMITTED``, ``SKIPPED``, ``FAILED``) and branches (``REVIEW_CHANGES``)
@@ -114,7 +114,7 @@ def new_state(module_path: Path, module_index: int) -> dict[str, Any]:
     slug = slug_for(module_path)
     return {
         "slug": slug,
-        "module_path": module_path.resolve().relative_to(_REPO_ROOT).as_posix(),
+        "module_path": module_path.resolve().relative_to(REPO_ROOT).as_posix(),
         "module_index": module_index,
         "stage": "UNAUDITED",
         "audit": None,
