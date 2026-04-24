@@ -2,40 +2,64 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-24 morning — pilot-hang autopsy, 2 infra PRs merged, phase-2 still held)
+## Active Work (2026-04-24 morning — 3 infra PRs merged, liveness-probe EPIC filed, pilot inconclusive on AI/ML batch)
 
 **Session context**: user pivoted from "start phase-2" to a broader "we have git problems all the time, need a durable solution" concern after I surfaced a 13-day-old stash on cold-start. Infrastructure-level response below. No curriculum or content changes this session.
 
 ### This session's shipments (all merged)
 
-- **PR #370** (`fix(resolver): line-buffer stdout + per-module heartbeat (#343)`). Root cause of the morning pilot's apparent 16-min freeze: Python block-buffers stdout when piped to `tee`, so the first line flushed but all subsequent lines never reached the log. Fix: `sys.stdout.reconfigure(line_buffering=True)` at `main()` entry, plus `[i/N] <key>: start` / `: resolving` heartbeat per module so any future hang localizes to a specific phase. Codex APPROVE with one NIT (lock ordering, not just string presence) — addressed in follow-up commit. 8/8 CLI lock tests pass.
-- **PR #371** (`feat(briefing): surface silent-drift git hygiene signals`). Adds three alerts to `/api/briefing/session`: forgotten stashes (warn >24 h, escalate >7 d), detached-HEAD worktrees, uncommitted files on `main` only. None need rate-limiting — each is a real drift signal we've hit before. Codex APPROVE with two test-coverage NITs (mixed-age behavior, malformed stash-list output) — both added as pinned tests. 107/107 `test_local_api.py` pass. The briefing service will surface these on next restart.
+- **PR #370** (`fix(resolver): line-buffer stdout + per-module heartbeat (#343)`). Root cause of the morning pilot's apparent 16-min freeze: Python block-buffers stdout when piped to `tee`, so the first line flushed but all subsequent lines never reached the log. Fix: `sys.stdout.reconfigure(line_buffering=True)` at `main()` entry, plus `[i/N] <key>: start` / `: resolving` heartbeat per module so any future hang localizes to a specific phase. Codex APPROVE with one NIT (lock ordering, not just string presence) — addressed in follow-up commit.
+- **PR #371** (`feat(briefing): surface silent-drift git hygiene signals`). Adds three alerts to `/api/briefing/session`: forgotten stashes (warn >24 h, escalate >7 d), detached-HEAD worktrees, uncommitted files on `main` only. None need rate-limiting — each is a real drift signal we've hit before. Codex APPROVE with two test-coverage NITs — both addressed. 107/107 `test_local_api.py` pass. The briefing service will surface these on next restart.
+- **PR #372** (`fix(resolver): cap per-finding Gemini timeout at 120 s (#343)`). Second round with Codex — first rev was scoped too broadly (would have dropped `run_research` / `run_inject` paths from 900 s to 120 s). Rescoped to a `_dispatch_gemini_for_candidate` wrapper in `citation_residuals.py`; `citation_backfill.dispatch_gemini` keeps the 900 s default so research/inject are unaffected. Test locks in `inspect.signature` default-dispatcher wiring as a regression guard. 61/61 tests pass.
+
+### Filed, not started — #373 liveness-probe EPIC
+
+Triggered by mini-pilot data below. Mirrors [learn-ukrainian#1520](https://github.com/learn-ukrainian/learn-ukrainian.github.io/issues/1520): composite K8s-style liveness probes (ANY-mode over stdoutStreamed + procCpu + fileMTime) as a durable replacement for the 120 s band-aid. ~days of work — deliberately tracked as non-urgent (matching sister project's stance). Reprioritizes IF we can prove the 120 s cap is killing productive-slow calls, not just refusing fiction. See "pilot data" below for current evidence.
 
 ### Hung pilot autopsy — root cause found
 
-Today's 16-min silent hang in `citation_residuals.py resolve --all --limit-modules 10`:
+Yesterday's 16-min silent hang in `citation_residuals.py resolve --all --limit-modules 10`:
 1. **Visibility failure (fixed by #370)**: Python stdout block-buffered behind `tee`, so the intro line was the last thing flushed before Python's 8 KB buffer started filling silently.
-2. **Actual hang (NOT fixed this session)**: py-spy needs root on macOS, so used `kill -INT` to force a Python traceback. Stack:
-   ```
-   resolve_module → request_candidates:298 → dispatcher(prompt) →
-   citation_backfill.py:723 dispatch_gemini → subprocess.run(..., timeout=900)
-   → process.communicate → selector.select(None)
-   ```
-   `dispatch_gemini` **has** `timeout=900`, but that's per-call — a single slow Gemini invocation blocks the whole pilot for up to 15 minutes. Worst case on 10 modules × 3 findings = many hours. Not today's primary problem but a real throughput ceiling on the phase-2 bulk run.
+2. **Subprocess-level hang (fixed by #372)**: SIGINT traceback (py-spy needs sudo on macOS) pinpointed `dispatch_gemini` at `citation_backfill.py:723` in `subprocess.run(..., timeout=900)` → `process.communicate` → `selector.select(None)`. The 900 s cap was inherited from the write-path pipeline; wrong for short structured URL-candidate prompts. Now 120 s per finding.
+
+### Phase-2 pilot data (inconclusive on AI/ML batch)
+
+Re-ran with heartbeat + timeout fix merged:
+
+| Attempt | Command | Result |
+|---|---|---|
+| A (10 modules, killed at module 2) | `--all --limit-modules 10 --worker-id pilot-2` | Module 1.3-diffusion-models: 3 findings, all unresolvable, **1506 s** — anomalously long; suspected leftover-process artifact. Killed to investigate. |
+| B (3 modules) | `--all --limit-modules 3 --worker-id pilot-2-mini` | 1.4 rlhf-alignment SKIPPED (stale lock from A, later released). 1.6 llm-evaluation: 3 findings / 0 resolved / **360.1 s** = exactly 3 × 120 s cap. 1.7 ai-red-teaming: 7 findings / 0 resolved / **795.3 s**. |
+
+**TOTAL across completed modules**: considered=10, resolved=0, unresolvable=10, rate=0%.
+
+What this does and doesn't tell us:
+- **Cap works**: 360 s = 3 × 120 s is clean evidence the timeout fires correctly; the 1506 s anomaly was a one-off (killed-run cleanup artifact, not systemic).
+- **0% resolve isn't conclusive**: the entire pilot sample was `ai-ml-engineering/advanced-genai/*` modules, which per residuals audit are heavy Category B (pedagogical fiction) — the LLM should refuse to fabricate URLs there, and refusals look like timeouts from outside.
+- **Manual probe on module 1.4 finding[1]** (before it was locked): 2 candidates returned in 71 s — so the resolver isn't universally broken, just this batch.
+- **Can't distinguish** "correctly refusing fiction" from "Pro killed mid-thought" from the outside. That's #373's argument.
 
 ### Housekeeping
 
-- **13-day-old stash dropped**: `stash@{0}` from 2026-04-11 was 714 lines of partially-obsolete AI/ML overlap audit (`docs/migration-decisions.md`, written against the pre-#200 numbering so every filename was already stale) plus 112 lines of UK ZTT translation that was re-done in `f8a1c478`. Dropped after investigation.
-- **`py-spy` installed** (`brew install py-spy`) but requires `sudo` on macOS due to SIP. SIGINT → Python traceback was a cleaner alternative in this case.
+- 13-day-old stash dropped (`stash@{0}` from 2026-04-11 — 714 lines of obsolete AI/ML audit against pre-#200 numbering + 112 lines of UK ZTT already re-translated in `f8a1c478`).
+- `py-spy` installed (`brew install py-spy`) but needs `sudo` on macOS. SIGINT → Python traceback was cleaner.
+- Stale module-write lock from killed pilot-2 on `module-1.4-rlhf-alignment` explicitly released via `module_lock.release_module_lock` so next run isn't gated on the lease.
 
-### Phase-2 pilot — still held for explicit approval
+### Cold-start for next session — the one clean move
 
-Same gate as before. Now with three improvements when it resumes:
-1. Per-module heartbeat — operator sees which module is in-flight.
-2. Line-buffered stdout — hangs are visible in real time.
-3. Briefing will auto-flag any stash >24 h or pipeline residual on main from a future cold start.
+**Pick one Category A module and run `resolve` against it** — binary data point:
+- **Resolves**: the 120 s cap is fine; #373 stays "someday." Phase-2 bulk is go on Cloud / Platform / On-Prem where Category A is dense.
+- **Doesn't resolve**: the cap is killing productive calls; #373 jumps up in priority.
 
-Before re-running at bulk, consider a small follow-up PR to lower the per-finding Gemini timeout from 900 s → ~120 s so one slow call doesn't kill the whole run. Not done this session — would be ~5 LOC in `citation_backfill.py:720` plus a test.
+Fast way to pick one (avoid AI/ML advanced-genai — it's ~100% Category B):
+```bash
+# Scan residuals audit for a Category A finding on a non-AI module.
+rg -n '^\| A \|' docs/residuals-audit-2026-04-24.md | rg -v 'ai-ml' | head -5
+# Then resolve just that module's queue file:
+.venv/bin/python scripts/citation_residuals.py resolve <module_key> --dry-run --no-lock
+```
+
+AI/ML advanced-genai is where the Category B modules cluster per the audit; the bulk pilot will have a much higher signal-to-noise on the other tracks.
 
 ### Prior session content — preserved below
 
