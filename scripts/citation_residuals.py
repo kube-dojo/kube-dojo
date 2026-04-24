@@ -817,6 +817,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_resolve.add_argument("--all", action="store_true", help="Process every queue file")
     p_resolve.add_argument(
+        "--limit-modules",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Cap the number of modules processed in an --all run to N. Useful "
+            "for gradual rollout / pilot runs before a full bulk batch — see "
+            "the 2026-04-23 postmortem. Applied AFTER the empty-queue filter, "
+            "so N=10 means 10 modules with actual needs_citation findings, "
+            "not 10 scanned files. Has no effect when a specific module_key is "
+            "given instead of --all."
+        ),
+    )
+    p_resolve.add_argument(
         "--dry-run",
         action="store_true",
         help="Propose resolutions but do not write to modules or queue JSON",
@@ -887,6 +901,14 @@ def main(argv: list[str] | None = None) -> int:
         if not useful_targets:
             print("No residuals with needs_citation findings.")
             return 0
+
+        if args.all and args.limit_modules is not None and args.limit_modules > 0:
+            total_before = len(useful_targets)
+            useful_targets = useful_targets[: args.limit_modules]
+            print(
+                f"--limit-modules {args.limit_modules}: "
+                f"processing {len(useful_targets)} of {total_before} useful modules"
+            )
 
         totals = {
             "considered": 0,

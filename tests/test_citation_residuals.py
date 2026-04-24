@@ -884,3 +884,96 @@ def test_build_source_line_safe_title_and_summary() -> None:
     # Summary uses first sentence only.
     assert "Further details" not in line
     assert "Amazon scrapped its AI recruiting tool in 2018." in line
+
+
+# ---- CLI: --limit-modules ------------------------------------------------
+
+
+def test_limit_modules_caps_all_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    queue_dir = tmp_path / ".pipeline" / "v3" / "human-review"
+    queue_dir.mkdir(parents=True)
+    finding = {
+        "line": 3,
+        "signals": ["year_reference"],
+        "excerpt": "In 2023 something happened.",
+        "search_hint": ["2023 event"],
+    }
+    for i in range(3):
+        _write_queue_file(
+            queue_dir / f"ai-demo-module-1.{i}-test.json",
+            f"ai/demo/module-1.{i}-test",
+            [finding],
+        )
+
+    monkeypatch.setattr(citation_residuals, "HUMAN_REVIEW_DIR", queue_dir)
+
+    called: list[Path] = []
+
+    def fake_resolve_module(qp: Path, **_: Any) -> dict[str, Any]:
+        called.append(qp)
+        return {
+            "module_key": qp.stem,
+            "considered": 1,
+            "resolved": 0,
+            "unresolvable": 0,
+            "module_edited": False,
+        }
+
+    monkeypatch.setattr(citation_residuals, "resolve_module", fake_resolve_module)
+
+    rc = citation_residuals.main(
+        ["resolve", "--all", "--limit-modules", "2", "--no-lock"]
+    )
+    assert rc == 0
+    assert len(called) == 2
+    out = capsys.readouterr().out
+    assert "--limit-modules 2" in out
+    assert "processing 2 of 3 useful modules" in out
+
+
+def test_limit_modules_ignored_when_module_key_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    queue_dir = tmp_path / ".pipeline" / "v3" / "human-review"
+    queue_dir.mkdir(parents=True)
+    finding = {
+        "line": 3,
+        "signals": ["year_reference"],
+        "excerpt": "In 2023 something happened.",
+        "search_hint": ["2023 event"],
+    }
+    _write_queue_file(
+        queue_dir / "ai-demo-module-1.0-test.json",
+        "ai/demo/module-1.0-test",
+        [finding],
+    )
+
+    monkeypatch.setattr(citation_residuals, "HUMAN_REVIEW_DIR", queue_dir)
+
+    called: list[Path] = []
+
+    def fake_resolve_module(qp: Path, **_: Any) -> dict[str, Any]:
+        called.append(qp)
+        return {
+            "module_key": qp.stem,
+            "considered": 1,
+            "resolved": 0,
+            "unresolvable": 0,
+            "module_edited": False,
+        }
+
+    monkeypatch.setattr(citation_residuals, "resolve_module", fake_resolve_module)
+
+    rc = citation_residuals.main(
+        [
+            "resolve",
+            "ai/demo/module-1.0-test",
+            "--limit-modules",
+            "5",
+            "--no-lock",
+        ]
+    )
+    assert rc == 0
+    assert len(called) == 1
