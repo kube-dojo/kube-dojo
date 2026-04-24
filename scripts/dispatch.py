@@ -785,6 +785,17 @@ def main():
                          "Use for v2 quality writer/reviewer dispatches where stdout = full module text.")
     cp.add_argument("--timeout", type=int, default=600, help="Timeout in seconds (default: 600)")
 
+    # codex
+    xp = subparsers.add_parser("codex", help="Dispatch prompt to Codex CLI (codex exec)")
+    xp.add_argument("prompt", help="Prompt text (use '-' to read from stdin)")
+    xp.add_argument("--model", default=CODEX_DEFAULT_MODEL,
+                    help=f"Codex model (default: {CODEX_DEFAULT_MODEL!r}; pass 'codex' to use CLI default)")
+    xp.add_argument("--no-tools", dest="tools_disabled", action="store_true",
+                    help="Accepted for symmetry with --no-tools on claude. Codex already runs "
+                         "with --sandbox read-only so the flag is a no-op (file writes are blocked "
+                         "via the sandbox; pure-text output is the natural mode).")
+    xp.add_argument("--timeout", type=int, default=900, help="Timeout in seconds (default: 900)")
+
     # logs
     lp = subparsers.add_parser("logs", help="Show recent dispatch logs")
     lp.add_argument("-n", type=int, default=10, help="Number of entries (default: 10)")
@@ -813,6 +824,13 @@ def main():
             prompt, args.model, args.timeout, args.mcp,
             tools_disabled=getattr(args, "tools_disabled", False),
         )
+        if ok:
+            print(output)
+        sys.exit(0 if ok else 1)
+
+    elif args.agent == "codex":
+        prompt = sys.stdin.read() if args.prompt == "-" else args.prompt
+        ok, output = dispatch_codex(prompt, args.model, args.timeout)
         if ok:
             print(output)
         sys.exit(0 if ok else 1)
