@@ -24,7 +24,7 @@ The working tree had an uncommitted line appended to `src/content/docs/cloud/adv
 
 ### Blockers still open
 
-- **#364 blocks #343 phase-2 bulk.** `_summarize_finding` uses the finding's `excerpt` as the Sources-line description; every resolved finding ships unreadable provenance. Running `resolve --all --workers 3` on the 64 batch-c modules without the fix would ship ~100+ garbage Sources lines. Do not authorize the bulk pilot until #364 lands and is dogfooded on ≥3 real resolves.
+- **#364 — PR #368 OPEN, Codex review dispatched.** Minimum-viable fix: drop `_summarize_finding`, emit `- [title](url)` only, strip `.html`/`.htm` from derived titles. 47/47 tests pass. Once merged, #343 phase-2 bulk is unblocked.
 
 ### Cold-start for next session
 
