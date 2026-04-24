@@ -554,6 +554,38 @@ def test_bootstrap_is_idempotent(fake_repo, monkeypatch):
     assert first_slugs == second_slugs
 
 
+def test_bootstrap_migrates_v1_state_missing_module_index(fake_repo, monkeypatch):
+    """v1 state files had no ``module_index``. Bootstrap must add it
+    without destroying audit / history fields — non-destructive migration.
+    """
+    # Seed a v1-shaped state (no module_index, has audit + history).
+    modules = pipeline.iter_all_modules()
+    assert modules
+    slug = state.slug_for(modules[0])
+    state.STATE_DIR.mkdir(parents=True, exist_ok=True)
+    v1_state = {
+        "slug": slug,
+        "module_path": modules[0].relative_to(fake_repo).as_posix(),
+        "stage": "AUDITED",
+        "audit": {"teaching_score": 3.0, "teaching_gaps": ["thin"]},
+        "history": [{"at": "2026-04-24T00:00:00Z", "stage": "AUDITED", "note": "v1"}],
+        "retry_count": 0,
+    }
+    state.save_state(v1_state)
+
+    class NSMock:
+        pass
+
+    pipeline.cmd_bootstrap(NSMock())  # type: ignore[arg-type]
+    migrated = state.load_state(slug)
+    assert migrated is not None
+    assert migrated["module_index"] == 0  # first module in sorted order
+    # Pre-existing fields preserved.
+    assert migrated["stage"] == "AUDITED"
+    assert migrated["audit"]["teaching_score"] == 3.0
+    assert migrated["history"][0]["note"] == "v1"
+
+
 def test_run_order_is_worst_first(fake_repo, monkeypatch):
     # Add a second module with HIGHER score.
     mod2_rel = "src/content/docs/k8s/cka/module-1.2-services.md"

@@ -63,26 +63,40 @@ def iter_all_modules() -> list[Path]:
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
-    """Create state files for every module that doesn't have one.
+    """Create state files for every module that doesn't have one and
+    migrate any pre-v2 state files that lack ``module_index``.
 
     Preserves existing state files — re-running bootstrap after adding
     new modules only creates new state, never overwrites. The
     ``module_index`` stays stable because it's re-derived from the
     sorted path list, and a new module appended at the end of the
     alphabetical list only grows the index space.
+
+    Migration: v1 state files had no ``module_index`` field. v2 needs
+    it for writer round-robin. Bootstrap fills it in for any existing
+    state that's missing it — non-destructive, preserves the audit
+    and history fields intact.
     """
     modules = iter_all_modules()
     state.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    created = 0
+    created = migrated = 0
     for i, module_path in enumerate(modules):
         slug = state.slug_for(module_path)
         existing = state.load_state(slug)
-        if existing is not None:
+        if existing is None:
+            st = state.new_state(module_path, module_index=i)
+            state.save_state(st)
+            created += 1
             continue
-        st = state.new_state(module_path, module_index=i)
-        state.save_state(st)
-        created += 1
-    print(f"bootstrap: {created} new state(s); {len(modules) - created} already existed; total {len(modules)}")
+        if existing.get("module_index") is None:
+            existing["module_index"] = i
+            state.save_state(existing)
+            migrated += 1
+    unchanged = len(modules) - created - migrated
+    print(
+        f"bootstrap: {created} new state(s); {migrated} v1→v2 migrated; "
+        f"{unchanged} already complete; total {len(modules)}"
+    )
     return 0
 
 
