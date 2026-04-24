@@ -2,21 +2,35 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-24 late evening — v2 done-pending-final-approve; handoff ready)
+## Active Work (2026-04-24 night — v2 Codex APPROVED on round 6; user-runnable smoke)
 
-**Status**: v2 mechanically complete; 4 rounds of Codex review iterated and addressed. 610 tests green; ruff clean. 10 commits ahead of origin/main on main. Primary clean. Not pushed.
+**Status**: v2 mechanically complete + Codex-APPROVED on round 6. **147 quality tests green; ruff clean. 12 commits ahead of origin/main on `main`. Primary clean. Not pushed.** Pipeline mutations remain user-run (per `feedback_no_run_scripts`), so the smoke is staged but not yet executed.
 
-**Read this first**: [`docs/sessions/2026-04-24-v2-implementation-handoff.md`](docs/sessions/2026-04-24-v2-implementation-handoff.md) — cold-start function with Codex must-fix→file:line→test mapping, smoke commands, and the "what NOT to do" list.
+**Read this first**: [`docs/sessions/2026-04-24-v2-implementation-handoff.md`](docs/sessions/2026-04-24-v2-implementation-handoff.md) — cold-start function with Codex must-fix→file:line→test mapping and the "what NOT to do" list.
 
-**Next session task** (per the handoff):
-1. Optionally run one more Codex pass on `ec681076` (round 4 found 2 more leak windows which round 5's commit addressed; round-5 prompt re-usable at `/tmp/kd_v2_fourthreview.md`).
-2. Smoke on `k8s-capa-module-1.2-argo-events` via `scripts.quality.pipeline run-module`.
-3. 3-module showcase (AWS IAM 1.1, CKA Pods 1.1, Platform Foundations 1.1).
-4. Scale to 742 under `--workers 1`.
+**Next session — user runs smoke**:
+
+```bash
+# 1. Optional sanity (read-only)
+.venv/bin/python -m pytest tests/test_quality_*.py -q             # 147 expected
+.venv/bin/python -m scripts.quality.pipeline status | head
+
+# 2. Bootstrap (idempotent — migrates v1 state files)
+.venv/bin/python -m scripts.quality.pipeline bootstrap
+
+# 3. Smoke on the designated target
+.venv/bin/python -m scripts.quality.pipeline run-module k8s-capa-module-1.2-argo-events
+
+# Expect: terminal state COMMITTED, .worktrees/ empty, one new commit on main.
+# If not COMMITTED, inspect status + logs before retrying — per
+# feedback_codex_review_before_running, iterate with Codex rather than push through.
+```
+
+After the smoke is COMMITTED, follow with the 3-module showcase (AWS IAM 1.1, CKA Pods 1.1, Platform Foundations 1.1) before scaling to 742 under `--workers 1`.
 
 **Tracking issue**: [#375](https://github.com/kube-dojo/kube-dojo.github.io/issues/375).
 
-**Codex review rounds this session**:
+**Codex review rounds (final)**:
 
 | Round | Verdict | Findings | Closed by |
 |-------|---------|----------|-----------|
@@ -24,8 +38,12 @@
 | 2 | changes_requested | 1 must (write_text leak) | `b50cfe2e` |
 | 3 | changes_requested | 1 must (post-create finalization) | `59001cbc` |
 | 4 | changes_requested | 2 must (post-create window + st2-None) | `ec681076` |
+| 5 | changes_requested | 1 must (post-create-worktree race) + 1 nit (flag-flip mismatch) | `e240f551` |
+| 6 | **approve** | 0 | — |
 
-**Key memory**: `feedback_codex_review_before_running` reinforced — four rounds caught progressively subtler leaks that self-smoke would have shipped.
+Round 5 closed the race window and the flag-flip nit by replacing `worktree_created_here` (a flag flipped AFTER `create_worktree` returned, with a Python-bytecode-level race window) with `we_own_throwaway = (from_stage == "CITATION_CLEANUP_ONLY") and not preexisting_worktree` — both inputs immutable from entry. The BaseException handler also `.exists()`-probes as belt-and-braces. New regression test: `test_cleanup_only_scrubs_worktree_when_create_worktree_raises_after_creation`.
+
+**Key memory**: `feedback_codex_review_before_running` reinforced again — five rounds caught progressively subtler leaks (write_text, finalization scope, st2-None, post-create-finalization window, post-create-worktree-itself race) that self-smoke would have shipped.
 
 **Prior handoff preserved**: [`docs/sessions/2026-04-24-quality-pipeline-redesign.md`](docs/sessions/2026-04-24-quality-pipeline-redesign.md) — requirements still locked.
 
