@@ -200,18 +200,86 @@ When configuring MLflow client pods to talk to MinIO, you must explicitly set co
 
 ## Orchestration & Pipelines
 
-Orchestrating machine learning workflows requires handling Directed Acyclic Graphs (DAGs) of tasks securely and efficiently. Data pipelines are complex and need dedicated orchestrators.
+Orchestrating machine learning workflows requires handling Directed Acyclic Graphs (DAGs) of tasks securely and efficiently. A typical training pipeline fans out across data validation, feature materialization, model training, evaluation, and conditional registration — each step running in its own pod, each producing artifacts that downstream steps must locate deterministically. Without an orchestrator that understands artifact passing, retry semantics, and pod-level resource isolation, teams end up gluing pipelines together with bash scripts that silently drop failures.
+
+### A Canonical Training DAG
+
+Most production ML pipelines on bare metal share the same skeleton regardless of which orchestrator is chosen. Visualizing the DAG before reading any YAML helps you reason about where failures concentrate and which steps need the most generous retry budgets.
+
+```mermaid
+flowchart LR
+    A[Validate Schema<br/>Great Expectations] --> B[Materialize Features<br/>Feast]
+    B --> C[Train Model<br/>PyTorch / XGBoost]
+    C --> D[Evaluate Holdout<br/>scikit-learn]
+    D -->|metric &gt; threshold| E[Register Model<br/>MLflow]
+    D -->|metric &le; threshold| F[Notify Owner<br/>Alertmanager]
+    E --> G[Promote to Staging<br/>KServe canary]
+```
+
+Steps A and B are I/O bound and fail most often due to upstream data drift; they should retry aggressively (up to 5 times with exponential backoff). Steps C and D are compute bound on GPU nodes; retrying a 4-hour training run blindly burns expensive cycles, so retry policy here should be `OnFailure` with a strict count of 1 and clear escalation to a human. Step E is a transactional write to MLflow and PostgreSQL; idempotency must be guaranteed by hashing the model artifact rather than the wall-clock timestamp, otherwise a partial failure leaves duplicate registry entries.
 
 ### Kubeflow & KFP
-Kubeflow is a CNCF Incubating project (accepted July 2023, not yet Graduated), with its latest stable release at v1.10.0. Kubeflow Pipelines (KFP) SDK v1 is frozen at v1.8.22; SDK v2 (v2.16.0) is the only actively developed version. Crucially, the KFP v2 SDK compiles pipelines to a backend-agnostic IR YAML format, moving away from the Argo Workflow YAML dependency of v1. 
+Kubeflow is a CNCF Incubating project (accepted July 2023, not yet Graduated), with its latest stable release at v1.10.0. Kubeflow Pipelines (KFP) SDK v1 is frozen at v1.8.22; SDK v2 (v2.16.0) is the only actively developed version. Crucially, the KFP v2 SDK compiles pipelines to a backend-agnostic IR YAML format, moving away from the Argo Workflow YAML dependency of v1.
 
 For model training, Kubeflow Trainer v2.2 supports PyTorch, JAX, XGBoost, MPI, and Flux distributed training under a single unified `TrainJob` CRD. Hyperparameter optimization is handled by Katib (v0.19.0), which supports algorithms including grid search, random search, Bayesian optimization, Hyperband, TPE, multivariate-TPE, CMA-ES, Sobol, and Population Based Training (PBT).
 
 ### Argo & Tekton
 Argo Workflows maintains both a v4.x branch (v4.0.4) and a v3.x LTS branch (v3.7.13) simultaneously, and the Argo project as a whole is a CNCF Graduated project. Alternatively, Tekton Pipelines (latest v1.11.0) is a CNCF Incubating project as of March 2026, having moved from the Continuous Delivery Foundation.
 
+A minimal Argo Workflow that mirrors the canonical DAG above looks like this. Note the explicit `artifacts` block that hands the trained model from the `train` step to the `evaluate` step via the cluster's MinIO bucket — without this declaration, Argo would not know how to wire pod outputs into pod inputs.
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: train-fraud-model-
+  namespace: mlops
+spec:
+  entrypoint: pipeline
+  artifactRepositoryRef:
+    configMap: artifact-repositories
+    key: minio-mlops
+  templates:
+  - name: pipeline
+    dag:
+      tasks:
+      - name: validate
+        template: ge-validate
+      - name: materialize
+        template: feast-materialize
+        dependencies: [validate]
+      - name: train
+        template: pytorch-train
+        dependencies: [materialize]
+      - name: evaluate
+        template: holdout-eval
+        dependencies: [train]
+        arguments:
+          artifacts:
+          - name: model
+            from: "{{tasks.train.outputs.artifacts.model}}"
+  - name: pytorch-train
+    retryStrategy:
+      limit: "1"
+      retryPolicy: "OnFailure"
+    container:
+      image: registry.mlops.svc.cluster.local/trainer:1.4
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+    outputs:
+      artifacts:
+      - name: model
+        path: /workspace/model.pt
+```
+
+The `retryStrategy` is intentionally tight on GPU steps: silently retrying a failed training job consumes hours of accelerator time and almost never succeeds the second time without human intervention. The `arguments.artifacts` block uses Argo's `from:` syntax to reference an upstream task's output, which the controller resolves to a MinIO presigned URL at scheduling time.
+
 ### KubeRay
-For heavy distributed computing, KubeRay (v1.6.0) is utilized. KubeRay is not a CNCF project; it is maintained under the Ray project ecosystem originating at Anyscale.
+For heavy distributed computing, KubeRay (v1.6.0) is utilized. KubeRay is not a CNCF project; it is maintained under the Ray project ecosystem originating at Anyscale. Ray is the right choice when a single training step needs to fan out across dozens of pods (distributed XGBoost, distributed hyperparameter tuning, or large-scale data preprocessing); Argo and KFP remain the right choice for stitching coarse-grained steps into a multi-stage pipeline.
+
+> **Pause and predict**: A team complains that their nightly KFP pipeline succeeds in development but fails in production with `artifact not found` errors at the `evaluate` step. The pipeline definitions are byte-identical between environments. What is the most likely root cause?
+> *Answer*: The production cluster is using a different MinIO bucket prefix than the artifact repository the pipeline expects, and the `artifactRepositoryRef` ConfigMap is missing or misconfigured in the production namespace. Argo and KFP resolve artifact paths at scheduling time using the cluster-scoped artifact repository configuration; pipeline YAML alone never carries the bucket name. Verify the ConfigMap in each target namespace before promoting pipelines across environments.
 
 ## Model Serving: KServe & Triton
 
@@ -247,9 +315,100 @@ spec:
 # The previous version remains defined or defaults to the rest of the traffic
 ```
 
+### Scaling and Failure Modes
+
+KServe inference pods scale through one of two controllers depending on whether Knative is installed. The Knative Pod Autoscaler (KPA) reacts to `concurrency` (in-flight requests per pod) within a few seconds and is the only path to scale-to-zero; the Horizontal Pod Autoscaler (HPA) reacts to CPU or custom Prometheus metrics on a longer cycle (15–60 seconds default) but cannot drop replicas below `minReplicas: 1`. For latency-sensitive serving on GPU nodes, KPA with `containerConcurrency: 4` and `minScale: 1` is the standard production choice — the floor of one replica eliminates cold-start penalties on the multi-gigabyte model weights, while concurrency-based scaling responds to bursty inference traffic faster than CPU-based HPA.
+
+GPU-backed serving introduces failure modes you will never see on CPU-only workloads. Three are worth memorizing:
+
+1. **GPU memory exhaustion under concurrent requests.** A model that fits in 12 GB of VRAM at batch size 1 may overflow at batch size 8 because the framework allocates intermediate activation tensors per request. The pod does not crash cleanly — `nvidia-smi` reports `out of memory` and Triton or TorchServe returns HTTP 500 for that request only, leaving the pod in a degraded state where every fourth or fifth request fails. Mitigation: enforce a `containerConcurrency` ceiling derived from a load test, not from CPU intuition.
+2. **Model loading hangs at pod startup.** When a 30 GB LLM weight file pulls slowly from MinIO, the readiness probe times out before the model finishes loading, Kubernetes marks the pod unhealthy, and rolling updates stall indefinitely. Mitigation: set `readinessProbe.initialDelaySeconds` to at least the 95th-percentile model load time observed in staging, and prefer `storageInitializer` sidecars that pre-stage weights to a `RWO` PVC during the init phase.
+3. **Eviction by GPU pressure on shared nodes.** When a higher-priority training job lands on the same GPU node, the kubelet evicts the inference pod even if its CPU and memory budgets are well within limits. Mitigation: separate inference and training into distinct node pools using `nodeSelector` and a dedicated `kserve-gpu` taint, or use Kubernetes Pod Priority classes with a `system-cluster-critical` priority for production inference services.
+
+> **Stop and think**: If your serving SLO is p99 < 200 ms and your model takes 90 seconds to load from MinIO, why is `minScale: 0` always wrong even when traffic is sparse?
+> *Answer*: A scale-from-zero event introduces a worst-case 90-second pod startup tail before the first byte of response, which is 450× the SLO budget. Cost-conscious teams sometimes accept this for internal-only batch APIs, but any externally-facing inference service must use `minScale: 1` (or higher) to keep at least one warm replica in memory.
+
 ## Monitoring & Governance
 
-Monitoring ML platforms requires robust policy engines. OPA (Open Policy Agent) is a CNCF Graduated project, and its OPA Gatekeeper (v3.22.0) is heavily used to enforce resource limits on ML workloads. Prometheus, another CNCF Graduated project, scrapes metrics from all components.
+Monitoring an MLOps platform requires three independent surfaces stitched together: **policy enforcement** at admission time (does this workload comply with resource and security rules?), **infrastructure metrics and alerts** during steady state (are pods healthy and responsive?), and **model-level observability** (are predictions still trustworthy?). A platform that handles only the first two will pass every SRE review and still serve stale or biased predictions for weeks before anyone notices. The diagram below shows how audit signals flow from cluster components into a centralized governance plane.
+
+```mermaid
+flowchart LR
+    subgraph Cluster
+        OPA[OPA Gatekeeper<br/>admission deny]
+        Prom[Prometheus<br/>node + pod metrics]
+        KServe[KServe predictor<br/>request logs]
+        Evidently[Evidently AI<br/>drift scores]
+    end
+    subgraph Governance Plane
+        Loki[Loki<br/>structured logs]
+        AM[Alertmanager<br/>routing]
+        SIEM[(SIEM / audit DB)]
+    end
+    OPA -->|deny event| Loki
+    Prom -->|alert fires| AM
+    KServe -->|prediction log| Loki
+    Evidently -->|drift breach| AM
+    Loki --> SIEM
+    AM -->|page oncall| SIEM
+```
+
+### Admission-Time Policy with OPA Gatekeeper
+
+OPA Gatekeeper compiles Rego policies into ConstraintTemplates and enforces them via Kubernetes admission webhooks. A common ML platform requirement is forbidding any pod that requests a GPU without also declaring a memory limit — without the limit, a runaway training job can starve every other pod on the node.
+
+```yaml
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResources
+metadata:
+  name: gpu-pods-must-set-memory-limit
+spec:
+  match:
+    kinds:
+    - apiGroups: [""]
+      kinds: ["Pod"]
+    namespaces: ["mlops", "training"]
+  parameters:
+    limits: ["memory"]
+    selectors:
+      resourceRequests: ["nvidia.com/gpu"]
+```
+
+When a pipeline submits a training pod that requests a GPU but omits `resources.limits.memory`, the admission webhook rejects the pod and writes a structured deny event to the audit log. The pipeline step fails fast at submission rather than mid-run, which prevents wasted GPU time and produces a clear, actionable error message for the data scientist who authored the manifest.
+
+### Infrastructure Alerting with Prometheus
+
+Prometheus alert rules sit on top of metrics scraped from KServe, Argo, MLflow, and the underlying Kubernetes nodes. The most important alert on a serving stack catches sustained elevated error rates before customers do. The rule below fires when more than five percent of a model's responses return non-2xx for ten consecutive minutes:
+
+```yaml
+groups:
+- name: kserve-inference-slo
+  rules:
+  - alert: KServeHighErrorRate
+    expr: |
+      sum by (inference_service) (
+        rate(revision_request_count{response_code_class!="2xx"}[5m])
+      )
+      /
+      sum by (inference_service) (
+        rate(revision_request_count[5m])
+      ) > 0.05
+    for: 10m
+    labels:
+      severity: page
+      team: mlops
+    annotations:
+      summary: "{{ $labels.inference_service }} error rate above 5%"
+      runbook: "https://runbooks.mlops.internal/kserve-error-budget"
+```
+
+The `for: 10m` clause is deliberate: short error spikes during canary rollouts or pod restarts are normal, and a tighter window would page oncall for benign churn. Pair this rule with one that watches `nvidia_gpu_memory_used_bytes` to catch the GPU-OOM failure mode described earlier, and one on `kserve_revision_request_latency_seconds` (p95) to enforce the latency half of your SLO.
+
+### Model-Level Observability and Drift
+
+Pod-level metrics tell you the platform is healthy; they do not tell you the model is still correct. Evidently AI runs as a Kubernetes Deployment that periodically pulls recent prediction logs and reference data, computes statistical distance metrics (Kolmogorov-Smirnov for numeric features, chi-squared for categoricals), and exports drift scores to Prometheus. When the drift score on a critical input feature crosses the configured threshold, Alertmanager routes the alert to the model owner — not to the platform oncall — because the remediation is retraining, not infrastructure work.
+
+The clearest separation of concerns: platform engineers own the Gatekeeper constraints and the Prometheus alert rules; model owners own the Evidently drift thresholds and the retraining cadence. Both signals land in the same SIEM so that the audit trail tells a coherent story when an incident reconstruction asks who knew what and when.
 
 For specialized ML monitoring, tools like Evidently AI (v0.7.21, Apache 2.0) and ZenML (0.94.2, Apache 2.0) offer drift detection and pipeline management. If you prefer managed platforms, Weights & Biases (wandb) provides an MIT-licensed Python SDK, but the W&B platform itself is a commercial SaaS with no open-source self-hosted server edition.
 
@@ -456,6 +615,24 @@ The MLflow UI should load correctly, demonstrating that the frontend API server 
     *   *Cause:* The `backend-store-uri` string in the MLflow deployment contains a typo or PostgreSQL has not finished initializing. Verify the Service name of your PostgreSQL deployment.
 *   **Error: `botocore.exceptions.EndpointConnectionError: Could not connect to the endpoint URL`**
     *   *Cause:* `MLFLOW_S3_ENDPOINT_URL` is missing or the MinIO service name is incorrect. Ensure the client pod (the `mlflow-test` pod) has the environment variable set explicitly; it does not inherit it from the server.
+
+### Task 6 — Transfer Challenge: Multi-Tenant Isolation
+
+The single-namespace deployment you just built works for one team. A real platform must serve at least three tenant teams (`fraud`, `pricing`, `forecast`) sharing the same physical cluster, where each team can read and write only its own MLflow runs and its own MinIO objects, and where any cross-tenant access attempt is denied at admission time.
+
+This challenge is intentionally open-ended — no single solution YAML is provided. Use the patterns from this module and prior modules in the track to design and defend your approach. Aim to spend 60–90 minutes here.
+
+**Required outcomes:**
+1.  Tenant `fraud` can `mlflow.log_artifact` to its own bucket prefix but receives `AccessDenied` when targeting `s3://mlflow-artifacts/pricing/`.
+2.  A pod in namespace `pricing` cannot read MLflow runs registered by namespace `fraud`, even though both teams share a single MLflow Tracking Server pod.
+3.  Any `Deployment` submitted to the `forecast` namespace that requests a GPU but omits a memory limit is rejected by Gatekeeper with a clear error.
+
+**Design questions to answer in your writeup:**
+- Will you run one MLflow Tracking Server per tenant, or one shared server with experiment-level ACLs? What are the operational costs of each path on a 50-tenant platform?
+- How do you scope MinIO credentials per tenant — IAM-style policies on a single root bucket, or one bucket per tenant with separate access keys? Which path makes Backups & Disaster Recovery (covered in module 9.6) easier?
+- If a tenant exhausts their PostgreSQL connection pool, how do you prevent the noisy neighbor from degrading the other tenants' MLflow logging latency?
+
+**Stretch goal — swap the storage backend.** Reproduce Tasks 1 through 5 with Ceph RGW (via the Rook operator) substituted for the bitnami MinIO chart. Document every place the manifests changed: which environment variables, which Service DNS names, which signature versions. The point of the stretch goal is to feel where MinIO assumptions are baked into the rest of the stack — many teams discover their "S3-compatible" tooling is actually MinIO-compatible only after they try a real swap.
 
 ## Quiz
 
