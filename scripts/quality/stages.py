@@ -1022,8 +1022,36 @@ def _post_merge_gates(slug: str) -> None:
     try:
         row = gates.build_ledger_row(slug=slug, state_payload=st, real_llm_result=real_llm)
         gates.append_ledger(row)
+        _commit_ledger_row(slug)
     except Exception as exc:
         print(f"[gate-warn] {slug}: ledger append raised {type(exc).__name__}: {exc}")
+
+
+def _commit_ledger_row(slug: str) -> None:
+    """Stage + commit the ledger TSV after a row append.
+
+    Without this, the working tree is left dirty after every merge
+    (the ledger file is tracked, not gitignored), which makes the
+    NEXT module's ``merge_one`` refuse with "primary has uncommitted
+    changes" — the exact #378 root-cause class. The merge commit
+    already landed; this is a follow-up commit pinning the audit row.
+    """
+    primary = _primary()
+    ledger_rel = "docs/quality-progress.tsv"
+    if not (primary / ledger_rel).exists():
+        return
+    diff = subprocess.run(
+        ["git", "diff", "--quiet", "--", ledger_rel],
+        cwd=primary, check=False,
+    )
+    if diff.returncode == 0:
+        # No changes (e.g. lock-only, or another worker already committed).
+        return
+    subprocess.run(["git", "add", ledger_rel], cwd=primary, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", f"quality(ledger): post-merge audit row for {slug}"],
+        cwd=primary, check=True,
+    )
 
 
 # ---- resume logic -----------------------------------------------------
