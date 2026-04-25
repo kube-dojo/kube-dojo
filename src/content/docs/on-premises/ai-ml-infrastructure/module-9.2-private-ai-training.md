@@ -8,39 +8,238 @@ sidebar:
 
 # Private AI Training Infrastructure
 
-In late 2024, a prominent generative AI startup burned over $2.4 million in idle compute over three weeks because their vanilla Kubernetes cluster could not properly handle distributed checkpoint bursts. Every time a node experienced an ECC memory error or a transient network drop, their entire 1,024-GPU training job crashed. When the job attempted to restart, standard Kubernetes scheduling led to fragmentation—pods were distributed randomly across the cluster without regard for network topology or synchronized startup. 
-
-Standard Kubernetes constructs—like TCP over overlay networks, default kube-scheduler behavior, and standard Ephemeral storage—fail spectacularly under the synchronous, high-bandwidth requirements of Large Language Models (LLMs). A distributed training job using PyTorch requires simultaneous execution; if 99 percent of pods are running but 1 percent are pending, the entire cluster idles indefinitely, waiting for the rendezvous.
-
-This module details how to architect and operate a Kubernetes cluster tailored for distributed training paradigms (PyTorch DDP/FSDP, JAX), focusing on kernel-bypass networking (RoCEv2/InfiniBand), gang scheduling, and NUMA-aware topology alignment. You will learn to eliminate these bottlenecks and design a resilient, high-throughput private AI platform.
+**Complexity:** Advanced  
+**Time:** 120-150 minutes  
+**Prerequisites:** Kubernetes Jobs, Services, device plugins, GPU basics, Linux networking, storage fundamentals, and basic PyTorch familiarity  
+**Environment:** Kubernetes 1.35+, a local `kind` cluster for the lab, and production familiarity with GPU nodes, RDMA-capable NICs, and shared storage  
 
 ## Learning Outcomes
 
-* **Design** a topology-aware scheduling architecture to optimize inter-GPU communication across NUMA nodes and network switches.
-* **Implement** PyTorch Distributed Data Parallel (DDP) workloads using Kubernetes Indexed Jobs and headless services.
-* **Diagnose** NCCL over InfiniBand/RoCEv2 communication failures using Multus, SR-IOV, and RDMA metrics.
-* Deploy and tune batch job schedulers (Kueue, Volcano) for fair-share GPU allocation and gang scheduling.
-* **Evaluate** high-throughput checkpoint storage mechanisms to minimize synchronous training disruptions.
+By the end of this module, you will be able to:
 
-## Distributed Training Primitives on Kubernetes
+* **Design** a topology-aware Kubernetes scheduling architecture that aligns GPUs, CPUs, memory, and RDMA NICs for distributed training workloads.
+* **Implement** PyTorch Distributed Data Parallel workloads using Indexed Jobs, headless Services, deterministic rank assignment, and queue-based admission.
+* **Diagnose** NCCL communication failures by comparing TCP fallback, RDMA device exposure, Multus attachments, SR-IOV resources, and fabric-level loss symptoms.
+* **Evaluate** whether Kueue, Volcano, or native Kubernetes scheduling is appropriate for a specific private AI training platform.
+* **Design** a checkpoint storage path that reduces synchronous training stalls while preserving durable recovery points.
 
-Modern distributed training primarily uses synchronous data parallelism or model parallelism. Frameworks like PyTorch and JAX require a static cluster of workers that communicate directly with one another.
+## Why This Module Matters
 
-### PyTorch 2.11: DDP and FSDP2
+A platform team builds a private training cluster because sensitive model data cannot leave the company network.
 
-As of April 2026, PyTorch 2.11 is the current stable PyTorch release. Understanding the evolution of its parallelism strategies is critical for infrastructure planning.
+The first pilot looks successful.
 
-* **Distributed Data Parallel (DDP):** Copies the entire model to every GPU and splits the dataset across GPUs. Gradients are synchronized across all GPUs via a Ring-AllReduce operation after the backward pass.
-* **Fully Sharded Data Parallel (FSDP2):** In PyTorch 2.11, the original FSDP1 (`FullyShardedDataParallel` class) is deprecated. FSDP2 (the `fully_shard` API, utilizing DTensor) is the current recommended distributed training API. Projects like TorchTitan use FSDP2 natively for LLM pretraining. FSDP2 provides approximately 7 percent lower GPU memory usage and approximately 1.5 percent average performance improvement over FSDP1, offering deterministic GPU memory allocation without requiring CPU synchronization.
+Eight GPU nodes join the cluster.
 
-### Mapping to Kubernetes Constructs
+The NVIDIA device plugin exposes GPUs.
 
-Distributed training frameworks require:
-1. **Predictable DNS:** Workers must discover each other before training begins.
-2. **Rank Awareness:** Each worker must know its index (Rank 0, Rank 1, etc.) in the global cluster. Rank 0 typically acts as the rendezvous point.
-3. **Simultaneous Execution:** All workers must start simultaneously. If Rank 0 starts but Rank 5 is pending, Rank 0 will timeout and crash.
+A data science team submits a distributed PyTorch job.
 
-Historically, this was solved using custom operators like Kubeflow's MPIJob or PyTorchJob. In modern Kubernetes (1.34+), this is natively solved using **Indexed Jobs**.
+Pods begin to start.
+
+Then the platform falls apart in slow motion.
+
+Rank 0 starts first.
+
+Rank 1 cannot resolve the rendezvous address.
+
+Several workers land on nodes attached to the wrong top-of-rack switch.
+
+NCCL fails to initialize RDMA and silently falls back to TCP over the default Kubernetes network.
+
+Half of the pods are running, half are pending, and every allocated GPU is idle because synchronous training cannot begin until every rank joins.
+
+The scheduler did exactly what a general-purpose Kubernetes scheduler normally does.
+
+It placed pods one at a time.
+
+It did not know that a training job is only useful when all workers start together.
+
+It did not know that two GPUs on the same host may have very different paths to the NIC.
+
+It did not know that a pending rank wastes every running rank.
+
+The storage system then adds another failure mode.
+
+Checkpoint writes arrive as synchronized bursts from many workers.
+
+A single checkpoint pauses training for minutes.
+
+When one rank crashes during a checkpoint window, the whole job restarts from stale state.
+
+The bill is not just wasted hardware.
+
+The bill is lost research time, delayed model releases, and a platform that teams stop trusting.
+
+Private AI training infrastructure is therefore not "Kubernetes plus GPUs."
+
+It is a coordinated system of scheduling, networking, topology, storage, and operational feedback.
+
+The hard part is not launching a container that can see a GPU.
+
+The hard part is making hundreds or thousands of GPUs behave like one reliable training machine.
+
+This module builds that mental model from first principles.
+
+You will start with the training process itself.
+
+Then you will map ranks and rendezvous onto Kubernetes primitives.
+
+Then you will add RDMA, topology, gang scheduling, observability, and checkpoint design.
+
+Finally, you will practice the same pattern in a local lab using CPU-backed PyTorch so the scheduling behavior is visible without requiring physical GPUs.
+
+## 1. Start With The Training Shape
+
+Distributed training is strict about coordination.
+
+A web application can usually tolerate partial availability.
+
+If one replica is missing, the load balancer sends traffic to the remaining replicas.
+
+A synchronous training job behaves differently.
+
+If one rank is missing, every other rank may wait.
+
+If one rank is slow, every other rank may idle at the synchronization point.
+
+If one rank crashes, the whole job usually fails or rolls back to a checkpoint.
+
+That difference changes the infrastructure design.
+
+You are not scheduling independent replicas.
+
+You are scheduling a single distributed computation.
+
+Each worker has a role.
+
+Each worker needs a rank.
+
+Each worker needs to discover the others.
+
+Each worker needs a network path that can handle repeated collective communication.
+
+Each worker needs access to checkpoint storage at nearly the same time.
+
+The smallest useful model is four workers training together.
+
+```text
++----------------------+       +----------------------+
+| Worker rank 0        |<----->| Worker rank 1        |
+| Rendezvous endpoint  |       | Joins rendezvous     |
+| GPU + CPU + NIC path |       | GPU + CPU + NIC path |
++----------------------+       +----------------------+
+          ^                              ^
+          |                              |
+          v                              v
++----------------------+       +----------------------+
+| Worker rank 2        |<----->| Worker rank 3        |
+| Joins rendezvous     |       | Joins rendezvous     |
+| GPU + CPU + NIC path |       | GPU + CPU + NIC path |
++----------------------+       +----------------------+
+```
+
+That diagram hides several production risks.
+
+The ranks may not start at the same time.
+
+The DNS records may not exist when the first worker tries to resolve them.
+
+The network path may be the wrong one.
+
+The GPU and NIC may sit behind different NUMA domains.
+
+The scheduler may place only some ranks because resources are fragmented.
+
+A production platform must make each of those risks explicit.
+
+### Distributed Data Parallel And Sharded Training
+
+Modern distributed training commonly uses data parallelism, tensor/model parallelism, pipeline parallelism, or combinations of them.
+
+This module focuses on the infrastructure pattern behind synchronous data parallel and sharded data parallel training because it is the foundation most Kubernetes-based training stacks build on.
+
+**Distributed Data Parallel (DDP)** copies the model to every worker.
+
+Each worker processes a different slice of the data.
+
+After the backward pass, workers synchronize gradients.
+
+That synchronization is usually the expensive cross-node communication path.
+
+**Fully Sharded Data Parallel (FSDP)** reduces per-GPU memory pressure by sharding model parameters, gradients, and optimizer state.
+
+The infrastructure implications are similar but more intense.
+
+Workers still need reliable collective communication.
+
+They also become more sensitive to communication latency because model state is repeatedly gathered and sharded.
+
+**Pipeline and tensor parallelism** split work inside the model.
+
+They often require even tighter network expectations because some layers cannot proceed until remote partitions finish.
+
+The exact framework API changes over time.
+
+The infrastructure lesson is more stable:
+
+A training platform must support deterministic rank identity, all-or-nothing startup, high-bandwidth communication, topology alignment, and checkpoint recovery.
+
+### PyTorch DDP And FSDP2
+
+PyTorch training commonly launches distributed workers with `torchrun`.
+
+A typical `torchrun` invocation tells each worker:
+
+* how many nodes exist,
+* how many processes run per node,
+* which rank this node has,
+* where the rendezvous endpoint is,
+* which backend to use.
+
+DDP is easy to explain because every worker owns the whole model.
+
+FSDP2 is more efficient for large models because state is sharded.
+
+The infrastructure does not get easier when the framework gets smarter.
+
+The scheduler still must admit the full job.
+
+The network still must carry collectives.
+
+The storage path still must handle checkpoint bursts.
+
+The operator still must prove that the job is using the intended hardware path.
+
+When planning a private AI cluster, separate framework concerns from platform concerns.
+
+Framework teams choose DDP, FSDP2, DeepSpeed, JAX, or another training strategy.
+
+Platform teams provide the reliable substrate.
+
+The substrate must expose the right devices, place pods intelligently, admit jobs as a group, and make failures diagnosable.
+
+### Mapping Training Requirements To Kubernetes
+
+Distributed training frameworks require three basic platform guarantees.
+
+1. **Predictable identity.** Each worker must know its rank.
+2. **Predictable discovery.** Workers must resolve each other before training begins.
+3. **Predictable admission.** Workers must start as a useful group, not as isolated pods.
+
+Historically, teams used custom training operators such as MPIJob or PyTorchJob.
+
+Those operators are still useful.
+
+However, Kubernetes now provides a strong native building block for simple distributed jobs: Indexed Jobs.
+
+An Indexed Job assigns each pod a stable completion index.
+
+That index maps naturally to a training rank.
+
+A headless Service provides stable DNS.
+
+Together, they give `torchrun` enough information to form a worker group.
 
 ```mermaid
 graph TD
@@ -63,19 +262,135 @@ graph TD
     P3 -.->|c10d Rendezvous| P0
 ```
 
-Setting `completionMode: Indexed` ensures each Pod receives a unique index via the `JOB_COMPLETION_INDEX` environment variable. Combined with a Headless Service, Pods receive deterministic hostnames (`pod-0.headless-svc`, `pod-1.headless-svc`), perfectly aligning with PyTorch's `torchrun` elastic launch requirements.
+The important detail is that `completionMode: Indexed` gives each pod a value in `JOB_COMPLETION_INDEX`.
 
-## High-Performance Networking (NCCL and RDMA)
+Rank 0 can be pod index 0.
 
-Kubernetes overlay networks (Calico, Cilium, Flannel) introduce CPU overhead and latency that degrade AI training performance. Multi-node GPU communication relies on the NVIDIA Collective Communications Library (NCCL). The current stable version, NCCL 2.29.7, supports both CUDA 12.x and CUDA 13.x.
+Rank 1 can be pod index 1.
 
-To achieve line-rate multi-node scaling, NCCL must use Remote Direct Memory Access (RDMA), bypassing the OS kernel entirely. This requires either InfiniBand or RDMA over Converged Ethernet (RoCEv2). 
+The rendezvous endpoint can point to rank 0 through the headless Service.
 
-To provision these advanced interfaces, administrators rely on the NVIDIA Network Operator. The current stable version is v26.1.0 (released February 22, 2025), with v26.4.0-beta.2 in active development. It provides the InfiniBand SR-IOV CNI, RoCE support, and GPUDirect RDMA. Note that InfiniBand deployments using the NVIDIA Network Operator strictly require the NVIDIA DOCA Driver and a running OpenSM subnet manager as prerequisites on the fabric.
+That is a clean Kubernetes-native design.
 
-### Exposing RDMA to Pods
+It is also incomplete by itself.
 
-You cannot route RDMA traffic through a standard Kubernetes CNI overlay. You must attach secondary network interfaces directly to the Pods. This is accomplished using Multus CNI combined with the SR-IOV Network Device Plugin.
+Indexed Jobs do not solve gang admission.
+
+A plain Indexed Job can still partially start.
+
+A plain Indexed Job does not guarantee that workers are on the right network topology.
+
+A plain Indexed Job does not expose RDMA devices.
+
+A plain Indexed Job does not make checkpoint storage fast.
+
+You should treat Indexed Jobs as the identity layer, not the whole platform.
+
+> **Active learning prompt:** A team tells you their Indexed Job has `parallelism: 16`, but only 10 pods are running and the rest are pending. The running pods consume GPUs while the job waits. Which platform guarantee is missing: identity, discovery, admission, topology, or storage?
+
+The missing guarantee is admission.
+
+The job has identity because each pod can get an index.
+
+It may even have discovery.
+
+But the platform admitted a partial job.
+
+For synchronous training, partial admission is often worse than no admission because it wastes expensive resources.
+
+## 2. Design The Network Before You Schedule The Job
+
+GPU training performance often fails at the network layer first.
+
+Kubernetes overlay networks are excellent for ordinary service traffic.
+
+They are not designed for sustained low-latency GPU collectives.
+
+An overlay network adds encapsulation, host networking overhead, and CPU involvement.
+
+For distributed training, those costs multiply at every synchronization point.
+
+NVIDIA Collective Communications Library, or NCCL, is commonly used for GPU collectives.
+
+NCCL can use multiple transports.
+
+When the RDMA path is healthy, it can use InfiniBand or RoCEv2.
+
+When that path is broken, it may fall back to TCP sockets.
+
+The dangerous failure mode is silent fallback.
+
+The job still runs.
+
+The dashboards still show GPU allocation.
+
+The training loop still progresses.
+
+But throughput collapses.
+
+A platform engineer must therefore ask two questions for every training workload:
+
+* Which network path should this job use?
+* How will we prove that the job actually used it?
+
+### InfiniBand And RoCEv2 In Plain Terms
+
+InfiniBand is a purpose-built high-performance fabric.
+
+RoCEv2 carries RDMA over Ethernet.
+
+Both allow remote direct memory access.
+
+The value of RDMA is that data can move between systems with much less CPU and kernel involvement than ordinary TCP.
+
+For GPU training, the strongest design is usually GPUDirect RDMA.
+
+That allows a capable NIC to transfer data directly to or from GPU memory without staging everything through host memory.
+
+This reduces latency and CPU pressure.
+
+It also makes topology alignment more important.
+
+If the NIC is close to one group of GPUs but the scheduler assigns a pod GPUs from a different NUMA domain, traffic crosses additional host interconnects before it reaches the NIC.
+
+The platform still "works."
+
+It just works badly.
+
+### The Kubernetes Problem With RDMA
+
+A normal pod receives a normal network interface from the cluster CNI.
+
+That interface is not the RDMA interface.
+
+You cannot route RDMA traffic through a standard overlay and expect kernel-bypass behavior.
+
+The pod needs access to a secondary interface or device resource that maps to the high-performance fabric.
+
+This is commonly done with:
+
+* Multus CNI for secondary network attachment,
+* SR-IOV device plugins for virtual functions,
+* the NVIDIA Network Operator for NVIDIA networking stacks,
+* switch-level configuration for lossless RoCEv2 or InfiniBand fabric operation.
+
+The pod spec then carries both application intent and hardware intent.
+
+It says "I need GPUs."
+
+It also says "I need the RDMA network attachment."
+
+It may say "I need this SR-IOV resource."
+
+That lets the scheduler and kubelet coordinate compute and network resources.
+
+### Exposing RDMA To Pods
+
+You cannot route RDMA traffic through a standard Kubernetes CNI overlay.
+
+You must attach secondary network interfaces directly to the Pods.
+
+This is accomplished using Multus CNI combined with the SR-IOV Network Device Plugin.
 
 ```yaml
 # Example Multus NetworkAttachmentDefinition for RoCEv2
@@ -98,15 +413,45 @@ spec:
   }'
 ```
 
+This object is only one piece of the design.
+
+The physical NIC must exist.
+
+The host drivers must be installed.
+
+The device plugin must advertise the resource.
+
+The pod must request the resource.
+
+The switch fabric must be configured correctly.
+
+The application must be told to use the intended interface.
+
+If any one of those pieces is wrong, NCCL may avoid the RDMA path.
+
 :::caution
 **RoCEv2 Requirements:** RoCEv2 requires a lossless network fabric. You must configure Priority Flow Control (PFC) and Explicit Congestion Notification (ECN) on your Top of Rack (ToR) switches. If packets drop, RoCEv2 falls back to Go-Back-N, causing catastrophic latency spikes that stall training.
 :::
 
-> **Stop and think**: Why is it critical for the NVIDIA Network Operator to have the DOCA driver and OpenSM running before attempting an InfiniBand deployment? Without a subnet manager like OpenSM, the InfiniBand fabric remains uninitialized, and ports will stay in an inactive state, preventing any RDMA communication.
+InfiniBand has its own operational requirements.
+
+For InfiniBand, the subnet manager matters.
+
+Without a subnet manager such as OpenSM, ports may remain inactive or unusable.
+
+For NVIDIA networking stacks, validate the driver and operator prerequisites before trying to debug training code.
+
+A PyTorch error can be the final symptom of a fabric that was never initialized.
+
+> **Stop and think:** Why is it critical for the NVIDIA Network Operator to have the DOCA driver and OpenSM running before attempting an InfiniBand deployment? Without a subnet manager like OpenSM, the InfiniBand fabric remains uninitialized, and ports will stay in an inactive state, preventing any RDMA communication.
 
 ### NCCL Configuration
 
-NCCL behavior is controlled via environment variables passed to the Pod. Below is the mapping of critical variables to ensure your application bypasses the standard network stack.
+NCCL behavior is controlled through environment variables passed to the training container.
+
+These variables are not a substitute for correct hardware setup.
+
+They are the control surface you use to verify and constrain NCCL behavior.
 
 | Variable | Recommended Value | Purpose |
 | :--- | :--- | :--- |
@@ -130,29 +475,227 @@ graph TD
     E --> E1[Enables GPUDirect RDMA, bypassing CPU]
 ```
 
-## GPU Operators, Drivers, and Device Plugins
+Use `NCCL_DEBUG=INFO` during validation and incident response.
 
-Managing the underlying hardware drivers on Kubernetes is handled by specialized operators. Despite the Kubernetes Device Manager component graduating to General Availability (GA) in Kubernetes 1.26, the Kubernetes Device Plugin API remains at v1beta1. It is not a stable GA API, but it forms the foundation for both NVIDIA and AMD integrations.
+In mature production environments, you may reduce log verbosity for steady-state runs.
 
-### NVIDIA GPU Operator
+Do not remove the ability to re-enable it quickly.
 
-As of April 2026, the current stable version of the NVIDIA GPU Operator is v26.3.0, utilizing calendar versioning (YY.MM.PP). This operator supports Kubernetes versions 1.32 through 1.35.
+A useful platform pattern is to provide a debug profile.
 
-NVIDIA GPU Operator v26.3.0 bundles several critical infrastructure components into a single deployment: the NVIDIA Container Toolkit 1.19.0, Kubernetes Device Plugin 0.19.0, DCGM Exporter v4.5.1–v4.8.0, Node Feature Discovery v0.18.3, DCGM 4.5.2-1, and the NVIDIA Driver Manager v0.10.0. By default, it deploys the NVIDIA driver 580.126.20, while also offering support for the 590.48.01, 570.211.01, and 535.288.01 branches.
+The default profile sets conservative production values.
 
-> **Documentation Note:** The CUDA version matrix for NVIDIA GPU Operator v26.3.0 is documented in the Component Matrix page, not the release notes. Because this information resides on a separate unverified page, always consult the live Component Matrix to confirm precise CUDA compatibility before upgrading.
+The debug profile adds NCCL logging, interface restrictions, and short test jobs that run collectives before a large training run begins.
 
-### AMD ROCm Ecosystem
+### What To Check When RDMA Is Suspect
 
-For clusters utilizing AMD accelerators, the AMD ROCm current stable production version is 7.2.1 (released March 25, 2026). A technology preview stream (7.10.0–7.12.0) is expected to replace the production stream by mid-2026.
+Start with the symptom.
 
-AMD provides a Kubernetes Device Plugin at version 1.3.1 that naturally exposes `amd.com/gpu` resources and provides automated node labeling (including device ID, VRAM, and compute unit counts). Furthermore, AMD provides a ROCm GPU Operator for Kubernetes (`github.com/ROCm/gpu-operator`), which is entirely separate from the device plugin and functions analogously to the NVIDIA GPU Operator.
+If training is slow but not failing, look for TCP fallback.
 
-## Topology-Aware Scheduling
+If training fails immediately, look for rendezvous, DNS, or interface discovery.
 
-A server with 8 GPUs does not have uniform communication bandwidth between all components. GPUs are connected via high-speed interconnects, but the NICs and CPUs are spread across different NUMA (Non-Uniform Memory Access) nodes and PCIe root complexes. If a Pod requests 4 GPUs, and the kube-scheduler assigns 2 GPUs from NUMA Node 0 and 2 GPUs from NUMA Node 1, data must traverse the UPI/QPI link between CPUs, creating a severe bottleneck.
+If training progresses but stalls during collectives, inspect fabric loss, MTU, congestion, and topology.
 
-To enforce NUMA alignment, configure the TopologyManager within the Kubelet configuration on all GPU nodes.
+A practical debugging sequence is:
+
+1. Confirm that the pod requested the GPU and RDMA resources.
+2. Confirm that the pod received the Multus attachment.
+3. Confirm that the expected interface exists inside the container.
+4. Confirm that the device plugin advertises healthy devices on the node.
+5. Confirm that NCCL logs mention the intended RDMA transport.
+6. Confirm that switch counters do not show loss or retransmission symptoms.
+7. Confirm that pods are not crossing a poor NUMA or rack topology.
+
+The order matters.
+
+Do not start by tuning NCCL if the pod never received the RDMA interface.
+
+Do not start by changing switch settings if NCCL logs show it is using sockets.
+
+Do not blame PyTorch if DNS resolution fails before the process group forms.
+
+### Worked Example: Diagnosing A Slow AllReduce
+
+A research team reports that a four-node DDP job is running at one third of expected throughput.
+
+The job does not crash.
+
+GPU utilization rises and falls in waves.
+
+The team suspects PyTorch.
+
+You are the platform engineer.
+
+Your task is to decide whether this is a framework problem or an infrastructure problem.
+
+**Step 1: Look for the communication symptom.**
+
+The training logs show long pauses after backward passes.
+
+That points toward gradient synchronization.
+
+In DDP, gradient synchronization commonly uses NCCL AllReduce.
+
+So the first hypothesis is a communication path problem.
+
+**Step 2: Check whether NCCL used RDMA.**
+
+You inspect the worker logs and find lines similar to:
+
+```text
+NCCL INFO NET/Socket : Using eth0
+```
+
+You do not see the expected `NET/IB` path.
+
+That means the job likely fell back to TCP sockets.
+
+PyTorch is not the first suspect anymore.
+
+The infrastructure did not provide or select the intended RDMA path.
+
+**Step 3: Confirm the pod attachment.**
+
+You check the pod annotations and network interfaces.
+
+```bash
+kubectl get pod pytorch-ddp-0 -o jsonpath='{.metadata.annotations.k8s\.v1\.cni\.cncf\.io/network-status}'
+kubectl exec pytorch-ddp-0 -- ip link
+```
+
+The pod only has the default `eth0`.
+
+It does not have the secondary RoCE interface.
+
+That means NCCL could not use the RDMA path even if the host was configured correctly.
+
+**Step 4: Check the pod resource request.**
+
+You inspect the job template.
+
+The pod requests GPUs but does not request the SR-IOV resource associated with the RoCE NetworkAttachmentDefinition.
+
+The Multus annotation was also missing.
+
+The scheduler placed the pod as a normal GPU workload.
+
+**Step 5: Fix the platform contract.**
+
+You update the workload template so it includes the network attachment annotation and requests the RDMA resource advertised by the device plugin.
+
+You also include NCCL environment variables that restrict the expected interface.
+
+The fix is not "upgrade PyTorch."
+
+The fix is to express the network requirement in Kubernetes.
+
+**Step 6: Re-run a small collective test.**
+
+Before launching the expensive training run, you run a small two-node job.
+
+The logs now show the intended RDMA path.
+
+GPU utilization becomes smoother.
+
+The team can then re-run the larger job with much lower risk.
+
+**Step 7: Capture the lesson as a platform guardrail.**
+
+You add an admission policy or workload template validation rule.
+
+Training jobs in the high-performance queue must request both GPU and RDMA resources.
+
+They must also include the standard NCCL debug profile during preflight.
+
+That turns an incident into a reusable control.
+
+> **Active learning prompt:** In the worked example, what would change if the pod had the secondary RoCE interface but NCCL still used `eth0`? Name two checks you would perform before changing application code.
+
+Good answers include checking `NCCL_IB_HCA`, checking whether the interface names inside the container match the configured values, checking device permissions, checking whether the RDMA devices are visible, and checking whether NCCL was built with the expected transport support.
+
+## 3. Align Hardware Topology With Pod Placement
+
+A GPU node is not a flat box of identical devices.
+
+It has PCIe root complexes.
+
+It has NUMA domains.
+
+It may have NVLink or other GPU interconnects.
+
+It has NICs attached through specific CPU and PCIe paths.
+
+Two GPUs in the same server may have very different communication paths to a NIC.
+
+If a pod asks for four GPUs, the device plugin can expose four GPUs.
+
+That does not automatically mean they are the best four GPUs.
+
+If the pod receives GPUs split across NUMA domains, CPU memory access and NIC paths may cross host interconnects.
+
+The job still starts.
+
+The performance loss may only appear under communication pressure.
+
+This is why topology alignment is an admission problem, not just a monitoring problem.
+
+You want a bad placement to fail early.
+
+A pending pod is visible and recoverable.
+
+A badly placed pod can waste an entire training run.
+
+### What NUMA Means For Training
+
+NUMA stands for Non-Uniform Memory Access.
+
+In a multi-socket server, memory is attached to different CPU sockets.
+
+A CPU can access remote memory, but remote access is slower.
+
+PCIe devices are also attached through particular root complexes.
+
+A GPU may be close to one CPU socket.
+
+A NIC may be close to another.
+
+When training traffic must cross sockets, latency rises and bandwidth falls.
+
+For ordinary batch jobs, that may be acceptable.
+
+For synchronous GPU collectives, it can dominate runtime.
+
+A simplified node might look like this:
+
+```text
++--------------------------------------------------------------------+
+| GPU Node                                                           |
+|                                                                    |
+|  +--------------------------+        +--------------------------+  |
+|  | NUMA node 0              |        | NUMA node 1              |  |
+|  | CPU cores 0-31           |        | CPU cores 32-63          |  |
+|  | Memory bank A            |        | Memory bank B            |  |
+|  | GPUs 0,1,2,3             |        | GPUs 4,5,6,7             |  |
+|  | NIC mlx5_0               |        | NIC mlx5_1               |  |
+|  +--------------------------+        +--------------------------+  |
+|              \                                /                    |
+|               \                              /                     |
+|                +---------- host interconnect +                     |
++--------------------------------------------------------------------+
+```
+
+A pod requesting four GPUs can fit neatly in one NUMA domain.
+
+A pod requesting six GPUs cannot.
+
+If the platform permits the six-GPU pod to run on this node, it must cross the interconnect.
+
+If the platform rejects it, the job may wait for a better shape or require a different workload design.
+
+### Kubelet Topology Manager
+
+To enforce NUMA alignment, configure the Topology Manager within the kubelet configuration on GPU nodes.
 
 ```yaml
 # /var/lib/kubelet/config.yaml
@@ -160,120 +703,782 @@ topologyManagerPolicy: single-numa-node
 topologyManagerScope: pod
 ```
 
-Setting `single-numa-node` ensures the Kubelet will reject Pod admission (resulting in a TopologyAffinityError) if it cannot allocate CPUs, Memory, GPUs, and SR-IOV NICs from the exact same NUMA node. 
+Setting `single-numa-node` ensures the kubelet rejects pod admission if it cannot allocate CPUs, memory, GPUs, and SR-IOV NICs from the same NUMA node.
 
-> **Pause and predict**: If a Kubernetes cluster has nodes with 8 GPUs split evenly across two NUMA domains, and a Pod requests 5 GPUs with a Kubelet policy of `single-numa-node`, will the Pod be scheduled? No, it will be rejected with a TopologyAffinityError, because 5 GPUs cannot be fulfilled by a single 4-GPU NUMA node.
+The failure appears as a `TopologyAffinityError`.
 
-For the NVIDIA device plugin to report NUMA topology to the Kubelet, ensure it is deployed with the `config.map` enabling `topology.mode: true`.
+That failure is useful.
 
-## Batch Schedulers and Gang Scheduling
+It tells the platform that the request cannot be satisfied with the required locality.
 
-The default kube-scheduler evaluates Pods individually. If a distributed training job requires 64 GPUs, and only 32 are available, the scheduler will place 32 Pods. The PyTorch job will hang indefinitely waiting for the remaining 32 ranks to join. Meanwhile, those 32 GPUs are allocated but idling, wasting compute and blocking other jobs. This necessitates **Gang Scheduling** (All-or-Nothing scheduling).
+`topologyManagerScope: pod` matters because training pods often contain init containers or sidecars.
 
-### Volcano
+The platform should reason about the pod as a whole.
 
-Volcano is a specialized batch scheduler for Kubernetes, running as a secondary scheduler. The current stable version is v1.14.1, released February 14, 2025, which introduced the AI-Native Unified Scheduling Platform featuring a Sharding Controller for dynamic resource pools. Volcano is CNCF's first and only official container batch scheduling project at the Incubating maturity level, accepted in April 2020 and promoted to Incubating on March 21, 2022.
-* **Pros:** Deeply understands complex HPC topologies, advanced queueing, and pod grouping.
-* **Cons:** Requires using custom CRDs (`PodGroup`, `Queue`) or Kubeflow MPI-Operators. It replaces standard Kubernetes scheduling logic, which can complicate cluster upgrades.
+For the NVIDIA device plugin to report NUMA topology to the kubelet, deploy it with topology reporting enabled in the plugin configuration.
+
+The exact key names depend on the operator and plugin version.
+
+Validate against the operator documentation used in your cluster.
+
+The design principle is stable:
+
+Device plugins must expose topology hints.
+
+The kubelet must enforce them.
+
+Workloads must request resources in a shape that can be admitted.
+
+> **Pause and predict:** If a Kubernetes cluster has nodes with 8 GPUs split evenly across two NUMA domains, and a Pod requests 5 GPUs with a Kubelet policy of `single-numa-node`, will the Pod be scheduled? No, it will be rejected with a TopologyAffinityError, because 5 GPUs cannot be fulfilled by a single 4-GPU NUMA node.
+
+### Scheduler Placement Versus Kubelet Admission
+
+It is easy to confuse scheduler placement with kubelet admission.
+
+The scheduler chooses a node.
+
+The kubelet admits the pod on that node.
+
+Topology Manager runs at kubelet admission time.
+
+That means the scheduler may pick a node that appears to have enough total GPUs, but the kubelet may reject the pod because those GPUs cannot be aligned with CPU, memory, or NIC resources.
+
+This can create frustrating loops if the scheduler does not have enough topology awareness.
+
+For production AI clusters, combine several layers:
+
+* node labels for hardware class,
+* taints and tolerations for GPU pools,
+* ResourceClasses or workload templates where appropriate,
+* topology-aware device plugin configuration,
+* kubelet Topology Manager policy,
+* batch admission to avoid partial starts,
+* observability that records topology admission failures.
+
+Do not rely on one layer to solve every placement problem.
+
+Kubernetes scheduling is intentionally modular.
+
+Private AI platforms need that modularity, but they must wire the modules together deliberately.
+
+### Topology-Aware Design Checklist
+
+Before opening a GPU pool to training teams, answer these questions:
+
+* How many GPUs sit in each NUMA domain?
+* Which NIC is closest to each GPU group?
+* Which GPU request sizes are valid for a single pod?
+* Which request sizes should be rejected and redesigned?
+* Does the device plugin expose topology hints?
+* Does the kubelet enforce a strict enough policy?
+* Can users see why a topology admission failure happened?
+* Does the queueing layer avoid admitting jobs that will fragment the pool?
+
+These answers should become platform documentation.
+
+They should also become workload templates.
+
+Most data scientists should not need to know every PCIe path in the server.
+
+They should choose from validated shapes such as `1xGPU`, `4xGPU single NUMA`, or `8xGPU full node`.
+
+The platform should make the correct path the easy path.
+
+## 4. Use Gang Scheduling To Avoid Partial Training Jobs
+
+The default kube-scheduler evaluates pods individually.
+
+That behavior is sensible for many workloads.
+
+It is dangerous for synchronous training.
+
+If a job needs 64 workers and only 40 can start, those 40 workers are not useful.
+
+They hold GPUs.
+
+They may start containers.
+
+They may wait at rendezvous.
+
+They may fail after timeout.
+
+Other jobs may be blocked by the partial allocation.
+
+This is the scheduling version of deadlock.
+
+Gang scheduling solves the problem by admitting a group only when the group can run as a group.
+
+In Kubernetes AI platforms, the common choices are Kueue and Volcano.
+
+Both can solve all-or-nothing admission.
+
+They differ in how deeply they replace or extend Kubernetes scheduling.
+
+### Why Native Jobs Are Not Enough
+
+A Kubernetes Job manages completion.
+
+It does not manage global fairness.
+
+It does not hold a job until all pods can run.
+
+It does not understand that a training worker is useless without the other ranks.
+
+A Job can retry failed pods.
+
+An Indexed Job can assign ranks.
+
+Neither is a complete batch platform.
+
+Without queueing, teams create accidental priority systems.
+
+The first job to grab partial resources may block better-shaped jobs.
+
+A large job can fragment the cluster.
+
+A small job can slip through and delay a larger reserved run.
+
+The platform needs admission control before pod creation becomes resource allocation.
 
 ### Kueue
 
-Kueue is a job queueing controller that sits above the kube-scheduler, rather than replacing it. 
-* **Pros:** Native integration with standard K8s Job APIs. It implements gang scheduling by simply keeping the Job suspended (spec.suspend: true) until Kueue verifies that cluster quota and capacity exist for all pods in the job simultaneously. Once quota is acquired, it un-suspends the job.
-* **Cons:** Less granular control over exact node-level bin-packing compared to Volcano.
+Kueue is a job queueing controller.
 
-**Architectural Recommendation:** Use Kueue for modern Kubernetes (1.34+) environments operating PyTorch via Indexed Jobs. It maintains standard scheduling mechanics while elegantly solving the gang admission problem.
+It sits above normal Kubernetes scheduling.
 
-### AI Observability and Autoscaling
+Instead of replacing the scheduler, it controls when jobs are admitted.
 
-To track experiments across massive scheduled runs, MLflow (current stable version 3.11.1, released April 7, 2026) offers robust AI Observability, budget policies for LLM gateways, and pickle-free model serialization. Alternatively, Weights & Biases (W&B) supports self-managed on-premises deployment via the W&B Kubernetes Operator, including air-gapped environments backed by MySQL 8, Redis, and S3-compatible storage.
+For native Jobs, Kueue can keep the job suspended until quota and capacity are available.
 
-For autoscaling inference workloads (not batch training), KEDA (v2.19.0, released February 2, 2025) is a CNCF graduated project with over 70 built-in scalers. However, KEDA has no native built-in GPU scaler; GPU-based autoscaling requires pointing the KEDA Prometheus scaler at DCGM Exporter endpoints.
+When the workload is admitted, Kueue allows the job to proceed.
 
-## AI Training and Inference Workloads
+This is a strong fit for modern Kubernetes environments that already use standard Job APIs and want queueing without replacing the scheduling stack.
 
-### Kubeflow Trainer v2
+Kueue works especially well when your platform contract is:
 
-Kubeflow Trainer (Training Operator v2) is the current stable standard. Version v2.2.0 was released on March 19, 2026. This v2 architecture natively supports PyTorch DDP, TensorFlow, JAX, XGBoost, DeepSpeed, MLX (Apple Silicon), HuggingFace, MPI, and the Flux Framework. 
+* users submit Jobs,
+* queues represent teams or priorities,
+* ResourceFlavors represent hardware pools,
+* ClusterQueues define quota,
+* admission happens before workers start.
 
-Crucially, MXNet and PaddlePaddle are NOT supported runtimes in Kubeflow Trainer v2. They exist only in the legacy Training Operator v1 (final version v1.9.2). This legacy v1.9.2 operator is still included in the Kubeflow manifests bundles (such as v26.03), which requires Kubernetes 1.34 or newer. 
+Kueue is less focused on deep HPC-style placement than Volcano.
 
-For frameworks requiring complex optimization strategies, DeepSpeed (current stable version 0.18.9, released March 30, 2026) provides zero-redundancy optimizers and Universal Checkpoint support. Note that the DeepSpeed repository has moved from the Microsoft organization to `github.com/deepspeedai/DeepSpeed`.
+You may still need node labels, topology policies, and device plugin configuration for placement details.
 
-### MLPerf Benchmarks
+### Volcano
 
-To validate your hardware design, consult MLPerf. MLPerf Training v5.1 (published November 12, 2025) uses Llama 3.1 8B (NLP) and Flux.1 (Image Generation) as its benchmark workloads. MLPerf Inference v6.0 (published April 1, 2026) measures text-to-video generation, GPT-OSS 120B, DeepSeek-R1, and YOLOv11 Large.
+Volcano is a Kubernetes-native batch scheduler.
 
-### Serving with NVIDIA NIM
+It runs as a scheduler and introduces batch concepts such as queues, pod groups, and scheduling plugins.
 
-Once trained, NVIDIA NIM microservices can be self-hosted on private on-premises infrastructure via the NIM Operator for Kubernetes. While NVIDIA Developer Program members can self-host on up to 16 GPUs at no cost, NVIDIA NIM is not open-source software; production deployments require a commercial NVIDIA AI Enterprise license.
+Volcano is often used in HPC and AI workloads that need more explicit gang semantics and advanced scheduling behavior.
 
-### Multi-Tenancy Considerations
+It can be a strong fit when:
 
-For organizations operating multiple isolated teams on massive bare-metal clusters, KubeRay and vCluster are prevalent tools. KubeRay (current stable v1.6.0, released March 19, 2026) manages Ray clusters natively.
+* the platform already standardizes on Volcano CRDs,
+* workloads use Kubeflow operators that integrate with Volcano,
+* the team wants scheduler-level batch behavior,
+* advanced queueing and pod group semantics are required.
 
-> **Project Status Verification:** While widely adopted, claims that KubeRay is an official CNCF sandbox or incubating project could not be independently verified against authoritative CNCF registries. 
-> 
-> **Capability Warning:** vCluster (Loft) current stable version is v0.33.1 (released March 26, 2025). However, claims that it supports direct GPU resource passthrough from host cluster to virtual clusters remain unverified based on primary release documentation. Validate hardware passthrough capabilities before deploying AI workloads on vCluster.
+The tradeoff is operational complexity.
 
-## Checkpoint Storage
+A secondary scheduler changes upgrade planning, debugging paths, and failure domains.
 
-Long-running LLM training jobs fail. Hardware faults, ECC memory errors, or network blips will crash a rank. Because training is synchronous, if one rank crashes, the entire job halts and must be restarted.
+Teams must understand which scheduler owns which pods.
 
-State is preserved via frequent checkpointing. Checkpointing 100GB+ of model state from multiple nodes simultaneously creates massive storage I/O bursts.
+The more deeply you customize scheduling, the more carefully you must test cluster upgrades.
 
-1. **Avoid standard CSI block storage (EBS/RBD):** Writing a 200GB checkpoint synchronously across 64 nodes to an object store or standard block storage can pause training for 15+ minutes per checkpoint.
-2. **Parallel File Systems:** Mount a high-performance distributed file system (Lustre, WEKA, or optimized CephFS) directly into the Pods.
-3. **Asynchronous Checkpointing:** Write checkpoints directly to host-local NVMe drives using Kubernetes `HostPath` or local volume provisioners. Run a daemonset on the node that asynchronously flushes these NVMe checkpoints to durable object storage (S3/MinIO) in the background, allowing the GPUs to resume computing immediately.
+### Choosing Between Kueue And Volcano
+
+Use the workload shape to choose.
+
+If your platform mostly runs native Kubernetes Jobs or Indexed Jobs, start with Kueue.
+
+If your platform runs HPC-style workloads with explicit PodGroups and advanced batch scheduling needs, evaluate Volcano.
+
+If you only need autoscaling for stateless inference, use neither as the primary answer.
+
+Inference scaling is a different problem.
+
+KEDA or HPA-style scaling is usually a better starting point for request-driven inference.
+
+Training queueing and inference autoscaling often coexist in the same cluster.
+
+They should not be confused.
+
+```text
++----------------------------+--------------------------+--------------------------+
+| Problem                    | Better starting point    | Why                      |
++----------------------------+--------------------------+--------------------------+
+| Native Indexed Job training| Kueue                    | Queue admission          |
+| HPC-style pod groups       | Volcano                  | Batch scheduler semantics|
+| Stateless inference scale  | KEDA or HPA              | Event or metric scaling  |
+| NUMA alignment             | Kubelet Topology Manager | Node-local admission     |
+| RDMA exposure              | Multus + SR-IOV          | Secondary interfaces     |
++----------------------------+--------------------------+--------------------------+
+```
+
+The most common mistake is asking one component to solve the whole system.
+
+Kueue does not configure RoCE.
+
+Volcano does not fix checkpoint storage.
+
+Topology Manager does not provide fairness.
+
+Multus does not provide gang admission.
+
+A private AI platform is the composition.
+
+## 5. Operators, Device Plugins, And Workload APIs
+
+GPU infrastructure usually requires operators.
+
+Operators install drivers, device plugins, monitoring agents, container runtime configuration, and supporting components.
+
+They reduce manual host work.
+
+They do not remove the need to understand the stack.
+
+### NVIDIA GPU Operator
+
+The NVIDIA GPU Operator commonly manages driver installation, container runtime integration, device plugin deployment, GPU feature discovery, and DCGM exporter.
+
+The exact component versions change over time.
+
+For production planning, do not copy a component matrix from a lesson and treat it as permanent truth.
+
+Validate the GPU Operator version, supported Kubernetes versions, CUDA compatibility, driver branch, and device plugin behavior from the live vendor matrix during upgrade planning.
+
+The platform decision is broader than "install the operator."
+
+You must decide:
+
+* whether drivers are managed by the operator or by the base OS image,
+* whether GPU nodes are internet-connected or air-gapped,
+* how driver upgrades are staged,
+* how node drains are coordinated with running training jobs,
+* how DCGM metrics are scraped,
+* how MIG or full-GPU modes are exposed,
+* how topology information reaches the kubelet.
+
+A private AI cluster often has strict change windows.
+
+A driver upgrade can affect every training workload.
+
+Treat operator upgrades like platform releases.
+
+### AMD ROCm Ecosystem
+
+AMD accelerator clusters follow a similar pattern with ROCm components, AMD device plugins, and ROCm-oriented operators.
+
+The resource name differs.
+
+The driver stack differs.
+
+The observability tools differ.
+
+The Kubernetes contract remains familiar:
+
+* nodes expose accelerator resources,
+* pods request those resources,
+* scheduling and admission control manage placement,
+* training frameworks use the accelerator backend,
+* observability confirms that the expected hardware path is active.
+
+Mixed accelerator environments require extra care.
+
+Do not hide hardware differences behind a single generic queue unless workloads are truly portable.
+
+Different accelerators may require different images, libraries, drivers, and performance expectations.
+
+Use ResourceFlavors, node labels, or separate queues to make hardware differences explicit.
+
+### Kubeflow Trainer And Training Operators
+
+Training operators can simplify user experience.
+
+They can generate workers, manage launcher pods, integrate with framework-specific conventions, and reduce YAML burden.
+
+Kubeflow Trainer v2 is a modern approach for multiple training runtimes.
+
+Legacy training operators may still exist in clusters for older frameworks.
+
+When adopting a training operator, evaluate it at two levels.
+
+At the user level, ask whether it makes common training jobs easier to submit correctly.
+
+At the platform level, ask whether it integrates cleanly with your queueing, topology, networking, and observability stack.
+
+A training operator that hides too much can make incidents harder.
+
+A good operator should make the right path shorter without obscuring the underlying Kubernetes objects during debugging.
+
+### MLflow, W&B, And Experiment Visibility
+
+Training infrastructure is not only about pods and devices.
+
+Teams also need experiment tracking.
+
+MLflow and Weights & Biases are common options.
+
+In private environments, both storage and network paths matter.
+
+Self-managed experiment tracking must answer:
+
+* Where are metrics stored?
+* Where are artifacts stored?
+* Is object storage internal?
+* Are credentials scoped per team?
+* Can runs be correlated with Kubernetes jobs?
+* Can failed runs be tied to node, network, or storage incidents?
+* Can the platform enforce retention and budget policies?
+
+The strongest platform designs link experiment metadata to infrastructure metadata.
+
+When a run slows down, the team should be able to correlate the run with NCCL logs, GPU metrics, queue wait time, node placement, and checkpoint duration.
+
+## 6. Checkpoint Storage Is Part Of Training Infrastructure
+
+Long-running training jobs fail.
+
+A private cluster must assume failure.
+
+Hardware faults happen.
+
+Nodes reboot.
+
+NICs flap.
+
+ECC errors appear.
+
+A single rank can crash.
+
+A synchronous training job must then recover from a checkpoint or restart from the beginning.
+
+Checkpoint design affects both reliability and throughput.
+
+A checkpoint path that is durable but slow can waste huge amounts of GPU time.
+
+A checkpoint path that is fast but not durable can lose days of progress.
+
+The platform must balance both.
+
+### Why Checkpoint Bursts Hurt
+
+Training checkpoints often arrive in bursts.
+
+Many workers reach the checkpoint boundary at nearly the same time.
+
+Each worker writes model state, optimizer state, metadata, or shard files.
+
+If every worker writes to the same object storage endpoint through a slow path, the storage system becomes the bottleneck.
+
+If Rank 0 aggregates the whole model and writes it alone, Rank 0 can run out of memory or become a single-node bottleneck.
+
+If storage pauses are long, GPUs sit idle.
+
+If checkpoints are too infrequent, failure recovery loses too much progress.
+
+Storage design is therefore an economic decision.
+
+The question is not "can the job write a file?"
+
+The question is "can the job checkpoint often enough to recover without destroying useful GPU time?"
+
+### Checkpoint Design Patterns
+
+A simple pattern writes directly to shared storage.
+
+This is easy to operate.
+
+It may be too slow for large jobs.
+
+A more scalable pattern writes sharded checkpoints.
+
+Each rank writes its own shard.
+
+This avoids Rank 0 aggregation.
+
+It can work well with parallel file systems.
+
+Another pattern writes first to local NVMe and flushes asynchronously.
+
+The training process resumes quickly after the local write.
+
+A background process moves checkpoint data to durable object storage.
+
+This can reduce training stalls but increases operational complexity.
+
+You must monitor flush lag.
+
+You must ensure local disks do not fill.
+
+You must define recovery behavior if a node fails before flush completes.
+
+```text
++---------------------+      fast local write       +----------------------+
+| Training worker     |---------------------------->| Node-local NVMe      |
+| rank N              |                             | checkpoint shard     |
++---------------------+                             +----------------------+
+          |                                                       |
+          | resumes training                                      |
+          v                                                       v
++---------------------+      async durable copy      +----------------------+
+| Next training step  |<-----------------------------| Flush DaemonSet      |
++---------------------+                              | S3 or MinIO target   |
+                                                     +----------------------+
+```
+
+This pattern can be excellent when engineered carefully.
+
+It is risky when treated as a quick hack.
+
+A checkpoint that exists only on a failed node is not a recovery point.
+
+Your platform must label checkpoint states clearly.
+
+For example:
+
+* `local-written`
+* `flush-in-progress`
+* `durable`
+* `verified`
+* `expired`
+
+Users should know which checkpoint is safe for restart.
+
+### Storage Evaluation Questions
+
+Before selecting checkpoint storage, ask:
+
+* What is the model state size?
+* How many ranks write at each checkpoint?
+* Are checkpoints sharded or aggregated?
+* What is the acceptable checkpoint pause?
+* What is the acceptable recovery point objective?
+* Can the storage system handle synchronized write bursts?
+* Can the team observe checkpoint duration per rank?
+* Can failed flushes block or alert before local disks fill?
+* How are checkpoints cleaned up?
+* How are checkpoints protected from cross-team access?
+
+For advanced infrastructure modules, storage should never be an afterthought.
+
+It is part of the training control plane.
+
+## 7. Build An Operational Runbook
+
+A private AI training platform should ship with a runbook before it ships with users.
+
+The runbook should not be a loose collection of commands.
+
+It should map symptoms to likely layers.
+
+That reduces incident time.
+
+It also helps platform engineers avoid blaming the wrong component.
+
+### Symptom-To-Layer Map
+
+```text
++--------------------------------------+--------------------------------+
+| Symptom                              | First layer to inspect          |
++--------------------------------------+--------------------------------+
+| Pods partially running               | Queue admission or quota        |
+| Rank cannot resolve rendezvous       | Headless Service and DNS timing |
+| NCCL logs show Socket transport      | RDMA attachment and NCCL config |
+| TopologyAffinityError                | NUMA resource shape             |
+| Training stalls at checkpoint        | Storage burst path              |
+| GPU utilization sawtooth pattern     | Collectives or checkpoint stalls|
+| Job waits while GPUs are allocated   | Missing gang scheduling         |
++--------------------------------------+--------------------------------+
+```
+
+This map is not exhaustive.
+
+It gives responders a starting path.
+
+A good incident process narrows the layer before changing settings.
+
+### Preflight Tests
+
+Run small tests before expensive jobs.
+
+A preflight should validate:
+
+* GPU visibility,
+* RDMA interface visibility,
+* NCCL transport selection,
+* DNS rendezvous,
+* queue admission,
+* topology admission,
+* checkpoint write path.
+
+A preflight job should finish quickly.
+
+It should be cheap enough to run often.
+
+It should fail loudly when the platform contract is broken.
+
+For example, a two-node NCCL test can confirm that the intended interface is used.
+
+A small Indexed Job can confirm that headless Service DNS works.
+
+A write test can confirm checkpoint path latency.
+
+A queue test can confirm that Kueue or Volcano admits the whole group.
+
+The goal is not to prove model quality.
+
+The goal is to prove platform readiness.
+
+### Air-Gapped And Regulated Environments
+
+Private AI clusters often exist because of data control, compliance, or network isolation.
+
+That changes operations.
+
+Images must be mirrored internally.
+
+Helm charts and manifests must be pinned and stored.
+
+GPU drivers must be staged.
+
+Model artifacts must remain inside approved storage.
+
+Experiment tracking must not call external services unless explicitly approved.
+
+License boundaries matter for proprietary serving and training components.
+
+The platform team should maintain an internal bill of materials.
+
+That bill of materials should include:
+
+* container images,
+* operator versions,
+* driver versions,
+* CUDA or ROCm stack versions,
+* firmware expectations,
+* switch configuration baselines,
+* storage client versions,
+* training framework images,
+* approved model artifact locations.
+
+The bill of materials makes upgrades auditable.
+
+It also makes rollback possible.
+
+## 8. Design Pattern: A Private Training Platform
+
+The pieces now fit together.
+
+A robust private AI training platform usually has separate pools and control loops.
+
+```text
++--------------------------------------------------------------------------------+
+|                              Private AI Platform                                |
++--------------------------------------------------------------------------------+
+|                                                                                |
+|  User submits training spec                                                     |
+|             |                                                                  |
+|             v                                                                  |
+|  +----------------------+        +----------------------+                       |
+|  | Queue admission      |------->| Native Job or        |                       |
+|  | Kueue or Volcano     |        | Training Operator    |                       |
+|  +----------------------+        +----------------------+                       |
+|             |                                |                                 |
+|             v                                v                                 |
+|  +----------------------+        +----------------------+                       |
+|  | Topology-aware GPU   |        | Headless Service     |                       |
+|  | node placement       |        | Rank discovery       |                       |
+|  +----------------------+        +----------------------+                       |
+|             |                                |                                 |
+|             v                                v                                 |
+|  +----------------------+        +----------------------+                       |
+|  | Multus + SR-IOV      |        | NCCL or framework    |                       |
+|  | RDMA attachment      |        | collective backend   |                       |
+|  +----------------------+        +----------------------+                       |
+|             |                                |                                 |
+|             v                                v                                 |
+|  +----------------------+        +----------------------+                       |
+|  | Parallel checkpoint  |        | Metrics, logs,       |                       |
+|  | storage path         |        | experiment tracking  |                       |
+|  +----------------------+        +----------------------+                       |
+|                                                                                |
++--------------------------------------------------------------------------------+
+```
+
+Read this diagram from top to bottom.
+
+Queue admission prevents partial jobs.
+
+The workload API creates deterministic workers.
+
+The headless Service supports rendezvous.
+
+Topology-aware placement keeps compute and network paths aligned.
+
+Multus and SR-IOV expose the high-performance fabric.
+
+NCCL uses that fabric for collectives.
+
+Checkpoint storage preserves progress.
+
+Observability ties the run back to infrastructure behavior.
+
+A failure in any box can look like a training problem.
+
+That is why senior platform engineers design for diagnosis, not only for happy-path launch.
 
 ## Did You Know?
 
-* **Did You Know?** The Volcano batch scheduler was accepted into the CNCF on April 9, 2020, and was successfully promoted to Incubating status on March 21, 2022.
-* **Did You Know?** MLPerf Training v5.1, published November 12, 2025, saw an 86 percent increase in multi-node submissions compared to v4.1, reflecting the industry shift toward massive distributed clusters.
-* **Did You Know?** Switching from PyTorch FSDP1 to FSDP2 in PyTorch 2.11 provides an average of 7 percent lower GPU memory usage and a 1.5 percent overall performance improvement.
-* **Did You Know?** DeepSpeed version 0.18.9 was released on March 30, 2026, introducing Universal Checkpoint support for AutoTP and robust ROCm architecture detection.
+* **Did You Know?** A synchronous distributed training job can waste every allocated GPU while appearing "partially healthy" if even one required rank is missing.
+* **Did You Know?** NCCL can continue running over TCP sockets after RDMA initialization fails, so a successful training start does not prove the high-performance network is being used.
+* **Did You Know?** `single-numa-node` topology policy intentionally rejects some pods because a visible pending failure is better than a hidden slow placement.
+* **Did You Know?** Sharded checkpointing reduces Rank 0 memory pressure by letting each rank write its own portion of model state instead of aggregating the entire model on one process.
 
 ## Common Mistakes & Practitioner Gotchas
 
 Before analyzing the table of common mistakes, consider the most prevalent networking race condition:
 
-### 4. Headless Service Propagation Delay
+### Headless Service Propagation Delay
+
 **Context:** The K8s Indexed job creates Pods instantly. Rank 1 boots, resolves `pod-0.headless-svc`, and gets an NXDOMAIN because CoreDNS hasn't updated its cache yet. The elastic launch agent will crash immediately.
+
 **Fix:** Use an init container with a simple `until nslookup pod-0.headless-svc; do sleep 1; done` bash loop to ensure DNS propagation is complete before the main training container starts.
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **NCCL Silent Fallback to TCP** | RDMA initialization fails due to misconfigured VFs or missing drivers. NCCL does not crash; it quietly falls back to TCP over the standard CNI overlay. | **Fix:** Always inject `NCCL_DEBUG=INFO` into training pods. Use a sidecar or log aggregator to explicitly parse for `NCCL INFO NET/IB : Using` vs `NCCL INFO NET/Socket`. |
-| **OOMKills During Model Save** | **Context:** Distributed frameworks frequently aggregate the model state to Rank 0 to write the checkpoint. If Rank 0 doesn't have enough RAM to hold the entire aggregated state, the node crashes. | **Fix:** Use `torch.distributed.checkpoint` (DCP) for PyTorch to save sharded checkpoints. Every GPU writes its local shard directly to storage, avoiding memory aggregation on Rank 0 entirely. |
-| **MTU Mismatches on Secondary Interfaces** | RoCEv2 strictly requires an MTU of 9000 (jumbo frames). Default Macvlan configs often deploy with an MTU of 1500, causing packet fragmentation that destroys RDMA throughput. | Explicitly define the MTU in the Multus NetworkAttachmentDefinition JSON payload to match the physical Top of Rack switch configurations. |
-| **Using topologyManagerPolicy: restricted** | Administrators assume `restricted` is safer than `single-numa-node`, but it allows pods to be scheduled across multiple NUMA domains if a single domain is full, causing immense interconnect lag. | Force `single-numa-node` on all GPU nodes. A pending pod waiting for unified capacity is vastly preferable to a running pod that bottlenecks the entire cluster. |
-| **Using KEDA for Batch Gang Scheduling** | Engineers mistakenly assume KEDA can hold pods in a pending state until resources are free, based on its popularity for event-driven autoscaling. | Use Kueue or Volcano. KEDA is an event-driven autoscaler for stateless deployments, not a batch queueing system capable of all-or-nothing scheduling. |
-| **Upgrading to Kubeflow Trainer v2 for MXNet** | Upgrading blindly to Trainer v2 breaks legacy pipelines because support for legacy frameworks like PaddlePaddle and MXNet was entirely stripped out. | Run the legacy v1.9.2 operator alongside v2 in your Kubernetes 1.34+ cluster if MXNet support is still a strict operational requirement. |
-| **Assuming NVIDIA NIM is fully Open Source** | Developers confuse the free developer tier (up to 16 GPUs) with open-source licensing, leading to compliance violations in production environments. | Secure NVIDIA AI Enterprise licensing for all production NIM deployments, as the containers rely on proprietary commercial optimizations. |
+| **NCCL Silent Fallback to TCP** | RDMA initialization fails due to misconfigured VFs or missing drivers. NCCL does not crash; it quietly falls back to TCP over the standard CNI overlay. | Always inject `NCCL_DEBUG=INFO` during validation. Parse for `NCCL INFO NET/IB : Using` versus `NCCL INFO NET/Socket`. |
+| **OOMKills During Model Save** | Distributed frameworks frequently aggregate model state to Rank 0 to write a checkpoint. If Rank 0 lacks enough RAM for the aggregated state, the node can fail. | Use sharded checkpointing such as `torch.distributed.checkpoint` so each rank writes its local shard directly to storage. |
+| **MTU Mismatches on Secondary Interfaces** | RoCEv2 fabrics often expect jumbo frames, while a default secondary CNI attachment may use a smaller MTU. Fragmentation or mismatch destroys throughput. | Define the MTU in the Multus NetworkAttachmentDefinition and verify that it matches the physical switch configuration. |
+| **Using `topologyManagerPolicy: restricted` For Strict Training Shapes** | Administrators assume `restricted` is always safer, but it can admit placements that do not match the strict locality needed for high-performance training. | Use `single-numa-node` for GPU pools that require CPU, memory, GPU, and NIC locality, then document valid request shapes. |
+| **Using KEDA For Batch Gang Scheduling** | Engineers confuse event-driven autoscaling with all-or-nothing training admission. KEDA can scale workloads, but it does not queue a distributed job as a gang. | Use Kueue or Volcano for batch admission. Use KEDA or HPA-style scaling for inference workloads driven by request metrics. |
+| **Upgrading Training Operators Without Runtime Inventory** | Legacy workloads may rely on framework support or launcher behavior that a newer operator no longer provides. | Inventory framework runtimes, job templates, queue integrations, and rollback paths before upgrading operators. |
+| **Assuming Fast Local Checkpoints Are Durable** | Local NVMe writes are fast, but a node failure can destroy unflushed checkpoint data. | Track checkpoint state explicitly and only advertise flushed, verified checkpoints as durable restart points. |
 
-## Hands-on Lab: Gang Scheduling PyTorch DDP with Kueue
+## Quiz
 
-This lab simulates a distributed PyTorch training job using standard Kubernetes Indexed Jobs and Kueue. We will force the job to use the CPU `gloo` backend so it runs entirely in `kind` without requiring physical GPUs.
+<details>
+<summary><b>1. A multi-node PyTorch job starts successfully, but training throughput is far below the platform baseline. Network dashboards show heavy traffic on the default CNI interface and almost no traffic on the RoCEv2 interfaces. What should you check first, and why?</b></summary>
+
+Start by checking whether NCCL fell back to TCP sockets and whether the pod actually received the RDMA attachment. The job can start even when the high-performance path is unused. Inspect `NCCL_DEBUG=INFO` logs for `NET/Socket` versus `NET/IB`, then verify the Multus network status annotation, container interfaces, and SR-IOV resource requests. This aligns the symptom with the network layer before changing PyTorch code.
+
+</details>
+
+<details>
+<summary><b>2. Your team submits a 32-rank training job. Twenty ranks start and hold GPUs, while the remaining ranks stay pending. The running ranks eventually time out at rendezvous. Which platform control should you add, and what behavior should it enforce?</b></summary>
+
+Add gang-style admission with Kueue or Volcano. The control should keep the job from starting until the full group can be admitted. For synchronous training, partial startup is wasteful because every rank depends on the others. Kueue can suspend a native Job until quota and capacity exist; Volcano can use batch scheduling concepts such as pod groups.
+
+</details>
+
+<details>
+<summary><b>3. A GPU node has 8 GPUs split evenly across two NUMA domains. A researcher requests 6 GPUs in one pod. The kubelet is configured with `topologyManagerPolicy: single-numa-node`. The pod fails with a topology admission error. Should the platform team relax the policy?</b></summary>
+
+Usually no. The failure is protecting the job from a poor placement. A 6-GPU request cannot fit inside one 4-GPU NUMA domain on that node shape. Relaxing the policy may allow the pod to run across host interconnects, creating hidden performance problems. Better options are to redesign the workload request, use full-node shapes, or schedule onto hardware that can satisfy the request locally.
+
+</details>
+
+<details>
+<summary><b>4. A team wants to run private training and private inference in the same cluster. They propose using Volcano for both queued training jobs and request-driven inference autoscaling. How would you evaluate that proposal?</b></summary>
+
+Volcano may be appropriate for queued batch training, but it is not the primary tool for request-driven inference autoscaling. Training needs all-or-nothing admission and queue fairness. Inference usually needs scaling based on request depth, latency, or external metrics. Use a batch scheduler or Kueue for training and an autoscaling mechanism such as KEDA or HPA-style scaling for inference metrics.
+
+</details>
+
+<details>
+<summary><b>5. A training job writes checkpoints through Rank 0. During larger runs, Rank 0 is OOMKilled during checkpoint creation even though normal training fits in memory. What infrastructure and framework pattern would you recommend?</b></summary>
+
+Recommend sharded checkpointing and storage that supports parallel writes. Rank 0 aggregation can require enough memory to hold large combined model state. Sharded checkpointing lets each rank write its own shard, reducing Rank 0 pressure. For large jobs, pair this with a parallel file system or a carefully monitored local NVMe plus asynchronous flush design.
+
+</details>
+
+<details>
+<summary><b>6. A RoCEv2 training fabric shows severe latency spikes during AllReduce. Pods have the right secondary interface, NCCL logs show the intended RDMA device, and there are no application errors. Switch counters show retransmission symptoms during congestion. What layer is most likely responsible?</b></summary>
+
+The fabric configuration is the likely problem. RoCEv2 depends on a lossless Ethernet design. Missing or incorrect Priority Flow Control and Explicit Congestion Notification can cause packet loss and retransmission behavior that stalls collectives. At this point, focus on switch QoS, MTU consistency, congestion handling, and fabric counters rather than pod YAML.
+
+</details>
+
+<details>
+<summary><b>7. A platform team wants to hide all hardware details from users by offering one generic `gpu-training` queue across NVIDIA and AMD nodes. What risk should you raise during design review?</b></summary>
+
+A single generic queue can hide incompatible runtime requirements. NVIDIA and AMD workloads may need different images, drivers, libraries, resource names, and performance assumptions. If the queue does not encode hardware differences, jobs may be admitted to nodes they cannot use correctly. Use explicit ResourceFlavors, node labels, validated templates, or separate queues unless workloads are proven portable.
+
+</details>
+
+<details>
+<summary><b>8. A job fails at startup because rank 1 cannot resolve the rank 0 rendezvous hostname, but a few seconds later the DNS record exists. How would you make this failure less likely without changing the training framework?</b></summary>
+
+Add startup gating around DNS readiness. For example, use an init container or entrypoint loop that waits until the rank 0 hostname resolves before launching the training process. This handles the race between pod creation and headless Service DNS propagation. Also verify that the Service selector, job name, subdomain, and rendezvous endpoint are consistent.
+
+</details>
+
+## Hands-On Exercise: Gang Scheduling PyTorch DDP With Kueue
+
+This lab simulates a distributed PyTorch training job using standard Kubernetes Indexed Jobs and Kueue.
+
+You will force the job to use the CPU `gloo` backend so it runs entirely in `kind` without physical GPUs.
+
+The goal is not to benchmark training.
+
+The goal is to observe the platform pattern:
+
+* deterministic rank identity,
+* headless Service discovery,
+* queue-based admission,
+* simultaneous worker execution,
+* verification through logs.
 
 ### Prerequisites
-* `kind` cluster running Kubernetes 1.34+
-* `kubectl` and `helm` installed
+
+* A `kind` cluster running Kubernetes 1.35+
+* `kubectl` installed
+* `helm` installed
+* Local access to pull the required container images
+* Enough local CPU and memory for a small two-worker job
+
+After the first command, this lab uses `k` as a shorthand alias for `kubectl`.
+
+Create it with:
+
+```bash
+alias k=kubectl
+```
 
 ### Step 1: Install Kueue
 
-Install Kueue to manage our job admission and gang scheduling.
+Install Kueue to manage job admission and gang scheduling.
 
 ```bash
 VERSION="v0.9.1"
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/v0.9.1/manifests.yaml
 
-# Wait for Kueue controller to be ready
 kubectl rollout status deployment/kueue-controller-manager -n kueue-system
 ```
 
-### Step 2: Configure Cluster Resources (Kueue)
+Verify the controller is available before continuing.
 
-Create a dummy ResourceFlavor and a ClusterQueue. We will mock capacity for 4 CPUs.
+```bash
+k get pods -n kueue-system
+```
+
+Success criteria:
+
+- [ ] The `kueue-controller-manager` Deployment reports a successful rollout.
+- [ ] The Kueue controller pod is `Running`.
+- [ ] `kubectl api-resources | grep kueue` shows Kueue resources.
+
+### Step 2: Configure Cluster Resources
+
+Create a dummy `ResourceFlavor`, a `ClusterQueue`, and a `LocalQueue`.
+
+This lab models a cluster with four CPUs of queue capacity.
+
+That is enough to admit the two-worker job later.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -306,9 +1511,26 @@ spec:
 EOF
 ```
 
-### Step 3: Create Headless Service for Worker Discovery
+Inspect the queue objects.
 
-PyTorch needs a stable DNS entry to resolve all worker IP addresses.
+```bash
+k get resourceflavor
+k get clusterqueue
+k get localqueue
+```
+
+Success criteria:
+
+- [ ] `default-flavor` exists.
+- [ ] `cluster-queue` exists.
+- [ ] `user-queue` exists in the `default` namespace.
+- [ ] The `ClusterQueue` includes CPU quota.
+
+### Step 3: Create The Headless Service
+
+PyTorch workers need a stable DNS name for rendezvous.
+
+The Service is headless because clients need pod DNS records rather than a load-balanced virtual IP.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -324,9 +1546,27 @@ spec:
 EOF
 ```
 
-### Step 4: Deploy the Indexed Job
+Check the Service.
 
-This job runs `torchrun` explicitly configured for a 2-node cluster. Notice the `kueue.x-k8s.io/queue-name` label, which signals Kueue to manage admission.
+```bash
+k get svc pytorch-ddp-svc
+```
+
+Success criteria:
+
+- [ ] The Service exists.
+- [ ] The Service has `CLUSTER-IP` set to `None`.
+- [ ] The Service selector is `job-name: pytorch-ddp`.
+
+### Step 4: Deploy The Indexed Job
+
+This job runs `torchrun` for a two-node worker group.
+
+The `kueue.x-k8s.io/queue-name` label tells Kueue which queue should manage admission.
+
+The `completionMode: Indexed` field gives each pod a deterministic index.
+
+The `JOB_COMPLETION_INDEX` value becomes the node rank.
 
 ```bash
 cat <<EOF | kubectl apply -f -
@@ -368,84 +1608,158 @@ spec:
 EOF
 ```
 
-### Step 5: Verification
-
-Verify Kueue admitted the job and both pods are running simultaneously (Gang Scheduling).
+Watch the job and pods.
 
 ```bash
-kubectl get workloads
-# Expected output:
-# NAME                QUEUE        ADMITTED BY     AGE
-# job-pytorch-ddp...  user-queue   cluster-queue   15s
-
-kubectl get pods -l job-name=pytorch-ddp
-# Both pods should transition to Running, then Completed.
+k get workloads
+k get jobs
+k get pods -l job-name=pytorch-ddp -w
 ```
 
-Check the logs of the secondary worker (Rank 1) to confirm successful rendezvous with Rank 0 over the Kubernetes network:
+Success criteria:
+
+- [ ] Kueue creates or recognizes a Workload for the Job.
+- [ ] The Workload is admitted by `cluster-queue`.
+- [ ] Two pods are created for the Indexed Job.
+- [ ] Both pods transition to `Running` and then `Completed`.
+
+### Step 5: Verify Rank Rendezvous
+
+Check the worker logs.
 
 ```bash
 kubectl logs -l job-name=pytorch-ddp | grep SUCCESS
-# Expected output:
-# SUCCESS: Rank 0 of 2 initialized.
-# SUCCESS: Rank 1 of 2 initialized.
 ```
 
+Expected output:
+
+```text
+SUCCESS: Rank 0 of 2 initialized.
+SUCCESS: Rank 1 of 2 initialized.
+```
+
+Success criteria:
+
+- [ ] The logs show rank 0 initialized.
+- [ ] The logs show rank 1 initialized.
+- [ ] Both ranks report a world size of 2.
+- [ ] The job completes successfully.
+
+### Step 6: Observe The Queue Contract
+
+Inspect the Workload after completion.
+
+```bash
+k get workloads
+k describe workload "$(k get workload -o name | head -n 1)"
+```
+
+Look for admission details that connect the Job to the queue.
+
+Success criteria:
+
+- [ ] The Workload references `user-queue`.
+- [ ] The Workload shows admission through `cluster-queue`.
+- [ ] CPU requests are accounted for by the queue.
+- [ ] The completed Job did not start as unrelated standalone pods.
+
+### Step 7: Create A Capacity Failure On Purpose
+
+Now create a larger job that requests more CPU than the queue allows.
+
+This shows why queue admission matters.
+
+```bash
+cat <<EOF | kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pytorch-ddp-too-large
+  labels:
+    kueue.x-k8s.io/queue-name: user-queue
+spec:
+  completions: 6
+  parallelism: 6
+  completionMode: Indexed
+  template:
+    spec:
+      subdomain: pytorch-ddp-svc
+      containers:
+      - name: worker
+        image: pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+        resources:
+          requests:
+            cpu: "1"
+        command:
+        - "bash"
+        - "-lc"
+        - "echo should-not-start-until-admitted && sleep 30"
+      restartPolicy: Never
+EOF
+```
+
+Inspect the Workload and pods.
+
+```bash
+k get workloads
+k get pods -l job-name=pytorch-ddp-too-large
+```
+
+Success criteria:
+
+- [ ] The oversized job is not admitted while the queue lacks enough quota.
+- [ ] The platform does not start a partial set of six workers.
+- [ ] You can explain why this is better than starting only some ranks.
+
+### Step 8: Clean Up
+
+Remove the lab resources.
+
+```bash
+kubectl delete job pytorch-ddp pytorch-ddp-too-large --ignore-not-found
+kubectl delete svc pytorch-ddp-svc --ignore-not-found
+kubectl delete localqueue user-queue --ignore-not-found
+kubectl delete clusterqueue cluster-queue --ignore-not-found
+kubectl delete resourceflavor default-flavor --ignore-not-found
+```
+
+Success criteria:
+
+- [ ] Both Jobs are deleted.
+- [ ] The headless Service is deleted.
+- [ ] The Kueue queue objects created for the lab are deleted.
+- [ ] No lab pods remain in the `default` namespace.
+
 ### Troubleshooting
-* **Pods stuck in Pending:** Check `kubectl describe workload job-pytorch-ddp`. If Kueue hasn't admitted it, ensure your `LocalQueue` and `ClusterQueue` have enough `nominalQuota` for the sum of all pod requests.
-* **Connection Refused in Logs:** Ensure the Headless Service name exactly matches the subdomain in the job template and the `--rdzv_endpoint` flag.
 
-## Quiz
+**Pods stuck in Pending:**  
+Run `k describe workload job-pytorch-ddp` and verify that the `LocalQueue` and `ClusterQueue` have enough CPU quota for the sum of all pod requests.
 
-<details>
-<summary><b>1. A multi-node PyTorch job starts, but the training immediately drops to a fraction of expected throughput. Network monitoring shows zero traffic on the secondary RoCEv2 interfaces, but heavy traffic on the Calico network. What is the most likely cause?</b></summary>
-An RDMA initialization failure caused NCCL to silently fall back to TCP sockets. When RoCEv2 interfaces are misconfigured (e.g., MTU mismatches or missing drivers), NCCL does not crash the training job. Instead, it quietly routes traffic over the primary Kubernetes CNI, which is not designed for line-rate GPU synchronization. You must inject `NCCL_DEBUG=INFO` to monitor for these silent fallbacks and ensure `NET/IB` is actively being utilized.
-</details>
+**Connection refused in logs:**  
+Ensure the headless Service name exactly matches the pod `subdomain` and the `--rdzv_endpoint` flag.
 
-<details>
-<summary><b>2. You are migrating legacy workloads from Kubeflow Training Operator v1 to Trainer v2.2.0. The pipeline utilizes MXNet for computer vision tasks and PyTorch for NLP. What architectural adjustment must you make?</b></summary>
-You must maintain the legacy v1 operator for the MXNet workloads. Kubeflow Trainer v2.2.0 completely dropped support for both MXNet and PaddlePaddle, focusing instead on frameworks like JAX, PyTorch, and DeepSpeed. You can run the final legacy v1.9.2 operator concurrently with v2 on Kubernetes 1.34+ to ensure all workloads continue functioning without disruption.
-</details>
+**DNS lookup fails:**  
+Check the Service selector and pod labels. If startup is racing DNS propagation, add an init container that waits for the rank 0 hostname.
 
-<details>
-<summary><b>2b. A distributed training framework requires each worker pod to know its exact rank (0, 1, 2) before startup, and Rank 0 must be reachable at a predictable internal DNS address by all other ranks. Standard Deployments generate random pod hashes. Which specific Kubernetes API pattern should you use to satisfy this requirement?</b></summary>
-You must use an Indexed Job combined with a Headless Service. The `completionMode: Indexed` field assigns a deterministic `JOB_COMPLETION_INDEX` to each pod, and the Headless Service provides predictable DNS records like `pod-0.headless-svc` for the rendezvous point.
-</details>
+**No Workload appears:**  
+Confirm that Kueue is installed, its controller is running, and the Job has the `kueue.x-k8s.io/queue-name` label.
 
-<details>
-<summary><b>3. You have a cluster where multiple data science teams submit PyTorch workloads. Frequently, jobs hang in an incomplete state because Team A's job occupies half the cluster, and Team B's job occupies the other half. Neither has enough GPUs to start their training loops. Which technology directly solves this?</b></summary>
-- [x] D) Kueue Gang Scheduling. 
-Kueue prevents this deadlock by suspending jobs until the full requested quota is available across the cluster. It ensures an all-or-nothing scheduling paradigm, preventing partial pod deployments from fragmenting the GPU pool and causing mutual starvation.
-</details>
+**Image pull is slow or blocked:**  
+Use an internally mirrored PyTorch image in private environments and update the Job image field accordingly.
 
-<details>
-<summary><b>4. You are tasked with upgrading your PyTorch 2.11 training scripts to reduce GPU memory pressure during the backward pass without incurring CPU synchronization overhead. Which parallelism strategy should you implement?</b></summary>
-You should transition from FSDP1 to FSDP2 (the `fully_shard` API utilizing DTensor). FSDP1 is officially deprecated in PyTorch 2.11. FSDP2 provides approximately 7 percent lower GPU memory usage and faster overall performance by sharding parameters differently, operating efficiently without the legacy CPU synchronization penalties.
-</details>
+### Lab Reflection
 
-<details>
-<summary><b>5. A GPU node contains 8 GPUs split across two NUMA nodes. The Kubelet topologyManagerPolicy is set to single-numa-node. A researcher submits a Pod requesting 6 GPUs. What is the resulting behavior?</b></summary>
-The Kubelet will reject the pod entirely, resulting in a TopologyAffinityError. Because the policy strictly enforces that all requested resources (GPUs, CPUs, Memory, SR-IOV interfaces) must reside on a single NUMA node, and the node only has 4 GPUs per NUMA domain, the 6-GPU request cannot be fulfilled locally without crossing the interconnect. 
-</details>
+After completing the lab, answer these questions in your notes:
 
-<details>
-<summary><b>6. A newly deployed RoCEv2 fabric experiences severe latency spikes during the PyTorch AllReduce phase. Network metrics show no physical link errors, but high rates of Go-Back-N retransmissions. What switch-level configuration is most likely missing?</b></summary>
-The Top of Rack (ToR) switches are likely missing Priority Flow Control (PFC) and Explicit Congestion Notification (ECN). RoCEv2 requires a lossless fabric; without these mechanisms, any microburst congestion leads to packet drops and catastrophic Go-Back-N fallback.
-</details>
-
-<details>
-<summary><b>7. You want to implement an event-driven autoscaler that scales up an inference Deployment when the queue of pending requests in an LLM gateway grows. A junior engineer suggests deploying the Volcano scheduler to handle this. Is this the correct approach?</b></summary>
-No, Volcano is the wrong tool for this scenario. Volcano is a batch scheduler designed for queueing and gang-scheduling finite training jobs. For scaling stateless inference Deployments based on event queues or external metrics, you should deploy KEDA (Kubernetes Event-driven Autoscaling) using its Prometheus scaler to evaluate the gateway metrics dynamically.
-</details>
-
-## Further Reading
-
-* [Kubernetes Documentation: Indexed Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/#completion-mode)
-* [Kueue Official Documentation](https://kueue.sigs.k8s.io/docs/concepts/)
-* [PyTorch Documentation: torchrun (Elastic Launch)](https://pytorch.org/docs/stable/elastic/run.html)
-* [NVIDIA NCCL Documentation: Environment Variables](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html)
-* [Kubelet Topology Manager Options](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/)
-
+* Which Kubernetes field gave each worker its deterministic rank?
+* Which object provided stable rendezvous DNS?
+* Which controller prevented the oversized job from starting partially?
+* What would need to change for a real GPU and RDMA training job?
+* Where would you add NCCL debug settings in the Job template?
+* How would you validate that a production job used RDMA rather than TCP?
+* How would checkpoint storage change for a long-running model training workload?
 ## Next Module
 
-Now that you have established a resilient, topology-aware bare-metal cluster with kernel-bypass networking, it is time to move from training infrastructure into model serving. In the next module, **[Module 9.3: Private LLM Serving](/on-premises/ai-ml-infrastructure/module-9.3-private-llm-serving/)**, we will focus on deploying optimized inference stacks for internal workloads.
+Now that you have established a resilient, topology-aware bare-metal cluster with kernel-bypass networking, it is time to move from training infrastructure into model serving.
+
+In the next module, **[Module 9.3: Private LLM Serving](/on-premises/ai-ml-infrastructure/module-9.3-private-llm-serving/)**, you will design optimized inference stacks for private workloads, compare serving runtimes, and operate model endpoints under latency, throughput, and isolation constraints.
