@@ -589,6 +589,36 @@ def test_review_changes_tiebreaker_after_cap(fake_repo, monkeypatch):
     assert st["retry_count"] == stages.RETRY_CAP  # not bumped past cap
 
 
+def test_review_changes_tiebreaker_also_changes_fails_terminally(fake_repo, monkeypatch):
+    """Tiebreaker (gemini) returning CHANGES must mark FAILED, not loop.
+
+    Regression for the infinite-tiebreaker bug caught while running
+    9.4 in the #378 recovery: previously, every call after the
+    tiebreaker's CHANGES re-routed back to tiebreaker forever (only
+    ``run_module``'s max_cycles eventually bailed, after wasting ~5
+    Gemini calls per module).
+    """
+    slug = _bootstrap(fake_repo)
+    st = state.load_state(slug)
+    st["stage"] = "REVIEW_CHANGES"
+    st["retry_count"] = stages.RETRY_CAP
+    st["writer"] = "codex"
+    st["reviewer"] = "gemini"  # tiebreaker already ran
+    st["review"] = {
+        "verdict": "changes_requested",
+        "must_fix": ["scaffold complexity is missing", "no inline prompts", "two facts wrong"],
+    }
+    state.save_state(st)
+
+    stages.handle_review_changes(slug)
+    st = state.load_state(slug)
+    assert st["stage"] == "FAILED"
+    assert st.get("failure_reason")
+    assert "tiebreaker" in st["failure_reason"]
+    assert "manual review required" in st["failure_reason"]
+    assert "scaffold complexity is missing" in st["failure_reason"]
+
+
 # ---- rebase-then-ff merge across main advancing (Codex must-fix #3) ---
 
 

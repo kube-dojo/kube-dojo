@@ -841,18 +841,37 @@ def _parse_review_verdict(result: DispatchResult) -> dict[str, Any] | None:
 
 
 def handle_review_changes(slug: str) -> None:
-    """REVIEW_CHANGES → WRITE_PENDING (retry) OR → tiebreaker.
+    """REVIEW_CHANGES → WRITE_PENDING (retry) OR → tiebreaker OR → FAILED.
 
     Closes Codex must-fix #4: the v1 bug was that ``REVIEW_CHANGES`` was
     a state nothing consumed. Here we route it back to the writer with
     the reviewer's ``must_fix`` list, bump ``retry_count``, and cap at
-    :data:`RETRY_CAP`. Beyond the cap, :func:`tiebreaker_one` runs.
+    :data:`RETRY_CAP`. Beyond the cap, the tiebreaker (gemini) runs.
+
+    If the tiebreaker ALSO returns CHANGES, mark the module FAILED —
+    three independent agents disagreeing means the writer can't reach
+    consensus and manual intervention is needed. Without this terminal
+    branch, the previous code re-routed back to tiebreaker forever
+    (only ``run_module``'s ``max_cycles`` guard eventually bailed,
+    after wasting ~5 Gemini calls per module).
     """
     with state.state_lease(slug) as lease:
         st = lease.load()
         if st is None or st["stage"] != "REVIEW_CHANGES":
             return
         retry_count = st.get("retry_count", 0)
+        if st.get("reviewer") == tiebreaker_agent():
+            # Tiebreaker already ran and still wants changes — terminal.
+            review = st.get("review") or {}
+            must_fix = review.get("must_fix") or []
+            preview = "; ".join(str(m)[:120] for m in must_fix[:3]) or "(no must_fix list)"
+            _fail_and_cleanup(
+                st,
+                f"tiebreaker ({tiebreaker_agent()}) also returned CHANGES — "
+                f"{len(must_fix)} must-fix item(s); manual review required. "
+                f"First items: {preview}",
+            )
+            return
         if retry_count >= RETRY_CAP:
             # Hand off to Gemini tiebreaker.
             state.transition(

@@ -94,6 +94,9 @@ test_script.sh
 # Quality progress ledger lock (the .tsv itself IS committed as the audit trail)
 docs/quality-progress.tsv.lock
 
+# Claude Code scheduled-task runtime
+.claude/scheduled_tasks.lock
+
 # Agent bridge runtime
 .bridge/
 .agent/
