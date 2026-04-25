@@ -2,6 +2,82 @@
 
 > **Read this first every session. Update before ending.**
 
+## Active Work (2026-04-26 ~00:30 local — #387 manual 9.4 done + #388 site-wide style problem surfaced + Phase 0 pipeline 3/9)
+
+**Status**: 9.4 manual rewrite COMMITTED (closes #387). While doing it, surfaced a **site-wide style consistency problem** that the v2/v3 audit rubric never caught — opened **#388** and built the first half of a new quality pipeline (Phase 0, 3 of 9 tasks). **Branch `main`, build green (1797 pages), ruff clean.**
+
+### #388 — site-wide module quality rewrite (the new initiative)
+
+A density scan over 1,339 modules found **165 below 18 wpp** (avg words / prose paragraph) — a signature of three distinct failure modes the rubric never caught:
+
+1. **Codex pad-bombs** (e.g. 9.1 GPU at 2,199 lines / 10.9 wpp — every sentence on its own line, gaming the 600-line gate).
+2. **v3 punchy-bullets** (e.g. ai/foundations/1.1 at 15.6 wpp — short fragments + heavy bullets).
+3. **Gemini v4 thin-expansion essay-filler** (looks dense, teaches nothing — disqualifies the existing v4 pipeline as a fix).
+
+Both the rubric AND I (Claude) were gamed by these modules — I had rewritten 9.4 today without noticing the systemic pattern until the user pointed at 9.1.
+
+### Phase 0 — pipeline infrastructure (this session — 3/9 done)
+
+- ✅ **`scripts/quality/density.py`** — productionized triple-gate (`words ≥ 1500 ∧ w/ln ≥ 18 ∧ wpp ≥ 22`). Validated: 5 PASS / 3 FAIL on a calibration set covering pad-bomb / v3-punchy / good-rewrite shapes. Run: `python -m scripts.quality.density <path>`.
+- ✅ **`scripts/quality/queue.py`** — writer routing rule (Gemini=beginner, Codex=advanced, Claude=tertiary) with **stickiness**: transient errors trigger exponential backoff retry on the **same** writer (5min → 30min → 2h → 8h → 24h). After 5 attempts escalates to tertiary. Never cross-writer fallback (would defeat style consistency). Frontmatter helpers `set_revision_pending_frontmatter` / `clear_revision_pending_frontmatter` mutate `.md` files atomically. Routing verified on 5 modules.
+- ✅ **`src/components/RevisionBanner.astro`** + PageTitle wiring + `revision_pending: z.boolean().optional()` in `src/content.config.ts` schema. Smoke-tested: set banner on 1.1, full build (1797 pages, 77.81s), banner HTML rendered correctly with proper styling, restored 1.1.
+
+### Phase 0 — remaining tasks (next session picks up here)
+
+- ⏳ **#4** `scripts/prompts/teaching-judge.md` — cross-family LLM reviewer prompt (Gemini reviews Codex / vice versa). JSON output with verdict + must-fix list.
+- ⏳ **#5** `scripts/quality/citation_verify.py` — extract URLs/version/date claims, fetch each, dispatch LLM judge (`supports/partial/no/fail`); only `supports` kept per `feedback_citation_verify_or_remove.md`.
+- ⏳ **#6** `scripts/quality_pipeline.py` — single CLI entrypoint with `triage / review / rewrite / status` subcommands. Uses queue.py + density.py + citations.
+- ⏳ **#7** End-to-end smoke test on one Tier 2 AI/ML module before mass rollout.
+- ⏳ **#8** Site-wide triage scan + populate queue + commit `revision_pending: true` on ~165 module frontmatters in one batch (**first user-visible site change — get explicit go from user before this**).
+- ⏳ **#9** Phase 1 AI/ML Tier 1 (worst 11 modules) — 3-5h background, sequential workers=1.
+
+### Decisions locked in this session
+
+| Decision | Source |
+|---|---|
+| Writer routing: Gemini-3.1-pro for beginner, Codex gpt-5.5+high for advanced, Claude Opus 4.7 tertiary | User confirmed after reading calibration outputs |
+| Density triple gate: `prose_words ≥ 1500 ∧ w/ln ≥ 18 ∧ wpp ≥ 22` | Calibration anchors in `density.py` docstring |
+| Queue stickiness: NEVER cross-writer fallback on transient errors; escalate to tertiary only after 5 attempts | User: "sometimes gemini or gpt has problems and then we will try later and not assigning to the other type" |
+| Student-facing `revision_pending` banner on every queued module until rewrite merges | User: "if we know a module has to be rewritten but couldn't yet we should mark it for the students" |
+
+### Calibration (kept in `.calibration/`, gitignored)
+
+| Module | Gemini-Pro | Codex-5.5 | Original |
+|---|---|---|---|
+| 1.1 what-is-ai | 174 ln / 2,568 w / wpp 69.8 | 231 ln / 3,604 w / wpp 60.3 | 326 ln / 1,729 w / wpp 15.6 |
+| 5.1 mlops-fundamentals | 444 ln / 4,967 w | 1,086 ln / 12,010 w | 933 ln / 9,509 w / wpp 7.3 |
+| 9.1 gpu-nodes | 1,288 ln / 10,113 w | 1,433 ln / 12,273 w | 2,199 ln / 10,496 w / wpp 10.9 |
+
+User judgment: both teaching-grade. Codex adds depth on advanced topics, Gemini compresses to vivid essentials on beginner topics.
+
+### Cold start (next session)
+
+```bash
+# Confirm Phase 0 still green
+python -m scripts.quality.density \
+  src/content/docs/on-premises/ai-ml-infrastructure/module-9.4-private-mlops-platform.md \
+  src/content/docs/on-premises/ai-ml-infrastructure/module-9.1-gpu-nodes-accelerated.md
+# expect: 9.4 PASS, 9.1 FAIL
+
+python -c "from pathlib import Path; from scripts.quality.queue import route_writer; \
+  print(route_writer(Path('src/content/docs/ai/foundations/module-1.1-what-is-ai.md')))"
+# expect: gemini-3.1-pro-preview
+
+# Pick up at task #4: write scripts/prompts/teaching-judge.md
+gh issue view 388     # full project plan + open task list
+```
+
+### Refs
+
+- #388 — site-wide module quality rewrite (this session's main initiative)
+- #387 — 9.4 manual rewrite (CLOSED by today's commit)
+- #378 — prior 12-module MLOps recovery batch
+- `scripts/prompts/teaching-rewrite.md` — proven prompt (calibration evidence in `.calibration/`)
+
+**Prior session summary follows** —
+
+---
+
 ## Active Work (2026-04-25 ~22:00 local — #378 12-module recovery DONE; 11/12 green, 4 pipeline bugs fixed inline)
 
 **Status**: #378 (12-module MLOps + on-prem AI/ML batch failure) recovered sequentially under workers=1. Result: 11/12 modules COMMITTED or SKIPPED, 1 FAILED on substantive grounds (9.4 has real audit gaps that 3 agents independently flagged — manual rewrite needed). Branch is `main`, clean, 40 commits ahead of `origin/main` (23 from this session). **188 quality tests, ruff clean.**
