@@ -2,6 +2,85 @@
 
 > **Read this first every session. Update before ending.**
 
+## Active Work (2026-04-26 ~02:00 local — #388 Phase 0 6/9 done; pipeline integrated + 3 codex review rounds; ready for smoke test)
+
+**Status**: Phase 0 of #388 advanced from 3/9 → 6/9. The new density-aware quality pipeline is wired into v2 (`scripts/quality/pipeline.py` / `stages.py`). 213 quality tests pass (was 188). 3 codex review rounds completed; all must-fixes addressed. **Branch `main`, ruff clean, work uncommitted.** Ready for the user-blocking smoke test on 1 AI/ML module before Phase 0 #8 (site-wide triage — first user-visible site change, needs explicit go).
+
+### What shipped this session (uncommitted, ~865 LOC + 25 new tests)
+
+| File | Δ | What |
+|---|---|---|
+| `scripts/prompts/teaching-judge.md` | NEW (124 lines) | Cross-family LLM reviewer prompt for #388 stage [2] (REVIEW-tier modules). JSON output `{verdict: approve|rewrite, patterns_present, must_fix, sample_paragraphs, reasoning}`. Pattern-focused: pad-bombs, punchy-bullets, essay-filler. **Not yet wired** — dispatcher integration deferred to Phase 2a. |
+| `scripts/quality/density.py` | +63 | `DensityVerdict.{PASS, REVIEW, REWRITE}` 3-way classifier. `classify()` method on `DensityMetrics`. New REWRITE floors (`words<1000 OR w/ln<12 OR wpp<18`). New `reasons_failed_rewrite()` for hard-gate error messages. |
+| `scripts/quality/queue.py` | +153 | `model_to_agent(model)` translator (queue model id → `(agent, model)` for dispatch). Split `ensure_queued(set_banner=True)` so route_one can attach without dirtying primary. **Bug fix**: `_iso_to_epoch` was using `time.mktime` (local-tz) on UTC ISO strings → blocks expired prematurely on +UTC machines. Switched to `calendar.timegm`. Refactored `record_attempt_start`/`record_block` into `_in_state(st)` lease-less primitives (caller saves) + thin lease-acquiring public wrappers. |
+| `scripts/quality/gates.py` | +46 | `assert_density_threshold(primary, slug, module_relpath)` mirrors `assert_visual_aids_preserved`'s shape. Reads file at writer-branch tip via `_git_show`, classifies, raises `GateError` on REWRITE with REWRITE-tier-floor reasons. |
+| `scripts/quality/stages.py` | +399 | `route_one`: density triage runs first; `_needs_writer()` is single source of truth; PASS or REVIEW with score≥4+complete-structure → CITATION_CLEANUP_ONLY (REVIEW-tier doesn't fall through to no-op structural prompt anymore); writer assignment via `queue.ensure_queued + queue.claim`; reviewer is universal-claude (codex if writer is claude). `merge_one`: `has_uncommitted` check moved INSIDE `_merge_lock` (race fix); density hard-gate runs after visual-aids gate; failure bounces via new `_handle_density_failure(st, reason)` (state.transition FIRST, then worktree teardown). New `_clear_banner_and_complete_queue` runs after merge_one releases its lease, acquires its own merge_lock briefly, runs `clear_revision_pending_frontmatter` + commits banner-clear, calls `queue.record_completion`. On commit failure: `git restore` + leave queue incomplete for future sweep. `write_one`: `queue._record_attempt_start_in_state(st)` before dispatch + `_record_block_in_state(st, ...)` on `DispatcherUnavailable` (BEFORE the transition, so the block survives the save). |
+| `scripts/quality/pipeline.py` | +130 | `cmd_triage` subcommand. Dry-run by default; `--apply` bootstraps state for REWRITE-tier, calls `queue.ensure_queued(set_banner=True)` for each, prints counts. REVIEW-tier intentionally NOT enqueued in v1. |
+| `scripts/quality/prompts.py` | +1 | `rewrite_prompt` instructs writers: "Do NOT preserve `revision_pending:` if present in input frontmatter". |
+| `tests/test_quality_density.py` | NEW (~70) | 10 tests: classifier boundary cases for PASS/REVIEW/REWRITE; code blocks excluded from prose_words. |
+| `tests/test_quality_queue.py` | NEW (~140) | 12 tests: `model_to_agent` round-trip + invalid; `route_writer` complexity-tag and track rules; `ensure_queued` banner toggle + writer stickiness; `claim` blocked/completed paths. |
+| `tests/test_quality_stages.py` | +144 | 3 integration tests: density REWRITE in route_one overrides high audit score; density gate failure bounces to WRITE_PENDING; bounce after RETRY_CAP marks FAILED. Plus `fake_repo` fixture got a default density-bypass monkey-patch so the existing 43 stage tests don't trip on the new gate. |
+
+**Dry-run scan**: 742 modules examined → **153 PASS, 182 REVIEW, 384 REWRITE** (23 skipped below `--min-prose 10`). The REWRITE count is much higher than #388's 165 estimate because my classifier catches pad-bombs (low w/ln) + thin modules (words<1000) in addition to wpp<18.
+
+### Codex review history (3 rounds)
+
+| Round | Verdict | Findings | Closed by |
+|---|---|---|---|
+| 1 | NEEDS_CHANGES | 5 must-fix: REVIEW falls through to structural; `ensure_queued` polluting non-rewrite queue; merge_one never clears banner / records completion; write_one missing `record_attempt_start`/`record_block`; density-bounce teardown before transition | All 5 + soft note (density message used PASS floors) addressed |
+| 2 | NEEDS_CHANGES | 3 NEW must-fix: lease-less primitives saved behind caller's stale `st`; `has_uncommitted` outside `_merge_lock`; banner-clear commit failure left primary dirty + queue marked complete | All 3 addressed |
+| 3 | NEEDS_CHANGES | 2 small must-fix: `clear_revision_pending` raise still marked queue complete (one-liner — fixed); no sweep for stranded COMMITTED+banner-incomplete entries (deferred — see Open Items) | #1 fixed; #2 deferred |
+
+### Sticky decisions (this session)
+
+- **Writer routing**: Gemini-3.1-pro for beginner tracks (`ai/foundations`, `ai/open-models-local-inference`), Codex gpt-5.5+high for advanced (everything else relevant), Claude Opus tertiary. Lives in `queue.route_writer`. (`writer_for_index` from 2026-04-25 effectively retired but kept in dispatchers.py for backward compat — unused.)
+- **Reviewer**: claude is the universal cross-family reviewer when writer ≠ claude. Codex when writer is claude. Gemini reserved for audit / citation / tiebreak.
+- **REVIEW-tier (in v1)**: not enqueued. Cleanup-only path or no-op. Teaching-judge LLM dispatch ships in Phase 2a. Banner is NOT set on REVIEW-tier modules.
+- **Density gate is hard, post-rewrite**: REWRITE verdict on the merged file bounces back to WRITE_PENDING (max RETRY_CAP=2 retries), then FAILED.
+- **Banner lifecycle**: set ONCE by `triage --apply` in a user-visible commit. Cleared at merge time by `_clear_banner_and_complete_queue` (also commits). Writers instructed to drop the field; banner-cleanup is defense-in-depth.
+
+### Cold start (next session)
+
+```bash
+# 1. Confirm pipeline still green.
+.venv/bin/python -m pytest tests/test_quality_*.py --timeout=30 -q
+# expect: 213 passed
+
+# 2. Confirm triage CLI works (dry-run, no mutation).
+.venv/bin/python -m scripts.quality.pipeline triage --min-prose 10 | head -10
+# expect: PASS=153 REVIEW=182 REWRITE=384
+
+# 3. The next concrete action is Phase 0 #7 — smoke test on ONE Tier-2 AI/ML module.
+#    Pick a Tier-2 module (NOT one of the worst 11 — those are Phase 1):
+gh issue view 388  # see scope + remaining 3 task list
+```
+
+### Phase 0 — remaining tasks (3 of 9)
+
+- ⏳ **#7** End-to-end smoke on one Tier-2 AI/ML module. Pick a slug, drive `pipeline run-module <slug>` with the new density+queue path. Verify: triage classifies, banner lifecycle works, writer dispatches at the queue's chosen model, cross-family review verdicts cleanly, citation_verify removes unverifiable URLs, density hard-gate passes, merge lands one commit on main, banner cleared. Record wall time + cost.
+- ⏳ **#8** **FIRST USER-VISIBLE SITE CHANGE.** Site-wide triage scan + populate queue + commit `revision_pending: true` on ~384 module frontmatters in one batch. **Get explicit user GO before this.** One commit, one PR-style summary in chat showing the file list (or representative sample).
+- ⏳ **#9** Phase 1 launch — AI/ML Tier 1 worst 11 modules through `pipeline run --workers 1`. 3-5h background. Stream progress every ~60s per `feedback_claude_owns_pipeline.md`.
+
+### Subsequent phases (from #388)
+
+- **Phase 2a** (2026-04-30 → 2026-05-05): site-wide triage + review pass for the remaining ~373 REWRITE-tier + ~182 REVIEW-tier. **Must finish before Gemini-3.1-pro downgrade on 2026-05-05.** REVIEW-tier is when teaching-judge LLM wiring lands.
+- **Phase 2b** (2026-05-05 → 2026-05-17): rewrite Phase 2a failures during Codex 10x window. Multi-day batch, claude monitors.
+
+### Open items (not blocking smoke test)
+
+- **No sweep for stranded `COMMITTED + queue.completed_at=None` slugs** (codex round-3 must #2). Two failure modes that strand: banner-clear commit failure (we revert + leave incomplete, but no future job re-tries it), and `_merge_lock` timeout in `_clear_banner_and_complete_queue`. Track as a follow-up: add `pipeline cleanup-banners` subcommand that scans for COMMITTED states with banner still in frontmatter, retries the clear+commit. ~50 LOC.
+- **Round-1/2 specific regression tests not yet added**: `write_one` preserves queue counters after success; `DispatcherUnavailable` persists `blocked_until`; banner-fail-stays-incomplete; concurrent merge pre-flight under banner cleanup; REVIEW-tier routing; PASS-cleanup-no-queue-doc. Codex flagged but accepted as follow-up.
+- **Teaching-judge LLM dispatcher** for REVIEW-tier modules (#388 stage [2]). Prompt is written; dispatch helper + state-machine integration deferred to Phase 2a. Code shape: a new `density_judge_one(slug)` stage that loads `scripts/prompts/teaching-judge.md`, dispatches via `default_verifier` (gemini-flash), parses JSON verdict, transitions accordingly.
+
+### Refs
+
+- #388 — site-wide module quality rewrite
+- 3 codex review prompts saved at `/tmp/388_codex_review_prompt.md`, `/tmp/388_codex_round2_prompt.md`, `/tmp/388_round3_prompt.md` (will not survive reboot — recreate from `git diff HEAD scripts/ tests/` if needed).
+
+### Prior session entries follow —
+
+---
+
 ## Active Work (2026-04-26 ~00:30 local — #387 manual 9.4 done + #388 site-wide style problem surfaced + Phase 0 pipeline 3/9)
 
 **Status**: 9.4 manual rewrite COMMITTED (closes #387). While doing it, surfaced a **site-wide style consistency problem** that the v2/v3 audit rubric never caught — opened **#388** and built the first half of a new quality pipeline (Phase 0, 3 of 9 tasks). **Branch `main`, build green (1797 pages), ruff clean.**
