@@ -34,7 +34,7 @@ from typing import Any, Iterable
 from . import state, stages
 from .dispatchers import DispatcherUnavailable
 from .prompts import assert_required_docs_exist
-from .worktree import primary_checkout_root
+from .worktree import has_uncommitted, primary_checkout_root
 
 
 _REPO_ROOT = primary_checkout_root(Path(__file__).resolve().parents[2])
@@ -201,6 +201,20 @@ def cmd_run(args: argparse.Namespace) -> int:
     a warning.
     """
     assert_required_docs_exist()
+
+    # Pre-flight: refuse to start if primary has uncommitted changes.
+    # Without this, every module in the batch reaches merge_one and is
+    # rejected with "primary has uncommitted changes" — the #378 root
+    # cause class. Fail fast so the operator commits/stashes once, not
+    # discovers the dirty tree N modules in.
+    if has_uncommitted(_REPO_ROOT):
+        print(
+            "[abort] primary checkout has uncommitted changes — "
+            "merge_one would refuse every module in the batch.\n"
+            "        Commit or stash first, then re-run.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.workers < 1:
         args.workers = 1
