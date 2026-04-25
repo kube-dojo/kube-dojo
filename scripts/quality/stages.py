@@ -982,6 +982,49 @@ def merge_one(slug: str) -> None:
             note=f"merged {merge_sha[:8]}",
         )
 
+        # #377 post-merge: anti-gaming sampler (20 % deterministic) + ledger
+        # row. These run AFTER the COMMITTED transition so a sampler/ledger
+        # failure cannot block the merge — sampling is advisory, the ledger
+        # is auditable. Failures surface as warnings on stdout and are
+        # written into the ledger row's notes field where applicable.
+        _post_merge_gates(slug)
+
+
+def _post_merge_gates(slug: str) -> None:
+    """Run the post-merge sampler + ledger append for a freshly-merged slug.
+
+    Failures here are non-fatal: a missing audit subprocess or unwritable
+    ledger should not undo a green merge. The audit subprocess can take
+    100+ seconds, so callers expecting fast turnaround on workers=1
+    batches should be aware. To skip entirely, set
+    ``KUBEDOJO_GATES_SAMPLE_RATE=0`` in the environment.
+    """
+    st = state.load_state(slug)
+    if st is None:
+        return
+    real_llm: dict[str, Any] | None = None
+    try:
+        if gates.should_sample(slug):
+            module_path = _module_path(st)
+            real_llm = gates.run_real_llm_rubric(module_path)
+            if not real_llm.get("ok"):
+                print(f"[gate-warn] {slug}: sample failed — {real_llm.get('error')}")
+            elif not real_llm.get("passed"):
+                print(
+                    f"[gate-warn] {slug}: real-LLM teaching score "
+                    f"{real_llm.get('teaching_score')} below threshold "
+                    f"{gates.REAL_LLM_MIN_TEACHING_SCORE} — batch should pause"
+                )
+    except Exception as exc:  # never let a sampler bug undo a merge
+        print(f"[gate-warn] {slug}: sampler raised {type(exc).__name__}: {exc}")
+        real_llm = {"ok": False, "error": f"sampler raised: {exc}"}
+
+    try:
+        row = gates.build_ledger_row(slug=slug, state_payload=st, real_llm_result=real_llm)
+        gates.append_ledger(row)
+    except Exception as exc:
+        print(f"[gate-warn] {slug}: ledger append raised {type(exc).__name__}: {exc}")
+
 
 # ---- resume logic -----------------------------------------------------
 
