@@ -1615,3 +1615,9 @@ An unsafe first project gives the model too much authority before the team can v
 ## Next Module
 
 Continue to [Models, APIs, Context, and Structured Output](./module-1.2-models-apis-context-structured-output/).
+
+## Sources
+
+- [Building Effective AI Agents](https://www.anthropic.com/research/building-effective-agents/) — Explains the difference between controlled workflows and more autonomous agents, which maps directly to this module's system-design framing.
+- [Structured model outputs](https://platform.openai.com/docs/guides/structured-outputs?api-mode=chat) — Shows how schema-shaped outputs make validation, routing, and predictable failure handling easier in real AI features.
+- [AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework) — Provides a practical risk and control framework for guardrails, review, measurement, and governance around AI systems.
