@@ -95,11 +95,11 @@ Produce a complete, replacement module that teaches the topic from beginner to s
 Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
 - Preserve every existing visual aid (ASCII, Mermaid, tables) — they are protected assets. Improve them if you can, but never remove.
+- Preserve any existing `## Sources` section verbatim (heading, ordering, citation lines, URLs). Do NOT modify, reorder, deduplicate, or "improve" entries. Do NOT add a NEW `## Sources` section if one isn't already present — citation insertion runs in a separate downstream stage.
 - Address each gap from the audit explicitly.
 - Minimum 600 content lines (250 for KCNA theory modules). Code/visuals don't count.
 - All quiz questions scenario-based (Bloom L3+). No recall questions.
 - Exactly 4 "Did You Know?" facts. 6-8 rows in "Common Mistakes". 6-8 quiz questions.
-- Do NOT add a `## Sources` section — citations are handled in a separate stage.
 - Do NOT use emojis. Do NOT use the number 47.
 
 Return the complete module. Starting with `---`.
@@ -145,7 +145,7 @@ If `hands-on-exercise`: multi-step `- [ ]` checklist, placed after the quiz.
 If `common-mistakes`: 6-8 row table, placed after "Did You Know?".
 If `did-you-know`: exactly 4 facts, placed after the core content.
 
-Do NOT add a `## Sources` section — handled separately. Do NOT use emojis or the number 47.
+Preserve any existing `## Sources` section verbatim — do NOT modify or remove it. Do NOT add a NEW `## Sources` section if one isn't already present (citation insertion runs in a separate stage). Do NOT use emojis or the number 47.
 """
 
 
@@ -210,7 +210,7 @@ Return ONLY a JSON object with this exact shape. No preamble, no reasoning prose
 Rules:
 - Verdict is "approve" ONLY IF teaching_score >= 4.0 AND rubric_score >= 4.0 AND every original gap is genuinely addressed.
 - must_fix entries must be specific — "Quiz Q3 tests recall (what is a Pod?); rewrite as scenario" NOT "improve quiz".
-- Ignore the `## Sources` section — citations are handled in a separate stage; do not penalize their absence or content.
+- Ignore the `## Sources` section for scoring — citation insertion runs in a SEPARATE downstream stage (`scripts/citation_backfill.py`), so neither the rubric's "Citation Gate" nor the absence of a Sources section should reduce the score here. The writer was instructed to preserve any pre-existing Sources verbatim and not add a new one; verify that instruction was honored (do not flag absence as a must-fix).
 - For track=structural: verify existing content was PRESERVED verbatim (zero edits to pre-existing lines). If any existing line was modified, verdict must be changes_requested.
 - For track=rewrite: verify narrative flow (not a bullet list), worked examples present before learner is asked to solve similar, at least 2 inline active-learning prompts.
 - Preserved visual aids (ASCII, Mermaid, tables): must be present and not removed.

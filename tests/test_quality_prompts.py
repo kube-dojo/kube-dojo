@@ -33,9 +33,30 @@ def test_rewrite_prompt_protects_visual_aids() -> None:
     assert "protected assets" in out or "never remove" in out
 
 
-def test_rewrite_prompt_forbids_sources_section() -> None:
+def test_rewrite_prompt_preserves_existing_sources_and_forbids_new() -> None:
+    """Two-pipeline contract: writer must NEVER touch an existing `## Sources`
+    section, and must NOT add a new one when none exists. Citation insertion
+    runs in a separate downstream stage (`scripts/citation_backfill.py`).
+
+    Regression guard against the v2 round-5 design hole: 241 modules already
+    have a Sources section from prior backfill runs; an instruction that just
+    says "don't add Sources" caused writers to silently drop existing ones."""
     out = prompts.rewrite_prompt(module_path="x.md", module_text="x", teaching_gaps=[])
-    assert "Sources" in out and "handled" in out.lower()
+    assert "Sources" in out
+    # Preservation directive
+    assert "verbatim" in out.lower()
+    # No-new-when-absent directive
+    assert "NEW" in out and "separate" in out.lower()
+
+
+def test_structural_prompt_preserves_existing_sources_and_forbids_new() -> None:
+    out = prompts.structural_prompt(
+        module_path="x.md", module_text="---\ntitle: T\n---\nBody.\n",
+        missing_sections=["quiz"],
+    )
+    assert "Sources" in out
+    assert "verbatim" in out.lower()
+    assert "NEW" in out
 
 
 def test_rewrite_prompt_forbids_47_and_emojis() -> None:

@@ -15,6 +15,7 @@ guards:
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -1350,6 +1351,121 @@ def test_write_cleanup_even_when_commit_fails(fake_repo, monkeypatch):
         ["git", "rev-parse", "--verify", branch], cwd=fake_repo, capture_output=True
     ).returncode
     assert rc != 0
+
+
+# ---- backfill-pending (close v2 → citation_backfill seam) ----
+
+
+def _seed_committed_state(fake_repo: Path, monkeypatch) -> tuple[str, dict]:
+    """Drive the fake-repo's seed module to COMMITTED for backfill tests."""
+    slug = _bootstrap(fake_repo)
+    stages.audit_one(slug)
+    stages.route_one(slug)
+    monkeypatch.setattr(stages, "dispatch", _stubbed_dispatch(_writer_stub_output(), _review_approve_output()))
+    stages.write_one(slug, timeout=10)
+    stages.citation_verify_one(slug, verifier_fn=lambda *a, **k: None, fetcher_fn=lambda url: None)
+    stages.review_one(slug, timeout=10)
+    stages.merge_one(slug)
+    st = state.load_state(slug)
+    assert st["stage"] == "COMMITTED", st.get("failure_reason")
+    return slug, st
+
+
+def test_backfill_pending_happy_path_records_done_and_commits(fake_repo, monkeypatch):
+    """When research + inject both succeed and inject modifies the file,
+    cmd_backfill_pending stamps state.backfill={done, ok, sha} and adds
+    a backfill commit on main. Regression guard for the v2 → citation_backfill
+    seam: a COMMITTED module without backfill should be picked up; once
+    backfill.done is True, the same module is skipped on subsequent calls.
+    """
+    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+
+    module_rel = st["module_path"]
+    sources_block = "\n## Sources\n\n- [Test](https://example.com) — example citation.\n"
+
+    def fake_subcmd(module_key, sub, *, agent=None):
+        if sub == "research":
+            return {"ok": True, "stdout": '{"ok": true}', "stderr": "", "returncode": 0}
+        # inject: append a Sources section to the actual module file
+        target = fake_repo / module_rel
+        target.write_text(target.read_text() + sources_block)
+        return {"ok": True, "stdout": '{"ok": true, "inline_applied": 1}', "stderr": "", "returncode": 0}
+
+    monkeypatch.setattr(pipeline, "_run_citation_subcommand", fake_subcmd)
+
+    rc = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc == 0
+
+    st2 = state.load_state(slug)
+    bf = st2["backfill"]
+    assert bf["done"] is True and bf["ok"] is True
+    assert bf["sha"] and len(bf["sha"]) == 40
+    # Module file on disk has the Sources section.
+    assert "## Sources" in (fake_repo / module_rel).read_text()
+    # Stage is still COMMITTED — backfill is a metadata layer, not a stage.
+    assert st2["stage"] == "COMMITTED"
+    # Re-running is a no-op (filtered out by backfill.done).
+    rc2 = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc2 == 0
+
+
+def test_backfill_pending_research_failure_records_error_no_commit(fake_repo, monkeypatch):
+    """Research subcommand failure must record stage_failed=research, leave
+    state.backfill.done=False, and NOT touch the working tree. Repeating
+    the command will retry (because done=False), which is the desired
+    behavior for transient LLM failures."""
+    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+
+    head_before = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=fake_repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+    def fake_subcmd(module_key, sub, *, agent=None):
+        if sub == "research":
+            return {"ok": False, "stdout": "", "stderr": "rate limit", "returncode": 1}
+        raise AssertionError("inject must not run after research failed")
+
+    monkeypatch.setattr(pipeline, "_run_citation_subcommand", fake_subcmd)
+    rc = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc == 1
+
+    st2 = state.load_state(slug)
+    bf = st2["backfill"]
+    assert bf["done"] is False and bf["ok"] is False
+    assert bf["stage_failed"] == "research"
+    assert "rate limit" in bf["error"]
+
+    head_after = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=fake_repo, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    assert head_before == head_after, "no commit should be made on research failure"
+
+
+def test_backfill_pending_inject_no_op_marks_done(fake_repo, monkeypatch):
+    """Inject succeeds but produces no diff (e.g. seed had no actionable
+    claims) → mark done=True, ok=True, no_op=True. The module is
+    considered backfilled and won't be retried."""
+    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+
+    def fake_subcmd(module_key, sub, *, agent=None):
+        return {"ok": True, "stdout": '{"ok": true}', "stderr": "", "returncode": 0}
+
+    monkeypatch.setattr(pipeline, "_run_citation_subcommand", fake_subcmd)
+    rc = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc == 0
+
+    st2 = state.load_state(slug)
+    bf = st2["backfill"]
+    assert bf["done"] is True and bf["ok"] is True and bf.get("no_op") is True
+    assert "sha" not in bf, "no_op should not record a sha"
 
 
 def test_run_order_is_worst_first(fake_repo, monkeypatch):

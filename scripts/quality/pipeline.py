@@ -287,6 +287,206 @@ def cmd_run_module(args: argparse.Namespace) -> int:
     return 0 if terminal not in ("FAILED",) else 1
 
 
+# ---- backfill-pending (close the v2 → citation_backfill seam) ---------
+
+
+_CITATION_BACKFILL_SCRIPT = _REPO_ROOT / "scripts" / "citation_backfill.py"
+_VENV_PYTHON = str(_REPO_ROOT / ".venv" / "bin" / "python")
+
+
+def _module_key_from_path(module_path: str) -> str:
+    """Convert state.module_path to citation_backfill's module_key.
+
+    e.g. ``src/content/docs/k8s/capa/module-1.2-argo-events.md`` →
+    ``k8s/capa/module-1.2-argo-events``.
+    """
+    rel = module_path
+    for prefix in ("src/content/docs/",):
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+            break
+    return rel.removesuffix(".md")
+
+
+def _git(repo: Path, *args: str, check: bool = True) -> tuple[int, str, str]:
+    """Run ``git`` in ``repo`` and return ``(returncode, stdout, stderr)``."""
+    import subprocess
+    proc = subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=False,
+    )
+    if check and proc.returncode != 0:
+        raise RuntimeError(
+            f"git {' '.join(args)} failed (rc={proc.returncode}): {proc.stderr.strip()}"
+        )
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def _run_citation_subcommand(module_key: str, sub: str, *, agent: str | None = None) -> dict[str, Any]:
+    """Subprocess-invoke ``scripts/citation_backfill.py {research,inject}``.
+
+    Returns a dict shaped ``{"ok": bool, "stdout": str, "stderr": str,
+    "returncode": int}``. The script's own JSON output (when it has any)
+    is forwarded as-is in ``stdout`` so callers can re-parse if they need
+    structured fields.
+    """
+    import subprocess
+    cmd = [_VENV_PYTHON, str(_CITATION_BACKFILL_SCRIPT), sub]
+    if agent:
+        cmd += ["--agent", agent]
+    cmd.append(module_key)
+    proc = subprocess.run(
+        cmd, cwd=str(_REPO_ROOT), capture_output=True, text=True, check=False,
+        timeout=900,
+    )
+    return {
+        "ok": proc.returncode == 0,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "returncode": proc.returncode,
+    }
+
+
+def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
+    """Run research + inject for one COMMITTED module. Commit on success.
+
+    Returns the outcome dict to be persisted to ``state.backfill``. On
+    success, the working module file may have been edited and a new
+    commit added on ``main``; on failure, leaves the worktree clean
+    (``git restore`` rolls back any partial inject write).
+    """
+    slug = st["slug"]
+    module_key = _module_key_from_path(st["module_path"])
+    repo = _REPO_ROOT
+
+    # Refuse to operate on a dirty primary — any pending edits must be
+    # resolved before we mutate the same files. The pipeline never leaves
+    # primary dirty between stages, but a human might.
+    rc, stdout, _ = _git(repo, "status", "--porcelain", check=False)
+    if rc != 0 or stdout.strip():
+        return {
+            "done": False, "ok": False,
+            "error": "primary checkout has uncommitted changes — refusing to backfill",
+            "module_key": module_key,
+        }
+
+    research = _run_citation_subcommand(module_key, "research", agent=agent)
+    if not research["ok"]:
+        return {
+            "done": False, "ok": False, "stage_failed": "research",
+            "error": (research["stderr"] or research["stdout"])[-500:],
+            "module_key": module_key,
+        }
+
+    inject = _run_citation_subcommand(module_key, "inject", agent=agent)
+    if not inject["ok"]:
+        # Best-effort: discard any partial write so primary stays clean.
+        _git(repo, "restore", st["module_path"], check=False)
+        return {
+            "done": False, "ok": False, "stage_failed": "inject",
+            "error": (inject["stderr"] or inject["stdout"])[-500:],
+            "module_key": module_key,
+        }
+
+    # Did inject change the file?
+    rc, stdout, _ = _git(repo, "status", "--porcelain", st["module_path"], check=False)
+    if rc != 0:
+        return {
+            "done": False, "ok": False, "stage_failed": "git_status",
+            "error": "git status failed after inject",
+            "module_key": module_key,
+        }
+    if not stdout.strip():
+        # Inject succeeded with no diff (e.g. seed had no actionable claims).
+        # Mark as done — backfill considered complete for this module.
+        return {
+            "done": True, "ok": True, "no_op": True,
+            "module_key": module_key,
+        }
+
+    _git(repo, "add", st["module_path"])
+    msg = (
+        f"quality(backfill): citation backfill {slug}\n\n"
+        f"Sources injected via scripts/citation_backfill.py for module_key "
+        f"`{module_key}`. Refs #375."
+    )
+    rc, _, stderr = _git(repo, "commit", "-m", msg, check=False)
+    if rc != 0:
+        _git(repo, "restore", "--staged", st["module_path"], check=False)
+        _git(repo, "restore", st["module_path"], check=False)
+        return {
+            "done": False, "ok": False, "stage_failed": "git_commit",
+            "error": stderr.strip()[-500:], "module_key": module_key,
+        }
+
+    _, sha, _ = _git(repo, "rev-parse", "HEAD")
+    return {
+        "done": True, "ok": True, "sha": sha.strip(),
+        "module_key": module_key,
+    }
+
+
+def cmd_backfill_pending(args: argparse.Namespace) -> int:
+    """Run citation_backfill (research + inject) on every COMMITTED module
+    that hasn't been backfilled yet. Closes the v2 → citation_backfill
+    seam in one command.
+
+    Two-pipeline note: v2 ships modules without ``## Sources`` because
+    citation insertion is owned by ``scripts/citation_backfill.py``.
+    Without this command, an operator would have to manually loop every
+    COMMITTED slug through ``research`` + ``inject``. After this command
+    each module's state file gains a ``backfill`` field with ``done``,
+    ``ok``, and either a commit ``sha`` or an ``error`` string for retry.
+    """
+    if not _CITATION_BACKFILL_SCRIPT.exists():
+        print(f"missing dependency: {_CITATION_BACKFILL_SCRIPT}")
+        return 1
+
+    candidates = iter_states(args.only or None)
+    pending = [
+        st for st in candidates
+        if st["stage"] == "COMMITTED" and not (st.get("backfill") or {}).get("done")
+    ]
+    if args.limit is not None:
+        pending = pending[: args.limit]
+
+    print(
+        f"backfill-pending: {len(pending)} of {len(candidates)} module(s) "
+        f"need backfill (agent={args.agent or 'default'})"
+    )
+    ok = fail = noop = 0
+    for st in pending:
+        slug = st["slug"]
+        outcome = _backfill_one(st, agent=args.agent)
+        with state.state_lease(slug) as lease:
+            current = lease.load()
+            if current is None:
+                continue
+            current["backfill"] = outcome
+            current.setdefault("history", []).append({
+                "at": state.now_iso(),
+                "stage": current["stage"],
+                "note": (
+                    "backfill done" if outcome.get("ok") and not outcome.get("no_op")
+                    else "backfill no-op" if outcome.get("no_op")
+                    else f"backfill failed: {outcome.get('stage_failed') or 'unknown'}"
+                ),
+            })
+            lease.save(current)
+        if outcome.get("ok"):
+            if outcome.get("no_op"):
+                noop += 1
+                print(f"[no-op] {slug}: nothing to inject")
+            else:
+                ok += 1
+                print(f"[ok]    {slug}: {outcome.get('sha', '')[:8]}")
+        else:
+            fail += 1
+            print(f"[fail]  {slug} at {outcome.get('stage_failed')}: {outcome.get('error', '')[:200]}")
+
+    print(f"backfill-pending: ok={ok} no-op={noop} fail={fail}")
+    return 0 if fail == 0 else 1
+
+
 # ---- reset-stage (admin) ---------------------------------------------
 
 
@@ -356,6 +556,20 @@ def main(argv: list[str] | None = None) -> int:
     p_reset.add_argument("slug")
     p_reset.add_argument("to_stage")
     p_reset.set_defaults(func=cmd_reset_stage)
+
+    p_backfill = sub.add_parser(
+        "backfill-pending",
+        help="run citation_backfill (research+inject) on every COMMITTED module not yet backfilled",
+    )
+    p_backfill.add_argument("--limit", type=int, default=None)
+    p_backfill.add_argument("--only", nargs="*", help="filter by slug(s)")
+    p_backfill.add_argument(
+        "--agent",
+        choices=("codex", "gemini"),
+        default=None,
+        help="override the agent used by citation_backfill",
+    )
+    p_backfill.set_defaults(func=cmd_backfill_pending)
 
     ns = parser.parse_args(argv)
     return ns.func(ns)

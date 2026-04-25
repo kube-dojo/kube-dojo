@@ -14,6 +14,8 @@ Minimum requirements:
 
 This gate applies before the 7-dimension score is considered valid.
 
+> **Pipeline note (v2 quality pipeline)**: the v2 cross-family review (`scripts/quality/prompts.py::review_prompt`) deliberately **suspends** the Citation Gate during the rewrite/review phase because citation insertion is owned by a separate downstream stage (`scripts/citation_backfill.py`). The writer is instructed to preserve any pre-existing `## Sources` section verbatim and not to add a new one. After v2 reaches `COMMITTED`, run `python -m scripts.quality.pipeline backfill-pending` (or invoke `scripts/citation_backfill.py research/inject` per slug) to satisfy the gate. A v2-rewritten module that has not yet been backfilled is **expected** to score low on this rubric until backfill runs — that is not a v2 bug, it is the seam between the two pipelines.
+
 ---
 
 ## Module Rubric (7 Dimensions, 1-5 Scale)
