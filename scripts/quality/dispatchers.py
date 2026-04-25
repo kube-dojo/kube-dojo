@@ -168,18 +168,25 @@ def dispatch(
 
 
 def writer_for_index(module_index: int) -> tuple[Agent, Agent]:
-    """Return ``(writer, reviewer)`` for a module's permanent index.
+    """Return ``(writer, reviewer)`` — codex writes, claude reviews.
 
-    * Even → Codex writes, Claude reviews.
-    * Odd  → Claude writes, Codex reviews.
+    The earlier even/odd alternation was abandoned 2026-04-25 after
+    empirical evidence that claude-as-writer lands ~440-line modules
+    (below the 600-line minimum in ``module-quality.md``) while codex
+    consistently lands 1500–2000+ lines at rubric ≥4.0. Claude is
+    redirected to coding/review tasks where it's strong. Cross-family
+    review per ``docs/review-protocol.md`` is still satisfied because
+    claude reviews codex (different model families).
+
+    The ``module_index`` parameter is kept in the signature so callers
+    don't break; it's no longer used to choose roles.
 
     Gemini is never a writer or reviewer here — it's reserved for the
     teaching audit (pre-pipeline) and citation verification (per-URL)
     and as tiebreaker after 2 retries (via :func:`tiebreaker_agent`).
     """
-    if module_index % 2 == 0:
-        return ("codex", "claude")
-    return ("claude", "codex")
+    del module_index
+    return ("codex", "claude")
 
 
 def tiebreaker_agent() -> Agent:

@@ -12,22 +12,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.quality import dispatchers  # noqa: E402
 
 
-def test_writer_for_index_even_is_codex_writes() -> None:
-    writer, reviewer = dispatchers.writer_for_index(0)
-    assert writer == "codex"
-    assert reviewer == "claude"
+def test_writer_for_index_returns_codex_writes_claude_reviews_for_every_index() -> None:
+    """Even/odd alternation was retired 2026-04-25 after empirical evidence
+    that claude-as-writer lands ~440-line modules vs codex's 1500–2000+.
 
-
-def test_writer_for_index_odd_is_claude_writes() -> None:
-    writer, reviewer = dispatchers.writer_for_index(1)
-    assert writer == "claude"
-    assert reviewer == "codex"
-
-
-def test_writer_for_index_stable_for_large_even() -> None:
-    # Permanent module_index: regression guard on the i%2 rotation.
-    assert dispatchers.writer_for_index(742) == ("codex", "claude")
-    assert dispatchers.writer_for_index(741) == ("claude", "codex")
+    Regression guard: every index — even, odd, large, zero — must return
+    ``("codex", "claude")``. Cross-family review is still satisfied
+    (different model families).
+    """
+    for idx in (0, 1, 2, 50, 100, 741, 742, 1000):
+        assert dispatchers.writer_for_index(idx) == ("codex", "claude"), idx
 
 
 def test_tiebreaker_is_gemini() -> None:

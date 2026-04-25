@@ -57,7 +57,7 @@ The headline KPI is **modules verified-shipped via v2** — not `critical_count`
 
 The plan is six phases, sequenced by leverage. Each phase has an exit criterion that's checkable from a single API call or `git log` query.
 
-### Phase A — MLOps interview track (priority lane, this week)
+### Phase A — MLOps cluster (priority lane, this week)
 
 Two threads run in parallel — one for existing-but-thin modules, one for genuine missing content.
 
@@ -179,7 +179,7 @@ Week 2–4 (May 02 – May 17):  D            (critical-rubric blitz)
 Week 4+ (May 17 onward):   E + F          (greenfield + lab audit)
 ```
 
-Phase C must overlap A/B because of the Gemini downgrade deadline. Phases A and B can run sequentially or in parallel — A wins on personal-relevance, B wins on cheapness.
+Phase C must overlap A/B because of the Gemini downgrade deadline. Phases A and B can run sequentially or in parallel — A wins on coverage of a high-demand topic, B wins on cheapness (already-AUDITED modules).
 
 ## Risk register
 
