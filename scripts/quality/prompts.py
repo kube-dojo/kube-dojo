@@ -94,6 +94,7 @@ Produce a complete, replacement module that teaches the topic from beginner to s
 
 Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
+- Do NOT preserve `revision_pending:` if present in input frontmatter — drop it from output. The banner is a queue marker that the merge step removes; carrying it through into a fresh rewrite would leave a "queued for revision" banner on a freshly-shipped module.
 - Preserve every existing visual aid (ASCII, Mermaid, tables) — they are protected assets. Improve them if you can, but never remove.
 - Preserve any existing `## Sources` section verbatim (heading, ordering, citation lines, URLs). Do NOT modify, reorder, deduplicate, or "improve" entries. Do NOT add a NEW `## Sources` section if one isn't already present — citation insertion runs in a separate downstream stage.
 - Address each gap from the audit explicitly.

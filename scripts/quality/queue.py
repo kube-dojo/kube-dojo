@@ -19,14 +19,15 @@ the queue layer chooses *which writer* to dispatch and *when* to retry.
 """
 from __future__ import annotations
 
+import calendar
 import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import state as _state
 from .state import (
-    CONTENT_ROOT,
     load_state,
     now_iso,
     save_state,
@@ -42,6 +43,29 @@ from .state import (
 PRIMARY_BEGINNER = "gemini-3.1-pro-preview"
 PRIMARY_ADVANCED = "gpt-5.5"
 TERTIARY = "claude-opus-4-7"
+
+# Map writer-model identifiers (returned by route_writer / stored in the
+# queue doc) onto the (agent, model) tuple that ``dispatchers.dispatch``
+# expects. Kept here, not in dispatchers.py, so the queue owns the
+# vocabulary. Adding a writer means adding an entry here AND a
+# corresponding case in scripts/dispatch.py.
+_MODEL_TO_AGENT: dict[str, tuple[str, str]] = {
+    PRIMARY_BEGINNER: ("gemini", PRIMARY_BEGINNER),
+    PRIMARY_ADVANCED: ("codex", PRIMARY_ADVANCED),
+    TERTIARY: ("claude", TERTIARY),
+}
+
+
+def model_to_agent(model: str) -> tuple[str, str]:
+    """Translate a queue writer-model id to a ``(agent, model)`` dispatch tuple.
+
+    Raises ``ValueError`` on an unknown model — callers must not silently
+    swap an unknown model for a default. The whole point of stickiness is
+    that the queue's writer choice survives unchanged through retries.
+    """
+    if model not in _MODEL_TO_AGENT:
+        raise ValueError(f"unknown writer model: {model!r} (known: {sorted(_MODEL_TO_AGENT)})")
+    return _MODEL_TO_AGENT[model]
 
 BEGINNER_TRACKS = (
     "ai/foundations",
@@ -96,7 +120,9 @@ def route_writer(module_path: Path) -> str:
     if complexity in {"complex", "advanced", "deep"}:
         return PRIMARY_ADVANCED
 
-    rel = module_path.resolve().relative_to(CONTENT_ROOT).as_posix()
+    # Resolve CONTENT_ROOT dynamically so test monkeypatches on
+    # ``state.CONTENT_ROOT`` reach this caller.
+    rel = module_path.resolve().relative_to(_state.CONTENT_ROOT).as_posix()
     section = "/".join(rel.split("/")[:2])
     for t in BEGINNER_TRACKS:
         if section.startswith(t):
@@ -150,13 +176,25 @@ class ClaimResult:
     reason: str | None  # human-readable when writer is None
 
 
-def ensure_queued(slug: str, module_path: Path) -> dict[str, Any]:
-    """Idempotently attach a queue doc to a module's state AND set the banner.
+def ensure_queued(
+    slug: str,
+    module_path: Path,
+    *,
+    set_banner: bool = True,
+) -> dict[str, Any]:
+    """Idempotently attach a queue doc to a module's state.
 
     Routes the writer per :func:`route_writer` if no queue doc exists yet,
     or returns the existing one (writer assignment is sticky across calls).
-    Also sets ``revision_pending: true`` in the module's frontmatter so the
-    Starlight banner renders for learners during the queue lifetime.
+
+    When ``set_banner=True`` (the default — used by the ``triage --apply``
+    CLI subcommand), also sets ``revision_pending: true`` on the module's
+    frontmatter so the Starlight banner renders for learners during the
+    queue lifetime. The pipeline's :mod:`stages.route_one` passes
+    ``set_banner=False`` because banner placement is a one-shot triage
+    decision committed in its own PR — mutating frontmatter inside
+    ``route_one`` would dirty the primary checkout and break
+    ``merge_one``'s pre-flight check.
     """
     with state_lease(slug):
         state = load_state(slug)
@@ -165,9 +203,10 @@ def ensure_queued(slug: str, module_path: Path) -> dict[str, Any]:
         if "queue" not in state:
             state["queue"] = new_queue_doc(route_writer(module_path))
             save_state(state)
-        # Frontmatter mutation lives outside the JSON state but is tied to it.
-        # Idempotent — no-op if already set.
-        set_revision_pending_frontmatter(module_path)
+        if set_banner:
+            # Frontmatter mutation lives outside the JSON state but is tied
+            # to it. Idempotent — no-op if already set.
+            set_revision_pending_frontmatter(module_path)
         return state["queue"]
 
 
@@ -192,17 +231,60 @@ def claim(slug: str, *, now: float | None = None) -> ClaimResult:
     return ClaimResult(writer=q["assigned_writer"], blocked_until=None, reason=None)
 
 
+def _record_attempt_start_in_state(st: dict[str, Any]) -> None:
+    """Mutate the queue subdoc of ``st`` in place; caller saves.
+
+    Codex round-2 must #1: the previous lease-less helper loaded and
+    saved its own copy of state, then the caller's later
+    ``state.transition(st, ...)`` would save behind it with the older
+    in-memory ``st`` — losing every queue mutation. Mutating ``st``
+    directly so the caller's eventual ``save_state(st)`` (typically via
+    ``state.transition``) carries the queue updates forward.
+    """
+    q = st.get("queue") if isinstance(st, dict) else None
+    if not q:
+        raise FileNotFoundError(f"queue for {st.get('slug') if st else '<unknown>'!r} missing")
+    q["writer_attempts"] = int(q.get("writer_attempts", 0)) + 1
+    q["total_attempts"] = int(q.get("total_attempts", 0)) + 1
+    q["blocked_until"] = None  # we're attempting now
+
+
 def record_attempt_start(slug: str) -> None:
     """Increment attempt counters. Call right before launching the writer dispatch."""
     with state_lease(slug):
-        state = load_state(slug)
-        if state is None or "queue" not in state:
+        st = load_state(slug)
+        if st is None or "queue" not in st:
             raise FileNotFoundError(f"queue for {slug!r} missing")
-        q = state["queue"]
-        q["writer_attempts"] = int(q.get("writer_attempts", 0)) + 1
-        q["total_attempts"] = int(q.get("total_attempts", 0)) + 1
-        q["blocked_until"] = None  # we're attempting now
-        save_state(state)
+        _record_attempt_start_in_state(st)
+        save_state(st)
+
+
+def _record_block_in_state(st: dict[str, Any], reason: str) -> str:
+    """Mutate the queue subdoc of ``st`` in place; caller saves.
+
+    Same lifecycle contract as :func:`_record_attempt_start_in_state` —
+    the caller already holds the lease and will save ``st`` either by
+    ``save_state`` directly or by an enclosing ``state.transition``.
+    Returns the new ``blocked_until`` timestamp or ``"ESCALATED"``.
+    """
+    q = st.get("queue") if isinstance(st, dict) else None
+    if not q:
+        raise FileNotFoundError(f"queue for {st.get('slug') if st else '<unknown>'!r} missing")
+    attempts = int(q.get("writer_attempts", 0))
+    if attempts >= MAX_PRIMARY_ATTEMPTS and q.get("escalation_level", 0) == 0:
+        q["escalation_level"] = 1
+        q["assigned_writer"] = TERTIARY
+        q["writer_attempts"] = 0
+        q["blocked_until"] = None
+        q["last_block_reason"] = f"escalated after {attempts} primary attempts: {reason}"
+        return "ESCALATED"
+    idx = min(attempts - 1, len(BACKOFF_SECONDS) - 1)
+    delay = BACKOFF_SECONDS[max(idx, 0)]
+    until_epoch = time.time() + delay
+    until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until_epoch))
+    q["blocked_until"] = until_iso
+    q["last_block_reason"] = reason
+    return until_iso
 
 
 def record_block(slug: str, reason: str) -> str:
@@ -213,29 +295,12 @@ def record_block(slug: str, reason: str) -> str:
     timestamp (or "ESCALATED" if we tipped over).
     """
     with state_lease(slug):
-        state = load_state(slug)
-        if state is None or "queue" not in state:
+        st = load_state(slug)
+        if st is None or "queue" not in st:
             raise FileNotFoundError(f"queue for {slug!r} missing")
-        q = state["queue"]
-        attempts = int(q.get("writer_attempts", 0))
-        if attempts >= MAX_PRIMARY_ATTEMPTS and q.get("escalation_level", 0) == 0:
-            # Tip over to tertiary
-            q["escalation_level"] = 1
-            q["assigned_writer"] = TERTIARY
-            q["writer_attempts"] = 0
-            q["blocked_until"] = None
-            q["last_block_reason"] = f"escalated after {attempts} primary attempts: {reason}"
-            save_state(state)
-            return "ESCALATED"
-        # Otherwise apply backoff with the assigned writer
-        idx = min(attempts - 1, len(BACKOFF_SECONDS) - 1)
-        delay = BACKOFF_SECONDS[max(idx, 0)]
-        until_epoch = time.time() + delay
-        until_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(until_epoch))
-        q["blocked_until"] = until_iso
-        q["last_block_reason"] = reason
-        save_state(state)
-        return until_iso
+        outcome = _record_block_in_state(st, reason)
+        save_state(st)
+        return outcome
 
 
 def record_completion(slug: str, module_path: Path | None = None) -> None:
@@ -262,7 +327,16 @@ def record_completion(slug: str, module_path: Path | None = None) -> None:
 
 
 def _iso_to_epoch(iso: str) -> float:
-    return time.mktime(time.strptime(iso, "%Y-%m-%dT%H:%M:%SZ"))
+    """Decode a ``YYYY-MM-DDTHH:MM:SSZ`` UTC ISO string to a UNIX epoch.
+
+    Must use ``calendar.timegm`` (UTC-aware) and NOT ``time.mktime``
+    (local-timezone). The string is produced via
+    ``time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(epoch))`` which
+    is UTC; round-tripping through ``time.mktime`` would shift the
+    epoch by the local timezone offset, causing blocks to "expire"
+    early on +UTC machines and persist past schedule on -UTC machines.
+    """
+    return calendar.timegm(time.strptime(iso, "%Y-%m-%dT%H:%M:%SZ"))
 
 
 def set_revision_pending_frontmatter(module_path: Path) -> bool:
@@ -335,6 +409,7 @@ __all__ = [
     "BACKOFF_SECONDS",
     "ClaimResult",
     "route_writer",
+    "model_to_agent",
     "ensure_queued",
     "claim",
     "record_attempt_start",

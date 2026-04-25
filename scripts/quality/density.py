@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 # Threshold tuning notes:
@@ -45,6 +46,30 @@ from pathlib import Path
 WORDS_FLOOR = 1500
 W_PER_LINE_FLOOR = 18.0
 W_PER_PARA_FLOOR = 22.0
+
+# Lower thresholds for the 3-way classifier (#388 pipeline stage [1]).
+# Below these, the teaching-judge LLM is NOT consulted — the module is
+# clearly bad enough to send straight to rewrite. Anchored against the
+# corpus' worst pad-bomb (9.1 GPU at w/ln 7.5, wpp 10.9) and worst
+# punchy-bullets (1.1 v3 at w/ln 7.5, wpp 15.6) — both deep below these.
+WORDS_FLOOR_REWRITE = 1000
+W_PER_LINE_FLOOR_REWRITE = 12.0
+W_PER_PARA_FLOOR_REWRITE = 18.0
+
+
+class DensityVerdict(str, Enum):
+    """Three-way density classification consumed by #388's triage stage.
+
+    * ``PASS`` — clears every PASS floor; no further action.
+    * ``REVIEW`` — fails at least one PASS floor but stays above every
+      rewrite floor; a teaching-judge LLM decides approve-vs-rewrite.
+    * ``REWRITE`` — any signal below the rewrite floor; no LLM consult,
+      goes straight to the writer queue.
+    """
+
+    PASS = "pass"
+    REVIEW = "review"
+    REWRITE = "rewrite"
 
 _FRONTMATTER_FENCE = re.compile(r"^---\s*\n.*?\n---\s*\n", flags=re.DOTALL)
 _FENCED_CODE = re.compile(r"```.*?```", flags=re.DOTALL)
@@ -87,6 +112,29 @@ class DensityMetrics:
             and self.w_per_para >= w_per_para_floor
         )
 
+    def classify(self) -> DensityVerdict:
+        """Three-way verdict for #388 triage stage.
+
+        Order of checks matters: REWRITE wins over REVIEW because the
+        rewrite floors are strictly looser than the PASS floors. A
+        module with ``wpp == 10`` simultaneously fails the PASS floor
+        (22) and the rewrite floor (18); the REWRITE verdict is more
+        actionable so we return that.
+        """
+        if (
+            self.prose_words < WORDS_FLOOR_REWRITE
+            or self.w_per_line < W_PER_LINE_FLOOR_REWRITE
+            or self.w_per_para < W_PER_PARA_FLOOR_REWRITE
+        ):
+            return DensityVerdict.REWRITE
+        if (
+            self.prose_words >= WORDS_FLOOR
+            and self.w_per_line >= W_PER_LINE_FLOOR
+            and self.w_per_para >= W_PER_PARA_FLOOR
+        ):
+            return DensityVerdict.PASS
+        return DensityVerdict.REVIEW
+
     def reasons_failed(
         self,
         words_floor: int = WORDS_FLOOR,
@@ -101,6 +149,21 @@ class DensityMetrics:
         if self.w_per_para < w_per_para_floor:
             out.append(f"wpp {self.w_per_para:.1f} < {w_per_para_floor:.1f} (punchy-bullets or essay-filler — paragraphs don't teach)")
         return out
+
+    def reasons_failed_rewrite(self) -> list[str]:
+        """Reasons against the REWRITE-tier floors specifically.
+
+        Used by the post-merge density hard gate (#388 stage [6]) so the
+        error message names the floor that actually fired the bounce —
+        ``reasons_failed`` reports against the PASS floors, which would
+        flag REVIEW-band signals as "violations" when only REWRITE-tier
+        signals can bounce a merge.
+        """
+        return self.reasons_failed(
+            words_floor=WORDS_FLOOR_REWRITE,
+            w_per_line_floor=W_PER_LINE_FLOOR_REWRITE,
+            w_per_para_floor=W_PER_PARA_FLOOR_REWRITE,
+        )
 
 
 def _strip_non_prose(text: str) -> str:

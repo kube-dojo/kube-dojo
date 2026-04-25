@@ -35,14 +35,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from . import gates, state
+from . import density, gates, queue, state
 from .citations import process_module_citations
 from .dispatchers import (
     DispatcherUnavailable,
     DispatchResult,
     dispatch,
     tiebreaker_agent,
-    writer_for_index,
 )
 from .extractors import (
     JsonExtractError,
@@ -176,12 +175,67 @@ def audit_one(slug: str, *, timeout: int = 600) -> None:
 def route_one(slug: str) -> None:
     """AUDITED → ROUTED / SKIPPED / CITATION_CLEANUP_ONLY.
 
-    Route rules:
-    * score ≥ 4.0 AND no missing structural sections → ``CITATION_CLEANUP_ONLY``
-      (citation pass still runs — everything goes through verify)
-    * score ≥ 4.0 BUT missing quiz/exercise → ``ROUTED`` with track=structural
-    * score < 4.0 → ``ROUTED`` with track=rewrite
+    Route rules (post-#388):
+
+    * Density classifier runs first. ``REWRITE`` overrides the audit score
+      and forces ``track="rewrite"`` — modules that game the audit rubric
+      with pad-bombs / punchy-bullets / essay-filler still get rewritten.
+    * If density is ``PASS`` AND audit score ≥ 4.0 AND no missing
+      structural sections → ``CITATION_CLEANUP_ONLY`` (citation pass still
+      runs — everything goes through verify).
+    * If audit score ≥ 4.0 but structural sections are missing →
+      ``ROUTED`` with track=structural.
+    * Otherwise → ``ROUTED`` with track=rewrite.
+
+    Writer assignment is queue-driven (per #388 routing rule): Gemini
+    for beginner tracks, Codex for advanced, Claude as tertiary
+    fallback. Reviewer is the universal cross-family default — Claude
+    for any non-Claude writer, Codex when the writer is Claude.
     """
+    # Phase 1 (no lease): read state + density + missing-section list to
+    # decide the cleanup-only short-circuit. We skip ``queue.ensure_queued``
+    # at this point because it shouldn't pollute the queue with modules
+    # that won't need a writer (Codex must #2). The lease block below
+    # re-reads state under CAS so the cheap pre-lease check just lets
+    # us skip leasing entirely on the no-write path.
+    pre_st = state.load_state(slug)
+    if pre_st is None:
+        raise StageError(f"state missing for {slug}")
+    if pre_st["stage"] != "AUDITED":
+        return
+
+    module_path = _module_path(pre_st)
+    text = module_path.read_text(encoding="utf-8")
+    missing = _missing_structural_sections(text)
+    audit_pre = pre_st.get("audit") or {}
+    score_pre = _audit_score(audit_pre)
+    density_metrics = density.evaluate_text(text)
+    density_verdict = density_metrics.classify()
+    density_payload = {
+        "verdict": density_verdict.value,
+        "prose_words": density_metrics.prose_words,
+        "w_per_line": round(density_metrics.w_per_line, 2),
+        "w_per_para": round(density_metrics.w_per_para, 2),
+    }
+
+    needs_writer = _needs_writer(
+        density_verdict=density_verdict,
+        score=score_pre,
+        missing=missing,
+    )
+
+    # Pre-lease queue setup ONLY when the module is actually heading to
+    # a writer. ``ensure_queued`` acquires its own ``state_lease`` so it
+    # must run outside the lease block below (fcntl.flock isn't
+    # re-entrant per process). Codex must #2: skipping cleanup-only and
+    # PASS+REVIEW-with-clean-structure paths keeps the queue scoped to
+    # actual writer work.
+    if needs_writer:
+        # set_banner=False — banners are committed by ``triage --apply``
+        # in their own user-visible PR; mutating frontmatter here would
+        # dirty primary and break merge_one's pre-flight check.
+        queue.ensure_queued(slug, module_path, set_banner=False)
+
     with state.state_lease(slug) as lease:
         st = lease.load()
         if st is None:
@@ -189,30 +243,92 @@ def route_one(slug: str) -> None:
         if st["stage"] != "AUDITED":
             return
 
+        # Re-read inside the lease (cheap) so the transition uses the
+        # canonical authoritative values.
         audit = st.get("audit") or {}
         score = _audit_score(audit)
-        missing = _missing_structural_sections(_module_path(st).read_text(encoding="utf-8"))
 
-        if score >= SCORE_SKIP_THRESHOLD and not missing:
+        if not needs_writer:
+            # PASS-tier or REVIEW-tier with no other concerns → cleanup
+            # only. Codex must #1: REVIEW-tier with score≥4 + complete
+            # structure routes here (NOT to a no-op structural prompt).
+            # The teaching-judge LLM (deferred to Phase 2a) will be
+            # responsible for sending REVIEW-tier modules to rewrite
+            # when warranted.
+            reason_bits = [f"score {score:.1f}", "structure complete"]
+            if density_verdict == density.DensityVerdict.PASS:
+                reason_bits.append("density PASS")
+            else:
+                reason_bits.append("density REVIEW (judge deferred)")
             state.transition(
                 st, "AUDITED", "CITATION_CLEANUP_ONLY",
-                route={"reason": f"score {score:.1f} + structure complete", "track": "cleanup_only"},
-                note=f"skip rewrite (score {score:.1f})",
+                route={
+                    "reason": ", ".join(reason_bits),
+                    "track": "cleanup_only",
+                    "density": density_payload,
+                },
+                note=f"skip rewrite ({', '.join(reason_bits)})",
             )
             return
 
-        track = "rewrite" if score < SCORE_SKIP_THRESHOLD else "structural"
-        writer, reviewer = writer_for_index(st["module_index"])
+        if density_verdict == density.DensityVerdict.REWRITE:
+            track = "rewrite"
+            track_reason = (
+                f"density REWRITE: {'; '.join(density_metrics.reasons_failed())}"
+            )
+        else:
+            # density is PASS or REVIEW here AND needs_writer is True,
+            # so either score<4 or missing!=[] forced us into this path.
+            track = "rewrite" if score < SCORE_SKIP_THRESHOLD else "structural"
+            track_reason = f"score {score:.1f}, missing={missing}"
+
+        # claim() is a read-only peek (no lease needed). Returns None
+        # when the queue's blocked_until is still in the future, which
+        # leaves the slug at AUDITED so the run loop picks it up later.
+        claim_result = queue.claim(slug)
+        if claim_result.writer is None:
+            return  # blocked, no transition; retry on next sweep
+        agent, writer_model = queue.model_to_agent(claim_result.writer)
+        reviewer = "claude" if agent != "claude" else "codex"
+
         state.transition(
             st, "AUDITED", "ROUTED",
-            route={"track": track, "score": score, "missing": missing},
-            writer=writer,
+            route={
+                "track": track,
+                "score": score,
+                "missing": missing,
+                "density": density_payload,
+                "reason": track_reason,
+            },
+            writer=agent,
+            writer_model=writer_model,
             reviewer=reviewer,
-            note=f"track={track} writer={writer}",
+            note=f"track={track} writer={agent}/{writer_model}",
         )
         # ROUTED → WRITE_PENDING in the same lease so the run-loop can
         # pick this up as a writable module immediately.
         state.transition(st, "ROUTED", "WRITE_PENDING", note="queued for write")
+
+
+def _needs_writer(
+    *,
+    density_verdict: "density.DensityVerdict",
+    score: float,
+    missing: list[str],
+) -> bool:
+    """True if the module must reach a writer (rewrite OR structural).
+
+    Single source of truth for the route decision so the pre-lease
+    short-circuit and the in-lease transition agree on whether to
+    enqueue. Modules that don't need a writer go to CITATION_CLEANUP_ONLY.
+    """
+    if density_verdict == density.DensityVerdict.REWRITE:
+        return True
+    if score < SCORE_SKIP_THRESHOLD:
+        return True
+    if missing:
+        return True
+    return False
 
 
 def _missing_structural_sections(text: str) -> list[str]:
@@ -256,11 +372,29 @@ def write_one(slug: str, *, timeout: int = 900) -> None:
             return
 
         attempt_id = state.start_in_progress(st, "WRITE_PENDING", "WRITE_IN_PROGRESS")
+        # Codex round-2 must #1: mutate ``st`` in place so the queue
+        # increments survive the next ``state.transition`` (which saves
+        # ``st`` back). The earlier ``_record_attempt_start_unlocked``
+        # variant did its own load+mutate+save, then transition's save
+        # of the stale in-memory ``st`` overwrote the queue updates.
+        try:
+            queue._record_attempt_start_in_state(st)
+            state.save_state(st)  # persist the increment immediately
+        except FileNotFoundError:
+            pass  # not queue-tracked (e.g. legacy paths) — proceed
         try:
             wt, commit_sha = _write_in_worktree(st, timeout=timeout, attempt_id=attempt_id)
-        except DispatcherUnavailable:
+        except DispatcherUnavailable as exc:
             # Revert — module stays retryable, branch cleaned up.
             remove_worktree(_primary(), slug, delete_branch=True)
+            # Codex round-2 must #1: record block in-place BEFORE the
+            # transition so the next save (inside transition) carries
+            # the blocked_until forward. Reverse order would lose the
+            # block on the transition's save of the older queue subdoc.
+            try:
+                queue._record_block_in_state(st, f"dispatcher unavailable: {exc}")
+            except FileNotFoundError:
+                pass
             state.transition(
                 st, "WRITE_IN_PROGRESS", "WRITE_PENDING",
                 note="dispatcher unavailable; will retry",
@@ -360,6 +494,7 @@ def _write_in_worktree(
     """
     slug = st["slug"]
     writer = st["writer"]
+    writer_model = st.get("writer_model")  # set by route_one (queue-driven)
     track = (st.get("route") or {}).get("track", "rewrite")
     module_rel = st["module_path"]
 
@@ -400,7 +535,7 @@ def _write_in_worktree(
         # (the worktree) directly, returning only a summary on stdout —
         # which the extractor then rejects as "no frontmatter delimiter
         # found" while the actual rewrite gets nuked with the worktree.
-        result = dispatch(writer, prompt, timeout=timeout, cwd=wt, tools_disabled=True)
+        result = dispatch(writer, prompt, timeout=timeout, cwd=wt, tools_disabled=True, model=writer_model)
         # Hang-retry path: the "0 B stdout + 'timed out' stderr" signature
         # observed on argo-events smoke rounds 2 and 4 — likely an
         # Anthropic-side stall on the second heavy claude-code call within
@@ -416,7 +551,7 @@ def _write_in_worktree(
                 result=result, prompt=prompt, error="dispatch_hang_attempt1",
             )
             time.sleep(_HANG_RETRY_SLEEP_SEC)
-            result = dispatch(writer, prompt, timeout=timeout, cwd=wt, tools_disabled=True)
+            result = dispatch(writer, prompt, timeout=timeout, cwd=wt, tools_disabled=True, model=writer_model)
             if _looks_like_dispatch_hang(result) or not result.ok:
                 hang_attempt_2 = f"{attempt_id}-r1"
                 diag2 = _save_write_diag(
@@ -889,6 +1024,155 @@ def handle_review_changes(slug: str) -> None:
         )
 
 
+def _clear_banner_and_complete_queue(primary: Path, slug: str, module_relpath: str) -> None:
+    """Post-merge cleanup: remove the ``revision_pending`` banner from the
+    merged file and mark the queue entry completed.
+
+    Runs under the merge lock so the brief dirty-primary window doesn't
+    race with another module's merge pre-flight. ``clear_revision_pending``
+    is idempotent — when the writer's output already dropped the banner,
+    this is a no-op and no extra commit lands. When the writer preserved
+    the banner verbatim from the input frontmatter (the inherit-by-default
+    case), we strip it and commit a small ``quality(banner)`` cleanup
+    commit so the rendered page no longer shows "queued for revision".
+
+    The queue's ``record_completion`` is also called WITHOUT a path so
+    it only updates the in-pipeline JSON state (no second frontmatter
+    pass). Best-effort: failures here are logged but never re-raise,
+    because the merge itself was successful and FAILING the slug after
+    a successful COMMITTED transition would corrupt the audit trail.
+    """
+    module_file = primary / module_relpath
+    banner_clean_succeeded = True
+    # Acquire the merge lock for the dirty-primary window so another
+    # slug's merge pre-flight (``has_uncommitted(primary)``) doesn't
+    # see an in-progress banner edit and refuse its merge.
+    try:
+        with _merge_lock():
+            try:
+                cleared = queue.clear_revision_pending_frontmatter(module_file)
+            except Exception as exc:  # pragma: no cover — advisory cleanup
+                # Codex round-3 must #1: a raise here means we don't know
+                # whether the banner is gone, so the queue must NOT be
+                # marked complete — a future sweep needs to retry.
+                print(f"[warn] {slug}: banner clear raised: {exc}")
+                cleared = False
+                banner_clean_succeeded = False
+
+            if cleared:
+                try:
+                    subprocess.run(
+                        ["git", "add", module_relpath],
+                        cwd=primary, check=True, capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "commit", "-m",
+                         f"quality(banner): clear revision_pending for {slug}"],
+                        cwd=primary, check=True, capture_output=True,
+                    )
+                except subprocess.CalledProcessError as exc:
+                    # Codex round-2 must #3: revert the working-tree
+                    # mutation so primary is clean for the NEXT module's
+                    # merge pre-flight, AND don't mark the queue
+                    # completed — the banner is still on the rendered
+                    # page and a follow-up cleanup pass is required.
+                    subprocess.run(
+                        ["git", "restore", "--staged", module_relpath],
+                        cwd=primary, check=False, capture_output=True,
+                    )
+                    subprocess.run(
+                        ["git", "restore", module_relpath],
+                        cwd=primary, check=False, capture_output=True,
+                    )
+                    print(
+                        f"[warn] {slug}: banner clear git commit failed "
+                        f"(rc={exc.returncode}); reverted working-tree edit. "
+                        f"Queue stays incomplete; banner will be cleared by "
+                        f"the next sweep."
+                    )
+                    banner_clean_succeeded = False
+    except TimeoutError as exc:  # pragma: no cover — lock contention path
+        print(f"[warn] {slug}: banner cleanup skipped — merge lock unavailable: {exc}")
+        banner_clean_succeeded = False
+
+    if not banner_clean_succeeded:
+        # Don't mark the queue complete — the banner is still showing on
+        # the rendered page and a future sweep needs to retry. Returning
+        # early here is safe: the merge already landed (state is
+        # COMMITTED), only the queue's "completed_at" timestamp is
+        # deferred.
+        return
+
+    try:
+        # Pass module_path=None: the frontmatter clear above already ran
+        # (with primary-side commit). queue.record_completion would do
+        # the SAME clear if we passed the path, then leave an
+        # uncommitted edit on primary — which would dirty subsequent
+        # merges in the batch. Pass None to skip the redundant clear.
+        queue.record_completion(slug, module_path=None)
+    except FileNotFoundError:
+        pass  # legacy slug without a queue doc
+    except Exception as exc:  # pragma: no cover — advisory cleanup
+        print(f"[warn] {slug}: queue.record_completion raised: {exc}")
+
+
+def _handle_density_failure(st: dict[str, Any], reason: str) -> None:
+    """REVIEW_APPROVED + density-fail → WRITE_PENDING (retry) OR → FAILED.
+
+    Mirrors :func:`handle_review_changes` retry semantics. The writer's
+    output cleared the cross-family review on teaching merits but failed
+    the deterministic density triple gate — usually means the writer
+    over-compressed or padded its way through the prose. Bounce to
+    WRITE_PENDING with the reasons in retry context, capped at
+    :data:`RETRY_CAP`. Beyond the cap, mark FAILED so a human queues
+    the rewrite manually.
+
+    Caller already holds the lease for ``st['slug']`` from inside
+    :func:`merge_one`'s ``state_lease`` block; we pass through to
+    ``state.transition`` which CAS-checks ``REVIEW_APPROVED`` on disk.
+    """
+    retry_count = st.get("retry_count", 0)
+    primary = _primary()
+    if retry_count >= RETRY_CAP:
+        # _fail_and_cleanup transitions to FAILED and removes the
+        # worktree+branch in one go. If the branch teardown fails it
+        # leaves a stale branch but the FAILED state is durable, which
+        # is the correct ordering: state truth first, cleanup advisory.
+        _fail_and_cleanup(
+            st,
+            f"density gate failed after {RETRY_CAP} retries — manual rewrite required: {reason}",
+        )
+        return
+    # Retry: back to WRITE_PENDING with the density failure as must_fix
+    # context. The writer prompt builder already merges ``review.must_fix``
+    # into the next attempt, so wedge our reason in there alongside any
+    # prior reviewer notes (kept distinct by the ``[density]`` prefix).
+    review = dict(st.get("review") or {})
+    must_fix = list(review.get("must_fix") or [])
+    must_fix.append(f"[density] {reason}")
+    review["must_fix"] = must_fix
+    # Codex must #5: transition FIRST, then tear down the worktree.
+    # If teardown raises after the transition, the state is durably
+    # WRITE_PENDING and ``create_worktree`` is idempotent (it prunes
+    # stale checkouts via ``_worktree_registered``-or-``wt.exists()``
+    # — see worktree.py). The reverse order would leave state stuck at
+    # REVIEW_APPROVED with the branch already gone — the next merge
+    # attempt would fail mysteriously.
+    state.transition(
+        st, "REVIEW_APPROVED", "WRITE_PENDING",
+        retry_count=retry_count + 1,
+        review=review,
+        note=f"density retry {retry_count + 1}/{RETRY_CAP}: {reason[:120]}",
+    )
+    try:
+        remove_worktree(primary, st["slug"], delete_branch=True)
+    except Exception as exc:  # pragma: no cover — cleanup is advisory
+        print(
+            f"[warn] {st['slug']}: density-retry worktree teardown failed: {exc}; "
+            f"create_worktree will retry pruning on the next write attempt"
+        )
+
+
 # ---- merge stage -------------------------------------------------------
 
 
@@ -959,9 +1243,6 @@ def merge_one(slug: str) -> None:
         if current_branch(primary) != "main":
             _fail_and_cleanup(st, "merge: primary not on main — manual intervention")
             return
-        if has_uncommitted(primary):
-            _fail_and_cleanup(st, "merge: primary has uncommitted changes — manual intervention")
-            return
 
         # Hard gate (#377): visual-aid preservation. Run BEFORE merge so a
         # regression doesn't land on main; the worktree branch is rebased
@@ -971,9 +1252,26 @@ def merge_one(slug: str) -> None:
         # are protected assets."
         last_error: Exception | None = None
         merge_sha: str | None = None
-        for attempt in range(_MERGE_RETRY_CAP):
+        density_meta: dict[str, Any] | None = None
+        density_failed = False
+        dirty_primary = False
+        for _attempt in range(_MERGE_RETRY_CAP):
             try:
                 with _merge_lock():
+                    # Codex round-2 must #2: dirty-primary check INSIDE
+                    # the merge lock. The banner-cleanup commit (in
+                    # ``_clear_banner_and_complete_queue``) holds the
+                    # same lock during its briefly-dirty window, so
+                    # checking outside the lock could mis-flag another
+                    # slug's in-flight cleanup as a foreign edit.
+                    # Inside the lock, dirty primary genuinely is a
+                    # foreign edit and we should fail.
+                    if has_uncommitted(primary):
+                        last_error = StageError(
+                            "primary has uncommitted changes inside merge lock — foreign edit"
+                        )
+                        dirty_primary = True
+                        break
                     rebase_onto_main(primary, slug)
                     try:
                         gates.assert_visual_aids_preserved(
@@ -982,6 +1280,22 @@ def merge_one(slug: str) -> None:
                     except gates.GateError as gate_exc:
                         last_error = gate_exc
                         break  # don't retry — regression is deterministic
+                    # #388 stage [6]: density hard gate. A REWRITE-tier
+                    # output must clear the triple gate before landing.
+                    # Density signals are content-stable (rebase doesn't
+                    # change them) so a single failure is terminal for
+                    # this attempt. We bounce the slug back to
+                    # WRITE_PENDING with the reason as retry context (up
+                    # to RETRY_CAP) instead of FAILing it outright,
+                    # because the writer may simply have over-compressed.
+                    try:
+                        density_meta = gates.assert_density_threshold(
+                            primary, slug, st["module_path"],
+                        )
+                    except gates.GateError as gate_exc:
+                        last_error = gate_exc
+                        density_failed = True
+                        break
                     merge_sha = merge_ff_only(primary, slug)
                 break
             except WorktreeError as exc:
@@ -990,23 +1304,46 @@ def merge_one(slug: str) -> None:
             except TimeoutError as exc:
                 last_error = exc
                 break  # contention timeout — don't spin
+        if dirty_primary:
+            _fail_and_cleanup(st, f"merge: {last_error}")
+            return
+        if density_failed:
+            _handle_density_failure(st, str(last_error))
+            return
         if merge_sha is None:
             _fail_and_cleanup(st, f"merge: {last_error}")
             return
 
         remove_worktree(primary, slug, delete_branch=True)
+        commit_payload: dict[str, Any] = {"sha": merge_sha, "branch": branch_name(slug)}
+        if density_meta is not None:
+            commit_payload["density"] = density_meta
         state.transition(
             st, "REVIEW_APPROVED", "COMMITTED",
-            commit={"sha": merge_sha, "branch": branch_name(slug)},
+            commit=commit_payload,
             note=f"merged {merge_sha[:8]}",
         )
+        # Capture for use AFTER the state_lease exits — the banner +
+        # queue cleanup helper acquires its own state_lease via
+        # ``record_completion``, so it MUST run outside this block to
+        # avoid an fcntl re-entrancy deadlock.
+        module_relpath = st["module_path"]
 
-        # #377 post-merge: anti-gaming sampler (20 % deterministic) + ledger
-        # row. These run AFTER the COMMITTED transition so a sampler/ledger
-        # failure cannot block the merge — sampling is advisory, the ledger
-        # is auditable. Failures surface as warnings on stdout and are
-        # written into the ledger row's notes field where applicable.
-        _post_merge_gates(slug)
+    # Codex must #3: clear the banner + close the queue entry so a
+    # shipped module no longer renders the "queued for revision" banner
+    # to learners. Runs OUTSIDE the state_lease above (lease re-entrancy)
+    # but acquires its OWN ``_merge_lock`` so the brief dirty-primary
+    # window for the banner-cleanup commit doesn't race with another
+    # module's merge pre-flight check.
+    _clear_banner_and_complete_queue(primary, slug, module_relpath)
+
+    # #377 post-merge: anti-gaming sampler (20 % deterministic) + ledger
+    # row. Runs AFTER the COMMITTED transition (no state_lease held) so
+    # a sampler/ledger failure cannot block the merge — sampling is
+    # advisory, the ledger is auditable. Failures surface as warnings on
+    # stdout and are written into the ledger row's notes field where
+    # applicable.
+    _post_merge_gates(slug)
 
 
 def _post_merge_gates(slug: str) -> None:

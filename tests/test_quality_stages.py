@@ -105,6 +105,23 @@ Question 1.
     monkeypatch.setenv("KUBEDOJO_GATES_SAMPLE_RATE", "0")
     # Prompt docs aren't present in the fake repo; stub the startup check.
     monkeypatch.setattr("scripts.quality.pipeline.assert_required_docs_exist", lambda: None)
+    # #388 density-gate bypass: the seed/rewrite fixtures are intentionally
+    # tiny (~5 prose words) to keep the suite fast and readable. The
+    # production density gate would (correctly) reject them as REWRITE-
+    # tier, but every existing test was written to validate stage
+    # mechanics, NOT density. Density behavior is exercised by dedicated
+    # tests in test_quality_density.py and the round-trip test in this
+    # file. The bypass forces ``classify() == PASS`` everywhere these
+    # stub modules are read; tests that specifically need REWRITE-tier
+    # behavior can monkeypatch this back to the real implementation.
+    from scripts.quality import density as _density
+    def _always_pass(_text: str) -> _density.DensityMetrics:
+        return _density.DensityMetrics(
+            prose_words=2000, textual_words=2200, nonblank_lines=100,
+            total_paragraphs=80, prose_paragraphs=60,
+            w_per_line=22.0, w_per_para=33.0,
+        )
+    monkeypatch.setattr(_density, "evaluate_text", _always_pass)
 
     return repo
 
@@ -1699,3 +1716,130 @@ def test_run_order_is_worst_first(fake_repo, monkeypatch):
     ordered = pipeline._order_worst_first(slugs)
     # Module 1.1 (score 2.5) should come before module 1.2 (score 3.9).
     assert ordered.index("k8s-cka-module-1.1-pods") < ordered.index(slug2)
+
+
+# ---- #388 density-aware routing + density hard-gate -------------------
+
+
+def test_route_one_density_rewrite_overrides_high_audit_score(fake_repo, monkeypatch):
+    """A module with a 4.5 audit score AND complete structure that fails
+    the density classifier (REWRITE) must still go to track=rewrite —
+    pad-bombs and punchy-bullets are exactly what the audit missed."""
+    slug = _bootstrap(fake_repo)
+    # High audit score + structurally complete
+    st = state.load_state(slug)
+    st["audit"] = {"teaching_score": 4.5, "teaching_gaps": []}
+    st["stage"] = "AUDITED"
+    state.save_state(st)
+    full_module = """---
+title: Pods
+sidebar:
+  order: 1
+---
+
+## Quiz
+
+Q.
+
+## Hands-On Exercise
+
+Do.
+
+## Common Mistakes
+
+T.
+
+## Did You Know?
+
+F.
+"""
+    (fake_repo / st["module_path"]).write_text(full_module)
+
+    # Override the fixture-default density bypass with a REWRITE-tier
+    # DensityMetrics so route_one's density check fires the override path.
+    from scripts.quality import density as _density
+    monkeypatch.setattr(
+        _density, "evaluate_text",
+        lambda _text: _density.DensityMetrics(
+            prose_words=200, textual_words=210, nonblank_lines=10,
+            total_paragraphs=4, prose_paragraphs=4,
+            w_per_line=21.0, w_per_para=10.0,  # wpp below REWRITE floor
+        ),
+    )
+
+    stages.route_one(slug)
+    st = state.load_state(slug)
+    assert st["stage"] == "WRITE_PENDING"
+    assert st["route"]["track"] == "rewrite"
+    assert st["route"]["density"]["verdict"] == "rewrite"
+
+
+def test_density_gate_failure_bounces_to_write_pending(fake_repo, monkeypatch):
+    """When merge_one's density gate raises, the slug must go back to
+    WRITE_PENDING with the reason in retry context (not FAILED)."""
+    slug = _bootstrap(fake_repo)
+    # Drive to REVIEW_APPROVED — bypass writer/reviewer dispatch entirely
+    # by hand-editing state.
+    st = state.load_state(slug)
+    st.update({
+        "stage": "REVIEW_APPROVED",
+        "writer": "codex",
+        "reviewer": "claude",
+        "write": {"agent": "codex", "attempt_id": "abc", "commit_sha": "deadbeef", "worktree": ".worktrees/x"},
+        "review": {"verdict": "approve", "must_fix": []},
+        "route": {"track": "rewrite", "score": 2.0, "missing": []},
+        "retry_count": 0,
+    })
+    state.save_state(st)
+
+    # Stub out the merge mechanics — we only want to test the density-fail
+    # bounce. NB: stages.py imports these symbols by value at module
+    # import time, so monkey-patching the source modules doesn't reach
+    # them — patch the names AS BOUND IN stages.
+    from scripts.quality import gates as _gates
+    monkeypatch.setattr(stages, "current_branch", lambda primary: "main")
+    monkeypatch.setattr(stages, "has_uncommitted", lambda primary: False)
+    monkeypatch.setattr(stages, "rebase_onto_main", lambda primary, slug: None)
+    monkeypatch.setattr(stages, "remove_worktree", lambda primary, slug, delete_branch=True: None)
+    monkeypatch.setattr(stages.gates, "assert_visual_aids_preserved", lambda *a, **kw: {})
+    def _raise(*a, **kw):
+        raise _gates.GateError("density gate failed on test-slug: wpp 8.0 < 22.0")
+    monkeypatch.setattr(stages.gates, "assert_density_threshold", _raise)
+
+    stages.merge_one(slug)
+    st = state.load_state(slug)
+    assert st["stage"] == "WRITE_PENDING", st.get("failure_reason")
+    assert st["retry_count"] == 1
+    must_fix = (st.get("review") or {}).get("must_fix") or []
+    assert any("[density]" in m for m in must_fix), f"expected [density] tag in must_fix; got {must_fix}"
+
+
+def test_density_gate_failure_after_retry_cap_marks_failed(fake_repo, monkeypatch):
+    """After RETRY_CAP density bounces, the next failure marks FAILED
+    (manual rewrite required)."""
+    slug = _bootstrap(fake_repo)
+    st = state.load_state(slug)
+    st.update({
+        "stage": "REVIEW_APPROVED",
+        "writer": "codex",
+        "reviewer": "claude",
+        "write": {"agent": "codex", "attempt_id": "abc", "commit_sha": "deadbeef", "worktree": ".worktrees/x"},
+        "review": {"verdict": "approve", "must_fix": []},
+        "route": {"track": "rewrite", "score": 2.0, "missing": []},
+        "retry_count": stages.RETRY_CAP,  # already at cap
+    })
+    state.save_state(st)
+
+    from scripts.quality import gates as _gates
+    monkeypatch.setattr(stages, "current_branch", lambda primary: "main")
+    monkeypatch.setattr(stages, "has_uncommitted", lambda primary: False)
+    monkeypatch.setattr(stages, "rebase_onto_main", lambda primary, slug: None)
+    monkeypatch.setattr(stages, "remove_worktree", lambda primary, slug, delete_branch=True: None)
+    monkeypatch.setattr(stages.gates, "assert_visual_aids_preserved", lambda *a, **kw: {})
+    monkeypatch.setattr(stages.gates, "assert_density_threshold",
+                        lambda *a, **kw: (_ for _ in ()).throw(_gates.GateError("density failed")))
+
+    stages.merge_one(slug)
+    st = state.load_state(slug)
+    assert st["stage"] == "FAILED"
+    assert "density gate failed after" in (st.get("failure_reason") or "")
