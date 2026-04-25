@@ -2,6 +2,47 @@
 
 > **Read this first every session. Update before ending.**
 
+## Active Work (2026-04-25 ~22:00 local — #378 12-module recovery DONE; 11/12 green, 4 pipeline bugs fixed inline)
+
+**Status**: #378 (12-module MLOps + on-prem AI/ML batch failure) recovered sequentially under workers=1. Result: 11/12 modules COMMITTED or SKIPPED, 1 FAILED on substantive grounds (9.4 has real audit gaps that 3 agents independently flagged — manual rewrite needed). Branch is `main`, clean, 40 commits ahead of `origin/main` (23 from this session). **188 quality tests, ruff clean.**
+
+**Final outcomes (12 of 12)**:
+
+| Slug | Outcome | Score |
+|------|---------|-------|
+| `platform-disciplines-data-ai-mlops-module-5.1-mlops-fundamentals` | COMMITTED | claude APPROVE 4.9 |
+| `platform-disciplines-data-ai-mlops-module-5.2-feature-stores` | COMMITTED | cleanup-only (kept 3, removed 1 unverifiable Tecton URL) |
+| `platform-disciplines-data-ai-mlops-module-5.3-model-training` | SKIPPED | cleanup-only (4 citations all verified, no changes) |
+| `platform-disciplines-data-ai-mlops-module-5.4-model-serving` | COMMITTED | claude APPROVE 4.9 |
+| `platform-disciplines-data-ai-mlops-module-5.5-model-monitoring` | COMMITTED | claude APPROVE 4.75 |
+| `platform-disciplines-data-ai-mlops-module-5.6-ml-pipelines` | COMMITTED | claude APPROVE 4.7 |
+| `on-premises-ai-ml-infrastructure-module-9.1-gpu-nodes-accelerated` | COMMITTED | claude APPROVE 4.8 |
+| `on-premises-ai-ml-infrastructure-module-9.2-private-ai-training` | COMMITTED | claude APPROVE 4.7 |
+| `on-premises-ai-ml-infrastructure-module-9.3-private-llm-serving` | COMMITTED | claude APPROVE 4.5 |
+| `on-premises-ai-ml-infrastructure-module-9.4-private-mlops-platform` | **FAILED** | tiebreaker (gemini) flagged 3 audit gaps still unaddressed after 2 retries — manual rewrite required |
+| `on-premises-ai-ml-infrastructure-module-9.5-private-aiops` | COMMITTED | claude APPROVE 4.9 |
+| `on-premises-ai-ml-infrastructure-module-9.6-high-performance-storage-ai` | COMMITTED | cleanup-only (empty Sources section dropped) |
+
+**4 pipeline bug fixes shipped during the recovery** (each caught by the run itself, not in tests):
+
+| Commit | Fix | How it surfaced |
+|---|---|---|
+| `46e4ae24` | `diag(pipeline)`: print failure_reason + last history + diag path on `[fail]` | (proactive — adds debug info per user request) |
+| `39028717` | `fix(gates)`: auto-commit ledger row after post-merge append | 5.2 canary's first green run left `docs/quality-progress.tsv` modified, blocking next module |
+| `eb768229` | `fix(pipeline)`: pre-flight refuse `cmd_run` when primary dirty | My own pipeline.py edit dirtied primary, blocking 5.2 canary's merge |
+| `eaa994e8` | `fix(stages)`: tiebreaker CHANGES is terminal, not a re-route loop | 9.4 looped 3 tiebreaker rounds with growing must-fix lists before I caught it |
+
+**Git hygiene done at session start**: removed 3 merged quality worktrees + branches (5.2/5.3/5.4 — crash had wiped working tree state, branches sat at `4abd1f80`), removed detached-HEAD `codex-interactive` worktree, cleaned 0-byte `.tsv.lock` residue. Briefing alerts cleared.
+
+**Next session**:
+- Push 40 commits to `origin/main` (`git push`).
+- Manual rewrite of 9.4 to address the 3 audit gaps (Orchestration & Pipelines section needs diagrams/code, Monitoring & Governance section is too thin, Practitioner Depth dimension below 4 — must add patterns/anti-patterns/failure modes).
+- The 11 newly-merged modules should land in the next `backfill-pending` cycle to attach `## Sources` sections.
+
+**Prior session summary follows** —
+
+---
+
 ## Active Work (2026-04-25 ~11:10 local — v2 + citation_backfill seam closed; both pipelines smoke-green)
 
 **Status**: v2 quality pipeline ships modules end-to-end on both writer paths AND auto-orchestrates citation backfill via the new `backfill-pending` subcommand. **160 quality tests, ruff clean.** Two modules took the full path round-trip this morning:
