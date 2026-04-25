@@ -681,7 +681,6 @@ You've completed this exercise when you can:
 - [Feast Documentation](https://docs.feast.dev/) — Open source feature store
 - [Feature Store for ML](https://www.featurestore.org/) — Community resources
 - [Uber Michelangelo](https://eng.uber.com/michelangelo-machine-learning-platform/) — Uber's ML platform
-- [Building Feature Stores](https://www.tecton.ai/blog/) — Tecton's blog
 
 ## Summary
 
