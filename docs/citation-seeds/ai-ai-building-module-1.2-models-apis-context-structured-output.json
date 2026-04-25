@@ -1,31 +1,77 @@
 {
   "module_key": "ai/ai-building/module-1.2-models-apis-context-structured-output",
   "module_path": "src/content/docs/ai/ai-building/module-1.2-models-apis-context-structured-output.md",
-  "research_run_id": "2026-04-19T23:23:20+00:00-codex-gpt-5.3-codex-spark",
-  "schema_version": 2,
-  "claims": [],
-  "further_reading": [
+  "research_run_id": "2026-04-25T13:07:15+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": null,
+  "claims": [
     {
-      "url": "https://openai.com/index/new-tools-and-features-in-the-responses-api/",
-      "title": "New Tools and Features in the Responses API",
-      "tier": "vendor",
-      "why_relevant": "Provides current API-level context for model/tool selection and how application design choices affect capabilities like tool use and workflow orchestration."
-    }
-  ],
-  "notes": "Module is predominantly pedagogical and uses generic, non-quantified examples. It does not make dated, vendor-specific, statistical, incident-based, or standards-based claims that require inline citations under the current citation-density rules.",
-  "_schema_issues": [],
-  "rejected_urls": [
-    {
-      "url": "https://openai.com/academy/prompting/",
-      "reason": "http_403",
-      "at_step": "research_validation",
-      "agent_proposed_tier": "vendor"
+      "claim_id": "C001",
+      "claim_text": "`gpt-5 mini` is faster and cheaper, and is a good fit for well-defined tasks.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Decision Example: Support Ticket Triage",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://developers.openai.com/api/docs/models/gpt-5-mini",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official model page directly states that GPT-5 mini is faster, more cost-efficient, and suited to well-defined tasks, but the primary source is on developers.openai.com, which is not currently allowlisted."
     },
     {
-      "url": "https://openai.com/index/introducing-structured-outputs-in-the-api/",
-      "reason": "http_403",
-      "at_step": "research_validation",
-      "agent_proposed_tier": "vendor"
+      "claim_id": "C002",
+      "claim_text": "`gpt-5.2` is stronger for complex reasoning and agentic work.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Decision Example: Support Ticket Triage",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://openai.com/index/introducing-gpt-5-2/",
+      "proposed_tier": "vendor",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "OpenAI's GPT-5.2 launch page explicitly describes GPT-5.2 as built for professional work, long-running agents, tool use, and complex multi-step tasks."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "`gpt-5.2` costs more than `gpt-5 mini`.",
+      "claim_class": "pricing",
+      "span_hint": "section: Worked Decision Example: Support Ticket Triage",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://developers.openai.com/api/docs/models/gpt-5.2",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official GPT-5.2 model page includes current per-token pricing and a quick comparison showing GPT-5.2 priced above GPT-5 mini, but that primary source is on developers.openai.com rather than the current allowlist."
     }
-  ]
+  ],
+  "further_reading": [
+    {
+      "url": "https://openai.com/gpt-5/",
+      "title": "GPT-5 Is Here",
+      "tier": "vendor",
+      "why_relevant": "Useful for current OpenAI model-family positioning, pricing snapshots, and high-level model-selection context."
+    },
+    {
+      "url": "https://openai.com/index/introducing-gpt-5-2/",
+      "title": "Introducing GPT-5.2",
+      "tier": "vendor",
+      "why_relevant": "Relevant to the module's named-model comparison because it documents GPT-5.2's intended use cases, reasoning profile, and pricing."
+    },
+    {
+      "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+      "title": "NIST AI Risk Management Framework",
+      "tier": "standards",
+      "why_relevant": "Useful background for the module's validation, risk-gating, and human-review design guidance."
+    }
+  ],
+  "notes": "Most of the module is pedagogical design guidance, hypothetical examples, schemas, quizzes, and exercises. I flagged only the explicit named-model capability and pricing comparisons as citation-requiring hard claims.",
+  "_schema_issues": [
+    "claim[0]:needs_allowlist_expansion_but_url_is_already_allowlisted",
+    "claim[2]:needs_allowlist_expansion_but_url_is_already_allowlisted"
+  ],
+  "rejected_urls": []
 }

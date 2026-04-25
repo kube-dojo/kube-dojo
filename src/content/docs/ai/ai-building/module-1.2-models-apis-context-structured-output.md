@@ -169,7 +169,7 @@ It is a good fit for well-defined tasks.
 
 The second option is `gpt-5.2`.
 
-It is stronger for complex reasoning and agentic work.
+It is [stronger for complex reasoning and agentic work](https://openai.com/index/introducing-gpt-5-2/).
 
 It costs more and may not be necessary for simple classification.
 
@@ -2194,3 +2194,9 @@ The application decides.
 ## Next Module
 
 Continue to [Tools, Retrieval, and Boundaries](./module-1.3-tools-retrieval-and-boundaries/).
+
+## Sources
+
+- [openai.com: introducing gpt 5 2](https://openai.com/index/introducing-gpt-5-2/) — OpenAI's GPT-5.2 launch page explicitly describes GPT-5.2 as built for professional work, long-running agents, tool use, and complex multi-step tasks.
+- [GPT-5 Is Here](https://openai.com/gpt-5/) — Useful for current OpenAI model-family positioning, pricing snapshots, and high-level model-selection context.
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework) — Useful background for the module's validation, risk-gating, and human-review design guidance.
