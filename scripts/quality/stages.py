@@ -323,7 +323,7 @@ def _save_write_diag(
     Returns the artifact path so the caller can include it in error
     messages for human follow-up.
     """
-    out_dir = _REPO_ROOT / ".pipeline" / "quality-pipeline"
+    out_dir = _REPO_ROOT / ".pipeline" / "quality-pipeline" / "diagnostics"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{slug}.write.{attempt_id}.failed.json"
     payload = {

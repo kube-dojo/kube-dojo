@@ -312,7 +312,7 @@ def test_write_one_extract_failure_persists_raw_diag(fake_repo, monkeypatch):
     assert "frontmatter" in reason or "extractor" in reason
     assert ".failed.json" in reason, "failure_reason should reference the diag artifact"
 
-    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline" / "diagnostics"
     diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
     assert len(diag_files) == 1, f"expected exactly one diag file, got {diag_files}"
     payload = json.loads(diag_files[0].read_text())
@@ -350,7 +350,7 @@ def test_write_one_dispatch_nonzero_persists_raw_diag(fake_repo, monkeypatch):
     assert "dispatch failed" in reason.lower()
     assert ".failed.json" in reason
 
-    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline" / "diagnostics"
     diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
     assert len(diag_files) == 1
     payload = json.loads(diag_files[0].read_text())
@@ -403,7 +403,7 @@ def test_write_one_hang_retry_succeeds(fake_repo, monkeypatch):
 
     # Only the first-attempt raw is persisted; the successful retry
     # doesn't leave a diag because there's nothing to debug.
-    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline" / "diagnostics"
     diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
     assert len(diag_files) == 1, f"expected exactly one r0 diag, got {diag_files}"
     payload = json.loads(diag_files[0].read_text())
@@ -443,7 +443,7 @@ def test_write_one_hang_double_retry_fails(fake_repo, monkeypatch):
     assert "hung twice" in reason.lower()
     assert "-r0.failed.json" in reason and "-r1.failed.json" in reason
 
-    diag_dir = fake_repo / ".pipeline" / "quality-pipeline"
+    diag_dir = fake_repo / ".pipeline" / "quality-pipeline" / "diagnostics"
     diag_files = sorted(diag_dir.glob(f"{slug}.write.*.failed.json"))
     assert len(diag_files) == 2, f"expected r0 + r1 diags, got {diag_files}"
 
