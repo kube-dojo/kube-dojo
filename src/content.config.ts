@@ -64,6 +64,11 @@ export const collections = {
           difficulty: z.enum(['beginner', 'intermediate', 'advanced']),
           environment: z.enum(['ubuntu', 'kubernetes', 'centos']),
         }).optional(),
+        // Set by the quality pipeline (scripts/quality/queue.py) when a
+        // module is queued for a teaching-style rewrite. Renders the
+        // RevisionBanner via PageTitle.astro so learners see the in-flight
+        // status. Cleared automatically when the rewrite merges.
+        revision_pending: z.boolean().optional(),
       }),
     }),
   }),

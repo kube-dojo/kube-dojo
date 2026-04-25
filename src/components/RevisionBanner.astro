@@ -1,0 +1,68 @@
+---
+/**
+ * RevisionBanner — shown at the top of any module whose frontmatter has
+ * `revision_pending: true`. Rendered by PageTitle.astro.
+ *
+ * Set by the quality pipeline when a module is queued for a teaching-style
+ * rewrite. Cleared automatically when the rewrite merges. The intent is
+ * transparency: learners see that the content is in flight rather than
+ * encountering a confusing v3 punchy-style or pad-bombed module without
+ * context.
+ *
+ * Usage in frontmatter:
+ *   revision_pending: true
+ */
+---
+
+<aside class="revision-banner" aria-label="Module revision notice">
+  <div class="revision-banner-inner">
+    <span class="revision-banner-icon" aria-hidden="true">&#9881;</span>
+    <div class="revision-banner-text">
+      <strong>This module is queued for a clarity rewrite.</strong>
+      The technical content is accurate, but the prose will be reworked for better
+      pedagogy (concrete examples, fewer bullet lists, clearer "why before what"
+      explanations). Check back soon — or follow progress at
+      <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/388"
+         target="_blank" rel="noopener">issue&nbsp;#388</a>.
+    </div>
+  </div>
+</aside>
+
+<style>
+  .revision-banner {
+    background: linear-gradient(135deg, #4A3300 0%, #6B4A00 100%);
+    border-left: 4px solid #FFB300;
+    border-radius: 8px;
+    padding: 0.875rem 1.125rem;
+    margin: 0.75rem 0 1.5rem;
+    color: #FFF8E1;
+  }
+  .revision-banner-inner {
+    display: flex;
+    gap: 0.875rem;
+    align-items: flex-start;
+  }
+  .revision-banner-icon {
+    color: #FFB300;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .revision-banner-text {
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+  .revision-banner-text strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #FFD54F;
+    font-weight: 700;
+  }
+  .revision-banner-text a {
+    color: #FFD54F;
+    text-decoration: underline;
+  }
+  .revision-banner-text a:hover {
+    color: #FFE082;
+  }
+</style>

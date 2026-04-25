@@ -5,10 +5,12 @@
 import type { Props } from '@astrojs/starlight/props';
 import LabBanner from './LabBanner.astro';
 import LabProgressBar from './LabProgressBar.astro';
+import RevisionBanner from './RevisionBanner.astro';
 const PAGE_TITLE_ID = '_top';
 const route = Astro.locals.starlightRoute;
 const title = route.entry.data.title;
 const lab = (route.entry.data as any).lab;
+const revisionPending = (route.entry.data as any).revision_pending === true;
 
 // Lab progress bars for index pages — prefix → total labs in that section
 const labTrackMap: Record<string, { prefix: string; total: number }> = {
@@ -102,6 +104,8 @@ if (parts.length > 1) {
   </nav>
 )}
 <h1 id={PAGE_TITLE_ID} class="kd-title">{title}</h1>
+
+{revisionPending && <RevisionBanner />}
 
 {labTrack && (
   <LabProgressBar prefix={labTrack.prefix} total={labTrack.total} />

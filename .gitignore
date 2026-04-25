@@ -5,6 +5,9 @@
 # Dispatch logs (CLI agent comms)
 .dispatch-logs/
 
+# Calibration scratch — writer-comparison outputs from #388
+.calibration/
+
 # Python bytecode caches
 __pycache__/
 *.pyc
