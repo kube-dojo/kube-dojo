@@ -1808,6 +1808,6 @@ From here, continue to:
 
 ## Sources
 
-- [OpenAI Evals](https://github.com/openai/evals) — Concrete examples and tooling for building repeatable eval sets and comparing changes over time.
-- [NIST AI RMF Playbook](https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook) — Useful for turning evaluation and review steps into an explicit shipping and governance practice.
-- [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — Relevant when moving from prompt iteration to shipping, because it highlights common security and reliability risks in LLM features.
+- [OpenAI Evals](https://github.com/openai/evals) — Provides concrete patterns for building repeatable evaluation sets and comparing prompt or model changes over time.
+- [NIST AI RMF Playbook](https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook) — Useful for connecting evaluation, governance, and operational risk controls when deciding what is safe enough to ship.
+- [OWASP Top 10 for LLM Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/) — Relevant when turning an eval loop into a production feature because it highlights common LLM security and reliability failure modes.
