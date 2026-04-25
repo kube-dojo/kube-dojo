@@ -387,15 +387,36 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
             "module_key": module_key,
         }
 
-    # Did inject change the file?
-    rc, stdout, _ = _git(repo, "status", "--porcelain", st["module_path"], check=False)
+    # The research step writes (or refreshes) the seed JSON; both
+    # artifacts (module + seed) must land in the same commit so the
+    # provenance is traceable in git history. ``git status --porcelain``
+    # without a path lists every file we may need to stage.
+    seed_rel = f"docs/citation-seeds/{module_key.replace('/', '-')}.json"
+    rc, status_all, _ = _git(repo, "status", "--porcelain", check=False)
     if rc != 0:
         return {
             "done": False, "ok": False, "stage_failed": "git_status",
             "error": "git status failed after inject",
             "module_key": module_key,
         }
-    if not stdout.strip():
+    changed_paths = {
+        line[3:].strip() for line in status_all.splitlines()
+        if line.strip()
+    }
+    backfill_paths = [p for p in (st["module_path"], seed_rel) if p in changed_paths]
+    foreign_paths = changed_paths - set(backfill_paths)
+    if foreign_paths:
+        # Some other process touched the working tree mid-backfill —
+        # refuse to drag those files into our commit. Roll back what
+        # citation_backfill wrote so primary stays clean for retry.
+        for p in backfill_paths:
+            _git(repo, "restore", p, check=False)
+        return {
+            "done": False, "ok": False, "stage_failed": "concurrent_edit",
+            "error": f"unexpected working-tree changes outside backfill scope: {sorted(foreign_paths)[:5]}",
+            "module_key": module_key,
+        }
+    if not backfill_paths:
         # Inject succeeded with no diff (e.g. seed had no actionable claims).
         # Mark as done — backfill considered complete for this module.
         return {
@@ -403,7 +424,7 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
             "module_key": module_key,
         }
 
-    _git(repo, "add", st["module_path"])
+    _git(repo, "add", *backfill_paths)
     msg = (
         f"quality(backfill): citation backfill {slug}\n\n"
         f"Sources injected via scripts/citation_backfill.py for module_key "
@@ -411,8 +432,9 @@ def _backfill_one(st: dict[str, Any], *, agent: str | None) -> dict[str, Any]:
     )
     rc, _, stderr = _git(repo, "commit", "-m", msg, check=False)
     if rc != 0:
-        _git(repo, "restore", "--staged", st["module_path"], check=False)
-        _git(repo, "restore", st["module_path"], check=False)
+        for p in backfill_paths:
+            _git(repo, "restore", "--staged", p, check=False)
+            _git(repo, "restore", p, check=False)
         return {
             "done": False, "ok": False, "stage_failed": "git_commit",
             "error": stderr.strip()[-500:], "module_key": module_key,

@@ -1447,6 +1447,79 @@ def test_backfill_pending_research_failure_records_error_no_commit(fake_repo, mo
     assert head_before == head_after, "no commit should be made on research failure"
 
 
+def test_backfill_pending_commits_seed_alongside_module(fake_repo, monkeypatch):
+    """Real citation_backfill writes both ``docs/citation-seeds/<flat>.json``
+    (research step) and the module markdown (inject step). Both must land
+    in the same backfill commit so the provenance is traceable in git
+    history (matches the prior pipeline_v3 convention from commit ec20ddef).
+    """
+    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    module_rel = st["module_path"]
+    module_key = pipeline._module_key_from_path(module_rel)
+    seed_rel = f"docs/citation-seeds/{module_key.replace('/', '-')}.json"
+    seed_path = fake_repo / seed_rel
+    seed_path.parent.mkdir(parents=True, exist_ok=True)
+    # Mirror production: docs/citation-seeds/ is tracked in git so any
+    # new seed shows up as an individual modified file rather than
+    # being collapsed into a "?? docs/" untracked-dir line.
+    (seed_path.parent / ".gitkeep").touch()
+    subprocess.run(["git", "add", str(seed_path.parent / ".gitkeep")], cwd=fake_repo, check=True)
+    subprocess.run(["git", "commit", "-m", "track citation-seeds dir"], cwd=fake_repo, check=True, capture_output=True)
+
+    def fake_subcmd(mk, sub, *, agent=None):
+        if sub == "research":
+            seed_path.write_text('{"module_key": "%s", "claims": []}\n' % mk)
+            return {"ok": True, "stdout": "", "stderr": "", "returncode": 0}
+        target = fake_repo / module_rel
+        target.write_text(target.read_text() + "\n## Sources\n\n- [Test](https://example.com).\n")
+        return {"ok": True, "stdout": "", "stderr": "", "returncode": 0}
+
+    monkeypatch.setattr(pipeline, "_run_citation_subcommand", fake_subcmd)
+    rc = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc == 0
+
+    # Seed file is committed alongside the module — git log shows BOTH paths.
+    log_out = subprocess.run(
+        ["git", "log", "-1", "--name-only", "--pretty=format:"],
+        cwd=fake_repo, check=True, capture_output=True, text=True,
+    ).stdout
+    files_committed = {line.strip() for line in log_out.splitlines() if line.strip()}
+    assert module_rel in files_committed
+    assert seed_rel in files_committed
+
+
+def test_backfill_pending_refuses_when_foreign_changes_appear(fake_repo, monkeypatch):
+    """If a file outside the backfill scope appears in the working tree
+    after inject (concurrent edit, fsync race, etc.), refuse to drag it
+    into our commit. Roll back our own writes so primary stays clean."""
+    slug, st = _seed_committed_state(fake_repo, monkeypatch)
+    module_rel = st["module_path"]
+
+    def fake_subcmd(mk, sub, *, agent=None):
+        if sub == "inject":
+            (fake_repo / module_rel).write_text(
+                (fake_repo / module_rel).read_text() + "\n## Sources\n\n- [t](https://x.com).\n"
+            )
+            # Simulate a concurrent edit appearing during inject.
+            (fake_repo / "README.md").write_text("seed\nconcurrent edit\n")
+        return {"ok": True, "stdout": "", "stderr": "", "returncode": 0}
+
+    monkeypatch.setattr(pipeline, "_run_citation_subcommand", fake_subcmd)
+    rc = pipeline.cmd_backfill_pending(
+        argparse.Namespace(only=None, limit=None, agent=None)
+    )
+    assert rc == 1
+
+    st2 = state.load_state(slug)
+    bf = st2["backfill"]
+    assert bf["done"] is False
+    assert bf["stage_failed"] == "concurrent_edit"
+    # Backfill's own write was rolled back; only the foreign edit remains.
+    assert "## Sources" not in (fake_repo / module_rel).read_text()
+
+
 def test_backfill_pending_inject_no_op_marks_done(fake_repo, monkeypatch):
     """Inject succeeds but produces no diff (e.g. seed had no actionable
     claims) → mark done=True, ok=True, no_op=True. The module is
