@@ -2,3 +2,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-25T18:23:58Z	platform-disciplines-data-ai-mlops-module-5.2-feature-stores	4.00		0						
 2026-04-25T18:29:38Z	on-premises-ai-ml-infrastructure-module-9.6-high-performance-storage-ai	4.40		1	4.10	solid				
 2026-04-25T19:01:11Z	platform-disciplines-data-ai-mlops-module-5.4-model-serving	3.80		0			codex	claude	approve	
+2026-04-25T19:09:41Z	on-premises-ai-ml-infrastructure-module-9.1-gpu-nodes-accelerated	3.70		0			codex	claude	approve	
