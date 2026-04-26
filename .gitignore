@@ -109,3 +109,4 @@ docs/quality-progress.tsv.lock
 .codex/
 .worktrees/
 batch_state/
+logs/
