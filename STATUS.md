@@ -2,7 +2,44 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~06:40 local — #388 single-batch mode after concurrency-race compounding)
+## Active Work (2026-04-26 ~10:55 local — #388 deferred-review batch under KUBEDOJO_SKIP_REVIEW)
+
+**Update**: Around 09:00 the Claude reviewer started returning rc=1 with empty stderr on every dispatch (~14 consecutive FAILEDs). Direct `claude -p` smoke works, so it's prompt-bundle / personal-plan-runtime specific, not auth. User wants to **save Opus quota for other things**, so the batch is now running with `KUBEDOJO_SKIP_REVIEW=1` — review stage synthesizes auto-approve without dispatch and appends slug to `.pipeline/quality-pipeline/post-review-queue.txt` for a future deferred-review pass.
+
+**Deterministic gates remain in force** (density, visual-aid, code-block-balance) — only the *semantic* teaching review is deferred.
+
+### Status reporter
+
+```bash
+.venv/bin/python scripts/show_388_status.py
+```
+
+Shows: COMMITTED-full-review vs COMMITTED-auto-approved vs still-bannered; FAILED-mode buckets; in-flight stages.
+
+### Resume / observe
+
+```bash
+tail -F logs/quality/phase-rewrite-batch.log
+
+KUBEDOJO_BEGINNER_FALLBACK=codex KUBEDOJO_TERTIARY_FALLBACK=codex KUBEDOJO_SKIP_REVIEW=1 \
+  REWRITE_QUEUE=/tmp/388-queue-merged.tsv REWRITE_SUFFIX="" \
+  nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup.log 2>&1 &
+disown
+
+pkill -f run_rewrite_batch.sh
+```
+
+### Deferred review pass — TODO when Claude quota returns
+
+Read `.pipeline/quality-pipeline/post-review-queue.txt` (one slug per line). For each, dispatch the existing review_prompt against the merged file. APPROVE → drop from queue. CHANGES_REQUESTED → re-set `revision_pending: true` banner OR queue for rewrite. No code yet — will be a small `scripts/post_review_388.py` runner.
+
+### Known FAILEDs that are NOT Claude-reviewer (need manual attention)
+
+- `on-premises-ai-ml-infrastructure-module-9.4-private-mlops-platform` — preexisting, gemini tiebreaker CHANGES with 3 must-fix items (#387 manual rewrite path).
+
+---
+
+## Prior — 2026-04-26 ~06:40 local — #388 single-batch mode after concurrency-race compounding
 
 **Update**: Two parallel batch halves produced compounding races at the v2 pipeline's merge_lock + state-lease boundary (orphan `assigned_writer` stickiness, ledger-row commit collisions, lease-contention timeouts). The pipeline's concurrency contract isn't airtight enough for two concurrent batch drivers + we hit Anthropic + Gemini throttling on the same window. Consolidated to **single batch (workers=1 effective)** running `/tmp/388-queue-merged.tsv` (382 unique slugs in priority order, retries appended).
 
