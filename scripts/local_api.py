@@ -63,6 +63,7 @@ RUNTIME_SERVICE_ORDER = tuple(svc["name"] for svc in RUNTIME_SERVICES)
 # at the edges, no absolute paths. The per-segment check rejects traversal
 # attempts like "..", ".", or leading-dot hidden names.
 _MODULE_KEY_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_ETAG_HEADER_RE = re.compile(r'^(?:W/)?"[A-Za-z0-9_./:-]+"$')
 
 
 def _validate_module_key(repo_root: Path, raw: str) -> str | None:
@@ -88,6 +89,21 @@ def _validate_module_key(repo_root: Path, raw: str) -> str | None:
     except (OSError, ValueError):
         return None
     return normalized
+
+
+def _header_value_has_crlf(value: str) -> bool:
+    return "\r" in value or "\n" in value
+
+
+def _safe_header_value(value: str) -> str:
+    return value.replace("\r", "").replace("\n", "")
+
+
+def _safe_etag_header_value(etag: str) -> str:
+    safe = _safe_header_value(etag)
+    if _ETAG_HEADER_RE.match(safe):
+        return safe
+    return _weak_etag(safe.encode("utf-8"))
 
 
 def _json_default(value: Any) -> Any:
@@ -1781,6 +1797,22 @@ def _module_key_to_review_filename(module_key: str) -> str:
     return module_key.replace("/", "__") + ".md"
 
 
+def _safe_review_path_for_module_key(repo_root: Path, module_key: str) -> Path | None:
+    normalized = _validate_module_key(repo_root, module_key)
+    if normalized is None:
+        return None
+    reviews_dir = (repo_root / _REVIEW_AUDIT_DIR).resolve()
+    filename = _module_key_to_review_filename(normalized)
+    if "/" in filename or "\\" in filename:
+        return None
+    try:
+        path = (reviews_dir / filename).resolve()
+        path.relative_to(reviews_dir)
+    except (OSError, ValueError):
+        return None
+    return path
+
+
 def _fact_check_summary(review_body: str) -> dict[str, Any]:
     latest = next(iter(_LATEST_REVIEW_RE.findall(review_body)), "")
     failed = [m.strip() for m in _FAILED_FACT_CHECK_RE.findall(latest)]
@@ -1846,8 +1878,9 @@ def build_module_reviews(
     agents can parse what they need without the API pretending to
     understand every variation of the format.
     """
-    reviews_dir = repo_root / _REVIEW_AUDIT_DIR
-    path = reviews_dir / _module_key_to_review_filename(module_key)
+    path = _safe_review_path_for_module_key(repo_root, module_key)
+    if path is None:
+        return None
     if not path.is_file():
         return None
     try:
@@ -6312,6 +6345,13 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
 
             if 200 <= status_code < 300:
                 inm = self.headers.get("If-None-Match", "")
+                if _header_value_has_crlf(inm):
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                etag = _safe_etag_header_value(etag)
                 if _match_etag(inm, etag):
                     self.send_response(304)
                     self.send_header("ETag", etag)
@@ -6320,6 +6360,8 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                     return
 
             try:
+                content_type = _safe_header_value(content_type)
+                etag = _safe_etag_header_value(etag)
                 self.send_response(status_code)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
@@ -6346,6 +6388,7 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                 content_type = "application/json; charset=utf-8"
 
             body = _serialize_payload(payload, content_type)
+            content_type = _safe_header_value(content_type)
             self.send_response(status_code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
