@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 6.4: FinOps with OpenCost"
 slug: platform/toolkits/developer-experience/scaling-reliability/module-6.4-finops-opencost
 sidebar:
