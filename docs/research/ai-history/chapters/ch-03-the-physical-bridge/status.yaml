@@ -1,1 +1,11 @@
-status: reviewing
+status: drafting
+brief_signoff:
+  reviewer: "codex"
+  date: "2026-04-26"
+  comment_url: "https://github.com/kube-dojo/kube-dojo.github.io/pull/398#issuecomment-4323131615"
+sources_signoff:
+  reviewer: "codex"
+  date: "2026-04-26"
+  comment_url: "https://github.com/kube-dojo/kube-dojo.github.io/pull/398#issuecomment-4323131615"
+prose_path: "src/content/docs/ai-history/ch-03-the-physical-bridge.md"
+prose_lines: 56

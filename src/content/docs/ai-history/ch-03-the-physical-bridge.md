@@ -7,7 +7,7 @@ sidebar:
 
 # Chapter 3: The Physical Bridge
 
-By the late 1930s, the theoretical foundations of artificial intelligence were complete but isolated. George Boole had proved that logic could be reduced to binary algebra (1s and 0s). Alan Turing had proved that a universal machine could execute any computable logic by reading symbols off a tape. Yet, these breakthroughs remained trapped in the ether of pure mathematics. They were philosophical blueprints without a physical substrate. 
+By the late 1930s, the theoretical foundations of digital computation were complete but isolated. George Boole had proved that logic could be reduced to binary algebra (1s and 0s). Alan Turing had proved that a universal machine could execute any computable logic by reading symbols off a tape. Yet, these breakthroughs remained trapped in the ether of pure mathematics. They were philosophical blueprints without a physical substrate. 
 
 The engineers of the era—the men building the massive, physical infrastructure of the 20th century—were completely disconnected from this abstract math. They were building continental telephone routing networks and colossal analog calculating machines using trial, error, and intuition. 
 
