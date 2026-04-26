@@ -160,6 +160,16 @@ online_store:
 
 When deploying Feast materialization jobs, use Kubernetes CronJobs that execute `feast materialize` rather than relying on external workflow orchestrators. This keeps the data movement logic tightly bound to the feature definitions.
 
+### Why Two Stores? The Read-Pattern Argument
+
+The split between PostgreSQL (offline) and Redis (online) is the single most important design decision in any feature-store deployment, and it follows directly from a quantitative property of each store rather than from convention. Training jobs read **billions of rows in a single sequential scan**, accept latencies measured in minutes, and never read the same row twice in a tight loop; inference services read **one row per request** keyed by entity ID, must respond within milliseconds, and re-read the same hot keys thousands of times per second. No single storage engine optimises both workloads. PostgreSQL with appropriate indexes and a columnar extension can serve the offline scan economically — its B-tree and BRIN indexes are well-tuned for range scans over partitioned event tables — but it would buckle under one hundred thousand point queries per second from a busy fraud-detection model. Redis serves the point query at sub-millisecond latency from RAM, but storing a year of historical events in Redis would cost tens of times more than the PostgreSQL equivalent and provide no analytical query capability beyond `GET key`.
+
+A second consequence falls out of the same split: **the materialization job is the only writer that crosses the boundary**. Training writes only to the offline store (or to MinIO Parquet files registered as offline sources); the inference path reads only from the online store and never queries Postgres directly. This one-way data flow is what guarantees training-serving consistency: as long as the materialization job runs correctly, the row a model sees at serving time is *byte-identical* to the row it was trained on. Teams that try to "simplify" by reading directly from Postgres at serving time inevitably hit two failure modes within months — first, latency spikes when Postgres autovacuum runs; second, training-serving skew when an analyst alters a Postgres view that the offline path uses but the online path does not.
+
+A third consequence governs disaster recovery. Postgres holds the system-of-record historical features and **must be backed up to an off-cluster location** (typically WAL-E or pgBackRest streaming to a separate MinIO tenancy or external S3). Redis is intentionally treated as a recoverable cache — if the entire Redis StatefulSet is destroyed, the operator runs `feast materialize-incremental $(date -d '1 day ago' -Iseconds)` and the online store rebuilds from Postgres in minutes. Keeping this asymmetry explicit in your runbook removes the temptation to over-engineer Redis HA (Redis Sentinel + AOF persistence + cross-DC replication) for what is, by design, a derived view.
+
+Finally, this design generalises: any feature store you evaluate (Tecton, Hopsworks, Vertex Feature Store) implements the same two-tier pattern under the hood, and the on-prem decision reduces to "which key-value store serves the online tier and which OLAP-friendly database serves the offline tier?" Common alternatives include DragonflyDB or KeyDB instead of Redis when license terms matter, or ClickHouse instead of Postgres when feature volume crosses ten billion rows. The architectural shape — single materialization writer, dual reader paths, asymmetric DR posture — does not change.
+
 ## Experiment Tracking: MLflow Architecture
 
 MLflow is hosted under the LF AI & Data Foundation (it is not a CNCF project) and is Apache 2.0 licensed. The current stable release is in major version 3 (v3.11.1), moving well past the legacy v2 architecture. MLflow officially supports Kubernetes as a backend for running MLflow Projects, allowing it to build Docker images and submit Kubernetes Jobs seamlessly without external orchestrators.
@@ -192,6 +202,22 @@ env:
 ```
 
 > **Stop and think**: Why do we inject AWS credentials when communicating with a local MinIO instance? MinIO implements the AWS S3 API protocol exactly, so standard AWS SDKs (like `boto3`) require these standard environment variables to authenticate, even if the endpoint is a local Kubernetes service running down the hall.
+
+### Backend Store Tradeoffs: Why PostgreSQL Wins for MLflow
+
+MLflow supports four backend store types — local filesystem, SQLite, PostgreSQL, and MySQL — and the choice is consequential enough to warrant explicit reasoning. The local filesystem backend is acceptable only for solo experimentation: there is no concurrency control beyond OS-level file locks, and `mlflow.log_metric` calls from two pods racing for the same run will silently corrupt the run's `metrics/` directory. SQLite removes that race because it serialises writes through a single file lock, but the same lock makes it unusable above roughly twenty concurrent writers; a Katib hyperparameter sweep with two hundred parallel trials will see sustained `database is locked` errors within minutes.
+
+PostgreSQL is the production default for three measurable reasons. First, its MVCC implementation lets hundreds of concurrent training pods log metrics without blocking each other, because each writer sees its own snapshot of the database; the `runs.update_at` timestamp updates without read-write contention. Second, MLflow's schema relies on foreign keys and JSON-typed columns for tags, both of which Postgres handles natively without extension; MySQL works but requires care around `utf8mb4` character sets to store non-ASCII parameter values. Third, the operational ecosystem around Postgres on Kubernetes is mature — operators like CloudNativePG and Zalando's `postgres-operator` provide point-in-time recovery, streaming replication, and connection-pooling integration with PgBouncer that the MySQL ecosystem matches less consistently.
+
+The connection-pool sizing rule that catches most teams off-guard is worth memorising. MLflow's Python client opens **one PostgreSQL connection per active run**, and a Katib sweep with one hundred parallel trials therefore needs at minimum one hundred connections plus a margin for the tracking server's own UI traffic. Postgres defaults to `max_connections = 100`. A naive deployment will refuse new connections halfway through the sweep with a cryptic `FATAL: sorry, too many clients already`. The fix is to deploy PgBouncer in transaction-pooling mode in front of Postgres and route MLflow's `--backend-store-uri` through it; PgBouncer multiplexes thousands of client connections onto a small fixed pool of backend connections, which is exactly the workload pattern MLflow generates.
+
+### Why MinIO over Ceph for the Small-Cluster Case
+
+The reflexive on-prem answer for "S3-compatible storage" is Ceph via the Rook operator, but that choice is wrong for most MLOps deployments below roughly fifty terabytes of artifacts. MinIO is a **single-binary object server** that stores data on the host filesystem with optional erasure coding across drives; a four-node MinIO cluster on commodity NVMe hardware consistently delivers single-digit-millisecond `GET` latencies and is operationally trivial to deploy via the Bitnami chart used in this module's lab. Ceph, by contrast, is a **distributed storage system** that provides block (RBD), file (CephFS), and object (RGW) interfaces simultaneously, with a CRUSH map, monitors, OSDs, and an MDS to coordinate. Operating Ceph competently is a full-time discipline; the cluster requires a minimum of three monitor nodes, careful network sizing (separate front-end and back-end networks for OSD recovery traffic), and operational familiarity with PG balancing and scrubbing.
+
+The break-even point depends on workload, but a useful rule of thumb is: stay on MinIO until at least one of these is true — total artifact volume exceeds fifty terabytes, multi-region replication is a hard requirement, or the same cluster must already host Ceph for block storage (in which case running RGW on top of the existing OSDs costs nothing extra). Below that threshold, MinIO's operational simplicity dominates: a single SRE can confidently take MinIO from zero to production in an afternoon, while Ceph will require weeks of capacity planning, network tuning, and failover drills before it is trustworthy enough to back a model registry. Teams that pick Ceph "because it scales further" without first hitting MinIO's limits typically discover that the unfamiliar failure modes — placement-group degradation, slow `osd_op_complaint_time` warnings, MDS rank failures — pull more SRE time than they ever save.
+
+The exception worth flagging: if the cluster is *already* running Ceph for stateful workloads (Postgres PVCs, Redis AOF, or RWX volumes for shared notebook home directories), enabling RGW costs essentially nothing and centralises object storage on the same operational substrate. In that environment, MinIO becomes redundant infrastructure. The decision is contextual, not categorical.
 
 :::caution
 **Boto3 Connection Timeouts**
@@ -274,6 +300,71 @@ spec:
 ```
 
 The `retryStrategy` is intentionally tight on GPU steps: silently retrying a failed training job consumes hours of accelerator time and almost never succeeds the second time without human intervention. The `arguments.artifacts` block uses Argo's `from:` syntax to reference an upstream task's output, which the controller resolves to a MinIO presigned URL at scheduling time.
+
+#### From High-Level Template to Compiled IR
+
+The YAML above is the *authored* form — what a platform engineer types into version control. What actually runs on the cluster is the *compiled* form: the Argo controller takes the templates, resolves all `{{tasks.*.outputs.*}}` references, expands artifact arguments, and synthesises a `WorkflowTaskResult` plus per-step `Pod` specs. KFP v2 makes this lowering explicit: the SDK emits a backend-agnostic IR YAML where every step is a fully-qualified executor spec with its inputs and outputs already resolved. Reading this lowered form is the difference between debugging a pipeline by guessing and debugging it by inspection.
+
+```yaml
+# Argo / KFP v2 lowered IR — what the controller actually executes
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: train-fraud-model-9c2f1
+  namespace: mlops
+  labels:
+    workflows.argoproj.io/completed: "false"
+    workflows.argoproj.io/phase: Running
+spec:
+  entrypoint: pipeline
+  arguments: {}
+status:
+  nodes:
+    train-fraud-model-9c2f1-2154:
+      id: train-fraud-model-9c2f1-2154
+      displayName: train
+      type: Pod
+      templateName: pytorch-train
+      phase: Succeeded
+      inputs:
+        artifacts:
+        - name: features
+          s3:
+            bucket: mlops-artifacts
+            key: train-fraud-model-9c2f1/materialize/features.parquet
+            endpoint: minio.storage.svc.cluster.local:9000
+            insecure: true
+      outputs:
+        artifacts:
+        - name: model
+          path: /workspace/model.pt
+          s3:
+            bucket: mlops-artifacts
+            key: train-fraud-model-9c2f1/train/model.pt
+            endpoint: minio.storage.svc.cluster.local:9000
+        exitCode: "0"
+      resourcesDuration:
+        nvidia.com/gpu: 3812
+        memory: 14503
+    train-fraud-model-9c2f1-3071:
+      id: train-fraud-model-9c2f1-3071
+      displayName: evaluate
+      type: Pod
+      templateName: holdout-eval
+      phase: Running
+      inputs:
+        artifacts:
+        - name: model
+          s3:
+            bucket: mlops-artifacts
+            key: train-fraud-model-9c2f1/train/model.pt
+            endpoint: minio.storage.svc.cluster.local:9000
+      boundaryID: train-fraud-model-9c2f1
+```
+
+Three things are worth noticing in the lowered form. First, the `from:` reference in the authored YAML has been resolved into a concrete `s3.bucket` + `s3.key` pair pointing at the workflow-scoped MinIO prefix — this is why two simultaneous runs of the same pipeline never collide on artifact paths, and why deleting a workflow safely garbage-collects its artifacts. Second, the `resourcesDuration` block under each Pod node records exactly how many GPU-seconds and memory-megabyte-seconds that step consumed; the cluster autoscaler and your chargeback dashboard read this same field, so a pipeline whose IR is missing `resourcesDuration` is invisible to FinOps. Third, `boundaryID` ties child nodes to their parent DAG node, which is how Argo prunes a sub-tree when a parent fails — without it, a failed `train` step would orphan `evaluate` rather than mark it `Omitted`.
+
+When debugging a stuck pipeline, fetch the lowered IR with `argo get -o yaml <workflow-name>` rather than re-reading the authored template. The authored template tells you what was *supposed* to happen; the IR tells you what the controller actually scheduled, which step is currently `Running`, and which artifact key downstream pods are blocking on. KFP v2 users get the same view through `kfp run get --output yaml`, which dumps the same IR structure with KFP's wrapper fields.
 
 ### KubeRay
 For heavy distributed computing, KubeRay (v1.6.0) is utilized. KubeRay is not a CNCF project; it is maintained under the Ray project ecosystem originating at Anyscale. Ray is the right choice when a single training step needs to fan out across dozens of pods (distributed XGBoost, distributed hyperparameter tuning, or large-scale data preprocessing); Argo and KFP remain the right choice for stitching coarse-grained steps into a multi-stage pipeline.
@@ -375,6 +466,89 @@ spec:
 ```
 
 When a pipeline submits a training pod that requests a GPU but omits `resources.limits.memory`, the admission webhook rejects the pod and writes a structured deny event to the audit log. The pipeline step fails fast at submission rather than mid-run, which prevents wasted GPU time and produces a clear, actionable error message for the data scientist who authored the manifest.
+
+#### Enforcing Model-Promotion Rules in Rego
+
+Resource policies are the easy half of governance. The harder half is policies that gate *what* gets shipped — specifically, the rule that no model artifact may move from the `staging` to the `production` MLflow stage without (a) a passing evaluation score on a holdout dataset, (b) a signed-off model card, and (c) provenance that ties the artifact back to a known training run. These checks must happen at admission time on the KServe `InferenceService` resource, not in CI, because a determined operator can always `kubectl apply` directly and bypass any pipeline-level gate. Below is a ConstraintTemplate plus the corresponding Rego module that encodes all three rules. The Rego is valid against OPA's `v1` (formerly `rego.v1`) syntax and uses the standard `gatekeeper.sh/v1` ConstraintTemplate shape.
+
+```yaml
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: kservepromotionguard
+spec:
+  crd:
+    spec:
+      names:
+        kind: KServePromotionGuard
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            minHoldoutAuc:
+              type: number
+            requiredAnnotations:
+              type: array
+              items:
+                type: string
+  targets:
+  - target: admission.k8s.gatekeeper.sh
+    rego: |
+      package kservepromotionguard
+
+      import rego.v1
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "InferenceService"
+        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        ann := input.review.object.metadata.annotations
+        score := to_number(ann["mlops.kubedojo.io/holdout-auc"])
+        score < input.parameters.minHoldoutAuc
+        msg := sprintf(
+          "promotion blocked: holdout AUC %.3f below required %.3f",
+          [score, input.parameters.minHoldoutAuc],
+        )
+      }
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "InferenceService"
+        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        required := input.parameters.requiredAnnotations
+        some key in required
+        not input.review.object.metadata.annotations[key]
+        msg := sprintf("promotion blocked: missing required annotation %q", [key])
+      }
+
+      violation contains {"msg": msg} if {
+        input.review.object.kind == "InferenceService"
+        input.review.object.metadata.labels["mlops.kubedojo.io/stage"] == "production"
+        run_id := input.review.object.metadata.annotations["mlops.kubedojo.io/mlflow-run-id"]
+        not regex.match(`^[a-f0-9]{32}$`, run_id)
+        msg := "promotion blocked: mlflow-run-id annotation must be a 32-char hex string"
+      }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: KServePromotionGuard
+metadata:
+  name: production-promotion-rules
+spec:
+  match:
+    kinds:
+    - apiGroups: ["serving.kserve.io"]
+      kinds: ["InferenceService"]
+    namespaces: ["mlops-prod"]
+  parameters:
+    minHoldoutAuc: 0.85
+    requiredAnnotations:
+    - mlops.kubedojo.io/holdout-auc
+    - mlops.kubedojo.io/model-card-url
+    - mlops.kubedojo.io/mlflow-run-id
+    - mlops.kubedojo.io/signed-off-by
+```
+
+The policy contains three independent `violation` rules. The first parses the `holdout-auc` annotation and rejects any promotion whose evaluation score is below the configured threshold (here `0.85`); a deploy that ships a regressed model will fail at admission with a human-readable message instead of silently degrading user experience. The second iterates the operator-supplied `requiredAnnotations` list and asserts every name resolves to a non-empty value, so a manifest that simply omits the model-card URL is rejected the same way as one with a deliberately wrong score. The third rule enforces the *shape* of the MLflow run ID — a 32-character hex string — which catches copy-paste errors and accidental promotion of a placeholder string like `"TODO"` or `"latest"`.
+
+Together these three rules close the gap between CI promotion (which any operator can bypass) and a cluster-side admission gate (which is the last line of defence). The Rego runs in milliseconds against every `InferenceService` apply, the deny message points the responsible engineer directly at the missing field, and the `K8sAuditLogs` Loki stream captures every rejection so a release retrospective can answer the question "which promotions did Gatekeeper block this quarter?" without spelunking through individual `kubectl describe` outputs. This is how a small platform team enforces model-promotion governance at scale without slowing down the data-science teams that consume the platform.
 
 ### Infrastructure Alerting with Prometheus
 
@@ -633,6 +807,22 @@ This challenge is intentionally open-ended — no single solution YAML is provid
 - If a tenant exhausts their PostgreSQL connection pool, how do you prevent the noisy neighbor from degrading the other tenants' MLflow logging latency?
 
 **Stretch goal — swap the storage backend.** Reproduce Tasks 1 through 5 with Ceph RGW (via the Rook operator) substituted for the bitnami MinIO chart. Document every place the manifests changed: which environment variables, which Service DNS names, which signature versions. The point of the stretch goal is to feel where MinIO assumptions are baked into the rest of the stack — many teams discover their "S3-compatible" tooling is actually MinIO-compatible only after they try a real swap.
+
+### Transfer Challenge
+
+You have just built and operated a single-tenant MLflow + MinIO + PostgreSQL stack inside one namespace. The transfer ask is harder: redesign the same MLflow tracking + Feast feature-store flow for a **multi-tenant on-prem cluster** where three independent ML teams (`fraud`, `pricing`, `forecast`) must each run experiments, register features, and serve models without ever seeing each other's experiments, runs, datasets, or model artifacts. The cluster has no internet egress and a single MLflow Tracking Server deployment must be shared across all three tenants for cost reasons.
+
+There is no provided solution. Work this on paper for at least an hour before searching for references — the goal is synthesis, not recall.
+
+**Concretely, sketch and defend:**
+1. The **namespace topology** — one namespace per tenant, one shared `mlops-system`, or a different cut entirely. State which CRDs live in which namespace and why.
+2. The **RBAC model** — which Roles, RoleBindings, and ServiceAccounts gate which MLflow REST endpoints. Note that MLflow Tracking does not natively enforce per-experiment ACLs; describe how you bridge that gap (proxy, OPA, OAuth2-proxy, or a fork). Pick one and justify.
+3. The **MinIO bucket-and-credential layout** — bucket-per-tenant with disjoint access keys, single bucket with prefix-scoped IAM policies, or separate MinIO tenancies. Score each on isolation strength, backup ergonomics, and quota enforceability.
+4. The **failure mode you are most worried about**, and the smoke test you would run quarterly to prove the isolation still holds. (Hint: the dangerous failure is rarely "tenant A reads tenant B's data on day one"; it is usually "a refactor six months later silently broadens an IAM policy and nobody notices.")
+
+**Defend your design against an adversary.** Assume a curious but non-malicious data scientist on team `pricing` who has full `kubectl` access to the `pricing` namespace. Walk through every API path they could plausibly use to enumerate, read, or modify `fraud` artifacts — the MinIO API, the MLflow REST API, the Kubernetes API, the Feast registry, raw `psycopg2` against the shared Postgres — and explain which control on your design blocks each path. If any path is unblocked, your design is incomplete; iterate until every adversary path terminates in a denial.
+
+The point of this exercise is not to produce a perfect manifest. It is to surface the gap between *plausible-sounding* multi-tenant designs and *actually adversary-resistant* ones — a gap that consumes most platform teams' second year.
 
 ## Quiz
 
