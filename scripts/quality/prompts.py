@@ -96,6 +96,7 @@ Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
 - Do NOT preserve `revision_pending:` if present in input frontmatter — drop it from output. The banner is a queue marker that the merge step removes; carrying it through into a fresh rewrite would leave a "queued for revision" banner on a freshly-shipped module.
 - **Visual-aid preservation is COUNT-BASED, not "best-effort"**: count the input's ` ```mermaid ` fenced blocks, ` ```ascii ` blocks, and `|---|` table rows. Your output MUST contain AT LEAST as many of each. Dropping any is a hard fail that bounces the module back to you.
+- **NEVER replace an ` ```ascii ` or ` ```text ` block with a Markdown table.** If a table reads better in your judgment, **add the table next to the ASCII block** — do not remove the ASCII. The same applies to Mermaid: never replace ASCII with Mermaid; keep both. The visual-aid count is checked PER TYPE (mermaid count, ascii count, table count) — substituting one type for another is detected and rejected.
 - Preserve any existing `## Sources` section verbatim (heading, ordering, citation lines, URLs). Do NOT modify, reorder, deduplicate, or "improve" entries. Do NOT add a NEW `## Sources` section if one isn't already present — citation insertion runs in a separate downstream stage.
 - Address each gap from the audit explicitly.
 - Minimum 600 content lines (250 for KCNA theory modules). Code/visuals don't count.
