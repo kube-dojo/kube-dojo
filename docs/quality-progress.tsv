@@ -96,3 +96,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T15:06:19Z	platform-toolkits-security-quality-security-tools-module-4.4-supply-chain	3.20		1	5.00	strong	codex	claude	approve	
 2026-04-26T15:12:34Z	k8s-otca-module-1.1-otel-sdk-deep-dive	3.60		0			codex	claude	approve	
 2026-04-26T15:26:37Z	k8s-cka-part2-workloads-scheduling-module-2.7-configmaps-secrets	4.50		0			codex	claude	approve	
+2026-04-26T15:33:15Z	k8s-ckad-part0-environment-module-0.2-developer-workflow	4.00		1	5.00	strong	codex	claude	approve	
