@@ -20,18 +20,18 @@ This chapter must separate representation from learning. The theorem says that s
 3. **The 1989 Cluster:** Cybenko, Hornik/Stinchcombe/White, and Funahashi establish related universal-approximation results from different angles, showing this was not a single isolated insight.
 4. **A Useful Misunderstanding:** The slogan "neural nets can approximate anything" becomes both a legitimizing banner and a source of overclaiming; the honest version keeps optimization, sample size, and compute separate.
 
-## 4k-7k Prose Capacity Plan
+## 2.5k-4k Prose Capacity Plan
 
-This chapter can sustain long-form prose only if each layer carries a different job:
+This chapter is conceptually important but structurally compact. It should not be forced into the 4k-7k range unless later source work uncovers enough historical texture beyond the theorem itself. A natural chapter likely fits these layers:
 
-- 700-1,000 words: post-perceptron anxiety about representational limits, cross-linked to Ch17 and Ch24.
-- 700-1,000 words: plain-language explanation of uniform approximation and why compact domains, continuity, hidden units, and nonlinear activation assumptions matter.
-- 900-1,300 words: the 1989 source cluster, with Cybenko, Hornik/Stinchcombe/White, and Funahashi treated as parallel stabilization rather than a winner-takes-all priority story.
-- 700-1,000 words: what the theorem did not prove: trainability, generalization, efficiency, architecture selection, biological realism, or production value.
-- 600-900 words: infrastructure frame: existence results are cheap on paper but expensive in silicon when networks grow, so the theorem waited for backprop, data, and compute to become practically useful.
-- 300-700 words: afterlife of the slogan in later deep-learning rhetoric, using Pinkus or another survey to keep the math sober.
+- 450-700 words: post-perceptron anxiety about representational limits, cross-linked to Ch17 and Ch24.
+- 500-800 words: plain-language explanation of uniform approximation and why compact domains, continuity, hidden units, and nonlinear activation assumptions matter.
+- 600-900 words: the 1989 source cluster, with Cybenko, Hornik/Stinchcombe/White, and Funahashi treated as parallel stabilization rather than a winner-takes-all priority story.
+- 450-700 words: what the theorem did not prove: trainability, generalization, efficiency, architecture selection, biological realism, or production value.
+- 350-600 words: infrastructure frame: existence results are cheap on paper but expensive in silicon when networks grow, so the theorem waited for backprop, data, and compute to become practically useful.
+- 200-400 words: afterlife of the slogan in later deep-learning rhetoric, using Pinkus and Barron to keep the math sober.
 
-If the chapter cannot anchor the 1989 cluster with page-level passages, it should be shorter and more cautious rather than inflated with generic math exposition.
+If the chapter cannot anchor the 1989 cluster with page-level passages, it should be shorter and more cautious rather than inflated with generic math exposition. A 2,500-word chapter is acceptable if that is what the verified evidence naturally supports.
 
 ## Citation Bar
 

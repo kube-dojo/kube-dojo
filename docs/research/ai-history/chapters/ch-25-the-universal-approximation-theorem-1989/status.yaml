@@ -8,3 +8,4 @@ notes:
   - "Initial research contract populated from verified bibliographic sources."
   - "Not ready for prose lock: theorem statements need page anchors and the 1989 cluster needs careful priority mapping."
   - "Core guardrail: universal approximation is representation capacity, not trainability, generalization, or deployment."
+  - "Gemini review rejected a forced 4k-7k target; natural prose target is now 2.5k-4k unless further historical evidence supports more."

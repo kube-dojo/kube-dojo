@@ -20,6 +20,7 @@
 | Source | Use | Verification |
 |---|---|---|
 | Allan Pinkus, "Approximation theory of the MLP model in neural networks," *Acta Numerica* 8, 143-195, 1999. DOI: `10.1017/S0962492900002919`. URL: https://www.cambridge.org/core/journals/acta-numerica/article/approximation-theory-of-the-mlp-model-in-neural-networks/18072C558C8410C4F92A82BCC8FC8CF9 | Sober survey of approximation-theoretic results and open problems; useful to discipline the slogan "networks approximate anything." | Green for survey role; page anchors still needed. |
+| Andrew R. Barron, "Universal approximation bounds for superpositions of a sigmoidal function," *IEEE Transactions on Information Theory* 39(3), 930-945, 1993. DOI: `10.1109/18.256500`. | Canonical follow-up for approximation-rate/efficiency bounds; anchors the distinction between bare existence and how costly approximation may be. | Yellow until exact passages are extracted; use as afterlife/efficiency context, not as the 1989 event. |
 | Moshe Leshno, Vladimir Ya. Lin, Allan Pinkus, Shimon Schocken, "Multilayer feedforward networks with a nonpolynomial activation function can approximate any function," *Neural Networks* 6(6), 861-867, 1993. DOI: `10.1016/S0893-6080(05)80131-5`. | Later condition-cleanup: nonpolynomial activation functions; use only as afterlife/precision, not as 1989 event. | Yellow until full text/anchors are verified. |
 | L. G. Valiant, "A theory of the learnable," *Communications of the ACM* 27(11), 1134-1142, 1984. | Background distinction between representability and learnability; useful if the chapter needs a compact way to explain why approximation does not equal learning. | Yellow; use cautiously and keep it as context, not neural-network-specific proof. |
 
@@ -31,7 +32,7 @@
 | Hornik/Stinchcombe/White and Funahashi published related 1989 universal-approximation results. | The 1989 Cluster | Hornik/Stinchcombe/White 1989; Funahashi 1989 | Pinkus 1999 | Yellow | Need exact passage/page anchors before making a priority narrative. |
 | The theorem addressed representation capacity, not the ability to train a useful finite network from data. | A Useful Misunderstanding | Cybenko 1989 scope; Hornik/Stinchcombe/White 1989 scope | Pinkus 1999; Valiant 1984 context | Yellow | This is the chapter's most important caveat; source it tightly. |
 | The theorem mattered historically because it helped counter the perception that neural networks were intrinsically too weak after perceptron-era limitations. | The Aftertaste of Perceptrons | Cybenko references Minsky/Papert and PDP context | Ch17 research; Pinkus 1999 | Yellow | Needs cross-chapter anchor from Ch17. |
-| Universal approximation became a durable slogan that can mislead if detached from optimization, sample complexity, and compute. | A Useful Misunderstanding | The theorem papers' limited claims | Pinkus 1999; Leshno et al. 1993 | Yellow | This is interpretation from source limits, not a direct quotation. |
+| Universal approximation became a durable slogan that can mislead if detached from optimization, sample complexity, approximation rates, and compute. | A Useful Misunderstanding | The theorem papers' limited claims | Pinkus 1999; Barron 1993; Leshno et al. 1993 | Yellow | This is interpretation from source limits, not a direct quotation. |
 
 ## Conflict Notes
 
@@ -46,4 +47,5 @@
 - Hornik/Stinchcombe/White 1989: extract theorem statement and any passage emphasizing nonconstant bounded continuous activation functions or multilayer feedforward networks.
 - Funahashi 1989: extract abstract/theorem statement and the network-depth conditions.
 - Pinkus 1999: extract survey passages that distinguish approximation-theoretic results from unresolved questions.
+- Barron 1993: extract rate/efficiency passages that sharpen the existence-versus-size caveat.
 - Kolmogorov 1957: decide whether to cite directly or through Pinkus to avoid weak translation sourcing.
