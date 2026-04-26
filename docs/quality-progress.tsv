@@ -25,3 +25,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T02:30:33Z	ai-ml-engineering-generative-ai-module-1.4-embeddings-semantic-search	3.20		1	5.00	strong	codex	claude	approve	
 2026-04-26T02:32:12Z	ai-ml-engineering-vector-rag-module-1.1-vector-databases-deep-dive	3.80		0			codex	claude	approve	
 2026-04-26T02:41:19Z	ai-ml-engineering-multimodal-ai-module-1.1-voice-audio-ai	5.00		0			codex	claude	approve	
+2026-04-26T02:46:48Z	ai-ml-engineering-deep-learning-module-1.7-transformers-from-scratch	3.00		0			codex	claude	approve	
