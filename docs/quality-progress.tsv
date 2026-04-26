@@ -113,3 +113,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T17:18:56Z	platform-disciplines-core-platform-platform-engineering-module-2.1-what-is-platform-engineering	4.50		0			codex	claude	approve	
 2026-04-26T17:26:48Z	on-premises-provisioning-module-2.1-datacenter-fundamentals	4.40		0			claude	codex	approve	
 2026-04-26T17:31:54Z	k8s-cka-part0-environment-module-0.5-exam-strategy	4.60		1	5.00	strong	codex	claude	approve	
+2026-04-26T17:55:16Z	platform-disciplines-delivery-automation-gitops-module-3.1-what-is-gitops	3.70		1	5.00	strong	codex	claude	approve	
