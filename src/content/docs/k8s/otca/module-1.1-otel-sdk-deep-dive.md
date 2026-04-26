@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 1.1: OTel API & SDK Deep Dive"
 slug: k8s/otca/module-1.1-otel-sdk-deep-dive
 sidebar:

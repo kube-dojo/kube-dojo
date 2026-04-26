@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 12.1: SonarQube - The Code Quality Platform"
 slug: platform/toolkits/security-quality/code-quality/module-12.1-sonarqube
 sidebar:
