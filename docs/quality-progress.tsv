@@ -71,3 +71,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T10:51:09Z	k8s-cnpa-module-1.4-practice-questions-set-1	1.50		0			codex	claude	approve	
 2026-04-26T10:58:14Z	platform-toolkits-cicd-delivery-gitops-deployments-module-2.2-argo-rollouts	3.50		0			codex	claude	approve	
 2026-04-26T11:08:30Z	platform-disciplines-reliability-security-devsecops-module-4.5-runtime-security	3.70		0			codex	claude	approve	
+2026-04-26T11:12:40Z	platform-toolkits-observability-intelligence-observability-module-1.6-pixie	3.00		0			codex	claude	approve	
