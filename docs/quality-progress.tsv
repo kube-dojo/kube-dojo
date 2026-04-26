@@ -27,3 +27,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T02:41:19Z	ai-ml-engineering-multimodal-ai-module-1.1-voice-audio-ai	5.00		0			codex	claude	approve	
 2026-04-26T02:46:48Z	ai-ml-engineering-deep-learning-module-1.7-transformers-from-scratch	3.00		0			codex	claude	approve	
 2026-04-26T02:48:33Z	ai-ml-engineering-ai-native-development-module-1.6-prompt-engineering-fundamentals	3.60		0			codex	claude	approve	
+2026-04-26T02:55:49Z	ai-ml-engineering-ai-infrastructure-module-1.5-home-ai-operations-cost-model	2.80		0			codex	claude	approve	
