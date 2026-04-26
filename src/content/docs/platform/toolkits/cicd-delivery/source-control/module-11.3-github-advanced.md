@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 11.3: GitHub Advanced - Beyond Basic Git Hosting"
 slug: platform/toolkits/cicd-delivery/source-control/module-11.3-github-advanced
 sidebar:
