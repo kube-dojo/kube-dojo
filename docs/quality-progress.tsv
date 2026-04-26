@@ -87,3 +87,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T13:32:57Z	k8s-ica-module-1.4-istio-observability	3.70		0			codex	claude	approve	
 2026-04-26T13:44:22Z	platform-toolkits-cicd-delivery-source-control-module-11.3-github-advanced	3.00		1	5.00	strong	codex	claude	approve	
 2026-04-26T14:00:11Z	platform-toolkits-data-ai-platforms-cloud-native-databases-module-15.2-cloudnativepg	3.20		0			codex	claude	approve	
+2026-04-26T14:05:39Z	platform-disciplines-reliability-security-devsecops-module-4.4-supply-chain-security	3.70		0			codex	claude	approve	
