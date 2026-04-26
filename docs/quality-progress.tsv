@@ -67,3 +67,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T10:35:01Z	platform-toolkits-cicd-delivery-gitops-deployments-module-2.3-flux	3.60		0			codex	claude	approve	
 2026-04-26T10:39:33Z	platform-disciplines-core-platform-sre-module-1.7-capacity-planning	4.00		1	5.00	strong	codex	claude	approve	
 2026-04-26T10:42:59Z	platform-toolkits-observability-intelligence-observability-module-1.7-hubble	3.20		0			codex	claude	approve	
+2026-04-26T10:48:04Z	platform-disciplines-reliability-security-devsecops-module-4.2-shift-left-security	3.20		0			codex	claude	approve	
