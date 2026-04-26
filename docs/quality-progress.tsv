@@ -117,3 +117,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T17:59:45Z	platform-toolkits-security-quality-security-tools-module-4.8-spiffe-spire	3.80		0			codex	claude	approve	
 2026-04-26T18:04:10Z	k8s-kcsa-part4-threat-model-module-4.5-threat-modeling-supply-chain-theory	3.50		0			codex	claude	approve	
 2026-04-26T18:08:52Z	platform-toolkits-infrastructure-networking-storage-module-16.2-minio	3.50		0			codex	claude	approve	
+2026-04-26T18:14:12Z	platform-toolkits-infrastructure-networking-networking-module-5.4-metallb	3.20		0			codex	claude	approve	
