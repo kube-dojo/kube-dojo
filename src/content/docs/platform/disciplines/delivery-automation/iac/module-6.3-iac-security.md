@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 6.3: Infrastructure as Code Security"
 slug: platform/disciplines/delivery-automation/iac/module-6.3-iac-security
 sidebar:
