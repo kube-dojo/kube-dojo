@@ -42,3 +42,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T04:22:46Z	ai-foundations-module-1.1-what-is-ai	4.80		0			gemini	claude	approve	
 2026-04-26T04:23:03Z	ai-ai-building-module-1.3-tools-retrieval-and-boundaries	3.20		0			claude	codex	approve	
 2026-04-26T04:28:20Z	ai-open-models-local-inference-module-1.1-open-models-and-model-hubs	2.50		0			gemini	claude	approve	
+2026-04-26T04:34:53Z	ai-open-models-local-inference-module-1.3-quantization-and-model-formats	2.00		0			gemini	claude	approve	
