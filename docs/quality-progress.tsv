@@ -83,3 +83,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T12:34:02Z	platform-toolkits-security-quality-code-quality-module-12.3-codeql	3.50		0			codex	claude	approve	
 2026-04-26T12:49:37Z	platform-toolkits-observability-intelligence-observability-module-1.5-tracing	4.20		0			codex	claude	approve	
 2026-04-26T13:22:42Z	k8s-cgoa-module-1.2-gitops-principles-review	1.50		0			codex	claude	approve	
+2026-04-26T13:27:21Z	platform-toolkits-developer-experience-scaling-reliability-module-6.4-finops-opencost	3.70		0			codex	claude	approve	
