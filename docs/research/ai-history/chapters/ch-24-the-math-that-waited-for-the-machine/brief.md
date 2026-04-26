@@ -25,7 +25,7 @@ This chapter should avoid the myth that Hinton, Rumelhart, and Williams single-h
 This chapter can support a long narrative only if it is built from verified layers rather than padding:
 
 - 800-1,000 words: the post-perceptron problem of hidden-unit credit assignment, tied back to Ch17.
-- 900-1,200 words: a pedagogical walkthrough of backpropagation as derivative bookkeeping, using a toy network and avoiding dry equations.
+- 600-900 words: a pedagogical walkthrough of backpropagation as derivative bookkeeping, grounded in the specific encoder or symmetry tasks from the 1986 papers rather than a generic toy network, avoiding dry equations.
 - 700-1,000 words: the prior-art lineage from reverse-mode differentiation and Werbos, written as an attribution correction rather than a side quarrel.
 - 1,000-1,400 words: the PDP/Nature publication moment and what "internal representations" meant in cognitive-science terms.
 - 700-1,000 words: infrastructure limits of the 1980s, why the algorithm waited for more compute, and why its matrix/gradient shape later mattered.
