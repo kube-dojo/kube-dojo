@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Deferred-review pass for KUBEDOJO_SKIP_REVIEW=1 batches (#388).
+
+The skip-review path keeps a writer batch moving when the reviewer LLM is
+rate-limited: ``review_one`` auto-approves without dispatching, marks
+``review.auto_approved=True``, and appends the slug to
+``.pipeline/quality-pipeline/post-review-queue.txt``. This script processes
+that queue once Claude quota recovers.
+
+For each slug at ``stage=COMMITTED`` with ``review.auto_approved=True``:
+
+* dispatch ``review_prompt`` against the on-disk (already-merged) module
+* APPROVE  -> record verdict in ``state.review.deferred``, drop from queue
+* CHANGES  -> record verdict, set ``revision_pending: true`` on module
+              frontmatter, drop from queue
+* reviewer unavailable -> stop the run, leave the queue intact
+
+The queue file is rewritten atomically; un-processed slugs stay queued.
+The script does NOT commit frontmatter changes — caller inspects ``git
+status`` and commits the batch.
+
+Heuristic from the #388 batch: deterministic gates (density, visual-aid,
+code-block-balance) are the real safety net; the LLM reviewer
+rubber-stamped 4.5-5.0 on auto-approved modules. ``--limit`` lets you
+spot-sample rather than burning quota on the full queue.
+"""
+from __future__ import annotations
+
+import argparse
+import random
+import sys
+from pathlib import Path
+from typing import cast
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from quality import state as qstate  # noqa: E402
+from quality.dispatchers import Agent, DispatcherUnavailable, dispatch  # noqa: E402
+from quality.prompts import build_audit_context, review_prompt  # noqa: E402
+from quality.queue import set_revision_pending_frontmatter  # noqa: E402
+from quality.stages import _parse_review_verdict  # noqa: E402
+
+QUEUE_PATH = Path(".pipeline/quality-pipeline/post-review-queue.txt")
+
+
+def read_queue() -> list[str]:
+    if not QUEUE_PATH.exists():
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in QUEUE_PATH.read_text(encoding="utf-8").splitlines():
+        slug = raw.strip()
+        if slug and slug not in seen:
+            seen.add(slug)
+            out.append(slug)
+    return out
+
+
+def write_queue(slugs: list[str]) -> None:
+    if not slugs:
+        QUEUE_PATH.write_text("", encoding="utf-8")
+        return
+    QUEUE_PATH.write_text("\n".join(slugs) + "\n", encoding="utf-8")
+
+
+def reviewable(st: dict) -> bool:
+    if st.get("stage") != "COMMITTED":
+        return False
+    review = st.get("review") or {}
+    return bool(review.get("auto_approved"))
+
+
+def review_slug(slug: str, *, reviewer_override: str | None, timeout: int, dry_run: bool):
+    """Returns ('approve'|'changes'|'skip'|'stop'|'fail', detail)."""
+    st = qstate.load_state(slug)
+    if st is None:
+        return "skip", "no state file"
+    if not reviewable(st):
+        return "skip", f"stage={st.get('stage')} auto_approved={(st.get('review') or {}).get('auto_approved')}"
+
+    module_file = Path(st["module_path"])
+    if not module_file.exists():
+        return "skip", f"module missing: {module_file}"
+
+    reviewer = reviewer_override or st["reviewer"]
+    track = (st.get("route") or {}).get("track", "rewrite")
+
+    if dry_run:
+        return "skip", f"DRY-RUN: would dispatch {reviewer} against {module_file}"
+
+    prompt = review_prompt(
+        module_path=st["module_path"],
+        module_text=module_file.read_text(encoding="utf-8"),
+        writer_agent=st["writer"],
+        track=track,
+        original_gaps=build_audit_context(st.get("audit")),
+    )
+    try:
+        result = dispatch(cast(Agent, reviewer), prompt, timeout=timeout, tools_disabled=True)
+    except DispatcherUnavailable as e:
+        return "stop", str(e)
+    if not result.ok:
+        return "fail", f"dispatch rc={result.returncode}: {result.stderr.strip()[:300]}"
+
+    verdict = _parse_review_verdict(result)
+    if verdict is None:
+        return "fail", "could not parse verdict JSON"
+
+    # Update state under lease — preserve original auto-approved record in
+    # review.deferred so the audit trail shows both the synthetic approve
+    # and the real (post-rate-limit) verdict.
+    with qstate.state_lease(slug, timeout=5.0) as lease:
+        st = lease.load()
+        if st is None or not reviewable(st):
+            return "skip", "state changed under us"
+        st.setdefault("review", {})["auto_approved"] = False
+        st["review"]["deferred"] = {"agent": reviewer, **verdict}
+        st.setdefault("history", []).append({
+            "at": qstate.now_iso(),
+            "stage": "COMMITTED",
+            "note": f"deferred-review {verdict['verdict']} by {reviewer} "
+                    f"(rubric={verdict.get('rubric_score')}, teaching={verdict.get('teaching_score')})",
+        })
+        lease.save(st)
+
+    if verdict["verdict"] == "approve":
+        return "approve", f"rubric={verdict.get('rubric_score')} teaching={verdict.get('teaching_score')}"
+
+    if set_revision_pending_frontmatter(module_file):
+        marked = "banner re-set"
+    else:
+        marked = "banner already present"
+    must_fix = verdict.get("must_fix") or []
+    return "changes", f"{marked}; {len(must_fix)} must-fix"
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
+    ap.add_argument("--limit", type=int, default=0, help="process at most N slugs (0 = all)")
+    ap.add_argument("--shuffle", action="store_true", help="randomize order before applying --limit (for spot-sampling)")
+    ap.add_argument("--reviewer", default=None, help="override reviewer agent (default: state.reviewer per slug)")
+    ap.add_argument("--timeout", type=int, default=600, help="per-dispatch timeout in seconds")
+    ap.add_argument("--dry-run", action="store_true", help="report what would happen, don't dispatch")
+    args = ap.parse_args()
+
+    queue = read_queue()
+    if not queue:
+        print("post-review-queue empty — nothing to do.")
+        return 0
+
+    work = list(queue)
+    if args.shuffle:
+        random.shuffle(work)
+    if args.limit:
+        work = work[: args.limit]
+
+    print(f"queue size: {len(queue)} slugs; processing {len(work)} this run "
+          f"({'dry-run' if args.dry_run else 'live'})")
+
+    counts = {"approve": 0, "changes": 0, "skip": 0, "fail": 0, "stop": 0}
+    drop_from_queue: set[str] = set()
+    stopped = False
+
+    for i, slug in enumerate(work, 1):
+        outcome, detail = review_slug(
+            slug,
+            reviewer_override=args.reviewer,
+            timeout=args.timeout,
+            dry_run=args.dry_run,
+        )
+        counts[outcome] += 1
+        print(f"[{i}/{len(work)}] {outcome:8s} {slug}  -- {detail}")
+        if outcome in ("approve", "changes", "skip"):
+            # Drop "skip" too: stale queue entries (already reset/never made it
+            # to COMMITTED+auto_approved) shouldn't linger forever. If they
+            # ever reach the auto-approved state again, they get re-queued.
+            drop_from_queue.add(slug)
+        if outcome == "stop":
+            stopped = True
+            print(f"reviewer unavailable — halting run, leaving {len(queue) - len(drop_from_queue)} slugs queued.")
+            break
+
+    if not args.dry_run:
+        remaining = [s for s in queue if s not in drop_from_queue]
+        write_queue(remaining)
+
+    print()
+    print(f"summary: approve={counts['approve']} changes={counts['changes']} "
+          f"skip={counts['skip']} fail={counts['fail']} stop={counts['stop']}")
+    if not args.dry_run:
+        print(f"queue after: {len(read_queue())} slug(s) remaining")
+        if counts["changes"]:
+            print("note: revision_pending banner re-set on module(s) — review `git status` and commit the batch.")
+    return 1 if (counts["fail"] or stopped) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
