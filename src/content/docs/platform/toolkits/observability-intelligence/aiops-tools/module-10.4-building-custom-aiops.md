@@ -1,1038 +1,569 @@
 ---
-revision_pending: true
 title: "Module 10.4: Building Custom AIOps"
 slug: platform/toolkits/observability-intelligence/aiops-tools/module-10.4-building-custom-aiops
 sidebar:
   order: 5
 ---
-> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 50-60 minutes
+
+# Module 10.4: Building Custom AIOps
+
+> **Toolkit Track** | Complexity: `[COMPLEX]` | Time: 60-75 minutes
 
 ## Prerequisites
 
-Before starting this module:
-- [AIOps Discipline](/platform/disciplines/data-ai/aiops/) — Complete conceptual foundation
-- [Module 10.1: Anomaly Detection Tools](../module-10.1-anomaly-detection-tools/) — Detection libraries
-- Python proficiency (pandas, scikit-learn basics)
-- Kubernetes basics (Deployments, Services, ConfigMaps)
-- Basic understanding of Kafka or similar streaming platforms
+Before starting this module, you should be comfortable reading PromQL queries, interpreting Kubernetes workload health, and writing small Python services that process structured data. You do not need to be a machine learning specialist, but you should understand the difference between a training baseline, a prediction, and a false positive.
 
-## What You'll Be Able to Do
+You should complete these first:
+
+- [AIOps Discipline](/platform/disciplines/data-ai/aiops/) — Conceptual foundation for automation, signal quality, and operational decision support
+- [Module 10.1: Anomaly Detection Tools](../module-10.1-anomaly-detection-tools/) — Detection approaches and algorithm trade-offs
+- [Module 10.2: Event Correlation Platforms](../module-10.2-event-correlation-platforms/) — Correlation, grouping, and incident reduction patterns
+- [Module 10.3: Observability AI Features](../module-10.3-observability-ai-features/) — Commercial platform capabilities and their limits
+- Python basics, including virtual environments, dictionaries, lists, and reading JSON files
+- Kubernetes basics, including Deployments, Services, ConfigMaps, Secrets, and container health probes
+- Kafka or another event-streaming platform at a conceptual level
+
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-- **Implement custom AIOps pipelines using Python and ML libraries for Kubernetes operational intelligence**
-- **Configure feature engineering pipelines for Prometheus metrics and Kubernetes event data**
-- **Deploy custom anomaly detection models with feedback loops for continuous accuracy improvement**
-- **Evaluate build-versus-buy trade-offs for AIOps capabilities based on team skills and data maturity**
-
+- **Design** a custom AIOps pipeline that separates ingestion, feature engineering, anomaly detection, correlation, and action stages.
+- **Implement** a runnable Python baseline detector that turns metric samples into anomaly events with enough context for later correlation.
+- **Evaluate** whether a team should build custom AIOps or buy a platform feature based on data volume, domain specificity, operational risk, and staffing.
+- **Debug** common failure modes in custom AIOps systems, including noisy models, broken ordering, missing topology, and unsafe remediation.
+- **Compare** deployment patterns for stateless detectors, stateful correlators, feedback loops, and Kubernetes runtime controls.
 
 ## Why This Module Matters
 
-Platform AI (Datadog Watchdog, Dynatrace Davis) covers 80% of use cases. But sometimes you need **custom AIOps** because:
+At 02:13, a checkout team sees latency rise, payment retries spike, and inventory reservations drift upward. The commercial observability platform opens three alerts, the log tool highlights two suspicious deploys, and the tracing dashboard shows pressure across half the request path. No individual signal is wrong, but none of them explains the incident quickly enough for the incident commander to choose the first fix.
 
-1. **Domain-specific detection** — Your anomalies are unique to your business
-2. **Data sovereignty** — Data cannot leave your infrastructure
-3. **Cost optimization** — Platform AI pricing doesn't scale for you
-4. **Integration requirements** — Need to integrate with proprietary systems
-5. **Competitive advantage** — AIOps as a differentiator
+This is the moment where custom AIOps becomes tempting. The team already owns rich domain knowledge: payment authorization is allowed to slow down during bank maintenance windows, inventory errors are more dangerous during flash sales, and a cache miss surge is only critical when it aligns with a specific checkout funnel. A general-purpose tool can detect abnormal behavior, but it may not know which abnormal behavior matters to this business at this hour.
 
-Building custom AIOps is a significant investment. This module shows you how to do it right.
+Custom AIOps is not a badge of maturity by itself. It is a product you build for your own operations, and it inherits the same obligations as any production service: reliability, versioning, observability, rollback, security, and user feedback. The goal is not to sprinkle machine learning over alerts; the goal is to turn operational data into faster, safer decisions that engineers trust under pressure.
 
-## Did You Know?
+A senior platform engineer treats custom AIOps as a socio-technical system. The pipeline must handle data quality, model quality, human review, incident workflow, and failure isolation. If any one of those layers is ignored, the model can become a high-speed noise generator that looks sophisticated while making on-call life worse.
 
-- **Netflix's anomaly detection system** processes **billions of time series** with custom algorithms. They open-sourced many components (Surus, Argus) but the full system remains proprietary because it's tightly integrated with their streaming architecture.
+## 1. Decide Whether Custom AIOps Is Worth Building
 
-- **Uber built Argos** for real-time anomaly detection across their microservices. At peak, it processes 500+ million metrics per minute with sub-second detection latency—impossible with off-the-shelf tools at their scale.
+Most teams should not start by building custom AIOps. Commercial platforms, open-source detectors, and simpler alert hygiene usually solve the first wave of operational intelligence problems at lower cost. Building custom becomes reasonable only when the team can name the specific decision that existing tools cannot support, and when that decision is valuable enough to justify owning a new production system.
 
-- **LinkedIn's ThirdEye** is open-sourced from their internal AIOps platform. It was built after they realized commercial tools couldn't handle their 10,000+ services generating 30+ million metrics.
+The first design question is therefore not "Which model should we use?" The first question is "What operational decision will this system improve?" A useful answer sounds concrete: "When checkout latency rises, identify whether the likely root cause is payment provider latency, inventory write contention, or a recent deployment within two minutes." A weak answer sounds vague: "Use AI to improve incident response."
 
-- **Pinterest's Anomaly Detection** system uses isolation forest ensembles trained on 2 years of historical data. They found that domain-specific training data improved accuracy by 40% compared to generic models—the key insight that drove them to build custom.
+A custom AIOps system usually earns its keep in one of four situations. The first is domain-specific behavior, where the important signal depends on business context that a generic tool does not know. The second is data sovereignty, where raw telemetry cannot leave controlled infrastructure. The third is scale economics, where platform pricing or query limits make deep analysis expensive. The fourth is workflow integration, where the output must drive internal runbooks, approval gates, or remediation systems that commercial tools cannot safely control.
 
-## War Story: The $8M Custom AIOps That Saved $50M
+```text
+BUILD-VERSUS-BUY DECISION PATH
 
-A major e-commerce company was losing $2M per hour during peak shopping periods when their systems had issues. Their off-the-shelf monitoring tools detected problems, but the correlation was too slow—by the time they figured out the root cause, an hour had passed.
-
-**The challenge:**
-- 4,000+ microservices
-- 2 million metrics per minute
-- Complex dependencies (payment → inventory → shipping → notifications)
-- Platform AI tools took 5-15 minutes to correlate events
-
-**The decision to build custom:**
-
-After a $12M incident during a flash sale (6 hours of degraded checkout), they decided commercial tools weren't cutting it. They spent $8M over 18 months building a custom AIOps platform.
-
-**Architecture decisions:**
-1. **Kafka backbone** — Every metric, log, and trace flowed through Kafka topics
-2. **Pre-computed topology** — Service dependencies updated every 5 minutes, cached in Redis
-3. **Domain-specific detectors** — Different ML models for checkout flow vs. browse flow
-4. **Human feedback loop** — Engineers rated every alert, continuously improving models
-
-**The breakthrough:**
-
-Their custom system achieved 45-second detection-to-root-cause time. The key innovation wasn't fancier ML—it was **pre-computed correlation**. Instead of correlating events in real-time, they maintained a constantly-updated dependency graph that instantly showed blast radius.
-
-**Results after 2 years:**
-- MTTR dropped from 45 minutes to 6 minutes
-- Incident frequency dropped 60% (predictive alerting caught issues before impact)
-- Engineering hours on incidents dropped from 400/month to 80/month
-- ROI: $50M saved annually vs. $8M investment
-
-**The lesson**: Custom AIOps makes sense at scale. The break-even point for this company was around 1,000 services. Below that, commercial tools win on cost. Above that, custom wins on accuracy and speed.
-
----
-
-## Custom AIOps Architecture
-
+┌────────────────────────────────────────────────────────────────────┐
+│ Start with the operational decision, not the model.                 │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ Can an existing platform detect the condition with acceptable       │
+│ latency, context, precision, and cost?                              │
+└────────────────────────────────────────────────────────────────────┘
+              │ Yes                                      │ No
+              ▼                                          ▼
+┌──────────────────────────────┐          ┌───────────────────────────┐
+│ Buy, configure, and improve   │          │ Is the missing context     │
+│ alert hygiene first.          │          │ specific to your domain?   │
+└──────────────────────────────┘          └───────────────────────────┘
+                                                        │
+                                                        ▼
+                                      ┌────────────────────────────────┐
+                                      │ Do you have owners for data,    │
+                                      │ models, runtime, and feedback?  │
+                                      └────────────────────────────────┘
+                                               │ Yes          │ No
+                                               ▼              ▼
+                              ┌────────────────────────┐  ┌────────────────────┐
+                              │ Build a narrow custom  │  │ Fix ownership and  │
+                              │ pipeline with rollback │  │ data maturity first│
+                              │ and human review.      │  │ before building.   │
+                              └────────────────────────┘  └────────────────────┘
 ```
+
+> **Stop and think:** Your organization has a noisy CPU alert that pages too often. Is that evidence that you need custom AIOps, or is it evidence that the alert policy and service ownership model need repair first? Write down the decision the system would improve before choosing a tool.
+
+A practical rule is to start with a narrow use case where false positives and false negatives can be reviewed by humans. Do not begin with automatic remediation across the whole cluster. Begin with one service family, one high-value symptom, one correlation path, and one clear feedback workflow. This keeps the first version understandable enough that engineers can inspect it during an incident.
+
+The build decision also has a staffing side. A custom AIOps platform needs people who can maintain streaming infrastructure, Kubernetes workloads, Python services, data contracts, model evaluation, and incident integrations. If the team cannot commit to those responsibilities, a commercial feature with weaker customization may still be the safer engineering choice.
+
+## 2. Design the Pipeline Around Data Contracts
+
+A custom AIOps pipeline is easier to reason about when each stage has one job and a clear contract. Ingestion collects signals, feature engineering reshapes them, detection scores unusual behavior, correlation groups related events, incident management chooses human or automated action, and feedback records whether the system helped. This separation lets you scale and debug stages independently.
+
+The architecture below is intentionally ordinary. Kafka is not magic; it is a durable buffer and replay mechanism between services that should not fail together. Python is not magic either; it is a convenient runtime for feature engineering and model libraries. Kubernetes provides deployment, restart, configuration, and resource controls. The value comes from the contracts between these pieces, not from any single tool.
+
+```text
 CUSTOM AIOPS ARCHITECTURE ON KUBERNETES
-────────────────────────────────────────────────────────────────
 
-DATA SOURCES                    INGESTION
-┌─────────┐                    ┌─────────────────┐
-│Prometheus│───────────────────▶│                 │
-├─────────┤                    │     Kafka       │
-│  Loki   │───────────────────▶│    (Ingest)     │
-├─────────┤                    │                 │
-│  Tempo  │───────────────────▶│  Topics:        │
-├─────────┤                    │  - metrics      │
-│ Events  │───────────────────▶│  - logs         │
-└─────────┘                    │  - traces       │
-                               │  - events       │
-                               └────────┬────────┘
-                                        │
-PROCESSING                              ▼
-┌─────────────────────────────────────────────────────────┐
-│                    AIOPS PIPELINE                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │  Anomaly    │  │   Event     │  │    Root     │     │
-│  │  Detection  │──│ Correlation │──│   Cause     │     │
-│  │  (Python)   │  │  (Python)   │  │  Analysis   │     │
-│  └─────────────┘  └─────────────┘  └─────────────┘     │
-│         │                                  │            │
-│         └──────────────┬───────────────────┘            │
-│                        ▼                                │
-│               ┌─────────────┐                          │
-│               │  Incident   │                          │
-│               │  Manager    │                          │
-│               └─────────────┘                          │
-└────────────────────────┬────────────────────────────────┘
-                         │
-ACTIONS                  ▼
-              ┌─────────────────┐
-              │  - PagerDuty    │
-              │  - Slack        │
-              │  - Auto-Remediate
-              │  - Runbooks     │
-              └─────────────────┘
+DATA SOURCES                         INGESTION AND CONTRACTS
+┌──────────────────┐                 ┌───────────────────────────────┐
+│ Prometheus       │ metrics query   │ topic: raw.metrics             │
+│ Loki             │ log events      │ topic: raw.logs                │
+│ Tempo            │ trace spans     │ topic: raw.traces              │
+│ Kubernetes API   │ object events   │ topic: raw.k8s_events          │
+└────────┬─────────┘                 └──────────────┬────────────────┘
+         │                                          │
+         ▼                                          ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ FEATURE ENGINEERING                                                 │
+│ Normalize timestamps, attach service ownership, calculate rates,    │
+│ join deployment metadata, suppress invalid samples, emit features.  │
+│ topic: features.service_health                                      │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ DETECTION                                                           │
+│ Score feature windows with statistical rules, seasonal models,      │
+│ or trained detectors. Emit anomaly candidates with evidence.        │
+│ topic: aiops.anomalies                                             │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ CORRELATION AND ROOT-CAUSE HYPOTHESIS                               │
+│ Group candidates by time, topology, ownership, deploy history,      │
+│ and dependency direction. Emit incidents with confidence scores.    │
+│ topic: aiops.incidents                                             │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│ ACTION AND FEEDBACK                                                 │
+│ Notify humans, attach runbooks, gate remediation, collect review,   │
+│ and feed labels back into future evaluation.                        │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
----
+The most important design artifact is the event schema. If every stage invents its own fields, correlation becomes guesswork and feedback becomes almost impossible. At minimum, anomaly events need a timestamp, service identity, metric name, observed value, expected range or baseline, detector name, score, window, and labels that connect the event to ownership and topology.
 
-## Project Structure
+A schema does not need to be complicated at the beginning. The following JSON example is small enough to read during an incident but structured enough for later automation. Notice that it carries both the score and the evidence behind the score. A responder should be able to tell whether the model reacted to a latency spike, a drop in traffic, a deployment, or a missing sample.
 
-```
-custom-aiops/
-├── docker-compose.yml          # Local development
-├── k8s/                        # Kubernetes manifests
-│   ├── namespace.yaml
-│   ├── kafka/
-│   │   ├── kafka-deployment.yaml
-│   │   └── zookeeper-deployment.yaml
-│   ├── aiops/
-│   │   ├── detector-deployment.yaml
-│   │   ├── correlator-deployment.yaml
-│   │   └── configmap.yaml
-│   └── monitoring/
-│       └── prometheus-servicemonitor.yaml
-├── src/
-│   ├── detector/               # Anomaly detection service
-│   │   ├── main.py
-│   │   ├── detectors/
-│   │   │   ├── prophet_detector.py
-│   │   │   ├── isolation_forest.py
-│   │   │   └── luminaire_detector.py
-│   │   └── config.py
-│   ├── correlator/             # Event correlation service
-│   │   ├── main.py
-│   │   ├── correlators/
-│   │   │   ├── time_based.py
-│   │   │   ├── topology_based.py
-│   │   │   └── text_based.py
-│   │   └── config.py
-│   ├── incident_manager/       # Incident management
-│   │   ├── main.py
-│   │   ├── actions/
-│   │   │   ├── pagerduty.py
-│   │   │   ├── slack.py
-│   │   │   └── remediation.py
-│   │   └── config.py
-│   └── common/
-│       ├── kafka_utils.py
-│       ├── prometheus_client.py
-│       └── models.py
-├── tests/
-├── requirements.txt
-└── README.md
+```json
+{
+  "schema_version": "1.0",
+  "event_type": "anomaly",
+  "timestamp": "2026-04-26T01:20:30Z",
+  "service": "checkout-api",
+  "namespace": "commerce",
+  "metric_name": "http_request_duration_p99",
+  "window_seconds": 300,
+  "value": 1.83,
+  "expected": 0.42,
+  "lower_bound": 0.18,
+  "upper_bound": 0.91,
+  "anomaly_score": 0.88,
+  "detector": "seasonal_baseline",
+  "labels": {
+    "team": "checkout",
+    "region": "us-east",
+    "tier": "critical"
+  },
+  "evidence": {
+    "sample_count": 300,
+    "baseline_days": 14,
+    "recent_deploy": "checkout-api-2026.04.26-1",
+    "missing_samples": 0
+  }
+}
 ```
 
----
+A senior implementation treats this schema as a contract. Producers validate it before publishing, consumers reject invalid messages safely, and version changes are rolled out deliberately. Without that discipline, the model may work in a notebook while the production pipeline silently drops context that correlation depends on.
 
-## Step 1: Data Ingestion Layer
+> **Stop and think:** If the `service` field is missing from an anomaly event, which later stages become unreliable? Consider correlation, routing, runbook selection, ownership, and feedback before reading on.
 
-### Kafka Setup on Kubernetes
+Missing service identity breaks more than routing. The correlator cannot attach topology, the incident manager cannot choose the right on-call policy, the feedback loop cannot learn which detector performs poorly for which team, and dashboards cannot explain whether one service is noisy or many services are affected. AIOps quality often fails because of weak metadata, not weak math.
+
+## 3. Build a Minimal Detector Before Adding Machine Learning
+
+The safest first detector is usually not a complex model. A rolling baseline with explicit evidence is easier to validate, easier to explain, and easier to compare against future approaches. When a simple detector fails, the team learns what feature is missing; when a complex model fails, the team may only learn that nobody trusts it.
+
+The worked example below reads metric samples from a JSON Lines file, calculates a rolling mean and standard deviation per service and metric, and emits anomaly events when a value moves far outside the recent baseline. It is intentionally local and runnable so you can study the mechanics without needing Kafka, Prometheus, or Kubernetes. This is the "I do" step before the exercise asks you to build a small pipeline yourself.
+
+Create a file named `samples.jsonl`:
+
+```json
+{"timestamp":"2026-04-26T01:00:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.41}
+{"timestamp":"2026-04-26T01:01:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.43}
+{"timestamp":"2026-04-26T01:02:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.39}
+{"timestamp":"2026-04-26T01:03:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.45}
+{"timestamp":"2026-04-26T01:04:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.40}
+{"timestamp":"2026-04-26T01:05:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.44}
+{"timestamp":"2026-04-26T01:06:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.42}
+{"timestamp":"2026-04-26T01:07:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.46}
+{"timestamp":"2026-04-26T01:08:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":0.43}
+{"timestamp":"2026-04-26T01:09:00Z","service":"checkout-api","namespace":"commerce","metric_name":"latency_p99","value":1.86}
+{"timestamp":"2026-04-26T01:10:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.28}
+{"timestamp":"2026-04-26T01:11:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.31}
+{"timestamp":"2026-04-26T01:12:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.29}
+{"timestamp":"2026-04-26T01:13:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.30}
+{"timestamp":"2026-04-26T01:14:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.32}
+{"timestamp":"2026-04-26T01:15:00Z","service":"catalog-api","namespace":"commerce","metric_name":"latency_p99","value":0.81}
+```
+
+Create a file named `rolling_detector.py`:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import json
+import statistics
+from collections import defaultdict, deque
+from dataclasses import dataclass
+from typing import Deque
+
+
+@dataclass(frozen=True)
+class MetricSample:
+    timestamp: str
+    service: str
+    namespace: str
+    metric_name: str
+    value: float
+
+    @classmethod
+    def from_json(cls, line: str) -> "MetricSample":
+        data = json.loads(line)
+        return cls(
+            timestamp=data["timestamp"],
+            service=data["service"],
+            namespace=data["namespace"],
+            metric_name=data["metric_name"],
+            value=float(data["value"]),
+        )
+
+
+class RollingBaselineDetector:
+    def __init__(self, window_size: int, min_points: int, z_threshold: float) -> None:
+        self.window_size = window_size
+        self.min_points = min_points
+        self.z_threshold = z_threshold
+        self.history: dict[str, Deque[float]] = defaultdict(lambda: deque(maxlen=window_size))
+
+    def key_for(self, sample: MetricSample) -> str:
+        return f"{sample.namespace}/{sample.service}/{sample.metric_name}"
+
+    def score(self, sample: MetricSample) -> dict | None:
+        key = self.key_for(sample)
+        previous_values = list(self.history[key])
+        self.history[key].append(sample.value)
+
+        if len(previous_values) < self.min_points:
+            return None
+
+        mean = statistics.fmean(previous_values)
+        stdev = statistics.pstdev(previous_values)
+        z_score = 0.0 if stdev == 0 else abs(sample.value - mean) / stdev
+
+        if z_score < self.z_threshold:
+            return None
+
+        direction = "high" if sample.value > mean else "low"
+        return {
+            "schema_version": "1.0",
+            "event_type": "anomaly",
+            "timestamp": sample.timestamp,
+            "service": sample.service,
+            "namespace": sample.namespace,
+            "metric_name": sample.metric_name,
+            "value": sample.value,
+            "expected": round(mean, 4),
+            "lower_bound": round(mean - (self.z_threshold * stdev), 4),
+            "upper_bound": round(mean + (self.z_threshold * stdev), 4),
+            "anomaly_score": round(min(z_score / self.z_threshold, 1.0), 4),
+            "detector": "rolling_z_score",
+            "evidence": {
+                "window_size": self.window_size,
+                "baseline_points": len(previous_values),
+                "z_score": round(z_score, 4),
+                "direction": direction,
+            },
+        }
+
+
+def run(input_path: str, window_size: int, min_points: int, z_threshold: float) -> None:
+    detector = RollingBaselineDetector(
+        window_size=window_size,
+        min_points=min_points,
+        z_threshold=z_threshold,
+    )
+
+    with open(input_path, "r", encoding="utf-8") as source:
+        for line in source:
+            if not line.strip():
+                continue
+            sample = MetricSample.from_json(line)
+            anomaly = detector.score(sample)
+            if anomaly is not None:
+                print(json.dumps(anomaly, sort_keys=True))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Detect anomalies with a rolling baseline.")
+    parser.add_argument("input_path", help="Path to a JSON Lines metric sample file.")
+    parser.add_argument("--window-size", type=int, default=20)
+    parser.add_argument("--min-points", type=int, default=5)
+    parser.add_argument("--z-threshold", type=float, default=3.0)
+    args = parser.parse_args()
+
+    run(
+        input_path=args.input_path,
+        window_size=args.window_size,
+        min_points=args.min_points,
+        z_threshold=args.z_threshold,
+    )
+```
+
+Run it from the directory that contains both files:
+
+```bash
+.venv/bin/python rolling_detector.py samples.jsonl --min-points 5 --z-threshold 3.0
+```
+
+You should see anomaly JSON for the checkout latency spike and the catalog latency spike. The exact score depends on the prior values in each service-specific baseline. That separation matters because a value that is normal for one service may be abnormal for another service with a different latency profile.
+
+The detector has obvious limitations, and that is useful. It assumes recent history is representative, it handles each metric independently, and it does not understand seasonality, deployments, traffic shape, or topology. Those gaps are not failures of the example; they are the design backlog for the next layer. You now have a baseline that produces explainable events, which means you can test whether fancier approaches actually improve operational outcomes.
+
+> **Prediction prompt:** Before changing the threshold from `3.0` to `2.0`, predict what will happen to false positives and false negatives. Then run the command again and compare the number of emitted anomaly events. The point is not to memorize a magic threshold; the point is to feel the precision and recall trade-off.
+
+Feature engineering is the next step because raw metrics rarely contain enough context. A detector that sees only `latency_p99=1.86` cannot know whether that value occurred during a canary, a traffic surge, a dependency outage, or a scheduled load test. A feature pipeline enriches the sample before detection so the model can make a better judgment.
+
+```text
+FEATURE ENGINEERING RESPONSIBILITIES
+
+┌────────────────────┐       ┌────────────────────────────┐       ┌─────────────────────┐
+│ Raw metric sample  │──────▶│ Feature engineering stage   │──────▶│ Feature event       │
+└────────────────────┘       └────────────────────────────┘       └─────────────────────┘
+        │                                  │                                │
+        │                                  │                                │
+        │ timestamp                        │ service owner                  │ rate over window
+        │ labels                           │ deployment version             │ error budget burn
+        │ value                            │ topology neighbors             │ traffic percentile
+        │ scrape metadata                  │ maintenance calendar           │ recent deploy flag
+```
+
+The senior habit is to version features as carefully as application APIs. A model trained with `recent_deploy` and `team` should not suddenly receive events where those fields are renamed or absent. Feature drift can be just as damaging as model drift because it changes what the detector thinks it knows about the world.
+
+## 4. Choose Detection Models by Signal Shape
+
+Different signals fail in different ways, so one detector rarely fits the whole platform. Request latency often has daily and weekly seasonality. Error rate may be sparse until a dependency breaks. CPU usage may gradually climb because of a leak. Queue depth may jump after a downstream outage. A mature custom AIOps system maps detector choice to signal behavior instead of applying one algorithm everywhere.
+
+The simplest useful detector families are statistical thresholds, seasonal baselines, isolation-based outlier detection, and supervised classifiers trained on labeled incidents. Statistical thresholds are explainable and cheap, but they miss subtle patterns. Seasonal baselines handle repeated cycles, but they need enough history. Isolation methods can catch strange combinations of features, but they are harder to explain. Supervised models can be powerful, but only when labels are reliable and representative.
+
+| Signal Pattern | Better Starting Detector | Why It Fits | Main Risk |
+|---|---|---|---|
+| Stable service latency with occasional spikes | Rolling z-score or robust median absolute deviation | Easy to explain and validate with local history | Noisy during deploys or traffic shifts |
+| Strong daily or weekly cycle | Seasonal baseline or Prophet-style forecast | Learns expected recurring shape over time | Needs enough clean historical data |
+| Many features interacting together | Isolation Forest or similar outlier method | Finds unusual combinations without labels | Can be hard to explain during incidents |
+| Known incident classes with reviewed labels | Supervised classifier | Learns from past responder decisions | Labels may encode old bias or stale topology |
+| Rare but high-impact domain events | Rule plus model hybrid | Keeps business invariants explicit | Rules can become unmaintained policy code |
+
+A good detector emits uncertainty, not just a verdict. The event should say which baseline it used, how much data supported the score, and why the score crossed the threshold. This evidence lets responders decide whether to trust the signal during a messy incident. It also gives model owners enough information to improve the pipeline after the incident review.
+
+The feedback loop is where custom AIOps becomes operationally useful. Every incident should allow responders to label whether the anomaly was useful, noisy, late, duplicated, or dangerous. Those labels become evaluation data. Without feedback, the team is tuning by opinion and anecdote; with feedback, the team can measure whether changes reduce noise without hiding real incidents.
+
+```text
+FEEDBACK LOOP FOR CONTINUOUS IMPROVEMENT
+
+┌──────────────────┐
+│ Anomaly emitted  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐      responder labels      ┌──────────────────────┐
+│ Incident review  │───────────────────────────▶│ Feedback store        │
+└──────────────────┘                            └──────────┬───────────┘
+                                                            │
+                                                            ▼
+┌──────────────────┐      evaluation report      ┌──────────────────────┐
+│ Model registry   │◀───────────────────────────│ Offline evaluation    │
+└────────┬─────────┘                            └──────────────────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Controlled rollout│
+└──────────────────┘
+```
+
+Feedback must be designed for tired humans. A five-field form that appears after every incident may get filled out; a twenty-field form will be ignored or filled with low-quality data. The first version can ask whether the alert was useful, whether the root-cause hypothesis was correct, whether the severity was right, and which service actually caused the issue. These few labels already support meaningful evaluation.
+
+A senior team also keeps a champion-challenger path. The current detector remains the champion that controls production behavior, while a challenger detector scores the same stream in shadow mode. The challenger does not page anyone. It produces evaluation reports that compare precision, recall, timeliness, and duplication against the current approach. This avoids replacing a trusted imperfect system with an unproven impressive one.
+
+## 5. Correlate Events Before Paging Humans
+
+Anomaly detection answers "Is this signal unusual?" Correlation answers "Are these unusual signals part of the same operational story?" That second question is where many AIOps projects become valuable, because responders do not need a separate page for every metric. They need a grouped incident with evidence, likely blast radius, and a starting hypothesis.
+
+Correlation uses several weak signals together. Time proximity says events happened near each other. Topology says one service depends on another. Ownership says two services belong to the same team or platform. Deployment history says a recent change may be related. Text similarity says log messages or event reasons share language. No single signal proves root cause, but the combination can rank useful hypotheses.
+
+```text
+CORRELATION INPUTS
+
+┌──────────────────┐       ┌─────────────────────┐
+│ Anomaly events   │──────▶│ Correlation engine  │
+└──────────────────┘       └──────────┬──────────┘
+                                      │
+┌──────────────────┐                  │
+│ Service topology │──────────────────┤
+└──────────────────┘                  │
+                                      ▼
+┌──────────────────┐       ┌─────────────────────┐
+│ Deploy history   │──────▶│ Incident candidate  │
+└──────────────────┘       └─────────────────────┘
+                                      ▲
+┌──────────────────┐                  │
+│ Ownership data   │──────────────────┘
+└──────────────────┘
+```
+
+The following runnable correlator groups anomaly events by service neighborhood and time bucket. It is deliberately simple, but it shows the shape of the problem: a detector emits isolated events, while a correlator keeps enough state to group them into an incident. In production, you would likely use Kafka partitions, Redis, a stream processor, or a database-backed state store instead of a local dictionary.
+
+Create `correlate_anomalies.py`:
+
+```python
+#!/usr/bin/env python3
+import argparse
+import datetime as dt
+import json
+from collections import defaultdict
+
+
+TOPOLOGY = {
+    "checkout-api": {"payment-api", "inventory-api", "cart-api"},
+    "payment-api": {"checkout-api"},
+    "inventory-api": {"checkout-api", "warehouse-api"},
+    "catalog-api": {"search-api"},
+}
+
+
+def parse_timestamp(value: str) -> dt.datetime:
+    normalized = value.replace("Z", "+00:00")
+    return dt.datetime.fromisoformat(normalized)
+
+
+def bucket_for(timestamp: str, bucket_seconds: int) -> int:
+    parsed = parse_timestamp(timestamp)
+    return int(parsed.timestamp()) // bucket_seconds
+
+
+def neighborhood(service: str) -> set[str]:
+    related = set(TOPOLOGY.get(service, set()))
+    related.add(service)
+    return related
+
+
+def group_key(event: dict, bucket_seconds: int) -> str:
+    service = event["service"]
+    bucket = bucket_for(event["timestamp"], bucket_seconds)
+    members = sorted(neighborhood(service))
+    return f"{bucket}:{','.join(members)}"
+
+
+def severity_from_score(score: float) -> str:
+    if score >= 0.85:
+        return "critical"
+    if score >= 0.65:
+        return "high"
+    if score >= 0.45:
+        return "medium"
+    return "low"
+
+
+def correlate(input_path: str, bucket_seconds: int) -> list[dict]:
+    groups: dict[str, list[dict]] = defaultdict(list)
+
+    with open(input_path, "r", encoding="utf-8") as source:
+        for line in source:
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            groups[group_key(event, bucket_seconds)].append(event)
+
+    incidents = []
+    for index, events in enumerate(groups.values(), start=1):
+        events.sort(key=lambda item: item["timestamp"])
+        max_score = max(float(event["anomaly_score"]) for event in events)
+        services = sorted({event["service"] for event in events})
+        first_event = events[0]
+
+        incidents.append(
+            {
+                "incident_id": f"INC-{index:05d}",
+                "created_at": first_event["timestamp"],
+                "severity": severity_from_score(max_score),
+                "services": services,
+                "event_count": len(events),
+                "hypothesis": {
+                    "probable_starting_service": first_event["service"],
+                    "reason": "earliest anomaly in topology-aware time bucket",
+                    "confidence": 0.6 if len(events) > 1 else 0.3,
+                },
+                "events": events,
+            }
+        )
+
+    return incidents
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Group anomaly events into incident candidates.")
+    parser.add_argument("input_path", help="Path to JSON Lines anomaly events.")
+    parser.add_argument("--bucket-seconds", type=int, default=300)
+    args = parser.parse_args()
+
+    for incident in correlate(args.input_path, args.bucket_seconds):
+        print(json.dumps(incident, sort_keys=True))
+```
+
+You can connect this to the detector by redirecting output:
+
+```bash
+.venv/bin/python rolling_detector.py samples.jsonl --min-points 5 > anomalies.jsonl
+.venv/bin/python correlate_anomalies.py anomalies.jsonl --bucket-seconds 300
+```
+
+The output is not a final truth; it is an incident candidate. That distinction matters. AIOps should make the responder faster, not pretend to be omniscient. The incident should say "probable starting service" and "confidence" rather than "root cause" unless the evidence is strong enough to justify that claim.
+
+Correlation state is the reason many examples run the correlator as one replica. If two replicas see different parts of the same incident without shared state, they may create duplicate incidents. Scaling options exist, but each one has a cost. You can partition by service ownership, store active incidents in Redis, use a stream processor with keyed state, or accept duplicate candidates and merge them later. The right answer depends on incident volume and blast-radius boundaries.
+
+## 6. Deploy With Kubernetes Controls and Operational Guardrails
+
+A custom AIOps service is part of the production control plane for humans. If it fails, it can hide incidents, spam responders, or execute unsafe remediation. Kubernetes deployment choices must therefore reflect the risk profile of each stage. Stateless detectors can usually scale horizontally. Correlators need careful state handling. Incident managers should be conservative and idempotent. Remediation should be gated until the organization has evidence that it is safe.
+
+The Kubernetes manifests below show the shape of a minimal deployment. They are not a complete production platform, but they demonstrate the controls that matter: explicit resources, health probes, configuration through ConfigMaps, credentials through Secrets, and different replica counts for stateless and stateful stages. Use `kubectl` for commands; if your shell defines `k` as an alias for `kubectl`, the shorter alias is fine after you have verified it points to the same binary.
 
 ```yaml
-# k8s/kafka/kafka-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Namespace
 metadata:
-  name: kafka
-  namespace: aiops
-spec:
-  replicas: 1  # Use 3 for production
-  selector:
-    matchLabels:
-      app: kafka
-  template:
-    metadata:
-      labels:
-        app: kafka
-    spec:
-      containers:
-      - name: kafka
-        image: confluentinc/cp-kafka:7.5.0
-        ports:
-        - containerPort: 9092
-        env:
-        - name: KAFKA_BROKER_ID
-          value: "1"
-        - name: KAFKA_ZOOKEEPER_CONNECT
-          value: "zookeeper:2181"
-        - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://kafka:9092"
-        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-          value: "1"
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
+  name: aiops
 ---
 apiVersion: v1
-kind: Service
+kind: ConfigMap
 metadata:
-  name: kafka
+  name: aiops-config
   namespace: aiops
-spec:
-  ports:
-  - port: 9092
-  selector:
-    app: kafka
-```
-
-### Prometheus Metrics Exporter
-
-```python
-# src/common/prometheus_client.py
-"""
-Export Prometheus metrics to Kafka for AIOps processing.
-"""
-import json
-import time
-from datetime import datetime
-from kafka import KafkaProducer
-from prometheus_api_client import PrometheusConnect
-
-class PrometheusExporter:
-    """Export Prometheus metrics to Kafka."""
-
-    def __init__(
-        self,
-        prometheus_url: str,
-        kafka_bootstrap: str,
-        topic: str = "metrics"
-    ):
-        self.prom = PrometheusConnect(url=prometheus_url)
-        self.producer = KafkaProducer(
-            bootstrap_servers=kafka_bootstrap,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
-        self.topic = topic
-
-    def export_metrics(self, queries: list[dict]):
-        """
-        Export metrics to Kafka.
-
-        Args:
-            queries: List of {"name": str, "query": str} dicts
-        """
-        timestamp = datetime.utcnow().isoformat()
-
-        for query_def in queries:
-            try:
-                result = self.prom.custom_query(query_def["query"])
-
-                for metric in result:
-                    message = {
-                        "timestamp": timestamp,
-                        "name": query_def["name"],
-                        "labels": metric["metric"],
-                        "value": float(metric["value"][1])
-                    }
-                    self.producer.send(self.topic, message)
-
-            except Exception as e:
-                print(f"Error exporting {query_def['name']}: {e}")
-
-        self.producer.flush()
-
-    def run_continuous(self, queries: list[dict], interval: int = 60):
-        """Run continuous export."""
-        while True:
-            self.export_metrics(queries)
-            time.sleep(interval)
-
-
-# Configuration
-METRICS_TO_EXPORT = [
-    {
-        "name": "http_request_duration_p99",
-        "query": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))"
-    },
-    {
-        "name": "http_request_rate",
-        "query": "sum(rate(http_requests_total[5m])) by (service)"
-    },
-    {
-        "name": "error_rate",
-        "query": "sum(rate(http_requests_total{status=~'5..'}[5m])) by (service) / sum(rate(http_requests_total[5m])) by (service)"
-    },
-    {
-        "name": "cpu_usage",
-        "query": "avg(rate(container_cpu_usage_seconds_total[5m])) by (pod)"
-    },
-    {
-        "name": "memory_usage",
-        "query": "avg(container_memory_usage_bytes) by (pod)"
-    }
-]
-
-if __name__ == "__main__":
-    exporter = PrometheusExporter(
-        prometheus_url="http://prometheus:9090",
-        kafka_bootstrap="kafka:9092"
-    )
-    exporter.run_continuous(METRICS_TO_EXPORT, interval=60)
-```
-
+data:
+  ANOMALY_THRESHOLD: "3.0"
+  CORRELATION_WINDOW_SECONDS: "300"
+  AUTO_REMEDIATION_ENABLED: "false"
+  INCIDENT_TOPIC: "aiops.incidents"
 ---
-
-## Step 2: Anomaly Detection Service
-
-### Main Detection Service
-
-```python
-# src/detector/main.py
-"""
-Anomaly Detection Service
-
-Consumes metrics from Kafka, detects anomalies, publishes to anomalies topic.
-"""
-import json
-import os
-from datetime import datetime, timedelta
-from collections import defaultdict
-from kafka import KafkaConsumer, KafkaProducer
-from .detectors.prophet_detector import ProphetDetector
-from .detectors.isolation_forest import IsolationForestDetector
-from .detectors.luminaire_detector import LuminaireDetector
-from .config import Config
-
-class AnomalyDetectionService:
-    """Main anomaly detection service."""
-
-    def __init__(self, config: Config):
-        self.config = config
-
-        # Kafka setup
-        self.consumer = KafkaConsumer(
-            config.metrics_topic,
-            bootstrap_servers=config.kafka_bootstrap,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            group_id="anomaly-detector",
-            auto_offset_reset="latest"
-        )
-
-        self.producer = KafkaProducer(
-            bootstrap_servers=config.kafka_bootstrap,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
-
-        # Detectors
-        self.detectors = {
-            "prophet": ProphetDetector(),
-            "isolation_forest": IsolationForestDetector(),
-            "luminaire": LuminaireDetector()
-        }
-
-        # Metric history for batch detection
-        self.metric_history: dict[str, list] = defaultdict(list)
-        self.history_window = timedelta(hours=24)
-
-    def get_metric_key(self, metric: dict) -> str:
-        """Generate unique key for metric series."""
-        labels = metric.get("labels", {})
-        sorted_labels = sorted(labels.items())
-        return f"{metric['name']}:{sorted_labels}"
-
-    def add_to_history(self, metric: dict):
-        """Add metric to history buffer."""
-        key = self.get_metric_key(metric)
-        self.metric_history[key].append({
-            "timestamp": metric["timestamp"],
-            "value": metric["value"]
-        })
-
-        # Trim old data
-        cutoff = datetime.utcnow() - self.history_window
-        self.metric_history[key] = [
-            m for m in self.metric_history[key]
-            if datetime.fromisoformat(m["timestamp"]) > cutoff
-        ]
-
-    def detect_anomaly(self, metric: dict) -> dict | None:
-        """
-        Run anomaly detection on metric.
-
-        Returns anomaly dict if detected, None otherwise.
-        """
-        key = self.get_metric_key(metric)
-        history = self.metric_history[key]
-
-        if len(history) < self.config.min_history_points:
-            return None
-
-        # Choose detector based on metric type
-        detector_name = self.config.metric_detector_map.get(
-            metric["name"],
-            "isolation_forest"  # default
-        )
-        detector = self.detectors[detector_name]
-
-        # Run detection
-        is_anomaly, score, details = detector.detect(
-            history,
-            metric["value"]
-        )
-
-        if is_anomaly:
-            return {
-                "timestamp": metric["timestamp"],
-                "metric_name": metric["name"],
-                "metric_labels": metric.get("labels", {}),
-                "value": metric["value"],
-                "anomaly_score": score,
-                "detector": detector_name,
-                "details": details
-            }
-
-        return None
-
-    def run(self):
-        """Main processing loop."""
-        print("Starting Anomaly Detection Service...")
-
-        for message in self.consumer:
-            metric = message.value
-
-            # Add to history
-            self.add_to_history(metric)
-
-            # Detect anomalies
-            anomaly = self.detect_anomaly(metric)
-
-            if anomaly:
-                print(f"Anomaly detected: {anomaly['metric_name']}")
-                self.producer.send(
-                    self.config.anomalies_topic,
-                    anomaly
-                )
-                self.producer.flush()
-
-
-if __name__ == "__main__":
-    config = Config.from_env()
-    service = AnomalyDetectionService(config)
-    service.run()
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aiops-secrets
+  namespace: aiops
+type: Opaque
+stringData:
+  PAGERDUTY_ROUTING_KEY: "replace-with-real-routing-key"
+  SLACK_WEBHOOK_URL: "https://hooks.slack.com/services/replace/me"
 ```
-
-### Prophet Detector Implementation
-
-```python
-# src/detector/detectors/prophet_detector.py
-"""
-Prophet-based anomaly detector for metrics with seasonality.
-"""
-import pandas as pd
-from prophet import Prophet
-
-class ProphetDetector:
-    """Anomaly detection using Facebook Prophet."""
-
-    def __init__(
-        self,
-        seasonality_mode: str = "multiplicative",
-        interval_width: float = 0.95
-    ):
-        self.seasonality_mode = seasonality_mode
-        self.interval_width = interval_width
-        self.models: dict = {}
-
-    def detect(
-        self,
-        history: list[dict],
-        current_value: float
-    ) -> tuple[bool, float, dict]:
-        """
-        Detect if current value is anomalous.
-
-        Returns:
-            (is_anomaly, score, details)
-        """
-        if len(history) < 100:
-            return False, 0.0, {"reason": "insufficient_data"}
-
-        # Prepare data for Prophet
-        df = pd.DataFrame(history)
-        df.columns = ["ds", "y"]
-        df["ds"] = pd.to_datetime(df["ds"])
-
-        # Train Prophet model
-        model = Prophet(
-            seasonality_mode=self.seasonality_mode,
-            interval_width=self.interval_width,
-            daily_seasonality=True,
-            weekly_seasonality=True
-        )
-        model.fit(df)
-
-        # Get forecast for current point
-        future = model.make_future_dataframe(periods=1, freq="min")
-        forecast = model.predict(future)
-        last_row = forecast.iloc[-1]
-
-        # Check if current value is outside confidence interval
-        lower = last_row["yhat_lower"]
-        upper = last_row["yhat_upper"]
-        expected = last_row["yhat"]
-
-        is_anomaly = current_value < lower or current_value > upper
-
-        # Calculate anomaly score (how far outside the interval)
-        if is_anomaly:
-            if current_value < lower:
-                score = (lower - current_value) / (upper - lower)
-            else:
-                score = (current_value - upper) / (upper - lower)
-        else:
-            score = 0.0
-
-        details = {
-            "expected": expected,
-            "lower_bound": lower,
-            "upper_bound": upper,
-            "deviation": current_value - expected
-        }
-
-        return is_anomaly, min(score, 1.0), details
-```
-
-### Isolation Forest Detector
-
-```python
-# src/detector/detectors/isolation_forest.py
-"""
-Isolation Forest anomaly detector for high-dimensional data.
-"""
-import numpy as np
-from sklearn.ensemble import IsolationForest
-
-class IsolationForestDetector:
-    """Anomaly detection using Isolation Forest."""
-
-    def __init__(
-        self,
-        contamination: float = 0.01,
-        n_estimators: int = 100
-    ):
-        self.contamination = contamination
-        self.n_estimators = n_estimators
-
-    def detect(
-        self,
-        history: list[dict],
-        current_value: float
-    ) -> tuple[bool, float, dict]:
-        """
-        Detect if current value is anomalous.
-
-        Returns:
-            (is_anomaly, score, details)
-        """
-        if len(history) < 50:
-            return False, 0.0, {"reason": "insufficient_data"}
-
-        # Extract values
-        values = np.array([h["value"] for h in history]).reshape(-1, 1)
-        current = np.array([[current_value]])
-
-        # Train Isolation Forest
-        model = IsolationForest(
-            contamination=self.contamination,
-            n_estimators=self.n_estimators,
-            random_state=42
-        )
-        model.fit(values)
-
-        # Predict
-        prediction = model.predict(current)[0]
-        score = -model.decision_function(current)[0]  # Higher = more anomalous
-
-        is_anomaly = prediction == -1
-
-        # Calculate statistics for context
-        mean = np.mean(values)
-        std = np.std(values)
-        z_score = (current_value - mean) / std if std > 0 else 0
-
-        details = {
-            "mean": float(mean),
-            "std": float(std),
-            "z_score": float(z_score),
-            "isolation_score": float(score)
-        }
-
-        return is_anomaly, min(abs(score), 1.0), details
-```
-
----
-
-## Step 3: Event Correlation Service
-
-```python
-# src/correlator/main.py
-"""
-Event Correlation Service
-
-Consumes anomalies from Kafka, correlates related events, creates incidents.
-"""
-import json
-import os
-from datetime import datetime, timedelta
-from collections import defaultdict
-from kafka import KafkaConsumer, KafkaProducer
-from .correlators.time_based import TimeBasedCorrelator
-from .correlators.topology_based import TopologyBasedCorrelator
-from .correlators.text_based import TextBasedCorrelator
-from .config import Config
-
-class EventCorrelationService:
-    """Main event correlation service."""
-
-    def __init__(self, config: Config):
-        self.config = config
-
-        # Kafka setup
-        self.consumer = KafkaConsumer(
-            config.anomalies_topic,
-            bootstrap_servers=config.kafka_bootstrap,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            group_id="event-correlator",
-            auto_offset_reset="latest"
-        )
-
-        self.producer = KafkaProducer(
-            bootstrap_servers=config.kafka_bootstrap,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
-
-        # Correlators
-        self.time_correlator = TimeBasedCorrelator(
-            window_seconds=config.correlation_window
-        )
-        self.topology_correlator = TopologyBasedCorrelator(
-            topology_file=config.topology_file
-        )
-        self.text_correlator = TextBasedCorrelator()
-
-        # Active incidents
-        self.active_incidents: dict = {}
-        self.incident_counter = 0
-
-    def correlate_event(self, anomaly: dict) -> str | None:
-        """
-        Try to correlate anomaly with existing incident.
-
-        Returns incident_id if correlated, None otherwise.
-        """
-        for incident_id, incident in self.active_incidents.items():
-            # Time correlation
-            if self.time_correlator.correlates(anomaly, incident["events"]):
-                return incident_id
-
-            # Topology correlation
-            if self.topology_correlator.correlates(anomaly, incident["events"]):
-                return incident_id
-
-            # Text similarity
-            if self.text_correlator.correlates(anomaly, incident["events"]):
-                return incident_id
-
-        return None
-
-    def create_incident(self, anomaly: dict) -> str:
-        """Create new incident from anomaly."""
-        self.incident_counter += 1
-        incident_id = f"INC-{self.incident_counter:06d}"
-
-        self.active_incidents[incident_id] = {
-            "id": incident_id,
-            "created_at": anomaly["timestamp"],
-            "updated_at": anomaly["timestamp"],
-            "status": "open",
-            "severity": self.calculate_severity(anomaly),
-            "events": [anomaly],
-            "root_cause": None
-        }
-
-        return incident_id
-
-    def add_to_incident(self, incident_id: str, anomaly: dict):
-        """Add anomaly to existing incident."""
-        incident = self.active_incidents[incident_id]
-        incident["events"].append(anomaly)
-        incident["updated_at"] = anomaly["timestamp"]
-
-        # Recalculate severity
-        incident["severity"] = max(
-            incident["severity"],
-            self.calculate_severity(anomaly)
-        )
-
-        # Try to identify root cause
-        if len(incident["events"]) >= 3:
-            incident["root_cause"] = self.identify_root_cause(
-                incident["events"]
-            )
-
-    def calculate_severity(self, anomaly: dict) -> int:
-        """Calculate severity (1-5) based on anomaly."""
-        score = anomaly.get("anomaly_score", 0)
-
-        if score > 0.9:
-            return 5  # Critical
-        elif score > 0.7:
-            return 4  # High
-        elif score > 0.5:
-            return 3  # Medium
-        elif score > 0.3:
-            return 2  # Low
-        else:
-            return 1  # Info
-
-    def identify_root_cause(self, events: list[dict]) -> dict | None:
-        """
-        Identify probable root cause from correlated events.
-        """
-        if not events:
-            return None
-
-        # Sort by timestamp
-        sorted_events = sorted(events, key=lambda e: e["timestamp"])
-
-        # First event is often the root cause
-        first_event = sorted_events[0]
-
-        # Look for infrastructure-level events
-        infra_events = [
-            e for e in sorted_events
-            if any(k in e.get("metric_name", "").lower()
-                   for k in ["cpu", "memory", "disk", "network"])
-        ]
-
-        if infra_events:
-            root_event = infra_events[0]
-        else:
-            root_event = first_event
-
-        return {
-            "event": root_event,
-            "confidence": 0.7,  # Would use ML in production
-            "reasoning": "First occurring event in correlation window"
-        }
-
-    def publish_incident(self, incident_id: str):
-        """Publish incident to Kafka."""
-        incident = self.active_incidents[incident_id]
-        self.producer.send(self.config.incidents_topic, incident)
-        self.producer.flush()
-
-    def cleanup_old_incidents(self):
-        """Close incidents that haven't had events recently."""
-        cutoff = datetime.utcnow() - timedelta(
-            minutes=self.config.incident_timeout_minutes
-        )
-
-        for incident_id, incident in list(self.active_incidents.items()):
-            last_update = datetime.fromisoformat(incident["updated_at"])
-            if last_update < cutoff:
-                incident["status"] = "resolved"
-                self.publish_incident(incident_id)
-                del self.active_incidents[incident_id]
-
-    def run(self):
-        """Main processing loop."""
-        print("Starting Event Correlation Service...")
-
-        for message in self.consumer:
-            anomaly = message.value
-
-            # Try to correlate with existing incident
-            incident_id = self.correlate_event(anomaly)
-
-            if incident_id:
-                self.add_to_incident(incident_id, anomaly)
-                print(f"Added to incident: {incident_id}")
-            else:
-                incident_id = self.create_incident(anomaly)
-                print(f"Created incident: {incident_id}")
-
-            # Publish updated incident
-            self.publish_incident(incident_id)
-
-            # Periodic cleanup
-            self.cleanup_old_incidents()
-
-
-if __name__ == "__main__":
-    config = Config.from_env()
-    service = EventCorrelationService(config)
-    service.run()
-```
-
----
-
-## Step 4: Incident Manager Service
-
-```python
-# src/incident_manager/main.py
-"""
-Incident Manager Service
-
-Consumes incidents from Kafka, takes actions (alert, remediate).
-"""
-import json
-import os
-from kafka import KafkaConsumer
-from .actions.pagerduty import PagerDutyAction
-from .actions.slack import SlackAction
-from .actions.remediation import RemediationAction
-from .config import Config
-
-class IncidentManagerService:
-    """Main incident management service."""
-
-    def __init__(self, config: Config):
-        self.config = config
-
-        # Kafka setup
-        self.consumer = KafkaConsumer(
-            config.incidents_topic,
-            bootstrap_servers=config.kafka_bootstrap,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            group_id="incident-manager",
-            auto_offset_reset="latest"
-        )
-
-        # Actions
-        self.pagerduty = PagerDutyAction(config.pagerduty_key)
-        self.slack = SlackAction(config.slack_webhook)
-        self.remediation = RemediationAction(config.runbook_dir)
-
-        # Track notified incidents
-        self.notified_incidents: set = set()
-
-    def should_alert(self, incident: dict) -> bool:
-        """Determine if incident should trigger alert."""
-        # Only alert on new or escalated incidents
-        if incident["id"] in self.notified_incidents:
-            # Check for escalation
-            return incident["severity"] >= 4
-
-        return incident["severity"] >= 3
-
-    def should_remediate(self, incident: dict) -> bool:
-        """Determine if auto-remediation should run."""
-        if not self.config.auto_remediation_enabled:
-            return False
-
-        # Only auto-remediate known issues
-        if not incident.get("root_cause"):
-            return False
-
-        # Check if runbook exists
-        root_cause_type = self.get_root_cause_type(incident)
-        return self.remediation.has_runbook(root_cause_type)
-
-    def get_root_cause_type(self, incident: dict) -> str:
-        """Extract root cause type for runbook matching."""
-        root_cause = incident.get("root_cause", {})
-        event = root_cause.get("event", {})
-        return event.get("metric_name", "unknown")
-
-    def handle_incident(self, incident: dict):
-        """Process incident and take appropriate actions."""
-
-        # Always notify Slack for visibility
-        self.slack.send(incident)
-
-        # Alert on-call if severity warrants
-        if self.should_alert(incident):
-            self.pagerduty.create_incident(incident)
-            self.notified_incidents.add(incident["id"])
-
-        # Auto-remediate if possible
-        if self.should_remediate(incident):
-            root_cause_type = self.get_root_cause_type(incident)
-            result = self.remediation.execute(root_cause_type, incident)
-
-            # Notify about remediation
-            self.slack.send_remediation_result(incident, result)
-
-    def run(self):
-        """Main processing loop."""
-        print("Starting Incident Manager Service...")
-
-        for message in self.consumer:
-            incident = message.value
-
-            print(f"Processing incident: {incident['id']}")
-            self.handle_incident(incident)
-
-
-if __name__ == "__main__":
-    config = Config.from_env()
-    service = IncidentManagerService(config)
-    service.run()
-```
-
-### Slack Action
-
-```python
-# src/incident_manager/actions/slack.py
-"""
-Slack notification action.
-"""
-import requests
-
-class SlackAction:
-    """Send notifications to Slack."""
-
-    def __init__(self, webhook_url: str):
-        self.webhook_url = webhook_url
-
-    def send(self, incident: dict):
-        """Send incident notification to Slack."""
-        severity_emoji = {
-            1: "ℹ️",
-            2: "⚠️",
-            3: "🟠",
-            4: "🔴",
-            5: "🚨"
-        }
-
-        emoji = severity_emoji.get(incident["severity"], "❓")
-        event_count = len(incident["events"])
-
-        # Build message
-        message = {
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"{emoji} Incident: {incident['id']}"
-                    }
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Severity:* {incident['severity']}/5"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Events:* {event_count}"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Status:* {incident['status']}"
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Created:* {incident['created_at']}"
-                        }
-                    ]
-                }
-            ]
-        }
-
-        # Add root cause if identified
-        if incident.get("root_cause"):
-            rc = incident["root_cause"]
-            message["blocks"].append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Probable Root Cause:* {rc['event']['metric_name']}\n"
-                            f"Confidence: {rc['confidence']*100:.0f}%"
-                }
-            })
-
-        requests.post(self.webhook_url, json=message)
-
-    def send_remediation_result(self, incident: dict, result: dict):
-        """Send remediation result to Slack."""
-        status = "✅ Success" if result["success"] else "❌ Failed"
-
-        message = {
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Auto-Remediation {status}*\n"
-                                f"Incident: {incident['id']}\n"
-                                f"Action: {result['action']}\n"
-                                f"Output: ```{result.get('output', 'N/A')}```"
-                    }
-                }
-            ]
-        }
-
-        requests.post(self.webhook_url, json=message)
-```
-
----
-
-## Step 5: Kubernetes Deployment
 
 ```yaml
-# k8s/aiops/detector-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1051,40 +582,40 @@ spec:
         app: anomaly-detector
     spec:
       containers:
-      - name: detector
-        image: your-registry/anomaly-detector:latest
-        env:
-        - name: KAFKA_BOOTSTRAP
-          value: "kafka:9092"
-        - name: METRICS_TOPIC
-          value: "metrics"
-        - name: ANOMALIES_TOPIC
-          value: "anomalies"
-        - name: MIN_HISTORY_POINTS
-          value: "100"
-        envFrom:
-        - configMapRef:
-            name: aiops-config
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
+        - name: detector
+          image: registry.example.com/aiops/anomaly-detector:1.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aiops-config
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.aiops.svc.cluster.local:9092"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "750m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+```
+
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1093,7 +624,7 @@ metadata:
   labels:
     app: event-correlator
 spec:
-  replicas: 1  # Single instance for correlation consistency
+  replicas: 1
   selector:
     matchLabels:
       app: event-correlator
@@ -1103,28 +634,42 @@ spec:
         app: event-correlator
     spec:
       containers:
-      - name: correlator
-        image: your-registry/event-correlator:latest
-        env:
-        - name: KAFKA_BOOTSTRAP
-          value: "kafka:9092"
-        - name: ANOMALIES_TOPIC
-          value: "anomalies"
-        - name: INCIDENTS_TOPIC
-          value: "incidents"
-        - name: CORRELATION_WINDOW
-          value: "300"
-        envFrom:
-        - configMapRef:
-            name: aiops-config
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "250m"
----
+        - name: correlator
+          image: registry.example.com/aiops/event-correlator:1.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aiops-config
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka.aiops.svc.cluster.local:9092"
+            - name: STATE_BACKEND
+              value: "local"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "384Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+```
+
+```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1143,290 +688,244 @@ spec:
         app: incident-manager
     spec:
       containers:
-      - name: manager
-        image: your-registry/incident-manager:latest
-        env:
-        - name: KAFKA_BOOTSTRAP
-          value: "kafka:9092"
-        - name: INCIDENTS_TOPIC
-          value: "incidents"
-        envFrom:
-        - secretRef:
-            name: aiops-secrets
-        - configMapRef:
-            name: aiops-config
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "250m"
+        - name: manager
+          image: registry.example.com/aiops/incident-manager:1.0.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: aiops-config
+            - secretRef:
+                name: aiops-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "300m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ```
 
-### ConfigMap and Secrets
+The `AUTO_REMEDIATION_ENABLED` default is `false` for a reason. Remediation is an actuator, and actuators deserve stronger controls than dashboards. Start with recommendations, then move to human-approved actions, then narrow automatic actions only after measuring safety. The first automatic action should be reversible, scoped, rate-limited, and tied to a runbook that humans already trust.
 
-```yaml
-# k8s/aiops/configmap.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aiops-config
-  namespace: aiops
-data:
-  AUTO_REMEDIATION_ENABLED: "true"
-  INCIDENT_TIMEOUT_MINUTES: "30"
-  RUNBOOK_DIR: "/etc/runbooks"
+The platform should also monitor the AIOps system itself. Track input lag, invalid event count, detector latency, anomaly volume, incident deduplication rate, action failures, and responder feedback. If anomaly volume doubles after a deploy, the AIOps team should know before on-call responders lose trust. Monitor your monitoring, but more specifically, monitor the decision pipeline that influences responders.
 
----
-# k8s/aiops/secrets.yaml (use sealed-secrets or external-secrets in production)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aiops-secrets
-  namespace: aiops
-type: Opaque
-stringData:
-  PAGERDUTY_KEY: "your-pagerduty-integration-key"
-  SLACK_WEBHOOK: "https://hooks.slack.com/services/xxx/xxx/xxx"
+```text
+AIOPS SERVICE HEALTH SIGNALS
+
+┌────────────────────────┐    ┌───────────────────────────────────────┐
+│ Pipeline Stage         │    │ Health Signals                         │
+├────────────────────────┤    ├───────────────────────────────────────┤
+│ Ingestion              │    │ Kafka lag, invalid events, sample gaps │
+│ Feature engineering    │    │ enrichment misses, schema rejects      │
+│ Detection              │    │ score latency, anomaly rate, errors    │
+│ Correlation            │    │ duplicate incidents, open state size   │
+│ Incident management    │    │ notification failures, action retries  │
+│ Feedback               │    │ label coverage, reviewer disagreement  │
+└────────────────────────┘    └───────────────────────────────────────┘
 ```
 
----
+Production maturity is not reached when the first model runs. It is reached when the team can deploy a new detector in shadow mode, compare it against historical incidents, roll it out to one service group, explain its output during an incident, and roll it back without losing the event stream. That is a platform engineering standard, not a data science luxury.
+
+## Did You Know?
+
+- **Netflix built several internal and open-source anomaly detection components because streaming behavior has service-specific patterns that generic monitoring could not fully capture.** The important lesson is not that every company should copy Netflix; it is that detection quality improves when the model understands the operating domain.
+
+- **LinkedIn's ThirdEye grew from the need to detect business and service anomalies across high-volume metric streams.** Its existence illustrates a common custom-AIOps driver: when metric volume, organizational context, and decision latency become tightly coupled, platform teams need more control over the pipeline.
+
+- **Many AIOps failures are data-contract failures rather than model failures.** Missing ownership labels, inconsistent service names, and unversioned feature changes can break correlation even when the detector's statistical method is reasonable.
+
+- **Shadow evaluation is one of the safest ways to improve operational intelligence.** A challenger detector can score the same events as production without paging humans, which lets the team compare usefulness before changing incident behavior.
 
 ## Common Mistakes
 
-| Mistake | Impact | Solution |
-|---------|--------|----------|
-| Training on too little data | High false positive rate | Wait for 2+ weeks of data before alerting |
-| Not handling concept drift | Degraded accuracy over time | Retrain models regularly or use online learning |
-| Single point of failure | Complete AIOps outage | Deploy with replicas, handle Kafka partitions |
-| Ignoring seasonality | Weekend/holiday false positives | Use Prophet or similar for seasonal metrics |
-| Alert on every anomaly | Alert fatigue | Require correlation before alerting |
-| No observability for AIOps | Blind to AIOps issues | Monitor your monitoring |
-
----
+| Mistake | Impact | Better Approach |
+|---|---|---|
+| Building custom AIOps before naming the decision it improves | The project becomes a model demo that does not reduce incident pain | Define the operational decision, target services, success metric, and human workflow before choosing tools |
+| Training or tuning against too little representative data | False positives rise during normal cycles, deploys, or traffic shifts | Collect enough baseline history, separate service profiles, and start with advisory output |
+| Treating anomaly detection as the whole product | Responders receive isolated signals without root-cause context or action guidance | Add topology, ownership, deployment history, correlation, and feedback from the beginning |
+| Scaling correlators without shared state or partition design | Related anomalies become duplicate incidents or inconsistent hypotheses | Partition by correlation domain or use a state backend with explicit merge behavior |
+| Hiding model evidence behind a single score | Engineers cannot judge whether an alert is trustworthy during an incident | Emit expected range, sample count, detector name, window, and supporting metadata |
+| Enabling remediation before proving alert quality | The system can restart, scale, or change workloads for the wrong reason | Begin with recommendations, require human approval, and automate only narrow reversible actions |
+| Ignoring drift in features, labels, and topology | Model quality decays even though code and thresholds appear unchanged | Version schemas, monitor enrichment misses, and review detector performance over time |
+| Failing to observe the AIOps pipeline itself | Broken ingestion or noisy models are discovered by annoyed responders | Track lag, invalid events, anomaly volume, duplicate incidents, action failures, and feedback coverage |
 
 ## Quiz
 
-Test your understanding of building custom AIOps:
-
 ### Question 1
-Why use Kafka between pipeline stages?
+
+Your team wants to build custom AIOps because the CPU alert for a critical service pages too often. During review, you discover the alert fires on every short-lived deployment spike, but incidents are only caused when error rate and queue depth rise together. What should you recommend as the first change, and why?
 
 <details>
 <summary>Show Answer</summary>
 
-Kafka provides:
-1. **Decoupling** — Services can scale independently
-2. **Durability** — Messages persist if consumers are down
-3. **Replay** — Can reprocess historical data
-4. **Backpressure** — Handles traffic spikes gracefully
-5. **Multiple consumers** — Same data feeds multiple services
+Start by improving the decision logic rather than building a broad custom platform. The immediate problem is not that CPU needs a sophisticated model; the problem is that the alert does not match the incident condition. A better first step is to correlate CPU with error rate, queue depth, deployment windows, and service impact, then page only when the combined condition predicts user risk. This aligns the signal with the operational decision and may avoid unnecessary custom infrastructure.
 </details>
 
 ### Question 2
-Why does the correlator run as a single replica?
+
+A detector emits anomaly events with `timestamp`, `metric_name`, `value`, and `anomaly_score`, but it does not include `service`, `namespace`, or ownership labels. The model scores look accurate in offline tests. What will likely fail when you connect this detector to incident workflow?
 
 <details>
 <summary>Show Answer</summary>
 
-Event correlation requires **global state** to group related events. With multiple replicas, different anomalies might go to different instances, breaking correlation.
-
-Solutions for scaling:
-- Partition by service/region to isolate correlation domains
-- Use distributed state (Redis) for shared correlation state
-- Accept eventual consistency with cross-instance sync
+Correlation and routing will fail even if the model scores are accurate. Without service and namespace identity, the system cannot attach topology, group related events, choose the correct on-call team, select a runbook, or gather service-specific feedback. Offline model accuracy is not enough for AIOps; the event contract must carry the context needed by downstream operational decisions.
 </details>
 
 ### Question 3
-What's the minimum data needed before anomaly detection works?
+
+A platform team deploys three correlator replicas behind one Kafka consumer group. Afterward, responders see duplicate incidents for the same checkout outage, and each incident contains only part of the evidence. What design issue caused this, and what are two reasonable fixes?
 
 <details>
 <summary>Show Answer</summary>
 
-It depends on the algorithm:
-- **Prophet**: 100+ data points covering at least one full seasonal cycle (1 week minimum for weekly patterns)
-- **Isolation Forest**: 50+ data points for reasonable baseline
-- **Luminaire**: 50+ points for structural break detection
-
-Best practice: Wait 2+ weeks before enabling alerting to avoid false positives during the learning period.
+The correlator has stateful grouping behavior, but the deployment scaled it like a stateless service. Related anomaly events were split across replicas without a shared correlation state or partitioning strategy. Two reasonable fixes are to partition events by a stable correlation key such as service group or ownership domain, or to store active incident state in a shared backend such as Redis or a stream processor with keyed state. Running a single correlator can also be acceptable while volume is low.
 </details>
 
----
+### Question 4
+
+Your challenger detector finds more anomalies than the current production detector during shadow evaluation. Product leadership wants to promote it immediately because it catches two past incidents earlier. What additional evidence should you ask for before rollout?
+
+<details>
+<summary>Show Answer</summary>
+
+Ask for precision, duplicate rate, false positive review, timeliness, and responder usefulness across a representative period. Catching two incidents earlier is valuable, but the detector may also create enough noise to reduce trust. A safe rollout compares the challenger against production in shadow mode, reviews false positives with service owners, and then enables it for a narrow service group before broader paging behavior changes.
+</details>
+
+### Question 5
+
+An AIOps pipeline starts producing many critical incidents every Monday morning. The affected services are healthy, but traffic patterns are different from weekends. Which part of the design should you inspect first, and what change might reduce the noise?
+
+<details>
+<summary>Show Answer</summary>
+
+Inspect the baseline and feature engineering design first. The detector may be comparing Monday traffic to weekend history without understanding weekly seasonality or business-hour patterns. A better approach is to use a seasonal baseline, include day-of-week and traffic context as features, or maintain separate baselines for comparable time windows. This addresses the signal shape rather than simply raising thresholds.
+</details>
+
+### Question 6
+
+A team wants to enable automatic remediation for every incident where the anomaly score exceeds `0.90`. The proposed action restarts the affected Deployment. What risks should you raise, and how would you redesign the rollout?
+
+<details>
+<summary>Show Answer</summary>
+
+Anomaly score alone does not prove root cause or prove that restart is safe. Restarting every high-score workload can worsen incidents, hide evidence, or create cascading failures. Redesign the rollout as advisory first, then human-approved remediation for a narrow known failure mode, then automatic action only when the runbook is reversible, rate-limited, scoped, and supported by feedback showing high correctness. The action should depend on root-cause evidence, not just anomaly severity.
+</details>
+
+### Question 7
+
+Your detector performed well for two months, but recently it misses incidents after a service migration. The code did not change. What non-code causes should you investigate, and how would you prevent a repeat?
+
+<details>
+<summary>Show Answer</summary>
+
+Investigate feature drift, label changes, topology changes, service renames, missing ownership metadata, altered traffic shape, and deployment process changes. The model may receive different inputs even though detector code is unchanged. Prevention requires schema validation, feature versioning, enrichment-miss metrics, topology freshness checks, and regular feedback-based evaluation. AIOps quality depends on the data contract staying true to the operating environment.
+</details>
 
 ## Hands-On Exercise
 
 ### Objective
-Build a minimal custom AIOps pipeline using Python and Docker.
 
-### Exercise: Local AIOps Pipeline
+Build a minimal local AIOps pipeline that turns metric samples into anomaly events, groups those events into incident candidates, and evaluates whether the pipeline output would be useful to a responder. This exercise uses local files so you can focus on the concepts before adding Kafka or Kubernetes.
 
-**Step 1: Create Project Structure**
+### Scenario
+
+The commerce platform team owns `checkout-api`, `payment-api`, `inventory-api`, and `catalog-api`. During a load event, responders receive scattered telemetry from several services. Your task is to build the first version of a custom AIOps pipeline that detects unusual latency, correlates related anomalies, and produces an incident candidate with evidence.
+
+### Step 1: Create the workspace
 
 ```bash
-mkdir custom-aiops && cd custom-aiops
-mkdir -p src/detector src/correlator
-touch docker-compose.yml
-touch src/detector/main.py src/correlator/main.py
-touch requirements.txt
+mkdir custom-aiops-local
+cd custom-aiops-local
+touch samples.jsonl rolling_detector.py correlate_anomalies.py review_incidents.py
 ```
 
-**Step 2: Create docker-compose.yml**
+### Step 2: Add the sample data
 
-```yaml
-version: '3.8'
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
+Copy the `samples.jsonl` content from the worked example into your local file. Add at least six more samples for `payment-api` where latency rises shortly after the `checkout-api` spike. Keep the timestamps within the same five-minute bucket so the correlator has a chance to group them.
 
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+### Step 3: Add the detector
 
-  detector:
-    build:
-      context: .
-      dockerfile: Dockerfile.detector
-    depends_on:
-      - kafka
-    environment:
-      KAFKA_BOOTSTRAP: kafka:29092
+Copy `rolling_detector.py` from the worked example into your local file. Run the detector and store its output:
 
-  correlator:
-    build:
-      context: .
-      dockerfile: Dockerfile.correlator
-    depends_on:
-      - kafka
-    environment:
-      KAFKA_BOOTSTRAP: kafka:29092
+```bash
+.venv/bin/python rolling_detector.py samples.jsonl --min-points 5 --z-threshold 3.0 > anomalies.jsonl
 ```
 
-**Step 3: Create Minimal Detector**
+If the output is empty, lower the threshold to `2.5` and run it again. Do not treat threshold tuning as a trick; write down why the lower threshold changes the trade-off between missed incidents and alert noise.
+
+### Step 4: Add the correlator
+
+Copy `correlate_anomalies.py` from the correlation section into your local file. Run it against the detector output:
+
+```bash
+.venv/bin/python correlate_anomalies.py anomalies.jsonl --bucket-seconds 300 > incidents.jsonl
+```
+
+Open `incidents.jsonl` and inspect whether checkout and payment anomalies were grouped. If they were not grouped, inspect the topology map and timestamps before changing detector logic.
+
+### Step 5: Add a small review script
+
+Create `review_incidents.py` to summarize incident candidates for a responder:
 
 ```python
-# src/detector/main.py
+#!/usr/bin/env python3
 import json
-import random
-import time
-from kafka import KafkaProducer, KafkaConsumer
-import numpy as np
+import sys
 
-def create_detector():
-    producer = KafkaProducer(
-        bootstrap_servers='kafka:29092',
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
 
-    # Simulate metrics and detect anomalies
-    baseline = 100
-    history = []
+def summarize(path: str) -> None:
+    with open(path, "r", encoding="utf-8") as source:
+        for line in source:
+            if not line.strip():
+                continue
+            incident = json.loads(line)
+            services = ", ".join(incident["services"])
+            hypothesis = incident["hypothesis"]
+            print(f"Incident: {incident['incident_id']}")
+            print(f"Severity: {incident['severity']}")
+            print(f"Services: {services}")
+            print(f"Events: {incident['event_count']}")
+            print(f"Starting hypothesis: {hypothesis['probable_starting_service']}")
+            print(f"Reason: {hypothesis['reason']}")
+            print(f"Confidence: {hypothesis['confidence']}")
+            print("---")
 
-    while True:
-        # Generate metric (occasionally anomalous)
-        if random.random() < 0.05:  # 5% anomaly rate
-            value = baseline * random.uniform(2, 5)
-            is_anomaly = True
-        else:
-            value = baseline + random.gauss(0, 10)
-            is_anomaly = False
-
-        history.append(value)
-        if len(history) > 100:
-            history.pop(0)
-
-        # Simple z-score detection
-        if len(history) >= 20:
-            mean = np.mean(history)
-            std = np.std(history)
-            z_score = abs(value - mean) / std if std > 0 else 0
-
-            if z_score > 3:
-                anomaly = {
-                    "timestamp": time.time(),
-                    "metric": "cpu_usage",
-                    "value": value,
-                    "z_score": z_score
-                }
-                producer.send('anomalies', anomaly)
-                print(f"Anomaly detected: {anomaly}")
-
-        time.sleep(1)
 
 if __name__ == "__main__":
-    time.sleep(10)  # Wait for Kafka
-    create_detector()
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: review_incidents.py incidents.jsonl")
+    summarize(sys.argv[1])
 ```
 
-**Step 4: Run the Pipeline**
+Run the review script:
 
 ```bash
-docker-compose up --build
+.venv/bin/python review_incidents.py incidents.jsonl
 ```
 
+### Step 6: Evaluate the design
+
+Write a short design note in your own words. Explain whether the output would help an incident commander, what context is missing, and what you would add before paging humans. Include at least one improvement to the event schema, one improvement to correlation, and one safety control for remediation.
+
 ### Success Criteria
-- [ ] Kafka cluster running
-- [ ] Detector producing anomalies to Kafka
-- [ ] Can consume anomalies from Kafka topic
-- [ ] Understand the data flow
 
----
+- [ ] You generated anomaly events from local metric samples using `.venv/bin/python`.
+- [ ] Each anomaly event includes service identity, metric name, value, score, detector name, and evidence.
+- [ ] You grouped anomaly events into at least one incident candidate.
+- [ ] You inspected whether topology and time windows changed the grouping behavior.
+- [ ] You explained the threshold trade-off instead of treating the detector as automatically correct.
+- [ ] You identified missing context that would matter during a real incident.
+- [ ] You proposed a safe next step before any automatic remediation is enabled.
 
-## Key Takeaways
+## Next Module
 
-1. **Start with platforms** — Build custom only when platform AI doesn't fit
-2. **Kafka is the backbone** — Decouples services, provides durability
-3. **Correlation is hard** — Single-instance or distributed state required
-4. **Models need data** — Wait 2+ weeks before alerting
-5. **Monitor your monitoring** — AIOps needs observability too
-
----
-
-## Further Reading
-
-### Open Source AIOps Projects
-- [LinkedIn ThirdEye](https://github.com/linkedin/thirdeye) — Open-source anomaly detection
-- [Netflix Surus](https://github.com/Netflix/Surus) — Collection of anomaly detection tools
-- [Apache Flink](https://flink.apache.org/) — Stream processing for real-time ML
-
-### Building ML Systems
-- [Designing Machine Learning Systems](https://www.oreilly.com/library/view/designing-machine-learning/9781098107956/) — Chip Huyen
-- [Machine Learning Engineering](http://www.mlebook.com/) — Andriy Burkov
-- [Reliable Machine Learning](https://www.oreilly.com/library/view/reliable-machine-learning/9781098106218/) — O'Reilly
-
-### Kafka and Streaming
-- [Kafka: The Definitive Guide](https://www.confluent.io/resources/kafka-the-definitive-guide-v2/) — Confluent
-- [Streaming Systems](https://www.oreilly.com/library/view/streaming-systems/9781491983867/) — O'Reilly
-
----
-
-## Summary
-
-Building custom AIOps is a significant investment requiring Kafka for data flow, Python ML libraries for detection, and Kubernetes for deployment. The architecture follows a pipeline pattern: ingest → detect → correlate → act. Start with platform AI and build custom only when you have unique requirements that justify the engineering effort. When you do build custom, ensure you have sufficient data, handle concept drift, and monitor your monitoring.
-
----
-
-## Toolkit Complete
-
-Congratulations! You've completed the AIOps Tools Toolkit. You now understand:
-
-- **Anomaly Detection Tools** — Prophet, Luminaire, PyOD
-- **Event Correlation Platforms** — BigPanda, Moogsoft, PagerDuty
-- **Observability AI Features** — Datadog Watchdog, Dynatrace Davis
-- **Building Custom AIOps** — Python + Kafka + Kubernetes pipelines
-
-Continue your learning:
-- [AIOps Discipline](/platform/disciplines/data-ai/aiops/) — Deepen conceptual understanding
-- [Observability Toolkit](/platform/toolkits/observability-intelligence/observability/) — The data collection layer
-- [SRE Discipline](/platform/disciplines/core-platform/sre/) — Apply AIOps to reliability
+Continue with the broader reliability practice that consumes AIOps output: [SRE Discipline](/platform/disciplines/core-platform/sre/). There you will connect detection, correlation, and incident automation to service-level objectives, error budgets, escalation policy, and operational review.
