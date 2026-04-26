@@ -53,3 +53,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T05:25:13Z	k8s-cgoa-module-1.4-practice-questions-set-1	1.20		0			codex	claude	approve	
 2026-04-26T05:31:23Z	k8s-ckad-part2-deployment-part2-cumulative-quiz	1.80		0			codex	claude	approve	
 2026-04-26T05:43:50Z	platform-toolkits-cicd-delivery-ci-cd-pipelines-module-3.3-argo-workflows	3.80		0			codex	claude	approve	
+2026-04-26T05:48:26Z	k8s-ckad-part3-observability-part3-cumulative-quiz	1.80		0			codex	claude	approve	
