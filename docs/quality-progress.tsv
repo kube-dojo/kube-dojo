@@ -14,3 +14,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T01:32:15Z	ai-ml-engineering-ai-native-development-module-1.8-ai-assisted-debugging-optimization	5.00		0			codex	claude	approve	
 2026-04-26T01:40:38Z	ai-ml-engineering-generative-ai-module-1.2-tokenization-text-processing	4.20		0			codex	claude	approve	
 2026-04-26T01:40:44Z	ai-ml-engineering-prerequisites-module-1.2-home-ai-workstation-fundamentals	3.20		0			codex	claude	approve	
+2026-04-26T01:49:10Z	ai-ml-engineering-ai-infrastructure-module-1.4-local-inference-stack-for-learners	3.20		1	5.00	strong	codex	claude	approve	
