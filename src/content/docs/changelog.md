@@ -6,6 +6,35 @@ sidebar:
   label: "What's New"
 ---
 
+## April 26, 2026 — Site-wide Quality Rewrite + Route Design + AI History Book Planning
+
+### Site-wide Module Quality Rewrite Underway
+- A 384-module rewrite batch (issue #388) is grinding through the curriculum, lifting modules to a stricter pedagogical bar
+- ~130 modules already shipped at the new bar with cross-family review or deferred-review approval
+- Auto-approved modules carry a `qa_pending` banner until a real cross-family reviewer signs off; rewritten modules briefly carry a `revision_pending` banner that clears on completion
+- Full lifecycle is tracked operator-side via the local API briefing — public lifecycle visibility is on the roadmap (#391)
+
+### Section Health Surfaced on Index Pages
+Section index pages now surface in-flight rework counts via a new `SectionHealthSummary` component (#390). Learners can see at a glance which sections are actively improving and which are stable. Hub pages roll up child counts.
+
+### Curriculum Route Design Tightened
+Hub pages were rewritten as **route guides** instead of catalogs (#246):
+- The Platform Engineering hub now opens with three persona routes (SRE, DevEx Builder, Platform Architect) instead of an alphabetical section dump
+- Platform Foundations and Platform Disciplines mirror the same persona-keyed shape with enriched per-section "best for" / "pair with" guidance
+- The Kubernetes Certifications hub now leads with three personas (Operator, Developer, Security Specialist) instead of an alphabetical KCNA → KCSA → CKAD → CKA → CKS default that suggested the wrong starting point for most learners
+- The Platform hub gained a "Common Entry Mistakes" callout that the earlier rewrite had dropped
+- New bridge pages help learners cross between tracks: K8s → On-Prem, K8s → Platform Engineering, AI/ML → AI Platform Engineering, AI/ML → Private AI Infrastructure (also part of #246)
+
+### AI History Book — Planning Locked
+A multi-agent narrative AI history book is in planning (#394). Ten chapters, infrastructure-history angle (Chip Wars in tone), strict sourcing standard (≥ 2 independent sources per scene-level passage). Module 1.1 of the AI/ML Engineering history section stays untouched as the technical-timeline appendix; the book is greenfield. Research wiki scaffolded at `docs/research/ai-history/` with per-chapter brief / sources / timeline / people / infrastructure-log / scene-sketches templates.
+
+### Internal Reliability Improvements
+- Atomic-drain pattern documented for the quality pipeline — the deferred-review queue and the rewrite batch race when run concurrently, so they now alternate
+- A reproducible silent-crash bug in the deferred-review drain script was identified and filed (#396)
+- Cross-family review caught real quality bugs in route-design changes that build-clean alone missed (security-cert ordering inversion, redundant section bloat, relative-link drift) — reinforced the "do not skip cross-family review even on small content changes" rule
+
+---
+
 ## April 16, 2026 — ZTT, AI/ML, Cert Prep, and Curriculum Routing
 
 ### Zero to Terminal Hardened
