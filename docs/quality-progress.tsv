@@ -100,3 +100,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T15:39:06Z	platform-disciplines-delivery-automation-iac-module-6.3-iac-security	5.00		0			codex	claude	approve	
 2026-04-26T15:47:31Z	platform-toolkits-cicd-delivery-source-control-module-11.2-gitea-forgejo	3.50		0			codex	claude	approve	
 2026-04-26T16:03:12Z	platform-toolkits-data-ai-platforms-cloud-native-databases-module-15.1-cockroachdb	3.20		0			codex	claude	approve	
+2026-04-26T16:09:22Z	platform-disciplines-delivery-automation-gitops-module-3.5-secrets	3.80		0			codex	claude	approve	
