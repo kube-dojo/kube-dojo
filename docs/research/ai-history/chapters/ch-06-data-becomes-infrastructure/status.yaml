@@ -1,0 +1,21 @@
+# Chapter 06 status — single source of truth for cross-agent state.
+# Hand-update on every status change. README.md status board is a hand-summary.
+
+slug: ch-06-data-becomes-infrastructure
+chapter: 06
+title: "Data Becomes Infrastructure (ImageNet)"
+owner: Gemini
+reviewer: Codex
+state: researching   # researching | verified | drafting | reviewing | done
+
+# state transitions:
+#   researching -> verified   (when sources.md sign-off lands)
+#   verified    -> drafting   (when brief.md sign-off lands)
+#   drafting    -> reviewing  (when prose hits ~1500 lines and writer requests review)
+#   reviewing   -> done       (when reviewer APPROVES the prose)
+
+last_updated: 2026-04-26
+brief_signoff: null    # set to {reviewer, date, comment_url} when locked
+sources_signoff: null  # set to {reviewer, date, comment_url} when locked
+prose_path: null       # set to "src/content/docs/ai-history/ch-06-data-becomes-infrastructure.md" once drafting starts
+prose_lines: 0         # update as prose grows
