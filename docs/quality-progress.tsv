@@ -135,3 +135,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T20:19:24Z	platform-foundations-observability-theory-module-3.3-instrumentation-principles	5.00		0			claude	codex	approve	
 2026-04-26T20:35:07Z	on-premises-operations-module-7.8-observability-at-scale	2.80		0			claude	codex	approve	
 2026-04-26T20:39:36Z	k8s-kcsa-part1-cloud-native-security-module-1.1-four-cs	3.70		0			codex	claude	approve	
+2026-04-26T20:48:06Z	platform-foundations-observability-theory-module-3.2-the-three-pillars	4.80		0			claude	codex	approve	
