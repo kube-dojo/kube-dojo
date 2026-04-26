@@ -1,518 +1,692 @@
 ---
-revision_pending: true
 title: "Reproducible Python, CUDA, and ROCm Environments"
 slug: ai-ml-engineering/prerequisites/module-1.3-reproducible-python-cuda-rocm-environments
 sidebar:
   order: 103
 ---
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3
----
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
+
 **Reading Time**: 2-3 hours
-**Prerequisites**: Modules 1.1 and 1.2 complete
----
 
-## What You'll Be Able to Do
+**Prerequisites**: Modules 1.1 and 1.2 complete, basic command-line navigation, and comfort editing small text files
 
-By the end of this module, you will:
-- understand the layers of a local AI environment instead of treating setup as magic
-- build one reproducible Python environment per project
-- reason about driver, toolkit, and framework compatibility
-- choose when to use plain virtual environments and when containers are worth it
-- diagnose the most common CUDA, ROCm, and Python drift failures
+## Learning Outcomes
 
-**Why this matters**: environment failures waste more learner time than most actual coding errors. If your setup is unreliable, every module after this becomes harder than it should be.
+By the end of this module, you will be able to design a project-local Python environment that another learner can recreate without relying on your shell history or global package state.
 
----
+You will be able to debug environment failures by separating Python interpreter problems, package-resolution problems, GPU driver problems, and framework-runtime compatibility problems.
 
-## Why AI Environments Break So Often
+You will be able to compare plain virtual environments, higher-level environment managers, and containers, then justify which one fits a learning project, team workstation, or deployment-bound prototype.
 
-In web development, many learners can get away with:
-- one Python install
-- one Node install
-- lots of trial and error
+You will be able to evaluate whether a CUDA or ROCm setup is internally compatible before installing a deep learning framework, instead of discovering incompatibility through runtime errors.
 
-In AI work, the stack is tighter and less forgiving.
+You will be able to build and run a smoke test that proves the environment imports the expected packages, uses the expected interpreter, and sees the intended CPU, CUDA, or ROCm backend.
 
-You are often combining:
-- Python packages
-- compiled native extensions
-- deep learning frameworks
-- GPU drivers
-- CUDA or ROCm runtime expectations
-- operating system behavior
+## Why This Module Matters
 
-If you do not understand the stack boundaries, you end up debugging by superstition.
+Mira joins a small applied AI team on Monday and receives a model repository, a short README, and a message that says, "It should run after installing the requirements." By Tuesday afternoon, one teammate can train on an NVIDIA GPU, another silently falls back to CPU, and Mira's notebook imports a different package version than the command-line script. Nobody has changed the model code, but every person is seeing a different system.
 
----
+That failure is not a Python trivia problem. It is a systems problem disguised as setup friction. AI projects combine interpreted code, compiled native extensions, hardware drivers, compute runtimes, and framework wheels that were built against specific assumptions. When those assumptions drift, the learner often blames the line of model code they can see, even though the failure was created several layers below it.
 
-## The Four Layers of the Stack
+Reproducibility is the skill that turns that chaos into an inspectable system. A reproducible environment does not mean every laptop is identical, and it does not mean you never have to debug setup again. It means the project has a declared path, an isolated interpreter, a dependency record, a hardware assumption, and a small verification sequence that shows where the stack is healthy or broken.
 
-Think about your environment in layers:
+Senior practitioners care about this because unreproducible environments waste expensive hardware time and make incidents harder to explain. Beginners should care because every future module in the AI/ML Engineering track assumes that a Python command, a notebook kernel, and a framework import all mean what they appear to mean. If you cannot trust the environment, you cannot trust the experiment.
 
-1. **Operating system and kernel**
-2. **GPU driver layer**
-3. **Compute runtime layer** such as CUDA or ROCm
-4. **Python and framework layer** such as PyTorch, TensorFlow, tokenizers, and app dependencies
+## The Mental Model: Reproducibility Is a Boundary Problem
 
-Most failures happen when learners confuse these layers.
+A local AI environment is not one thing. It is a stack of boundaries, and each boundary answers a different question. The operating system answers whether the machine can load drivers and libraries. The GPU driver answers whether the hardware is visible. CUDA or ROCm answers whether software can ask the GPU to do compute work. Python and the framework answer whether your code can call the right compiled binaries.
 
-Examples:
-- reinstalling Python when the real problem is the GPU driver
-- changing the driver when the real problem is an incompatible wheel
-- blaming PyTorch when the real issue is environment mixing between projects
-
----
-
-## The Reproducibility Rule That Prevents Most Pain
-
-Use this baseline rule:
-
-**One project, one isolated environment, one documented setup path.**
-
-That means:
-- a dedicated project directory
-- a dedicated Python environment
-- a dependency file tracked in Git
-- one short verification sequence
-
-Do not share one giant global Python environment across AI projects.
-
-That approach often looks efficient for two days and chaotic by week three.
-
----
-
-## The Baseline Workflow
-
-For most learners, this is the correct starting workflow:
-
-1. install a supported Python version
-2. create one directory per project
-3. create a virtual environment inside or adjacent to that project
-4. install only what the project needs
-5. record dependencies
-6. run a short verification script
-
-Example shape:
+Most painful setup sessions start when a learner treats those boundaries as interchangeable. They reinstall Python when the driver is missing, upgrade a GPU driver when the notebook kernel is pointing at the wrong virtual environment, or install a CPU-only framework wheel and then wonder why the GPU is invisible. The fix is not memorizing every possible version combination; the fix is learning to ask which layer owns the failure.
 
 ```text
-my-ai-project/
-├── .venv/
-├── src/
-├── notebooks/
-├── data/
-├── outputs/
-├── requirements.txt
-└── README.md
+AI project stack, read from bottom to top
+
++--------------------------------------------------------------+
+| Project code and notebooks                                  |
+| model.py, train.py, notebooks, tests, configuration files     |
++--------------------------------------------------------------+
+| Python packages and framework wheels                         |
+| numpy, torch, tensorflow, tokenizers, compiled extensions     |
++--------------------------------------------------------------+
+| Python interpreter and isolated environment                   |
+| .venv/bin/python, pip metadata, notebook kernel binding       |
++--------------------------------------------------------------+
+| Compute runtime family                                       |
+| CUDA libraries for NVIDIA, ROCm/HIP libraries for AMD         |
++--------------------------------------------------------------+
+| GPU driver and device visibility                             |
+| nvidia-smi, rocminfo, kernel modules, device permissions      |
++--------------------------------------------------------------+
+| Operating system, kernel, filesystem, shell                   |
+| Linux distribution, package manager, PATH, working directory  |
++--------------------------------------------------------------+
 ```
 
-This is deliberately boring. Boring is what you want from environments.
+The important move is to debug downward or upward deliberately, not randomly. If a package cannot import, start at the Python environment and package layer. If the package imports but the GPU is unavailable, move down to framework build, runtime family, and driver visibility. If the driver tool cannot see the device, Python is not the first suspect.
 
----
+> **Pause and predict:** A teammate says `import torch` works, but `torch.cuda.is_available()` returns `False` on a workstation with an NVIDIA GPU. Before reading further, decide which two layers you would inspect first and which layer you would avoid changing until you have evidence.
 
-## Python Isolation Choices
+A strong first answer is to inspect the framework wheel and the driver/runtime layer. The import only proves that Python found a package named `torch`; it does not prove that the package was built with CUDA support, that the driver can expose the GPU, or that the runtime libraries expected by the wheel are usable. Recreating the virtual environment may eventually be useful, but reinstalling Python itself is usually an expensive guess.
 
-### Option 1: `venv` as the Default Baseline
+## The Baseline Rule: One Project, One Environment, One Verification Path
 
-For this curriculum, plain Python virtual environments are the safest baseline.
+The baseline rule for this track is simple: one project, one isolated environment, one documented setup path, and one smoke test. This rule sounds small, but it prevents the most common failure pattern in early AI work: many projects slowly sharing one global interpreter until package versions and notebook kernels become impossible to reason about.
 
-Why:
-- built into Python
-- simple mental model
-- minimal hidden behavior
-- portable enough for solo work
-- easy to debug
+An isolated environment gives each project a private package directory and a predictable interpreter path. The interpreter path matters because `pip install` and `python train.py` must refer to the same environment. If they do not, you get the classic failure where installation succeeds in one terminal and the application fails in another.
 
-If a learner cannot keep a `venv` workflow healthy, adding more tooling usually makes the problem harder, not easier.
+A documented setup path matters because memory is not reproducibility. If the only record of the environment is "I installed a few things last month," the project cannot be handed to another learner, recreated on a second workstation, or diagnosed after a failed upgrade. The goal is not a perfect enterprise build system on day one; the goal is enough evidence that a future person can rebuild the same starting point.
 
-### Option 2: Higher-Level Environment Managers
+A smoke test matters because successful installation logs are not proof. Package installers can succeed while installing CPU-only wheels, while leaving a notebook kernel bound to an old interpreter, or while accepting versions that import but fail during a real tensor operation. The smoke test gives the project a known checkpoint before model code enters the story.
 
-You may later choose tools that manage Python versions, lock files, or binary packages more aggressively.
+```text
+Reproducible project shape
 
-These can be useful, but they are not the baseline skill.
+my-ai-project/
++-- .venv/                     # project-local interpreter and installed packages
++-- src/                       # importable project code
++-- notebooks/                 # exploration, bound to the project environment
++-- data/                      # local data samples, usually not committed if large
++-- outputs/                   # generated artifacts, usually ignored by Git
++-- requirements.in            # direct human-chosen dependencies
++-- requirements.txt           # resolved or pinned install input for this project
++-- verify_env.py              # smoke test for interpreter, packages, and backend
++-- README.md                  # setup and verification steps
++-- .gitignore                 # excludes .venv, outputs, caches, large local files
+```
 
-You should first understand:
-- what Python version is active
-- where packages are being installed
-- which environment is currently activated
+This structure is deliberately ordinary. Ordinary environments are easier to inspect, easier to document, and easier to replace when they break. The less mystery your setup contains, the more attention you can spend on data, training behavior, and model quality.
 
-Without that, better tools just hide confusion.
+## Building the First Environment Deliberately
 
-### Option 3: Containers
+The first environment should be boring enough that you can explain every line of the setup. Start by creating the project directory, then create the virtual environment inside that directory. Once the virtual environment exists, run package-management commands through `.venv/bin/python -m pip` so the interpreter and installer are tied together by path rather than by shell assumptions.
 
-Containers are valuable when:
-- your host machine is already messy
-- you need stronger reproducibility
-- your team needs the same setup
-- you are preparing code for deployment anyway
+```bash
+mkdir -p reproducible-ai-env/src reproducible-ai-env/notebooks reproducible-ai-env/data reproducible-ai-env/outputs
+cd reproducible-ai-env
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip setuptools wheel
+.venv/bin/python -m pip --version
+.venv/bin/python -c "import sys; print(sys.version); print(sys.prefix)"
+```
 
-Containers are not automatically simpler for beginners. They add another layer. Use them when the added control is worth it.
+The command `python3.12 -m venv .venv` is the one unavoidable bootstrap step in this example because the environment does not exist yet. After that, the module uses `.venv/bin/python` explicitly so package installation, verification, and scripts all run under the project interpreter. In a team README, state which bootstrap command your operating system uses, then keep the rest of the workflow path-explicit.
 
----
+A beginner often asks why activation is not enough. Activation is convenient for interactive work, but it modifies shell state, and shell state is easy to lose across terminals, notebooks, task runners, and editor integrations. Path-explicit commands are noisier, yet they make documentation and automation more reliable because the command itself names the interpreter.
 
-## CUDA and ROCm: What You Actually Need to Understand
+```bash
+cat > requirements.in <<'EOF'
+numpy
+packaging
+EOF
 
-You do not need to memorize every toolkit version. You do need the right mental model.
+.venv/bin/python -m pip install -r requirements.in
+.venv/bin/python -m pip freeze > requirements.txt
+.venv/bin/python -m pip check
+```
 
-### CUDA
+The split between `requirements.in` and `requirements.txt` is a useful beginner-to-practitioner bridge. The `.in` file records the dependencies the project intentionally asked for, while the `.txt` file records the concrete installed result, including transitive dependencies. Small solo projects sometimes use only `requirements.txt`, but larger projects benefit from knowing which dependencies were direct choices and which arrived because another package required them.
 
-[CUDA is the NVIDIA compute stack](https://github.com/NVIDIA/cuda-python) used by many deep learning frameworks.
+```bash
+cat > .gitignore <<'EOF'
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+outputs/
+*.pyc
+EOF
 
-For learners, the important idea is:
+cat > README.md <<'EOF'
+# Reproducible AI Environment
 
-**driver compatibility and framework build compatibility must agree.**
+## Setup
+Create the environment with Python 3.12, then run package commands through `.venv/bin/python`.
 
-If they do not, you often see:
-- GPU not detected
-- runtime initialization errors
-- unsupported binary or kernel errors
-- silent fallback to CPU
+## Install
+`.venv/bin/python -m pip install -r requirements.txt`
 
-### ROCm
+## Verify
+`.venv/bin/python verify_env.py`
+EOF
+```
 
-[ROCm plays a similar role for AMD GPUs](https://github.com/ROCm/ROCm), but the ecosystem and [supported combinations can be less forgiving depending on hardware and distro choice](https://github.com/ROCm/ROCm).
+This README is intentionally short, but it already captures the reproducibility contract. It tells the next person which Python line matters, how packages are installed, and how health is checked. A better README can add GPU expectations later, but even this small version is much stronger than an undocumented global environment.
 
-That does not make it unusable. It means you should be stricter about:
-- using supported operating systems
-- using documented framework builds
-- avoiding random package mixing
+> **Stop and think:** If a teammate says "I activated the environment yesterday, so the editor should still be using it today," what hidden assumption are they making? Write down how you would prove which interpreter the editor or notebook actually uses.
 
-### The Wrong Mental Model
+The hidden assumption is that every tool shares the same shell activation state. Editors, notebook servers, task runners, and terminals often start as separate processes, so they may not inherit the activation you think they inherited. The proof is to print the interpreter path from inside the exact tool that is running the code, not from a different terminal that happens to look similar.
 
-"I installed the newest thing, so it should work."
+## Worked Example: Debugging a Notebook and CLI Mismatch
 
-Wrong.
+Consider a project where the command-line smoke test works, but a notebook fails with `ModuleNotFoundError: No module named 'numpy'`. A weak diagnosis is "Jupyter is broken." A better diagnosis is "the notebook kernel is probably bound to a different interpreter than the project CLI."
 
-The correct model is:
+First, prove what the command line is using. This command prints the interpreter path and imports `numpy` from the project environment. Because it calls `.venv/bin/python` directly, there is no ambiguity about which interpreter is being tested.
 
-"I installed a compatible set of things."
+```bash
+.venv/bin/python - <<'PY'
+import numpy
+import sys
 
-That is how reproducible environments are built.
+print("cli_executable:", sys.executable)
+print("numpy_version:", numpy.__version__)
+PY
+```
 
----
+Next, run the same two checks inside the notebook. Put the code in a notebook cell and compare the output with the command-line output. The exact path does not need to be memorized, but it should point into the same project `.venv` directory.
 
-## A Compatibility Checklist That Ages Well
+```python
+import numpy
+import sys
 
-Before installing frameworks, verify:
+print("notebook_executable:", sys.executable)
+print("numpy_version:", numpy.__version__)
+```
 
-1. what GPU you have
-2. whether your OS is appropriate for the stack
-3. whether the driver is installed and visible
-4. which compute runtime family you are targeting
-5. [which framework build matches that target](https://github.com/pytorch/pytorch)
+If those paths differ, installing more packages from the notebook is usually the wrong first fix. You should register or select a notebook kernel that points at the project environment, then rerun the proof. The key lesson is that environment debugging is evidence collection, not package whack-a-mole.
 
-Only then install the framework.
+```bash
+.venv/bin/python -m pip install ipykernel
+.venv/bin/python -m ipykernel install --user --name reproducible-ai-env --display-name "Python (.venv reproducible-ai-env)"
+```
 
-If you reverse that order, you end up debugging the entire stack at once.
+After selecting that kernel in the notebook UI, rerun the notebook cell. If the paths now agree, the failure was not a missing package in the project environment; it was a tool boundary problem. This is the same reasoning pattern you will use later for CUDA and ROCm: identify the boundary, prove what each side sees, then change the smallest responsible layer.
 
----
+## Choosing Between venv, Environment Managers, and Containers
 
-## Verification Beats Hope
+Plain `venv` is the baseline because it teaches the core mechanism without hiding too much. You can see the interpreter path, inspect installed packages, remove the environment directory, and recreate it from the dependency file. For learning modules and small projects, that transparency is more valuable than clever automation.
 
-Every environment should have a short smoke test.
+Higher-level tools can add lock files, Python version management, dependency solving, and faster installs. They are useful when teams need stricter repeatability or when dependency trees become large. They do not remove the need to understand which interpreter is active, where packages are installed, or whether the framework build matches the hardware path.
 
-Examples of what you want to verify:
-- Python version
-- active environment path
-- package install sanity
-- framework import
-- GPU visibility
-- simple tensor operation on the intended backend
+Containers add a stronger boundary around the operating-system userland and package installation path. They help when onboarding must be repeatable, host machines are inconsistent, several incompatible stacks must coexist, or the project is already moving toward deployment. They also add new concepts: image layers, bind mounts, GPU runtime integration, container users, and host-driver interaction.
 
-A successful smoke test gives you a checkpoint. Without it, you do not know whether the system was ever healthy.
+| Situation | Prefer `venv` | Prefer higher-level manager | Prefer container |
+|---|---|---|---|
+| Solo learning project with one Python stack | Best default because it is transparent and easy to delete | Optional if you already understand the basics | Usually unnecessary unless the host is already messy |
+| Team prototype with many dependencies | Works if documentation is disciplined | Good fit when lock files and resolver behavior matter | Good fit when laptops keep drifting or onboarding is painful |
+| Multiple incompatible CUDA or ROCm experiments | Risky because host libraries and package choices may collide | Helpful for Python packages but not a full OS boundary | Strong fit when each experiment needs a separate runtime image |
+| Deployment-bound inference service | Useful for local development only | Useful for lock discipline before image build | Strong fit because runtime packaging becomes part of delivery |
 
----
+The decision should be based on failure modes, not fashion. If the problem is "I do not know which Python I am using," a container will not automatically teach you that. If the problem is "four developers need the same userland and package stack on different hosts," staying with ad hoc host setup may keep wasting time.
 
-## When to Use Containers Instead of Host Python
+## CUDA: Compatibility Is a Contract, Not a Guess
 
-Use host Python plus `venv` when:
-- you are learning
-- the project is solo
-- setup is straightforward
-- you want the simplest debugging path
+CUDA is NVIDIA's compute platform, and many deep learning frameworks publish builds that target specific CUDA runtime versions. The driver installed on the host must be new enough for the runtime expectations of the framework build. The framework wheel must also be the CUDA-enabled build, not a CPU-only build that happens to import successfully.
 
-Use containers when:
-- onboarding must be repeatable
-- host dependencies are unstable
-- you are mixing multiple incompatible stacks
-- the project is moving toward deployment
+A practical CUDA workflow starts below Python. Confirm that the GPU is visible to the operating system and driver tooling before installing a framework build. If `nvidia-smi` cannot see the GPU, installing PyTorch again will not make the device appear. If `nvidia-smi` works but the framework cannot use CUDA, the next suspect is the framework build or runtime compatibility.
 
-Do not containerize everything by reflex. But do not resist containers once host drift becomes the actual problem.
+```bash
+command -v nvidia-smi
+nvidia-smi
+```
 
----
+The output of `nvidia-smi` is not a full proof that PyTorch or TensorFlow will work, but it proves something important: the NVIDIA driver layer can see the GPU. That narrows the problem. If a later tensor operation fails, you can focus on framework build, runtime expectation, permissions, or container GPU passthrough rather than wondering whether the hardware exists.
 
-## Common Failure Modes
+For PyTorch specifically, use the official installation selector for the target operating system, package manager, Python version, and compute platform. Do not mix a random wheel from one guide with a CUDA toolkit from another guide unless you understand exactly why that combination is supported. In most learner setups, the framework-provided wheel includes the runtime pieces it expects, while the host driver remains the critical host-level dependency.
 
-### Failure 1: Wrong Python, Right Packages
+```bash
+.venv/bin/python - <<'PY'
+try:
+    import torch
+except ImportError:
+    print("torch: not installed")
+else:
+    print("torch_version:", torch.__version__)
+    print("torch_cuda_build:", torch.version.cuda)
+    print("cuda_available:", torch.cuda.is_available())
+    if torch.cuda.is_available():
+        x = torch.tensor([1.0, 2.0], device="cuda")
+        print("tensor_device:", x.device)
+        print("tensor_sum:", float(x.sum().cpu()))
+PY
+```
 
-You installed dependencies into one interpreter and ran another.
+This smoke test distinguishes several cases. If `torch` is not installed, you are still at the package layer. If `torch.version.cuda` is `None`, you likely installed a CPU build. If CUDA is built in but unavailable, the driver/runtime boundary deserves attention. If the tensor operation succeeds, you have stronger evidence than an import alone.
 
-Symptoms:
-- package not found
-- command works in one terminal but not another
-- notebook and CLI disagree
+> **Pause and predict:** Suppose `nvidia-smi` works, `torch.__version__` prints normally, `torch.version.cuda` is `None`, and `torch.cuda.is_available()` is `False`. Which layer is probably wrong, and why would reinstalling the NVIDIA driver be a low-value first move?
 
-Fix:
-- check active interpreter
-- recreate the environment cleanly
-- stop guessing which Python is being used
+The likely problem is the framework package selection. A CPU-only PyTorch build can import perfectly while reporting no CUDA build support. The NVIDIA driver may still be healthy, so reinstalling it would change a lower layer that already passed its first proof.
 
-### Failure 2: Driver and Framework Mismatch
+## ROCm: Be Stricter About Supported Combinations
 
-Symptoms:
-- GPU not available
-- import succeeds but device use fails
-- framework falls back to CPU
+ROCm plays a similar role for AMD GPUs, but the support matrix can be more sensitive to GPU model, Linux distribution, kernel, ROCm release, and framework build. That does not make ROCm unsuitable for learning. It means you should treat official compatibility guidance as part of the setup, not as optional reading after a failed install.
 
-Fix:
-- verify the driver layer first
-- verify the intended compute runtime
-- install a framework build that matches it
+A practical ROCm workflow starts by identifying the GPU and confirming ROCm tooling can see it. On systems with ROCm installed, `rocminfo` and related tools provide evidence from the runtime side. If those tools are unavailable or cannot see the hardware, installing a framework wheel is unlikely to fix the lower-layer issue.
 
-### Failure 3: Mixed Package Managers Without a Plan
+```bash
+lspci | grep -Ei 'vga|3d|display'
+command -v rocminfo
+rocminfo
+```
 
-Symptoms:
-- inconsistent behavior across machines
-- difficult upgrades
-- unclear source of installed binaries
+ROCm also changes how you interpret framework output. Many frameworks expose AMD GPU support through HIP-related fields, while still using some APIs named after CUDA for historical compatibility. That naming can confuse beginners: a method name containing `cuda` does not always mean the backend is NVIDIA CUDA. You must inspect the framework's reported build information and official documentation for the package you installed.
 
-Fix:
-- choose a primary environment strategy per project
-- keep the project setup documented
+```bash
+.venv/bin/python - <<'PY'
+try:
+    import torch
+except ImportError:
+    print("torch: not installed")
+else:
+    print("torch_version:", torch.__version__)
+    print("torch_cuda_build:", torch.version.cuda)
+    print("torch_hip_build:", torch.version.hip)
+    print("backend_available:", torch.cuda.is_available())
+    if torch.cuda.is_available():
+        x = torch.tensor([3.0, 4.0], device="cuda")
+        print("tensor_device:", x.device)
+        print("tensor_sum:", float(x.sum().cpu()))
+PY
+```
 
-### Failure 4: "It Works on My Notebook"
+The lesson is not that every learner must become a GPU driver expert before training a model. The lesson is that ROCm rewards a disciplined compatibility check before package installation. Identify the hardware, confirm the operating system and ROCm version are supported, choose a documented framework build, and then verify with a real tensor operation.
 
-The notebook kernel, shell environment, and project directory are not actually aligned.
+## Designing a Smoke Test That Teaches You Something
 
-Fix:
-- make the environment explicit
-- make the project root explicit
-- verify imports from both notebook and CLI
+A smoke test is a small program that proves the environment can do the minimum meaningful work expected by the project. For AI environments, importing a package is too weak by itself. A useful smoke test reports interpreter identity, package versions, working directory, environment variables that matter, GPU visibility, and a tiny computation on the intended backend.
 
----
+The smoke test should be committed to the project because it is part of the setup contract. When a future teammate says "the environment is broken," the first question becomes "which smoke-test line changed?" That is much better than comparing screenshots of terminal history or guessing which installation guide each person followed.
 
-## Recommended Team Habits Even for Solo Learners
+```bash
+cat > verify_env.py <<'PY'
+from __future__ import annotations
 
-Even if you work alone, behave like someone who may need to recreate the project in two months.
+import os
+import platform
+import subprocess
+import sys
+from pathlib import Path
 
-Track:
-- dependency file
-- Python version
-- short setup steps
-- smoke test
-- GPU or CPU assumptions
 
-That habit is the bridge from hobby setup to professional reproducibility.
+def run_optional(command: list[str]) -> str:
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return "not found"
+    first_lines = completed.stdout.strip().splitlines()[:6]
+    if not first_lines and completed.stderr.strip():
+        first_lines = completed.stderr.strip().splitlines()[:6]
+    return "\n".join(first_lines) if first_lines else f"exit code {completed.returncode}"
 
----
+
+def main() -> None:
+    project_root = Path(__file__).resolve().parent
+    print("project_root:", project_root)
+    print("python_version:", sys.version.split()[0])
+    print("python_executable:", sys.executable)
+    print("python_prefix:", sys.prefix)
+    print("platform:", platform.platform())
+    print("virtual_env:", os.environ.get("VIRTUAL_ENV", "not set"))
+
+    import numpy
+
+    print("numpy_version:", numpy.__version__)
+    print("nvidia_smi:", run_optional(["nvidia-smi"]))
+    print("rocminfo:", run_optional(["rocminfo"]))
+
+    try:
+        import torch
+    except ImportError:
+        print("torch_status: not installed")
+        return
+
+    print("torch_version:", torch.__version__)
+    print("torch_cuda_build:", torch.version.cuda)
+    print("torch_hip_build:", torch.version.hip)
+    print("torch_backend_available:", torch.cuda.is_available())
+
+    if torch.cuda.is_available():
+        tensor = torch.tensor([1.0, 2.0, 3.0], device="cuda")
+        print("torch_tensor_device:", tensor.device)
+        print("torch_tensor_sum:", float(tensor.sum().cpu()))
+    else:
+        print("torch_tensor_device: cpu-only path")
+
+
+if __name__ == "__main__":
+    main()
+PY
+
+.venv/bin/python verify_env.py
+```
+
+This script is intentionally plain Python, not a testing framework. Early in a project, the goal is a readable diagnostic that any learner can run. Later, a team might turn parts of it into automated CI checks, but local hardware detection often remains a workstation-level verification step because CI runners may not have the same GPU backend.
+
+A senior-level habit is to write the smoke test so success and failure both teach. If `nvidia-smi` is missing, the script says so without crashing. If PyTorch is not installed yet, the script reports that and exits cleanly. If a backend is available, the script performs a real tensor operation so you know more than "the package imported."
+
+## Dependency Records: Minimum, Useful, and Stronger
+
+Dependency records come in levels. The minimum useful record is a file that lets another person install the project dependencies into a clean environment. A stronger record distinguishes direct dependencies from resolved transitive dependencies. A still stronger record includes hashes, lock files, container images, or a tested build process.
+
+For a beginner project, the most important mistake to avoid is editing the environment manually for days without updating any file. The moment the working environment exists only inside `.venv`, reproducibility is already decaying. Commit the dependency file, the smoke test, and the README; do not commit the `.venv` directory itself.
+
+```bash
+.venv/bin/python -m pip freeze > requirements.txt
+.venv/bin/python -m pip check
+.venv/bin/python verify_env.py
+```
+
+`pip freeze` is not perfect as a design document because it records everything installed, including transitive packages. That can be useful for recreation but noisy for human review. Many teams keep a human-authored input file and a generated lock file, or they use a tool that makes this separation explicit. The principle is the same: record intent and record the tested result.
+
+When GPU frameworks are involved, write the hardware assumption in prose as well as dependencies. A requirements file can say which wheel was installed, but a README should also say whether the project was verified on CPU, CUDA, ROCm, or multiple paths. This prevents a teammate from treating a CPU-only environment as a failed GPU setup or treating a CUDA setup as a portable default.
+
+## Version Strategy: Newest Is Not the Same as Compatible
+
+A common beginner strategy is to install the newest driver, newest toolkit, newest framework, and newest Python version, then expect them to cooperate. That strategy fails because compatibility is about tested combinations, not individual freshness. A brand-new Python version may not have wheels for all packages yet, and a framework build may target a runtime that assumes a sufficiently new but not arbitrary driver.
+
+The better strategy is to choose an anchor. In many AI projects, the framework version is the anchor because it determines supported Python versions and available CPU, CUDA, or ROCm builds. In other projects, hardware or organization policy is the anchor because the workstation driver or base image is fixed. Once you know the anchor, choose the rest of the environment around it.
+
+```text
+Compatibility decision order
+
+1. Identify the project requirement.
+   Example: "We need PyTorch with GPU acceleration for local fine-tuning."
+
+2. Identify the hardware path.
+   Example: "This workstation has an NVIDIA GPU, so the target runtime is CUDA."
+
+3. Identify supported framework builds.
+   Example: "The PyTorch install selector lists builds for specific CUDA targets."
+
+4. Confirm host driver visibility.
+   Example: "`nvidia-smi` sees the GPU before the framework is installed."
+
+5. Install into a clean project environment.
+   Example: "Use `.venv/bin/python -m pip` and avoid global packages."
+
+6. Run the smoke test.
+   Example: "A tensor operation succeeds on the intended backend."
+```
+
+This order reduces cognitive load because each step narrows the problem. If you install first and reason later, every failure could belong to every layer. If you reason first, a failure at step five or six has a smaller search space.
+
+## Containers: Stronger Boundary, Different Debugging
+
+Containers are valuable when the host environment has become part of the problem. A container image can capture a userland, system packages, Python packages, and application code in a repeatable build. For teams, that means onboarding can shift from "recreate my laptop" to "build or pull this image and run this command."
+
+Containers do not package the physical GPU driver in the same way they package Python dependencies. GPU container support still depends on host drivers and runtime integration. That is why a CUDA container can fail on a host with a broken NVIDIA driver, and a ROCm container can fail on unsupported hardware or missing device access. The container boundary is strong, but it is not magic.
+
+A beginner-friendly container decision is to start with `venv` until the project has a real reason to need a stronger boundary. A professional decision is to containerize when repeatability, deployment alignment, or incompatible stacks justify the extra layer. The wrong decision is to use containers as a way to avoid understanding the environment; that simply moves confusion into a Dockerfile.
+
+```text
+Host Python plus venv
+
+Host OS
++-- GPU driver
++-- Project directory
+    +-- .venv
+    +-- project code
+    +-- smoke test
+
+Containerized project
+
+Host OS
++-- GPU driver and container runtime integration
++-- Container image
+    +-- OS userland
+    +-- Python environment
+    +-- project code
+    +-- smoke test
+```
+
+If you containerize, keep the same teaching discipline. The image should have a documented build path, a minimal dependency strategy, and a smoke test that runs inside the container. A container that nobody can rebuild is only a larger version of an undocumented virtual environment.
+
+## Common Failure Modes and How to Triage Them
+
+The fastest environment debuggers do not try fixes first. They classify symptoms. A missing package, a wrong interpreter, a CPU-only wheel, a driver visibility problem, and a notebook kernel mismatch can all produce short error messages, but they require different changes.
+
+When a package import fails, ask which interpreter ran the code and which interpreter installed the package. When a GPU is invisible, ask whether the driver tool sees it before blaming the framework. When a notebook disagrees with the CLI, ask whether the kernel is bound to the project `.venv`. When a rebuild fails after weeks of work, ask whether the dependency record actually matched the environment.
+
+```text
+Symptom triage map
+
++-------------------------------+-------------------------------+-------------------------------+
+| Symptom                       | First proof to collect        | Likely boundary               |
++-------------------------------+-------------------------------+-------------------------------+
+| ModuleNotFoundError           | print interpreter path         | Python environment/package     |
+| CLI works, notebook fails     | compare notebook and CLI paths | notebook kernel binding        |
+| Import works, GPU unavailable | inspect framework build fields | framework/runtime/driver       |
+| nvidia-smi cannot see GPU     | run driver tool outside Python | driver or host visibility      |
+| rocminfo missing or failing   | inspect ROCm install/support   | ROCm runtime or host support   |
+| Rebuild gives new versions    | compare dependency records     | dependency pinning/resolution  |
++-------------------------------+-------------------------------+-------------------------------+
+```
+
+A senior practitioner also records the triage result. If the fix was "select the correct notebook kernel," put that in the README. If the fix was "install the CUDA-enabled framework wheel, not the CPU wheel," update the installation section. Every environment incident is an opportunity to remove one future mystery.
+
+## Did You Know?
+
+- **Framework imports are weak evidence**: A deep learning framework can import successfully even when it was installed as a CPU-only build, so a real backend tensor operation is a stronger verification step than `import torch` alone.
+
+- **Notebook kernels are separate execution choices**: Activating `.venv` in a terminal does not guarantee that an existing notebook server or editor has selected the same interpreter, so the path must be checked inside the notebook itself.
+
+- **GPU containers still depend on host drivers**: Container images can package userland libraries and Python dependencies, but NVIDIA and AMD GPU access still requires compatible host driver and runtime integration.
+
+- **A lock file is not a hardware proof**: Dependency records help recreate packages, but they do not prove that the workstation has the expected GPU, driver, permissions, or supported ROCm/CUDA path.
 
 ## Common Mistakes
 
 | Mistake | What Goes Wrong | Better Move |
 |---|---|---|
-| One global Python environment for everything | dependency collisions and mystery imports | one environment per project |
-| Installing frameworks before checking driver/runtime assumptions | hard-to-read failures | verify stack layers first |
-| Mixing tools without understanding the active interpreter | shell and notebook mismatch | always know which interpreter is active |
-| Trusting a setup because one import worked once | hidden drift remains | use a repeatable smoke test |
-| Treating containers as magic | extra complexity with no model | use containers intentionally, not reflexively |
+| Reusing one global Python environment for every AI project | Dependency collisions build slowly, and imports start depending on accidental install order rather than project intent | Create one project-local `.venv`, install only project dependencies, and document the setup path |
+| Running `pip install` through one interpreter and scripts through another | Installation appears successful, but the application cannot find packages or sees different versions | Use `.venv/bin/python -m pip` and run verification through the same `.venv/bin/python` path |
+| Treating a successful framework import as GPU verification | CPU-only builds and broken runtime paths can still import, so the first real tensor operation fails later | Run a smoke test that reports build fields and performs a tiny tensor operation on the intended backend |
+| Installing frameworks before checking GPU driver visibility | Error messages span too many layers, making it unclear whether hardware, driver, runtime, or Python is responsible | Verify `nvidia-smi` or `rocminfo` first, then install the framework build that matches the chosen backend |
+| Assuming notebook activation follows terminal activation | The notebook uses an old kernel while the CLI uses the project environment, creating contradictory results | Print the interpreter path inside the notebook and register a kernel from the project `.venv` when needed |
+| Mixing package managers without a written strategy | Packages arrive from several sources, upgrades become hard to explain, and rebuilds differ across machines | Choose a primary environment strategy per project and record any exceptions in the README |
+| Containerizing before understanding the failing layer | The team gains image, mount, user, and GPU runtime complexity while the original Python confusion remains | Use containers when repeatability or deployment needs justify them, and keep the same smoke-test discipline |
+| Committing `.venv` or generated outputs to Git | The repository becomes large, platform-specific, and harder for others to clone or review | Commit dependency files, setup notes, and verification scripts; ignore local environments and generated artifacts |
 
----
-
-## Check Your Understanding
-
-1. Why is "compatible set" a better mindset than "latest version" for AI environments?
-2. What problem does one-project-one-environment solve?
-3. When should a learner choose containers over plain virtual environments?
-4. Why is a smoke test more valuable than assuming a successful install means the system is healthy?
-
----
-
-<!-- v4:generated type=no_quiz model=codex turn=1 -->
 ## Quiz
 
-
-**Q1.** Your team starts a new local LLM project, and one developer suggests reusing the same global Python environment they already use for three other AI experiments to save time. Two weeks later, package versions conflict and nobody can reproduce the same setup. What project setup should you have used from day one, and why?
-
-<details>
-<summary>Answer</summary>
-Use the module's baseline rule: one project, one isolated environment, and one documented setup path. That means a dedicated project directory, a dedicated `venv`, a tracked dependency file such as `requirements.txt`, and a short verification sequence. This prevents dependency collisions and makes it possible to recreate the same environment later instead of relying on a shared global Python install.
-</details>
-
-**Q2.** Your teammate sees that PyTorch imports correctly, but when they try to run a tensor operation on the GPU, the framework falls back to CPU. They immediately propose reinstalling Python. Based on the stack model from the module, what is the more likely problem area to investigate first?
+**Q1.** Your team inherits a training repository where `README.md` says only "install requirements," and two developers report different `numpy` versions after following that instruction. What environment evidence would you add first, and why does that evidence reduce the debugging space?
 
 <details>
 <summary>Answer</summary>
-The driver and compute runtime compatibility should be checked before touching Python. The module explains that many failures happen when people confuse stack layers. If import works but GPU use fails, the likely issue is a driver/framework/runtime mismatch rather than Python itself. The right approach is to verify the driver layer first, confirm the intended CUDA or ROCm target, and then ensure the installed framework build matches that target.
+Add a project-local environment path, a dependency record, and a smoke test that prints the interpreter path and package versions. This reduces the debugging space because the team can distinguish "different interpreter" from "different dependency resolution" instead of treating both as a generic install failure. The strongest immediate habit is running installs and verification through `.venv/bin/python` so the command itself names the environment being tested.
 </details>
 
-**Q3.** You are setting up an AMD GPU workstation for model training on Linux. A colleague says, "Just install the newest packages from wherever you find them and it should work." Why is that a risky approach for ROCm, and what should you do instead?
+**Q2.** A learner reports that their notebook cannot import a package, but `.venv/bin/python -c "import package_name"` works in the project directory. What should you check before reinstalling dependencies, and what result would confirm your diagnosis?
 
 <details>
 <summary>Answer</summary>
-It is risky because ROCm can be less forgiving about supported hardware, operating systems, and framework builds. The module's correct mental model is not "install the newest thing" but "install a compatible set of things." You should verify that the OS is appropriate, confirm the GPU and driver are supported, choose ROCm as the target runtime family deliberately, and then install a documented framework build that matches that setup instead of mixing random packages.
+Check the notebook's interpreter path from inside a notebook cell and compare it with the CLI interpreter path. If the notebook path does not point into the project `.venv`, the issue is a kernel binding mismatch rather than a missing package in the project environment. Registering or selecting a kernel backed by `.venv/bin/python` should make the notebook and CLI agree.
 </details>
 
-**Q4.** A notebook on your machine can import a library successfully, but the same import fails from the command line in the project directory. What failure mode does this suggest, and how should you fix it?
+**Q3.** An NVIDIA workstation passes `nvidia-smi`, but PyTorch reports `torch.version.cuda` as `None` and `torch.cuda.is_available()` as `False`. Which layer should you change first, and which tempting change should you avoid?
 
 <details>
 <summary>Answer</summary>
-This suggests an environment mismatch between the notebook kernel, shell interpreter, and possibly the project root. The module calls this a common "it works on my notebook" problem. The fix is to make the environment explicit, make the project root explicit, verify which interpreter is active, and confirm imports from both the notebook and CLI so they are using the same project environment.
+Change the framework package selection first because the installed PyTorch build appears to be CPU-only. Avoid reinstalling the NVIDIA driver as a first move because `nvidia-smi` already gave evidence that the driver can see the GPU. The next action is to install a PyTorch build that matches the intended CUDA target, then rerun the smoke test with a real tensor operation.
 </details>
 
-**Q5.** You are helping a small team onboard to a project that mixes several incompatible AI stacks, and different laptops keep drifting into different states. The code may later be deployed in production. Should you stay with host Python plus `venv`, or is this a case for containers?
+**Q4.** A team with AMD GPUs installs random package versions from several blog posts, then sees different ROCm behavior across two Linux workstations. How should they redesign the setup process before trying more package commands?
 
 <details>
 <summary>Answer</summary>
-This is a case where containers are worth using. The module recommends host Python plus `venv` for learning, solo work, and straightforward setups, but containers become the better choice when onboarding must be repeatable, host dependencies are unstable, multiple incompatible stacks are involved, or the project is moving toward deployment. Here, the added control of containers is justified.
+They should start from a supported-combination check: identify the GPU models, confirm the Linux distribution and ROCm release are supported, choose a documented framework build, and install into a clean project environment. ROCm setups are less forgiving when hardware, distribution, runtime, and framework builds are mixed casually. A smoke test should report HIP/build information and perform a small backend tensor operation when available.
 </details>
 
-**Q6.** A developer installs framework packages first and only afterward checks whether the machine's GPU driver and runtime stack are appropriate. They now face hard-to-read errors across multiple layers. What installation order would have reduced this confusion?
+**Q5.** A prototype began as a solo `venv` project, but now six developers need the same setup, host machines keep drifting, and the service is moving toward deployment. Should the team stay with only host Python, and what trade-off justifies your recommendation?
 
 <details>
 <summary>Answer</summary>
-They should have followed the compatibility checklist before installing frameworks. The module's order is: verify what GPU is present, confirm the OS is appropriate, check that the driver is installed and visible, choose the compute runtime family such as CUDA or ROCm, and then install the framework build that matches that target. Reversing that order makes the whole stack harder to debug.
+This is a strong case for introducing containers because repeatable onboarding, deployment alignment, and host drift are now real problems. The trade-off is that containers add image builds, runtime configuration, mounts, users, and GPU passthrough concerns. The recommendation is justified because the stronger boundary solves a concrete team problem, not because containers are automatically simpler.
 </details>
 
-**Q7.** Your project setup guide currently says only, "Install dependencies and start working." A new teammate asks how they can tell whether the environment was ever healthy in the first place. What should you add to the project, and what should it verify?
+**Q6.** A smoke test imports `torch` and exits successfully, so a learner marks the CUDA environment as verified. Later, training silently runs on CPU. How would you improve the smoke test to catch this earlier?
 
 <details>
 <summary>Answer</summary>
-Add a short smoke test as part of the documented setup path. The module recommends verifying the Python version, active environment path, package install sanity, framework import, GPU visibility, and a simple tensor operation on the intended backend. This gives the team a known-good checkpoint instead of assuming that installation output means the environment actually works.
+The smoke test should report framework build fields such as CUDA or HIP version, report backend availability, and execute a tiny tensor operation on the intended device. Import success alone only proves that Python can load the package. A real tensor operation proves much more: the framework build, runtime path, and device access are aligned enough for minimal computation.
 </details>
 
-<!-- /v4:generated -->
-<!-- v4:generated type=no_exercise model=codex turn=1 -->
+**Q7.** During a rebuild, `pip install -r requirements.txt` succeeds, but `pip check` reports dependency conflicts and the model behaves differently from last week. What does this suggest about the project's dependency record, and how should the team respond?
+
+<details>
+<summary>Answer</summary>
+It suggests the dependency record is not strong enough to recreate the previously tested environment, or that incompatible versions were allowed into the environment. The team should separate direct dependencies from resolved versions, regenerate or repair the lock-style record from a known-good environment, run `pip check`, and rerun the smoke test. If the project needs stricter repeatability, a higher-level lock tool or container build may be justified.
+</details>
+
 ## Hands-On Exercise
 
+Goal: build a clean AI project environment, document it, and prove whether it is currently CPU-only, CUDA-capable, or ROCm-capable. You do not need a GPU to complete the exercise; if no GPU tooling exists, your smoke test should report that clearly instead of pretending the backend is available.
 
-Goal: build a fresh project environment that is isolated, documented, and easy to verify on CPU, CUDA, or ROCm hardware.
+- [ ] Create a fresh project directory with a local virtual environment and confirm the interpreter path is project-owned.
 
-- [ ] Create a new project directory with a dedicated virtual environment and activate it.
+```bash
+mkdir -p reproducible-ai-env/src reproducible-ai-env/notebooks reproducible-ai-env/data reproducible-ai-env/outputs
+cd reproducible-ai-env
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip setuptools wheel
+.venv/bin/python -c "import sys; print(sys.version); print(sys.executable); print(sys.prefix)"
+```
 
-  ```bash
-  mkdir -p reproducible-ai-env/{src,notebooks,data,outputs}
-  cd reproducible-ai-env
-  python3 -m venv .venv
-  source .venv/bin/activate
-  python --version
-  which python
-  ```
+- [ ] Add a minimal dependency input file, install through the project interpreter, and record the resolved environment.
 
-- [ ] Record the active interpreter and package tool versions so the environment state is explicit from the start.
+```bash
+cat > requirements.in <<'EOF'
+numpy
+packaging
+EOF
 
-  ```bash
-  python --version
-  python -m pip --version
-  which python
-  which pip
-  ```
+.venv/bin/python -m pip install -r requirements.in
+.venv/bin/python -m pip freeze > requirements.txt
+.venv/bin/python -m pip check
+```
 
-- [ ] Create a minimal dependency file and install only the packages this project needs.
+- [ ] Create a README that documents the setup contract another learner should follow.
 
-  ```bash
-  cat > requirements.txt <<'EOF'
-  pip
-  setuptools
-  wheel
-  numpy
-  EOF
+```bash
+cat > README.md <<'EOF'
+# Reproducible AI Environment
 
-  python -m pip install --upgrade pip setuptools wheel
-  python -m pip install -r requirements.txt
-  python -m pip freeze > requirements.lock.txt
-  ```
+## Setup
+Use Python 3.12 to create `.venv`, then run package commands through `.venv/bin/python`.
 
-- [ ] Inspect the machine's GPU stack before installing any framework-specific CUDA or ROCm build.
+## Install
+`.venv/bin/python -m pip install -r requirements.txt`
 
-  ```bash
-  uname -a
-  lspci | grep -Ei 'vga|3d|display'
-  ```
+## Verify
+`.venv/bin/python verify_env.py`
 
-  ```bash
-  nvidia-smi
-  ```
+## Hardware expectation
+This project may run CPU-only unless the smoke test reports a working CUDA or ROCm backend.
+EOF
+```
 
-  ```bash
-  rocminfo
-  ```
+- [ ] Add a `.gitignore` so local environments and generated artifacts are not treated as project source.
 
-- [ ] Add a smoke test script that reports Python details, package import health, and whether PyTorch can see CUDA or ROCm if it is installed later.
+```bash
+cat > .gitignore <<'EOF'
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+outputs/
+*.pyc
+EOF
+```
 
-  ```bash
-  cat > verify_env.py <<'EOF'
-  import os
-  import platform
-  import sys
+- [ ] Inspect GPU tooling before installing any framework-specific CUDA or ROCm package.
 
-  print("python:", sys.version.split()[0])
-  print("executable:", sys.executable)
-  print("platform:", platform.platform())
-  print("venv:", os.environ.get("VIRTUAL_ENV", "not set"))
+```bash
+lspci | grep -Ei 'vga|3d|display' || true
+command -v nvidia-smi || true
+command -v rocminfo || true
+```
 
-  import numpy
-  print("numpy:", numpy.__version__)
+- [ ] Create a smoke test that reports interpreter identity, package health, optional GPU tools, and optional framework backend status.
 
-  try:
-      import torch
-      print("torch:", torch.__version__)
-      print("cuda_available:", torch.cuda.is_available())
-      print("cuda_version:", getattr(torch.version, "cuda", None))
-      print("hip_version:", getattr(torch.version, "hip", None))
-      if torch.cuda.is_available():
-          x = torch.tensor([1.0, 2.0]).to("cuda")
-          print("tensor_device:", x.device)
-  except ImportError:
-      print("torch: not installed")
-  EOF
+```bash
+cat > verify_env.py <<'PY'
+from __future__ import annotations
 
-  python verify_env.py
-  ```
+import os
+import platform
+import subprocess
+import sys
+from pathlib import Path
 
-- [ ] Create a short setup note so another person can reproduce the same environment without guessing.
 
-  ```bash
-  cat > README.md <<'EOF'
-  # Reproducible AI Environment
+def optional_output(command: list[str]) -> str:
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        return "not found"
+    combined = completed.stdout.strip() or completed.stderr.strip()
+    if not combined:
+        return f"exit code {completed.returncode}"
+    return "\n".join(combined.splitlines()[:8])
 
-  ## Setup
-  1. Create the virtual environment: `python3 -m venv .venv`
-  2. Activate it: `source .venv/bin/activate`
-  3. Install dependencies: `python -m pip install -r requirements.txt`
 
-  ## Verify
-  Run: `python verify_env.py`
-  EOF
+def main() -> None:
+    print("project_root:", Path(__file__).resolve().parent)
+    print("python_version:", sys.version.split()[0])
+    print("python_executable:", sys.executable)
+    print("python_prefix:", sys.prefix)
+    print("platform:", platform.platform())
+    print("virtual_env:", os.environ.get("VIRTUAL_ENV", "not set"))
 
-  cat README.md
-  ```
+    import numpy
 
-- [ ] Recreate the environment from scratch and confirm the same verification path still works.
+    print("numpy_version:", numpy.__version__)
+    print("nvidia_smi_status:", optional_output(["nvidia-smi"]))
+    print("rocminfo_status:", optional_output(["rocminfo"]))
 
-  ```bash
-  deactivate
-  rm -rf .venv
-  python3 -m venv .venv
-  source .venv/bin/activate
-  python -m pip install -r requirements.txt
-  python verify_env.py
-  ```
+    try:
+        import torch
+    except ImportError:
+        print("torch_status: not installed")
+        print("backend_status: CPU-only verification path completed")
+        return
+
+    print("torch_version:", torch.__version__)
+    print("torch_cuda_build:", torch.version.cuda)
+    print("torch_hip_build:", torch.version.hip)
+    print("torch_backend_available:", torch.cuda.is_available())
+
+    if torch.cuda.is_available():
+        value = torch.tensor([5.0, 7.0], device="cuda").sum().cpu().item()
+        print("torch_tensor_backend: cuda-compatible API")
+        print("torch_tensor_sum:", value)
+    else:
+        print("torch_tensor_backend: cpu-only path")
+
+
+if __name__ == "__main__":
+    main()
+PY
+
+.venv/bin/python verify_env.py
+```
+
+- [ ] Recreate the environment from the recorded dependency file and confirm the same verification command still works.
+
+```bash
+rm -rf .venv
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip setuptools wheel
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip check
+.venv/bin/python verify_env.py
+```
 
 Success criteria:
-- The project has its own `.venv`, `requirements.txt`, `requirements.lock.txt`, `README.md`, and `verify_env.py`.
-- `which python` points to the project's virtual environment after activation.
-- `python -m pip freeze` produces a repeatable dependency snapshot.
-- Hardware inspection identifies whether the machine should follow a CPU, CUDA, or ROCm path.
-- `python verify_env.py` runs successfully and reports a clear, reproducible environment state.
 
-<!-- /v4:generated -->
-## Next Modules
+- [ ] The project contains `.venv`, `requirements.in`, `requirements.txt`, `README.md`, `.gitignore`, and `verify_env.py`.
+
+- [ ] Verification commands use `.venv/bin/python` after the bootstrap environment is created.
+
+- [ ] `requirements.txt` can recreate the installed packages in a fresh `.venv`.
+
+- [ ] `verify_env.py` prints the interpreter path, Python version, project root, platform, and `numpy` version.
+
+- [ ] GPU inspection reports whether `nvidia-smi` or `rocminfo` is available, without failing the whole smoke test when either tool is missing.
+
+- [ ] If PyTorch is installed later, the smoke test distinguishes CPU-only, CUDA-build, and HIP-build evidence before claiming backend success.
+
+- [ ] The README tells a future learner how to install and verify the environment without relying on your terminal history.
+
+## Next Module
 
 - [Notebooks, Scripts, and Project Layouts](./module-1.4-notebooks-scripts-project-layouts/)
 - [PyTorch Fundamentals](../deep-learning/module-1.2-pytorch-fundamentals/)
 - [Home AI Workstation Fundamentals](./module-1.2-home-ai-workstation-fundamentals/)
-
-## Sources
-
-- [NVIDIA cuda-python](https://github.com/NVIDIA/cuda-python) — Useful for understanding CUDA's platform/runtime surface from the Python side of local AI environments.
-- [ROCm Official Repository](https://github.com/ROCm/ROCm) — Useful for ROCm overview, supported hardware and OS guidance, and links to the official compatibility matrix.
-- [PyTorch Official Repository](https://github.com/pytorch/pytorch) — Useful for seeing how a major framework distinguishes CPU, CUDA, and ROCm installation and build paths.
