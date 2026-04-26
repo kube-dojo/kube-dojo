@@ -1,18 +1,6 @@
-# Chapter 06 — People
+# People: Chapter 6
 
-Verified protagonist bios. One entry per person who gets named in the prose.
+## Verified Protagonists
 
-## Format
-
-```
-### Person Name (born–died)
-
-- **Role in this chapter:** what they did during the era covered
-- **Verified bio sources:** [SRC-NN], [CAT-NN]
-- **Quote sources (if any):** [SRC-NN] — primary required for direct quotes
-- **Conflicts:** any discrepancies in birth/death/role across sources
-```
-
-## People
-
-_to be populated_
+- **Fei-Fei Li:** The primary visionary behind ImageNet. She recognized that the AI field's obsession with algorithmic perfection was futile without a dataset that accurately represented the complexity of the visual world. She pushed the project forward despite widespread skepticism in the academic community.
+- **Jia Deng:** The lead author of the 2009 CVPR paper and a key graduate student who executed much of the technical and logistical engineering required to interface with Mechanical Turk and manage the massive database.

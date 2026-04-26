@@ -1,15 +1,18 @@
-# Chapter 06 — Infrastructure log
+# Infrastructure Log: Chapter 6
 
-Technical metrics anchored in primary sources. This is the spine of the infrastructure-history angle.
+## Technical Metrics & Constraints
 
-| Year | System / Org | Compute | Data | Notable artifact | Source |
-|---|---|---|---|---|---|
-| _e.g. 1958_ | _e.g. Cornell Aeronautical Lab_ | _e.g. IBM 704, ~12 KFLOPS_ | _e.g. 20×20 pixel inputs_ | _e.g. Mark I Perceptron_ | _[SRC-06-NN]_ |
+### The Data Status Quo (pre-ImageNet)
+- **PASCAL VOC (circa 2006-2008):**
+  - Scope: 20 classes.
+  - Scale: Tens of thousands of images.
+  - Constraint: Models trained on this overfit rapidly; they learned the dataset, not the world.
 
-## Cluster sizes / parameter counts (where relevant)
-
-_to be populated for chapters where compute scale is the story (6, 7, 8, 9, 10)_
-
-## Cost / power / footprint estimates
-
-_only when source-anchored — no back-of-envelope estimates without flagging them as speculation_
+### The New Infrastructure
+- **Amazon Mechanical Turk (AMT):**
+  - Workforce: Global, distributed human intelligence.
+  - Role in AI: Treated as an API call for human labeling; a computational pipeline rather than just labor.
+- **ImageNet (2009 release):**
+  - Scale: 3.2 million labeled images.
+  - Taxonomy: 5,247 synsets (categories) based on WordNet.
+  - Ultimate Scale: Grew to over 14 million images and 21,000+ synsets.

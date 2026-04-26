@@ -1,15 +1,4 @@
-# Chapter 06 — Open questions
+# Open Questions: Chapter 6
 
-Live list of unresolved research questions. These block the brief lock until resolved or explicitly downgraded to "out of scope".
-
-## Blocking
-
-- [ ] _question that must be resolved before brief.md lock_
-
-## Non-blocking (nice-to-have)
-
-- [ ] _question that would strengthen the chapter but isn't required_
-
-## Resolved
-
-- [x] _resolved question_ — resolution: _summary_, source: _[SRC-NN]_
+- What were the specific financial constraints of using Mechanical Turk in the early days of the project, and how did Fei-Fei Li secure the funding when the broader community was skeptical?
+- How much of the Mechanical Turk data cleaning/consensus algorithm was novel computer science versus standard crowdsourcing practice at the time?
