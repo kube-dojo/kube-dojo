@@ -32,22 +32,73 @@ def test_dispatch_gemini_starts_new_session():
 def test_stream_timeout_kills_process_group_first():
     proc = MagicMock()
     proc.pid = 12345
+    parent = MagicMock()
+    child = MagicMock()
+    parent.children.return_value = [child]
 
-    with patch("dispatch.os.killpg") as killpg:
+    with patch("dispatch.psutil.Process", return_value=parent), patch(
+        "dispatch.os.killpg"
+    ) as killpg:
         dispatch._kill_process_tree(proc)
 
+    child.kill.assert_called_once()
+    parent.kill.assert_called_once()
     killpg.assert_called_once_with(12345, signal.SIGKILL)
     proc.kill.assert_not_called()
 
 
 def test_stream_timeout_falls_back_to_proc_kill():
     proc = MagicMock()
+    proc.pid = None
+
+    dispatch._kill_process_tree(proc)
+
+    proc.kill.assert_called_once()
+
+
+def test_stream_timeout_uses_process_group_when_psutil_cannot_inspect():
+    proc = MagicMock()
     proc.pid = 12345
 
-    with patch("dispatch.os.killpg", side_effect=OSError):
+    with patch("dispatch.psutil.Process", side_effect=dispatch.psutil.AccessDenied), patch(
+        "dispatch.os.killpg"
+    ) as killpg:
+        dispatch._kill_process_tree(proc)
+
+    killpg.assert_called_once_with(12345, signal.SIGKILL)
+    proc.kill.assert_not_called()
+
+
+def test_stream_timeout_falls_back_to_proc_kill_when_group_kill_fails():
+    proc = MagicMock()
+    proc.pid = 12345
+
+    with patch("dispatch.psutil.Process", side_effect=dispatch.psutil.AccessDenied), patch(
+        "dispatch.os.killpg", side_effect=OSError
+    ):
         dispatch._kill_process_tree(proc)
 
     proc.kill.assert_called_once()
+
+
+def test_stream_timeout_kills_all_descendants_before_parent():
+    proc = MagicMock()
+    proc.pid = 12345
+    parent = MagicMock()
+    child = MagicMock()
+    grandchild = MagicMock()
+    kill_order: list[str] = []
+    parent.children.return_value = [child, grandchild]
+    child.kill.side_effect = lambda: kill_order.append("child")
+    grandchild.kill.side_effect = lambda: kill_order.append("grandchild")
+    parent.kill.side_effect = lambda: kill_order.append("parent")
+
+    with patch("dispatch.psutil.Process", return_value=parent), patch(
+        "dispatch.os.killpg"
+    ):
+        dispatch._kill_process_tree(proc)
+
+    assert kill_order == ["child", "grandchild", "parent"]
 
 
 def test_gemini_quiet_mode_defaults_on_in_pipeline_mode(monkeypatch):
