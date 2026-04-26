@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 7.1: Terraform Deep Dive"
 slug: platform/toolkits/infrastructure-networking/iac-tools/module-7.1-terraform
 sidebar:
