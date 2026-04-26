@@ -1,13 +1,13 @@
 # Brief: Chapter 4 - The Statistical Roots
 
 ## Thesis
-While logic and calculation were being mechanized in the West, Russian mathematicians were laying the groundwork for probability-based generation. Andrey Markov's study of language as a sequence of probabilities—rather than strict grammatical rules—planted the distant seeds for modern Large Language Models.
+Andrey Markov's study of language as a dependent sequence of probabilities laid the mathematical groundwork for modern generative AI, modeling sequences statistically rather than relying on grammatical rules.
 
 ## Scope
-- IN SCOPE: Andrey Markov, Markov Chains, his analysis of Pushkin's *Eugene Onegin*, the mathematics of sequential probability.
-- OUT OF SCOPE: Hidden Markov Models in speech recognition (belongs to the 1980s).
+- IN SCOPE: Andrey Markov, his 1913 analysis of *Eugene Onegin*, Markov Chains, the mathematical ancestry of LLMs.
+- OUT OF SCOPE: Claims that Markov foresaw modern AI or that his work proved language *must* be modeled this way globally.
 
 ## Scenes Outline
-1. **The Grammatical Debate:** The prevailing view that language is strictly rule-based.
-2. **The Poet and the Mathematician:** Markov manually counts vowels and consonants in *Eugene Onegin*.
-3. **The Chain of Probability:** Markov proves that the probability of the next letter depends only on the current letter, inventing the Markov Chain.
+1. **The Dispute:** Markov challenges Nekrasov's theological arguments about independent events.
+2. **Counting Pushkin:** Markov manually calculates vowel/consonant transition probabilities in *Eugene Onegin*.
+3. **The Ancestry of Generation:** Establishing Markov chains as the distant statistical ancestor of predictive text, distinct from symbolic AI's later rule-based approach.

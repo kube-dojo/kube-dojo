@@ -1,4 +1,5 @@
 # People: Chapter 4
 
 ## Verified Protagonists
-- **Andrey Markov (1856–1922):** Russian mathematician who invented Markov Chains. He proved that events in a sequence could be predicted by analyzing local probabilities, bypassing the need for deep, global rules.
+- **Andrey Markov (1856–1922):** Russian mathematician who developed Markov chains to model dependent probability sequences.
+- **Pavel Nekrasov (1853–1924):** Markov's theological and mathematical rival.

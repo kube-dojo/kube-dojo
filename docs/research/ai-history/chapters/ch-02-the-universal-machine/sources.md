@@ -1,11 +1,16 @@
 # Sources: Chapter 2
 
-## Annotated Bibliography
+## Claim Matrix
 
+| Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
+|---|---|---|---|---|---|
+| Hilbert posed the Entscheidungsproblem in 1928 | 1 | Hilbert & Ackermann, *Grundzüge der theoretischen Logik* (1928) | [Hodges 1983], p. 91 | Green | None |
+| Turing proposed the Universal Machine to solve it | 2, 3 | Turing 1936, *On Computable Numbers...* | [Hodges 1983], p. 96 | Green | None |
+
+## Bibliography
 ### Primary
-- [x] **"On Computable Numbers, with an Application to the Entscheidungsproblem" (Alan Turing, 1936)**
-  - Verification: Green. The legendary paper introducing the theoretical "Universal Computing Machine".
+- **Turing, Alan. "On Computable Numbers, with an Application to the Entscheidungsproblem." (1936).** [DOI: 10.1112/plms/s2-42.1.230 | PhilPapers: https://philpapers.org/rec/TUROCN]
+- **Hilbert, David, and Wilhelm Ackermann. *Grundzüge der theoretischen Logik*. (1928).**
 
 ### Secondary
-- [x] **"Alan Turing: The Enigma" (Andrew Hodges, 1983)**
-  - Verification: Green. The definitive biography of Alan Turing. Covers the intellectual climate and his conceptualization of the Universal Machine.
+- **[Hodges 1983]** (See source-catalog.md)

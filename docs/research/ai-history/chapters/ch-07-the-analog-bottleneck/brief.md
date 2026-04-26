@@ -1,13 +1,13 @@
 # Brief: Chapter 7 - The Analog Bottleneck
 
 ## Thesis
-The philosophical dream of Cybernetics collided violently with the physical constraints of 1950s analog hardware. Grey Walter’s electronic tortoises proved that biological principles could be mimicked, but the sheer physical impossibility of scaling vacuum tubes meant analog intelligence was a dead end.
+Grey Walter’s electronic tortoises proved that complex, life-like behavior could emerge from simple analog circuits. However, the physical reality of vacuum tubes posed a severe scaling constraint that drove the field toward digital solutions.
 
 ## Scope
-- IN SCOPE: W. Grey Walter, the *Machina speculatrix* (tortoises), the physical reality of vacuum tube circuits and heat dissipation.
-- OUT OF SCOPE: Digital architectures.
+- IN SCOPE: W. Grey Walter, *Machina speculatrix* (tortoises Elmer and Elsie), analog circuit behavior, physical constraints of vacuum tubes.
+- OUT OF SCOPE: Exaggerated claims of "thermodynamic impossibility" or skyscraper-sized calculations without direct engineering sources.
 
 ## Scenes Outline
-1. **The Living Brain:** Grey Walter builds the tortoises to prove simple circuits yield complex behavior.
-2. **The Illusion of Will:** The tortoises navigate, feed, and interact, dazzling observers.
-3. **The Heat and the Glass:** The hard infrastructural wall. Scaling from two vacuum tubes to millions is thermodynamically impossible.
+1. **A Machine That Learns:** Walter builds the tortoises to demonstrate emergent biological behavior.
+2. **The Illusion of Intent:** The tortoises navigate and interact using only a light sensor, bump sensor, and two vacuum tubes.
+3. **The Scaling Wall:** The practical limitations of soldering hardware vs. programming software.

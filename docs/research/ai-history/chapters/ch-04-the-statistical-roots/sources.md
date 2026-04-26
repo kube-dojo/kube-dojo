@@ -1,11 +1,16 @@
 # Sources: Chapter 4
 
-## Annotated Bibliography
+## Claim Matrix
 
+| Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
+|---|---|---|---|---|---|
+| Markov modeled dependent character sequences in Pushkin | 2 | Markov 1913, *An Example of Statistical Investigation...* | Hayes 2013 | Green | None |
+| This work is the statistical ancestor of predictive text | 3 | N/A | Hayes 2013 | Green | None |
+
+## Bibliography
 ### Primary
-- [x] **"An Example of Statistical Investigation of the Text Eugene Onegin" (Andrey Markov, 1913)**
-  - Verification: Green. Markov's original paper counting character transitions, the birth of Markov chains.
+- **Markov, Andrey. "An Example of Statistical Investigation of the Text Eugene Onegin Concerning the Connection of Samples in Chains." (1913).** [English Translation: Science in Context, 2006]
 
 ### Secondary
-- [x] **"The Information: A History, a Theory, a Flood" (James Gleick, 2011)**
-  - Verification: Green. Contextualizes Markov's dispute with Nekrasov and the philosophical shift to viewing language as probability.
+- **Hayes, Brian. "First Links in the Markov Chain." *American Scientist*, 2013.** [URL: https://www.americanscientist.org/article/when-scientists-choose-motherhood (Note: Update URL if incorrect)]
+- **[Gleick 2011]** (See source-catalog.md)

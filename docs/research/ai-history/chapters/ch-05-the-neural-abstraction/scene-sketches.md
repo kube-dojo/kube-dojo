@@ -1,11 +1,8 @@
 # Scene Sketches: Chapter 5
 
-## Scene 1: The Vagabond Genius
+## Scene 1: The Collaboration
 - **Setting:** Chicago (1940s).
-- **Action:** Pitts, a homeless runaway, meets McCulloch, and they begin translating the brain into math.
+- **Action:** Pitts and McCulloch begin translating biological activity into logical calculus.
 
-## Scene 2: The Threshold
-- **Action:** Pedagogical explanation: How an artificial neuron acts as an AND gate or an OR gate based on a mathematical threshold.
-
-## Scene 3: The Unified Theory
-- **Action:** Their paper bridges biology and computing. The brain is just a Turing Machine made of meat.
+## Scene 2: The Idealized Threshold
+- **Action:** Pedagogical breakdown of how their mathematical model works: sum of inputs vs. threshold. Explicitly noting this is a mathematical idealization, not literal wetware biology.

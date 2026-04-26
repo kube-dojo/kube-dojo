@@ -1,11 +1,15 @@
 # Sources: Chapter 5
 
-## Annotated Bibliography
+## Claim Matrix
 
+| Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
+|---|---|---|---|---|---|
+| McCulloch-Pitts modeled neurons as idealized logic gates | 2, 3 | McCulloch & Pitts 1943 | Piccinini 2004 | Green | None |
+
+## Bibliography
 ### Primary
-- [x] **"A Logical Calculus of the Ideas Immanent in Nervous Activity" (Warren McCulloch and Walter Pitts, 1943)**
-  - Verification: Green. The foundational paper of artificial neural networks.
+- **McCulloch, Warren, and Walter Pitts. "A Logical Calculus of the Ideas Immanent in Nervous Activity." *Bulletin of Mathematical Biophysics*, Vol. 5. (1943).** [PhilPapers: https://philpapers.org/rec/MCCALC]
 
 ### Secondary
-- [x] **"The Man Who Tried to Redeem the World with Logic" (Amanda Gefter, Nautilus, 2015)**
-  - Verification: Green. Provides the tragic, brilliant biographical history of Walter Pitts and his collaboration with McCulloch.
+- **Piccinini, Gualtiero. "The First Computational Theory of Mind and Brain: A Close Look at McCulloch and Pitts's 'Logical Calculus'." *Synthese*. (2004).** (Confirms the model is idealized, not literal biology).
+- **Gefter, Amanda. "The Man Who Tried to Redeem the World with Logic." *Nautilus*, 2015.**

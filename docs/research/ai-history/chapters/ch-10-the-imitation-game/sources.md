@@ -1,11 +1,15 @@
 # Sources: Chapter 10
 
-## Annotated Bibliography
+## Claim Matrix
 
+| Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
+|---|---|---|---|---|---|
+| Turing framed the test via a teletype interface to remove physical biases | 2 | Turing 1950, p. 433 | [Hodges 1983] | Green | None |
+| Turing predicted a requirement of 10^9 bits of storage for a thinking machine | 3 | Turing 1950, p. 442 | [Hodges 1983] | Green | None |
+
+## Bibliography
 ### Primary
-- [x] **"Computing Machinery and Intelligence" (Alan Turing, Mind, 1950)**
-  - Verification: Green. The paper that introduced the Imitation Game (Turing Test) and explicitly argued for the capability of digital computers.
+- **Turing, Alan. "Computing Machinery and Intelligence." *Mind*, Vol. 59, No. 236. (1950).** [Oxford/Mind: https://academic.oup.com/book/42030/chapter/355746326]
 
 ### Secondary
-- [x] **"Alan Turing: The Enigma" (Andrew Hodges, 1983)**
-  - Verification: Green. Contextualizes Turing's post-war mindset and his philosophical defense of the digital machine.
+- **[Hodges 1983]** (See source-catalog.md)

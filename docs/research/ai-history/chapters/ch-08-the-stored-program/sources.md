@@ -1,11 +1,17 @@
 # Sources: Chapter 8
 
-## Annotated Bibliography
+## Claim Matrix
 
+| Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
+|---|---|---|---|---|---|
+| ENIAC was programmed via physical cables by women mathematicians | 1 | Oral histories of ENIAC programmers | Haigh et al. 2016 | Green | None |
+| Von Neumann's EDVAC draft formalized the stored-program concept | 2 | von Neumann 1945 | [Dyson 2012] | Green | None |
+| Eckert and Mauchly disputed the sole credit of von Neumann | 3 | Moore School meeting notes | Haigh et al. 2016 | Green | High historical tension regarding patent rights.
+
+## Bibliography
 ### Primary
-- [x] **"First Draft of a Report on the EDVAC" (John von Neumann, 1945)**
-  - Verification: Green. The defining architectural blueprint of modern digital computing.
+- **von Neumann, John. "First Draft of a Report on the EDVAC." (1945).** [Smithsonian Scan: https://library.si.edu/digital-library/book/firstdraftofrepo00vonn]
 
 ### Secondary
-- [x] **"Turing's Cathedral: The Origins of the Digital Universe" (George Dyson, 2012)**
-  - Verification: Green. The definitive history of von Neumann and the creation of the stored-program computer at the IAS.
+- **Haigh, Thomas, Mark Priestley, and Crispin Rope. *ENIAC in Action: Making and Remaking the Modern Computer*. MIT Press, 2016.** [URL: https://mitpress.mit.edu/9780262535175/eniac-in-action/]
+- **[Dyson 2012]** (See source-catalog.md)

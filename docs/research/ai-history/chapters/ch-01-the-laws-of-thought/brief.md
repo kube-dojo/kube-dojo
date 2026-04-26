@@ -1,13 +1,13 @@
 # Brief: Chapter 1 - The Laws of Thought
 
 ## Thesis
-Before artificial intelligence could be engineered in hardware, it had to be proven conceptually possible in mathematics. George Boole's formalization of human logic into a binary algebra was the foundational breakthrough, proving that reasoning is not a mystical process but a mechanical one.
+Before AI could be engineered, human reasoning had to be formalized into binary algebra. George Boole proved that logic is mechanical, not mystical. Crucially, Boole’s algebra was not designed with physical computing in mind.
 
 ## Scope
-- IN SCOPE: George Boole's life, the publication of *The Laws of Thought*, the reduction of logic to True/False (1/0), and the initial rejection of his ideas by practical engineers.
+- IN SCOPE: George Boole's life, the 1854 publication of *The Laws of Thought*, the reduction of logic to binary states. The philosophical gap between 19th-century math and 20th-century hardware.
 - OUT OF SCOPE: Physical implementation of logic (belongs to later chapters).
 
 ## Scenes Outline
-1. **The Self-Taught Mathematician:** Introduce George Boole and his motivation to formalize the chaotic process of human thought.
-2. **The Binary Reduction:** Explain the math pedagogically—how Boole proved that any logical statement could be solved algebraically using only two states.
-3. **The 80-Year Wait:** Boole's algebra is viewed as elegant but practically useless by the engineering community, lying dormant for decades.
+1. **The Self-Taught Mathematician:** Boole observes the messy nature of human arguments.
+2. **The Binary Reduction:** Boole proves logical statements can be solved algebraically using two states. (Note: Avoiding claims that modern binary computing was already "present" in his mind).
+3. **The Dormant Blueprint:** Boole's algebra lies dormant for decades, viewed as elegant but practically useless by engineers.

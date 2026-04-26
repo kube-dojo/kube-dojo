@@ -1,13 +1,13 @@
 # Brief: Chapter 9 - The Memory Miracle
 
 ## Thesis
-Von Neumann's elegant architecture was useless if the machine constantly forgot what it was doing. The physical prerequisite for complex symbolic AI was Jay Forrester and An Wang's invention of magnetic core memory, which provided the fast, non-volatile infrastructure required to run complex code.
+Von Neumann's architecture required fast, reliable, non-volatile memory. The invention of magnetic core memory by researchers like Jay Forrester, An Wang, and Jan Rajchman provided the physical infrastructure necessary for complex software, replacing fragile electrostatic tubes.
 
 ## Scope
-- IN SCOPE: Williams tubes (electrostatic memory constraints), Jay Forrester (MIT Whirlwind), An Wang, the physical weaving of magnetic core memory.
-- OUT OF SCOPE: IBM 704 (next chapter).
+- IN SCOPE: Williams tubes, Jay Forrester (MIT Whirlwind), An Wang (pulse transfer device), Jan Rajchman (RCA), the patent disputes, the physical weaving of core memory.
+- OUT OF SCOPE: Semiconductor RAM (1970s).
 
 ## Scenes Outline
-1. **The Amnesiac Machines:** The unreliability of electrostatic Williams tubes crashing programs constantly.
-2. **The Magnetic Donut:** Forrester and Wang independently realize that ferrite rings can store polarity (1 or 0) without power.
-3. **The Textile Workers:** The labor-intensive physical process of hand-weaving the memory grids, cementing the physical infrastructure of the digital age.
+1. **The Amnesiac Machines:** The volatility and crash-rates of Williams tubes and delay lines.
+2. **The Magnetic Solution:** Wang, Forrester, and Rajchman independently develop core memory solutions, leading to complex patent battles.
+3. **Manufacturing Infrastructure:** The labor-intensive, precision wiring required to build core memory grids.
