@@ -103,3 +103,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T16:09:22Z	platform-disciplines-delivery-automation-gitops-module-3.5-secrets	3.80		0			codex	claude	approve	
 2026-04-26T16:30:13Z	platform-toolkits-infrastructure-networking-storage-module-16.3-longhorn	3.50		0			codex	claude	approve	
 2026-04-26T16:34:36Z	k8s-cnpa-module-1.1-exam-strategy-and-blueprint-review	1.80		0			codex	claude	approve	
+2026-04-26T16:38:59Z	k8s-kcna-part3-cloud-native-architecture-module-3.10-green-computing	4.00		0			codex	claude	approve	
