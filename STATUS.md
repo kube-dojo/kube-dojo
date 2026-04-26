@@ -2,24 +2,47 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~17:38 local — #388 batch + #246 platform hubs shipped + AI history book consensus locked)
+## Active Work (2026-04-26 ~18:25 local — v3 follow-on session: AI history book filed + #246 routes shipped + gemini-fixed)
 
-**Full handoff**: [`docs/sessions/2026-04-26-388-handoff-v3.md`](docs/sessions/2026-04-26-388-handoff-v3.md)
+**Prior handoff**: [`docs/sessions/2026-04-26-388-handoff-v3.md`](docs/sessions/2026-04-26-388-handoff-v3.md)
 
 | | Value |
 |---|---|
-| #388 shipped | 115 (107 full-review + 8 auto-approved) |
-| Still `revision_pending` | 287 |
-| FAILED right now | 0 |
-| Cumulative deferred-review APPROVE rate | 30/32 (~94%) |
-| Origin sync | clean |
-| Batch alive | yes (PID `cat logs/quality/batch.pid`) |
+| #388 shipped | 119 (111 full-review + 8 auto-approved) — +4 since v3 |
+| Still `revision_pending` | ~283 |
+| FAILED right now | 0 (longhorn merge-race recovered → reset to AUDITED) |
+| Cumulative deferred-review APPROVE rate | unchanged (~94%) |
+| Origin sync | clean (last push: c3f114f7→d37cb696) |
+| Batch alive | yes (PID `cat logs/quality/batch.pid`) — restarted twice this session |
+| Open issues | 42 (was 44; closed #380 AUDITED-drained + #390 SectionHealthSummary verified) |
 
-**Issues SHIPPED this session**: #390 (`SectionHealthSummary` component) + #246 (platform/index.md + platform/foundations/index.md rewrites).
+**Issues SHIPPED / FILED this session**:
 
-**AI history book agreement LOCKED** between codex + gemini + claude. 10 chapters, 3+3+4 ownership split (codex/gemini/claude), workflow with mandatory lock-step before drafting, research wiki at `docs/research/ai-history/`. Module-1.1 stays UNTOUCHED (greenfield book). See v3 handoff for the locked details.
+- **#394** filed — Epic: AI History book (greenfield 10-chapter narrative, codex+gemini+claude consensus locked). Skeleton scaffolded at `docs/research/ai-history/` (10 chapter folders × 8 templates each + README + source-catalog). Module-1.1 stays UNTOUCHED.
+- **#395** filed — Bug: dispatch.py / agent bridge — claude fails with `unknown option` when monitor JSON snapshot is in args (root cause of last session's 3-way discussion claude-absence).
+- **#246 progress** — 3 route-design files shipped + gemini-reviewed:
+  - `platform/disciplines/index.md` rewritten as full route guide (61 LOC, mirrors foundations pattern, 14 disciplines × persona)
+  - `k8s/index.md` rebalanced — added "Choose Your Path" persona section (Operator/Developer/Security Specialist), demoted alphabetical default, deleted 3 redundant legacy sections per gemini review, all relative links → absolute
+  - `platform/index.md` — added "Common Entry Mistakes" callout that earlier rewrite had dropped
+- **#390 closed** — SectionHealthSummary verified as shipped (commit 8a053ff8).
+- **#380 closed** — AUDITED queue drained (0 modules at AUDITED stage, pipeline_v2 leases empty).
+- **#393 cross-linked to #394** — narrative-enrichment depth pass deferred until #394 chapters 6-10 reach `verified` state.
 
-**Open for next session**: file the AI history book GitHub epic; create `docs/research/ai-history/` skeleton; continue #246 (k8s/index.md, platform/disciplines/index.md, 4 bridge pages); pick up next from triage list (#392 What's New, #391 public status page, #375 pipeline cleanup); batch continues autonomously.
+**Cross-family review (gemini on codex)**: caught 3 must-fixes on the route changes — security route inversion (CKA→CKS→KCSA), redundant legacy sections, relative links. All applied in commit c3f114f7. Reinforced lessons #2 from v3 handoff: do NOT skip cross-family review even on "small" content changes.
+
+**Open for next session**:
+- **AI history book** — each agent populates their assigned chapter `brief.md` + `sources.md` (gemini ch1/6/8, claude ch2/3/4/9, codex ch5/7/10). Cross-family reviewer signs off on each contract before prose drafting starts.
+- **#246 still open** — 4 bridge pages (k8s→on-prem, k8s→platform, ai/ml→platform-data-ai, ai/ml→on-prem-ai-infra). Deferred this session because the design needs sidebar wiring + location decision (probably under each source track's `bridges/` subdir with new sidebar autogenerate entries).
+- **#392** What's New page refresh (codex's #2 priority after #388).
+- **#391** Public status page (depends on #389 quality board which is also open).
+- **Auto-approved modules need deferred review** — 8 auto-approved this session, 7 unprocessed at v3, batch produces more. Run `.venv/bin/python scripts/quality_post_review.py --timeout 300 --limit 20` (per atomic-drain pattern: pause batch first if active).
+- **Batch continues autonomously** — 119/384 shipped, ~283 still pending. Average wall ~280-500s per module.
+
+**Lessons reinforced this session**:
+1. Atomic drain pattern still bites — running `quality_post_review.py` while batch is active causes dirty_pre on next module. The post-review-queue.txt entries also persist after partial drain runs (cleaned manually).
+2. Cwd discipline — `cd` inside a Bash heredoc shifted my session cwd into `docs/research/ai-history/chapters`, broke subsequent relative-path commands. Use absolute paths everywhere.
+3. Gemini cross-family review found real bugs in codex output even after build passed clean. Build-clean ≠ review-clean.
+4. Codex when told to "fold/delete redundant sections" sometimes bolts on new sections without removing the old ones. Explicit "DELETE these sections" works better than "fold".
 
 ---
 
