@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "CGOA Exam Strategy and Blueprint Review"
 slug: k8s/cgoa/module-1.1-exam-strategy-and-blueprint-review
 sidebar:
