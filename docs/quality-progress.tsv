@@ -108,3 +108,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T16:48:37Z	platform-disciplines-core-platform-sre-module-1.2-slos	4.50		0			codex	claude	approve	
 2026-04-26T16:53:39Z	platform-toolkits-observability-intelligence-observability-module-1.2-opentelemetry	3.70		0			codex	claude	approve	
 2026-04-26T16:58:52Z	k8s-cnpa-module-1.2-core-platform-fundamentals-review	1.50		0			codex	claude	approve	
+2026-04-26T17:03:42Z	platform-toolkits-observability-intelligence-aiops-tools-module-10.4-building-custom-aiops	3.40		0			codex	claude	approve	
