@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Policy as Code & Governance"
 description: "Implement cluster governance, admission control, and runtime security using OPA Gatekeeper, Kyverno, Falco, and Tetragon."
 slug: on-premises/security/module-6.7-policy-as-code
