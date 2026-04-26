@@ -91,3 +91,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T14:15:45Z	k8s-cka-part3-services-networking-module-3.8-cluster-networking-data-path	3.70		1	5.00	strong	codex	claude	approve	
 2026-04-26T14:27:14Z	platform-toolkits-observability-intelligence-aiops-tools-module-10.3-observability-ai-features	3.00		0			codex	claude	approve	
 2026-04-26T14:35:29Z	platform-toolkits-infrastructure-networking-iac-tools-module-7.1-terraform	3.50		0			codex	claude	approve	
+2026-04-26T14:41:20Z	platform-toolkits-observability-intelligence-aiops-tools-module-10.2-event-correlation-platforms	3.50		0			codex	claude	approve	
