@@ -3265,6 +3265,252 @@ def _section_for_key(module_key: str) -> str:
     return parts[1]
 
 
+# ---- quality board (per-module status grid for the operator dashboard) ----
+
+
+_QUALITY_BOARD_IN_FLIGHT_STAGES = frozenset({
+    "WRITE_PENDING",
+    "WRITE_IN_PROGRESS",
+    "REVIEW_PENDING",
+    "REVIEW_IN_PROGRESS",
+    "CITATION_VERIFY",
+    "MERGE_PENDING",
+    "REVIEW_APPROVED",
+})
+_QUALITY_BOARD_DONE_STAGES = frozenset({"COMMITTED", "SKIPPED"})
+_QUALITY_BOARD_REVISION_RE = re.compile(r"^revision_pending\s*:\s*true", re.MULTILINE)
+
+
+def _quality_board_slug_for_path(rel_path: str) -> str:
+    """Slug used for ``.pipeline/quality-pipeline/<slug>.json`` files.
+
+    Mirrors the convention emitted by ``scripts/quality/queue.py``: drop
+    the ``.md`` suffix and replace ``/`` with ``-`` on the docs-relative
+    path. Example: ``ai/foundations/module-1.1-what-is-ai.md`` →
+    ``ai-foundations-module-1.1-what-is-ai``.
+    """
+    stem = rel_path[:-3] if rel_path.endswith(".md") else rel_path
+    return stem.replace("/", "-")
+
+
+def _quality_board_has_revision_banner(text: str) -> bool:
+    """``revision_pending: true`` line inside the leading frontmatter
+    block (we only check the head so a literal banner string buried in
+    prose can't trigger it)."""
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---", 4)
+    head = text[: end + 4] if end >= 0 else text[:2000]
+    return bool(_QUALITY_BOARD_REVISION_RE.search(head))
+
+
+def _quality_board_load_states(repo_root: Path) -> dict[str, dict[str, Any]]:
+    """Load every ``.pipeline/quality-pipeline/<slug>.json`` (skip
+    ``*.lock`` siblings). Indexed by slug. Malformed files are silently
+    skipped — the board has to keep rendering even if one state file is
+    half-written by an in-flight worker."""
+    state_dir = repo_root / ".pipeline" / "quality-pipeline"
+    out: dict[str, dict[str, Any]] = {}
+    if not state_dir.is_dir():
+        return out
+    for path in state_dir.glob("*.json"):
+        if path.name.endswith(".lock"):
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        slug = str(data.get("slug") or path.stem)
+        out[slug] = data
+    return out
+
+
+def _quality_board_load_post_review_queue(repo_root: Path) -> set[str]:
+    queue_path = repo_root / ".pipeline" / "quality-pipeline" / "post-review-queue.txt"
+    if not queue_path.is_file():
+        return set()
+    try:
+        text = queue_path.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+
+def _quality_board_review_log_keys(repo_root: Path) -> set[str]:
+    """Module keys (docs-relative path without ``.md``) that have at
+    least one review-log file under ``.pipeline/reviews``."""
+    reviews_dir = repo_root / _REVIEW_AUDIT_DIR
+    if not reviews_dir.is_dir():
+        return set()
+    keys: set[str] = set()
+    for path in reviews_dir.glob("*.md"):
+        if path.name.endswith(".lock"):
+            continue
+        keys.add(_review_filename_to_module_key(path.name))
+    return keys
+
+
+def _quality_board_classify(
+    *,
+    score: float | None,
+    revision_pending: bool,
+    stage: str | None,
+    auto_approved: bool,
+    in_post_review_queue: bool,
+    latest_verdict: str | None,
+) -> str:
+    """Apply the precedence ladder from issue #389.
+
+    Order is mutually exclusive — first match wins:
+      in_flight > both > needs_review > needs_rewrite > done.
+    """
+    score_val = float(score) if score is not None else 0.0
+    if stage in _QUALITY_BOARD_IN_FLIGHT_STAGES:
+        return "in_flight"
+    if auto_approved and (score_val < 4.0 or revision_pending):
+        return "both"
+    if auto_approved or in_post_review_queue:
+        return "needs_review"
+    if revision_pending or score_val < 3.0 or stage == "FAILED":
+        return "needs_rewrite"
+    if (
+        score_val >= 4.0
+        and not revision_pending
+        and (stage is None or stage in _QUALITY_BOARD_DONE_STAGES)
+        and (latest_verdict is None or latest_verdict == "approve")
+    ):
+        return "done"
+    # Anything left over (e.g. score 3.0–3.9 with no banner, no review,
+    # no auto-approve, no FAILED) is a soft "needs_review" — surface it
+    # so the operator sees it instead of silently hiding modules from
+    # the board.
+    return "needs_review"
+
+
+def build_quality_board(repo_root: Path) -> dict[str, Any]:
+    """Per-module status grid joining heuristic scores, pipeline state,
+    revision banners, the post-review queue, and review verdicts.
+
+    Status precedence (first match wins): ``in_flight`` >
+    ``both`` > ``needs_review`` > ``needs_rewrite`` > ``done``.
+    See issue #389 for the contract.
+    """
+    docs_root = repo_root / "src" / "content" / "docs"
+    if not docs_root.exists():
+        return {
+            "generated_at": int(time.time()),
+            "totals": {"done": 0, "needs_rewrite": 0, "needs_review": 0, "both": 0, "in_flight": 0, "total": 0},
+            "tracks": [],
+            "modules": [],
+        }
+
+    # Reuse heuristic scores so the rubric numbers stay consistent
+    # with /api/quality/scores. Index by docs-relative path.
+    quality = build_quality_scores(repo_root)
+    score_by_path: dict[str, dict[str, Any]] = {}
+    for entry in quality.get("modules") or []:
+        rel = str(entry.get("path") or "")
+        if rel:
+            score_by_path[rel] = entry
+
+    states = _quality_board_load_states(repo_root)
+    post_review_queue = _quality_board_load_post_review_queue(repo_root)
+    review_log_keys = _quality_board_review_log_keys(repo_root)
+
+    # Iterate every EN module on disk so we cover modules with no state
+    # file (e.g. UNAUDITED) and modules with no review log yet.
+    paths = sorted(
+        path
+        for path in docs_root.glob("**/module-*.md")
+        if ".staging." not in path.name
+        and not path.relative_to(docs_root).as_posix().startswith("uk/")
+    )
+
+    modules: list[dict[str, Any]] = []
+    track_buckets: dict[str, dict[str, int]] = {}
+    totals = {"done": 0, "needs_rewrite": 0, "needs_review": 0, "both": 0, "in_flight": 0, "total": 0}
+
+    for path in paths:
+        rel = path.relative_to(docs_root)
+        rel_str = rel.as_posix()
+        slug = _quality_board_slug_for_path(rel_str)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        revision_pending = _quality_board_has_revision_banner(text)
+
+        score_entry = score_by_path.get(rel_str)
+        score = float(score_entry["score"]) if score_entry and score_entry.get("score") is not None else None
+
+        state = states.get(slug) or {}
+        stage_raw = state.get("stage")
+        stage = str(stage_raw) if stage_raw else "UNAUDITED"
+        review = state.get("review") or {}
+        auto_approved = review.get("auto_approved") is True
+        verdict_raw = review.get("verdict")
+        latest_verdict = (
+            str(verdict_raw).strip().lower() if isinstance(verdict_raw, str) and verdict_raw else None
+        )
+
+        _, module_key_label = _quality_title_and_label(rel, text)
+        track = _quality_track_label(rel)
+
+        # Review-log lookup uses the docs-relative key without the .md
+        # suffix (matches _module_key_to_review_filename semantics).
+        review_key = rel_str[:-3] if rel_str.endswith(".md") else rel_str
+        if latest_verdict is None and review_key in review_log_keys:
+            # Review log exists but the state file didn't carry a
+            # verdict — treat as "review present, verdict unknown" so
+            # rule 5 won't shortcut to ``done``.
+            latest_verdict = "unknown"
+
+        status = _quality_board_classify(
+            score=score,
+            revision_pending=revision_pending,
+            stage=stage_raw if stage_raw else None,
+            auto_approved=auto_approved,
+            in_post_review_queue=slug in post_review_queue,
+            latest_verdict=latest_verdict,
+        )
+
+        modules.append({
+            "module_key": module_key_label,
+            "slug": slug,
+            "path": rel_str,
+            "track": track,
+            "status": status,
+            "score": score,
+            "revision_pending": revision_pending,
+            "stage": stage,
+            "auto_approved": auto_approved,
+            "latest_review_verdict": latest_verdict,
+        })
+
+        totals[status] += 1
+        totals["total"] += 1
+        bucket = track_buckets.setdefault(
+            track,
+            {"done": 0, "needs_rewrite": 0, "needs_review": 0, "both": 0, "in_flight": 0, "total": 0},
+        )
+        bucket[status] += 1
+        bucket["total"] += 1
+
+    tracks = [
+        {"track": track, **counts}
+        for track, counts in sorted(track_buckets.items(), key=lambda item: item[0].lower())
+    ]
+
+    return {
+        "generated_at": int(time.time()),
+        "totals": totals,
+        "tracks": tracks,
+        "modules": modules,
+    }
+
+
 def build_tracks_readiness(repo_root: Path) -> dict[str, Any]:
     """Per-track, per-section readiness grid for the operator dashboard.
 
@@ -5675,6 +5921,10 @@ def build_api_schema() -> dict[str, Any]:
             },
             {"path": "/api/quality/scores", "desc": "Live heuristic rubric scores from current English module files"},
             {
+                "path": "/api/quality/board",
+                "desc": "Per-module status grid (done / needs_rewrite / needs_review / both / in_flight) joining heuristic scores, pipeline state, revision banners, post-review queue, and review verdicts",
+            },
+            {
                 "path": "/api/quality/upgrade-plan",
                 "desc": "Upgrade queue derived from rubric scores for #180 (4/5) or #181 (5/5)",
                 "query": ["target=4.0|5.0"],
@@ -5868,6 +6118,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_bridge_messages(repo_root, since, limit), "application/json; charset=utf-8"
     if path == "/api/quality/scores":
         return 200, build_quality_scores(repo_root), "application/json; charset=utf-8"
+    if path == "/api/quality/board":
+        return 200, build_quality_board(repo_root), "application/json; charset=utf-8"
     if path == "/api/quality/upgrade-plan":
         try:
             target = float(query.get("target", ["4.0"])[0])
@@ -5954,6 +6206,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/pipeline/v2/status": (5.0, _v_v2_db),
     "/api/translation/v2/status": (5.0, _v_translation_db),
     "/api/labs/status": (10.0, None),
+    "/api/quality/board": (15.0, None),
     "/api/quality/upgrade-plan": (30.0, None),
     "/api/citations/status": (30.0, None),
     "/api/ztt/status": (30.0, None),
