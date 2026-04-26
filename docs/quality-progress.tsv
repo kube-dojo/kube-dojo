@@ -20,3 +20,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T02:07:45Z	ai-ml-engineering-ai-native-development-module-1.10-anthropic-agent-sdk-and-runtime-patterns	2.80		1	5.00	strong	codex	claude	approve	
 2026-04-26T02:10:43Z	ai-ml-engineering-deep-learning-module-1.3-training-neural-networks	4.50		1	5.00	strong	codex	claude	approve	
 2026-04-26T02:14:43Z	ai-ml-engineering-prerequisites-module-1.4-notebooks-scripts-project-layouts	2.80		0			codex	claude	approve	
+2026-04-26T02:18:52Z	ai-ml-engineering-prerequisites-module-1.3-reproducible-python-cuda-rocm-environments	3.00		1	5.00	strong	codex	claude	approve	
