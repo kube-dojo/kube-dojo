@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 5.4: MetalLB - Load Balancing for Bare-Metal Kubernetes"
 slug: platform/toolkits/infrastructure-networking/networking/module-5.4-metallb
 sidebar:
