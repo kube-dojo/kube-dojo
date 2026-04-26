@@ -56,3 +56,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T05:48:26Z	k8s-ckad-part3-observability-part3-cumulative-quiz	1.80		0			codex	claude	approve	
 2026-04-26T05:57:06Z	platform-toolkits-data-ai-platforms-ml-platforms-module-9.1-kubeflow	3.00		0			codex	claude	approve	
 2026-04-26T06:05:06Z	platform-toolkits-developer-experience-scaling-reliability-module-6.3-velero	3.00		0			codex	claude	approve	
+2026-04-26T06:12:07Z	k8s-cka-part0-environment-module-0.3-vim-yaml	3.80		0			codex	claude	approve	
