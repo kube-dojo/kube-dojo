@@ -127,3 +127,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T19:10:13Z	platform-disciplines-core-platform-platform-engineering-module-2.6-platform-maturity	4.60		0			codex	claude	approve	
 2026-04-26T19:34:14Z	on-premises-planning-module-1.1-case-for-on-prem	3.80		0			codex	codex	approve	
 2026-04-26T19:44:06Z	on-premises-security-module-6.7-policy-as-code	3.00		0			claude	codex	approve	
+2026-04-26T19:51:19Z	on-premises-storage-module-4.3-local-storage	3.80		0			claude	codex	approve	
