@@ -9,3 +9,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-25T19:40:20Z	on-premises-ai-ml-infrastructure-module-9.2-private-ai-training	3.20		0			codex	claude	approve	
 2026-04-25T19:47:30Z	on-premises-ai-ml-infrastructure-module-9.3-private-llm-serving	3.20		0			codex	claude	approve	
 2026-04-25T19:54:50Z	platform-disciplines-data-ai-mlops-module-5.6-ml-pipelines	2.50		0			codex	claude	approve	
+2026-04-26T00:33:52Z	ai-ml-engineering-frameworks-agents-module-1.1-langchain-fundamentals	4.20		1	5.00	strong	codex	claude	approve	
