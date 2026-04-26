@@ -20,6 +20,7 @@ the queue layer chooses *which writer* to dispatch and *when* to retry.
 from __future__ import annotations
 
 import calendar
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -107,6 +108,25 @@ def _read_complexity(module_path: Path) -> str | None:
     return None
 
 
+def _beginner_writer() -> str:
+    """Resolve the beginner-track writer, honouring a runtime degraded
+    fallback.
+
+    During the 2026-04-26 batch run, Gemini-3.1-pro-preview hit a peak-hour
+    capacity window where ~75% of writes returned truncated output (odd
+    triple-backtick count = unclosed code fence). Setting
+    ``KUBEDOJO_BEGINNER_FALLBACK=codex`` reroutes the beginner-track
+    modules to Codex gpt-5.5 for the duration. Unset to restore the
+    Gemini default once capacity returns.
+    """
+    fallback = os.environ.get("KUBEDOJO_BEGINNER_FALLBACK", "").lower().strip()
+    if fallback in {"codex", "gpt-5.5"}:
+        return PRIMARY_ADVANCED
+    if fallback in {"claude", "claude-opus", "claude-opus-4-7"}:
+        return TERTIARY
+    return PRIMARY_BEGINNER
+
+
 def route_writer(module_path: Path) -> str:
     """Return the assigned writer for a module per the routing rule.
 
@@ -116,7 +136,7 @@ def route_writer(module_path: Path) -> str:
     """
     complexity = _read_complexity(module_path)
     if complexity in {"quick", "beginner", "easy", "intro"}:
-        return PRIMARY_BEGINNER
+        return _beginner_writer()
     if complexity in {"complex", "advanced", "deep"}:
         return PRIMARY_ADVANCED
 
@@ -126,7 +146,7 @@ def route_writer(module_path: Path) -> str:
     section = "/".join(rel.split("/")[:2])
     for t in BEGINNER_TRACKS:
         if section.startswith(t):
-            return PRIMARY_BEGINNER
+            return _beginner_writer()
     for t in ADVANCED_TRACKS:
         if section.startswith(t):
             return PRIMARY_ADVANCED
