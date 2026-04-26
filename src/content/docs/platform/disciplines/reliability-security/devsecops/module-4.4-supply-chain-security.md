@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 4.4: Supply Chain Security"
 slug: platform/disciplines/reliability-security/devsecops/module-4.4-supply-chain-security
 sidebar:

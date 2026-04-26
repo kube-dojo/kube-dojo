@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 3.8: Cluster Networking Data Path"
 slug: k8s/cka/part3-services-networking/module-3.8-cluster-networking-data-path
 sidebar:
