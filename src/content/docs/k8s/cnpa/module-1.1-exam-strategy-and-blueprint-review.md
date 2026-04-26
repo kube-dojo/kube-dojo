@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "CNPA Exam Strategy and Blueprint Review"
 slug: k8s/cnpa/module-1.1-exam-strategy-and-blueprint-review
 sidebar:
