@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Text Generation & Sampling Strategies"
 slug: ai-ml-engineering/generative-ai/module-1.3-text-generation-sampling-strategies
 sidebar:
@@ -10,847 +9,541 @@ sidebar:
 
 # Text Generation & Sampling Strategies: The Art of Controlled Randomness
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
-By the end of this comprehensive module, you will be able to:
-- **Compare** the effects of temperature, top-p, and top-k sampling on language model outputs.
-- **Implement** specialized sampling configurations tailored for diverse use cases (e.g., code generation vs. creative writing).
-- **Diagnose** repetitive loops and hallucination issues caused by sub-optimal sampling parameters.
-- **Evaluate** the computational and qualitative trade-offs of length constraints and repetition penalties.
-- **Design** a reliable text generation pipeline using deterministic sampling for structured data extraction.
+By the end of this module, you will be able to:
+
+- **Compare** greedy decoding, temperature sampling, nucleus sampling, top-k filtering, repetition penalties, and stopping controls across realistic production scenarios.
+- **Design** sampling profiles for structured extraction, code generation, customer support chat, summarization, creative ideation, and long-form drafting.
+- **Diagnose** repeated phrases, malformed structured output, dull responses, runaway generation, and incoherent high-variance text by tracing the decoding configuration.
+- **Evaluate** the trade-offs between determinism, diversity, cost, latency, safety, and user experience when selecting generation parameters.
+- **Implement** a runnable local sampling playground that demonstrates how decoding settings change token selection without requiring access to a hosted model API.
 
 ## Why This Module Matters
 
-In early 2024, Air Canada was forced to honor a non-existent refund policy after their customer service chatbot hallucinated a "bereavement fare" rule. The chatbot provided a highly articulate, completely fabricated policy to a grieving customer, leading to a highly publicized tribunal case that cost the airline thousands of dollars in direct fines and immeasurable reputational damage. 
+A product manager at a travel company asks the AI team why the support assistant confidently invented a refund exception that did not exist in the policy manual. The prompt included the correct policy, the retrieval system returned the right document, and the model was capable of summarizing it accurately in offline tests. The failure appeared only in production, where the assistant had been configured with a chat-friendly decoding profile designed to sound warm, varied, and conversational. That profile was useful for brainstorming marketing copy, but it was dangerous for a workflow where the correct answer was narrow, contractual, and auditable.
 
-Why did this happen? An investigation into similar enterprise AI failures frequently points to a single, easily avoidable culprit: misconfigured sampling parameters. Developers often deploy models using the default API settings—typically a high temperature designed for creative, engaging chat—when strict, deterministic settings are required for policy adherence. A model running with high temperature is instructed to prioritize novelty and statistical variation over strict factual repetition, which is disastrous for a customer service agent handling strict corporate policies.
+Sampling strategy is the part of text generation that decides which token gets written next after the model has scored the possible options. A model can assign probabilities well and still produce a bad answer if the decoding layer rewards novelty in a task that requires consistency. Conversely, the same model can sound lifeless, repetitive, or evasive if every application is forced through a deterministic profile. Production AI engineering is not only prompt design; it is also control over the statistical process that turns probability distributions into text.
 
-This incident highlights a critical truth in AI engineering: generating text is not just about writing a good prompt. The physical process of selecting the next word is governed by statistical sampling algorithms that run over the output probability distribution of the neural network. If you do not explicitly control these algorithms, you are effectively rolling the dice with your application's reliability. In this module, you will learn how to take absolute control over the text generation process, moving from unpredictable text synthesis to deterministic, production-grade output.
+This module teaches sampling as an engineering control surface rather than as a set of magic knobs. You will start with the token-by-token mechanics, then progressively add temperature, top-p, top-k, repetition penalties, stop sequences, and length limits. The goal is not to memorize default numbers. The goal is to reason from the workload: what must be stable, what may vary, what must never appear, how long the answer should be, and what failure mode would hurt users most.
 
-## The Foundations of Text Generation
+## The Generation Loop
 
-### The Autoregressive Process
-
-Modern Large Language Models (LLMs) generate text through an **autoregressive process**. This means they generate output one token at a time, and for every new token generated, they consume the entire previously generated sequence as context. The model does not "think" paragraphs ahead; it iteratively guesses the single most appropriate next token.
-
-Here is the fundamental step-by-step process:
+Text generation is usually autoregressive, which means the model writes one token, appends that token to the context, and then uses the expanded context to score the next token. The model is not drafting a complete paragraph in a hidden buffer and then revealing it. It is repeatedly answering a narrower question: given everything so far, which token should come next? This is why early decoding choices matter so much. A slightly unusual token at step five changes the context at step six, which changes the probabilities at step seven, and the whole answer can drift into a different path.
 
 ```mermaid
 flowchart TD
-    A[1. Start with prompt: 'The cat sat on the'] --> B[2. Model predicts next token: ' mat']
-    B --> C[3. Append to sequence: 'The cat sat on the mat']
-    C --> D[4. Predict next token: '.']
-    D --> E[5. Append: 'The cat sat on the mat.']
-    E --> F{6. Stop condition met?}
-    F -- No --> B
-    F -- Yes --> G[End Generation]
+    A[Prompt and prior context] --> B[Model scores next-token candidates]
+    B --> C[Raw logits for vocabulary]
+    C --> D[Decoding controls reshape or filter choices]
+    D --> E[Sampler selects one token]
+    E --> F[Append token to context]
+    F --> G{Stop condition met?}
+    G -- No --> B
+    G -- Yes --> H[Return final text]
 ```
 
-At each iteration, the model outputs a probability distribution over its entire vocabulary (which can be upwards of 50,000 to 100,000 tokens). 
+At each step, the model produces raw scores called logits. Those scores are converted into probabilities, and the decoding strategy decides whether to choose the highest-probability token or sample from a filtered set. If the prompt is `The deployment failed because the`, the model might assign high probability to `image`, `probe`, `node`, and `secret`, while assigning tiny probabilities to thousands of irrelevant tokens. Decoding determines whether the answer follows the safest path, explores a plausible alternative, or accidentally reaches into the low-probability tail.
 
 ```mermaid
-flowchart TD
-    subgraph Iteration 1
-        I1["Input: 'The cat sat on the'"] --> M1("Model: Probability distribution")
-        M1 --> D1["' mat': 0.35 (35%)<br>' floor': 0.25 (25%)<br>' chair': 0.15 (15%)<br>' roof': 0.10 (10%)<br>' sofa': 0.05 (5%)<br>(50,000 other tokens)"]
-        D1 -.->|Sample Strategy| O1["Output: ' mat'"]
+flowchart LR
+    subgraph StepOne["Step 1"]
+        P1["Prompt: The deployment failed because the"] --> M1["Model scores vocabulary"]
+        M1 --> D1["image 0.32<br/>probe 0.24<br/>node 0.18<br/>secret 0.09<br/>weather 0.001"]
+        D1 --> S1["Sampler chooses: image"]
     end
-    
-    O1 --> I2
-    
-    subgraph Iteration 2
-        I2["Input: 'The cat sat on the mat'"] --> M2("Model: Probability distribution")
-        M2 --> D2["'.': 0.40 (40%)<br>',': 0.20 (20%)<br>' and': 0.15 (15%)<br>..."]
-        D2 -.->|Sample Strategy| O2["Output: '.'"]
+    S1 --> P2
+    subgraph StepTwo["Step 2"]
+        P2["Context: The deployment failed because the image"] --> M2["Model scores vocabulary"]
+        M2 --> D2["tag 0.36<br/>pull 0.25<br/>registry 0.16<br/>digest 0.08"]
+        D2 --> S2["Sampler chooses: tag"]
     end
-    
-    O2 --> F["Final: 'The cat sat on the mat.'"]
+    S2 --> OUT["Output path: image tag ..."]
 ```
 
-If we use a strategy called **Greedy decoding** (always picking the highest probability token), we end up with text that looks like this:
+The key engineering insight is that decoding does not create knowledge that the model lacks. It changes how strongly the model follows its most likely continuation, how much alternative wording is allowed, and how aggressively risky low-probability options are removed. A retrieval-augmented answer still needs low-variance decoding if every word must align with source material. A story-writing assistant still needs some filtering because creativity is not the same as random token selection.
 
-```
-"The cat sat on the mat."
-"The cat sat on the mat and slept."
-"The cat sat on the mat in the sun."
-```
+**Active learning prompt:** Before reading further, decide which workload should be more deterministic: extracting `namespace`, `deployment`, and `imageTag` fields from an incident report, or suggesting five names for a new internal platform team. Write one sentence explaining the failure mode you are trying to prevent in each case.
 
-The problem with greedy decoding is that it produces boring, repetitive, and predictable text. Human text isn't always the "most likely" next word! We use varied vocabulary, we take creative paths, and we surprise readers. To achieve human-like generation, we must sample from the probability distribution instead of always picking the top choice.
+## Greedy Decoding and Determinism
 
-> **Stop and think**: If you were building an automated medical diagnosis summarizer for doctors, would you want the model to be creative and diverse, or boring and consistent? How might sampling parameters impact patient safety?
+Greedy decoding always picks the highest-probability next token. When the model gives `image` a probability of `0.32` and `probe` a probability of `0.24`, greedy decoding selects `image` every time. This makes the output stable for the same prompt and model snapshot, which is valuable for tests, structured extraction, reproducible reports, and workflows where downstream systems parse the response. It also makes the model less able to explore alternative phrasing, which can make responses feel repetitive or overly conservative.
 
-## Temperature: Controlling Randomness
-
-### What is Temperature?
-
-**Temperature** (τ) is a parameter that controls how "random" the model's outputs are. It mathematically reshapes the probability distribution before the model makes its selection.
-
-The transformation follows this formula:
-
-```
-p_i = exp(logit_i / τ) / Σ exp(logit_j / τ)
+```ascii
++-----------------------------+-----------------------------+
+| Candidate next token        | Probability after scoring   |
++-----------------------------+-----------------------------+
+| image                       | 0.32                        |
+| probe                       | 0.24                        |
+| node                        | 0.18                        |
+| secret                      | 0.09                        |
+| timeout                     | 0.06                        |
++-----------------------------+-----------------------------+
+| Greedy choice               | image                       |
++-----------------------------+-----------------------------+
 ```
 
-By adjusting the value of τ, you scale the logits (raw scores) before they are passed through the softmax function. This flattens or sharpens the distribution curve.
+Greedy decoding is often exposed as `temperature: 0.0`, although different providers may implement exact determinism differently. Some APIs also have model-side nondeterminism, backend changes, safety layers, or tool-use routing that can affect repeatability even when temperature is zero. From an application design perspective, however, a zero-temperature profile is still the right starting point whenever correctness means "the same valid format every time" rather than "a pleasantly varied answer."
 
-### Temperature = 0.0 (Deterministic)
-
-When temperature is set to 0.0, the model exhibits deterministic behavior. It strictly chooses the token with the highest probability, functioning exactly like greedy decoding.
-
-```
-Original probabilities:
-  " mat":     0.35
-  " floor":   0.25
-  " chair":   0.15
-  ...
-
-With temperature = 0.0:
-  " mat":     1.00  (always selected)
-  " floor":   0.00
-  " chair":   0.00
-  ...
-```
-
-The result is usually the exact same output when the API is called with the same prompt and settings. This is vital when absolute reproducibility is required.
-
-```
-Prompt: "Explain photosynthesis in one sentence."
-Output: "Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen."
-```
-
-### Temperature = 0.7 (Balanced)
-
-A temperature of 0.7 is the industry standard for balanced outputs. It introduces moderate randomness, allowing the model to occasionally pick lower-probability tokens without venturing into absurdity.
-
-```
-Original probabilities:
-  " mat":     0.35
-  " floor":   0.25
-  " chair":   0.15
-  ...
-
-With temperature = 0.7:
-  " mat":     0.45  (higher chance, but not guaranteed)
-  " floor":   0.28
-  " chair":   0.18
-  ...
-```
-
-This ensures that repeated generations yield varied but sensible outputs, which is perfect for conversational AI and content creation.
-
-```
-1. "Photosynthesis is the process by which plants use sunlight to create energy."
-2. "Photosynthesis allows plants to convert light energy into chemical energy."
-3. "Through photosynthesis, plants transform sunlight into food for growth."
-```
-
-### Temperature = 1.0 (Creative)
-
-Setting temperature to 1.0 means sampling directly from the model's unaltered probability distribution.
-
-```
-Original probabilities (unchanged):
-  " mat":     0.35
-  " floor":   0.25
-  " chair":   0.15
-  " roof":    0.10
-  ...
-```
-
-This setting pushes the boundaries of creativity, producing surprising vocabulary choices and diverse sentence structures.
-
-```
-1. "Photosynthesis is nature's way of capturing sunlight and turning it into life."
-2. "Through photosynthesis, leaves act as tiny solar panels producing sugar."
-3. "Photosynthesis: the green magic that powers our planet's food chain."
-```
-
-### Temperature > 1.0 (Highly Creative/Random)
-
-Increasing temperature beyond 1.0 drastically flattens the distribution. Tokens that originally had a minuscule chance of being selected are elevated, while the primary choices are suppressed.
-
-```
-Original probabilities:
-  " mat":     0.35
-  " floor":   0.25
-  " chair":   0.15
-  ...
-
-With temperature = 1.5:
-  " mat":     0.28  (reduced)
-  " floor":   0.24
-  " chair":   0.18
-  " roof":    0.14  (increased!)
-  " spaceship": 0.02  (now more likely!)
-  ...
-```
-
-This results in highly unpredictable, bizarre outputs. While useful for experimental art, it risks complete loss of coherence in standard applications.
-
-```
-1. "Photosynthesis is like a plant's breakfast buffet, but with light instead of pancakes."
-2. "Imagine tiny factories inside leaves, powered by sunshine, churning out sugar molecules."
-3. "Photosynthesis: quantum biology meets botanical chemistry in nature's laboratory."
-```
-
-> **Pause and predict**: If you are writing a script to generate Python unit tests for a strict CI pipeline, should you use a temperature of 0.1 or 0.9? Why?
-
-The fundamental trade-off between determinism and creativity is beautifully captured below:
-
-```mermaid
-flowchart TD
-    subgraph T0 [Temperature = 0.0]
-        direction TB
-        A1[Boring but reliable] --> A2["The cat sat on the mat."]
-    end
-    subgraph T1 [Temperature = 1.0]
-        direction TB
-        B1[Balanced quality] --> B2["The cat sat on the chair."]
-    end
-    subgraph T2 [Temperature = 2.0]
-        direction TB
-        C1[Creative but unpredictable] --> C2["The cat sat on the spaceship."]
-    end
-```
-
-## Top-p (Nucleus Sampling)
-
-Top-p, or nucleus sampling, is a dynamic filtering mechanism. It involves sampling from the smallest set of tokens whose cumulative probability exceeds the value `p`. Think of it as instructing the model to "include enough tokens to cover p% of the probability mass, and discard the rest."
-
-```
-Token probabilities (sorted by probability):
-  " mat":       0.35  → cumulative: 0.35
-  " floor":     0.25  → cumulative: 0.60
-  " chair":     0.15  → cumulative: 0.75
-  " roof":      0.10  → cumulative: 0.85
-  " sofa":      0.05  → cumulative: 0.90  ← STOP! We've reached 90%
-  " table":     0.03
-  " bed":       0.02
-  " spaceship": 0.01
-  ...
-
-Nucleus (tokens included): [" mat", " floor", " chair", " roof", " sofa"]
-Excluded: Everything else
-
-Sample randomly from the nucleus.
-```
-
-By aggressively truncating the long tail of low-probability tokens, Top-p prevents the model from selecting completely nonsensical words, acting as a structural safety net.
-
-> **Stop and think**: If `top_p` is set to 0.9 and the highest probability token alone has a probability of 0.95, how many tokens will be included in the nucleus?
-
-When you combine a high temperature (which increases randomness) with a tight Top-p filter, you encourage varied word choice while mathematically guaranteeing the model won't say something completely absurd.
-
-Consider a prompt asking about the weather. Without Top-p filtering:
-
-```
-Possible outputs:
-- "sunny" (35%)
-- "rainy" (25%)
-- "cloudy" (15%)
-- "snowy" (10%)
-- "foggy" (5%)
-- "purple" (0.1%)  ← This could happen!
-- "mathematical" (0.05%)  ← Weird!
-```
-
-Applying a Top-p filter of 0.9 explicitly strips away the absurd options:
-
-```
-Nucleus includes: ["sunny", "rainy", "cloudy", "snowy", "foggy"]
-Filters out: ["purple", "mathematical", ...]
-
-Result: Sensible weather descriptions only!
-```
-
-## Top-k Sampling
-
-Top-k sampling is a simpler, static filtering approach. It dictates that the model should strictly sample from the top `k` most probable tokens, discarding all others.
-
-```
-Token probabilities (sorted):
-  " mat":       0.35  ← Top 5
-  " floor":     0.25  ← Top 5
-  " chair":     0.15  ← Top 5
-  " roof":      0.10  ← Top 5
-  " sofa":      0.05  ← Top 5
-  " table":     0.03  ← Excluded
-  " bed":       0.02  ← Excluded
-  ...
-
-Sample randomly from top 5 only.
-```
-
-While effective, Top-k has largely been superseded by Top-p in modern applications. The static nature of Top-k means it can arbitrarily slice through highly competitive options, or conversely, include garbage tokens if the model is very confident about only a few words. 
-
-```
-Scenario 1 (clear winner):
-  " mat": 0.80
-  " floor": 0.10
-  " chair": 0.05
-  (rest: <0.01 each)
-
-Top-k=50: Includes 50 tokens (many irrelevant ones)
-Top-p=0.9: Includes just 2-3 tokens (better!)
-
-Scenario 2 (uncertain):
-  " mat": 0.15
-  " floor": 0.14
-  " chair": 0.13
-  ... (many similar probabilities)
-
-Top-k=50: Includes 50 tokens (good)
-Top-p=0.9: Includes 15-20 tokens (also good)
-```
-
-## Repetition Penalties
-
-Autoregressive models are prone to local minima loops, where the model gets stuck repeating the same phrases. 
-
-```
-Prompt: "The benefits of exercise are"
-
-Output: "The benefits of exercise are numerous. The benefits of exercise include
-improved cardiovascular health. The benefits of exercise are well-documented.
-The benefits of exercise are..."
-```
-
-To combat this, we apply a repetition penalty (α), which reduces the probability of tokens that have already appeared in the output.
-
-```
-If token appeared n times:
-  new_probability = original_probability / (α ^ n)
-```
-
-For instance, if a word is penalized heavily:
-
-```
-Token " benefits" appeared 3 times:
-  Original probability: 0.30
-  Penalized probability: 0.30 / (1.2^3) = 0.30 / 1.728 ≈ 0.17
-
-Each repetition makes it less likely to appear again.
-```
-
-Applying no penalty allows loops to form naturally:
-
-```
-The AI revolution is changing everything. The AI revolution is transforming
-industries. The AI revolution is...
-```
-
-Applying a moderate penalty forces vocabulary variance:
-
-```
-The AI revolution is changing everything. This transformation is reshaping
-industries. Artificial intelligence continues to evolve...
-```
-
-However, applying an excessively high penalty results in contrived, unnatural text:
-
-```
-The AI revolution is changing everything. Artificial intelligence transforms
-numerous sectors. Machine learning reshapes various domains...
-```
-
-## Length Control
-
-Length constraints are your primary defense against runaway API costs. You must explicitly define boundaries for generation.
-
-The easiest way is via `max_tokens`:
+A deterministic profile does not guarantee truth. If the prompt asks for a policy that is not present in the context, greedy decoding may consistently produce the same wrong answer. Determinism controls variance, not factuality. In production, you pair deterministic decoding with schema validation, retrieval grounding, refusal rules, and tests that compare output against expected structures. Treat greedy decoding as one guardrail in a larger reliability system.
 
 ```python
-response = client.messages.create(
-    model="claude-sonnet-4-5-20250929",
-    max_tokens=100,  # Generate at most 100 tokens
-    messages=[{"role": "user", "content": "Explain quantum physics"}]
-)
-```
-
-Alternatively, `stop_sequences` halt the model the moment a specific substring is generated, avoiding mid-sentence cut-offs:
-
-```python
-response = client.messages.create(
-    model="claude-sonnet-4-5-20250929",
-    max_tokens=1000,
-    stop_sequences=["\n\n", "---"],  # Stop at paragraph break or horizontal rule
-    messages=[{"role": "user", "content": "Write a short poem"}]
-)
-```
-
-## Advanced Techniques
-
-Historically, non-sampling algorithms like **Beam Search** were popular. Beam search expands multiple paths in parallel to find the absolute highest probability sequence across multiple steps.
-
-```
-Start: "The cat"
-Step 1:
-  "The cat sat" (prob: 0.8)
-  "The cat jumped" (prob: 0.6)
-Keep top 2 sequences.
-
-Step 2:
-  "The cat sat on" (prob: 0.8 × 0.9 = 0.72)
-  "The cat sat down" (prob: 0.8 × 0.7 = 0.56)
-  "The cat jumped over" (prob: 0.6 × 0.8 = 0.48)
-  "The cat jumped high" (prob: 0.6 × 0.6 = 0.36)
-Keep top 2: "The cat sat on" and "The cat sat down"
-
-Continue...
-```
-
-While beam search is excellent for strict translations, it has been largely abandoned in creative text generation because it converges too aggressively, eliminating the diverse vocabulary that makes text feel human.
-
-## Putting It All Together: Common Sampling Configurations
-
-Different applications demand fundamentally different sampling matrices. 
-
-```python
-{
+EXTRACTION_PROFILE = {
     "temperature": 0.0,
-    "top_p": 1.0,  # (ignored when temperature=0)
-    "max_tokens": 1000
+    "top_p": 1.0,
+    "max_tokens": 300,
+    "stop_sequences": ["\n\nEND"],
 }
 ```
 
+Use this kind of profile when a downstream parser, ticketing system, CI pipeline, or audit log depends on predictable output shape. The `top_p` value is effectively neutral here because a zero-temperature setting already selects the top token. The `max_tokens` limit protects cost and prevents runaway generation, while the stop sequence gives the model a clear place to end after the target payload. The important design habit is to write the profile from the consumer backward: if a parser consumes it, do not optimize for charm.
+
+## Temperature: Reshaping Confidence
+
+Temperature changes the sharpness of the probability distribution before sampling. Low temperature makes high-probability tokens even more dominant, while high temperature flattens the distribution and gives lower-probability tokens more opportunity to appear. This is why temperature is often described as a creativity knob, but that nickname is incomplete. It is more precise to say that temperature controls how willing the sampler is to depart from the model's strongest local preference.
+
+```mermaid
+flowchart TD
+    A[Raw logits] --> B{Temperature}
+    B -- "0.0" --> C[Greedy: highest token only]
+    B -- "0.2" --> D[Very sharp distribution]
+    B -- "0.7" --> E[Moderate variation]
+    B -- "1.0" --> F[Original distribution]
+    B -- "1.3" --> G[Flattened distribution]
+    C --> H[Stable structured output]
+    D --> I[Focused code or extraction]
+    E --> J[Natural chat or summaries]
+    F --> K[Creative drafting]
+    G --> L[Risk of drift without filtering]
+```
+
+A temperature near zero is appropriate when the output space is narrow. Code generation, YAML generation, SQL drafting, and JSON extraction all punish unnecessary variation because a single unexpected token can break execution or parsing. A temperature around `0.2` can still allow limited flexibility while keeping the answer close to the most likely continuation. A temperature around `0.7` is common for conversational assistants because users usually prefer language that adapts to their wording and does not repeat the same sentence template forever.
+
+High temperature becomes useful when the user explicitly wants novelty, such as brainstorming product names or exploring story directions. It is still an engineering risk because the sampler is more likely to select tokens that are merely possible rather than strongly supported by the prompt. High temperature should usually be paired with top-p filtering, stronger review, or an application design that can tolerate weak ideas. Never use high temperature to compensate for missing context or unclear instructions; it will make the model more adventurous, not more informed.
+
+| Temperature range | Behavior | Best fit | Main risk |
+|---|---|---|---|
+| `0.0` | Greedy and highly repeatable | JSON, tests, strict templates | Consistently repeats a wrong assumption if the prompt is flawed |
+| `0.1-0.3` | Focused with minimal variation | Code, YAML, factual summaries | Can sound rigid and may miss useful alternate wording |
+| `0.4-0.8` | Balanced and conversational | Support chat, explanations, reports | May add phrasing variety that complicates parsing |
+| `0.9-1.2` | Creative and diverse | Ideation, storytelling, drafts | Can drift from constraints without filters |
+| `>1.2` | Highly exploratory | Experimental writing only | Incoherence, invented details, wasted tokens |
+
+**Active learning prompt:** Your team generates Kubernetes NetworkPolicy YAML from natural-language requests. The model often adds a friendly preface before the manifest, and CI fails because the output is no longer valid YAML. Would you first lower temperature, raise temperature, add a repetition penalty, or increase `max_tokens`? Explain the mechanism behind your choice, not just the setting.
+
+## Top-p: Dynamic Filtering With a Nucleus
+
+Top-p, also called nucleus sampling, filters the candidate tokens by cumulative probability. The sampler sorts tokens from most likely to least likely, keeps the smallest set whose total probability reaches the `top_p` threshold, and discards everything else. Unlike top-k, the size of the candidate set changes at every generation step. When the model is very confident, top-p may keep only a few tokens. When the model is uncertain among many plausible options, top-p can keep a broader set.
+
+```ascii
+Sorted candidates for one decoding step
++-------------+-------------+------------------------+
+| Token       | Probability | Cumulative probability |
++-------------+-------------+------------------------+
+| image       | 0.32        | 0.32                   |
+| probe       | 0.24        | 0.56                   |
+| node        | 0.18        | 0.74                   |
+| secret      | 0.09        | 0.83                   |
+| timeout     | 0.06        | 0.89                   |
+| quota       | 0.04        | 0.93  <- top_p 0.90    |
+| pineapple   | 0.001       | discarded              |
++-------------+-------------+------------------------+
+```
+
+Top-p is useful because many language-model distributions have a long tail of low-probability tokens. Those tail tokens are not always impossible, but they are often where gibberish, weird topic jumps, and unsupported claims begin. A `top_p` value such as `0.9` allows the model to vary among plausible choices while removing the most unlikely tail. A tighter value such as `0.5` or `0.7` forces the answer to stay close to the strongest candidates, which can be helpful for factual summaries or code-like output.
+
+The interaction between temperature and top-p matters more than either setting alone. Temperature changes the shape of the distribution, while top-p decides how much of that shaped distribution remains eligible. A high temperature with `top_p: 1.0` can wander into strange options because the tail remains available. A moderate temperature with `top_p: 0.9` often gives natural language without letting extremely unlikely tokens through. A low temperature with tight top-p can become so constrained that responses feel repetitive or fail to adapt to legitimate user variation.
+
+| Workload | Recommended top-p | Why this range works | What to watch |
+|---|---|---|---|
+| Strict extraction | `1.0` with temperature `0.0` | Greedy decoding makes nucleus filtering irrelevant | Validate schema anyway |
+| Code generation | `0.4-0.7` | Keeps token choices focused on common syntax patterns | May overfit to common boilerplate |
+| Support chat | `0.8-0.95` | Allows natural wording while removing extreme tail tokens | Still needs grounding and policy checks |
+| Creative drafting | `0.9-0.98` | Preserves a broad set of plausible continuations | Can drift if the prompt is weak |
+| Brainstorming | `0.9-1.0` | Maximizes variety for low-stakes idea generation | Needs ranking or human selection afterward |
+
+A common misunderstanding is that `top_p: 0.9` means "choose the top ninety percent of tokens." It does not. It means "choose the smallest set of tokens whose probability mass reaches ninety percent." If the top token alone has probability `0.95`, the nucleus may contain only that token. If many tokens each have similar probability, the nucleus may contain many candidates. That dynamic behavior is why top-p is usually a better default than a fixed top-k value.
+
+## Top-k: Static Filtering and Its Trade-Offs
+
+Top-k sampling keeps exactly the `k` most probable tokens and removes the rest. If `top_k` is `5`, the sampler can choose only among the five highest-ranked candidates, regardless of their absolute probabilities. This is easy to reason about, and it can be useful in local model stacks or research settings where a fixed candidate budget is desirable. The weakness is that the same `k` can be too broad when the model is confident and too narrow when the model is uncertain.
+
+```ascii
+Clear-step distribution with top_k = 5
++-------------+-------------+-------------------------------+
+| Token       | Probability | Decision                      |
++-------------+-------------+-------------------------------+
+| pass        | 0.82        | kept                          |
+| fail        | 0.08        | kept                          |
+| skip        | 0.03        | kept                          |
+| retry       | 0.02        | kept                          |
+| timeout     | 0.01        | kept                          |
+| unrelated   | 0.004       | discarded                     |
++-------------+-------------+-------------------------------+
+```
+
+In the clear distribution above, keeping five tokens may already be too generous because the model strongly prefers one answer. A top-p filter might keep only `pass` and perhaps `fail`, while top-k keeps weaker alternatives merely because they happen to be ranked near the top. In a different step where twelve candidates are genuinely close, `top_k: 5` might discard useful options too early. Static filtering cannot adapt to confidence.
+
+You should avoid combining top-p and top-k unless the provider documentation explicitly defines the order and you have a reason to need both. Some systems apply top-k first, then top-p. Others apply nucleus filtering first, then cap the result. That implementation detail changes the candidate pool, which means the same numbers can behave differently across backends. For most application work, choose top-p as the primary filter and leave top-k unset or neutral.
+
+| Filter | Candidate set size | Strength | Weakness |
+|---|---|---|---|
+| Greedy | One token | Maximum repeatability | No diversity |
+| Top-p | Dynamic by probability mass | Adapts to model confidence | Less intuitive to inspect manually |
+| Top-k | Fixed by rank | Simple and predictable candidate count | Can include weak tokens or exclude plausible ones |
+| Temperature only | Entire vocabulary remains possible | Simple diversity control | Low-probability tail remains available |
+| Beam search | Multiple high-probability paths | Useful for translation-like tasks | Often dull for open-ended generation |
+
+## Repetition Penalties and Degeneration
+
+Autoregressive generation can fall into repeated phrases because the model keeps conditioning on its own previous text. If a phrase has just appeared several times, the context makes it locally probable to appear again. This failure mode is sometimes called degeneration: the output remains grammatical but becomes unhelpfully repetitive. Long-form responses, brainstorming lists, and generic explanations are especially vulnerable because the model can loop on high-level phrases that sound plausible.
+
+```ascii
+Without a repetition penalty
++------------------------------------------------------------+
+| The platform should be scalable. The platform should be    |
+| scalable because the platform should be scalable. The       |
+| platform should be scalable for future growth.             |
++------------------------------------------------------------+
+
+With a moderate repetition penalty
++------------------------------------------------------------+
+| The platform should scale horizontally, recover from node   |
+| loss, and expose capacity signals before traffic spikes.   |
++------------------------------------------------------------+
+```
+
+A repetition penalty reduces the probability of tokens that have already appeared. The exact implementation varies, but the engineering intent is consistent: make repeated tokens less attractive so the sampler explores nearby alternatives. A mild value such as `1.05` or `1.1` can help a chatbot avoid stale wording. A stronger value such as `1.2` or `1.3` can help longer creative responses, but excessive penalties make text sound forced because the model avoids natural repeated function words and domain terms.
+
+Repetition penalties are not a substitute for a good prompt structure. If you ask for "ten unique ideas" but do not require categories, constraints, or evaluation criteria, the model may still repeat themes using different words. Penalties operate at the token level, while conceptual diversity often requires task design. For serious ideation workflows, combine a moderate repetition penalty with explicit diversity requirements such as "one operational idea, one security idea, one cost idea, and one developer-experience idea."
+
+| Repetition setting | Likely behavior | Suitable workload | Risk |
+|---|---|---|---|
+| `1.0` | No penalty | Short structured output, code, exact terminology | Long text may loop |
+| `1.05-1.1` | Gentle discouragement | Chat, summaries, support responses | May not fix severe loops |
+| `1.15-1.3` | Stronger vocabulary pressure | Long drafting, brainstorming, story generation | Can sound unnatural |
+| `>1.3` | Aggressive avoidance | Rare rescue setting for loop-heavy local models | May damage coherence and terminology |
+
+A senior-level debugging habit is to distinguish repetition caused by decoding from repetition caused by content design. If the model repeats the same phrase after several hundred tokens, a repetition penalty and shorter sections may help. If it repeats the same idea across list items, the prompt likely lacks distinct axes for comparison. If it repeats boilerplate at the start of every answer, the system prompt or examples may be teaching the model that preamble is required.
+
+## Length Limits, Stop Sequences, and Cost Control
+
+Length control is a reliability feature, not only a billing feature. Every production generation should have an explicit `max_tokens` limit based on the expected output, the downstream consumer, and the acceptable latency budget. Without a limit, a model can continue until it reaches a provider cap, burns unnecessary tokens, or produces text that the user never needed. A strict limit also forces the application designer to decide what "done" looks like.
+
+Stop sequences give the model a semantic boundary. A few-shot prompt might show several examples separated by `###`, and the model may continue writing additional examples unless a stop sequence tells it where the target answer ends. Structured output often benefits from a sentinel such as `END_JSON` or an instruction to stop after a closing delimiter. Stop sequences are especially useful when the output will be embedded into another file, sent to a parser, or shown in a UI with limited space.
+
 ```python
-{
+SUMMARY_PROFILE = {
+    "temperature": 0.3,
+    "top_p": 0.7,
+    "max_tokens": 220,
+    "stop_sequences": ["\n\n###", "\n\nSource:"],
+}
+```
+
+The example above is designed for a factual summary rather than a creative answer. Low temperature keeps the response close to the source, top-p removes low-probability wording, and `max_tokens` bounds cost and latency. The stop sequences prevent the model from drifting into another prompt section or inventing a source list. Notice that none of these settings proves the summary is accurate. They reduce decoding risk, while citation checks, source comparison, and application tests address factual risk.
+
+A common production pattern is to set a conservative model output limit and then validate the result. If the output is incomplete, malformed, or fails schema validation, the application can retry with a repair prompt or a larger limit. Blindly raising `max_tokens` for every request is a poor fix because it increases cost for successful cases and may hide prompt design problems. Treat length as part of the contract between the model and the application.
+
+## Worked Example: Diagnosing a Broken Extraction Flow
+
+A team uses an LLM to extract incident metadata from support messages. The downstream system expects a JSON object with `service`, `environment`, `severity`, and `summary`. During testing, the model sometimes returns valid JSON, but other times it writes a sentence before the object or appends an explanation afterward. The current profile is `temperature: 0.7`, `top_p: 0.9`, `max_tokens: 1000`, and no stop sequence. The prompt asks the model to "extract the details and explain any uncertainty."
+
+The first diagnosis is that the decoding profile and task contract disagree. A JSON extraction flow does not need conversational variation, and the phrase "explain any uncertainty" invites text outside the object. The profile should be deterministic, the prompt should require only JSON, and the output should be validated. A stop sequence can help, but schema validation is the stronger boundary because a stop sequence alone cannot guarantee that all required keys exist.
+
+```python
+BROKEN_EXTRACTION_PROFILE = {
     "temperature": 0.7,
     "top_p": 0.9,
-    "max_tokens": 500,
-    "repetition_penalty": 1.1
-}
-```
-
-```python
-{
-    "temperature": 1.0,
-    "top_p": 0.95,
-    "max_tokens": 2000,
-    "repetition_penalty": 1.2
-}
-```
-
-```python
-{
-    "temperature": 0.2,
-    "top_p": 0.5,
-    "max_tokens": 200
-}
-```
-
-```python
-{
-    "temperature": 1.2,
-    "top_p": 0.95,
     "max_tokens": 1000,
-    "repetition_penalty": 1.3
+}
+
+FIXED_EXTRACTION_PROFILE = {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "max_tokens": 240,
+    "stop_sequences": ["\n\nEND_JSON"],
 }
 ```
 
-### Use Case 1: Chatbot Responses
-```python
+The repaired design also changes the prompt structure. Instead of asking for explanation, it provides a schema and requires the model to put uncertainty into fields such as `"severity": "unknown"` or `"summary": "insufficient information"`. That preserves useful uncertainty while keeping the output parseable. A retry path can ask the model to repair invalid JSON, but the primary path should be strict enough that repair is rare.
+
+```json
 {
-    "temperature": 0.7,
+  "service": "checkout-api",
+  "environment": "prod",
+  "severity": "high",
+  "summary": "Checkout requests are timing out after a new image rollout."
+}
+```
+
+The senior-level lesson is that sampling parameters are only one layer in a control system. The profile reduces output variance, the prompt defines the contract, the stop sequence bounds the response, and the validator rejects malformed results. If any one layer is missing, the others have to carry too much responsibility. Reliable AI systems usually come from several modest controls working together, not from a single perfect setting.
+
+## Production Profiles by Use Case
+
+The safest way to choose sampling settings is to classify the workload before touching any numbers. Ask whether the output is consumed by a human or a machine, whether diversity is valuable or harmful, whether the answer must cite source material, and how expensive a bad answer would be. These questions turn sampling from guesswork into design. The following profiles are starting points, not universal defaults, and they should be tested against representative prompts.
+
+### Use Case 1: Customer Support Chat
+
+Support chat needs natural language, but it must stay within policy and source material. A moderate temperature can make answers feel less robotic, while top-p filtering removes unlikely tail tokens. The application should still ground answers in retrieved policy text, include refusal behavior for missing information, and log enough metadata for audit. A decoding profile cannot make an unsupported policy true.
+
+```python
+SUPPORT_CHAT_PROFILE = {
+    "temperature": 0.6,
     "top_p": 0.9,
+    "repetition_penalty": 1.05,
     "max_tokens": 500,
-    "repetition_penalty": 1.1,
-    "stop_sequences": ["\nUser:", "\nHuman:"]
+    "stop_sequences": ["\nUser:", "\nHuman:"],
 }
 ```
 
 ### Use Case 2: Code Generation
 
+Code generation rewards consistency, syntax discipline, and common patterns. A low temperature helps the model choose conventional tokens, while a tight top-p prevents unnecessary exploration. Repetition penalties should usually remain neutral or mild because code legitimately repeats identifiers, indentation, keywords, and structural markers. The stronger reliability boundary is compilation, unit tests, static analysis, and review.
+
 ```python
-{
+CODE_GENERATION_PROFILE = {
     "temperature": 0.2,
     "top_p": 0.5,
-    "max_tokens": 2000,
-    "stop_sequences": ["```
+    "repetition_penalty": 1.0,
+    "max_tokens": 1200,
+    "stop_sequences": ["\n```", "\n# End"],
+}
 ```
-
-**Why**:
-- Temperature 0.2: High consistency, minimal variation
-- Top-p 0.5: Very focused on most likely tokens
-- Max tokens 2000: Allow complete functions
-- Stop sequences: Stop after code block
-
----
 
 ### Use Case 3: Creative Story Writing
 
-**Goal**: Interesting, surprising narratives.
+Creative writing benefits from a wider candidate pool because the user often wants surprise, texture, and varied phrasing. A temperature near `1.0` with a broad nucleus allows richer continuations while still filtering the most unlikely tail. A moderate repetition penalty helps avoid repeated sentence openings and recycled imagery. The application should give the user editing tools rather than pretending every generated draft is final.
 
-**Configuration**:
+```python
+CREATIVE_WRITING_PROFILE = {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "repetition_penalty": 1.2,
+    "max_tokens": 1800,
+    "stop_sequences": ["\n\n###"],
+}
 ```
-
-```
-
-**Why**:
-- Temperature 1.0: Creative freedom
-- Top-p 0.95: Still filter extreme outliers
-- Max tokens 3000: Allow longer stories
-- High repetition penalty: Varied vocabulary, avoid repetitive phrases
-
----
 
 ### Use Case 4: JSON Data Extraction
 
-**Goal**: Valid JSON, consistent format.
+JSON extraction is a machine-consumed workflow, so the decoding profile should prioritize validity and repeatability. Use zero temperature, a neutral top-p, a tight token budget, and a clear stop boundary. The application should parse the output with a real JSON parser and reject or repair invalid results. If the provider supports native structured output or schema-constrained decoding, use that before relying on prompt-only formatting.
 
-**Configuration**:
+```python
+JSON_EXTRACTION_PROFILE = {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "repetition_penalty": 1.0,
+    "max_tokens": 300,
+    "stop_sequences": ["\n\nEND_JSON"],
+}
 ```
-
-```
-
-**Why**:
-- Temperature 0.0: Deterministic (critical for structured data!)
-- Stop after closing brace: Prevent extra text after JSON
-- No top-p needed (temperature=0 is greedy)
-
----
 
 ### Use Case 5: Brainstorming Ideas
 
-**Goal**: Diverse, unusual ideas.
+Brainstorming is one of the few places where higher variance is often desirable. The goal is not to produce a single correct answer; it is to generate a candidate set that a human or ranking step can evaluate. A higher temperature and broad top-p can surface less obvious ideas, while a repetition penalty reduces near-duplicates. You should still ask for categories, constraints, or scoring criteria so the diversity is useful rather than chaotic.
 
-**Configuration**:
+```python
+BRAINSTORMING_PROFILE = {
+    "temperature": 1.15,
+    "top_p": 0.95,
+    "repetition_penalty": 1.25,
+    "max_tokens": 900,
+    "stop_sequences": ["\n\nEND_IDEAS"],
+}
 ```
 
+### Use Case 6: Financial or Incident Summarization
+
+Summaries of high-stakes material should be conservative but readable. Very low temperature can make text rigid, while moderate low temperature gives the model enough flexibility to produce clear sentences. Top-p should be tighter than for chat because unsupported wording can change the meaning of a report. The application should cite sources, preserve uncertainty, and avoid allowing the model to fill gaps with plausible but unverified details.
+
+```python
+FACTUAL_SUMMARY_PROFILE = {
+    "temperature": 0.3,
+    "top_p": 0.7,
+    "repetition_penalty": 1.0,
+    "max_tokens": 450,
+    "stop_sequences": ["\n\nSources:", "\n\nEND_SUMMARY"],
+}
 ```
 
-**Why**:
-- Temperature 1.2: Push into creative territory
-- Top-p 0.95: Still filter completely nonsensical
-- High repetition penalty: Force diverse ideas
-- Longer context: Allow exploring multiple ideas
+| Use Case | Temperature | Top-p | Top-k | Repetition | Max Tokens | Primary validation |
+|---|---:|---:|---:|---:|---:|---|
+| Code generation | `0.2` | `0.5` | unset | `1.0` | `1200` | tests and linters |
+| JSON extraction | `0.0` | `1.0` | unset | `1.0` | `300` | JSON schema |
+| Support chatbot | `0.6` | `0.9` | unset | `1.05` | `500` | policy grounding |
+| Creative writing | `1.0` | `0.95` | unset | `1.2` | `1800` | human editing |
+| Brainstorming | `1.15` | `0.95` | unset | `1.25` | `900` | ranking criteria |
+| Factual summary | `0.3` | `0.7` | unset | `1.0` | `450` | source comparison |
+| Translation-like rewriting | `0.3` | `0.8` | unset | `1.0` | `800` | bilingual review |
+| Test fixtures | `0.0` | `1.0` | unset | `1.0` | varies | exact expected output |
 
----
+## Decision Process for New Workloads
 
-## STOP: Time to Practice!
+When you face a new workload, do not start by copying a temperature from an example. Start by identifying the consumer of the output. If software consumes the output, favor deterministic decoding and validation. If a human consumes the output and values tone, use moderate sampling with safety filters. If a human consumes the output and values surprise, allow wider sampling but add ranking, editing, or review. The profile should express the cost of variance.
 
-You must prove you can control the generation output of an LLM using Python. In this lab, we will use an interactive local script to simulate adjusting sampling parameters against a mock autoregressive output engine. 
-
-**Task 1: Set Up the Environment**
-Open your terminal and create a dedicated workspace.
-```bash
-mkdir ~/kubedojo-sampling-lab
-cd ~/kubedojo-sampling-lab
-python3 -m venv venv
-source venv/bin/activate
-pip install requests
+```mermaid
+flowchart TD
+    A[New generation workload] --> B{Machine-consumed output?}
+    B -- Yes --> C[Use low or zero temperature]
+    C --> D[Add schema or parser validation]
+    D --> E[Set tight max_tokens and stop boundary]
+    B -- No --> F{Is novelty a product requirement?}
+    F -- No --> G[Use low-moderate temperature and top_p filter]
+    G --> H[Ground in source material and test factuality]
+    F -- Yes --> I[Use higher temperature with broad top_p]
+    I --> J[Add repetition control and human/ranking review]
 ```
 
-**Task 2: Implement the Configuration Engine**
-Create a new file called `sampling_playground.py`. We will structure a Python dictionary containing parameters corresponding to a deterministic JSON extractor.
-```bash
-cat << 'EOF' > sampling_playground.py
-import json
+This decision tree deliberately separates generation quality from output validation. A creative brainstorming tool can tolerate weak ideas because the user chooses among them. A compliance assistant cannot tolerate creative policy interpretation because users may act on the response. A code assistant sits between the two: some variation is helpful, but executable validation is mandatory. Sampling strategy should match the consequences of a bad token, not the personality you wish the model had.
 
-def generate_payload(scenario_type):
-    configs = {
-        "json_extraction": {
-            "temperature": 0.0,
-            "max_tokens": 1000,
-            "stop_sequences": ["\n}"]
-        },
-        "creative_brainstorm": {
-            "temperature": 1.2,
-            "top_p": 0.95,
-            "repetition_penalty": 1.4,
-            "max_tokens": 1500
-        }
-    }
-    print(f"Executing {scenario_type} with config:")
-    print(json.dumps(configs[scenario_type], indent=2))
-    
-if __name__ == "__main__":
-    import sys
-    generate_payload(sys.argv[1])
-EOF
-```
+There is also a latency and cost dimension. Larger `max_tokens` increases the worst-case response time and price. Wider sampling can sometimes produce longer, more meandering answers because the model explores less direct paths. Strong stop sequences and concise prompt contracts keep the output bounded. In high-throughput systems, sampling profiles should be part of capacity planning, not hidden constants buried in application code.
 
-**Task 3: Execute and Verify Deterministic Profile**
-Run the script to verify your structured data extraction profile is fully deterministic.
-```bash
-python sampling_playground.py json_extraction
-```
-**Checkpoint Verification**: Ensure the console output shows `temperature: 0.0` and clearly lists the `\n}` stop sequence. 
-
-**Task 4: Execute and Verify Creative Profile**
-Run the script applying the highly variant brainstorming configuration.
-```bash
-python sampling_playground.py creative_brainstorm
-```
-**Checkpoint Verification**: Ensure the console lists the `temperature: 1.2` alongside the aggressive `repetition_penalty: 1.4`.
-
-<details>
-<summary>Click here for the solution confirmation checklist</summary>
-
-- [x] Environment created and activated successfully.
-- [x] Script executes without import errors.
-- [x] Output correctly maps `json_extraction` to a greedy (0.0) temperature setting.
-- [x] Output correctly restricts the creative setting with a Top-p limit.
-</details>
-
-## Common Pitfalls
-
-### Pitfall 1: Using Temperature for Consistency
-
-**Wrong**:
-```
-
-```
-
-**Right**:
-```
-
-```
-
-**Why**: Even small temperature creates randomness.
-
----
-
-### Pitfall 2: Combining Top-p and Top-k
-
-**Wrong**:
-```
-
-```
-
-**Problem**: Unclear which takes precedence. Behavior varies by API.
-
-**Right**: Use one or the other, not both.
-```
-
-```
-
----
-
-### Pitfall 4: Too-High Temperature
-
-**Wrong**:
-```
-
-```
-
-**Result**: Nonsensical outputs, wasted API calls.
-
-**Right**: Stay under 1.5, ideally under 1.2.
-
----
-
-### Expanded Common Mistakes Table
-
-| Mistake | Why | Fix |
+| Decision question | If yes | If no |
 |---|---|---|
-| Using Temperature for Consistency | Even small temperature > 0.0 creates randomness. | Set temperature to 0.0 for strict determinism. |
-| Combining Top-p and Top-k | Conflicting sampling pools cause unpredictable behavior depending on the backend framework. | Pick one strategy. Top-p is generally preferred over static top-k. |
-| Ignoring Repetition Penalty on Long Outputs | Autoregressive models naturally fall into local minima loops over long contexts. | Apply a mild repetition penalty (1.1-1.2) for text responses exceeding 200 tokens. |
-| Setting Temperature Too High (> 1.5) | Flattens the probability distribution entirely, making gibberish just as likely as real words. | Cap temperature at 1.2 for creative tasks; use top-p to truncate the absurd tail. |
-| Not Setting max_tokens | Models can generate indefinitely until they hit context limits, causing runaway API costs. | Always set a strict `max_tokens` limit based on the expected response length. |
-| Using Sampling for JSON Extraction | Any creativity in structural generation risks malformed braces or unexpected keys. | Use greedy decoding (temperature 0.0) combined with strict stop sequences. |
-| Blindly Trusting Default Parameters | API defaults are designed for general chat, not specialized tasks like code or structured data. | Explicitly define sampling parameters for every distinct use case in production. |
-| Omitting Stop Sequences in Few-Shot Prompts | The model will continue generating additional "examples" infinitely if it doesn't know where the target output ends. | Define a stop sequence like `\n\n` or `User:` to forcefully halt generation. |
+| Will a parser consume the output? | Use `temperature: 0.0` and schema validation | Allow moderate natural-language variation |
+| Is novelty valuable to the user? | Increase temperature and review/rank outputs | Keep temperature low or moderate |
+| Could a wrong detail cause harm? | Tighten top-p, ground in sources, preserve uncertainty | Focus more on user experience |
+| Is the output long-form? | Add repetition control and section limits | Keep repetition penalty neutral |
+| Does the prompt contain few-shot examples? | Add stop sequences to prevent extra examples | Use normal task-specific boundaries |
+| Is cost sensitive? | Lower `max_tokens` and add retry only when needed | Allow room for richer answers |
 
-## Sampling Strategy Decision Matrix
+## Common Mistakes
 
-| Use Case | Temperature | Top-p | Top-k | Repetition | Max Tokens |
-|----------|-------------|-------|-------|------------|------------|
-| **Code generation** | 0.2 | 0.5 | - | 1.0 | 2000 |
-| **JSON extraction** | 0.0 | - | - | 1.0 | 1000 |
-| **Chatbot** | 0.7 | 0.9 | - | 1.1 | 500 |
-| **Creative writing** | 1.0 | 0.95 | - | 1.3 | 3000 |
-| **Brainstorming** | 1.2 | 0.95 | - | 1.4 | 1500 |
-| **Summarization** | 0.3 | 0.7 | - | 1.0 | 500 |
-| **Translation** | 0.3 | 0.8 | - | 1.0 | 1000 |
-| **Testing/QA** | 0.0 | - | - | 1.0 | varies |
+| Mistake | Why it fails | Practical fix |
+|---|---|---|
+| Using chat defaults for structured extraction | General chat defaults usually allow wording variation, prefaces, and explanations that break parsers. | Use `temperature: 0.0`, a strict prompt contract, a stop boundary, and schema validation. |
+| Treating temperature as a truthfulness control | Lower temperature reduces variance, but it does not add missing evidence or correct bad context. | Pair conservative decoding with retrieval grounding, refusal behavior, and factual checks. |
+| Combining top-p and top-k without a documented reason | Different backends may apply the filters in different orders, changing the candidate pool. | Prefer top-p alone unless the provider documents the combined behavior and you test it. |
+| Setting high temperature for code or YAML | Extra variation can introduce invalid syntax, unexpected comments, or conversational filler. | Use low temperature, tight top-p, and validate with compilers, parsers, linters, or tests. |
+| Omitting `max_tokens` in production | Runaway generation increases cost, latency, and the chance of irrelevant trailing text. | Set a limit based on the expected output and add a repair path for incomplete results. |
+| Overusing repetition penalties | Strong penalties can make normal terminology, identifiers, and function words look artificially avoided. | Start mild for prose, keep code mostly neutral, and inspect output quality before raising it. |
+| Solving conceptual duplication with token penalties | Repetition penalties reduce token reuse but do not guarantee diverse ideas or distinct categories. | Add prompt constraints that require different angles, audiences, risks, or evaluation criteria. |
+| Forgetting stop sequences in few-shot prompts | The model may continue the pattern and generate extra examples instead of stopping at the answer. | Add a delimiter or sentinel that marks the end of the target response. |
 
-## Key Takeaways
+## Did You Know?
 
-1. **Autoregressive generation**: LLMs generate one token at a time
-2. **Temperature controls creativity**: 0.0 = deterministic, 1.0+ = creative
-3. **Top-p filters unlikely tokens**: 0.9 is a good default
-4. **Top-k is less common**: Top-p is generally better
-5. **Repetition penalty prevents loops**: Use 1.1-1.3 for most cases
-6. **max_tokens controls length and cost**: Always set it!
-7. **No one-size-fits-all**: Different use cases need different strategies
-8. **Experiment!**: Sampling parameters are cheap to adjust
+1. Nucleus sampling was popularized by the 2019 paper "The Curious Case of Neural Text Degeneration," which showed that simply maximizing likelihood can produce dull or repetitive text even when the model is strong.
 
-## Did You Know? The Hidden History of Text Generation
+2. A zero-temperature setting is best understood as a decoding choice, not as a universal reproducibility guarantee, because provider infrastructure, model versions, safety layers, and tool routing can still change behavior.
 
-1. In April 2019, the paper "The Curious Case of Neural Text Degeneration" was published, introducing nucleus sampling (top-p) to the AI community; it has since garnered over 2,500 citations.
-2. In a 2023 GitHub Copilot analysis, researchers found that code generated with a temperature greater than 0.5 contained 3x more bugs than code generated securely at temperature 0.2.
-3. During the GPT-3 beta in 2020, OpenAI originally set the default temperature for the Playground to 0.7 simply because an early researcher felt it provided the most natural responses, entirely bypassing rigorous statistical testing.
-4. A major AI writing startup lost over $100,000 in revenue in late 2021 when a production configuration accidentally set `top_p` to 0.1 instead of 0.9, leading to a massive 400% spike in user churn due to robotic, boring outputs.
+3. Repetition problems often become visible only after several hundred generated tokens, which is why short demos can look healthy while long-form production responses still degrade.
 
-```
-[CODE-44] (from: The "Boring GPT-2" Problem)
-```
+4. Native structured-output features, when available, are usually stronger than prompt-only JSON instructions because they constrain the generation or validate the result closer to the model boundary.
 
-```
-[CODE-45] (from: Why "Temperature" and Not "Creativity"?)
-```
+## Quiz
 
-| Temperature | Behavior | Use Cases |
-|-------------|----------|-----------|
-| **0.0** | Deterministic, usually the same | Testing, structured output, reproducibility |
-| **0.1-0.3** | Very focused, minimal variation | Code generation, data extraction |
-| **0.5-0.7** | Balanced, sensible variation | General chatbots, content generation |
-| **0.8-1.0** | Creative, diverse | Creative writing, brainstorming |
-| **1.0-1.5** | Highly creative, unpredictable | Art, poetry, experimental |
-| **>1.5** | Random, potentially nonsensical | Rarely useful |
+**1. Your team deploys an LLM that extracts Kubernetes incident fields into JSON for an automated ticket router. The router fails because the model sometimes writes `Here is the JSON:` before the object, although the fields themselves are usually correct. Which change should you make first?**
 
-| Use Case | Temperature | Top-p | Top-k | Repetition | Max Tokens |
-|----------|-------------|-------|-------|------------|------------|
-| **Code generation** | 0.2 | 0.5 | - | 1.0 | 2000 |
-| **JSON extraction** | 0.0 | - | - | 1.0 | 1000 |
-| **Chatbot** | 0.7 | 0.9 | - | 1.1 | 500 |
-| **Creative writing** | 1.0 | 0.95 | - | 1.3 | 3000 |
-| **Brainstorming** | 1.2 | 0.95 | - | 1.4 | 1500 |
-| **Summarization** | 0.3 | 0.7 | - | 1.0 | 500 |
-| **Translation** | 0.3 | 0.8 | - | 1.0 | 1000 |
-| **Testing/QA** | 0.0 | - | - | 1.0 | varies |
-
-| Finding | Source |
-|---------|--------|
-| Nucleus sampling improves human preference by **21%** | Original paper, 2019 |
-| Temperature 0.7-0.8 rated "most natural" by users | OpenAI user studies |
-| Code with temp>0.5 has **3x more bugs** | GitHub Copilot analysis |
-| Creative writing peaks at temp **1.0-1.1** | Author surveys, 2023 |
-| Repetition penalty reduces loops by **85%** | Hugging Face benchmarks |
-
-## Key Links
-- ["The Curious Case of Neural Text Degeneration"](https://arxiv.org/abs/1904.09751)
-- ["Hierarchical Neural Story Generation"](https://arxiv.org/abs/1805.04833)
-- [OpenAI API - Sampling Parameters](https://platform.openai.com/docs/api-reference/chat/create#temperature)
-- [Anthropic Claude - Generation Parameters](https://docs.anthropic.com/claude/reference/messages_post)
-- [Hugging Face - Generation Strategies](https://huggingface.co/docs/transformers/generation_strategies)
-- [Hugging Face Generation Playground](https://huggingface.co/spaces/huggingface-projects/text-generation-playground)
-
-## Knowledge Check: Scenario-Based Quiz
-
-**1. You are building an automated customer support bot that parses messy customer emails to extract a standardized JSON payload for your ticketing system. During testing, the bot occasionally prepends "Here is the extracted information:" before the JSON, which breaks your downstream parser. Which sampling configuration is most appropriate to fix this?**
-- A) `temperature: 0.7`, `top_p: 0.9`, no stop sequences
-- B) `temperature: 1.0`, `repetition_penalty: 1.5`, max tokens 500
-- C) `temperature: 0.0`, `stop_sequences: ["\n}"]`, `max_tokens`: 1000
-- D) `temperature: 0.2`, `top_k: 50`, no stop sequences
+- A) Increase temperature so the model can find a better phrasing.
+- B) Set temperature to `0.0`, require JSON only, add a stop boundary, and validate with a JSON parser.
+- C) Increase `max_tokens` so the model has enough room to finish the explanation.
+- D) Add a high repetition penalty so the preface appears less often.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: C**
-
-**Why:** Extracting structured data like JSON requires absolute determinism to ensure the output schema is strictly followed without any creative flair or conversational filler. Setting the temperature to `0.0` (greedy decoding) ensures the model consistently chooses the highest probability tokens, which aligns with predictable data formatting. Furthermore, using a stop sequence like `\n}` prevents the model from generating extraneous text after the JSON object has been completed. The other options introduce randomness (`temperature > 0`) or fail to provide a definitive stopping mechanism, both of which risk breaking the parser.
+**Correct answer: B.** The failure is not that the model lacks enough space or needs more variety; the failure is that a machine-consumed workflow is using a profile that allows conversational text. A deterministic profile, strict output contract, stop boundary, and parser validation align the decoding behavior with the downstream consumer.
 </details>
 
-**2. Your startup has built an "AI Brainstorming Partner" designed to help writers overcome writer's block by suggesting wild, unexpected plot twists. However, beta testers are complaining that the suggestions are highly repetitive and feel like standard Hollywood tropes. You check the backend and see the configuration is `{"temperature": 0.5, "top_p": 0.9}`. What is the most effective adjustment?**
-- A) Decrease `temperature` to 0.0 and increase `top_p` to 1.0
-- B) Increase `temperature` to 1.2 and add a `repetition_penalty` of 1.3
-- C) Switch to top-k sampling with `top_k: 5`
-- D) Add stop sequences to end the generations earlier
+**2. A product team wants an assistant to propose unusual internal hackathon themes. The current profile uses `temperature: 0.2`, `top_p: 0.5`, and no repetition penalty. Users say every idea sounds like a generic productivity workshop. What adjustment best matches the workload?**
+
+- A) Raise temperature near `1.1`, use broad top-p such as `0.95`, and add a moderate repetition penalty.
+- B) Lower temperature to `0.0` so the model consistently selects the best theme.
+- C) Set top-k to `1` so the output becomes more focused.
+- D) Reduce `max_tokens` so the model cannot repeat itself.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: B**
-
-**Why:** The goal of a brainstorming tool is to maximize creativity and surface unusual or surprising ideas, which means you need to flatten the probability distribution. Increasing the temperature to `1.2` encourages the model to select lower-probability, less obvious tokens, directly combating the "standard trope" problem. Additionally, introducing a `repetition_penalty` of `1.3` actively discourages the model from reusing the same words or phrases, ensuring the generated plot twists remain diverse and varied. Lowering the temperature or restricting the token pool (like with `top_k: 5`) would only make the outputs more predictable and boring.
+**Correct answer: A.** Brainstorming is a novelty-seeking workload, so the profile should allow more varied candidates while still filtering the extreme tail. A moderate repetition penalty helps reduce near-duplicate ideas, while lowering temperature or top-k would make the output even more predictable.
 </details>
 
-**3. You are configuring an LLM for a public-facing chatbot. You want it to be conversational and natural, but you absolutely cannot afford for it to start hallucinating completely nonsensical words or generating gibberish. You've set the temperature to `0.8`. Which parameter should you pair with this to act as a safety net against gibberish?**
-- A) `top_p: 0.9`
-- B) `repetition_penalty: 2.0`
-- C) `top_k: 1`
-- D) `temperature: 0.0` (as a fallback)
+**3. A support chatbot must sound natural, but it keeps inventing unusual phrases and occasionally drifts away from the retrieved policy. The current profile is `temperature: 1.2`, `top_p: 1.0`, and `max_tokens: 900`. Which diagnosis is most accurate?**
+
+- A) The model needs a larger token budget to explain the policy fully.
+- B) The sampler is too deterministic and cannot adapt to customer wording.
+- C) High temperature plus no nucleus filtering leaves too much low-probability tail available.
+- D) A repetition penalty is impossible to use in customer support.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: A**
-
-**Why:** A temperature of `0.8` provides the desired conversational variety, but it also increases the likelihood of sampling from the very low-probability "tail" of the distribution, which can lead to nonsensical output. Nucleus sampling (`top_p: 0.9`) acts as a dynamic safety net by dynamically truncating that tail and restricting the sample pool to only the tokens that make up the top 90% of the cumulative probability mass. This means that while the response remains varied, the model is much less likely to select bizarre, statistically improbable tokens. Setting `top_k: 1` would defeat the purpose of the temperature setting by forcing deterministic output.
+**Correct answer: C.** The profile encourages exploratory token choices and does not filter the long tail, which increases the risk of strange wording and drift. A support chatbot usually needs moderate temperature, top-p filtering, grounding, and policy validation rather than maximum variation.
 </details>
 
-**4. Scenario: You are generating a daily news summary for financial analysts. Accuracy is highly critical, but sentences should still read naturally rather than looking like robotic bullet points. What combination is ideal?**
-- A) `temperature: 1.5`, `top_p: 1.0`
-- B) `temperature: 0.3`, `top_p: 0.7`
-- C) `temperature: 0.0`, `top_k: 1`
-- D) `temperature: 2.0`, `repetition_penalty: 0.5`
+**4. A developer uses `top_p: 0.95` and `top_k: 10` in a local inference stack. After a framework upgrade, output diversity changes even though the numbers are identical. What is the most likely cause and fix?**
+
+- A) The model forgot previous conversations, so increase context length.
+- B) The framework may apply top-p and top-k in a different order, so simplify to one filtering strategy unless both are explicitly required.
+- C) The temperature must be exactly `1.0` whenever top-p is enabled.
+- D) The stop sequence is too short, so remove it.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: B**
-
-**Why:** A lower temperature like 0.3 ensures the output remains factual, constrained, and highly relevant, perfectly matching the financial analysis requirement. Coupling this with a Top-p of 0.7 forces the model to choose from only the most confident pool of words, drastically reducing the risk of hallucination while preserving just enough variety to form readable human sentences. Setting it to 0.0 would result in monotonous, overly rigid text, while anything above 1.0 risks severe financial inaccuracies.
+**Correct answer: B.** Combining filtering strategies can make behavior depend on implementation order. If one version applies top-k before top-p and another applies top-p before top-k, the eligible candidate pool changes, so the standard fix is to choose the primary filter and test it directly.
 </details>
 
-**5. Scenario: A developer configures an LLM to generate long-form architectural design documents. After about 400 tokens, the document descends into an infinite loop, repeating the phrase "The system must scale horizontally" over and over. What went wrong?**
-- A) The developer forgot to set a stop sequence.
-- B) The temperature was set to 0.0.
-- C) The developer omitted a repetition penalty on a long generation task.
-- D) The `max_tokens` limit was reached too early.
+**5. An AI documentation assistant writes strong first paragraphs, but after several sections it repeats the phrase `This approach improves reliability` in nearly every paragraph. The profile has moderate temperature, top-p filtering, and no repetition penalty. What should you try, and what else should you inspect?**
+
+- A) Add a mild repetition penalty and inspect whether the prompt asks for distinct sections with different purposes.
+- B) Set temperature to `0.0` and remove all section headings.
+- C) Increase `max_tokens` because the model is running out of space.
+- D) Disable top-p so the model can use every token in the vocabulary.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: C**
-
-**Why:** Autoregressive models are statistically prone to falling into local minima over long generation windows, causing them to repeat sequences that were highly probable moments earlier. By failing to include a `repetition_penalty` (such as 1.1 or 1.2), the developer allowed the model to continually feed its own repetitive output back into its context window, reinforcing the loop. A repetition penalty mathematically degrades the probability of previously emitted tokens, forcing the model to select new vocabulary and breaking the cycle.
+**Correct answer: A.** The symptom fits degeneration in long-form generation, so a mild repetition penalty can help. You should also inspect the prompt because conceptual repetition often means the task lacks distinct axes, not merely that the sampler reused tokens.
 </details>
 
-**6. Scenario: You're constructing a CI/CD pipeline script generator that must output valid YAML block files. However, the model frequently includes conversational filler ("Sure, here is your YAML...") before writing the code. How do you resolve this?**
-- A) Set `temperature: 1.0` and increase `top_k: 50`.
-- B) Apply a strict few-shot prompt paired with `temperature: 0.0` and a stop sequence.
-- C) Increase the `repetition_penalty` to 1.5.
-- D) Use beam search instead of nucleus sampling.
+**6. A CI assistant generates YAML manifests. The YAML is usually correct, but one out of several runs includes a comment explaining the manifest, which breaks a strict downstream comparison test. Which profile best fits this use case?**
+
+- A) `temperature: 0.8`, `top_p: 0.9`, `max_tokens: 1000`
+- B) `temperature: 1.0`, `top_p: 1.0`, `repetition_penalty: 1.2`
+- C) `temperature: 0.0`, neutral top-p, clear stop sequence, and YAML parser validation
+- D) `temperature: 1.2`, top-k set to `50`, and no stop sequence
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: B**
-
-**Why:** Code generation and strict file formatting require zero creative variance. Lowering the temperature to 0.0 forces the model into a deterministic state. By supplying a few-shot prompt that explicitly models pure YAML output without preamble, and implementing a stop sequence, you ensure the model behaves like a strict parser rather than a conversational assistant. Manipulating top-k or repetition penalties would not eliminate conversational filler; it would merely alter the vocabulary of the filler.
+**Correct answer: C.** YAML for CI is machine-consumed and exactness matters. The profile should reduce variance, define a stopping boundary, and rely on parser validation rather than hoping the model chooses not to add explanatory text.
 </details>
 
-**7. Scenario: A client complains that their Top-p setting of 0.95 and Top-k setting of 10 are clashing, resulting in unpredictable behavior across different API updates. What is the standard architectural fix?**
-- A) Decrease both Top-p and Top-k simultaneously until the output stabilizes.
-- B) Remove Top-k entirely and rely solely on the Top-p dynamic filter.
-- C) Revert to greedy decoding.
-- D) Increase temperature to mask the clash.
+**7. A financial analyst summary tool uses `temperature: 0.0` and produces accurate but awkward sentence fragments. Stakeholders want readable summaries without creative interpretation of the source. Which adjustment is most reasonable?**
+
+- A) Move to `temperature: 1.5` so the model can write more naturally.
+- B) Use a low nonzero temperature such as `0.3`, pair it with tighter top-p, and keep source validation.
+- C) Remove `max_tokens` so the model can decide how much explanation is needed.
+- D) Add a very high repetition penalty so every sentence is unique.
 
 <details>
-<summary>Click for the answer</summary>
+<summary>Answer</summary>
 
-**Correct Answer: B**
-
-**Why:** Combining Top-p and Top-k is a classic anti-pattern because the order of operations varies depending on the backend infrastructure, leading to ambiguous probability truncations. The modern architectural standard is to utilize Top-p (nucleus sampling) exclusively because it dynamically adjusts the inclusion pool based on the actual probability distribution of the current step, whereas Top-k is rigidly static and can forcefully include bad tokens or exclude good ones. Removing Top-k resolves the architectural clash instantly.
+**Correct answer: B.** The workload needs readability but remains high-stakes and source-bound. A low nonzero temperature with constrained top-p can improve fluency while preserving conservative behavior, but factual validation and source comparison still carry the accuracy requirement.
 </details>
 
-<!-- v4:generated type=no_exercise model=codex turn=1 -->
 ## Hands-On Exercise
 
+Goal: build and use a local Python sampling playground that shows how temperature, top-p, top-k, repetition penalties, and token limits change generated text. This lab does not call a hosted model API, so you can focus on decoding mechanics without credentials or network access. You will implement a tiny token-transition model, run several profiles, and then reason from observed behavior back to production settings.
 
-Goal: build a small Python sampling playground that demonstrates how `temperature`, `top_p`, `top_k`, `repetition_penalty`, and `max_tokens` change generated text, then use it to compare deterministic extraction, balanced chat, and creative generation profiles.
-
-- [ ] Create a clean lab directory and Python virtual environment.
+- [ ] Create a clean lab directory and virtual environment.
 
 ```bash
-mkdir -p ~/sampling-strategies-lab
-cd ~/sampling-strategies-lab
+mkdir -p sampling-strategies-lab
+cd sampling-strategies-lab
+.venv/bin/python --version 2>/dev/null || true
+```
+
+If `.venv/bin/python` does not exist in your current directory, create a local environment with the system Python available on your workstation, then use the environment's explicit interpreter path for the rest of the lab.
+
+```bash
 python3 -m venv .venv
-./.venv/bin/python --version
+.venv/bin/python --version
 ```
 
-Verification command:
-
-```bash
-pwd
-./.venv/bin/python --version
-```
-
-- [ ] Create `sampling_lab.py` with a small token sampler that supports greedy decoding, temperature scaling, nucleus sampling, top-k filtering, repetition penalty, and max-token limits.
+- [ ] Create `sampling_lab.py` with a runnable sampler.
 
 ```bash
 cat > sampling_lab.py <<'PY'
@@ -859,91 +552,79 @@ import math
 import random
 from collections import Counter
 
-BASE_TRANSITIONS = {
-    "<START>": {"Kubernetes": 0.28, "Sampling": 0.25, "A": 0.20, "Reliable": 0.15, "Creative": 0.12},
-    "Kubernetes": {"improves": 0.34, "requires": 0.26, "uses": 0.20, "scales": 0.20},
-    "Sampling": {"controls": 0.35, "changes": 0.25, "improves": 0.20, "limits": 0.20},
-    "A": {"deterministic": 0.30, "creative": 0.25, "balanced": 0.25, "reliable": 0.20},
-    "Reliable": {"systems": 0.34, "pipelines": 0.33, "outputs": 0.33},
-    "Creative": {"writing": 0.40, "brainstorming": 0.30, "output": 0.30},
-    "improves": {"reliability": 0.40, "clarity": 0.30, "consistency": 0.30},
-    "requires": {"careful": 0.50, "stable": 0.25, "explicit": 0.25},
-    "uses": {"structured": 0.34, "repeatable": 0.33, "focused": 0.33},
-    "scales": {"safely": 0.40, "predictably": 0.30, "gradually": 0.30},
-    "controls": {"randomness": 0.55, "quality": 0.25, "style": 0.20},
-    "changes": {"tone": 0.40, "variance": 0.35, "behavior": 0.25},
-    "limits": {"gibberish": 0.45, "drift": 0.30, "cost": 0.25},
-    "deterministic": {"JSON": 0.60, "pipelines": 0.20, "workflows": 0.20},
-    "creative": {"stories": 0.45, "ideas": 0.30, "drafts": 0.25},
-    "balanced": {"responses": 0.50, "chatbots": 0.25, "summaries": 0.25},
-    "reliable": {"automation": 0.45, "parsing": 0.30, "generation": 0.25},
-    "systems": {"need": 0.50, "prefer": 0.25, "benefit": 0.25},
-    "pipelines": {"need": 0.50, "avoid": 0.25, "prefer": 0.25},
-    "outputs": {"must": 0.45, "should": 0.30, "can": 0.25},
-    "writing": {"benefits": 0.40, "thrives": 0.30, "needs": 0.30},
-    "brainstorming": {"benefits": 0.40, "likes": 0.30, "needs": 0.30},
-    "output": {"benefits": 0.40, "changes": 0.30, "needs": 0.30},
-    "reliability": {".": 1.0},
-    "clarity": {".": 1.0},
-    "consistency": {".": 1.0},
-    "careful": {"configuration": 0.60, "sampling": 0.40},
-    "stable": {"prompts": 0.50, "schemas": 0.50},
-    "explicit": {"limits": 0.50, "parameters": 0.50},
-    "structured": {"formats": 0.50, "data": 0.50},
-    "repeatable": {"results": 0.60, "behavior": 0.40},
-    "focused": {"choices": 0.60, "generation": 0.40},
-    "safely": {".": 1.0},
-    "predictably": {".": 1.0},
-    "gradually": {".": 1.0},
-    "randomness": {".": 1.0},
-    "quality": {".": 1.0},
-    "style": {".": 1.0},
-    "tone": {".": 1.0},
-    "variance": {".": 1.0},
-    "behavior": {".": 1.0},
-    "gibberish": {".": 1.0},
-    "drift": {".": 1.0},
-    "cost": {".": 1.0},
-    "JSON": {"extraction": 0.70, "schemas": 0.30},
-    "stories": {"need": 0.60, "reward": 0.40},
-    "ideas": {"need": 0.50, "reward": 0.50},
-    "drafts": {"need": 0.60, "reward": 0.40},
-    "responses": {"need": 0.60, "benefit": 0.40},
-    "chatbots": {"need": 0.60, "benefit": 0.40},
-    "summaries": {"need": 0.60, "benefit": 0.40},
-    "automation": {".": 1.0},
-    "parsing": {".": 1.0},
-    "generation": {".": 1.0},
-    "need": {"low": 0.34, "moderate": 0.33, "careful": 0.33},
-    "prefer": {"low": 0.50, "focused": 0.50},
-    "benefit": {"from": 1.0},
-    "must": {"stay": 0.60, "remain": 0.40},
-    "should": {"stay": 0.60, "remain": 0.40},
-    "can": {"stay": 0.50, "be": 0.50},
-    "configuration": {".": 1.0},
-    "sampling": {".": 1.0},
-    "prompts": {".": 1.0},
+TRANSITIONS = {
+    "<START>": {
+        "JSON": 0.28,
+        "Chat": 0.24,
+        "Code": 0.22,
+        "Creative": 0.16,
+        "Unusual": 0.10,
+    },
+    "JSON": {"extraction": 0.68, "format": 0.20, "story": 0.04, "bananas": 0.01},
+    "Chat": {"answers": 0.42, "support": 0.32, "rambles": 0.08, "sparkles": 0.02},
+    "Code": {"generation": 0.52, "syntax": 0.30, "poetry": 0.05, "mist": 0.01},
+    "Creative": {"drafts": 0.38, "ideas": 0.34, "twists": 0.20, "static": 0.03},
+    "Unusual": {"ideas": 0.44, "phrases": 0.30, "detours": 0.18, "noise": 0.04},
+    "extraction": {"needs": 0.70, "prefers": 0.20, "wanders": 0.02},
+    "format": {"needs": 0.62, "prefers": 0.28, "wanders": 0.02},
+    "answers": {"need": 0.46, "balance": 0.34, "repeat": 0.10},
+    "support": {"needs": 0.44, "balance": 0.36, "repeat": 0.10},
+    "generation": {"needs": 0.58, "prefers": 0.24, "repeat": 0.08},
+    "syntax": {"needs": 0.60, "prefers": 0.22, "repeat": 0.08},
+    "drafts": {"benefit": 0.44, "need": 0.26, "repeat": 0.18},
+    "ideas": {"benefit": 0.40, "need": 0.28, "repeat": 0.20},
+    "twists": {"benefit": 0.44, "need": 0.24, "repeat": 0.20},
+    "phrases": {"benefit": 0.34, "repeat": 0.30, "drift": 0.18},
+    "detours": {"drift": 0.40, "repeat": 0.24, "benefit": 0.18},
+    "needs": {"strict": 0.44, "clear": 0.32, "repeat": 0.18},
+    "need": {"moderate": 0.40, "clear": 0.30, "repeat": 0.20},
+    "prefers": {"low": 0.48, "focused": 0.34, "repeat": 0.12},
+    "balance": {"controlled": 0.44, "natural": 0.34, "repeat": 0.14},
+    "benefit": {"from": 0.55, "with": 0.25, "repeat": 0.14},
+    "from": {"variety": 0.44, "novelty": 0.32, "repeat": 0.16},
+    "with": {"filters": 0.50, "limits": 0.28, "repeat": 0.14},
+    "strict": {"decoding": 0.70, "schemas": 0.20, "repeat": 0.05},
+    "clear": {"limits": 0.42, "validation": 0.36, "repeat": 0.14},
+    "moderate": {"temperature": 0.54, "filtering": 0.28, "repeat": 0.12},
+    "low": {"temperature": 0.62, "variance": 0.20, "repeat": 0.10},
+    "focused": {"sampling": 0.56, "tokens": 0.24, "repeat": 0.12},
+    "controlled": {"randomness": 0.56, "language": 0.24, "repeat": 0.12},
+    "natural": {"language": 0.54, "answers": 0.24, "repeat": 0.14},
+    "variety": {"helps": 0.52, "matters": 0.28, "repeat": 0.12},
+    "novelty": {"helps": 0.52, "matters": 0.28, "repeat": 0.12},
+    "filters": {"remove": 0.52, "limit": 0.28, "repeat": 0.12},
+    "limits": {"control": 0.52, "protect": 0.28, "repeat": 0.12},
+    "decoding": {".": 1.0},
     "schemas": {".": 1.0},
-    "formats": {".": 1.0},
-    "data": {".": 1.0},
-    "results": {".": 1.0},
-    "choices": {".": 1.0},
-    "extraction": {"needs": 1.0},
-    "reward": {"higher": 0.50, "novel": 0.50},
-    "from": {"controlled": 0.60, "careful": 0.40},
-    "stay": {"consistent": 0.60, "structured": 0.40},
-    "remain": {"consistent": 0.60, "structured": 0.40},
-    "be": {"flexible": 0.50, "structured": 0.50},
-    "low": {"temperature": 1.0},
-    "moderate": {"temperature": 1.0},
-    "higher": {"temperature": 1.0},
-    "novel": {"tokens": 1.0},
-    "controlled": {"randomness": 1.0},
-    "consistent": {".": 1.0},
-    "structured": {".": 1.0},
-    "flexible": {".": 1.0},
+    "validation": {".": 1.0},
     "temperature": {".": 1.0},
+    "filtering": {".": 1.0},
+    "variance": {".": 1.0},
+    "sampling": {".": 1.0},
     "tokens": {".": 1.0},
+    "randomness": {".": 1.0},
+    "language": {".": 1.0},
+    "helps": {".": 1.0},
+    "matters": {".": 1.0},
+    "remove": {"tail": 0.70, "noise": 0.20, "repeat": 0.05},
+    "limit": {"tail": 0.60, "noise": 0.25, "repeat": 0.08},
+    "control": {"cost": 0.60, "length": 0.25, "repeat": 0.08},
+    "protect": {"cost": 0.55, "parsers": 0.30, "repeat": 0.08},
+    "tail": {".": 1.0},
+    "noise": {".": 1.0},
+    "cost": {".": 1.0},
+    "length": {".": 1.0},
+    "parsers": {".": 1.0},
+    "repeat": {"repeat": 0.70, "repeat.": 0.30},
+    "repeat.": {".": 1.0},
+    "wanders": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "rambles": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "sparkles": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "poetry": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "mist": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "static": {"noise": 0.50, "drift": 0.30, "repeat": 0.10},
+    "drift": {".": 1.0},
+    "bananas": {"noise": 1.0},
 }
 
 PRESETS = {
@@ -952,24 +633,24 @@ PRESETS = {
         "top_p": 1.0,
         "top_k": 0,
         "repetition_penalty": 1.0,
-        "max_tokens": 8,
-        "seed": 7,
+        "max_tokens": 9,
+        "seed": 11,
     },
     "balanced_chat": {
         "temperature": 0.7,
         "top_p": 0.9,
         "top_k": 0,
         "repetition_penalty": 1.05,
-        "max_tokens": 10,
-        "seed": 7,
+        "max_tokens": 11,
+        "seed": 11,
     },
-    "creative_story": {
+    "creative_brainstorm": {
         "temperature": 1.1,
         "top_p": 0.95,
         "top_k": 0,
-        "repetition_penalty": 1.15,
-        "max_tokens": 12,
-        "seed": 7,
+        "repetition_penalty": 1.2,
+        "max_tokens": 13,
+        "seed": 11,
     },
     "loop_prone": {
         "temperature": 0.8,
@@ -977,7 +658,7 @@ PRESETS = {
         "top_k": 0,
         "repetition_penalty": 1.0,
         "max_tokens": 12,
-        "seed": 3,
+        "seed": 5,
     },
     "loop_resistant": {
         "temperature": 0.8,
@@ -985,24 +666,46 @@ PRESETS = {
         "top_k": 0,
         "repetition_penalty": 1.3,
         "max_tokens": 12,
-        "seed": 3,
+        "seed": 5,
+    },
+    "code_generation": {
+        "temperature": 0.2,
+        "top_p": 0.5,
+        "top_k": 0,
+        "repetition_penalty": 1.0,
+        "max_tokens": 9,
+        "seed": 17,
     },
 }
 
+def normalize(probs):
+    total = sum(probs.values())
+    if total <= 0:
+        raise ValueError("probabilities must sum to a positive value")
+    return {token: value / total for token, value in probs.items()}
+
+def apply_repetition_penalty(probs, counts, penalty):
+    if penalty <= 1.0:
+        return probs
+    adjusted = {}
+    for token, value in probs.items():
+        adjusted[token] = value / (penalty ** counts[token])
+    return normalize(adjusted)
+
 def apply_temperature(probs, temperature):
-    if temperature == 0:
+    if temperature == 0.0:
         best = max(probs, key=probs.get)
         return {best: 1.0}
-    adjusted = {tok: p ** (1.0 / temperature) for tok, p in probs.items()}
-    total = sum(adjusted.values())
-    return {tok: val / total for tok, val in adjusted.items()}
+    adjusted = {}
+    for token, value in probs.items():
+        adjusted[token] = math.pow(value, 1.0 / temperature)
+    return normalize(adjusted)
 
 def apply_top_k(probs, top_k):
-    if not top_k or top_k <= 0:
+    if top_k <= 0:
         return probs
     kept = dict(sorted(probs.items(), key=lambda item: item[1], reverse=True)[:top_k])
-    total = sum(kept.values())
-    return {tok: val / total for tok, val in kept.items()}
+    return normalize(kept)
 
 def apply_top_p(probs, top_p):
     if top_p >= 1.0:
@@ -1010,38 +713,28 @@ def apply_top_p(probs, top_p):
     ranked = sorted(probs.items(), key=lambda item: item[1], reverse=True)
     kept = {}
     cumulative = 0.0
-    for tok, val in ranked:
-        kept[tok] = val
-        cumulative += val
+    for token, value in ranked:
+        kept[token] = value
+        cumulative += value
         if cumulative >= top_p:
             break
-    total = sum(kept.values())
-    return {tok: val / total for tok, val in kept.items()}
-
-def apply_repetition_penalty(probs, counts, penalty):
-    if penalty <= 1.0:
-        return probs
-    adjusted = {}
-    for tok, val in probs.items():
-        repeats = counts[tok]
-        adjusted[tok] = val / (penalty ** repeats)
-    total = sum(adjusted.values())
-    return {tok: val / total for tok, val in adjusted.items()}
+    return normalize(kept)
 
 def sample_token(probs, rng):
-    tokens, weights = zip(*probs.items())
+    tokens = list(probs)
+    weights = [probs[token] for token in tokens]
     return rng.choices(tokens, weights=weights, k=1)[0]
 
-def generate(preset):
-    cfg = PRESETS[preset]
+def generate(preset_name):
+    cfg = PRESETS[preset_name]
     rng = random.Random(cfg["seed"])
     counts = Counter()
     current = "<START>"
     output = []
 
     for _ in range(cfg["max_tokens"]):
-        probs = BASE_TRANSITIONS[current]
-        probs = apply_repetition_penalty(probs, counts, cfg["repetition_penalty"])
+        base = TRANSITIONS.get(current, {".": 1.0})
+        probs = apply_repetition_penalty(base, counts, cfg["repetition_penalty"])
         probs = apply_temperature(probs, cfg["temperature"])
         probs = apply_top_k(probs, cfg["top_k"])
         probs = apply_top_p(probs, cfg["top_p"])
@@ -1058,12 +751,13 @@ def generate(preset):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--preset", choices=PRESETS.keys(), required=True)
+    parser.add_argument("--preset", required=True, choices=sorted(PRESETS))
     args = parser.parse_args()
     cfg, text = generate(args.preset)
-    print("Preset:", args.preset)
+    print(f"Preset: {args.preset}")
     print("Config:")
-    print(cfg)
+    for key, value in cfg.items():
+        print(f"  {key}: {value}")
     print("Output:")
     print(text)
 
@@ -1072,121 +766,108 @@ if __name__ == "__main__":
 PY
 ```
 
-Verification command:
+- [ ] Run the deterministic profile twice and confirm that the output is identical.
 
 ```bash
-./.venv/bin/python sampling_lab.py --preset deterministic_json
+.venv/bin/python sampling_lab.py --preset deterministic_json
+.venv/bin/python sampling_lab.py --preset deterministic_json
 ```
 
-- [ ] Run the deterministic profile twice and confirm the output is identical across runs.
+Success criteria for this step:
+
+- [ ] Both runs show `temperature: 0.0`.
+- [ ] Both runs produce the same output text.
+- [ ] The output stays focused on extraction, structure, or validation rather than creative drift.
+
+- [ ] Run the balanced chat profile and compare it with the deterministic profile.
 
 ```bash
-./.venv/bin/python sampling_lab.py --preset deterministic_json
-./.venv/bin/python sampling_lab.py --preset deterministic_json
+.venv/bin/python sampling_lab.py --preset balanced_chat
 ```
 
-Verification commands:
+Success criteria for this step:
+
+- [ ] The profile shows a moderate temperature rather than zero temperature.
+- [ ] The profile uses top-p filtering rather than leaving the full tail unfiltered.
+- [ ] The output remains coherent while allowing more variation than the deterministic profile.
+
+- [ ] Run the creative brainstorming profile and inspect whether it allows broader phrasing.
 
 ```bash
-./.venv/bin/python sampling_lab.py --preset deterministic_json | grep "temperature"
-./.venv/bin/python sampling_lab.py --preset deterministic_json | grep "Output:" -A1
+.venv/bin/python sampling_lab.py --preset creative_brainstorm
 ```
 
-- [ ] Run the balanced chat profile and compare it with the deterministic profile to observe moderate variation with controlled filtering.
+Success criteria for this step:
+
+- [ ] The profile uses a higher temperature than the balanced profile.
+- [ ] The profile still uses top-p filtering, so creativity is not completely unconstrained.
+- [ ] The output differs in style or path from the deterministic and balanced profiles.
+
+- [ ] Compare the loop-prone and loop-resistant profiles.
 
 ```bash
-./.venv/bin/python sampling_lab.py --preset balanced_chat
+.venv/bin/python sampling_lab.py --preset loop_prone
+.venv/bin/python sampling_lab.py --preset loop_resistant
 ```
 
-Verification commands:
+Success criteria for this step:
+
+- [ ] The loop-prone profile shows `repetition_penalty: 1.0`.
+- [ ] The loop-resistant profile shows a higher repetition penalty.
+- [ ] You can explain whether the penalty changed the output and why token-level penalties do not guarantee conceptual diversity.
+
+- [ ] Run the code generation profile and compare it to the creative profile.
 
 ```bash
-./.venv/bin/python sampling_lab.py --preset balanced_chat | grep "top_p"
-./.venv/bin/python sampling_lab.py --preset balanced_chat | grep "repetition_penalty"
+.venv/bin/python sampling_lab.py --preset code_generation
+.venv/bin/python sampling_lab.py --preset creative_brainstorm
 ```
 
-- [ ] Run the creative profile and confirm it uses a higher temperature and still constrains the token pool with nucleus sampling.
+Success criteria for this step:
 
-```bash
-./.venv/bin/python sampling_lab.py --preset creative_story
-```
+- [ ] The code profile uses lower temperature and tighter top-p than the creative profile.
+- [ ] You can explain why code and YAML generation should prefer focused token selection.
+- [ ] You can identify which validation layer would be required in a real code-generation system.
 
-Verification commands:
-
-```bash
-./.venv/bin/python sampling_lab.py --preset creative_story | grep "temperature"
-./.venv/bin/python sampling_lab.py --preset creative_story | grep "top_p"
-```
-
-- [ ] Compare a loop-prone configuration with a loop-resistant configuration to see how repetition penalties reduce repeated phrasing.
-
-```bash
-./.venv/bin/python sampling_lab.py --preset loop_prone
-./.venv/bin/python sampling_lab.py --preset loop_resistant
-```
-
-Verification commands:
-
-```bash
-./.venv/bin/python sampling_lab.py --preset loop_prone | grep "repetition_penalty"
-./.venv/bin/python sampling_lab.py --preset loop_resistant | grep "repetition_penalty"
-```
-
-- [ ] Edit the preset values in `sampling_lab.py` so `balanced_chat` uses `top_k: 3` and rerun it to observe the effect of static truncation.
+- [ ] Edit `sampling_lab.py` so `balanced_chat` temporarily uses `top_k: 3`, then rerun it.
 
 ```bash
 grep -n "balanced_chat" -A8 sampling_lab.py
-./.venv/bin/python sampling_lab.py --preset balanced_chat
+.venv/bin/python sampling_lab.py --preset balanced_chat
 ```
 
-Verification command:
+Success criteria for this step:
 
-```bash
-grep -n '"top_k"\|"top_k' sampling_lab.py
-```
+- [ ] You can find the `top_k` setting in the profile.
+- [ ] You can explain how fixed-rank filtering differs from nucleus filtering.
+- [ ] You can explain why using both top-p and top-k may be ambiguous in real providers unless the order is documented.
 
-- [ ] Add a new preset named `code_generation` with low temperature, tight `top_p`, and short `max_tokens`, then run it and compare the output with `creative_story`.
-
-```bash
-./.venv/bin/python sampling_lab.py --preset code_generation
-./.venv/bin/python sampling_lab.py --preset creative_story
-```
-
-Verification commands:
-
-```bash
-grep -n "code_generation" -A8 sampling_lab.py
-./.venv/bin/python sampling_lab.py --preset code_generation | grep "Config:" -A6
-```
-
-- [ ] Write down one recommended sampling profile for each use case: JSON extraction, chatbot response, code generation, and creative brainstorming.
-
-Verification command:
+- [ ] Write a short recommendation for each workload in your notes.
 
 ```bash
 printf '%s\n' \
-'JSON extraction: temperature 0.0, top_p 1.0, repetition_penalty 1.0' \
-'Chatbot response: temperature 0.7, top_p 0.9, repetition_penalty 1.05' \
-'Code generation: temperature 0.2, top_p 0.5, repetition_penalty 1.0' \
-'Creative brainstorming: temperature 1.1, top_p 0.95, repetition_penalty 1.15'
+'JSON extraction: temperature 0.0, neutral top_p, schema validation, tight max_tokens.' \
+'Support chat: moderate temperature, top_p filtering, grounding, policy checks.' \
+'Code generation: low temperature, tight top_p, tests and linters.' \
+'Brainstorming: higher temperature, broad top_p, repetition control, human ranking.'
 ```
 
-Success criteria:
-- Deterministic generation produces the same output on repeated runs with `temperature` set to `0.0`.
-- Balanced generation uses moderate randomness with `top_p` filtering and remains coherent.
-- Creative generation shows more varied phrasing than deterministic or balanced profiles.
-- Repetition penalty visibly changes outputs between loop-prone and loop-resistant presets.
-- A custom preset for a new use case can be added and executed successfully.
-- The final sampling recommendations clearly distinguish reliable, structured tasks from creative, open-ended tasks.
+Final exercise success criteria:
 
-<!-- /v4:generated -->
+- [ ] You can demonstrate deterministic generation by running the same preset twice.
+- [ ] You can explain why top-p dynamically adapts while top-k uses a fixed rank cutoff.
+- [ ] You can diagnose repetition as either token-level degeneration, weak task structure, or both.
+- [ ] You can choose different sampling profiles for structured extraction, support chat, code generation, and brainstorming.
+- [ ] You can describe the validation layer that must accompany each production profile.
+- [ ] You can justify every parameter in a profile from the workload's failure modes rather than from memorized defaults.
+
 ## What's Next
 
-**Module 9**: Embeddings & Semantic Similarity
-If sampling parameters control *how* an LLM speaks, embeddings determine *what* it understands. In the next module, you will learn how models convert raw text into high-dimensional vectors. We will unpack the mathematics behind semantic similarity, revealing the core technology driving enterprise RAG pipelines and vector databases!
+**Module 1.4: Embeddings & Semantic Similarity**
+
+Sampling parameters control how a model turns probabilities into generated text, but embeddings solve a different problem: how systems represent meaning so similar content can be found, compared, clustered, and retrieved. In the next module, you will learn how text becomes vectors, why semantic similarity powers retrieval-augmented generation, and how embedding quality affects the context that a generator receives before sampling ever begins.
 
 ## Sources
 
 - [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) — Primary paper for nucleus sampling, degeneration under maximization, and the motivation for sampling-based decoding.
 - [Hugging Face Transformers: Generation Strategies](https://huggingface.co/docs/transformers/en/generation_strategies) — Practical overview of greedy decoding, sampling, and beam search with current framework terminology.
-- [Anthropic Messages API Reference](https://docs.anthropic.com/en/api/messages) — Relevant to the module's API examples and current provider-facing controls such as temperature, top_p, top_k, and stop sequences.
