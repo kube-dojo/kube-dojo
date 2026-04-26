@@ -60,3 +60,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T06:36:24Z	platform-toolkits-developer-experience-scaling-reliability-module-6.1-karpenter	3.00		0			codex	claude	approve	
 2026-04-26T08:23:29Z	linux-foundations-container-primitives-module-2.1-namespaces	4.00		0			codex	claude	approve	
 2026-04-26T08:30:50Z	platform-toolkits-infrastructure-networking-k8s-distributions-module-14.4-talos	3.50		0			codex	claude	approve	
+2026-04-26T08:37:51Z	linux-foundations-system-essentials-module-1.1-kernel-architecture	4.50		1	5.00	strong	codex	claude	approve	
