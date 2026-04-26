@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 11.2: Gitea & Forgejo - Lightweight Self-Hosted Git"
 slug: platform/toolkits/cicd-delivery/source-control/module-11.2-gitea-forgejo
 sidebar:
