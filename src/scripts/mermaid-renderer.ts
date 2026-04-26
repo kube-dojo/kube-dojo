@@ -71,7 +71,9 @@ async function renderHost(host: HTMLElement): Promise<void> {
 
   mermaid.initialize({
     startOnLoad: false,
-    securityLevel: 'strict',
+    // Diagrams are author-trusted Markdown, not user input. Keep loose mode so
+    // existing labels using <br>, <b>, and <i> render correctly.
+    securityLevel: 'loose',
     theme: currentTheme() === 'light' ? 'default' : 'dark',
   });
 
