@@ -28,21 +28,26 @@ function enhanceMetaChips(root: Element): void {
   const timeMatch = text.match(/Time to Complete:\s*(.+?)(?:\n|$)/);
   const time = timeMatch ? timeMatch[1].trim() : null;
 
-  const chips: string[] = [];
-  if (complexity) {
-    const cls = complexity === 'QUICK' ? 'kd-chip-quick' :
-                complexity === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced';
-    const icon = complexity === 'QUICK' ? '✓' : complexity === 'MEDIUM' ? '⚠' : '⚡';
-    chips.push(`<span class="kd-chip ${cls}">${icon} ${complexity.charAt(0) + complexity.slice(1).toLowerCase()}</span>`);
-  }
-  if (time) {
-    chips.push(`<span class="kd-chip kd-chip-time">⏱ ${time}</span>`);
-  }
-
-  if (chips.length > 0) {
+  if (complexity || time) {
     const chipsDiv = document.createElement('div');
     chipsDiv.className = 'kd-meta-chips';
-    chipsDiv.innerHTML = chips.join('');
+
+    // Reproduce the new safer buildChips logic
+    if (complexity) {
+      const cls = complexity === 'QUICK' ? 'kd-chip-quick' :
+                  complexity === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced';
+      const icon = complexity === 'QUICK' ? '✓' : complexity === 'MEDIUM' ? '⚠' : '⚡';
+      const chip = document.createElement('span');
+      chip.className = `kd-chip ${cls}`;
+      chip.textContent = `${icon} ${complexity.charAt(0) + complexity.slice(1).toLowerCase()}`;
+      chipsDiv.appendChild(chip);
+    }
+    if (time) {
+      const chip = document.createElement('span');
+      chip.className = 'kd-chip kd-chip-time';
+      chip.textContent = `⏱ ${time}`;
+      chipsDiv.appendChild(chip);
+    }
     firstBq.replaceWith(chipsDiv);
   }
 }
@@ -68,7 +73,14 @@ function enhanceWarStories(root: Element): void {
 
     const header = document.createElement('div');
     header.className = 'kd-warstory-header';
-    header.innerHTML = `<span>🔥</span><span>${text.replace(/war story:?\s*/i, '').trim() || 'War Story'}</span>`;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = '🔥';
+    header.appendChild(iconSpan);
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = text.replace(/war story:?\s*/i, '').trim() || 'War Story';
+    header.appendChild(titleSpan);
 
     const body = document.createElement('div');
     body.className = 'kd-warstory-body';
@@ -154,6 +166,19 @@ describe('Content Enhancer — Meta Chips', () => {
 
     expect(root.querySelectorAll('.kd-meta-chips').length).toBe(1);
   });
+
+  it('renders time chip text without parsing injected markup', () => {
+    const maliciousTime = '<img src=x onerror=alert(1)>';
+    const root = createContent(
+      `<blockquote>Complexity: [MEDIUM] | Time to Complete: &lt;img src=x onerror=alert(1)&gt;</blockquote>`,
+    );
+    enhanceMetaChips(root);
+
+    const timeChip = root.querySelector('.kd-chip-time')!;
+    expect(timeChip.textContent).toBe(`⏱ ${maliciousTime}`);
+    expect(timeChip.querySelector('img')).toBeNull();
+    expect(timeChip.innerHTML).not.toContain('<img');
+  });
 });
 
 describe('Content Enhancer — War Stories', () => {
@@ -195,6 +220,20 @@ describe('Content Enhancer — War Stories', () => {
     enhanceWarStories(root);
 
     expect(root.querySelectorAll('.kd-warstory').length).toBe(1);
+  });
+
+  it('renders war story heading text without parsing injected markup', () => {
+    const maliciousTitle = '</span><script>alert(1)</script>';
+    const root = createContent(
+      '<h2>War Story: &lt;/span&gt;&lt;script&gt;alert(1)&lt;/script&gt;</h2><p>Content</p>',
+    );
+    enhanceWarStories(root);
+
+    const header = root.querySelector('.kd-warstory-header')!;
+    const title = header.querySelectorAll('span')[1]!;
+    expect(title.textContent).toBe(maliciousTitle);
+    expect(header.querySelector('script')).toBeNull();
+    expect(header.innerHTML).not.toContain('<script>');
   });
 });
 

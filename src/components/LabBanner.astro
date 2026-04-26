@@ -191,17 +191,47 @@ const env = envLabels[environment] ?? envLabels.ubuntu;
       const isCompleted = status?.status === 'completed';
       const reminder = document.createElement('div');
       reminder.className = 'lab-reminder';
-      reminder.innerHTML = `
-        <div style="background:#EBF1FF;border:1px solid #326CE5;border-radius:12px;padding:1rem 1.25rem;margin:2rem 0 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-          <span style="font-size:1.25rem">&#9654;</span>
-          <div style="flex:1">
-            <strong style="color:#1A3A7A">Ready to practice?</strong>
-            <span style="color:#4B5563;font-size:0.875rem"> Launch the hands-on lab for this module.</span>
-          </div>
-          <a href="${labUrl}" target="_blank" rel="noopener" style="background:#326CE5;color:white;padding:0.4rem 1rem;border-radius:8px;font-size:0.8125rem;font-weight:600;text-decoration:none;display:${isCompleted ? 'none' : 'inline-flex'};align-items:center;gap:0.25rem" data-lab-launch>Launch Lab &#8599;</a>
-          <span data-lab-complete style="display:none;background:transparent;border:1px solid #9CA3AF;color:#374151;padding:0.4rem 1rem;border-radius:8px;font-size:0.8125rem;font-weight:600;cursor:pointer">Mark Complete</span>
-          <span data-lab-done style="display:${isCompleted ? 'inline' : 'none'};color:#00A651;font-weight:700;font-size:0.8125rem">&#10003; Completed</span>
-        </div>`;
+      reminder.style.cssText = 'background:#EBF1FF;border:1px solid #326CE5;border-radius:12px;padding:1rem 1.25rem;margin:2rem 0 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap';
+
+      const icon = document.createElement('span');
+      icon.style.fontSize = '1.25rem';
+      icon.innerHTML = '&#9654;'; // Static HTML entity
+
+      const textDiv = document.createElement('div');
+      textDiv.style.flex = '1';
+      const strong = document.createElement('strong');
+      strong.style.color = '#1A3A7A';
+      strong.textContent = 'Ready to practice?';
+      const span = document.createElement('span');
+      span.style.cssText = 'color:#4B5563;font-size:0.875rem';
+      span.textContent = ' Launch the hands-on lab for this module.';
+      textDiv.appendChild(strong);
+      textDiv.appendChild(span);
+
+      const launchLink = document.createElement('a');
+      launchLink.href = labUrl || '#';
+      launchLink.target = '_blank';
+      launchLink.rel = 'noopener';
+      launchLink.style.cssText = `background:#326CE5;color:white;padding:0.4rem 1rem;border-radius:8px;font-size:0.8125rem;font-weight:600;text-decoration:none;display:${isCompleted ? 'none' : 'inline-flex'};align-items:center;gap:0.25rem`;
+      launchLink.dataset.labLaunch = '';
+      launchLink.innerHTML = 'Launch Lab &#8599;'; // Static HTML entities
+
+      const completeSpan = document.createElement('span');
+      completeSpan.dataset.labComplete = '';
+      completeSpan.style.cssText = 'display:none;background:transparent;border:1px solid #9CA3AF;color:#374151;padding:0.4rem 1rem;border-radius:8px;font-size:0.8125rem;font-weight:600;cursor:pointer';
+      completeSpan.textContent = 'Mark Complete';
+
+      const doneSpan = document.createElement('span');
+      doneSpan.dataset.labDone = '';
+      doneSpan.style.cssText = `display:${isCompleted ? 'inline' : 'none'};color:#00A651;font-weight:700;font-size:0.8125rem`;
+      doneSpan.innerHTML = '&#10003; Completed'; // Static HTML entity
+
+      reminder.appendChild(icon);
+      reminder.appendChild(textDiv);
+      reminder.appendChild(launchLink);
+      reminder.appendChild(completeSpan);
+      reminder.appendChild(doneSpan);
+
       pagination.parentNode?.insertBefore(reminder, pagination);
     }
   });

@@ -21,6 +21,9 @@
     "mermaid": "^11.14.0",
     "sharp": "^0.34.2"
   },
+  "overrides": {
+    "uuid": "^14.0.0"
+  },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
