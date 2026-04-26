@@ -858,7 +858,49 @@ def review_one(slug: str, *, timeout: int = 900) -> None:
     v1 bug was catastrophic here — reviewer read from primary (which
     was still on ``main``), always approved because the diff was
     invisible. Fix: ``_module_path_in_worktree``.
+
+    Env override:
+        KUBEDOJO_SKIP_REVIEW=1 — auto-approve every module without
+            dispatching the reviewer LLM. Records a synthetic verdict
+            with ``auto_approved=True`` so a future post-review pass
+            can find these modules and re-evaluate semantically.
+            Used during Claude rate-limit windows where bulk writing
+            should continue but review must be deferred. The
+            deterministic gates (density, visual-aid,
+            code-block-balance) still run on the writer's output.
     """
+    if os.environ.get("KUBEDOJO_SKIP_REVIEW") == "1":
+        with state.state_lease(slug, timeout=5.0) as lease:
+            st = lease.load()
+            if st is None or st["stage"] != "REVIEW_PENDING":
+                return
+            attempt_id = state.start_in_progress(st, "REVIEW_PENDING", "REVIEW_IN_PROGRESS")
+            reviewer = st["reviewer"]
+            review_meta = {
+                "agent": reviewer,
+                "attempt_id": attempt_id,
+                "verdict": "approve",
+                "rubric_score": None,
+                "teaching_score": None,
+                "auto_approved": True,
+                "must_fix": [],
+                "nits": [],
+            }
+            state.transition(
+                st, "REVIEW_IN_PROGRESS", "REVIEW_APPROVED",
+                review=review_meta,
+                note=f"auto-approved (KUBEDOJO_SKIP_REVIEW); {reviewer} review deferred",
+            )
+            # record the slug for the future post-review pass
+            try:
+                queue_path = Path(".pipeline/quality-pipeline/post-review-queue.txt")
+                queue_path.parent.mkdir(parents=True, exist_ok=True)
+                with queue_path.open("a", encoding="utf-8") as f:
+                    f.write(f"{slug}\n")
+            except OSError:
+                pass
+        return
+
     with state.state_lease(slug, timeout=5.0) as lease:
         st = lease.load()
         if st is None or st["stage"] != "REVIEW_PENDING":
