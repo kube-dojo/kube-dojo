@@ -2,7 +2,25 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~02:45 local — #388 Phase 0 + #8 done; full prioritized rewrite batch running unattended)
+## Active Work (2026-04-26 ~03:35 local — #388 batch resumed under hardened rewrite prompt after 3/3 first-wave failure)
+
+**Update**: First-wave batch completed 3/3 modules with structural-gate failures (slug 1 visual-aid drop 6→3 mermaid; slug 2 density pad-bomb w/ln 10.9; slug 3 density punchy-bullets wpp 12.5). Diagnosis: the rewrite_prompt was advisory-only on density and best-effort on visual aids. Hardened in commit `5f1cab70`:
+
+- Visual-aid preservation switched from "best-effort" to **count-based contract** ("count input mermaid/ascii/table-rows; output ≥ each").
+- Added explicit prose-density section enumerating the 3 LLM failure patterns (pad-bomb, punchy-bullets, essay-filler) with numeric thresholds matching the gates (wpp ≥ 22, w/ln ≥ 18, prose_words ≥ 1500) and positive shape guidance (3–6 sentence paragraphs, claim-then-ground structure, anti-bullet-substitution).
+
+2-canary validation under the new prompt:
+
+| Slug | Was | Now |
+|---|---|---|
+| 1 debugging-optimization | FAIL visual-aid 6→3 | **PASS** mermaid 6→8, wpp 52.4, w/ln 33.5 |
+| 2 vector-rag/1.6 | FAIL density w/ln 10.9 | **REVIEW-COMMITTED** wpp 42.9, w/ln 14.8 (above REWRITE floor 12, below PASS floor 18) |
+
+2/2 ship under the hardened prompt. Slug 3 reset and re-queued; both batch halves relaunched at 03:32.
+
+---
+
+## Prior — 2026-04-26 ~02:45 local — #388 Phase 0 + #8 done; full prioritized rewrite batch running unattended
 
 **Status**: Phase 0 #7 (smoke) ✅ + #8 (site-wide triage, banners committed) ✅. Phase 1 #9 batch launched in background and chained into Phase 2a — sequential `pipeline run-module` over all 383 banner-set REWRITE modules in priority order. **Branch `main`, clean, 9 commits ahead of origin (do not push without verifying).** User went to sleep with explicit GO for both #8 and the full batch ("phase 2a after, i need all ai and ai/ml related first then the rest, and then the wholesite").
 
