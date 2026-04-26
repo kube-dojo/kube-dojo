@@ -73,3 +73,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T11:08:30Z	platform-disciplines-reliability-security-devsecops-module-4.5-runtime-security	3.70		0			codex	claude	approve	
 2026-04-26T11:12:40Z	platform-toolkits-observability-intelligence-observability-module-1.6-pixie	3.00		0			codex	claude	approve	
 2026-04-26T11:17:40Z	platform-toolkits-security-quality-security-tools-module-4.6-kubearmor	3.00		1	5.00	strong	codex	claude	approve	
+2026-04-26T11:24:24Z	platform-toolkits-data-ai-platforms-ml-platforms-module-9.5-ray-serve	3.00		0			codex	claude	approve	
