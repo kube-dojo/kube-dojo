@@ -99,6 +99,14 @@ Read Foundations to understand why the practices work. Read Disciplines to learn
 | If you want AI/ML next | use [MLOps](/platform/disciplines/data-ai/mlops/) and [AI Infrastructure](/platform/disciplines/data-ai/ai-infrastructure/) before [AI/ML Engineering](/ai-ml-engineering/) infrastructure depth |
 | If private infrastructure is your target | go to [On-Premises Kubernetes](/on-premises/) after Linux, Cloud, and Platform foundations are no longer shaky |
 
+## Common Entry Mistakes
+
+- jumping into Disciplines (SRE, GitOps, MLOps) before any Foundations module — the practices stop making sense once the underlying theory is fuzzy
+- choosing a Toolkit page (ArgoCD, Falco, Backstage) as the first read — implementation details land without grounding, and the wrong tool gets picked
+- treating the alphabetical section list as a study order — Platform Engineering is role-shaped, not catalog-shaped
+- skipping the readiness check above and returning later confused about why YAML, networking, or Git workflows feel underwater
+- expecting cert-style scope here — Platform Engineering is operating-model territory, not exam scope
+
 ## What's Not Here Yet
 
 Our current focus is on refining route design and tightening entry guidance. The roadmap includes improving cross-track bridges and learner handoffs to ensure the Platform track feels less like a catalog and more like a set of deliberate career routes.

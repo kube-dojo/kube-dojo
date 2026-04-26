@@ -41,6 +41,57 @@ sidebar:
 
 ---
 
+## Choose Your Path
+
+Start with the job shape, not the alphabetical list. `KCNA` is useful for cloud-native context, but it is optional for learners who already need hands-on cluster work.
+
+### The Operator
+
+The operator wants production cluster administration: scheduling, networking, storage, upgrades, troubleshooting, and incident response. This is the strongest default route for SRE, infrastructure, and platform-adjacent learners who need to run clusters under pressure.
+
+**Default route:** `KCNA (optional) → CKA → CKS`
+
+**Concrete routes:**
+- `Beginner -> operator`: `Prerequisites -> KCNA -> CKA -> CKS`
+- `Linux / ops -> admin`: `Linux -> CKA -> CKS`
+
+**When to come back:** after `CKA` or `CKS`, add specialist tracks such as `CGOA`, `CCA`, `ICA`, `KCA`, `CAPA`, `OTCA`, `PCA`, `CNPA`, `CNPE`, or `FinOps` when they match the platform you operate.
+
+### The Developer
+
+The developer wants to build, deploy, configure, observe, and debug applications on Kubernetes. This route focuses on workloads first, then cluster administration only if your work expands into platform ownership.
+
+**Default route:** `KCNA (optional) → CKAD → CKA (optional)`
+
+**Concrete routes:**
+- `Beginner -> developer`: `Prerequisites -> KCNA -> CKAD`
+- `Application developer -> platform-aware developer`: `CKAD -> CKA`
+
+**When to come back:** after `CKAD`, add `CGOA`, `CAPA`, `CBA`, `OTCA`, `PCA`, `CNPA`, or `CNPE` when your work moves toward delivery platforms, observability, developer portals, or platform engineering.
+
+### The Security Specialist
+
+The security specialist wants to harden clusters, workloads, supply chains, runtime behavior, and policy controls. Start with `CKA` because `CKS` requires it and assumes you can administer clusters before securing them.
+
+**Default route:** `CKA → CKS → KCSA`
+
+**Concrete routes:**
+- `Kubernetes -> security`: `CKA -> CKS -> KCSA`
+- `Security concepts first`: `KCSA -> CKA -> CKS`
+
+**When to come back:** after `CKS`, add `CCA`, `KCA`, `CGOA`, `ICA`, `OTCA`, `PCA`, `CNPA`, `CNPE`, or `FinOps` when your security work touches networking, policy, GitOps, service mesh, observability, platforms, or cost governance.
+
+### Platform And Specialist Routes
+
+- `Kubernetes -> platform`: `KCNA or CKA -> CNPA -> CNPE`
+- `GitOps / platform specialist`: `KCNA or CKA -> CGOA / CNPA / CNPE`
+- `Observability specialist`: `CKAD or CKA -> PCA / OTCA`
+- `Networking specialist`: `CKA -> CCA / ICA`
+
+Specialist certifications are not a better first move than learning the core Kubernetes path. They make the most sense after you already understand how clusters, workloads, and operations fit together.
+
+---
+
 ## Certifications
 
 | Cert | Name | Type | Modules | Curriculum |
@@ -54,7 +105,7 @@ sidebar:
 
 ---
 
-## Suggested Order
+## Alternative Sequences
 
 One hard rule applies regardless of the path below: **CKS requires prior CKA completion.** It is not just "security-flavored Kubernetes." It assumes you already know how to administer clusters under time pressure.
 
@@ -123,16 +174,6 @@ CKAD / CKS / specialist certs
 Use `KCNA` if you want a conceptual entry point. Use `CKA` if you already want hands-on cluster administration pressure from day one.
 
 If your long-term goal is `CNPA` or `CNPE`, treat them as **post-foundation** credentials. `CNPA` can follow `KCNA` for conceptual platform learners, but `CNPE` makes the most sense after you already have at least one real hands-on Kubernetes route such as `CKA` or `CKAD`.
-
-## Common Certification Routes
-
-- `Beginner -> operator`: `Prerequisites -> KCNA -> CKA -> CKS`
-- `Beginner -> developer`: `Prerequisites -> KCNA -> CKAD`
-- `Linux / ops -> admin`: `Linux -> CKA -> CKS`
-- `Kubernetes -> platform`: `KCNA or CKA -> CNPA -> CNPE`
-- `GitOps / platform specialist`: `KCNA or CKA -> CGOA / CNPA / CNPE`
-
-Specialist certifications are not a better first move than learning the core Kubernetes path. They make the most sense after you already understand how clusters, workloads, and operations fit together.
 
 ## Tool & Specialist Certifications
 
