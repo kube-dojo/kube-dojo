@@ -2,7 +2,79 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~02:00 local — #388 Phase 0 6/9 done; pipeline integrated + 3 codex review rounds; ready for smoke test)
+## Active Work (2026-04-26 ~02:45 local — #388 Phase 0 + #8 done; full prioritized rewrite batch running unattended)
+
+**Status**: Phase 0 #7 (smoke) ✅ + #8 (site-wide triage, banners committed) ✅. Phase 1 #9 batch launched in background and chained into Phase 2a — sequential `pipeline run-module` over all 383 banner-set REWRITE modules in priority order. **Branch `main`, clean, 9 commits ahead of origin (do not push without verifying).** User went to sleep with explicit GO for both #8 and the full batch ("phase 2a after, i need all ai and ai/ml related first then the rest, and then the wholesite").
+
+### What landed this session
+
+| SHA | What |
+|---|---|
+| `36f796cf` | Phase 0 #7 smoke: codex rewrite of `ai-ml-engineering/frameworks-agents/1.1-langchain-fundamentals` |
+| `f3c6e73f` | smoke ledger row |
+| `c9d233c3` | Phase 0 #8: `revision_pending: true` banners on 383 modules — single user-visible commit |
+| `c159e41f` | `scripts/run_rewrite_batch.sh` prioritized batch driver + .gitignore logs/ |
+
+### Phase 0 #7 smoke result (`ai-ml-engineering/frameworks-agents/1.1-langchain-fundamentals`)
+
+| Metric | Before | After |
+|---|---|---|
+| Density verdict | REWRITE (wpp 17.8) | PASS (wpp 43.9) |
+| Prose words | 1243 | 5053 |
+| Sections | partial | 14 H2 incl. Did You Know / Common Mistakes / Quiz / Hands-On / Sources |
+| Sources | absent | 2 verified URLs (citation_verify kept-supports) |
+| Reviewer verdict | n/a | claude APPROVE |
+| Wall | — | 23m32s |
+
+End-to-end pipeline (audit → route → write → citation_verify → review → density gate → merge → banner clear → worktree teardown) all clean.
+
+### Phase 1 + 2a batch — running
+
+**Driver**: `scripts/run_rewrite_batch.sh`  
+**Queue**: `/tmp/388-rewrite-queue.tsv` (383 modules, banner-set ground truth, prioritized)  
+**Logs**: `logs/quality/phase-rewrite-batch.log` + per-module status TSV `logs/quality/phase-rewrite-status.tsv`  
+**PID**: see `logs/quality/batch.pid`  
+**Workers**: 1 (per `feedback_claude_owns_pipeline.md` and `feedback_batch_worker_cap.md`)
+
+Tier ordering:
+
+| Tier | Scope | Count |
+|---|---|---|
+| A | `ai-ml-engineering/*` (Phase 1 worst-11 first by wpp asc) | 29 |
+| B | `ai/*` bridge track | 15 |
+| C | `on-premises/ai-ml-infrastructure` | 4 |
+| D | `platform/disciplines/data-ai` (mlops + aiops) | 12 |
+| E | everything else, by wpp asc | 323 |
+
+**ETA at ~24min/module sequential**: ~150 hours total. Tier A+B+C+D (60 modules ≈ AI/ML scope) ≈ 24h. **Phase 2a deadline 2026-05-05 (Gemini-3.1-pro downgrade)** is 9 days out — at workers=1 sequential the batch will run past that. If the deadline matters, bump to workers=3 hard-cap (per `feedback_batch_worker_cap.md`) after monitoring stability for the first 5–10 modules.
+
+### Resume / observe / kill
+
+```bash
+# Tail current module
+tail -F logs/quality/phase-rewrite-batch.log
+
+# Status table (live)
+column -t -s $'\t' logs/quality/phase-rewrite-status.tsv | tail -30
+
+# Kill the batch (graceful)
+pkill -f run_rewrite_batch.sh
+
+# Resume after a kill (script skips COMMITTED slugs)
+nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup.log 2>&1 &
+disown
+```
+
+### Open / deferred
+
+- No sweep for stranded `COMMITTED + queue.completed_at=None` (codex round-3 must #2). Track as `pipeline cleanup-banners` follow-up.
+- Round-1/2 specific regression tests deferred per codex acceptance.
+- Teaching-judge LLM dispatch for REVIEW-tier modules (#388 stage [2]) — prompt at `scripts/prompts/teaching-judge.md`, dispatch helper not yet wired (Phase 2a deliverable).
+- Push `main` to `origin` — held for user verification (9 commits ahead).
+
+---
+
+## Prior — 2026-04-26 ~02:00 local — #388 Phase 0 6/9 done; pipeline integrated + 3 codex review rounds; ready for smoke test
 
 **Status**: Phase 0 of #388 advanced from 3/9 → 6/9. The new density-aware quality pipeline is wired into v2 (`scripts/quality/pipeline.py` / `stages.py`). 213 quality tests pass (was 188). 3 codex review rounds completed; all must-fixes addressed. **Branch `main`, ruff clean, work uncommitted.** Ready for the user-blocking smoke test on 1 AI/ML module before Phase 0 #8 (site-wide triage — first user-visible site change, needs explicit go).
 
