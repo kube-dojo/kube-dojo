@@ -56,18 +56,6 @@ GitHub Codespaces and Gitpod are the two leading commercial solutions. Both turn
 
 ---
 
-## Did You Know?
-
-- **Gitpod forced Microsoft to build Codespaces** — When Gitpod launched in 2017, GitHub was still just a Git host. By 2019, Gitpod had 100,000+ users who'd discovered that "one-click coding" was possible. Microsoft, which had acquired GitHub for $7.5B, realized they needed a response. Codespaces launched in 2020, heavily inspired by Gitpod's design. Competition made both products better.
-
-- **Stripe's 3,000 engineers have never set up a local environment** — Stripe banned local development entirely in 2021. Every engineer, from new hire to staff+, uses Gitpod. Their onboarding guide is literally: "Click this link." They estimate the policy saves $12M/year in productivity gains and eliminated 94% of "environment-related" support tickets.
-
-- **The Dev Containers spec started as a VS Code feature and became an industry standard** — Microsoft's VS Code team created devcontainer.json for local Docker development. When Codespaces launched using the same format, competitors faced a choice: fight the standard or adopt it. DevPod, JetBrains, and even Gitpod now support devcontainer.json. Microsoft's spec became the lingua franca of development environments.
-
-- **One Codespaces customer reduced their laptop budget by $2.1M** — A financial services firm with 500 developers was spending $4,200/developer on MacBook Pros every 3 years. After migrating to Codespaces, they switched to $800 Chromebooks. The savings: $1.7M in hardware plus $400K in IT support. The developers, who now had 16-core cloud machines instead of 8-core laptops, didn't complain.
-
----
-
 ## GitHub Codespaces
 
 ### What It Is
@@ -196,6 +184,8 @@ gh codespace delete -c <codespace-name>
   }
 }
 ```
+
+*Pause and predict: a teammate adds `"postCreateCommand": "npm install"` but their workspace still takes nine minutes to start. Without prebuilds enabled, when does that command actually run, and why doesn't caching `node_modules` between sessions save them? Reason it through before reading the next subsection.*
 
 ### Codespaces Prebuilds
 
@@ -513,6 +503,8 @@ Free tier            120 hours/mo       50 hours/mo
 Paid                 $0.18+/hour        $9+/month
 ```
 
+*Stop and think: your team is ninety percent on GitHub but the data-science group lives on a self-hosted GitLab and needs occasional GPU time. Before you read the decision guide below, pick which platform you'd standardise on, which one you'd allow as an exception, and how you'd justify that split to a finance partner who only sees the per-seat invoice.*
+
 ### When to Use Which
 
 ```
@@ -776,6 +768,18 @@ The VP of Engineering presented the ROI to the board: "We spent $45,000 on Gitpo
 
 ---
 
+## Did You Know?
+
+- **Gitpod forced Microsoft to build Codespaces** — When Gitpod launched in 2017, GitHub was still just a Git host. By 2019, Gitpod had 100,000+ users who'd discovered that "one-click coding" was possible. Microsoft, which had acquired GitHub for $7.5B, realized they needed a response. Codespaces launched in 2020, heavily inspired by Gitpod's design. Competition made both products better.
+
+- **Stripe's 3,000 engineers have never set up a local environment** — Stripe banned local development entirely in 2021. Every engineer, from new hire to staff+, uses Gitpod. Their onboarding guide is literally: "Click this link." They estimate the policy saves $12M/year in productivity gains and eliminated 94% of "environment-related" support tickets.
+
+- **The Dev Containers spec started as a VS Code feature and became an industry standard** — Microsoft's VS Code team created devcontainer.json for local Docker development. When Codespaces launched using the same format, competitors faced a choice: fight the standard or adopt it. DevPod, JetBrains, and even Gitpod now support devcontainer.json. Microsoft's spec became the lingua franca of development environments.
+
+- **One Codespaces customer reduced their laptop budget by $2.1M** — A financial services firm with 500 developers was spending $4,200/developer on MacBook Pros every 3 years. After migrating to Codespaces, they switched to $800 Chromebooks. The savings: $1.7M in hardware plus $400K in IT support. The developers, who now had 16-core cloud machines instead of 8-core laptops, didn't complain.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Why It's Bad | Better Approach |
@@ -791,26 +795,114 @@ The VP of Engineering presented the ROI to the board: "We spent $45,000 on Gitpo
 
 ---
 
+## Quiz
+
+### Question 1
+Your platform team standardised on GitHub Codespaces last quarter. The data-science group just told leadership they need a CDE too, but their code lives on a self-hosted GitLab instance and they want to launch workspaces with attached GPUs for model fine-tuning. Engineering management is asking whether the existing Codespaces investment can absorb them. What do you tell leadership, and what alternative would you propose?
+
+<details>
+<summary>Show Answer</summary>
+
+**Codespaces cannot serve this group: it is GitHub-only and has no GPU SKU. Recommend Gitpod (Flex self-hosted) for data science while keeping Codespaces for the GitHub-based teams.**
+
+The two non-negotiable constraints are the Git provider (Codespaces does not support GitLab repositories at all, only GitHub.com and GitHub Enterprise Server) and the GPU requirement (the published Codespaces machine types top out at CPU-only Premium; GPU workspaces are a Gitpod-only feature, and only on self-hosted Gitpod Flex). Trying to migrate the data-science group's repos to GitHub purely to fit Codespaces would be a much larger disruption than running Gitpod Flex alongside. The right architecture is heterogeneous on purpose: standardise the *interface* (devcontainer.json, which both platforms read) so a workspace definition is portable, but let each group's CDE follow its Git host and hardware needs.
+</details>
+
+### Question 2
+A new hire pings you on day one: "I clicked Create codespace and it's been spinning for nine minutes — is this normal?" You check the repo and confirm `.devcontainer/devcontainer.json` is present and `postCreateCommand` runs `npm install && npm run build`. What is most likely wrong, and how do you fix the experience for the next new hire?
+
+<details>
+<summary>Show Answer</summary>
+
+**Prebuilds are not enabled. Every fresh codespace is doing a cold clone, image pull, and full install/build on the spot. Enable prebuilds for the default branch and the most active feature branches.**
+
+Without prebuilds, the codespace lifecycle on first launch is: provision the VM, pull the dev container base image, clone the repo, run `postCreateCommand`, then run `postStartCommand` — in that order, sequentially, on the path of the user's clock. With prebuilds enabled, GitHub does this work in advance on every push and snapshots the result; new codespaces hydrate from the snapshot in roughly thirty seconds. The fix is in *Repository Settings → Codespaces → Prebuilds*, not in code. Tell the new hire to retry once the first prebuild finishes; tell yourself that "is this normal?" is exactly the kind of friction prebuilds exist to eliminate, and that documenting prebuild status in the onboarding runbook prevents the next person from asking.
+</details>
+
+### Question 3
+Your finance partner emails: "Codespaces spend tripled this month and I can see workspaces left running over the weekend. Fix it." When you audit the org, you find that the default machine type is `largePremiumLinux` (32 cores) and there is no idle timeout configured. Which two organisation-policy levers do you change, and which Common Mistakes does each map to?
+
+<details>
+<summary>Show Answer</summary>
+
+**Lower the allowed/default machine types and set a short default idle timeout (and a retention period).**
+
+Two distinct failure modes are stacking. *Same specs for all* (the Common Mistakes row about over-provisioning) means a developer editing a small docs PR is paying for a 32-core box; constrain `allowed_machine_types` so the default is something like `standardLinux32gb` (4 core) and let teams justify upgrades per repo. *No idle timeout* (the Common Mistakes row about runaway costs) is what burned you over the weekend; set `default_idle_timeout: 30` so a forgotten browser tab does not bill until Monday, and set `default_retention_period` to delete stopped workspaces after fourteen days so storage does not accumulate forever. These are organisation-level Codespaces policies, not per-repo settings — pushing them centrally fixes the whole estate at once instead of waiting for every team to remember.
+</details>
+
+### Question 4
+A reviewer on a Gitpod-using team complains: "The PR environment finishes building but the app at port 3000 returns 'connection refused' from my preview tab." You inspect `.gitpod.yml` and see the dev server task starts cleanly in the workspace terminal. What is the most likely misconfiguration, and how does Gitpod's port model differ from a local laptop here?
+
+<details>
+<summary>Show Answer</summary>
+
+**The port is not declared in `ports:` (or its `visibility` is wrong), so Gitpod is not exposing the in-workspace listener through the preview URL.**
+
+On a laptop, "the server is listening on 3000" is the whole story. In Gitpod, every port goes through a workspace-scoped proxy; ports that are not declared in `.gitpod.yml`'s `ports:` block default to private and are reachable only from inside the workspace. The fix is to add the port with an `onOpen` directive (so the preview tab opens automatically) and an explicit `visibility` (`private` for authenticated workspace members, `public` for share-the-URL demos). This is the same behaviour the Common Mistakes table calls out as "ignoring port forwarding": developers debug into walls because their mental model is laptop networking, not proxied container networking. Codespaces has the analogous `forwardPorts` and a port-visibility UI; the principle is the same on both platforms.
+</details>
+
+### Question 5
+Your security team is reviewing a draft `.devcontainer/devcontainer.json` from a product engineer. The file contains literal values for `DATABASE_URL` and `STRIPE_API_KEY` under a top-level `containerEnv` block, with a comment `# TODO: rotate before launch`. The engineer says: "It's only in a private repo, what's the issue?" What do you push back with, and what is the right Codespaces primitive for this?
+
+<details>
+<summary>Show Answer</summary>
+
+**Anything checked into the repo — even a private one — is in the git history forever, available to every collaborator, and copied into every fork and clone. Use Codespaces secrets (organisation- or repository-scoped) instead.**
+
+Private does not mean secret. Repo access today is broader than the author thinks (forks, prior collaborators, security tooling that mirrors the repo, future acquisitions), and rotating a leaked credential after the fact is a multi-step incident, not a one-line edit. The Codespaces-native answer is the `secrets` mechanism: declare which secret names a codespace expects in `devcontainer.json` (the `secrets` array), then store the actual values at the repository or organisation level in GitHub settings, where they are injected as environment variables at workspace start and never written to disk in the repo. Map this to the Common Mistakes row "Secrets in config — exposed in repository" — it is the same anti-pattern that Doppler, sealed-secrets, and Vault all exist to solve, just at the dev-environment layer.
+</details>
+
+### Question 6
+A Series B startup wants to deploy Gitpod into their EKS cluster instead of using gitpod.io. The CTO asks you to list the three or four most likely things that will go wrong on day one, ranked by how often they bite first-time installers. What do you put on the list?
+
+<details>
+<summary>Show Answer</summary>
+
+**OAuth app misconfiguration, DNS/cert-manager wiring, object storage IAM, and Postgres reachability — roughly in that order of "broke before lunch on day one".**
+
+OAuth tops the list because Gitpod Flex needs a registered OAuth application on every Git provider it federates with (GitHub, GitLab, etc.) and the redirect URI must match the cluster's domain exactly; a typo here means users can land on the login page but never finish the handshake. DNS and cert-manager are next: Flex assumes a wildcard hostname for workspaces (each workspace gets its own subdomain) and a working ACME issuer; if cert-manager is not already producing certs in the namespace, every workspace URL throws a TLS error. Object storage is third — the Helm values point Gitpod at S3 (or GCS/MinIO) for workspace snapshots and prebuilds, and the IAM role needs read+write on the bucket; permissions failures here surface as workspaces that build but cannot be restored. Postgres reachability rounds out the top four: the database lives outside the chart in real deployments and the cluster network policy must allow the namespace to reach it. None of these are Gitpod bugs; all of them are environment assumptions that a first-time installer has not validated yet.
+</details>
+
+### Question 7
+Two engineers on the same team disagree. Engineer A wants to keep the workspace image small (`node:20-slim`, install tools per-workspace via `postCreateCommand`). Engineer B wants a fat custom image baked weekly with every tool the team uses. Each says the other is making the developer experience worse. Whose argument is stronger, and under what condition would you flip your answer?
+
+<details>
+<summary>Show Answer</summary>
+
+**Engineer A is right by default — start small and let prebuilds amortise the install cost — but flip to Engineer B if the team's setup commands are slow, flaky, or pull from rate-limited registries.**
+
+The Common Mistakes row "Huge base images — slow to download, slow to start" is the case for Engineer A: a slim base pulls fast on every cache miss and the difference between "cold start" and "warm start" stays small. Prebuilds make `postCreateCommand` essentially free on the user's clock — the install runs once, on the prebuild runner, and every new workspace hydrates from a snapshot. The case for Engineer B emerges when the install path is unreliable: corporate proxy that throttles npm, an internal artifact registry with quotas, a build step that compiles native modules and randomly fails on certain CPU types, or a tool whose installer hits a public endpoint that occasionally rate-limits. In those environments, baking the tools into the image trades disk size for determinism, and a weekly rebuild keeps it fresh without exposing every developer to install flakiness. The decision is not aesthetic; it is "which failure mode hurts us more — slow pulls or flaky installs?"
+</details>
+
+### Question 8
+Your VP of Engineering wants to ban local development entirely and put all 200 engineers on a single CDE, like the Stripe story in the war story section. Before you green-light it, you have an architectural-review meeting tomorrow. What three concrete questions do you bring to that meeting that would change the recommendation if the answers came back wrong?
+
+<details>
+<summary>Show Answer</summary>
+
+**(1) Which Git providers do we actually have? (2) What is our network shape for build/test traffic? (3) What is our acceptable failure mode when the CDE is down?**
+
+The Git-provider question decides the platform itself — a single GitHub-only org points at Codespaces, a multi-provider environment forces Gitpod or a mixed deployment, and the wrong assumption here invalidates the whole rollout. The network question decides cost and latency: if developers' tests pull large datasets or push to private artifact registries inside a specific cloud region, picking a CDE region that is far from those services adds seconds to every round-trip and dollars to every egress, and that compounds across two hundred engineers. The failure-mode question is the one VPs forget: a CDE outage means *nobody can code*, not just "some people are inconvenienced," and the answer determines whether you need a self-hosted footprint, a documented laptop fallback, or an SLA-backed plan with the vendor. If any of these three answers comes back wrong — multi-provider repos with a Codespaces choice, distant region with no plan to relocate, no tolerance for any downtime — you do not say no, but you say "not this quarter, here is what we fix first."
+</details>
+
+---
+
 ## Hands-On Exercise
 
-### Task: Configure Both Platforms
+**Objective**: Stand up the same Node.js project for both Codespaces and Gitpod, get a one-click "Open in Gitpod" PR review experience working, and compare the two platforms on real metrics — not vendor marketing.
 
-**Objective**: Set up the same project for both Codespaces and Gitpod, compare experience.
+**Prerequisites**: a GitHub account with Codespaces enabled (free tier is sufficient), a Gitpod account linked to that GitHub account, and `git` plus `gh` installed locally for the bootstrap.
 
-**Success Criteria**:
-1. devcontainer.json works in Codespaces
-2. .gitpod.yml works in Gitpod
-3. App starts automatically in both
-4. Prebuilds configured for both
+You will work through five progressive tasks. Each task ends with a `- [ ]` checkbox list — do not move on until every box is ticked.
 
-### Steps
+### Task 1: Bootstrap a minimal Node.js app locally
+
+Before the cloud platforms can build anything, they need something to build. Create the smallest possible Express app and commit it.
 
 ```bash
-# 1. Create test repository on GitHub
 mkdir cde-lab && cd cde-lab
 git init
 
-# 2. Create simple app
 cat > package.json << 'EOF'
 {
   "name": "cde-lab",
@@ -829,8 +921,24 @@ const app = express();
 app.get('/', (req, res) => res.send('Hello from CDE!'));
 app.listen(3000, () => console.log('Running on :3000'));
 EOF
+```
 
-# 3. Configure Codespaces
+Success criteria:
+- [ ] `cde-lab/package.json` and `cde-lab/server.js` both exist
+- [ ] `git status` shows the two files as untracked, ready to commit
+- [ ] You can predict (without running it) that `npm install && npm run dev` would print `Running on :3000`
+
+<details>
+<summary>Why so minimal?</summary>
+
+The point of this lab is to compare *platform behaviour*, not application complexity. A two-file Express app keeps the install fast on free-tier machines, makes prebuild timings easy to read, and lets you finish the lab in one session. You can swap in a real repo later — the configuration files transfer unchanged.
+</details>
+
+### Task 2: Configure GitHub Codespaces with a dev container
+
+Create a `.devcontainer/devcontainer.json` that pins the base image, declares the port, runs `npm install` once on container creation, and starts the dev server every time the workspace boots.
+
+```bash
 mkdir -p .devcontainer
 cat > .devcontainer/devcontainer.json << 'EOF'
 {
@@ -846,8 +954,24 @@ cat > .devcontainer/devcontainer.json << 'EOF'
   "postStartCommand": "npm run dev"
 }
 EOF
+```
 
-# 4. Configure Gitpod
+Success criteria:
+- [ ] `.devcontainer/devcontainer.json` parses as valid JSON (try `python -m json.tool < .devcontainer/devcontainer.json`)
+- [ ] You can explain out loud why `postCreateCommand` runs `npm install` but `postStartCommand` runs `npm run dev` — and not the other way around
+- [ ] The `forwardPorts` value matches the port `server.js` listens on
+
+<details>
+<summary>Hint: postCreate vs postStart lifecycle</summary>
+
+`postCreateCommand` runs *once*, when the container is first built (or when a prebuild bakes the image). `postStartCommand` runs *every time* the workspace starts, including resumes from stop. Putting `npm install` in `postCreate` means dependencies hydrate from cache on resumes; putting `npm run dev` in `postStart` means the server is listening as soon as you connect, even after the workspace was stopped overnight.
+</details>
+
+### Task 3: Configure Gitpod with `.gitpod.yml`
+
+Mirror the Codespaces setup using Gitpod's configuration format. Note how the same intent (install once, run server, expose port 3000) maps onto a different file structure.
+
+```bash
 cat > .gitpod.yml << 'EOF'
 image: gitpod/workspace-node
 
@@ -871,8 +995,33 @@ github:
     pullRequests: true
     addBadge: true
 EOF
+```
 
-# 5. Add Gitpod button to README
+Success criteria:
+- [ ] `.gitpod.yml` is valid YAML (try `python -c "import yaml,sys; yaml.safe_load(open('.gitpod.yml'))"`)
+- [ ] You can identify which Gitpod field plays the role of `postCreateCommand` and which plays the role of `postStartCommand`
+- [ ] You set `pullRequests: true` so reviewers will get a prebuilt environment on every PR
+
+<details>
+<summary>Mapping between the two formats</summary>
+
+Same primitives, different spelling:
+
+- Base image: `image` in both
+- One-time setup: `postCreateCommand` in Codespaces, `tasks[].init` in Gitpod
+- Per-start command: `postStartCommand` in Codespaces, `tasks[].command` in Gitpod
+- Port exposure: `forwardPorts` in Codespaces, `ports[]` (with `visibility`) in Gitpod
+- VS Code extensions: `customizations.vscode.extensions` in Codespaces, `vscode.extensions` in Gitpod
+- Prebuilds: repo settings UI in Codespaces, `github.prebuilds` block in Gitpod
+
+A team that maintains both can keep these two files in sync with a short script.
+</details>
+
+### Task 4: Add the "Open in Gitpod" badge and push to GitHub
+
+The PR-review story from earlier in the module hinges on reviewers being one click away from a running environment. Wire that up now.
+
+```bash
 cat > README.md << 'EOF'
 # CDE Lab
 
@@ -883,163 +1032,53 @@ cat > README.md << 'EOF'
 Or use GitHub Codespaces from the repository Code button.
 EOF
 
-# 6. Commit and push to GitHub
 git add .
 git commit -m "Configure cloud development environments"
-# Push to your GitHub repository
-
-# 7. Test Codespaces
-# Go to repo → Code → Codespaces → Create codespace
-
-# 8. Test Gitpod
-# Visit gitpod.io/#https://github.com/YOUR_USER/cde-lab
-
-# 9. Compare:
-# - Startup time
-# - IDE experience
-# - Port forwarding
-# - Extension loading
+gh repo create cde-lab --public --source=. --remote=origin --push
 ```
 
----
-
-## Quiz
-
-### Question 1
-What's the main difference between Codespaces and Gitpod?
+Success criteria:
+- [ ] `README.md` shows the Gitpod badge in GitHub's rendered preview
+- [ ] You replaced `YOUR_USER` with your actual GitHub username before committing
+- [ ] `gh repo view --web` opens the repo and the badge is clickable
 
 <details>
-<summary>Show Answer</summary>
+<summary>If `gh repo create` fails</summary>
 
-**Codespaces is GitHub-only; Gitpod supports GitHub, GitLab, and Bitbucket**
-
-Other differences:
-- Codespaces uses devcontainer.json; Gitpod uses .gitpod.yml
-- Gitpod offers self-hosted (Gitpod Flex); Codespaces is SaaS only
-- Codespaces has native Copilot integration
-- Gitpod supports GPU workspaces
+You can do the equivalent in the browser: create a new public repo named `cde-lab` on GitHub, then in the local clone run `git remote add origin git@github.com:YOUR_USER/cde-lab.git && git push -u origin main`. The CLI is faster but not load-bearing for the lab.
 </details>
 
-### Question 2
-What are prebuilds and why do they matter?
+### Task 5: Launch on both platforms and compare
 
-<details>
-<summary>Show Answer</summary>
+Now exercise both platforms end-to-end and record what you see. This is where the lab moves from "can I configure it?" to "do I understand the differences?"
 
-**Prebuilds run setup commands in advance so workspaces start instantly**
+```bash
+# Codespaces
+# Browse to https://github.com/YOUR_USER/cde-lab
+# Click Code -> Codespaces -> Create codespace on main
+# Wait for the workspace to open, then verify the preview tab shows "Hello from CDE!"
 
-Without prebuilds:
-- Clone repo → Install deps → Build → Wait 10+ minutes
-
-With prebuilds:
-- Prebuild does all setup on commit
-- New workspace restores from snapshot
-- Start in 30 seconds
-
-Prebuilds transform CDEs from "slow but convenient" to "faster than local."
-</details>
-
-### Question 3
-What configuration file does Codespaces use?
-
-<details>
-<summary>Show Answer</summary>
-
-**devcontainer.json (the Dev Containers specification)**
-
-This is the same spec used by:
-- VS Code Dev Containers extension
-- DevPod
-- GitHub Codespaces
-
-This means one configuration works across multiple tools.
-</details>
-
-### Question 4
-How does Gitpod Flex differ from Gitpod SaaS?
-
-<details>
-<summary>Show Answer</summary>
-
-**Gitpod Flex is self-hosted on your Kubernetes cluster**
-
-Benefits of self-hosted:
-- Data stays on your infrastructure
-- No per-user fees (just infrastructure cost)
-- Air-gapped deployment possible
-- Custom networking/security
-- GPU support
-
-The control plane runs on your cluster; workspaces run there too.
-</details>
-
-### Question 5
-How do you add a Gitpod button to a README?
-
-<details>
-<summary>Show Answer</summary>
-
-**Use the Gitpod button with a prefixed URL**
-
-```markdown
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/owner/repo)
+# Gitpod
+# Browse to https://gitpod.io/#https://github.com/YOUR_USER/cde-lab
+# Authorize on first launch, then wait for the Dev Server task to settle
+# The preview tab should show "Hello from CDE!"
 ```
 
-When clicked, it opens a workspace with the repo cloned and configured.
-</details>
-
-### Question 6
-What happens when a Codespace is idle?
-
-<details>
-<summary>Show Answer</summary>
-
-**It's stopped automatically after the idle timeout (default 30 minutes)**
-
-Stopped workspaces:
-- Don't consume compute costs
-- Keep their disk contents
-- Can be restarted quickly
-- Are deleted after retention period (default 14 days)
-
-This prevents runaway costs from forgotten workspaces.
-</details>
-
-### Question 7
-How do you manage secrets in Codespaces?
+Success criteria:
+- [ ] Codespaces workspace boots and the forwarded port 3000 returns `Hello from CDE!`
+- [ ] Gitpod workspace boots and the public port 3000 returns `Hello from CDE!`
+- [ ] You wrote down the cold-start time for each platform (in seconds, from click to "ready")
+- [ ] You can name one thing each platform did *better* than the other in your hands — not from the comparison table, from your own measurement
+- [ ] You stopped both workspaces afterwards (do not let them idle on free-tier hours)
 
 <details>
-<summary>Show Answer</summary>
+<summary>Stretch: enable a prebuild and re-measure</summary>
 
-**Via repository/organization settings or the `secrets` property**
+Codespaces: in the repository's *Settings → Codespaces → Prebuilds*, configure a prebuild for the `main` branch. Push a trivial commit and wait for the prebuild to complete (check the *Codespaces* tab).
 
-Secrets can be scoped to:
-- A specific repository
-- Selected repositories in an org
-- All repositories in an org
+Gitpod: the `github.prebuilds` block you wrote in Task 3 already enables this — push a commit and watch the prebuild status under your Gitpod dashboard.
 
-They're injected as environment variables, not stored in the repo.
-</details>
-
-### Question 8
-Which should you choose: Codespaces or Gitpod?
-
-<details>
-<summary>Show Answer</summary>
-
-**Depends on your Git provider and deployment needs**
-
-Choose Codespaces if:
-- GitHub-only shop
-- Want native Copilot integration
-- Prefer devcontainer.json standard
-- Microsoft enterprise support needed
-
-Choose Gitpod if:
-- Using GitLab or Bitbucket
-- Need self-hosted option
-- Want unlimited hours pricing
-- Need GPU workspaces
+Then create a *fresh* workspace on each platform and time the cold start again. The delta between "first time" and "after prebuild" is the single most important number for selling CDEs to a skeptical team — capture it.
 </details>
 
 ---
