@@ -117,7 +117,7 @@ class ClaudeAdapter:
             claude_bin = shutil.which("claude")
             cmd = [claude_bin] if claude_bin else ["npx", "@anthropic-ai/claude-code@latest"]
 
-        cmd.extend(["-p", prompt])
+        cmd.append("-p")
 
         # --bare: fast path when stateless and API key is set.
         # Disabled if we're resuming/starting a named session (those need
@@ -175,7 +175,7 @@ class ClaudeAdapter:
         return InvocationPlan(
             cmd=cmd,
             cwd=cwd,
-            stdin_payload="",  # Claude -p takes prompt as positional arg, not stdin
+            stdin_payload=prompt,
             output_file=None,
             env_overrides={},
             liveness_paths=self._resolve_liveness_paths(cwd),
