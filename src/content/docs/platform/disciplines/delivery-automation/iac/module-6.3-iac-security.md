@@ -1,356 +1,413 @@
 ---
-revision_pending: true
 title: "Module 6.3: Infrastructure as Code Security"
 slug: platform/disciplines/delivery-automation/iac/module-6.3-iac-security
 sidebar:
   order: 4
 ---
-## Complexity: [COMPLEX]
-## Time to Complete: 50 minutes
 
----
+## Complexity: [COMPLEX]
+## Time to Complete: 70 minutes
 
 ## Prerequisites
 
-Before starting this module, you should have completed:
-- [Module 6.1: IaC Fundamentals](../module-6.1-iac-fundamentals/) - Core IaC concepts
-- [Module 6.2: IaC Testing](../module-6.2-iac-testing/) - Testing strategies
-- [Module 4.2: Defense in Depth](/platform/foundations/security-principles/module-4.2-defense-in-depth/) - Security principles
+Before starting this module, you should have completed [Module 6.1: IaC Fundamentals](../module-6.1-iac-fundamentals/) because this lesson assumes you already know why declarative infrastructure uses state, providers, plans, and modules. You should also have completed [Module 6.2: IaC Testing](../module-6.2-iac-testing/) because security controls are most useful when they are built into the same test-and-review path as correctness checks.
 
----
+You should be comfortable reading Terraform-style HCL, basic YAML, cloud IAM policies, CI pipeline definitions, and Kubernetes object manifests. The examples use Terraform and AWS because they make the attack paths concrete, but the reasoning applies equally to OpenTofu, Pulumi, CloudFormation, Bicep, Crossplane, and GitOps-managed Kubernetes resources.
 
-## What You'll Be Able to Do
+You should also have a working mental model of defense in depth from [Module 4.2: Defense in Depth](/platform/foundations/security-principles/module-4.2-defense-in-depth/). IaC security is not one scanner, one encrypted bucket, or one secret manager; it is a chain of controls that keep a single mistake from becoming a production incident.
+
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-- **Implement policy-as-code scanning that blocks insecure infrastructure before deployment**
-- **Design least-privilege IAM patterns for IaC service accounts and CI/CD pipelines**
-- **Build secret injection workflows that keep credentials out of IaC state files and repositories**
-- **Evaluate IaC security tools — tfsec, Checkov, Sentinel, OPA — against your compliance requirements**
+- **Analyze** an IaC delivery path and identify where secrets, state files, plans, provider credentials, modules, and review permissions can be abused by an attacker.
+- **Design** a policy-as-code gate that combines secret scanning, static IaC scanning, plan scanning, and human approval without blocking normal developer flow.
+- **Debug** insecure Terraform configurations by interpreting scanner findings, fixing the infrastructure definition, and validating that the fix addresses the actual risk.
+- **Evaluate** secret handling patterns for IaC and choose whether a value belongs in code, variables, state, a secret manager, a runtime controller, or a separately rotated credential system.
+- **Justify** least-privilege CI and cloud IAM decisions using blast-radius reasoning, trust boundaries, and evidence that an auditor can inspect later.
 
 ## Why This Module Matters
 
-**The $18.7 Million Terraform Secret**
+A platform team at a regional payments company believed their Terraform was already secure because nobody committed `.tfvars` files and the state bucket had server-side encryption enabled. Their deployment pipeline used a cloud role, their pull requests required review, and their storage bucket was private. From a distance, the system looked mature enough that security review became a formality instead of a real inspection.
 
-The security team at a major financial services company received an alert that made their blood run cold. Their Terraform state file—stored in an S3 bucket with "private" permissions—had been accessed from an IP address in Eastern Europe. The state file contained everything: database passwords, API keys, service account credentials, and the complete topology of their production infrastructure.
+The incident began when an engineer opened a pull request from a fork that changed a Terraform module source to a similarly named public repository. The pipeline ran `terraform init` and `terraform plan` automatically because the team wanted fast preview comments on every change. That plan step executed with enough cloud permissions to read remote state, resolve data sources, and render a plan artifact that contained sensitive values marked as "sensitive" in the console but still present in the binary plan file.
 
-The investigation revealed a chilling chain of events. A developer had accidentally committed their AWS credentials to a public GitHub repository six months earlier. Those credentials had minimal permissions—read-only access to S3. The attacker had been patiently mapping the organization's infrastructure ever since, downloading state files from dozens of projects. Now they had everything needed to access production systems.
+The attacker did not need to break encryption on the state bucket. They abused the workflow that already had permission to decrypt it. They downloaded the plan artifact, extracted database connection strings and internal resource names, then used those clues to target a misconfigured staging service that had network access to production. The first visible symptom was not a failed scan; it was an unusual database login from a build runner address that nobody had included in the incident runbook.
 
-The breach affected 2.3 million customer records. The total cost: $18.7 million in fines, remediation, and lost business.
+This module teaches IaC security as an operating discipline, not as a list of tools. You will learn how to reason about what each control protects, what it does not protect, and how controls combine across source code, state, secrets, CI/CD, cloud IAM, Kubernetes, and audit evidence. The goal is not to make Terraform "safe" in the abstract; the goal is to make infrastructure change paths secure enough that a bad commit, leaked token, or compromised runner cannot silently become a production breach.
 
-This module teaches you how to secure infrastructure as code—because your Terraform state file might be the most valuable asset in your entire organization.
+> **Active learning prompt:** If a state bucket is private and encrypted at rest, which actor still needs legitimate decrypt access for normal deployments, and what happens if that actor is compromised?
 
-> **Stop and think**: If a developer commits a secret to a public repository and immediately deletes it in the next commit, is the organization still at risk?
+## 1. Map the IaC Security Attack Surface Before Choosing Tools
 
----
+IaC security starts with a map because attackers do not care which team owns a boundary. A Terraform repository might belong to platform engineering, a GitHub Actions workflow might belong to developer experience, a state bucket might belong to cloud operations, and a secret manager might belong to security. During an incident, however, all of those components form one attack path, and a weak decision in any one layer can expose everything downstream.
 
-## The IaC Security Attack Surface
-
-Infrastructure as code introduces unique security challenges that don't exist in traditional infrastructure management.
+A beginner mistake is to treat IaC files as "just configuration" and scan only for obvious cloud misconfigurations, such as public buckets or open security groups. A senior operator asks a broader question: what can this code cause a trusted automation identity to read, write, print, cache, upload, or destroy? That question changes the review from syntax checking into system design.
 
 ```mermaid
 flowchart TD
-    subgraph AttackSurface [IaC SECURITY ATTACK SURFACE]
+    subgraph AttackSurface [IaC security attack surface]
         direction TB
-        
-        Source["<b>SOURCE CODE</b><br/>• Hardcoded secrets<br/>• Insecure defaults<br/>• Misconfig in code"]
-        Secrets["<b>SECRETS MANAGEMENT</b><br/>• Plaintext in vars<br/>• Env vars exposed<br/>• Weak rotation"]
-        State["<b>STATE FILES</b><br/>• Sensitive values<br/>• Resource metadata<br/>• Access control"]
-        
-        Pipeline["<b>CI/CD PIPELINE</b><br/>• Credential theft from logs<br/>• Supply chain attacks on providers/modules<br/>• Malicious pull request modifications<br/>• Insufficient access controls"]
-        
-        Infra["<b>DEPLOYED INFRASTRUCTURE</b><br/>• Overly permissive IAM policies<br/>• Public S3 buckets, open security groups<br/>• Unencrypted storage, missing logging<br/>• Drift from secure baseline"]
-        
-        Source --> Pipeline
-        Secrets --> Pipeline
-        State --> Pipeline
-        Pipeline --> Infra
+        Source["Source repository<br/>hardcoded secrets, module sources, insecure defaults"]
+        Review["Review system<br/>approval bypass, unsafe fork workflows, broad bot permissions"]
+        Pipeline["CI/CD runner<br/>OIDC token, provider install, plan rendering, logs"]
+        Secrets["Secrets systems<br/>Vault, cloud secrets, KMS, external secret controllers"]
+        State["Remote state<br/>resource metadata, sensitive attributes, locks, versions"]
+        Plan["Plan artifact<br/>proposed changes, computed values, hidden sensitive fields"]
+        Cloud["Cloud and Kubernetes APIs<br/>IAM, networking, storage, workloads, policies"]
+        Audit["Audit evidence<br/>logs, approvals, scan records, state access records"]
+        Source --> Review
+        Review --> Pipeline
+        Pipeline --> Secrets
+        Pipeline --> State
+        Pipeline --> Plan
+        Pipeline --> Cloud
+        State --> Audit
+        Plan --> Audit
+        Cloud --> Audit
     end
 ```
 
-> **Pause and predict**: What types of security misconfigurations can a static analysis tool find in IaC that it couldn't find in traditional application source code?
+The map shows why "we use encryption" is not a complete answer. Encryption protects data from someone who steals the storage medium or gains raw object access without decrypt permission. It does not protect data from the deployment role, the pipeline step that renders a plan, the person who can download artifacts, or the module code that can cause Terraform to read sensitive data sources.
 
----
-
-## Security Scanning Tools
-
-### Checkov: Comprehensive Policy Scanning
-
-Checkov is the most comprehensive IaC security scanner, supporting Terraform, CloudFormation, Kubernetes, and more.
-
-```bash
-# Install Checkov
-pip install checkov
-
-# Scan Terraform directory
-checkov -d . --framework terraform
-
-# Scan with specific checks
-checkov -d . --check CKV_AWS_18,CKV_AWS_19,CKV_AWS_20
-
-# Skip specific checks
-checkov -d . --skip-check CKV_AWS_18
-
-# Output to JUnit for CI/CD
-checkov -d . -o junitxml > checkov-results.xml
-
-# Scan plan file for accurate results
-terraform plan -out=tfplan
-terraform show -json tfplan > tfplan.json
-checkov -f tfplan.json
-
-# Custom policy example
-cat > custom_policy.py << 'EOF'
-from checkov.terraform.checks.resource.base_resource_check import BaseResourceCheck
-from checkov.common.models.enums import CheckResult, CheckCategories
-
-class RequireDescriptionTag(BaseResourceCheck):
-    def __init__(self):
-        name = "Ensure all resources have description tag"
-        id = "CUSTOM_001"
-        supported_resources = ['aws_*']
-        categories = [CheckCategories.CONVENTION]
-        super().__init__(name=name, id=id,
-                        categories=categories,
-                        supported_resources=supported_resources)
-
-    def scan_resource_conf(self, conf):
-        tags = conf.get('tags', [{}])
-        if isinstance(tags, list):
-            tags = tags[0] if tags else {}
-        if 'Description' in tags or 'description' in tags:
-            return CheckResult.PASSED
-        return CheckResult.FAILED
-
-check = RequireDescriptionTag()
-EOF
+```ascii
++----------------------+        +----------------------+        +----------------------+
+| Source repository    |        | CI/CD runner         |        | Cloud control plane  |
+| - HCL and modules    | -----> | - provider plugins   | -----> | - IAM and resources  |
+| - review comments    |        | - plan and apply     |        | - audit events       |
+| - policy exceptions  |        | - temporary creds    |        | - runtime drift      |
++----------+-----------+        +----------+-----------+        +----------+-----------+
+           |                               |                               |
+           v                               v                               v
++----------------------+        +----------------------+        +----------------------+
+| Secret manager       |        | Remote state backend |        | Evidence store       |
+| - values and leases  | <----> | - resource metadata  | -----> | - logs and reports   |
+| - rotation history   |        | - sensitive fields   |        | - approvals          |
+| - access policies    |        | - object versions    |        | - scan results       |
++----------------------+        +----------------------+        +----------------------+
 ```
 
-### tfsec: Terraform-Specific Scanner
+Use this diagram as a threat-model checklist. If you cannot explain who can read each box, who can write each box, and what evidence proves those permissions are appropriate, the system is not ready for production. The strongest IaC programs keep this map current as pipelines evolve, providers change, and teams adopt new module registries or secret controllers.
 
-tfsec (now part of Trivy) focuses specifically on Terraform:
+| Surface | What can go wrong | Strong control | Evidence to keep |
+|---|---|---|---|
+| Source repository | Secrets, unsafe module sources, insecure defaults, and unreviewed exceptions enter the change path. | Branch protection, secret scanning, signed commits where appropriate, CODEOWNERS, and policy checks before merge. | Pull request approvals, scanner results, exception records, and module provenance records. |
+| CI/CD runner | Trusted automation executes untrusted code or exposes credentials through logs, artifacts, and plugins. | OIDC, minimal job permissions, protected environments, pinned actions, isolated runners, and artifact encryption. | Workflow logs, OIDC trust policy, environment approval history, and artifact retention settings. |
+| State backend | Sensitive resource attributes and topology become readable to too many humans or machines. | Remote backend, SSE-KMS, narrow IAM, versioning, access logging, lock table, and state separation by environment. | Bucket policy, KMS policy, object access logs, state lock records, and restore tests. |
+| Secret system | Terraform pulls secrets into state or creates secrets that cannot be rotated without downtime. | Runtime secret injection, dynamic credentials, lifecycle boundaries, and rotation runbooks. | Secret access logs, rotation history, lease records, and dependency maps. |
+| Cloud API | Terraform role can create privilege escalation paths or modify resources outside its ownership. | Permission boundaries, scoped roles, tag conditions, service control policies, and separate plan/apply roles. | IAM policy review, access analyzer findings, CloudTrail events, and denied-action tests. |
+| Audit path | Security cannot reconstruct who changed what, which controls passed, or why an exception existed. | Immutable logs, PR-linked runs, policy decision logs, and release records tied to state versions. | CloudTrail, CI run IDs, SARIF uploads, change tickets, and approved exception expiration dates. |
 
-```bash
-# Install tfsec
-brew install tfsec
+A practical way to apply the map is to classify every IaC value by consequence. Public metadata such as a bucket name has low confidentiality but might still reveal naming conventions. A database password has high confidentiality and operational impact. A provider token has high privilege and might let an attacker mint additional access. A Terraform plan can include all three, so treating plans as harmless review artifacts is a design error.
 
-# Basic scan
-tfsec .
+> **Active learning prompt:** Your team wants every pull request to receive an automatic Terraform plan comment. Before approving that workflow, list three things the plan job can read that a random pull-request author should not be able to read.
 
-# Scan with specific severity
-tfsec . --minimum-severity HIGH
+The safest teams make trust boundaries explicit in repository documentation. They state which branches can request cloud credentials, which events can run plans, which identities can apply changes, which state files each identity can read, and where exceptions are recorded. That documentation is not bureaucracy; it is the operating manual for debugging security failures when a pipeline behaves differently than expected.
 
-# Output as JSON for parsing
-tfsec . --format json > tfsec-results.json
+The first design principle is separation of duties. Planning and applying are different actions, and they do not always need the same privileges. A pull request plan might run with read-only cloud access against non-sensitive data sources, while an approved main-branch apply uses a stronger role after human approval. If the plan needs production secrets to render, that is a signal that the module design may be coupling review too tightly to runtime credentials.
 
-# Scan with custom rules
-cat > .tfsec/custom_check.yaml << 'EOF'
-checks:
-  - code: CUSTOM001
-    description: Ensure S3 bucket has specific naming convention
-    impact: Non-standard naming makes inventory management difficult
-    resolution: Use naming pattern: {env}-{service}-{purpose}
-    requiredTypes:
-      - resource
-    requiredLabels:
-      - aws_s3_bucket
-    severity: MEDIUM
-    matchSpec:
-      name: bucket
-      action: regexMatches
-      value: ^(dev|staging|prod)-[a-z]+-[a-z]+$
-    errorMessage: S3 bucket name must follow pattern {env}-{service}-{purpose}
-EOF
+The second design principle is fail closed with useful feedback. A scanner that fails silently, a policy exception that never expires, or a workflow that marks security jobs as informational in production is just decoration. Good controls block dangerous changes, explain the reason, and show the developer the smallest safe change that would satisfy the policy.
 
-# Run with custom checks
-tfsec . --custom-check-dir .tfsec/
+The third design principle is evidence by default. Auditors and incident responders need more than "the scan passed when we merged." They need a durable record of which code was scanned, which policy bundle was used, who approved the exception, which cloud identity applied the change, and which state version resulted from that run. IaC is uniquely good at creating this evidence because every change already flows through version control and automation.
+
+## 2. Build Policy-as-Code Gates That Teach and Block
+
+Policy-as-code turns security decisions into executable review rules. The value is not only that a scanner can catch public S3 buckets; the value is that every pull request receives the same explanation, the same severity model, and the same escalation path. That consistency lets platform teams move security review earlier without asking every application team to become cloud security specialists.
+
+Static scanning and plan scanning answer different questions. Static scanning reads the source configuration before provider defaults, variables, and data sources are fully resolved. Plan scanning reads the proposed change after Terraform has evaluated expressions and provider behavior. Static scanning is faster and safer for untrusted pull requests, while plan scanning is more accurate but may require stronger credentials and careful artifact handling.
+
+```ascii
++--------------------+     +--------------------+     +--------------------+     +--------------------+
+| Commit arrives     | --> | Static source scan | --> | Terraform plan     | --> | Plan policy scan   |
+| - HCL, YAML, JSON  |     | - fast feedback    |     | - resolved graph   |     | - accurate values  |
+| - module sources   |     | - no cloud access  |     | - cloud reads      |     | - sensitive output |
++--------------------+     +--------------------+     +--------------------+     +--------------------+
+          |                          |                          |                          |
+          v                          v                          v                          v
++--------------------+     +--------------------+     +--------------------+     +--------------------+
+| Secret scan        |     | Developer fixes    |     | Protected approval |     | Apply or reject    |
+| - tokens in repo   |     | - local command    |     | - environment gate |     | - evidence stored  |
++--------------------+     +--------------------+     +--------------------+     +--------------------+
 ```
 
-### Trivy: All-in-One Scanner
+A good gate has a severity model that matches business risk. Critical findings should block immediately when they expose credentials, public databases, unauthenticated administrative access, or privilege escalation. Medium findings might block in production but warn in a sandbox. Low findings can be tracked as hygiene when they do not create a realistic attack path, but they still need an owner and an expiration date if they become exceptions.
 
-Trivy scans IaC, containers, and filesystems:
+Tool choice matters less than rule coverage and workflow design. Checkov is useful when one pipeline must scan Terraform, Kubernetes manifests, Helm charts, CloudFormation, and other IaC formats. Trivy is useful when the same team wants one scanner for configuration, container images, and filesystem secrets. OPA and Conftest are useful when you need organization-specific policies written in Rego. Terraform Cloud and Enterprise Sentinel policies are useful when your plan and apply workflow already lives there.
 
-```bash
-# Install Trivy
-brew install trivy
+| Tool pattern | Best fit | Strength | Watch out |
+|---|---|---|---|
+| Static IaC scanner | Pull-request feedback before cloud credentials are issued. | Fast, cheap, and easy to run on forks or local workstations. | Can miss computed values, provider defaults, and runtime data source results. |
+| Plan scanner | Production change review after variables and modules are resolved. | More accurate because the proposed resource graph is known. | Plan files can contain sensitive values and must be protected like state. |
+| General policy engine | Custom organizational rules that span teams and platforms. | Flexible enough to encode naming, ownership, network, and compliance rules. | Requires rule engineering discipline, tests, versioning, and exception lifecycle. |
+| Managed policy platform | Teams that want built-in dashboards, baselines, and compliance mapping. | Easier reporting and central visibility across repositories. | Can become shelfware if developers cannot reproduce findings locally. |
 
-# Scan Terraform configuration
-trivy config .
-
-# Scan with severity filter
-trivy config . --severity HIGH,CRITICAL
-
-# Scan specific file types
-trivy config . --tf-exclude-downloaded-modules
-
-# Output as table with details
-trivy config . --format table --output trivy-report.txt
-
-# CI/CD integration with exit code
-trivy config . --exit-code 1 --severity CRITICAL
-```
-
-### Terrascan: Policy-as-Code Scanner
-
-Terrascan uses Rego policies (same as OPA):
+The worked example below starts with a deliberately unsafe Terraform file. The goal is not to deploy it; the goal is to learn how to interpret findings and convert them into concrete code changes. The commands use `.venv/bin/python` because this repository standard requires the virtual environment explicitly when Python tooling is used.
 
 ```bash
-# Install Terrascan
-brew install terrascan
-
-# Scan Terraform
-terrascan scan -t terraform
-
-# Scan with specific policy types
-terrascan scan -t aws -t k8s
-
-# Use custom policy
-cat > custom_policy.rego << 'EOF'
-package accurics
-
-rdsEncryptionNotEnabled[retVal] {
-    rds := input.aws_db_instance[_]
-    rds.config.storage_encrypted != true
-    retVal := {
-        "Id": rds.id,
-        "ReplaceType": "edit",
-        "CodeType": "resource",
-        "Attribute": "storage_encrypted",
-        "Expected": "true"
+mkdir -p iac-security-lab/terraform
+cd iac-security-lab
+.venv/bin/python -m pip install checkov
+cat > terraform/main.tf <<'EOF'
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
-}
-EOF
-
-terrascan scan -t terraform -p custom_policy.rego
-```
-
-> **Stop and think**: How do you inject a secret into a Terraform deployment without exposing it in the final state file?
-
----
-
-## Secrets Management in IaC
-
-### The Problem with Secrets
-
-```hcl
-# ❌ NEVER DO THIS - Secrets in code
-resource "aws_db_instance" "main" {
-  identifier     = "production-db"
-  engine         = "postgres"
-  instance_class = "db.r5.large"
-
-  username = "admin"
-  password = "SuperSecretPassword123!"  # Committed to git history FOREVER
-}
-
-# ❌ NEVER DO THIS - Secrets in variables
-variable "db_password" {
-  default = "SuperSecretPassword123!"  # Still in code
-}
-
-# ❌ RISKY - Environment variables visible in CI/CD logs
-# TF_VAR_db_password=SuperSecretPassword123!
-```
-
-### Solution 1: HashiCorp Vault
-
-```hcl
-# Configure Vault provider
-provider "vault" {
-  address = "https://vault.company.com:8200"
-  # Uses VAULT_TOKEN from environment
-}
-
-# Read secrets from Vault
-data "vault_generic_secret" "db_creds" {
-  path = "secret/data/production/database"
-}
-
-# Use secrets without exposing them
-resource "aws_db_instance" "main" {
-  identifier     = "production-db"
-  engine         = "postgres"
-  instance_class = "db.r5.large"
-
-  username = data.vault_generic_secret.db_creds.data["username"]
-  password = data.vault_generic_secret.db_creds.data["password"]
-
-  lifecycle {
-    ignore_changes = [password]  # Don't show in plan
   }
 }
 
-# Dynamic secrets - even better
-data "vault_aws_access_credentials" "creds" {
-  backend = "aws"
-  role    = "terraform-role"
-  type    = "sts"
+variable "db_password" {
+  default = "ChangeMeNow123!"
 }
 
-provider "aws" {
-  access_key = data.vault_aws_access_credentials.creds.access_key
-  secret_key = data.vault_aws_access_credentials.creds.secret_key
-  token      = data.vault_aws_access_credentials.creds.security_token
+resource "aws_s3_bucket" "uploads" {
+  bucket = "example-prod-uploads-insecure"
+}
+
+resource "aws_security_group" "admin" {
+  name        = "admin-open-ssh"
+  description = "Administrative access"
+
+  ingress {
+    description = "SSH from the internet"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_db_instance" "orders" {
+  identifier           = "orders-prod"
+  engine               = "postgres"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  username             = "orders_admin"
+  password             = var.db_password
+  publicly_accessible  = true
+  storage_encrypted    = false
+  skip_final_snapshot  = true
+}
+EOF
+checkov -d terraform --framework terraform
+```
+
+When you read scanner output, do not treat it as a pass/fail oracle. Treat each finding as a question about an attack path. "S3 bucket has no encryption" asks what data could land in the bucket and who could read raw objects. "Security group allows SSH from everywhere" asks whether a management port is reachable by the internet. "RDS is public and unencrypted" asks whether network exposure and data-at-rest exposure combine into a more severe incident.
+
+A strong remediation changes architecture, not only syntax. For the S3 bucket, adding encryption is necessary but incomplete without public access blocks and ownership controls. For SSH, replacing `0.0.0.0/0` with a corporate CIDR might be acceptable in a legacy environment, but a better platform pattern is to remove direct SSH and use session manager access with audit logs. For the database, private subnets, security groups, encryption, final snapshots, and password rotation all matter.
+
+```hcl
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+variable "environment" {
+  description = "Deployment environment name used for ownership tags."
+  type        = string
+  default     = "production"
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+resource "aws_s3_bucket" "uploads" {
+  bucket = "example-${var.environment}-uploads-${random_id.suffix.hex}"
+
+  tags = {
+    Environment        = var.environment
+    ManagedBy          = "terraform"
+    DataClassification = "internal"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_security_group" "web" {
+  name        = "web-https-only"
+  description = "Public HTTPS ingress only"
+
+  ingress {
+    description = "HTTPS from clients"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow outbound application traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
 ```
 
-### Solution 2: AWS Secrets Manager
+Notice what the remediation does not do. It does not create a password in a variable default, it does not publish a plan artifact, and it does not grant the Terraform role administrator access so the example is easier to apply. Secure IaC often feels slower at first because every convenience is inspected for what it exposes to the next actor in the chain.
+
+> **Active learning prompt:** The secure S3 example enables encryption, versioning, and public access blocks. Which of those controls protects confidentiality, which protects recoverability, and which protects exposure prevention?
+
+Custom policies become useful when built-in checks cannot express your organization’s actual standard. For example, a healthcare platform might require every storage bucket with patient data to use a customer-managed KMS key, a data classification tag, and access logging to a central account. A generic scanner can catch missing encryption, but it cannot know your internal retention owner unless you teach it.
+
+The following Rego policy is runnable with Conftest against Terraform plan JSON or simplified JSON input. In production you would write tests for the policy itself, version the policy bundle, and publish examples that developers can run locally before opening a pull request. The point is to make the rule executable, not merely documented in a wiki.
+
+```rego
+package terraform.security
+
+deny[msg] {
+  resource := input.resource_changes[_]
+  resource.type == "aws_s3_bucket"
+  not resource.change.after.tags.DataClassification
+  msg := sprintf("bucket %s must include a DataClassification tag", [resource.address])
+}
+
+deny[msg] {
+  resource := input.resource_changes[_]
+  resource.type == "aws_security_group"
+  ingress := resource.change.after.ingress[_]
+  ingress.from_port == 22
+  ingress.cidr_blocks[_] == "0.0.0.0/0"
+  msg := sprintf("security group %s must not expose SSH to the internet", [resource.address])
+}
+
+deny[msg] {
+  resource := input.resource_changes[_]
+  resource.type == "aws_db_instance"
+  resource.change.after.publicly_accessible == true
+  msg := sprintf("database %s must not be publicly accessible", [resource.address])
+}
+```
+
+Policy exceptions need the same rigor as policy rules. An exception should name the owner, resource, reason, compensating control, review date, and expiration date. Permanent exceptions are usually design debt disguised as governance. If a team really needs an internet-facing database for a migration window, the exception should expire automatically and alert both the owning team and the platform team before it becomes stale.
+
+A useful gate also teaches developers how to fix findings. A scanner message that says "CKV_AWS_X failed" is weak feedback. A platform-owned policy should explain the risk, link to a secure module, and show the smallest acceptable change. Developers are more likely to adopt security standards when the paved road is faster than arguing with the gate.
+
+## 3. Keep Secrets Out of Code, Plans, and State Whenever Possible
+
+Secrets in IaC are dangerous because Terraform and similar tools are designed to remember the world. State exists so the tool can compare desired infrastructure to real infrastructure, but that same memory can retain generated passwords, access keys, database connection strings, certificate material, and provider-returned attributes. Marking a value as sensitive hides it in some CLI output; it does not guarantee the value is absent from state or plan files.
+
+The first rule is simple: do not put long-lived secrets in source code. A committed secret is still compromised even if the next commit deletes it, because Git history, forks, CI logs, package mirrors, and external scanners may already have a copy. The correct incident response is rotation and investigation, not editing the file and hoping nobody noticed.
 
 ```hcl
-# Read existing secret
-data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = "production/database/password"
+variable "db_password" {
+  description = "Database password supplied outside source control."
+  type        = string
+  sensitive   = true
 }
 
-resource "aws_db_instance" "main" {
-  identifier     = "production-db"
-  engine         = "postgres"
-  instance_class = "db.r5.large"
-
-  username = "admin"
-  password = jsondecode(data.aws_secretsmanager_secret_version.db_password.secret_string)["password"]
+output "db_endpoint" {
+  description = "Database endpoint without credentials."
+  value       = aws_db_instance.orders.endpoint
 }
 
-# Create and manage secret (for initial setup)
-resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "production/database/password"
+output "db_connection_string" {
+  description = "Connection string that includes a sensitive password."
+  value       = "postgres://${var.db_username}:${var.db_password}@${aws_db_instance.orders.endpoint}/orders"
+  sensitive   = true
+}
+```
+
+The `sensitive = true` attribute is useful but often misunderstood. It reduces accidental display in plans, logs, and outputs, which is valuable for human review and CI output. It does not transform Terraform into a secret manager, and it does not remove all sensitive values from state when a provider schema stores those values as resource attributes.
+
+```ascii
++---------------------------+        +---------------------------+
+| Terraform input variable  |        | Terraform state backend   |
+| sensitive = true          | -----> | may still store value     |
+| hidden in CLI output      |        | access must be restricted |
++---------------------------+        +---------------------------+
+                 |
+                 v
++---------------------------+        +---------------------------+
+| Provider API request      | -----> | Cloud resource attribute  |
+| needs real secret value   |        | may return or retain data |
++---------------------------+        +---------------------------+
+```
+
+A better pattern is to let Terraform create the secret container and permissions, while runtime systems create, rotate, or inject the secret value. For example, Terraform can create an AWS Secrets Manager secret, a KMS key, an IAM role that may read a specific path, and a Kubernetes ExternalSecret object. The application then receives the secret at runtime, and the infrastructure state does not need to contain the actual password.
+
+```hcl
+resource "aws_secretsmanager_secret" "orders_db" {
+  name                    = "production/orders/database"
   recovery_window_in_days = 7
 
   tags = {
     Environment = "production"
     ManagedBy   = "terraform"
+    Owner       = "orders-team"
   }
 }
 
-# Generate random password
-resource "random_password" "db_password" {
-  length           = 32
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
-}
+resource "aws_iam_policy" "orders_secret_read" {
+  name = "orders-secret-read"
 
-# Store in Secrets Manager
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = aws_secretsmanager_secret.db_password.id
-  secret_string = jsonencode({
-    username = "admin"
-    password = random_password.db_password.result
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue"
+      ]
+      Resource = aws_secretsmanager_secret.orders_db.arn
+    }]
   })
-
-  lifecycle {
-    ignore_changes = [secret_string]  # Don't rotate on every apply
-  }
 }
 ```
 
-### Solution 3: External Secrets Operator (Kubernetes)
+The previous example stores no secret value. A separate rotation workflow, break-glass procedure, or database bootstrap job can set the value. That separation improves security because the Terraform role no longer needs to know the password, and state no longer becomes the easiest place to steal it.
+
+When Kubernetes is part of the platform, External Secrets Operator or a similar controller can bridge cloud secret stores into cluster-native Secrets. Terraform installs the controller and IAM relationship, while the controller reconciles specific secret values at runtime. In Kubernetes examples, this course uses `kubectl`; many operators shorten it to `k` after configuring an alias such as `alias k=kubectl`, but the examples here use full commands for clarity.
 
 ```yaml
-# ExternalSecret syncs secrets from external providers to Kubernetes
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
-  name: database-credentials
+  name: orders-database
   namespace: production
 spec:
   refreshInterval: 1h
@@ -358,202 +415,109 @@ spec:
     kind: ClusterSecretStore
     name: aws-secrets-manager
   target:
-    name: database-credentials
+    name: orders-database
     creationPolicy: Owner
   data:
     - secretKey: username
       remoteRef:
-        key: production/database
+        key: production/orders/database
         property: username
     - secretKey: password
       remoteRef:
-        key: production/database
+        key: production/orders/database
         property: password
 ```
 
-```hcl
-# Terraform to deploy External Secrets Operator
-resource "helm_release" "external_secrets" {
-  name             = "external-secrets"
-  repository       = "https://charts.external-secrets.io"
-  chart            = "external-secrets"
-  namespace        = "external-secrets"
-  create_namespace = true
+This pattern still has risks. A Kubernetes Secret is base64-encoded, not magically encrypted from every cluster reader. You still need Kubernetes RBAC, encryption at rest for the Kubernetes API server, namespace isolation, controller permissions scoped to exact secret paths, and audit logging for reads. The advantage is that the IaC state manages the wiring while the secret value lives in a system built for rotation and access control.
 
-  values = [<<-EOF
-    installCRDs: true
-    serviceAccount:
-      annotations:
-        eks.amazonaws.com/role-arn: ${aws_iam_role.external_secrets.arn}
-  EOF
-  ]
-}
-
-# IAM role for External Secrets
-resource "aws_iam_role" "external_secrets" {
-  name = "external-secrets-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Federated = aws_iam_openid_connect_provider.eks.arn
-      }
-      Action = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")}:sub" = "system:serviceaccount:external-secrets:external-secrets"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "external_secrets" {
-  name = "external-secrets-policy"
-  role = aws_iam_role.external_secrets.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret"
-      ]
-      Resource = "arn:aws:secretsmanager:*:*:secret:production/*"
-    }]
-  })
-}
-```
-
-### Solution 4: SOPS (Secrets OPerationS)
-
-SOPS encrypts secrets files that can be safely committed to git:
+Some teams use SOPS to encrypt secret files that live beside IaC code. This can be a reasonable GitOps pattern when the encrypted file is the deployable artifact and the decryption key is tightly controlled. It becomes risky when pipelines decrypt the file too early, print it during templating, or feed it into Terraform resources that store the plaintext in state anyway.
 
 ```bash
-# Install SOPS
-brew install sops
-
-# Create .sops.yaml for configuration
-cat > .sops.yaml << 'EOF'
+mkdir -p secrets-demo
+cd secrets-demo
+cat > .sops.yaml <<'EOF'
 creation_rules:
-  - path_regex: \.enc\.yaml$
-    kms: arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
-  - path_regex: \.enc\.json$
-    kms: arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012
+  - path_regex: production\.enc\.yaml$
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleexample
 EOF
-
-# Encrypt a secrets file
-cat > secrets.yaml << 'EOF'
+cat > production.yaml <<'EOF'
 database:
-  username: admin
-  password: SuperSecretPassword123!
-api_keys:
-  stripe: sk_live_xxxxx
-  sendgrid: SG.xxxxx
+  username: orders_admin
+  password: replace-me-before-use
 EOF
-
-sops -e secrets.yaml > secrets.enc.yaml
-rm secrets.yaml  # Remove plaintext
-
-# Decrypt for use
-sops -d secrets.enc.yaml > secrets.yaml
-
-# Use with Terraform via templatefile
-data "sops_file" "secrets" {
-  source_file = "secrets.enc.yaml"
-}
-
-resource "aws_db_instance" "main" {
-  password = data.sops_file.secrets.data["database.password"]
-}
+sops --encrypt production.yaml > production.enc.yaml
+rm production.yaml
 ```
 
-> **Pause and predict**: If you encrypt your Terraform state file at rest in an S3 bucket, does that protect you from a compromised CI/CD pipeline?
+The command block is runnable only when SOPS and a real key are installed; the placeholder key must be replaced with a valid recipient. In a real platform, that key management decision matters more than the file format. If every developer can decrypt production secrets locally, the repository is encrypted but the access model may still be too broad.
 
----
+| Pattern | Secret value in Git | Secret value in Terraform state | Operational fit | Main risk |
+|---|---|---|---|---|
+| Plain variable default | Yes | Often yes | Never acceptable for real credentials. | Git history and state both become breach material. |
+| Sensitive variable from CI | No | Often yes | Emergency bridge for legacy modules. | CI logs, plan files, and state access still matter. |
+| Terraform creates secret value | No | Often yes | Useful for generated bootstrap values with careful state controls. | Rotation and state exposure must be designed deliberately. |
+| Terraform creates secret container only | No | No, if value is managed elsewhere | Strong default for mature platforms. | Requires a separate workflow for initial value and rotation. |
+| Runtime secret controller | No | No, if Terraform manages only references | Strong Kubernetes and GitOps pattern. | Cluster RBAC and controller identity become critical. |
+| SOPS-encrypted file | Encrypted artifact only | Depends on how consumed | Useful for GitOps and declarative deployments. | Decryption scope and downstream state leakage are easy to miss. |
 
-## State File Security
+> **Active learning prompt:** A team says, "We use SOPS, so secrets are safe in Git." What extra question would you ask to determine whether those secrets later appear in Terraform state or CI logs?
 
-### The Danger of State Files
+Senior practitioners treat secret flow as a data-flow diagram. They draw where the value is created, who can decrypt it, where it is cached, which logs might include it, which state files might retain it, how rotation works, and which services break if it changes. If that diagram is missing, the team is usually relying on hope rather than engineering.
 
-Terraform state files contain:
-- All resource attributes (including sensitive values)
-- Resource IDs that enable targeting
-- Provider credentials if improperly configured
-- Complete infrastructure topology
+## 4. Protect State, Plan Files, and Provider Credentials Like Production Systems
 
-```json
-// TERRAFORM STATE FILE CONTENTS
-{
-  "resources": [
-    {
-      "type": "aws_db_instance",
-      "instances": [{
-        "attributes": {
-          "username": "admin",
-          "password": "EXPOSED_IN_PLAINTEXT!", // <-- DANGER!
-          "endpoint": "prod-db.xxx.us-east-1.rds.amazonaws"
-        }
-      }]
-    },
-    {
-      "type": "aws_iam_access_key",
-      "instances": [{
-        "attributes": {
-          "secret": "EXPOSED_SECRET_KEY!" // <-- DANGER!
-        }
-      }]
-    }
-  ]
-}
-```
+State files are high-value assets because they combine secrets, resource identifiers, dependencies, and infrastructure topology. Even when a state file contains no obvious passwords, it can reveal account IDs, database endpoints, subnet layouts, IAM role names, private DNS names, storage bucket names, and module structure. That information helps attackers move faster once they have any foothold.
 
-### Secure State Storage
+Remote state is safer than local state only when the backend is designed as a sensitive system. A local state file on a laptop can be backed up to consumer cloud storage, copied into support tickets, or committed accidentally. A remote backend can enforce encryption, access control, locking, versioning, and logging. The word "can" matters because an unlogged bucket with broad read access is simply a centralized breach target.
 
 ```hcl
-# backend.tf - Secure S3 backend configuration
 terraform {
   backend "s3" {
-    bucket         = "company-terraform-state"
-    key            = "production/infrastructure/terraform.tfstate"
+    bucket         = "company-terraform-state-prod"
+    key            = "payments/production/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
-    kms_key_id     = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
-    dynamodb_table = "terraform-state-lock"
-
-    # Role assumption for least privilege
-    role_arn = "arn:aws:iam::123456789012:role/TerraformStateAccess"
+    kms_key_id     = "arn:aws:kms:us-east-1:123456789012:key/example-key-id"
+    dynamodb_table = "terraform-state-locks"
+    role_arn       = "arn:aws:iam::123456789012:role/TerraformStateAccess"
   }
 }
 ```
 
+A secure backend has more than a backend block. The bucket needs public access blocks, versioning, restricted principals, server-side encryption with a key whose policy is not overly broad, access logs or CloudTrail data events, lifecycle rules that preserve forensic evidence long enough, and a tested restore path. The lock table needs point-in-time recovery because losing lock metadata during an outage can lead teams into unsafe manual fixes.
+
 ```hcl
-# Create secure state bucket
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "company-terraform-state"
+  bucket = "company-terraform-state-prod"
 
   lifecycle {
     prevent_destroy = true
   }
 
   tags = {
-    Purpose   = "Terraform State Storage"
-    Sensitive = "true"
+    Purpose            = "terraform-state"
+    DataClassification = "restricted"
+    ManagedBy          = "terraform"
   }
 }
 
-# Enable versioning for recovery
+resource "aws_s3_bucket_public_access_block" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_versioning" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
+
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-# Server-side encryption with KMS
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -566,57 +530,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
   }
 }
 
-# Block all public access
-resource "aws_s3_bucket_public_access_block" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# Require encryption in transit
-resource "aws_s3_bucket_policy" "terraform_state" {
-  bucket = aws_s3_bucket.terraform_state.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyUnencryptedConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.terraform_state.arn,
-          "${aws_s3_bucket.terraform_state.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
-      {
-        Sid       = "DenyIncorrectEncryption"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.terraform_state.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# State locking with DynamoDB
-resource "aws_dynamodb_table" "terraform_state_lock" {
-  name         = "terraform-state-lock"
+resource "aws_dynamodb_table" "terraform_state_locks" {
+  name         = "terraform-state-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -628,456 +543,134 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
   point_in_time_recovery {
     enabled = true
   }
-
-  tags = {
-    Purpose = "Terraform State Locking"
-  }
 }
+```
 
-# KMS key for state encryption
-resource "aws_kms_key" "terraform_state" {
-  description             = "KMS key for Terraform state encryption"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
+Backend IAM should be narrow and boring. The deployment role for one environment should read and write only that environment’s state prefix. Humans should not have routine read access to production state unless their job requires it, and emergency access should be logged through break-glass controls. Cross-environment state reads should be minimized because they silently couple blast radius between teams.
+
+```hcl
+resource "aws_iam_policy" "production_state_access" {
+  name = "production-terraform-state-access"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "RootAccess"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::123456789012:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "TerraformAccess"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::123456789012:role/TerraformStateAccess"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-```
-
-### Marking Sensitive Values
-
-```hcl
-# Prevent sensitive values from appearing in logs/output
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-output "db_connection_string" {
-  description = "Database connection string"
-  value       = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.main.endpoint}/app"
-  sensitive   = true
-}
-
-# Sensitive values in resources
-resource "aws_ssm_parameter" "db_password" {
-  name  = "/production/database/password"
-  type  = "SecureString"
-  value = var.db_password
-
-  lifecycle {
-    ignore_changes = [value]
-  }
-}
-```
-
-> **Stop and think**: If Terraform needs to create databases, network rules, and IAM policies, how can you apply the principle of least privilege without breaking your deployments?
-
----
-
-## IAM and Access Control
-
-### Principle of Least Privilege for Terraform
-
-```hcl
-# Bad: Overly permissive Terraform role
-resource "aws_iam_role_policy" "terraform_bad" {
-  name = "terraform-full-access"
-  role = aws_iam_role.terraform.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = "*"           # ❌ TOO BROAD
-      Resource = "*"           # ❌ TOO BROAD
-    }]
-  })
-}
-
-# Good: Scoped permissions per environment
-resource "aws_iam_role_policy" "terraform_production" {
-  name = "terraform-production"
-  role = aws_iam_role.terraform.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "EC2Management"
-        Effect = "Allow"
-        Action = [
-          "ec2:Describe*",
-          "ec2:CreateTags",
-          "ec2:DeleteTags",
-          "ec2:RunInstances",
-          "ec2:TerminateInstances",
-          "ec2:StopInstances",
-          "ec2:StartInstances"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "ec2:ResourceTag/Environment" = "production"
-          }
-        }
-      },
-      {
-        Sid    = "VPCManagement"
-        Effect = "Allow"
-        Action = [
-          "ec2:CreateVpc",
-          "ec2:DeleteVpc",
-          "ec2:CreateSubnet",
-          "ec2:DeleteSubnet",
-          "ec2:CreateSecurityGroup",
-          "ec2:DeleteSecurityGroup",
-          "ec2:AuthorizeSecurityGroupIngress",
-          "ec2:AuthorizeSecurityGroupEgress",
-          "ec2:RevokeSecurityGroupIngress",
-          "ec2:RevokeSecurityGroupEgress"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:RequestTag/Environment" = "production"
-          }
-        }
-      },
-      {
-        Sid    = "S3StateAccess"
+        Sid    = "StateObjectAccess"
         Effect = "Allow"
         Action = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject"
         ]
-        Resource = "arn:aws:s3:::company-terraform-state/production/*"
+        Resource = "arn:aws:s3:::company-terraform-state-prod/payments/production/*"
       },
       {
-        Sid    = "DynamoDBLocking"
+        Sid    = "StateBucketListPrefix"
+        Effect = "Allow"
+        Action = "s3:ListBucket"
+        Resource = "arn:aws:s3:::company-terraform-state-prod"
+        Condition = {
+          StringLike = {
+            "s3:prefix" = "payments/production/*"
+          }
+        }
+      },
+      {
+        Sid    = "StateLockAccess"
         Effect = "Allow"
         Action = [
           "dynamodb:GetItem",
           "dynamodb:PutItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable"
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/terraform-state-lock"
+        Resource = "arn:aws:dynamodb:us-east-1:123456789012:table/terraform-state-locks"
       }
     ]
   })
 }
 ```
 
-### Permission Boundaries
+Plan files deserve the same classification as state files. Terraform’s human-readable plan output hides sensitive values in many places, but the binary plan and JSON-rendered plan can still contain enough detail to be sensitive. Uploading raw plans as public or broadly readable CI artifacts is a common way to bypass an otherwise careful state backend.
 
-```hcl
-# Permission boundary prevents privilege escalation
-resource "aws_iam_policy" "terraform_boundary" {
-  name = "terraform-permission-boundary"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "AllowedServices"
-        Effect   = "Allow"
-        Action   = [
-          "ec2:*",
-          "rds:*",
-          "s3:*",
-          "eks:*",
-          "elasticloadbalancing:*",
-          "autoscaling:*",
-          "cloudwatch:*",
-          "logs:*",
-          "sns:*",
-          "sqs:*",
-          "kms:*",
-          "secretsmanager:*"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid      = "DenyIAMEscalation"
-        Effect   = "Deny"
-        Action   = [
-          "iam:CreateUser",
-          "iam:DeleteUser",
-          "iam:AttachUserPolicy",
-          "iam:CreateLoginProfile",
-          "iam:UpdateLoginProfile",
-          "iam:CreateAccessKey",
-          "iam:UpdateAccessKey",
-          "iam:PutUserPolicy",
-          "iam:DeleteUserPolicy"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid      = "DenyBillingAccess"
-        Effect   = "Deny"
-        Action   = [
-          "aws-portal:*",
-          "budgets:*",
-          "ce:*"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid      = "DenyOrganizationsAccess"
-        Effect   = "Deny"
-        Action   = "organizations:*"
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Apply boundary to Terraform role
-resource "aws_iam_role" "terraform" {
-  name                 = "TerraformRole"
-  permissions_boundary = aws_iam_policy.terraform_boundary.arn
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Principal = {
-        Service = "codebuild.amazonaws.com"
-      }
-      Action = "sts:AssumeRole"
-    }]
-  })
-}
-```
-
-> **Pause and predict**: Why is running `terraform plan` in a pull request potentially dangerous if the pipeline executes automatically on untrusted code?
-
----
-
-## CI/CD Pipeline Security
-
-### Secure GitHub Actions Workflow
+A safer plan workflow keeps plan artifacts short-lived, encrypted, and scoped to the apply job that needs them. It also avoids running privileged plan jobs on untrusted fork events. When a pull request needs feedback from a fork, run static scanning and formatting checks first. Save credentialed plan generation for trusted branches, protected environments, or workflows that require approval before secrets and cloud roles are issued.
 
 ```yaml
-# .github/workflows/terraform-secure.yml
-name: Terraform Secure Pipeline
+name: terraform-security
 
 on:
   pull_request:
-    paths: ['terraform/**']
+    paths:
+      - "terraform/**"
   push:
-    branches: [main]
-    paths: ['terraform/**']
+    branches:
+      - main
+    paths:
+      - "terraform/**"
 
-# Minimal permissions
 permissions:
   contents: read
   pull-requests: write
-  id-token: write  # For OIDC
-
-env:
-  TF_VERSION: "1.6.0"
-  AWS_REGION: "us-east-1"
+  id-token: write
+  security-events: write
 
 jobs:
-  security-scan:
-    name: Security Scanning
+  static-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Scan for secrets in code
-      - name: Gitleaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Terraform security scan
-      - name: Checkov Security Scan
+      - name: Run Checkov without cloud credentials
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: terraform/
+          directory: terraform
           framework: terraform
           soft_fail: false
-          output_format: sarif
-          output_file_path: checkov.sarif
-
-      # Upload results to GitHub Security
-      - name: Upload Checkov Results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
-        with:
-          sarif_file: checkov.sarif
 
   plan:
-    name: Terraform Plan
     runs-on: ubuntu-latest
-    needs: security-scan
-    environment: production-plan  # Requires approval
-    outputs:
-      plan_exit_code: ${{ steps.plan.outputs.exitcode }}
+    needs: static-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production-plan
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      # OIDC authentication - no static credentials
-      - name: Configure AWS Credentials
+          terraform_version: "1.6.6"
+      - name: Configure cloud credentials through OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsTerraform
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-${{ github.run_id }}
-
-      - name: Terraform Init
-        run: |
-          cd terraform/environments/production
-          terraform init -backend-config="encrypt=true"
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          cd terraform/environments/production
-          terraform plan -detailed-exitcode -out=tfplan 2>&1 | tee plan.txt
-          echo "exitcode=$?" >> $GITHUB_OUTPUT
-        continue-on-error: true
-
-      # Store plan as artifact (encrypted)
-      - name: Encrypt and Upload Plan
-        run: |
-          cd terraform/environments/production
-          gpg --symmetric --cipher-algo AES256 --batch --passphrase "${{ secrets.PLAN_ENCRYPTION_KEY }}" tfplan
-          gpg --symmetric --cipher-algo AES256 --batch --passphrase "${{ secrets.PLAN_ENCRYPTION_KEY }}" plan.txt
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan
-          path: |
-            terraform/environments/production/tfplan.gpg
-            terraform/environments/production/plan.txt.gpg
-
-      # Comment plan on PR (sanitized)
-      - name: Comment Plan on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('terraform/environments/production/plan.txt', 'utf8');
-
-            // Sanitize sensitive info from plan output
-            const sanitized = plan
-              .replace(/password\s*=\s*"[^"]*"/gi, 'password = "***REDACTED***"')
-              .replace(/secret\s*=\s*"[^"]*"/gi, 'secret = "***REDACTED***"')
-              .replace(/token\s*=\s*"[^"]*"/gi, 'token = "***REDACTED***"');
-
-            const output = `#### Terraform Plan
-
-            <details><summary>Show Plan</summary>
-
-            \`\`\`
-            ${sanitized.substring(0, 60000)}
-            \`\`\`
-
-            </details>`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
-
-  apply:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    needs: plan
-    if: github.ref == 'refs/heads/main' && needs.plan.outputs.plan_exit_code == '2'
-    environment: production-apply  # Requires approval
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsTerraform
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan
-
-      - name: Decrypt Plan
-        run: |
-          cd terraform/environments/production
-          gpg --decrypt --batch --passphrase "${{ secrets.PLAN_ENCRYPTION_KEY }}" tfplan.gpg > tfplan
-
-      - name: Terraform Init
+          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsTerraformPlan
+          aws-region: us-east-1
+      - name: Create encrypted plan artifact
         run: |
           cd terraform/environments/production
           terraform init
-
-      - name: Terraform Apply
-        run: |
-          cd terraform/environments/production
-          terraform apply -auto-approve tfplan
+          terraform plan -out=tfplan
+          gpg --symmetric --cipher-algo AES256 --batch --passphrase "${{ secrets.PLAN_ARTIFACT_KEY }}" tfplan
+          rm tfplan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: production-tfplan
+          path: terraform/environments/production/tfplan.gpg
+          retention-days: 1
 ```
 
-### OIDC Authentication (No Static Credentials)
+Provider credentials are another state-adjacent risk because they are powerful and often under-reviewed. Static cloud access keys in CI secrets are long-lived bearer tokens; if they leak, an attacker can use them outside the pipeline. OIDC federation is safer because the CI provider exchanges a short-lived signed identity token for temporary cloud credentials, and the trust policy can bind that exchange to a specific repository, branch, workflow, or environment.
 
 ```hcl
-# Create GitHub OIDC provider in AWS
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 
   client_id_list = ["sts.amazonaws.com"]
 
   thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1",
-    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"
+    "6938fd4d98bab03faadb97b34396831e3780aea1"
   ]
 }
 
-# Create role that GitHub Actions can assume
-resource "aws_iam_role" "github_actions_terraform" {
-  name = "GitHubActionsTerraform"
+resource "aws_iam_role" "github_actions_terraform_plan" {
+  name = "GitHubActionsTerraformPlan"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1092,438 +685,393 @@ resource "aws_iam_role" "github_actions_terraform" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          # Only allow from specific repo and branch
           "token.actions.githubusercontent.com:sub" = "repo:company/infrastructure:ref:refs/heads/main"
         }
       }
     }]
   })
-
-  # Apply permission boundary
-  permissions_boundary = aws_iam_policy.terraform_boundary.arn
 }
 ```
 
-> **Stop and think**: How can you prove to an auditor that an S3 bucket created three months ago was deployed with encryption enabled from day one?
+> **Active learning prompt:** A workflow uses OIDC but allows any branch in the repository to assume the production apply role. Is that materially better than a static key, and what condition would you add first?
 
----
+State separation is a design decision, not a naming convention. Separate state by environment, ownership boundary, and blast radius. A shared global state file for networking, databases, clusters, and application resources makes dependency management convenient, but it also means every apply needs access to everything. Smaller state boundaries reduce exposure and make incident response more precise.
 
-## Compliance and Auditing
+The trade-off is coordination. Too many tiny state files create dependency sprawl, remote-state coupling, and slow changes because every team must know where outputs live. The senior move is not "one state per resource" or "one state for everything." The senior move is to draw ownership boundaries that match teams, failure domains, and permissions, then automate the dependency handoff through approved outputs or a service catalog.
 
-### Compliance Frameworks in Code
+## 5. Design Least-Privilege IaC Identities and Secure CI/CD Workflows
+
+Least privilege for IaC is harder than least privilege for an application service because IaC identities create and modify the platform itself. A web service may need to read one database and write one queue. A Terraform role might need to create databases, attach policies, update security groups, and rotate keys. The answer is not administrator access; the answer is staged privilege, permission boundaries, and explicit ownership.
+
+Begin with separate identities for separate actions. A static scanner needs no cloud credentials. A pull-request plan role may need read access to selected data sources but should not create resources. An apply role needs write access but should be protected by environment approvals and limited to the environment it manages. A break-glass role may exist for emergencies, but it should not be the normal pipeline identity.
+
+```ascii
++----------------------+      +----------------------+      +----------------------+
+| Static scan job      |      | Plan job             |      | Apply job            |
+| No cloud role        | ---> | Read-focused role    | ---> | Write-focused role   |
+| Runs on pull request |      | Protected approval   |      | Main branch only     |
++----------------------+      +----------------------+      +----------------------+
+          |                             |                             |
+          v                             v                             v
++----------------------+      +----------------------+      +----------------------+
+| Finds code issues    |      | Finds drift/changes  |      | Changes production   |
+| Safe for forks       |      | Sensitive outputs    |      | Strong audit needed  |
++----------------------+      +----------------------+      +----------------------+
+```
+
+IAM policies for Terraform should be generated from ownership, not copied from a blog post. If a team owns only resources tagged `Environment=production` and `Service=orders`, use tag conditions where the cloud service supports them. If Terraform may create IAM roles for workloads, require a permission boundary on every created role. If Terraform manages KMS keys, decide which actions it can perform without allowing key policy changes that lock out security administrators.
 
 ```hcl
-# modules/compliant-s3/main.tf
-# SOC2 and HIPAA compliant S3 bucket
+resource "aws_iam_policy" "terraform_orders_apply" {
+  name = "terraform-orders-production-apply"
 
-resource "aws_s3_bucket" "compliant" {
-  bucket = var.bucket_name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ManageTaggedS3Buckets"
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:GetBucketLocation",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketPolicy",
+          "s3:PutBucketTagging",
+          "s3:GetBucketTagging"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/Environment" = "production",
+            "aws:RequestTag/Service"     = "orders"
+          }
+        }
+      },
+      {
+        Sid    = "DenyPrivilegeEscalation"
+        Effect = "Deny"
+        Action = [
+          "iam:CreateAccessKey",
+          "iam:CreateUser",
+          "iam:AttachUserPolicy",
+          "iam:PutUserPolicy",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:DeleteRolePermissionsBoundary"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
 
-  tags = merge(var.tags, {
-    Compliance      = var.compliance_framework
-    DataClassification = var.data_classification
-    Owner           = var.owner
+Permission boundaries are especially important when Terraform creates IAM roles. A permission boundary does not grant access by itself; it limits the maximum access an identity can have. That makes it useful when you want application teams to define their own workload roles but prevent those roles from gaining administrator permissions, disabling logging, or modifying organization-wide controls.
+
+```hcl
+resource "aws_iam_policy" "workload_boundary" {
+  name = "workload-permission-boundary"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowExpectedWorkloadServices"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "secretsmanager:GetSecretValue",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "DenyAdministrativeSurfaces"
+        Effect = "Deny"
+        Action = [
+          "iam:*",
+          "organizations:*",
+          "account:*",
+          "cloudtrail:StopLogging",
+          "cloudtrail:DeleteTrail",
+          "kms:ScheduleKeyDeletion"
+        ]
+        Resource = "*"
+      }
+    ]
   })
 }
 
-# Requirement: Encryption at rest
-resource "aws_s3_bucket_server_side_encryption_configuration" "compliant" {
-  bucket = aws_s3_bucket.compliant.id
+resource "aws_iam_role" "orders_workload" {
+  name                 = "orders-workload"
+  permissions_boundary = aws_iam_policy.workload_boundary.arn
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = var.kms_key_id
-    }
-  }
-}
-
-# Requirement: Access logging
-resource "aws_s3_bucket_logging" "compliant" {
-  bucket = aws_s3_bucket.compliant.id
-
-  target_bucket = var.logging_bucket
-  target_prefix = "${var.bucket_name}/"
-}
-
-# Requirement: Versioning for data integrity
-resource "aws_s3_bucket_versioning" "compliant" {
-  bucket = aws_s3_bucket.compliant.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# Requirement: Block public access
-resource "aws_s3_bucket_public_access_block" "compliant" {
-  bucket = aws_s3_bucket.compliant.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# Requirement: Lifecycle for data retention
-resource "aws_s3_bucket_lifecycle_configuration" "compliant" {
-  bucket = aws_s3_bucket.compliant.id
-
-  rule {
-    id     = "retention"
-    status = "Enabled"
-
-    transition {
-      days          = 90
-      storage_class = "STANDARD_IA"
-    }
-
-    transition {
-      days          = 180
-      storage_class = "GLACIER"
-    }
-
-    expiration {
-      days = var.retention_days
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = var.retention_days
-    }
-  }
-}
-
-# Compliance validation
-resource "null_resource" "compliance_check" {
-  triggers = {
-    bucket_id = aws_s3_bucket.compliant.id
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      # Verify encryption
-      encryption=$(aws s3api get-bucket-encryption --bucket ${aws_s3_bucket.compliant.id} 2>/dev/null)
-      if [ -z "$encryption" ]; then
-        echo "COMPLIANCE FAILURE: Encryption not enabled"
-        exit 1
-      fi
-
-      # Verify public access block
-      public_access=$(aws s3api get-public-access-block --bucket ${aws_s3_bucket.compliant.id})
-      if echo "$public_access" | grep -q '"BlockPublicAcls": false'; then
-        echo "COMPLIANCE FAILURE: Public access not fully blocked"
-        exit 1
-      fi
-
-      echo "COMPLIANCE CHECK PASSED"
-    EOT
-  }
-}
-```
-
-### Audit Trail
-
-```hcl
-# Enable CloudTrail for all Terraform operations
-resource "aws_cloudtrail" "terraform_audit" {
-  name                          = "terraform-audit-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
-  kms_key_id                    = aws_kms_key.cloudtrail.arn
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["${aws_s3_bucket.terraform_state.arn}/"]
-    }
-  }
-
-  tags = {
-    Purpose = "Terraform Audit Trail"
-  }
-}
-
-# Alert on state file access
-resource "aws_cloudwatch_log_metric_filter" "state_access" {
-  name           = "terraform-state-access"
-  pattern        = "{ $.eventSource = s3.amazonaws.com && $.requestParameters.bucketName = terraform-state }"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-
-  metric_transformation {
-    name      = "StateFileAccess"
-    namespace = "TerraformSecurity"
-    value     = "1"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "state_access_alert" {
-  alarm_name          = "terraform-state-unusual-access"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "StateFileAccess"
-  namespace           = "TerraformSecurity"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 10
-  alarm_description   = "Unusual number of Terraform state file accesses"
-  alarm_actions       = [aws_sns_topic.security_alerts.arn]
-}
-```
-
----
-
-## War Story: The State File Breach
-
-**Company**: Financial services provider
-**Incident**: Complete infrastructure compromise via state file
-
-**Timeline**:
-- **Day 1**: Developer commits AWS credentials to public GitHub repo
-- **Day 7**: Credentials discovered by automated scanner (attacker)
-- **Day 8**: Attacker finds S3 bucket with Terraform state via naming convention
-- **Day 14**: Attacker downloads state files from 47 projects
-- **Day 21**: Attacker begins accessing production systems using credentials from state
-- **Day 28**: Security team detects unusual database queries
-- **Day 29**: Full incident response initiated
-
-**What the attacker gained from state files**:
-```
-From terraform.tfstate:
-├── RDS passwords (plaintext)
-├── API keys for third-party services
-├── SSH key passphrases
-├── IAM user secret access keys
-├── SSL certificate private keys
-├── Application secrets
-├── VPN pre-shared keys
-└── Complete network topology
-```
-
-**Financial Impact**:
-- Incident response: $890K
-- Forensics and investigation: $340K
-- Regulatory fines (PCI DSS): $2.1M
-- Customer notification: $450K
-- Credit monitoring: $1.2M
-- Legal fees: $780K
-- Lost business: $4.2M
-- Insurance premium increase: $340K/year
-- **Total first year**: $10.3M
-
-**Security Measures That Would Have Prevented This**:
-
-```hcl
-# 1. State encryption with customer-managed keys
-terraform {
-  backend "s3" {
-    encrypt    = true
-    kms_key_id = "alias/terraform-state"  # CMK, not default
-  }
-}
-
-# 2. Secret values from Vault, not in state
-data "vault_generic_secret" "db" {
-  path = "secret/database"
-}
-
-# 3. Restrict state bucket access
-resource "aws_s3_bucket_policy" "state" {
-  policy = jsonencode({
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
     Statement = [{
-      Effect    = "Deny"
-      Principal = "*"
-      Action    = "s3:*"
-      Resource  = "${aws_s3_bucket.state.arn}/*"
-      Condition = {
-        StringNotEquals = {
-          "aws:PrincipalArn" = [
-            "arn:aws:iam::123456789012:role/TerraformRole"
-          ]
-        }
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
       }
+      Action = "sts:AssumeRole"
     }]
   })
 }
+```
 
-# 4. No IAM access keys - use OIDC
-resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-  # ...
-}
+Pull-request workflows need special scrutiny because they mix collaboration with execution. A malicious change can alter module sources, provider versions, local-exec provisioners, test scripts, generated files, or pipeline configuration. If the workflow runs automatically on untrusted code with secrets available, the attacker can try to exfiltrate credentials before any human reads the diff.
 
-# 5. Audit all state access
-resource "aws_cloudtrail" "state_audit" {
-  # Log all S3 data events for state bucket
+The first mitigation is event design. Avoid running privileged workflows on `pull_request_target` unless you fully understand the trust model, because it can run with base-repository permissions while processing attacker-controlled changes. Prefer unprivileged checks for forked pull requests, and require approval before any job receives cloud credentials or repository secrets.
+
+The second mitigation is dependency pinning. GitHub Actions should be pinned to trusted versions, providers should have version constraints and lock files, and Terraform modules should come from trusted registries or pinned commits. A module source that tracks a branch is a supply-chain dependency with moving behavior. A module source pinned to an immutable reference is reviewable.
+
+The third mitigation is output hygiene. Logs should not print environment variables, rendered templates, raw plans, provider debug output, or decrypted secret files. Artifacts should have short retention, encryption where needed, and access limited to the jobs and people who require them. Plan comments on pull requests should be summarized and sanitized, not dumped wholesale.
+
+| Workflow decision | Safer default | Why it matters | Senior-level exception handling |
+|---|---|---|---|
+| Forked pull requests | Run format, validation, and static scans without secrets. | External contributors should not receive cloud credentials through automation. | Maintainers can trigger a protected plan after reviewing code that affects execution. |
+| Plan artifacts | Encrypt, retain briefly, and scope access to apply jobs. | Raw plans may expose values that human CLI output hides. | Store only summaries when apply does not need the exact binary plan. |
+| Provider installation | Use lock files and trusted registries. | Provider binaries execute as part of the deployment toolchain. | Mirror providers internally for regulated or isolated environments. |
+| Module sources | Pin versions or immutable commits. | Moving branches can change infrastructure behavior after review. | Allow local development branches only in non-production experiments. |
+| Apply approval | Require protected environments for production. | A merged commit should not always mean immediate production mutation. | Automate low-risk environments while preserving production approval and audit. |
+
+> **Active learning prompt:** A developer proposes one all-powerful Terraform role because "the scanner will catch bad code." What failure mode does that argument ignore, and which control limits damage if the scanner misses something?
+
+Senior teams also test their denies. A permission boundary that nobody has tried to violate is an assumption. Create a small negative test that attempts a forbidden IAM change in a non-production account and confirm the pipeline fails for the reason you expect. This kind of test catches policy drift, cloud behavior changes, and accidental broadening before an attacker or misconfigured module finds it.
+
+## 6. Produce Audit Evidence and Respond to IaC Security Incidents
+
+Security controls are incomplete if nobody can prove they were active at the time of a change. IaC gives you a natural evidence chain: commit, review, scan, plan, approval, apply, state version, cloud audit event, and runtime verification. A strong platform connects those pieces so an auditor or incident commander can reconstruct what happened without relying on memory.
+
+Evidence should be collected automatically because manual screenshots rot. Scan results can be uploaded as SARIF or stored with the CI run. Policy decisions can be logged with policy bundle versions. Environment approvals can be tied to the workflow run. CloudTrail or equivalent audit logs can show which assumed role changed which resource. State object versions can show when the state changed and which run produced that version.
+
+```ascii
++------------+   +------------+   +------------+   +------------+   +------------+
+| Commit SHA |-->| PR review  |-->| Scan record|-->| Plan run   |-->| Approval   |
++------------+   +------------+   +------------+   +------------+   +------------+
+       |                                                    |              |
+       v                                                    v              v
++------------+   +------------+   +------------+   +------------+   +------------+
+| Apply run  |-->| State ver. |-->| CloudTrail |-->| Drift scan |-->| Audit pack |
++------------+   +------------+   +------------+   +------------+   +------------+
+```
+
+Compliance modules should encode requirements rather than describe them. If a product team needs a compliant storage bucket, they should consume a module that creates encryption, public access blocks, logging, versioning, lifecycle, tags, and monitoring by default. The platform team can then scan for direct use of low-level resources in production paths and require teams to use the compliant module unless an exception is approved.
+
+```hcl
+module "orders_archive_bucket" {
+  source = "git::https://github.com/company/platform-modules.git//aws/compliant-s3?ref=v2.3.0"
+
+  bucket_name         = "orders-production-archive"
+  environment         = "production"
+  owner               = "orders-team"
+  data_classification = "restricted"
+  retention_days      = 2555
+  kms_key_id          = aws_kms_key.orders_archive.arn
+  logging_bucket      = "central-s3-access-logs"
 }
 ```
 
----
+The module interface is part of the control. Notice that the caller supplies classification, owner, retention, and KMS information as normal inputs, not as a separate compliance spreadsheet. That means policy checks can inspect the code, the platform can inventory ownership, and auditors can connect the deployed resource back to a reviewed module version.
+
+Incident response for IaC security should be rehearsed before an incident. If a state file is downloaded by an unexpected principal, assume every secret and credential contained in that state is compromised until proven otherwise. The response is not only "make the bucket private." You must rotate exposed secrets, invalidate sessions, review cloud activity from the exposure window, preserve evidence, and harden the path that allowed access.
+
+| Incident signal | First technical response | Follow-up investigation | Long-term fix |
+|---|---|---|---|
+| Secret committed to repository | Revoke and rotate the secret immediately, then remove the value from reachable history where feasible. | Identify forks, CI logs, package mirrors, and external systems that may have copied it. | Add pre-commit scanning, server-side secret scanning, and rotation playbooks. |
+| Unexpected state file read | Lock down state access and rotate credentials present in affected state. | Review object access logs, CloudTrail events, and state versions for the exposure period. | Narrow backend IAM, separate state files, and alert on unusual state access. |
+| Raw plan artifact exposed | Delete the artifact, rotate any included secrets, and audit who downloaded it. | Determine which jobs produced the artifact and whether forks or broad readers could access it. | Encrypt plans, reduce retention, and publish sanitized summaries only. |
+| Terraform role used outside pipeline | Disable the role session path if possible and review all actions from that principal. | Check OIDC trust conditions, static keys, runner compromise, and assumed-role history. | Remove static credentials, tighten trust policy, and separate plan/apply identities. |
+| Scanner bypass discovered | Stop promotion for affected paths until compensating review is complete. | Identify when the bypass entered, which changes skipped policy, and whether exceptions were abused. | Make policy jobs required, test policy enforcement, and expire exceptions automatically. |
+
+A common senior-level question is whether to remove secrets from old state versions. The answer is usually yes where feasible, but do not start by deleting evidence during an active investigation. Preserve forensic copies under restricted access, rotate exposed values, then follow a deliberate state sanitation process. In Terraform, that may include state replacement, state moves, resource recreation, or backend object lifecycle adjustments after legal and incident-response requirements are understood.
+
+Drift detection also belongs in IaC security. A resource can be secure when Terraform creates it and insecure after someone changes it manually in the console. Periodic drift scans compare real infrastructure to desired state, but they should be designed carefully because a drift tool with read access to everything is itself sensitive. The output should create actionable tickets, not noisy reports that teams learn to ignore.
+
+```bash
+cd terraform/environments/production
+terraform init -backend=true
+terraform plan -detailed-exitcode -refresh-only -out=drift.tfplan
+terraform show -json drift.tfplan > drift.json
+checkov -f drift.json --framework terraform_plan
+```
+
+The command sequence demonstrates a refresh-only plan that can support drift review, but production use requires careful credential and artifact handling. The `drift.tfplan` and `drift.json` files may contain sensitive metadata, so they should not be uploaded casually. Treat drift evidence as sensitive operational data and apply the same retention and access rules you use for normal plans.
+
+The final layer is culture. Teams need to know that IaC security gates are not a punishment for writing infrastructure code. They are the mechanism that lets more teams safely own infrastructure changes without waiting for a central operations group. When the platform provides secure modules, local scanning commands, clear exceptions, and fast feedback, security becomes part of the delivery system rather than a separate approval queue.
+
+## Did You Know?
+
+1. **Terraform state can retain sensitive values even when CLI output hides them.** The `sensitive` flag is an output and display control, not a guarantee that the backend contains no sensitive material.
+2. **An encrypted state bucket can still leak through a trusted automation identity.** Encryption protects against some storage exposures, but a compromised runner with decrypt permission can read the same data Terraform reads.
+3. **OIDC reduces secret storage but does not remove the need for authorization design.** A broad trust policy can still let the wrong branch, workflow, or repository assume a powerful role.
+4. **Policy exceptions are security decisions, not comments.** A useful exception has an owner, reason, compensating control, approval trail, and expiration date.
 
 ## Common Mistakes
 
-| Mistake | Risk | Solution |
-|---------|------|----------|
-| Secrets in terraform.tfvars | Committed to git, exposed | Use Vault, Secrets Manager, or SOPS |
-| State file in version control | Secrets exposed in plaintext | Use remote backend with encryption |
-| Overly permissive IAM for Terraform | Blast radius too large | Least privilege per environment |
-| No state file encryption | Data exposure if bucket accessed | Enable SSE-KMS with CMK |
-| Static credentials in CI/CD | Credential theft risk | Use OIDC federation |
-| Skipping security scans | Misconfigurations reach production | Mandatory Checkov/tfsec in pipeline |
-| No audit trail | Can't detect or investigate breaches | Enable CloudTrail for state bucket |
-| Sensitive outputs not marked | Appear in logs and console | Always use `sensitive = true` |
-
----
+| Mistake | Why it fails in practice | Better approach |
+|---|---|---|
+| Treating `sensitive = true` as secret storage | The value may still be present in state or plan files even when hidden from terminal output. | Use secret managers or runtime injection, and restrict state as a sensitive asset. |
+| Running privileged plans on untrusted pull requests | Attacker-controlled code can influence providers, modules, scripts, logs, and artifacts before review. | Run static checks first, then require approval before credentialed plan jobs. |
+| Uploading raw plan files as broad CI artifacts | Binary and JSON plans can contain sensitive values and detailed topology. | Encrypt plan artifacts, retain them briefly, and publish sanitized summaries. |
+| Giving Terraform administrator access permanently | A missed scan, malicious module, or compromised runner can mutate the entire account. | Use scoped roles, permission boundaries, tag conditions, and separate plan/apply identities. |
+| Using one state file for unrelated teams and environments | Every user or job that needs one output can gain visibility into unrelated sensitive resources. | Split state along ownership and blast-radius boundaries, then publish approved outputs. |
+| Writing policy rules without developer guidance | Developers see failures as arbitrary blockers and create informal bypass paths. | Include risk explanations, secure module links, local reproduction commands, and exception workflows. |
+| Keeping permanent policy exceptions | The exception becomes undocumented architecture and survives after the original reason disappears. | Require owner, expiration date, compensating control, and scheduled review. |
 
 ## Quiz
 
-Test your understanding of IaC security:
-
 <details>
-<summary>1. Your team is adopting Terraform and a junior engineer suggests storing the `terraform.tfstate` file in the same public GitHub repository as the source code to keep everything together. Why must you immediately reject this proposal?</summary>
+<summary>1. Your team stores Terraform state in an encrypted private S3 bucket, but the CI role can read every state prefix in the account. A compromised build runner downloads state for unrelated teams. What design mistake allowed the incident, and how would you reduce the blast radius?</summary>
 
-**Answer**: You must reject this proposal because the Terraform state file contains a complete mapping of your deployed infrastructure, including sensitive values stored in plain text. Even if you use secure secret managers to inject passwords during the run, Terraform caches those final values within the state file attributes (such as database passwords, API keys, and IAM secrets). Exposing this file in a public repository gives anyone on the internet the exact credentials and topological knowledge required to compromise your entire environment. To secure it properly, the state should be stored in an encrypted remote backend, like an S3 bucket with restricted IAM access, rather than version control.
+The mistake is treating backend encryption as a substitute for authorization boundaries. The runner had legitimate decrypt and read access, so encryption did not stop it from reading state. Reduce the blast radius by separating state by environment and ownership, narrowing the CI role to only the required prefixes, using separate roles for separate workspaces, logging state object access, and alerting on unusual reads. Rotation is also required for any secrets exposed in the downloaded state.
 </details>
 
 <details>
-<summary>2. Your organization's CI/CD pipeline currently uses a long-lived AWS IAM user's Access Key and Secret Key stored as GitHub Secrets to deploy infrastructure. The security team mandates migrating to OIDC federation. Why is this transition critical for pipeline security?</summary>
+<summary>2. A developer opens a pull request that changes a Terraform module source from a pinned release tag to a branch in a personal repository. The pipeline automatically runs `terraform init` and `terraform plan` with production read credentials. What should you check before allowing that workflow to continue?</summary>
 
-**Answer**: This transition is critical because long-lived static credentials pose a massive risk if leaked, requiring a complex and often neglected rotation process. OIDC (OpenID Connect) federation eliminates the need to store static secrets entirely by allowing the CI/CD provider to dynamically request short-lived, temporary credentials directly from the cloud provider. These temporary credentials automatically expire after the pipeline job completes, drastically reducing the window of opportunity for an attacker if the pipeline is compromised. Furthermore, OIDC trust policies can be scoped down to specific repository branches and workflow contexts, enforcing a strict least-privilege model that static keys cannot guarantee.
+You should check whether untrusted code can cause provider or module execution inside a credentialed job. The workflow should not run privileged plans automatically for changes that alter module sources, provider configuration, scripts, or pipeline behavior. Require static scanning without credentials first, verify the module source is trusted and pinned to an immutable reference, and require maintainer approval before any production role is assumed. The plan job should also avoid exposing raw artifacts or secrets in comments.
 </details>
 
 <details>
-<summary>3. You are designing an S3 bucket via Terraform that will store highly sensitive patient records subject to HIPAA and SOC2 compliance. Beyond simply creating the bucket, what critical security configurations must you implement in your IaC to pass an audit?</summary>
+<summary>3. A scanner reports that an RDS instance is public, unencrypted, and uses a password supplied through a sensitive Terraform variable. The application team says the password is hidden in plan output, so the finding is low risk. How do you evaluate that claim?</summary>
 
-**Answer**: To pass a rigorous compliance audit, you must implement multiple layers of defense directly in your Terraform configuration. First, you need to enforce encryption at rest using a customer-managed KMS key, rather than relying solely on default AWS encryption, and enforce encryption in transit via a bucket policy requiring HTTPS. Second, you must enable all four Public Access Block settings to prevent accidental exposure and turn on versioning to ensure data integrity against accidental deletion or ransomware. Finally, you must configure access logging to a separate, dedicated log bucket and enable AWS CloudTrail data events so that every single read or write operation is recorded for forensic analysis.
+The claim is incomplete because hiding the password in CLI output does not remove the public network exposure, the missing storage encryption, or the possibility that the password exists in state or plan artifacts. You should classify the combined risk as high because network reachability and credential exposure reinforce each other. The remediation should make the database private, enable encryption, restrict security groups, move password handling to a secret-management pattern where possible, and protect or rotate any value that may already be in state.
 </details>
 
 <details>
-<summary>4. An attacker successfully downloads your unencrypted Terraform state file from an exposed S3 bucket, extracting database credentials and stealing 2.3 million customer records. During the incident response debrief, the executive board asks you to estimate the financial impact based on the industry average of $150 per compromised record. What hidden factors contribute to this enormous cost?</summary>
+<summary>4. Your platform team wants to let application teams create IAM roles through Terraform, but security is worried that a team could grant itself administrator permissions. Which control would you design, and how would you prove it works?</summary>
 
-**Answer**: While the direct calculation (2.3 million × $150) yields an immediate impact of $345 million, this figure encompasses a vast array of cascading, hidden expenses beyond just the lost data. In the immediate aftermath, you will incur massive costs for specialized incident response, digital forensics, and emergency infrastructure remediation. Over the following months, the organization will face steep regulatory fines (such as GDPR or PCI-DSS penalties), costly legal fees from class-action lawsuits, and the financial burden of providing credit monitoring to affected customers. Furthermore, the long-term damage to the company's reputation will result in significant customer churn and lost future business, making the true cost far more devastating than the initial technical breach.
+Use permission boundaries on roles that Terraform creates, combined with denies for administrative surfaces such as IAM escalation, organization management, logging deletion, and key destruction. The boundary limits the maximum effective permissions even if a workload policy is overly broad. To prove it works, add a negative test in a non-production account that attempts to create or update a role beyond the boundary and confirm the pipeline fails with an authorization denial. Keep the test result and boundary policy as audit evidence.
 </details>
 
 <details>
-<summary>5. You need to grant your Terraform CI/CD role the ability to create new IAM roles and policies for specific application microservices, but the security team is worried Terraform could be used to grant itself administrative privileges. How can you use IAM Permission Boundaries to safely solve this requirement?</summary>
+<summary>5. A team uses SOPS-encrypted YAML files in Git and decrypts them inside a CI job before passing values into Terraform resources. The security review still rejects the design. What is the likely reason, and what safer pattern could replace it?</summary>
 
-**Answer**: You can solve this by attaching an IAM Permission Boundary to the Terraform role, which establishes a strict ceiling on the maximum permissions that role (and any role it creates) can wield. Even if the Terraform code contains a policy granting `AdministratorAccess`, the permission boundary intercepts and denies the request because the boundary acts as an absolute upper limit. This enables you to safely delegate IAM management to your infrastructure automation, allowing it to create specific application roles while mathematically preventing it from escalating its own privileges. By explicitly denying access to sensitive services like billing, CloudTrail modification, or Organization management within the boundary, you contain the blast radius of a compromised pipeline.
+The likely reason is that decryption inside CI and passing values into Terraform can still place plaintext in logs, plan files, or state, depending on the resources and provider schemas. SOPS protects the Git artifact, but it does not automatically protect every downstream system that receives the decrypted value. A safer pattern is for Terraform to create the secret container, IAM access, and runtime reference while a dedicated secret workflow or controller manages the actual value. For Kubernetes, an external secret controller can inject values at runtime without Terraform storing them.
 </details>
 
 <details>
-<summary>6. Your DevOps team is building a new unified deployment pipeline that will process Terraform for infrastructure, Helm charts for Kubernetes, and AWS CloudFormation templates. You need to select a single security scanning tool. Why would you choose Checkov over tfsec for this specific scenario?</summary>
+<summary>6. During an audit, you are asked to prove that a production bucket was created with encryption, public access blocks, and logging from its first deployment. What evidence would you assemble from the IaC delivery path?</summary>
 
-**Answer**: Checkov is the optimal choice for this scenario because it is designed as a comprehensive, multi-framework scanner capable of analyzing Terraform, Kubernetes, Helm, CloudFormation, and Dockerfiles under a single unified tool. In contrast, tfsec (now integrated into Trivy) was purpose-built exclusively for Terraform, meaning it would be unable to evaluate your Helm charts or CloudFormation templates. By using Checkov, your team benefits from a consistent policy language (Python-based) and a single reporting format across all your different infrastructure paradigms. This avoids the operational overhead of managing and configuring separate, isolated security tools for each specific technology stack in your pipeline.
+Assemble the commit that introduced the bucket, the pull request review, scanner or policy results for that commit, the plan or sanitized plan summary, the approval record, the apply workflow run, the state version created by the apply, and cloud audit events showing the bucket configuration calls. If the bucket came from a compliant module, include the module version and its policy tests. The strongest answer connects source code, automation evidence, and cloud-side audit logs rather than relying on the bucket’s current settings alone.
 </details>
 
 <details>
-<summary>7. Your pipeline runs `terraform plan`, saves the output to a file, and uploads it as a GitHub Actions artifact so the subsequent `terraform apply` job can use it. A security auditor flags this as a critical vulnerability. Why is saving the raw plan file as a pipeline artifact dangerous?</summary>
+<summary>7. A production pipeline comments full Terraform plan output on pull requests so reviewers do not need to open CI logs. Reviewers like the convenience, but security flags it. How would you redesign the feedback while preserving useful review context?</summary>
 
-**Answer**: The raw Terraform plan file is highly dangerous because it contains the exact, unencrypted values of everything that will be applied to your infrastructure, including sensitive variables, passwords, and API keys. When you upload this file as a standard pipeline artifact, it is stored in plain text on the CI/CD provider's servers, making it accessible to anyone with read access to the repository's action runs. This means any developer, or an attacker who compromises a developer's account, can simply download the artifact and extract production secrets. To remediate this, you must encrypt the plan file using a tool like GPG with a securely injected passphrase before uploading it, ensuring it can only be decrypted by the subsequent apply job.
+Replace full plan dumping with a sanitized summary that lists resource actions, high-risk changes, and links to protected CI artifacts when needed. Do not include raw binary plans, JSON plans, provider debug logs, or rendered secrets in comments. Run static checks on pull requests, generate credentialed plans only in protected contexts, encrypt any required plan artifact, and retain it briefly. This preserves reviewer context while respecting that plans can contain sensitive values and topology.
 </details>
-
-<details>
-<summary>8. At 2:00 AM, an alert triggers indicating that your production Terraform state file in S3 was downloaded by an unrecognized, external IP address. Assuming the attacker now possesses the file, what immediate technical steps must you execute to secure the environment?</summary>
-
-**Answer**: Because the attacker now holds a plaintext copy of every secret managed by your infrastructure code, your absolute first priority is to rotate all exposed credentials, including database passwords, IAM access keys, and third-party API tokens. Simultaneously, you must invalidate any active sessions associated with compromised service accounts to immediately cut off the attacker's access if they are already inside. Next, you should lock down the state bucket, rotate its access credentials, and review AWS CloudTrail logs to identify if the attacker has already used the stolen secrets to pivot into other systems. Finally, you must engage your incident response protocol to preserve forensic evidence and begin a comprehensive audit of all infrastructure changes made since the breach occurred.
-</details>
-
----
 
 ## Hands-On Exercise
 
-**Objective**: Implement a secure Terraform configuration with secrets management and security scanning.
+**Objective:** Build a local IaC security review workflow that finds insecure Terraform, fixes the design, and documents which controls protect source, state, secrets, and CI/CD. This lab does not deploy cloud resources; it uses scanners and review artifacts so you can practice the security reasoning without needing a cloud account.
 
-### Part 1: Set Up Security Scanning
+### Part 1: Create an intentionally insecure Terraform configuration
+
+Start by creating a small lab repository with a Terraform file that contains several realistic security problems. The point is not to memorize scanner IDs. The point is to practice reading the finding, naming the attack path, and deciding whether the fix should be a small attribute change or a different secret and access pattern.
 
 ```bash
-# Create project structure
-mkdir -p secure-iac-lab/{terraform,policy}
-cd secure-iac-lab
-
-# Create intentionally insecure Terraform
-cat > terraform/main.tf << 'EOF'
-# Intentionally insecure for demonstration
+mkdir -p iac-security-lab/terraform
+cd iac-security-lab
+.venv/bin/python -m pip install checkov
+cat > terraform/main.tf <<'EOF'
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
 
 variable "db_password" {
-  default = "Password123!"  # BAD: Hardcoded secret
+  default = "Password123!"
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "my-data-bucket"
-  # Missing: encryption, versioning, public access block
+  bucket = "example-prod-data-insecure"
 }
 
-resource "aws_security_group" "web" {
-  name = "web-sg"
+resource "aws_security_group" "admin" {
+  name        = "admin-open"
+  description = "Administrative access from anywhere"
 
   ingress {
+    description = "SSH from the internet"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # BAD: SSH open to world
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-resource "aws_db_instance" "main" {
-  identifier     = "production"
-  engine         = "mysql"
-  instance_class = "db.t3.micro"
-
-  username = "admin"
-  password = var.db_password
-
-  publicly_accessible = true  # BAD: DB public
-  storage_encrypted   = false # BAD: No encryption
+resource "aws_db_instance" "orders" {
+  identifier           = "orders-prod"
+  engine               = "postgres"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  username             = "orders_admin"
+  password             = var.db_password
+  publicly_accessible  = true
+  storage_encrypted    = false
+  skip_final_snapshot  = true
 }
 EOF
-
-# Run security scans
-pip install checkov
-checkov -d terraform/
-
-# You should see multiple failures
+checkov -d terraform --framework terraform
 ```
 
-### Part 2: Fix Security Issues
+- [ ] You created a lab directory with a Terraform file that includes a hardcoded password, an unprotected bucket, public SSH, and an exposed unencrypted database.
+- [ ] You ran Checkov locally using `.venv/bin/python` to install the tool instead of relying on a system Python.
+- [ ] You recorded at least four findings and wrote one sentence for each finding that explains the attack path, not just the scanner label.
+
+### Part 2: Replace unsafe resource definitions with secure defaults
+
+Now create a safer file beside the original. Keeping the insecure file is useful for comparison, but in a real pull request you would remove or replace the unsafe resources rather than shipping both versions. Focus on controls that change the risk: public access blocks, encryption, versioning, private networking assumptions, and no password default.
 
 ```bash
-# Create secure version
-cat > terraform/main_secure.tf << 'EOF'
-# Secure configuration
+cat > terraform/main_secure.tf <<'EOF'
+terraform {
+  required_version = ">= 1.6.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+}
+
+variable "environment" {
+  description = "Deployment environment."
+  type        = string
+  default     = "production"
+}
 
 variable "db_password" {
-  description = "Database password - provide via TF_VAR_db_password"
+  description = "Database password supplied from an approved secret workflow."
   type        = string
   sensitive   = true
-  # No default - must be provided
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "my-data-bucket-${random_id.suffix.hex}"
+  bucket = "example-${var.environment}-data-${random_id.suffix.hex}"
 
   tags = {
-    Environment = "production"
-    ManagedBy   = "terraform"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "data" {
-  bucket = aws_s3_bucket.data.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
-  bucket = aws_s3_bucket.data.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
-    }
+    Environment        = var.environment
+    ManagedBy          = "terraform"
+    DataClassification = "internal"
   }
 }
 
@@ -1536,29 +1084,39 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
-resource "aws_security_group" "web" {
-  name        = "web-sg"
-  description = "Web server security group"
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
 
-  # SSH only from internal network
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"]
-    description = "SSH from internal only"
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  # HTTPS from anywhere
+resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_security_group" "web" {
+  name        = "web-https-only"
+  description = "HTTPS ingress for application traffic"
+
   ingress {
+    description = "HTTPS from clients"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS"
   }
 
   egress {
+    description = "Outbound application traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -1566,127 +1124,102 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "web-sg"
+    Environment = var.environment
+    ManagedBy   = "terraform"
   }
-}
-
-resource "aws_db_instance" "main" {
-  identifier     = "production"
-  engine         = "mysql"
-  instance_class = "db.t3.micro"
-
-  username = "admin"
-  password = var.db_password
-
-  publicly_accessible    = false
-  storage_encrypted      = true
-  deletion_protection    = true
-  skip_final_snapshot    = false
-  final_snapshot_identifier = "production-final-snapshot"
-
-  vpc_security_group_ids = [aws_security_group.db.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  tags = {
-    Environment = "production"
-  }
-
-  lifecycle {
-    ignore_changes = [password]
-  }
-}
-
-resource "random_id" "suffix" {
-  byte_length = 4
 }
 EOF
-
-# Verify fixes
-checkov -d terraform/ -f terraform/main_secure.tf
+checkov -f terraform/main_secure.tf --framework terraform
 ```
 
-### Part 3: Implement Secrets Management
+- [ ] The secure file has no password default and marks the password variable sensitive.
+- [ ] The secure bucket has public access blocks, versioning, encryption, ownership tags, and classification tags.
+- [ ] The secure security group removes SSH exposure and allows only the expected public application port.
+- [ ] You can explain which findings disappeared and which remaining findings would require additional surrounding infrastructure to satisfy fully.
+
+### Part 3: Add a secret-container pattern instead of storing a secret value
+
+Add a file that shows the safer boundary: Terraform creates the secret object and read permissions, while a separate process supplies or rotates the value. This pattern is intentionally less convenient than placing a generated password directly into a database resource, but it reduces the chance that Terraform state becomes the easiest secret dump.
 
 ```bash
-# Create secrets management example
-cat > terraform/secrets.tf << 'EOF'
-# Using AWS Secrets Manager
-
-# Create the secret
-resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "production/database/password"
+cat > terraform/secrets.tf <<'EOF'
+resource "aws_secretsmanager_secret" "orders_database" {
+  name                    = "production/orders/database"
   recovery_window_in_days = 7
+
+  tags = {
+    Environment        = "production"
+    ManagedBy          = "terraform"
+    Owner              = "orders-team"
+    DataClassification = "restricted"
+  }
 }
 
-# Generate random password
-resource "random_password" "db" {
-  length           = 32
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
-}
+resource "aws_iam_policy" "orders_database_secret_read" {
+  name = "orders-database-secret-read"
 
-# Store password
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = aws_secretsmanager_secret.db_password.id
-  secret_string = jsonencode({
-    username = "admin"
-    password = random_password.db.result
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue"
+      ]
+      Resource = aws_secretsmanager_secret.orders_database.arn
+    }]
   })
 }
+EOF
+checkov -f terraform/secrets.tf --framework terraform
+```
 
-# Reference secret in RDS
-data "aws_secretsmanager_secret_version" "db" {
-  secret_id  = aws_secretsmanager_secret.db_password.id
-  depends_on = [aws_secretsmanager_secret_version.db_password]
-}
+- [ ] Terraform creates the secret container but does not place a plaintext password in the file.
+- [ ] The IAM policy allows only read actions for one secret ARN rather than wildcard access to every secret.
+- [ ] You wrote down how the initial secret value would be created, who can rotate it, and where rotation evidence would live.
 
-locals {
-  db_creds = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)
-}
+### Part 4: Write a CI/CD security decision record
 
-# Use in database (reference to above RDS)
-# password = local.db_creds["password"]
+Create a short decision record that explains how this repository should run IaC checks. The record should be specific enough that another engineer could implement the workflow without asking whether forked pull requests get credentials or whether plan artifacts are safe to upload.
+
+```bash
+cat > iac-security-decision.md <<'EOF'
+# IaC Security Decision Record
+
+## Trust boundaries
+
+Untrusted pull requests run formatting, validation, secret scanning, and static IaC scanning without cloud credentials. Credentialed Terraform plans run only after maintainer approval or on protected branches. Production applies run only from the main branch through a protected environment.
+
+## State and plan handling
+
+Terraform state is stored in a remote backend with encryption, versioning, access logging, and prefix-scoped IAM. Raw plan artifacts are treated as sensitive because they may contain values hidden from human CLI output. Any plan artifact needed by an apply job is encrypted, retained briefly, and never posted directly into a pull request comment.
+
+## Secret handling
+
+Terraform may create secret containers, IAM permissions, and runtime references. Terraform should not store long-lived plaintext secret values unless an exception documents why state exposure is acceptable and how rotation works. Runtime secret injection is preferred for application credentials.
+
+## Policy gates
+
+Static scanning blocks critical findings in all environments. Production changes require plan review, policy scan results, and protected approval. Exceptions must include an owner, reason, compensating control, and expiration date.
 EOF
 ```
 
-### Success Criteria
+- [ ] The decision record defines what runs for untrusted pull requests and what requires approval.
+- [ ] The decision record classifies state and plan artifacts as sensitive operational data.
+- [ ] The decision record explains how secrets should flow without making Terraform the default secret store.
+- [ ] The decision record includes an exception model with owner, reason, compensating control, and expiration date.
 
-- [ ] Initial Checkov scan shows 5+ security issues
-- [ ] Fixed configuration passes all Checkov checks
-- [ ] No hardcoded secrets in final configuration
-- [ ] S3 bucket has encryption, versioning, and public access block
-- [ ] Security group restricts SSH to internal network
-- [ ] Database is not publicly accessible and has encryption
+### Part 5: Review the lab as if it were a pull request
 
----
+Finish by reviewing your own work from the perspective of a platform security reviewer. Do not simply ask whether the scanner is green. Ask whether the design would still be understandable during an incident, whether the trust boundaries are explicit, and whether the next team could follow the pattern without copying an insecure shortcut.
 
-## Key Takeaways
-
-- [ ] **State files are crown jewels** - Encrypt, restrict access, audit all access
-- [ ] **Never hardcode secrets** - Use Vault, Secrets Manager, SOPS, or environment variables
-- [ ] **Scan early and often** - Checkov, tfsec, Trivy in every PR
-- [ ] **Use OIDC for CI/CD** - No static credentials to steal
-- [ ] **Apply permission boundaries** - Limit what Terraform can do even when compromised
-- [ ] **Mark sensitive values** - `sensitive = true` prevents logging
-- [ ] **Audit everything** - CloudTrail for state bucket, alerts on unusual access
-- [ ] **Least privilege always** - Terraform role only needs what it manages
-- [ ] **Compliance in code** - Encode requirements in modules and policies
-- [ ] **Assume breach mentality** - Design so state file theft isn't catastrophic
-
----
-
-## Did You Know?
-
-> **State File Statistics**: A 2023 survey found that 43% of organizations store Terraform state files without encryption, and 12% store them in version control systems accessible to all developers.
-
-> **Checkov Adoption**: Bridgecrew's Checkov has over 1,000 built-in policies and scans over 5 million infrastructure configurations per month, catching an average of 47 misconfigurations per project.
-
-> **OIDC Origin**: The OpenID Connect protocol used for GitHub Actions authentication was standardized in 2014, but adoption for CI/CD didn't become widespread until AWS added support in 2021.
-
-> **Cost of Secrets**: According to GitGuardian's 2023 report, over 10 million secrets were detected in public GitHub commits, with the average time to remediation being 327 days.
-
----
+- [ ] You can identify one control that protects source code, one that protects CI/CD, one that protects state, and one that protects runtime secrets.
+- [ ] You can explain why an encrypted backend does not protect against a compromised runner with legitimate decrypt permission.
+- [ ] You can explain why a plan artifact should not be posted raw into a pull request comment.
+- [ ] You can explain how permission boundaries reduce blast radius when Terraform is allowed to create IAM roles.
+- [ ] You can explain what evidence an auditor would inspect to prove that a secure bucket was deployed through the approved path.
+- [ ] You can name at least one remaining risk in the lab and describe the next control you would add in a production platform.
 
 ## Next Module
 
-Continue to [Module 6.4: IaC at Scale](../module-6.4-iac-at-scale/) to learn about managing infrastructure as code across large organizations with multiple teams and environments.
+Continue to [Module 6.4: IaC at Scale](../module-6.4-iac-at-scale/) to learn how teams manage infrastructure as code across many environments, repositories, ownership boundaries, and platform standards.
