@@ -1,289 +1,356 @@
 ---
-revision_pending: true
 title: "Module 11.2: Gitea & Forgejo - Lightweight Self-Hosted Git"
 slug: platform/toolkits/cicd-delivery/source-control/module-11.2-gitea-forgejo
 sidebar:
   order: 3
 ---
-## Complexity: [MEDIUM]
-## Time to Complete: 45-50 minutes
 
----
+## Complexity: [MEDIUM]
+
+## Time to Complete: 55-70 minutes
 
 ## Prerequisites
 
-Before starting this module, you should have completed:
-- [GitOps Discipline](/platform/disciplines/delivery-automation/gitops/) - Git-centric workflows
-- Basic Git fundamentals (branches, remotes, hooks)
-- Container/Kubernetes basics
-- Understanding of why self-hosting matters
+Before starting this module, you should have completed the GitOps discipline module and be comfortable with basic Git workflows, including branches, remotes, pull requests, and tags.
 
----
+You should also understand what Kubernetes gives you as a platform, because this module compares single-host, container-based, and Kubernetes-based deployment patterns instead of treating every installation as the same problem.
 
-## What You'll Be Able to Do
+You do not need to be a Gitea or Forgejo administrator already. The module starts with beginner-level platform choices, then builds toward senior operational decisions about identity, runner isolation, migration, backups, and governance.
+
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-- **Deploy Gitea or Forgejo on Kubernetes as a lightweight self-hosted Git platform**
-- **Configure Gitea Actions for CI/CD workflows compatible with GitHub Actions syntax**
-- **Implement repository mirroring, webhooks, and OAuth2 authentication for team workflows**
-- **Compare Gitea and Forgejo resource footprints against GitLab for small-to-medium team requirements**
-
+- **Evaluate** whether Gitea, Forgejo, GitHub, or GitLab fits a team scenario based on governance, resource limits, CI/CD needs, and operational risk.
+- **Design** a lightweight self-hosted Git deployment that separates application state, Git repositories, LFS objects, identity, and runner execution boundaries.
+- **Configure** a runnable Gitea or Forgejo lab with Actions enabled, a registered runner, and a workflow that behaves like a small internal delivery pipeline.
+- **Debug** common failure modes involving incorrect `ROOT_URL`, missing runner labels, unsafe Docker socket exposure, broken webhook delivery, and incomplete backups.
+- **Justify** a migration plan from GitHub or GitLab into a lightweight forge, including repository import, workflow adaptation, mirror strategy, and rollback evidence.
 
 ## Why This Module Matters
 
-**When GitHub Is Too Much and Too Little**
+The release manager was watching a production change freeze spread across three teams because the internal Git service had become a mystery box. Developers could clone repositories, but nobody could explain who owned backups, which identity system had authority, whether CI runners were isolated, or how mirror synchronization behaved during an outage. When the audit team asked for evidence that sensitive deployment scripts lived inside the approved network, the answer was a folder path, a few shell histories, and a nervous silence.
 
-Audit findings showed that sensitive automation scripts had been stored outside the organization's approved environment. That kind of setup creates serious security and compliance risk, and it is one reason teams adopt an internal Git server for controlled networks.
+That kind of failure rarely starts with a dramatic platform outage. It usually starts with a reasonable shortcut: a team needs Git inside a lab, a factory floor, a small Kubernetes cluster, or a regulated network where public SaaS access is restricted. Someone installs a lightweight forge because GitLab feels too heavy, GitHub Enterprise is too expensive, or the environment cannot reach the internet. The service works, people trust it, and then the team discovers that "small" does not mean "operationally optional."
 
-Other teams face a different constraint: they need version control on very small hardware and cannot justify a heavyweight platform or enterprise licensing just to store internal scripts.
+Gitea and Forgejo are attractive because they make self-hosted Git feel approachable. A small team can run the web UI, Git smart HTTP, SSH access, pull requests, issues, packages, webhooks, and Actions-style CI/CD without operating a sprawling DevOps platform. That simplicity is real, but it can mislead platform engineers into ignoring the hard parts: state placement, identity trust, runner isolation, secret handling, upgrade policy, and disaster recovery.
 
-Meanwhile, a startup's platform team was drowning in tool sprawl. GitHub for code, Jenkins for CI, Artifactory for packages, separate LDAP integration for each. Every vendor wanted enterprise pricing. The engineering budget was already stretched thin, and they just needed... a Git server that worked.
+This module treats Gitea and Forgejo as platform components rather than hobby tools. You will learn how their lightweight architecture creates genuine advantages, where those advantages stop, and how a senior engineer decides whether the trade-off is appropriate for a team that needs internal source control.
 
-Gitea exists because not everyone needs an enterprise platform. Sometimes you need a Git server that's small, fast, self-contained, and just works—[a single binary](https://github.com/go-gitea/gitea/blob/main/README.md) that runs on anything from a $35 Raspberry Pi to a massive Kubernetes cluster. GitHub's features with none of GitHub's baggage.
+## 1. Start With the Constraint, Not the Tool
 
-Forgejo is Gitea's community fork—same codebase, different governance. When Gitea's parent company started making decisions the community disagreed with, Forgejo emerged as the "truly open" alternative. The projects remained closely related after the fork, but governance and roadmap differences still matter if you're choosing for the long term.
+A lightweight forge is most valuable when the constraint is sharper than "we want our own Git server." Good constraints sound like operational facts: the network is air-gapped, the hardware is small, licensing is capped, developers need familiar pull requests, or the organization wants control over source code without adopting a full DevOps suite. If the real problem is "we need integrated security scanning, portfolio reporting, and enterprise workflow governance," a small forge may create more glue work than it removes.
 
----
+Gitea and Forgejo occupy the middle ground between bare Git hosting and a full platform such as GitLab. They provide repository browsing, access control, code review, issues, release artifacts, package hosting, webhooks, and Actions-compatible workflow execution. They do not turn every delivery concern into a single product boundary, so you still design the surrounding platform deliberately.
 
-## Did You Know?
+The beginner mistake is to compare tools only by feature checkboxes. A senior comparison starts with failure modes: what happens when the database is lost, when object storage is unavailable, when a runner is compromised, when the identity provider changes group names, or when a repository mirror silently stops syncing. A tool is lightweight only if the complete operating model remains understandable.
 
-- **Gitea is much lighter than a full GitLab deployment** - That makes it attractive for hobby, lab, and small-team self-hosting on modest infrastructure.
+```text
+LIGHTWEIGHT FORGE DECISION FRAME
 
-- **Forgejo was born from a governance crisis** - In October 2022, Gitea's maintainers transferred the project to a for-profit company without community consultation. Within weeks, Forgejo forked under Codeberg e.V., a German non-profit. The split highlighted a fundamental question: who owns open source projects when maintainers commercialize?
-
-- **Codeberg.org runs on Forgejo** - That makes it a useful real-world example that Forgejo can power a substantial public forge.
-
-- **The Gitea/Gogs lineage traces back to GitHub itself** - Gogs was an earlier self-hosted Git service from which Gitea later forked. When Gogs development slowed, [Gitea forked in 2016](https://github.com/go-gitea/gitea/blob/main/README.md). When Gitea commercialized, Forgejo forked in 2022. Each fork happened because communities wanted faster, more open development than the parent project offered.
-
----
-
-## Gitea vs Forgejo: The Fork Story
-
-```
-THE GITEA/FORGEJO TIMELINE
-─────────────────────────────────────────────────────────────────
-
-2016: Gogs created (Go Git Service)
-      │
-      └──▶ Community wants more features, faster development
-
-2016: Gitea forks from Gogs
-      │ "Community-driven, open governance"
-      │
-      ├── 2017-2022: Rapid growth, GitHub-like features
-      │
-      └──▶ 2022: Gitea Ltd formed (for-profit company)
-           │
-           ├── Some contributors concerned about direction
-           │
-           └──▶ 2022: Forgejo forks from Gitea
-                "Truly community-governed, non-profit"
-
-TODAY:
-┌─────────────────────────────────────────────────────────────────┐
-│                                                                  │
-│  GITEA                          FORGEJO                         │
-│  ─────                          ───────                         │
-│  Gitea Ltd (company)            Codeberg e.V. (non-profit)     │
-│  Faster feature releases        Community-first decisions       │
-│  Commercial support available   Volunteer-driven support        │
-│  95% same code                  95% same code                   │
-│                                                                  │
-│  Which to choose?                                               │
-│  • Need commercial support? → Gitea                             │
-│  • Want community governance? → Forgejo                         │
-│  • Air-gapped deployment? → Either works                        │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────┐
+│ Team has a source-control    │
+│ problem with local ownership │
+└───────────────┬──────────────┘
+                │
+                ▼
+┌──────────────────────────────┐
+│ Is the main constraint       │
+│ resource, network, cost, or  │
+│ governance simplicity?       │
+└───────┬──────────────────────┘
+        │ yes
+        ▼
+┌──────────────────────────────┐
+│ Gitea or Forgejo is worth    │
+│ evaluating as the forge core │
+└───────┬──────────────────────┘
+        │
+        ▼
+┌──────────────────────────────┐
+│ Do CI, identity, backup,     │
+│ audit, and migration risks   │
+│ still fit your team capacity?│
+└───────┬──────────────┬───────┘
+        │ yes          │ no
+        ▼              ▼
+┌───────────────┐  ┌──────────────────────┐
+│ Adopt small   │  │ Choose a fuller       │
+│ forge pattern │  │ platform or managed   │
+│ deliberately  │  │ service instead       │
+└───────────────┘  └──────────────────────┘
 ```
 
----
+> **Pause and predict:** A team says, "GitLab needs too much memory, so we will install Gitea and be done." Before reading further, write down three responsibilities that did not disappear just because the forge is smaller.
 
-## Architecture Deep Dive
+The responsibilities that remain are usually state, identity, and execution. The database still stores users, issues, pull requests, permissions, releases, and metadata. Git repositories still need consistent backups and corruption checks. CI runners still execute untrusted code, and a runner with access to the Docker socket can often affect the host. Lightweight software reduces overhead, but it does not eliminate platform engineering.
 
-### Gitea's Elegant Simplicity
+Gitea and Forgejo share a close technical lineage, so most operational patterns apply to both. Gitea forked from Gogs when contributors wanted faster community-driven development. Forgejo later forked from Gitea after governance concerns, with Codeberg e.V. providing a non-profit home for the project. That history matters because governance is not decorative when the service becomes part of your delivery control plane.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      GITEA ARCHITECTURE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    Single Go Binary                        │  │
-│  │                                                            │  │
-│  │  ┌─────────┬─────────┬─────────┬─────────┬─────────────┐  │  │
-│  │  │  Git    │  Web    │  API    │ Webhooks│   Actions   │  │  │
-│  │  │ Server  │   UI    │  REST   │ Delivery│   Runner    │  │  │
-│  │  └─────────┴─────────┴─────────┴─────────┴─────────────┘  │  │
-│  │                          │                                 │  │
-│  │                          ▼                                 │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │                    ORM Layer                         │  │  │
-│  │  │        XORM (supports multiple databases)           │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
-│  └────────────────────────────┬──────────────────────────────┘  │
-│                               │                                  │
-│  ┌────────────────────────────┼──────────────────────────────┐  │
-│  │                            │                               │  │
-│  │  ┌──────────┐    ┌────────┴────────┐    ┌──────────────┐ │  │
-│  │  │ Database │    │  File Storage   │    │   Git Repos  │ │  │
-│  │  │SQLite/PG │    │  (local/S3)     │    │(local/NFS)   │ │  │
-│  │  │MySQL/MSSQL    └─────────────────┘    └──────────────┘ │  │
-│  │  └──────────┘                                            │  │
-│  │                                                           │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  Optional Components:                                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐    │
-│  │ Redis Cache  │  │ Actions Runner│  │ External Auth     │    │
-│  │ (optional)   │  │ (for CI/CD)   │  │ (LDAP/OAuth/SAML) │    │
-│  └──────────────┘  └──────────────┘  └────────────────────┘    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```text
+GITEA AND FORGEJO LINEAGE
 
-CONTRAST WITH GITLAB:
-─────────────────────────────────────────────────────────────────
-Gitea:  1 binary, 1 config file, optional database
-GitLab: Rails app, Sidekiq, PostgreSQL, Redis, Gitaly, Praefect...
+┌─────────────┐
+│    Gogs     │
+│ early Go    │
+│ Git service │
+└──────┬──────┘
+       │ community wants broader development
+       ▼
+┌─────────────┐
+│    Gitea    │
+│ lightweight │
+│ forge       │
+└──────┬──────┘
+       │ governance disagreement after company formation
+       ▼
+┌─────────────┐
+│   Forgejo   │
+│ community   │
+│ fork        │
+└─────────────┘
 
-Resource Requirements:
-                Gitea           GitLab
-─────────────────────────────────────────────────────────────────
-RAM             100MB           4GB minimum
-CPU             1 core          2+ cores
-Disk            ~50MB binary    5GB+ installation
-Startup         Seconds         Minutes
+Choosing between them is partly technical, but it is also a governance and support decision.
 ```
 
-### Supported Backends
+| Scenario | Stronger fit | Reasoning |
+|---|---|---|
+| A five-person lab needs Git, reviews, and local auth on a small VM | Gitea or Forgejo | The team benefits from a compact operational footprint and does not need a full DevOps suite. |
+| A public open-source community wants non-profit governance as a visible principle | Forgejo | Governance and community control are part of the product choice, not a side note. |
+| A company wants a lightweight forge but also wants commercial support options | Gitea | Commercial support and upstream project direction may matter more than non-profit governance. |
+| A regulated enterprise wants one platform for SCM, CI, SAST, DAST, dependency scanning, and portfolio controls | GitLab or GitHub Enterprise | The integrated compliance surface can outweigh the simplicity of a smaller forge. |
+| A GitOps platform needs an internal source of truth reachable by ArgoCD or Flux | Gitea or Forgejo | The forge can act as a compact Git authority while GitOps tools handle reconciliation. |
 
-| Component | Options | Notes |
-|-----------|---------|-------|
-| **Database** | SQLite, PostgreSQL, MySQL, MSSQL | SQLite fine for small teams (<100 users) |
-| **Git Storage** | Local filesystem, NFS | Use fast SSD for best performance |
-| **LFS Storage** | Local, S3, MinIO, Azure Blob | Required for large file support |
-| **Cache** | Built-in, Redis | Redis optional but helps at scale |
-| **Search** | Built-in, Elasticsearch | Elasticsearch for code search at scale |
+The important lesson is not that one project is universally better. The important lesson is that source control is a trust anchor. If your deployment automation, infrastructure definitions, incident runbooks, and policy-as-code live in Git, the forge is now part of the release system. You choose it with the same discipline you would apply to a database, registry, or identity provider.
 
----
+## 2. Understand the Architecture Before You Install
 
-## Deployment Options
+Gitea and Forgejo are simple because the application is packaged as a small Go service with a direct operational model. The application serves the web UI and API, handles Git smart HTTP, manages repository metadata, receives webhooks, stores artifacts, and schedules Actions jobs when CI/CD is enabled. Most installations then rely on three persistent state areas: a relational database, a repository filesystem, and optional object storage for LFS, packages, and artifacts.
 
-### Option 1: Single Binary (Simplest)
+That architecture is easier to reason about than a platform composed of many cooperating services. It also means your failure domain is concentrated. If the database backup is missing, restoring the Git directories alone is not enough to recover issues, pull requests, users, sessions, access tokens, runner registrations, and release metadata. If the repository filesystem is missing, the database may show repositories that cannot be cloned. If LFS object storage is missing, the Git history may exist while the large files referenced by pointers are gone.
+
+```text
+GITEA OR FORGEJO COMPONENT MODEL
+
+┌──────────────────────────────────────────────────────────────────┐
+│                         Forge Application                        │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────┐ │
+│  │ Web UI      │  │ REST API    │  │ Git HTTP    │  │ SSH Git │ │
+│  │ reviews     │  │ automation  │  │ clone/push  │  │ access  │ │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └────┬────┘ │
+│         │                │                │              │      │
+│         └────────────────┴────────────────┴──────────────┘      │
+│                              │                                   │
+│                              ▼                                   │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ Metadata and policy logic: users, orgs, teams, issues,     │  │
+│  │ pull requests, tokens, webhooks, runner records, packages  │  │
+│  └────────────────────────────┬───────────────────────────────┘  │
+└───────────────────────────────┼──────────────────────────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        ▼                       ▼                       ▼
+┌───────────────┐       ┌───────────────┐       ┌────────────────┐
+│ SQL database  │       │ Git repos     │       │ Object storage │
+│ metadata      │       │ refs/objects  │       │ LFS/artifacts  │
+└───────────────┘       └───────────────┘       └────────────────┘
+```
+
+The database choice should follow the concurrency and recoverability requirement, not the installation tutorial you happened to find first. SQLite is excellent for a tiny internal service, a lab, a demo, or an appliance-like edge installation where one process owns the database file and backup windows are simple. PostgreSQL is the safer default when multiple teams depend on the service, when you need familiar backup tooling, or when you expect growth.
+
+The repository storage choice is equally important. Local persistent disk is simple and fast for a single replica. NFS can work, but it shifts the reliability question to the storage system and its locking behavior. S3-compatible object storage is a good fit for LFS and package data, but it is not a substitute for understanding which data lives in Git repositories and which data lives outside them.
+
+| State area | What it contains | Backup consequence | Common senior decision |
+|---|---|---|---|
+| Relational database | Users, teams, permissions, issues, pull requests, webhooks, tokens, runner registrations | Losing it breaks the meaning around repositories even if Git objects remain | Use PostgreSQL for shared production instances and test point-in-time restore. |
+| Git repository directory | Bare Git repositories, refs, objects, hooks, wiki repos | Losing it breaks clone, fetch, push, and history access | Back it up with filesystem-consistent snapshots or coordinated service downtime. |
+| LFS and package storage | Large binary objects, package assets, workflow artifacts depending on configuration | Losing it creates broken pointers and incomplete releases | Use object storage with lifecycle policy, versioning where appropriate, and restore testing. |
+| Configuration and secrets | `app.ini`, secret keys, internal tokens, OAuth settings, mail settings | Losing it can invalidate sessions, tokens, and integrations | Store sensitive settings in a secrets manager or Kubernetes Secret, not in ad hoc notes. |
+| Runner registration data | Runner identity, labels, scopes, and tokens | Losing it requires runner re-registration and may pause CI | Treat runners as replaceable compute, but manage labels and scopes as configuration. |
+
+> **Stop and think:** If a backup contains only `/data/git/repositories`, what user-visible parts of the forge can still be missing after restore? Name at least four before checking the table above.
+
+The answer should include pull request discussions, issue state, permissions, users, tokens, webhooks, releases, runner registrations, package metadata, and possibly LFS objects. Git is the center of the service, but a forge is more than Git object storage. That is why a backup plan for a forge is a system plan, not a directory copy.
+
+A good platform design separates "small application" from "casual state." You can run a single application replica while still using production-grade storage, TLS, authentication, monitoring, and backup discipline. Small teams often do not need high availability on day one, but they do need a recovery story that someone has actually tested.
+
+```text
+SMALL PRODUCTION DESIGN
+
+┌──────────────────────────────┐
+│ Ingress or reverse proxy     │
+│ TLS, host routing, headers   │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Gitea or Forgejo application │
+│ one replica, pinned version  │
+└───────┬─────────────┬────────┘
+        │             │
+        ▼             ▼
+┌──────────────┐ ┌──────────────┐
+│ PostgreSQL   │ │ Persistent   │
+│ managed or   │ │ volume for   │
+│ backed up    │ │ Git repos    │
+└──────┬───────┘ └──────┬───────┘
+       │                │
+       ▼                ▼
+┌──────────────┐ ┌──────────────┐
+│ Object store │ │ Backup jobs  │
+│ LFS/packages │ │ restore test │
+└──────────────┘ └──────────────┘
+```
+
+A senior engineer also distinguishes service availability from delivery availability. If the web UI is down for ten minutes, developers may still have local clones and can continue some work. If the Git source of truth is corrupted, GitOps deployments, CI pipelines, release tags, and audit trails may all be affected. Severity depends on how many workflows treat the forge as a control point.
+
+## 3. Choose a Deployment Pattern Deliberately
+
+The fastest way to install Gitea or Forgejo is not always the best way to operate it. A single binary is excellent for learning, edge appliances, or controlled single-host services. Docker Compose is convenient when the team wants a reproducible small deployment without a full Kubernetes platform. Helm on Kubernetes is appropriate when the organization already operates Kubernetes well and wants the forge to share ingress, certificate, backup, monitoring, and secret-management patterns.
+
+The wrong choice is to deploy on Kubernetes simply because the team has a cluster. A source-control system is often a dependency of the cluster automation itself. If your GitOps controller needs the forge to reconcile the cluster, and the forge needs the cluster to recover, you have created a bootstrap loop. That loop is manageable, but only if you document how to restore the forge when the cluster is degraded.
+
+| Pattern | Best use | Main risk | Operational recommendation |
+|---|---|---|---|
+| Single binary | Small VM, edge node, air-gapped appliance, learning environment | Manual drift around service files, backups, and upgrades | Use a dedicated user, systemd unit, explicit backup script, and pinned binary version. |
+| Docker Compose | Small team production, lab environment, repeatable local service | Docker socket and volume ownership mistakes | Keep state in named directories, pin images, and document runner isolation separately. |
+| Kubernetes Helm | Shared platform, standardized ingress, cert-manager, external database | Bootstrap dependency and persistent volume assumptions | Use external PostgreSQL where possible, test restore, and avoid treating pods as state. |
+| Managed SaaS | Public or enterprise hosted development | Network, compliance, and cost constraints | Use SaaS when operational ownership is not the goal and policy allows it. |
+
+A single-binary installation teaches the architecture clearly because every path is visible. The example below is intentionally small, but it demonstrates the decisions you still need: a dedicated user, persistent directories, explicit configuration, and a service manager. In a real environment, you would pin a supported release from the project you choose and verify checksums before installation.
 
 ```bash
-# Download latest release
-wget https://dl.gitea.io/gitea/1.21/gitea-1.21.0-linux-amd64
-chmod +x gitea-1.21.0-linux-amd64
-mv gitea-1.21.0-linux-amd64 /usr/local/bin/gitea
+sudo useradd --system --shell /usr/sbin/nologin --home-dir /srv/gitea --create-home gitea
+sudo install -d -o gitea -g gitea -m 0750 /srv/gitea/{data,log,custom}
+sudo install -d -o root -g gitea -m 0750 /etc/gitea
 
-# Create user and directories
-useradd --system --shell /bin/bash --comment 'Gitea' \
-  --create-home --home-dir /var/lib/gitea gitea
+sudo tee /etc/gitea/app.ini >/dev/null <<'EOF'
+APP_NAME = Internal Git
+RUN_MODE = prod
 
-mkdir -p /var/lib/gitea/{custom,data,log}
-mkdir -p /etc/gitea
-chown -R gitea:gitea /var/lib/gitea /etc/gitea
+[server]
+DOMAIN = git.internal.example
+ROOT_URL = https://git.internal.example/
+HTTP_PORT = 3000
+START_SSH_SERVER = true
+SSH_DOMAIN = git.internal.example
+SSH_PORT = 22
+OFFLINE_MODE = false
 
-# Run directly (for testing)
-sudo -u gitea gitea web --config /etc/gitea/app.ini
+[database]
+DB_TYPE = sqlite3
+PATH = /srv/gitea/data/gitea.db
 
-# Or create systemd service
-cat > /etc/systemd/system/gitea.service << 'EOF'
+[repository]
+ROOT = /srv/gitea/data/git/repositories
+DEFAULT_BRANCH = main
+DEFAULT_PRIVATE = private
+
+[security]
+INSTALL_LOCK = true
+MIN_PASSWORD_LENGTH = 12
+
+[service]
+DISABLE_REGISTRATION = true
+REQUIRE_SIGNIN_VIEW = true
+
+[log]
+MODE = console,file
+LEVEL = info
+ROOT_PATH = /srv/gitea/log
+EOF
+
+sudo chown root:gitea /etc/gitea/app.ini
+sudo chmod 0640 /etc/gitea/app.ini
+```
+
+```bash
+sudo tee /etc/systemd/system/gitea.service >/dev/null <<'EOF'
 [Unit]
-Description=Gitea
-After=network.target
+Description=Gitea lightweight Git forge
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=gitea
 Group=gitea
-WorkingDirectory=/var/lib/gitea
+WorkingDirectory=/srv/gitea
 ExecStart=/usr/local/bin/gitea web --config /etc/gitea/app.ini
 Restart=always
-Environment=USER=gitea HOME=/var/lib/gitea
+RestartSec=5
+Environment=USER=gitea
+Environment=HOME=/srv/gitea
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now gitea
+sudo systemctl daemon-reload
+sudo systemctl enable --now gitea
+sudo systemctl status gitea --no-pager
 ```
 
-### Option 2: Docker Compose (Recommended for Production)
+The same service becomes more repeatable with Docker Compose. Compose is often the best teaching environment because learners can see the database, application, and runner as separate services without needing a Kubernetes cluster. Notice that the runner is not started automatically in this production-shaped example; it needs a registration token and a deliberate security decision about Docker access.
 
 ```yaml
-# docker-compose.yml
-version: '3'
-
 services:
-  gitea:
-    image: gitea/gitea:1.21
-    container_name: gitea
-    environment:
-      - USER_UID=1000
-      - USER_GID=1000
-      - GITEA__database__DB_TYPE=postgres
-      - GITEA__database__HOST=db:5432
-      - GITEA__database__NAME=gitea
-      - GITEA__database__USER=gitea
-      - GITEA__database__PASSWD=gitea
-      - GITEA__server__ROOT_URL=https://git.example.com
-      - GITEA__server__SSH_DOMAIN=git.example.com
-      - GITEA__server__SSH_PORT=2222
-      - GITEA__mailer__ENABLED=true
-      - GITEA__mailer__SMTP_ADDR=smtp.example.com
-      - GITEA__mailer__SMTP_PORT=587
-    restart: always
-    volumes:
-      - ./gitea-data:/data
-      - /etc/timezone:/etc/timezone:ro
-      - /etc/localtime:/etc/localtime:ro
-    ports:
-      - "3000:3000"   # Web UI
-      - "2222:22"     # SSH
-    depends_on:
-      - db
-    networks:
-      - gitea
-
   db:
-    image: postgres:15-alpine
-    container_name: gitea-db
-    restart: always
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=gitea
-      - POSTGRES_PASSWORD=gitea
-      - POSTGRES_DB=gitea
+      POSTGRES_DB: gitea
+      POSTGRES_USER: gitea
+      POSTGRES_PASSWORD: change-this-password
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
-    networks:
-      - gitea
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitea -d gitea"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
-networks:
-  gitea:
-    driver: bridge
+  forge:
+    image: gitea/gitea:1.24
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: db:5432
+      GITEA__database__NAME: gitea
+      GITEA__database__USER: gitea
+      GITEA__database__PASSWD: change-this-password
+      GITEA__server__ROOT_URL: http://127.0.0.1:3000/
+      GITEA__server__SSH_DOMAIN: 127.0.0.1
+      GITEA__server__SSH_PORT: "2222"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "true"
+      GITEA__actions__ENABLED: "true"
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    volumes:
+      - ./gitea-data:/data
 ```
 
-### Option 3: Kubernetes with Helm
+Kubernetes is a good target when the surrounding platform already provides reliable storage, ingress, TLS, backups, secrets, and observability. The Kubernetes version target for KubeDojo content is 1.35+, and the example below uses ordinary Kubernetes primitives rather than assuming a special cluster distribution. Use `kubectl` in the examples; if you normally alias it to `k`, remember that shared training material should show the full command first.
 
 ```bash
-# Add Gitea Helm repo
 helm repo add gitea https://dl.gitea.io/charts/
 helm repo update
-
-# Create namespace
 kubectl create namespace gitea
+```
 
-# Create values file
-cat > gitea-values.yaml << 'EOF'
+```yaml
 replicaCount: 1
 
 image:
   repository: gitea/gitea
-  tag: "1.21"
+  tag: "1.24"
   pullPolicy: IfNotPresent
 
 service:
@@ -297,53 +364,44 @@ service:
 ingress:
   enabled: true
   className: nginx
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: git.example.com
+    - host: git.internal.example
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: gitea-tls
       hosts:
-        - git.example.com
+        - git.internal.example
 
 persistence:
   enabled: true
   size: 50Gi
-  storageClass: standard
 
 gitea:
   admin:
     username: gitea_admin
-    password: changeme
+    password: replace-with-a-secret
     email: admin@example.com
-
   config:
     server:
-      ROOT_URL: https://git.example.com
-      SSH_DOMAIN: git.example.com
-
+      ROOT_URL: https://git.internal.example/
+      SSH_DOMAIN: git.internal.example
     database:
       DB_TYPE: postgres
-
     security:
       INSTALL_LOCK: true
-      SECRET_KEY: ""  # Auto-generated if empty
-
-    oauth2:
-      ENABLE: true
-
+    service:
+      DISABLE_REGISTRATION: true
+      REQUIRE_SIGNIN_VIEW: true
     actions:
       ENABLED: true
-      DEFAULT_ACTIONS_URL: https://github.com
 
 postgresql:
   enabled: true
   auth:
     username: gitea
-    password: gitea
+    password: replace-with-a-secret
     database: gitea
   primary:
     persistence:
@@ -352,242 +410,197 @@ postgresql:
 redis:
   enabled: true
   architecture: standalone
-EOF
-
-# Install
-helm install gitea gitea/gitea -n gitea -f gitea-values.yaml
 ```
 
----
+```bash
+helm upgrade --install gitea gitea/gitea \
+  --namespace gitea \
+  --values gitea-values.yaml
 
-## Configuration Deep Dive
+kubectl -n gitea get pods
+kubectl -n gitea get svc
+kubectl -n gitea get ingress
+```
 
-### Essential app.ini Settings
+> **Pause and predict:** If this Kubernetes-hosted forge is the source of truth for the manifests that create the same cluster, what recovery document must exist outside the forge?
+
+The recovery document must describe how to restore the forge without depending on the unavailable forge. That usually means keeping bootstrap manifests, Helm values, database restore instructions, secret recovery procedures, and DNS or ingress steps in an offline runbook, a secure backup system, or another repository with separate availability. GitOps is powerful, but every GitOps platform needs a bootstrap path.
+
+A worked example makes the deployment decision more concrete. Imagine a factory automation group with thirty engineers, three shifts, no internet access in the production network, and several thousand equipment scripts. They need pull requests, audit trails, local accounts or LDAP, and nightly backups. They do not need complex portfolio reporting, integrated dependency scanning, or organization-wide planning boards.
+
+The lightweight design is reasonable if the team chooses a single internal VM, PostgreSQL, local repository storage, offline mode, and a documented USB or secure-transfer backup path. SQLite could work technically, but PostgreSQL gives the operations team familiar backup and restore tooling. Actions might be disabled at first because arbitrary runner execution in an isolated network creates a larger security question than Git hosting itself.
+
+Now compare that with a company-wide engineering platform serving hundreds of repositories, security policies, compliance reports, required approvals, dependency scanning, and central release dashboards. Gitea or Forgejo could still host repositories, but the team would need to assemble many surrounding controls. In that second scenario, a full platform might be more expensive but less risky because it packages capabilities the organization already requires.
+
+This is the senior pattern: choose the smallest tool that makes the operating model simpler, not merely the smallest binary. A tiny application surrounded by poorly understood integrations is not simple. A slightly larger platform with a clear support and compliance model can be simpler in the only sense that matters.
+
+## 4. Configure Identity, Policy, and Network Behavior
+
+Identity is where small forges often become production systems without anyone noticing. A personal lab can use local accounts. A team forge should usually integrate with LDAP, Active Directory, OIDC, or another identity provider so that onboarding, offboarding, group membership, and audit trails follow organizational policy. The key question is not "can the tool authenticate users," but "which system is authoritative for access."
+
+Gitea and Forgejo support local users, external authentication sources, and OAuth or OIDC-style login patterns depending on version and configuration. The exact provider syntax can change over time, so production teams should verify the current documentation for their chosen release. The operational principle is stable: make one system authoritative, map groups carefully, test admin access before cutover, and keep a break-glass account with strong protection.
 
 ```ini
-; /etc/gitea/app.ini
-APP_NAME = My Company Git
+APP_NAME = Internal Git
 RUN_MODE = prod
 
 [server]
-DOMAIN           = git.example.com
-ROOT_URL         = https://git.example.com/
-HTTP_PORT        = 3000
-SSH_DOMAIN       = git.example.com
-SSH_PORT         = 22
+DOMAIN = git.internal.example
+ROOT_URL = https://git.internal.example/
+HTTP_PORT = 3000
+SSH_DOMAIN = git.internal.example
+SSH_PORT = 22
 START_SSH_SERVER = true
-OFFLINE_MODE     = false  ; Set true for air-gapped
+OFFLINE_MODE = false
 
 [database]
-DB_TYPE  = postgres
-HOST     = localhost:5432
-NAME     = gitea
-USER     = gitea
-PASSWD   = `your-secure-password`
+DB_TYPE = postgres
+HOST = postgres.internal.example:5432
+NAME = gitea
+USER = gitea
+PASSWD = replace-with-secret-from-runtime
 SSL_MODE = require
 
 [security]
-SECRET_KEY          = your-secret-key
-INTERNAL_TOKEN      = your-internal-token
-INSTALL_LOCK        = true
+INSTALL_LOCK = true
 MIN_PASSWORD_LENGTH = 12
+PASSWORD_COMPLEXITY = lower,upper,digit
 
 [service]
-DISABLE_REGISTRATION       = false
-REQUIRE_SIGNIN_VIEW        = false
-ENABLE_CAPTCHA             = true
+DISABLE_REGISTRATION = true
+REQUIRE_SIGNIN_VIEW = true
 DEFAULT_KEEP_EMAIL_PRIVATE = true
-NO_REPLY_ADDRESS           = noreply.git.example.com
-
-[mailer]
-ENABLED   = true
-SMTP_ADDR = smtp.example.com
-SMTP_PORT = 587
-FROM      = gitea@example.com
-USER      = gitea@example.com
-PASSWD    = smtp-password
-
-[session]
-PROVIDER = redis
-PROVIDER_CONFIG = network=tcp,addr=localhost:6379,db=0
-
-[cache]
-ADAPTER = redis
-HOST    = network=tcp,addr=localhost:6379,db=1
-
-[queue]
-TYPE = redis
-CONN_STR = redis://localhost:6379/2
-
-[log]
-MODE      = console, file
-LEVEL     = info
-ROOT_PATH = /var/lib/gitea/log
+NO_REPLY_ADDRESS = noreply.git.internal.example
 
 [repository]
-ROOT                    = /var/lib/gitea/git/repositories
-DEFAULT_BRANCH          = main
-DEFAULT_PRIVATE         = private
-MAX_CREATION_LIMIT      = -1  ; Unlimited
-PREFERRED_LICENSES      = MIT,Apache-2.0,GPL-3.0
-
-[repository.upload]
-ENABLED     = true
-TEMP_PATH   = /var/lib/gitea/uploads
-MAX_FILES   = 10
-FILE_MAX_SIZE = 50  ; MB
-
-[lfs]
-STORAGE_TYPE = minio
-MINIO_ENDPOINT = s3.example.com
-MINIO_ACCESS_KEY_ID = access-key
-MINIO_SECRET_ACCESS_KEY = secret-key
-MINIO_BUCKET = gitea-lfs
-MINIO_LOCATION = us-east-1
-MINIO_USE_SSL = true
+ROOT = /data/git/repositories
+DEFAULT_BRANCH = main
+DEFAULT_PRIVATE = private
+DISABLE_HTTP_GIT = false
 
 [actions]
 ENABLED = true
-DEFAULT_ACTIONS_URL = github  ; or self-hosted URL
 
-[oauth2]
-ENABLE = true
-JWT_SECRET = your-jwt-secret
+[webhook]
+ALLOWED_HOST_LIST = private,external
 ```
 
-### LDAP/Active Directory Integration
+`ROOT_URL` deserves special attention because it affects generated clone URLs, redirects, webhook payloads, OAuth callbacks, and links in email notifications. If users access the service through `https://git.internal.example/` but the application believes it is `http://127.0.0.1:3000/`, you will see confusing symptoms. OAuth login may fail, webhooks may point at the wrong origin, and developers may copy clone URLs that only work from the server itself.
 
-```ini
-; Add to app.ini or configure via UI
+`OFFLINE_MODE` is another deceptively small setting. In an air-gapped environment, it prevents the application from trying to reach external services for avatars or other external assets. In a normal internal network, enabling offline mode may not be necessary, but you should still decide intentionally which external calls are allowed. A forge that hosts regulated code should not quietly depend on public network calls nobody reviewed.
 
-[authentication]
-REQUIRE_EXTERNAL_REGISTRATION_CAPTCHA = false
+| Configuration area | Good production question | Failure symptom when ignored |
+|---|---|---|
+| `ROOT_URL` | What exact URL do users, webhooks, OAuth callbacks, and email links use? | Login redirects fail, clone URLs are wrong, webhook consumers receive unusable links. |
+| Registration policy | Can anyone create an account, or must identity come from the provider? | Former employees or unknown users keep access paths outside normal offboarding. |
+| Default repository visibility | Are new repositories private unless intentionally published? | Sensitive internal code becomes visible across the instance by default. |
+| Mailer setup | Can password resets, mentions, and notifications reach users reliably? | Users bypass normal flows because notification-dependent actions do not work. |
+| Webhook allow list | Which internal and external endpoints may receive repository events? | A compromised admin or repo owner can send payloads to unexpected destinations. |
+| Secret key storage | Where do application secrets, OAuth client secrets, and tokens live? | Restores break sessions or leak long-lived credentials through filesystem backups. |
 
-; Via Admin UI: Site Administration → Authentication Sources → Add
-; Or via API:
-```
+> **Stop and think:** Your SSO login works, but new users land with no team permissions and create local usernames that do not match corporate identities. Is that an authentication problem, an authorization problem, or both?
+
+It is both, and treating it as only a login problem leads to brittle access control. Authentication proves who the user is. Authorization decides what repositories, organizations, and administrative functions that identity can use. Group claim mapping, team synchronization, username normalization, and admin-group rules are part of the forge design, not cosmetic settings.
+
+A typical OIDC-style setup uses a dedicated client in the identity provider, a redirect URI matching the forge `ROOT_URL`, and claims that can be mapped to users and groups. The command below demonstrates the shape of an OAuth provider registration, but production values must come from the identity provider and should be stored through a secure configuration mechanism rather than pasted into shell history.
 
 ```bash
-# Add LDAP authentication via CLI
+gitea admin auth add-oauth \
+  --config /data/gitea/conf/app.ini \
+  --name "Corporate SSO" \
+  --provider openidConnect \
+  --key "gitea-client-id" \
+  --secret "replace-with-client-secret" \
+  --auto-discover-url "https://idp.internal.example/realms/platform/.well-known/openid-configuration" \
+  --group-claim-name "groups" \
+  --admin-group "gitea-admins"
+```
+
+LDAP integration follows the same principle but has different operational traps. Bind credentials need rotation. Search bases and filters need testing against disabled users. Admin filters should be precise enough that a broad directory group does not become forge administrator by accident. The best time to test deprovisioning is before the forge hosts production deployment code.
+
+```bash
 gitea admin auth add-ldap \
-  --name "Corporate AD" \
-  --host ldap.example.com \
+  --config /data/gitea/conf/app.ini \
+  --name "Corporate LDAP" \
+  --host ldap.internal.example \
   --port 636 \
   --security-protocol ldaps \
-  --user-search-base "ou=Users,dc=example,dc=com" \
-  --user-filter "(&(objectClass=user)(sAMAccountName=%s))" \
-  --admin-filter "(memberOf=CN=GitAdmins,OU=Groups,DC=example,DC=com)" \
+  --user-search-base "ou=Users,dc=internal,dc=example" \
+  --user-filter "(&(objectClass=person)(uid=%s))" \
+  --admin-filter "(memberOf=cn=gitea-admins,ou=Groups,dc=internal,dc=example)" \
   --email-attribute mail \
-  --username-attribute sAMAccountName \
+  --username-attribute uid \
   --firstname-attribute givenName \
   --surname-attribute sn \
-  --bind-dn "CN=git-bind,OU=Service Accounts,DC=example,DC=com" \
-  --bind-password "bind-password"
+  --bind-dn "cn=gitea-bind,ou=ServiceAccounts,dc=internal,dc=example" \
+  --bind-password "replace-with-bind-password"
 ```
 
-### OAuth2/OIDC (Keycloak Example)
+Policy is not only identity. Repository defaults, branch protection, required approvals, signed commits, protected tags, webhooks, and Actions permissions all shape the risk surface. Small forges tend to be adopted by teams that want less ceremony, but platform teams still need defaults that keep accidental exposure and accidental deletion from becoming normal.
 
-```bash
-# Add Keycloak OIDC provider
-gitea admin auth add-oauth \
-  --name "Keycloak SSO" \
-  --provider openidConnect \
-  --key gitea-client-id \
-  --secret gitea-client-secret \
-  --auto-discover-url https://keycloak.example.com/realms/company/.well-known/openid-configuration \
-  --group-claim-name groups \
-  --admin-group gitea-admins
+A practical baseline is to make repositories private by default, disable public registration, require sign-in to view internal code, protect main branches, require pull requests for production repositories, and limit who can create organization-level runners or webhooks. You can relax those controls for open-source or inner-source contexts, but the default should match the cost of a mistake.
+
+## 5. Treat Actions Runners as Execution Infrastructure
+
+Gitea Actions gives lightweight forges a familiar CI/CD story because workflow files look close to GitHub Actions. That compatibility is useful during migration, but it can hide the most important difference: you own the runner infrastructure. There is no GitHub-hosted runner fleet behind the curtain. Your labels, containers, networks, credentials, caches, and host permissions are now part of your platform.
+
+The Actions scheduler lives in the forge application. The runner polls for jobs, matches `runs-on` labels, executes steps, streams logs, and uploads artifacts. A runner can execute in host mode, Docker mode, or more isolated container patterns depending on version and setup. Docker mode is common because workflow steps run in containers, but mounting the host Docker socket grants powerful access and should not be treated as harmless convenience.
+
+```text
+GITEA ACTIONS EXECUTION PATH
+
+┌──────────────────────────────┐
+│ Developer pushes commit      │
+│ with .gitea/workflows/ci.yml │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Forge receives Git event     │
+│ and schedules workflow job   │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Runner polls instance        │
+│ and matches job label        │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Runner starts job container  │
+│ or host execution context    │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Logs, status, and artifacts  │
+│ flow back to the forge       │
+└──────────────────────────────┘
 ```
 
----
+> **Pause and predict:** A repository owned by interns can run workflows on an instance-level runner that mounts `/var/run/docker.sock`. What can go wrong if a workflow is malicious rather than merely buggy?
 
-## Gitea Actions: GitHub-Compatible CI/CD
+A malicious workflow may be able to control Docker on the host, inspect other containers, mount host paths, steal runner environment variables, access cached credentials, or alter later jobs. The exact blast radius depends on configuration, but the mental model should be simple: a shared runner that can control the host container runtime is highly privileged. Treat runner scopes and labels as security boundaries only when the execution environment actually enforces boundaries.
 
-### How It Works
+Runner placement should follow trust. Instance-level runners are convenient for common trusted workloads, but they are risky if any repository can submit arbitrary workflows. Organization-level runners narrow the blast radius. Repository-level runners are better for sensitive workloads or teams with unusual dependencies. Ephemeral runners reduce credential exposure by registering for one job and disappearing afterward, though they require more automation.
 
-```
-GITEA ACTIONS ARCHITECTURE
-─────────────────────────────────────────────────────────────────
+| Runner pattern | Best use | Risk profile | Design note |
+|---|---|---|---|
+| Instance-level reusable runner | Small trusted instance with similar workloads | Broadest blast radius if any repository can run jobs | Limit repository access, monitor jobs, and avoid privileged host access where possible. |
+| Organization-level runner | Teams with shared build dependencies | Compromise affects repositories in that organization | Match labels to team trust boundaries, not only operating system names. |
+| Repository-level runner | Sensitive code, deployment jobs, special hardware | Narrower scope but more operational overhead | Good fit for production deployment pipelines and regulated repositories. |
+| Ephemeral runner | Untrusted workloads or stronger isolation goals | Lower credential persistence, more automation complexity | Pair with queue-triggered provisioning and aggressive cleanup. |
+| Host-mode runner | Builds needing local tools or special devices | Weakest execution isolation | Use only for trusted workloads and document why containers cannot be used. |
 
-┌─────────────────────────────────────────────────────────────────┐
-│                         GITEA SERVER                             │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Actions Scheduler                                         │  │
-│  │  - Watches for workflow triggers                          │  │
-│  │  - Queues jobs for runners                                │  │
-│  │  - Stores logs and artifacts                              │  │
-│  └────────────────────────────┬──────────────────────────────┘  │
-└───────────────────────────────┼──────────────────────────────────┘
-                                │ HTTP/HTTPS
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      ACT RUNNER (self-hosted)                    │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Runner Process                                            │  │
-│  │  - Polls Gitea for jobs                                   │  │
-│  │  - Executes workflows in containers                       │  │
-│  │  - Uploads logs and artifacts                             │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  Execution Environments:                                         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
-│  │  Docker  │  │  LXC     │  │  Host    │                      │
-│  │Container │  │Container │  │(rootless)│                      │
-│  └──────────┘  └──────────┘  └──────────┘                      │
-└─────────────────────────────────────────────────────────────────┘
-
-WORKFLOW SYNTAX: 99% compatible with GitHub Actions!
-```
-
-### Setting Up Actions
-
-```bash
-# 1. Enable Actions in app.ini
-cat >> /etc/gitea/app.ini << 'EOF'
-[actions]
-ENABLED = true
-DEFAULT_ACTIONS_URL = github  ; Use GitHub's actions as default
-
-; For air-gapped: host your own action repos
-; DEFAULT_ACTIONS_URL = https://git.internal.example.com
-EOF
-
-# 2. Deploy Act Runner
-# Option A: Binary
-wget https://dl.gitea.io/act_runner/0.2.6/act_runner-0.2.6-linux-amd64
-chmod +x act_runner-0.2.6-linux-amd64
-mv act_runner-0.2.6-linux-amd64 /usr/local/bin/act_runner
-
-# Register runner (get token from Gitea UI: Settings → Actions → Runners)
-act_runner register \
-  --instance https://git.example.com \
-  --token <registration-token> \
-  --name prod-runner-01 \
-  --labels ubuntu-latest:docker://ubuntu:22.04,self-hosted
-
-# Start runner
-act_runner daemon
-
-# Option B: Docker
-docker run -d \
-  --name act-runner \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ./runner-data:/data \
-  -e CONFIG_FILE=/data/config.yaml \
-  gitea/act_runner:latest
-```
-
-### Example Workflow (GitHub-Compatible)
+A minimal workflow lives under `.gitea/workflows/`, not `.github/workflows/`. Most simple GitHub Actions workflows can be moved with small changes, but do not assume every advanced feature behaves identically. OIDC tokens, hosted runner assumptions, cache networking, action pinning, and marketplace access are common migration review points.
 
 ```yaml
-# .gitea/workflows/ci.yaml
-name: CI Pipeline
+name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   test:
@@ -595,94 +608,104 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Show runner context
+        run: |
+          echo "repository=${{ github.repository }}"
+          echo "sha=${{ github.sha }}"
+          uname -a
+
+      - name: Run unit test placeholder
+        run: |
+          test -f README.md
+          echo "README exists and workflow can read repository content"
+
+      - name: Create build artifact
+        run: |
+          mkdir -p build
+          printf "artifact from %s\n" "${{ github.sha }}" > build/result.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          go-version: '1.21'
-
-      - name: Run tests
-        run: go test -v ./...
-
-      - name: Build
-        run: go build -o app ./cmd/main.go
-
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Run Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-
-  build-image:
-    needs: [test, security-scan]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Login to Registry
-        uses: docker/login-action@v3
-        with:
-          registry: registry.example.com
-          username: ${{ secrets.REGISTRY_USER }}
-          password: ${{ secrets.REGISTRY_PASS }}
-
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: registry.example.com/myapp:${{ github.sha }}
+          name: result
+          path: build/result.txt
 ```
 
-### Actions Compatibility Notes
+A runner label is a contract between workflow authors and runner operators. If a workflow says `runs-on: ubuntu-latest`, the runner must advertise a matching label and map it to a suitable execution environment. When labels are vague, users assume a GitHub-hosted environment that does not exist. When labels are precise, operators can communicate what the runner really provides.
 
-| Feature | GitHub Actions | Gitea Actions | Notes |
-|---------|---------------|---------------|-------|
-| Workflow syntax | ✓ | ✓ | Nearly identical |
-| Actions from GitHub | ✓ | ✓ | Works by default |
-| Matrix builds | ✓ | ✓ | Full support |
-| Secrets | ✓ | ✓ | Repo/org/instance level |
-| Artifacts | ✓ | ✓ | Upload/download |
-| Caching | ✓ | Partial | Cache action works |
-| OIDC tokens | ✓ | ✗ | Not yet supported |
-| Reusable workflows | ✓ | ✓ | Works |
-| GitHub-hosted runners | ✓ | ✗ | Self-hosted only |
+```yaml
+runner:
+  file: .runner
+  capacity: 2
+  timeout: 3h
 
----
+container:
+  network: bridge
+  privileged: false
+  options: ""
 
-## Migration Strategies
+cache:
+  enabled: true
+  dir: "/data/cache"
+  host: "192.0.2.10"
+  port: 8088
 
-### From GitHub to Gitea
+labels:
+  - "ubuntu-latest:docker://catthehacker/ubuntu:act-latest"
+  - "golang-1.23:docker://golang:1.23-bookworm"
+  - "deploy-prod:docker://alpine:3.20"
+```
+
+The `deploy-prod` example is intentionally named by purpose rather than operating system. A production deployment runner should be scarce, audited, and attached to protected branches or environments. If every repository can request `deploy-prod`, the label is decoration. If only approved repositories and branch rules can reach it, the label becomes part of a meaningful control.
+
+A senior Actions design also reviews outbound network access. If workflows can pull any public action from GitHub, an air-gapped promise is false. If workflows can push to any registry, the pipeline may exfiltrate artifacts. If package caches are shared across trust boundaries, dependency poisoning becomes easier. The smaller forge does not remove supply-chain problems; it makes them your responsibility.
+
+## 6. Plan Migration, Mirroring, and Operations as One Story
+
+Migration is not finished when `git clone --mirror` succeeds. A forge migration may include repositories, issues, pull requests, releases, wiki pages, labels, milestones, webhooks, deploy keys, branch protection rules, secrets, packages, and workflow files. Some data can be imported directly. Some data must be recreated. Some data should intentionally be left behind because it represents legacy policy you do not want to preserve.
+
+The safest migration begins with a classification pass. Production deployment repositories deserve a rehearsed migration and rollback plan. Archived repositories may need only a mirror and read-only verification. Personal repositories may be handled by owners. Repositories with Git LFS need special attention because Git history can appear complete while LFS objects are missing.
+
+```text
+MIGRATION CONTROL FLOW
+
+┌──────────────────────────────┐
+│ Inventory repositories       │
+│ owners, sensitivity, LFS     │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Classify migration method    │
+│ mirror, import, archive      │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Recreate platform controls   │
+│ teams, branch rules, secrets │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Adapt workflows and runners  │
+│ labels, caches, credentials  │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Verify clone, PR, CI, tags,  │
+│ release, webhook, rollback   │
+└──────────────────────────────┘
+```
+
+A one-time import is useful when the source system is being retired or when the target should become authoritative immediately. A mirror is useful during transition, but it can confuse teams if they are not clear about which side accepts writes. Bidirectional sync sounds attractive, yet it often creates conflict handling and audit ambiguity. Most teams should prefer a clear cutover window over long-running bidirectional cleverness.
 
 ```bash
-# Option 1: Mirror repositories (keeps sync)
-# In Gitea UI: New Migration → GitHub → Enter repo URL
-# Check "This repository will be a mirror"
+GITHUB_ORG="example-org"
+GITEA_URL="https://git.internal.example"
+GITEA_ORG="platform"
+GITEA_TOKEN="replace-with-token"
 
-# Option 2: One-time import
-# Via UI: New Migration → GitHub
-# Enter: https://github.com/owner/repo
-# Authenticate with token for private repos
-
-# Option 3: Bulk migration script
-#!/bin/bash
-GITHUB_ORG="my-company"
-GITEA_URL="https://git.example.com"
-GITEA_TOKEN="your-token"
-GITEA_ORG="my-company"
-
-# Get all repos from GitHub
-repos=$(gh repo list $GITHUB_ORG --json name -q '.[].name')
-
-for repo in $repos; do
-  echo "Migrating $repo..."
-
-  curl -X POST "$GITEA_URL/api/v1/repos/migrate" \
+gh repo list "$GITHUB_ORG" --json name,isPrivate --jq '.[] | select(.isPrivate == true) | .name' |
+while read -r repo; do
+  curl -fsS -X POST "$GITEA_URL/api/v1/repos/migrate" \
     -H "Authorization: token $GITEA_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{
@@ -699,333 +722,326 @@ for repo in $repos; do
 done
 ```
 
-### Migrating CI from GitHub Actions to Gitea Actions
-
-```yaml
-# BEFORE: .github/workflows/ci.yaml (GitHub)
-name: CI
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest  # GitHub-hosted
-    steps:
-      - uses: actions/checkout@v4
-      - run: make build
-
-# AFTER: .gitea/workflows/ci.yaml (Gitea)
-name: CI
-on: [push]
-jobs:
-  build:
-    runs-on: ubuntu-latest  # Your self-hosted runner
-    steps:
-      - uses: actions/checkout@v4  # Same!
-      - run: make build
-
-# Key changes:
-# 1. Move file from .github/ to .gitea/
-# 2. Ensure runner labels match
-# 3. Update any GitHub-specific actions
-# 4. Most workflows work unchanged!
-```
-
----
-
-## War Story: The Air-Gapped Factory Floor
-
-*How a $340 million semiconductor expansion almost failed over a Git server*
-
-### The Situation
-
-**Company**: A tier-2 semiconductor manufacturer in Arizona
-**Date**: Q3 2023
-**Stakes**: $340 million production line expansion
-
-The automation team maintained many equipment-control scripts in shared folders with inconsistent naming. Without version control, they also lacked a clean audit trail and reliable rollback path.
-
-Then came the audit.
-
-A compliance audit demanded traceability for script changes, and the team could not answer basic questions about who changed what and when.
-
-**Requirements for the fix**:
-- Operate in a fully isolated network
-- Run on existing low-resource hardware
-- Sync between clean rooms that can't be physically connected
-- Support 50 engineers across 3 shifts
-- Zero recurring licensing costs (capex budget was exhausted)
-- Be deployable on a short compliance deadline
-
-### Why Not GitLab?
-
-The team ruled out a heavier enterprise platform because licensing and deployment overhead did not fit the budget or the timeline.
-
-"We tried GitLab Omnibus on a test VM anyway. It wanted 8GB RAM minimum just to start. Our entire edge compute budget was 16GB across 4 Pis. GitLab was dead before we started."
-
-Per-seat enterprise Git hosting can be hard to justify when the immediate need is basic internal version control for scripts and automation.
-
-### The Solution
-
-```
-FACTORY FLOOR GIT ARCHITECTURE
-─────────────────────────────────────────────────────────────────
-
-┌─────────────────────────────────────────────────────────────────┐
-│                        CLEAN ROOM A                              │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Raspberry Pi 4 (4GB)                                      │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │  Gitea (100MB RAM)                                   │  │  │
-│  │  │  SQLite database (local)                             │  │  │
-│  │  │  Local Git storage                                   │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                              │                                   │
-│                    USB drive sync                                │
-│                     (sneakernet)                                 │
-│                              │                                   │
-└──────────────────────────────┼───────────────────────────────────┘
-                               │
-┌──────────────────────────────┼───────────────────────────────────┐
-│                        CLEAN ROOM B                              │
-│                              │                                   │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Raspberry Pi 4 (4GB)                                      │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │  Gitea (100MB RAM)                                   │  │  │
-│  │  │  Mirror sync from USB                                │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-
-Sync Process:
-1. Engineer commits to Room A Gitea
-2. Nightly: USB drive syncs Git bundles
-3. Room B imports bundles via automation
-4. Bidirectional sync handles conflicts with branch prefixes
-```
-
-### Implementation
-
 ```bash
-# Gitea on Raspberry Pi - minimal config
-cat > /etc/gitea/app.ini << 'EOF'
-APP_NAME = FabGit
-RUN_MODE = prod
+SOURCE_URL="https://github.com/example-org/service-a.git"
+TARGET_URL="https://git.internal.example/platform/service-a.git"
 
-[server]
-DOMAIN       = gitea.local
-ROOT_URL     = http://gitea.local:3000/
-HTTP_PORT    = 3000
-OFFLINE_MODE = true  # Critical for air-gapped
-
-[database]
-DB_TYPE = sqlite3
-PATH    = /var/lib/gitea/data/gitea.db
-
-[repository]
-ROOT = /var/lib/gitea/git/repositories
-
-[security]
-INSTALL_LOCK = true
-
-[service]
-DISABLE_REGISTRATION = true
-REQUIRE_SIGNIN_VIEW  = true
-
-[log]
-LEVEL = warn  # Reduce disk writes
-EOF
-
-# USB sync script (runs on each Gitea)
-#!/bin/bash
-# /opt/sync/export-bundles.sh
-
-EXPORT_DIR="/mnt/usb/git-sync"
-mkdir -p "$EXPORT_DIR"
-
-for repo in /var/lib/gitea/git/repositories/*/*.git; do
-  repo_name=$(basename "$repo" .git)
-  cd "$repo"
-  git bundle create "$EXPORT_DIR/${repo_name}.bundle" --all
-done
-
-# Checksum for integrity
-cd "$EXPORT_DIR"
-sha256sum *.bundle > checksums.sha256
+git clone --mirror "$SOURCE_URL" service-a.git
+cd service-a.git
+git remote set-url --push origin "$TARGET_URL"
+git push --mirror
+git lfs fetch --all "$SOURCE_URL" || true
+git lfs push --all "$TARGET_URL" || true
 ```
 
-### Results
+Workflow migration deserves its own review. Moving `.github/workflows/ci.yaml` to `.gitea/workflows/ci.yaml` may be enough for a small test pipeline, but deployment workflows often depend on GitHub-hosted runner tools, GitHub OIDC federation, repository environments, organization secrets, or marketplace actions. Each of those assumptions must be mapped to a Gitea or Forgejo equivalent, a self-hosted replacement, or a deliberate removal.
 
-**Timeline**:
-- Week 1: Gitea deployed on 4 Raspberry Pis
-- Week 2: LDAP integration, USB sync automation
-- Week 3-4: Migration of 2,400 scripts with commit history reconstruction
-- Week 5: Training across all three shifts
-- Week 6: Re-audit passed with flying colors
+```text
+WORKFLOW MIGRATION CHECK
 
-**Financial Impact**:
-
-| Metric | Before (No VCS) | After (Gitea) | Savings |
-|--------|-----------------|---------------|---------|
-| Script rollback time | 2-4 hours | 30 seconds | $45K/year in downtime |
-| Cross-shift handoff issues | 5/week | 0 | $78K/year in rework |
-| Audit compliance | **Failed** | **Passed** | $340M expansion saved |
-| Annual licensing cost | N/A | $0 | $127K vs GitLab quote |
-| Hardware cost | N/A | $0 (existing Pis) | $0 additional |
-| Memory used | N/A | 98MB average | - |
-
-**Outcome**: The deployment reduced audit risk and avoided buying a heavier platform for a narrow internal use case.
-
-### Lessons Learned
-
-1. **SQLite can be workable for small deployments** - validate concurrency, backup, and maintenance requirements against your own workload.
-2. **Offline mode is essential** - Setting `OFFLINE_MODE = true` prevents all external calls, critical for air-gapped compliance
-3. **Git bundles solve sync** - Native Git feature that works everywhere, no special tooling needed
-4. **Small hardware can be enough** - lightweight Git hosting is often viable on modest systems when the workload is limited.
-5. **Version control improves traceability** - it gives teams a clearer record of changes, authorship, and rollback history.
-
----
-
-## Gitea vs GitHub vs GitLab Comparison
-
-```
-FEATURE COMPARISON
-─────────────────────────────────────────────────────────────────
-
-                        Gitea      GitHub.com   GitLab CE
-─────────────────────────────────────────────────────────────────
-Self-hosted             ✓          Enterprise   ✓
-Min RAM                 100MB      N/A          4GB
-Single binary           ✓          ✗            ✗
-Free (all features)     ✓          Limited      Tiered
-LDAP/SAML               ✓          Enterprise   ✓
-CI/CD built-in          ✓ (Actions) ✓ (Actions) ✓ (CI/CD)
-Container registry      ✓          ✓            ✓
-Code review             ✓          ✓            ✓
-Issue tracking          ✓          ✓            ✓
-Project boards          ✓          ✓            ✓
-Wiki                    ✓          ✓            ✓
-Dependency scanning     ✗          ✓ (GHAS)     ✓ (Ultimate)
-Code search             Basic      Advanced     Advanced
-
-BEST FOR:
-─────────────────────────────────────────────────────────────────
-Gitea:
-  • Resource-constrained environments
-  • Air-gapped deployments
-  • Simple self-hosting needs
-  • GitHub Actions compatibility without GitHub
-
-GitHub:
-  • Open source projects
-  • Integration ecosystem
-  • AI features (Copilot)
-  • Enterprise with compliance needs
-
-GitLab:
-  • Full DevOps platform in one tool
-  • Complex CI/CD pipelines
-  • Security scanning built-in
-  • Regulatory compliance
+┌──────────────────────────────┐
+│ File location                 │
+│ .github/workflows -> .gitea   │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Runner labels                 │
+│ ubuntu-latest must exist      │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Secrets and credentials       │
+│ recreate, do not copy blindly │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ External actions              │
+│ allowed, mirrored, or blocked │
+└───────────────┬──────────────┘
+                ▼
+┌──────────────────────────────┐
+│ Deployment identity           │
+│ replace hosted OIDC patterns  │
+└──────────────────────────────┘
 ```
 
----
+Operations after migration are where lightweight tools either shine or suffer. The service should be monitored for HTTP availability, SSH clone access, database health, disk space, queue depth, runner availability, webhook failures, and backup completion. Disk space is especially important because Git repositories, LFS objects, packages, Actions logs, and artifacts can grow faster than teams expect.
+
+Backups should be tested as restores, not counted as successful job exits. A meaningful restore test creates a separate instance, restores the database and repositories, verifies users and permissions, clones representative repositories, checks LFS objects, loads a pull request page, and confirms that the restored service does not accidentally send webhooks or emails as if it were production. That test reveals hidden dependencies before a real incident.
+
+| Operational signal | Why it matters | Example response |
+|---|---|---|
+| HTTP and SSH availability | Users need both browser workflows and Git transport | Alert separately so SSH failures are not hidden by a healthy web UI. |
+| Database backup age | Metadata loss can break reviews, permissions, and audit trails | Page the owner when backup age exceeds the recovery point objective. |
+| Repository disk growth | Git, LFS, packages, artifacts, and logs compete for storage | Set retention policies and expand storage before writes fail. |
+| Runner queue duration | CI/CD value disappears when jobs wait too long | Add runners, split labels, or investigate stuck workflows. |
+| Webhook delivery failures | GitOps, chatops, and integrations depend on events | Retry known failures and validate target allow lists. |
+| Failed login spikes | Credential abuse or identity misconfiguration may be happening | Check identity-provider logs and rate-limiting behavior. |
+
+> **Stop and think:** A restored forge passes a web UI smoke test, but developers report that old releases are missing binaries. Which state area was probably excluded from the restore, and how would you prove it?
+
+The likely missing area is package, release asset, artifact, or LFS storage depending on how the instance was configured. Prove it by comparing release asset records in the database, object storage keys, LFS pointer files, and direct download behavior on a representative repository. A complete restore test checks the user experience, not only process exit codes.
+
+Senior operators also plan upgrades conservatively. Because the forge stores critical metadata, upgrades should be rehearsed on a restored copy when possible. Read release notes, back up first, run database migrations in a controlled window, verify login and clone flows, then verify webhooks and runners. If you operate Forgejo, pay attention to its release schedule and LTS policy. If you operate Gitea, pay attention to the upstream release and security advisory channels.
+
+## 7. Worked Example: Designing a Small Regulated Forge
+
+A regional healthcare analytics team needs a source-control service inside a restricted network. The team has twenty developers, several platform engineers, and a compliance requirement that infrastructure scripts and deployment manifests stay inside approved systems. They already operate Kubernetes, but their GitOps controller reads from Git, so the source-control service must be recoverable even if the application cluster is unhealthy.
+
+The beginner answer is "install the Helm chart because we have Kubernetes." The senior answer starts by drawing dependencies. If the forge is needed to recover the cluster, the cluster cannot be the only place where the forge recovery instructions live. The team can still deploy the application on Kubernetes, but backups, Helm values, secrets recovery, and an emergency restore path need storage outside the cluster.
+
+```text
+DEPENDENCY-AWARE DESIGN
+
+┌──────────────────────────────┐
+│ Secure backup repository     │
+│ restore docs, Helm values    │
+│ encrypted secrets package    │
+└───────────────┬──────────────┘
+                │ emergency restore path
+                ▼
+┌──────────────────────────────┐
+│ Kubernetes-hosted forge      │
+│ ingress, TLS, app pod        │
+└───────┬─────────────┬────────┘
+        │             │
+        ▼             ▼
+┌──────────────┐ ┌──────────────┐
+│ External     │ │ Persistent   │
+│ PostgreSQL   │ │ repository   │
+│ backups      │ │ volume       │
+└──────────────┘ └──────────────┘
+        │             │
+        ▼             ▼
+┌──────────────────────────────┐
+│ Nightly restore rehearsal    │
+│ clone, LFS, PR, webhook test │
+└──────────────────────────────┘
+```
+
+The team chooses Forgejo because non-profit governance aligns with their internal open-source policy, but the same technical design would work with Gitea. They use PostgreSQL rather than SQLite because the database is operationally important and the organization already knows how to back it up. They use private repositories by default and require sign-in because the instance contains deployment logic and environment-specific configuration.
+
+For identity, they configure OIDC against the corporate provider and map a narrow admin group. They keep one break-glass administrator account in a password vault with multi-person access policy. They test offboarding by disabling a test user in the identity provider and verifying that the user cannot authenticate, push, or access private repositories after session expiry.
+
+For CI/CD, they start with organization-level runners for build and test jobs, then create repository-level runners for production deployment repositories. The deployment runners use labels such as `deploy-staging` and `deploy-prod`, and branch protection prevents feature branches from invoking production deployment jobs. The team does not mount the host Docker socket on the production deployment runner; instead, the runner executes in a constrained environment with only the credentials needed for that deployment path.
+
+For migration, they import repositories in three waves. The first wave contains a non-critical service used to validate clone, pull request, issue, webhook, and Actions behavior. The second wave contains internal libraries and shared manifests. The final wave contains deployment repositories, scheduled during a change window with source repositories placed read-only before cutover. Each wave has a rollback decision point.
+
+The result is not "a small Git server." It is a small forge operated with clear platform boundaries. The team gained local ownership and lower operational overhead without pretending that source control is disposable. That is the difference between a lightweight platform component and an unmanaged side project.
+
+## Did You Know?
+
+- **Gitea and Forgejo can run on modest hardware, but production reliability still depends on state design.** The application footprint is small, while the database, Git repositories, LFS objects, and runner execution environments still need deliberate ownership.
+
+- **Forgejo's existence is a governance lesson as much as a technical fork.** When a delivery platform becomes strategic, the project's ownership model, release policy, and community direction can be valid engineering criteria.
+
+- **Actions compatibility reduces migration friction but does not remove runner responsibility.** Workflow syntax may look familiar, yet labels, isolation, outbound network access, cache behavior, and deployment credentials are now controlled by your team.
+
+- **A tested restore is more valuable than an impressive backup dashboard.** A forge restore must prove that repositories, metadata, permissions, LFS objects, releases, webhooks, and representative workflows all behave as expected.
 
 ## Common Mistakes
 
-| Mistake | Why It's Bad | Better Approach |
-|---------|--------------|-----------------|
-| SQLite in production with 500+ users | Performance degrades, locking issues | Use PostgreSQL from the start |
-| Not setting `INSTALL_LOCK = true` | Anyone can re-run setup | Lock immediately after install |
-| Storing secrets in app.ini | Plain text in config file | Use environment variables or secrets manager |
-| Skipping backups | Gitea stores more than Git repos | Backup database + repos + LFS |
-| Running as root | Security risk | Use dedicated gitea user |
-| Exposing to internet without TLS | Credentials sent in plain text | Always use HTTPS, even internal |
-| Ignoring `OFFLINE_MODE` for air-gapped | Gitea tries to reach external services | Set `OFFLINE_MODE = true` |
-| Not setting up Actions runners | Users expect CI/CD to work | Deploy runners before announcing |
+| Mistake | Why It Hurts | Better Approach |
+|---|---|---|
+| Choosing SQLite for a shared production instance only because setup is fast | Locking behavior, backup discipline, and growth pressure can surprise the team later | Use SQLite for tiny or appliance-like deployments, and choose PostgreSQL when the forge supports multiple teams. |
+| Backing up only Git repository directories | Pull requests, issues, permissions, tokens, releases, and runner data live outside bare Git repositories | Back up and restore-test the database, repository storage, object storage, configuration, and secrets together. |
+| Leaving public registration enabled on an internal forge | Unknown users may create accounts outside normal onboarding and offboarding controls | Disable open registration and integrate with the organization's authoritative identity provider. |
+| Treating instance-level runners as harmless shared build workers | A malicious workflow can abuse broad runner access, especially when the Docker socket is mounted | Scope runners by trust boundary, prefer repository-level runners for sensitive jobs, and reduce host privileges. |
+| Migrating workflows without reviewing hosted-runner assumptions | GitHub-hosted tools, OIDC credentials, marketplace access, and cache behavior may not exist locally | Review each workflow for labels, actions, secrets, network access, and deployment identity before cutover. |
+| Setting `ROOT_URL` to the internal container or loopback address | Users receive broken clone URLs, OAuth callbacks fail, and webhook payloads contain unusable links | Set `ROOT_URL` to the exact external URL developers and integrations use. |
+| Deploying the forge on the same cluster that depends on it without a bootstrap plan | A cluster outage can block access to the Git source needed to recover the cluster | Store restore instructions, values, and encrypted recovery material outside the forge and rehearse recovery. |
+| Announcing Actions before runners, labels, and security policy are ready | Developers create workflows that queue forever or run on unsafe infrastructure | Publish runner labels, allowed actions policy, secret rules, and support expectations before enabling CI broadly. |
 
----
+## Quiz
+
+### Question 1
+
+Your team runs a small internal Gitea instance on Docker Compose with SQLite. It now hosts deployment manifests for eight services, and two more teams want to join. Pull requests are still fast, but compliance asks for point-in-time restore evidence. What would you recommend before expanding usage, and why?
+
+<details>
+<summary>Show Answer</summary>
+
+Move the production design toward PostgreSQL and a tested restore process before onboarding more teams. SQLite may still work for a small installation, but the risk has changed because the forge now controls deployment manifests for multiple services. The recommendation is not "SQLite is bad"; it is that the team needs stronger backup tooling, restore evidence, and operational familiarity as the blast radius grows. A good answer also mentions backing up repositories, LFS or package storage, configuration, and secrets, not only changing the database.
+</details>
+
+### Question 2
+
+A team migrates a GitHub Actions workflow by copying it into `.gitea/workflows/ci.yaml`. The workflow stays queued forever with `runs-on: ubuntu-latest`. The forge UI shows no runner failures. What should you check first, and what design lesson does this reveal?
+
+<details>
+<summary>Show Answer</summary>
+
+Check whether any registered runner advertises a label matching `ubuntu-latest`, and verify that Actions are enabled for the instance and repository. In Gitea Actions, runner labels are provided by your self-hosted runner fleet. The design lesson is that workflow syntax compatibility does not mean hosted runner compatibility. The platform team must publish supported labels and maintain the execution environments behind them.
+</details>
+
+### Question 3
+
+A regulated factory uses Forgejo in an air-gapped network. Developers report that avatar loading and some workflow steps try to reach public internet addresses. Which configuration and workflow areas would you review, and how would you reduce the risk?
+
+<details>
+<summary>Show Answer</summary>
+
+Review `OFFLINE_MODE`, external avatar behavior, allowed webhook destinations, Actions default action sources, and workflow steps that fetch public actions or packages. Enabling offline mode helps prevent application-level external calls, but workflows can still attempt outbound access if runners have a route. Reducing the risk requires both forge configuration and runner network controls. In a strict air-gapped environment, mirror required actions and dependencies internally, then block unexpected egress.
+</details>
+
+### Question 4
+
+After a restore test, users can log in and clone repositories, but release pages show missing binary downloads and Git LFS files fail during checkout. The backup job reported success. What was wrong with the backup strategy?
+
+<details>
+<summary>Show Answer</summary>
+
+The backup probably captured the database and Git repositories but missed object storage, LFS storage, package storage, or release asset files. A forge restore is complete only when user-visible artifacts work, not when the database starts. The fix is to inventory all configured storage backends, include them in backup and restore procedures, and verify representative LFS files, release assets, packages, and workflow artifacts during restore tests.
+</details>
+
+### Question 5
+
+A platform team wants one instance-level runner for every repository because it is cheaper to operate. Some repositories are maintained by trusted employees, while others accept contributions from external contractors. What runner design would you propose?
+
+<details>
+<summary>Show Answer</summary>
+
+Do not use one broad instance-level runner for every trust level. Split runners by trust boundary, using organization-level or repository-level runners for sensitive repositories and separate constrained runners for contractor-accessible projects. Avoid privileged host access for untrusted workflows, review Docker socket exposure, and use explicit labels that describe purpose. The cost of extra runners is usually lower than the cost of one compromised runner with broad access.
+</details>
+
+### Question 6
+
+Your organization wants to migrate from GitHub to Forgejo, but several deployment workflows rely on GitHub OIDC federation to cloud accounts. The repository import succeeds. What migration work remains before cutover?
+
+<details>
+<summary>Show Answer</summary>
+
+The deployment identity model must be redesigned or replaced. Importing repositories does not recreate GitHub OIDC trust relationships, repository environments, organization secrets, or hosted-runner assumptions. The team must decide how Forgejo workflows will authenticate to the cloud, where secrets live, which runners can deploy, and which branch protections gate those jobs. The cutover should wait until a representative deployment workflow succeeds through the new identity path.
+</details>
+
+### Question 7
+
+A team deploys Gitea on Kubernetes and stores the Helm values only in a repository hosted by that same Gitea instance. During a cluster storage incident, the forge is unavailable and the team cannot find the exact restore settings. What architecture mistake caused this, and how should it be corrected?
+
+<details>
+<summary>Show Answer</summary>
+
+The team created a bootstrap dependency loop without an external recovery path. If the forge is required to restore the cluster or itself, the restore instructions and critical values cannot live only inside that forge. Correct the design by storing bootstrap material, encrypted secrets recovery instructions, Helm values, database restore procedures, and DNS or ingress steps in a secure location outside the instance. Then rehearse recovery from that external material.
+</details>
+
+### Question 8
+
+A team asks whether they should choose Gitea or GitLab. They have limited hardware, need internal pull requests, want GitHub Actions-style workflows, and already use separate tools for scanning, registry, and deployment. What recommendation would you make, and what caveat would you attach?
+
+<details>
+<summary>Show Answer</summary>
+
+Gitea or Forgejo is a strong candidate because the team needs lightweight source control and does not require a full integrated DevOps platform. The caveat is that the surrounding operating model still matters: identity, backups, runner isolation, workflow compatibility, monitoring, and restore testing must be designed explicitly. The recommendation should include a pilot with one representative repository and one representative workflow before committing the whole organization.
+</details>
 
 ## Hands-On Exercise
 
-### Task: Deploy Gitea with CI/CD
+### Task: Deploy a Local Gitea Lab With Actions and Verify the Operating Model
 
-**Objective**: Deploy Gitea, configure authentication, set up Actions, and run a pipeline.
+In this exercise, you will deploy Gitea with Docker Compose, complete the initial setup, register an Actions runner, create a repository, run a workflow, and then inspect the design decisions that would matter in production. The lab uses `127.0.0.1` for browser access and a Compose service name for runner-to-forge communication, because the runner talks over the internal Docker network while you use the published port from your workstation.
 
-**Success Criteria**:
-1. Gitea running and accessible
-2. LDAP or OAuth authentication working
-3. Actions runner registered
-4. Sample workflow executes successfully
-5. Container image pushed to registry
+### Success Criteria
 
-### Steps
+- [ ] Gitea starts successfully and returns version information from the local API endpoint.
+- [ ] The instance has Actions enabled and a runner registered with a label that matches the workflow.
+- [ ] A test repository contains a `.gitea/workflows/ci.yaml` workflow committed to the default branch.
+- [ ] A workflow run completes successfully and uploads a small artifact.
+- [ ] You can explain where the database, Git repositories, runner data, and workflow artifacts are stored in the lab.
+- [ ] You can identify which parts of the lab are unsafe or incomplete for production and describe the production replacement.
+
+### Step 1: Create the Lab Directory
 
 ```bash
-# 1. Create deployment directory
-mkdir -p ~/gitea-lab && cd ~/gitea-lab
+mkdir -p ~/gitea-actions-lab
+cd ~/gitea-actions-lab
+```
 
-# 2. Deploy with Docker Compose
-cat > docker-compose.yaml << 'EOF'
-version: '3'
+Create a Compose file with a forge service first. The runner is included under a profile so it does not start until you have a registration token from the UI.
 
+```yaml
 services:
-  gitea:
-    image: gitea/gitea:1.21
-    container_name: gitea
+  forge:
+    image: gitea/gitea:1.24
+    container_name: gitea-lab
+    restart: unless-stopped
     environment:
-      - USER_UID=1000
-      - USER_GID=1000
-      - GITEA__database__DB_TYPE=sqlite3
-      - GITEA__server__ROOT_URL=http://localhost:3000
-      - GITEA__actions__ENABLED=true
-    volumes:
-      - ./gitea-data:/data
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__server__ROOT_URL: http://127.0.0.1:3000/
+      GITEA__server__SSH_DOMAIN: 127.0.0.1
+      GITEA__server__SSH_PORT: "2222"
+      GITEA__service__DISABLE_REGISTRATION: "false"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__actions__ENABLED: "true"
     ports:
       - "3000:3000"
       - "2222:22"
+    volumes:
+      - ./gitea-data:/data
 
   runner:
     image: gitea/act_runner:latest
-    container_name: gitea-runner
+    container_name: gitea-runner-lab
+    profiles:
+      - runner
     depends_on:
-      - gitea
+      - forge
     environment:
-      - GITEA_INSTANCE_URL=http://gitea:3000
-      - GITEA_RUNNER_REGISTRATION_TOKEN=  # Get from UI
+      GITEA_INSTANCE_URL: http://forge:3000
+      GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN:?set-runner-token-first}
+      GITEA_RUNNER_NAME: lab-runner
+      GITEA_RUNNER_LABELS: ubuntu-latest:docker://catthehacker/ubuntu:act-latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./runner-data:/data
-EOF
+```
 
-docker compose up -d gitea
+Save that content as `docker-compose.yaml`, then start the forge.
 
-# 3. Complete initial setup at http://localhost:3000
-# - Create admin account
-# - Note: Keep defaults for this exercise
+```bash
+docker compose up -d forge
+docker compose ps
+curl -fsS http://127.0.0.1:3000/api/v1/version
+```
 
-# 4. Enable Actions and get runner token
-# Go to: Site Administration → Actions → Runners → Create new Runner
-# Copy the registration token
+### Step 2: Complete Initial Setup
 
-# 5. Update docker-compose.yaml with token and start runner
-# Edit GITEA_RUNNER_REGISTRATION_TOKEN=<your-token>
-docker compose up -d runner
+Open `http://127.0.0.1:3000/` in your browser and complete the initial setup. Use SQLite for the lab, keep the application URL as `http://127.0.0.1:3000/`, and create an administrator account you can use for the rest of the exercise.
 
-# 6. Create a test repository
-# In UI: + → New Repository → "test-ci"
+For a production instance, this is where you would stop and challenge the defaults. You would disable open registration, configure SSO, move to PostgreSQL for shared use, enable TLS, set private repository defaults, and decide whether Actions should be enabled before runner policy exists.
 
-# 7. Add workflow file
-git clone http://localhost:3000/your-user/test-ci.git
+### Step 3: Create a Runner Registration Token
+
+In the Gitea UI, open site administration and create an Actions runner registration token. The exact navigation can vary by version, but you are looking for the instance-level Actions runner settings. Copy the token and export it in your shell.
+
+```bash
+export GITEA_RUNNER_REGISTRATION_TOKEN="replace-with-token-from-ui"
+docker compose --profile runner up -d runner
+docker compose logs --tail=80 runner
+```
+
+Return to the UI and verify that `lab-runner` appears online. Confirm that the runner label includes `ubuntu-latest`, because the workflow you create next will request that label.
+
+### Step 4: Create a Repository and Workflow
+
+Create a repository named `test-ci` in the UI. Then clone it from the local instance, add a README, and add a Gitea Actions workflow. Replace `YOUR_USER` with the account name you created during setup.
+
+```bash
+git clone http://127.0.0.1:3000/YOUR_USER/test-ci.git
 cd test-ci
 
+printf "# test-ci\n\nGitea Actions lab repository.\n" > README.md
 mkdir -p .gitea/workflows
-cat > .gitea/workflows/ci.yaml << 'EOF'
-name: Test Pipeline
+```
+
+```yaml
+name: Lab CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   test:
@@ -1033,194 +1049,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show environment
+      - name: Verify repository content
         run: |
-          echo "Hello from Gitea Actions!"
-          echo "Repository: ${{ github.repository }}"
-          echo "Commit: ${{ github.sha }}"
-          uname -a
+          test -f README.md
+          echo "Repository content is available inside the runner"
 
       - name: Create artifact
-        run: echo "Build output" > artifact.txt
+        run: |
+          mkdir -p build
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > build/timestamp.txt
+          echo "${{ github.repository }}" >> build/timestamp.txt
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: build-output
-          path: artifact.txt
-EOF
-
-git add .
-git commit -m "Add CI workflow"
-git push
-
-# 8. Watch the pipeline run
-# Go to: Repository → Actions → Watch the workflow execute
+          name: lab-output
+          path: build/timestamp.txt
 ```
 
-### Verification
+Save that workflow as `.gitea/workflows/ci.yaml`, then commit and push it.
 
 ```bash
-# Check Gitea is running
-curl -s http://localhost:3000/api/v1/version | jq
-
-# Check runner is registered
-# In UI: Site Administration → Actions → Runners
-# Should show your runner as "Idle" or "Active"
-
-# Verify workflow executed
-# In UI: Repository → Actions → Should show successful run
+git add README.md .gitea/workflows/ci.yaml
+git commit -m "Add lab CI workflow"
+git push origin main
 ```
 
----
+### Step 5: Verify the Run and Inspect the System
 
-## Quiz
+Open the repository in the Gitea UI, navigate to Actions, and watch the workflow run. If it stays queued, inspect the runner label and runner logs. If checkout fails, confirm that the runner can reach `http://forge:3000` from the Compose network and that the repository URL generated by Gitea uses the expected root URL for browser and Git access.
 
-### Question 1
-What is the minimum RAM required to run Gitea?
+```bash
+docker compose ps
+docker compose logs --tail=120 forge
+docker compose logs --tail=120 runner
+find gitea-data -maxdepth 4 -type d | sort | head -40
+find runner-data -maxdepth 3 -type f | sort | head -40
+```
 
-<details>
-<summary>Show Answer</summary>
+Record which directories contain application configuration, repository data, SQLite database files, runner registration data, and workflow artifacts. This is the point of the lab: you are not only proving that a workflow can run, you are learning which state areas would need production ownership.
 
-**~100MB**
+### Step 6: Production Readiness Reflection
 
-Gitea is written in Go and compiles to a single binary that's extremely resource-efficient. Compare this to GitLab's 4GB minimum requirement.
-</details>
+Answer these questions in your own notes before considering the lab complete. Which setting would you change first before exposing the service to a team? Which state areas would you include in backups? Which runner privileges are unsafe for untrusted repositories? Which identity provider would be authoritative? Which recovery instructions must live outside the forge?
 
-### Question 2
-What is the relationship between Gitea and Forgejo?
+A strong answer will mention disabling open registration, using TLS, configuring SSO, moving shared production metadata to PostgreSQL, scoping runners by trust boundary, avoiding broad Docker socket access for untrusted workflows, backing up database plus repositories plus object storage, and testing restore rather than only testing startup.
 
-<details>
-<summary>Show Answer</summary>
+### Step 7: Clean Up the Lab
 
-**Forgejo is a community fork of Gitea**
+```bash
+cd ~/gitea-actions-lab
+docker compose --profile runner down
+```
 
-In 2022, when Gitea Ltd was formed as a for-profit company, some community members forked Gitea to create Forgejo under non-profit governance (Codeberg e.V.). They share ~95% of the same codebase but have different organizational structures and philosophies.
-</details>
+If you want to remove all lab state, delete the lab directory after stopping the containers. Do that only when you no longer need the repository, runner registration, logs, or workflow history from the exercise.
 
-### Question 3
-How do Gitea Actions compare to GitHub Actions?
+## Next Module
 
-<details>
-<summary>Show Answer</summary>
-
-**Mostly syntax compatible**
-
-Gitea Actions uses the same workflow syntax as GitHub Actions. Most workflows can be copied from `.github/workflows/` to `.gitea/workflows/` with minimal changes. The main differences are:
-- Self-hosted runners only (no GitHub-hosted)
-- Some advanced features like OIDC tokens not yet supported
-- Actions from GitHub.com work by default
-</details>
-
-### Question 4
-What database options does Gitea support?
-
-<details>
-<summary>Show Answer</summary>
-
-**SQLite, PostgreSQL, MySQL, MSSQL**
-
-- SQLite: Good for small teams (<100 users), zero setup
-- PostgreSQL: Recommended for production
-- MySQL/MariaDB: Widely used, fully supported
-- MSSQL: For Microsoft shops
-</details>
-
-### Question 5
-What is `OFFLINE_MODE` in Gitea configuration?
-
-<details>
-<summary>Show Answer</summary>
-
-**Disables all external network calls**
-
-When `OFFLINE_MODE = true`, Gitea won't try to:
-- Fetch Gravatar avatars
-- Load external fonts
-- Check for updates
-- Fetch action definitions from GitHub
-
-Essential for air-gapped deployments.
-</details>
-
-### Question 6
-How do you migrate repositories from GitHub to Gitea?
-
-<details>
-<summary>Show Answer</summary>
-
-**Via UI migration, API, or mirror sync**
-
-Options:
-1. **UI**: New Migration → GitHub → Enter URL
-2. **API**: POST to `/api/v1/repos/migrate`
-3. **Mirror**: Creates ongoing sync with source
-4. **Manual**: Clone from GitHub, push to Gitea
-
-Migrations include issues, PRs, releases, and wiki.
-</details>
-
-### Question 7
-What runner does Gitea Actions use?
-
-<details>
-<summary>Show Answer</summary>
-
-**act_runner**
-
-Gitea's official Actions runner, based on the `act` project. It:
-- Executes workflows in Docker containers
-- Uses same syntax as GitHub Actions
-- Supports labels for runner selection
-- Can run on any platform (Linux, macOS, Windows)
-</details>
-
-### Question 8
-When would you choose Gitea over GitLab?
-
-<details>
-<summary>Show Answer</summary>
-
-**Resource constraints, simplicity, or air-gapped environments**
-
-Choose Gitea when:
-- Limited RAM/CPU (edge, IoT, small VMs)
-- Simple Git hosting without full DevOps platform
-- Air-gapped networks needing offline mode
-- GitHub Actions compatibility is desired
-- Zero licensing cost is required
-
-Choose GitLab when:
-- Full DevOps platform in one tool
-- Built-in security scanning
-- Complex CI/CD requirements
-- Enterprise support needed
-</details>
-
----
-
-## Key Takeaways
-
-1. **Gitea = GitHub features, minimal resources** - A full-featured Git server in 100MB RAM
-2. **Single binary simplicity** - No complex dependencies, easy deployment
-3. **Forgejo is the community fork** - Same features, different governance
-4. **Actions are GitHub-compatible** - Move workflows with minimal changes
-5. **SQLite works for small teams** - PostgreSQL for anything larger
-6. **OFFLINE_MODE for air-gapped** - Critical setting often missed
-7. **Migration is straightforward** - Import issues, PRs, wikis, releases
-8. **Self-hosted runners only** - Plan your runner infrastructure
-9. **Perfect for edge computing** - Runs on Raspberry Pi
-10. **Cost: $0** - All features free, forever
-
----
-
-## Next Steps
-
-- **Next Module**: [Module 11.3: GitHub Advanced](../module-11.3-github-advanced/) - GHAS, Copilot, and enterprise features
-- **Related**: [Module 12.1: SonarQube](/platform/toolkits/security-quality/code-quality/module-12.1-sonarqube/) - Integrate code quality scanning
-- **Related**: [Module 2.1: ArgoCD](/platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) - GitOps with Gitea
-
----
+[Module 11.3: GitHub Advanced](../module-11.3-github-advanced/) continues the source-control toolkit by examining GitHub Enterprise features, security controls, automation patterns, and the trade-offs of managed ecosystem depth compared with lightweight self-hosted forges.
 
 ## Further Reading
 
@@ -1229,10 +1115,6 @@ Choose GitLab when:
 - [Gitea Actions Documentation](https://docs.gitea.io/en-us/actions/)
 - [act_runner Documentation](https://gitea.com/gitea/act_runner)
 - [Gitea vs GitLab comparison](https://docs.gitea.io/en-us/comparison/)
-
----
-
-*"Sometimes the best tool is the simplest one that solves your problem. Gitea illustrates the appeal of a lightweight self-hosted Git service."*
 
 ## Sources
 
