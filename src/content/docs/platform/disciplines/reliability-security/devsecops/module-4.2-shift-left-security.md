@@ -1,333 +1,309 @@
 ---
-revision_pending: true
 title: "Module 4.2: Shift-Left Security"
 slug: platform/disciplines/reliability-security/devsecops/module-4.2-shift-left-security
 sidebar:
   order: 3
 ---
-> **Discipline Module** | Complexity: `[MEDIUM]` | Time: 35-40 min
+
+# Module 4.2: Shift-Left Security
+
+> **Discipline Module** | Complexity: `[MEDIUM]` | Time: 45-55 min | Track: DevSecOps
 
 ## Prerequisites
 
-Before starting this module:
-- **Required**: [Module 4.1: DevSecOps Fundamentals](../module-4.1-devsecops-fundamentals/) — Core concepts
-- **Required**: Git basics (commits, branches, hooks)
-- **Recommended**: IDE experience (VS Code, IntelliJ, etc.)
-- **Helpful**: Basic understanding of static analysis
+Before starting this module, the learner should be comfortable with the security workflow introduced in [Module 4.1: DevSecOps Fundamentals](../module-4.1-devsecops-fundamentals/), because this lesson assumes the team already understands shared ownership between development, operations, and security.
+
+The module also assumes working knowledge of Git commits, branches, local hooks, pull requests, and basic CI behavior. The examples use Python, JavaScript, YAML, shell scripts, and Kubernetes manifests, but the security patterns apply across most application stacks.
+
+Learners will get the most value if they have seen static analysis warnings in an IDE before, even if they have not configured the rules themselves. Prior experience with pre-commit, Semgrep, Bandit, detect-secrets, or gitleaks is helpful but not required.
 
 ---
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
-After completing this module, you will be able to:
+After completing this module, the learner will be able to:
 
-- **Implement pre-commit security scanning that catches vulnerabilities before code enters the repository**
-- **Design IDE-integrated security tools that give developers real-time feedback on security issues**
-- **Build threat modeling practices that identify security risks during design rather than after deployment**
-- **Configure dependency scanning that blocks known vulnerable packages from entering your supply chain**
+- **Design** a layered shift-left security workflow that gives developers fast local feedback without removing deeper CI and production controls.
+- **Implement** pre-commit security checks that block newly introduced secrets, risky code patterns, and insecure configuration before a commit is created.
+- **Debug** a failing local security hook by separating tool configuration problems, real findings, false positives, baselines, and developer-experience issues.
+- **Evaluate** when a security rule belongs in an IDE, pre-commit hook, pre-push hook, CI job, or server-side enforcement point.
+- **Compare** secrets scanning, SAST, dependency scanning, and IaC scanning strategies so that each control is placed where it catches the right class of risk.
+
+---
 
 ## Why This Module Matters
 
-You've adopted DevSecOps. You have security scans in your pipeline. Great!
+A platform team can spend months building a polished DevSecOps pipeline and still leave developers with security feedback that arrives too late. A pull request may pass unit tests, wait in review, trigger security scanning, and then fail because a token, unsafe query, permissive container setting, or vulnerable dependency was introduced hours or days earlier. By then, the author has moved on, the reviewer has lost flow, and the fix competes with delivery pressure.
 
-But the pipeline runs after you push. You write code Monday, push Tuesday, get scan results Wednesday, fix Thursday. That's 3-4 days of context switching.
+The teams that handle security well do not treat the central pipeline as the first place a developer learns about risk. They move selected checks closer to the moment of creation, where the author still remembers the exact change, the intended behavior, and the local context. A warning in the editor or a fast hook before commit turns a security issue from a compliance event into ordinary engineering feedback.
 
-**What if you caught issues before you committed?**
+Shift-left security matters because it changes the cost curve. A secret caught before commit never enters Git history. A risky API call caught while the developer is typing does not need a late-stage security review debate. An insecure Terraform rule caught locally avoids a failed deployment window. The practice is not about pushing all security responsibility onto developers; it is about designing guardrails that make the secure path easier, faster, and more visible.
 
-Shift-left security isn't just about having security in CI/CD. It's about pushing security so far left that developers catch issues in their IDE, before they even commit.
-
-After this module, you'll understand:
-- Pre-commit security checks and how to implement them
-- IDE security plugins and developer-friendly tooling
-- Secrets detection before they reach Git
-- SAST integration at the earliest possible point
+The senior-level skill is choosing what to shift left and what to leave later. Fast, deterministic, low-noise checks belong close to the developer. Slow, expensive, whole-repository, or environment-aware checks usually belong in CI or production monitoring. A good DevSecOps platform gives teams both: early feedback for preventable mistakes and deeper independent verification for everything that requires more context.
 
 ---
 
-## The Pre-Commit Defense Line
+## 1. The Shift-Left Feedback Model
 
-### Why Pre-Commit Matters
+Shift-left security means moving useful security feedback closer to the point where a change is authored. It does not mean every scanner must run inside the editor, and it does not mean the pipeline becomes optional. The phrase is useful only when it describes a deliberate feedback design: which signal appears at which stage, how long it takes, how trustworthy it is, and what the developer can do next.
 
-```
-The Commit Timeline
-─────────────────────────────────────────────────────────────────▶
+```text
+The Commit-to-Production Feedback Timeline
+──────────────────────────────────────────────────────────────────────────────▶
 
-  Developer         Pre-commit        CI/CD           Production
-  writes code       hooks run         scans run       deployed
-       │                │                 │                │
-       ▼                ▼                 ▼                ▼
-   ┌───────┐        ┌───────┐        ┌───────┐        ┌───────┐
-   │ CODE  │───────▶│ CHECK │───────▶│ SCAN  │───────▶│ LIVE  │
-   └───────┘        └───────┘        └───────┘        └───────┘
-                         │
-                    Issue found
-                    here = instant
-                    feedback, easy fix
-```
-
-**Pre-commit advantages:**
-- Developer still has context (just wrote the code)
-- No wait for CI/CD pipeline
-- No PR/review cycle for obvious issues
-- Catches secrets before they enter Git history
-- Teaches developers as they work
-
-### Git Hooks Primer
-
-Git hooks are scripts that run at specific points in the Git workflow:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     GIT HOOK LIFECYCLE                       │
-│                                                              │
-│  Local Hooks                    Remote Hooks                 │
-│  ───────────                    ─────────────                │
-│                                                              │
-│  pre-commit ────▶ commit-msg ────▶ pre-push ────▶ pre-receive│
-│       │               │               │               │      │
-│   Validate        Validate         Check           Server    │
-│   code            message          before          validates │
-│                                    push            received  │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+  Authoring          Local Gate          Shared Gate          Runtime Gate
+  IDE/editor         pre-commit          CI / PR checks        deploy / observe
+      │                  │                    │                    │
+      ▼                  ▼                    ▼                    ▼
+  ┌──────────┐      ┌──────────┐        ┌──────────┐        ┌──────────┐
+  │  WRITE   │─────▶│  BLOCK   │───────▶│  VERIFY  │───────▶│  DETECT  │
+  └──────────┘      └──────────┘        └──────────┘        └──────────┘
+      │                  │                    │                    │
+      │                  │                    │                    │
+      ├─ seconds         ├─ seconds           ├─ minutes           ├─ minutes to days
+      ├─ low context     ├─ local context     ├─ repo context      ├─ real behavior
+      └─ best for hints  └─ best for blockers └─ best for proof    └─ best for response
 ```
 
-**Most important for security:**
-- `pre-commit`: Runs before commit is created (local)
-- `pre-push`: Runs before push to remote (local)
-- `pre-receive`: Runs on server (enforced)
+A useful early check has three properties: it is fast enough that developers tolerate it, specific enough that developers trust it, and actionable enough that the fix is obvious or discoverable. A hook that takes a minute and emits hundreds of findings will be bypassed. An IDE warning that flags every safe wrapper as dangerous will be ignored. A CI-only scanner that reports a hardcoded credential after it has already been pushed is valuable as a backup but late as a prevention control.
+
+The guiding question is not "Can this tool run earlier?" The better question is "Does running this tool earlier improve the decision the developer can make right now?" A fast secret pattern check improves the commit decision because the correct response is usually to remove the value and rotate the credential. A full container image scan may not help before commit if the image does not exist yet, so it belongs later.
+
+```text
+Signal Quality by Stage
+──────────────────────────────────────────────────────────────────────────────
+
+  ┌──────────────────┬──────────────────────┬───────────────────────────────┐
+  │ Stage            │ Best signal           │ Poor fit                      │
+  ├──────────────────┼──────────────────────┼───────────────────────────────┤
+  │ IDE              │ risky API use         │ full dependency graph proof   │
+  │ pre-commit       │ new secret patterns   │ slow whole-history audits     │
+  │ pre-push         │ broader repo checks   │ production-only behavior      │
+  │ CI / pull request│ complete SAST reports │ hints that could be instant   │
+  │ deployment       │ policy enforcement    │ style issues                  │
+  │ runtime          │ exploit attempts      │ preventable syntax mistakes   │
+  └──────────────────┴──────────────────────┴───────────────────────────────┘
+```
+
+**Pause and predict:** A team adds a pre-commit hook that runs every unit test, a dependency audit, a full container build, a complete SAST scan, and a license audit. Commits now take several minutes. Before reading further, decide which developer behaviors are likely to appear and which checks should move to a later stage.
+
+The likely result is bypass pressure. Developers may use `--no-verify`, create temporary commits outside the hook path, disable the framework locally, or delay commits until work piles up. The fix is not to lecture the team about discipline. The fix is to split the control set so that only fast, local, deterministic checks block commits, while slower checks run on pre-push or CI where the team still gets enforcement without damaging the inner development loop.
+
+| Stage | Good Fit | Why It Belongs There | Common Failure Mode |
+|---|---|---|---|
+| IDE | Security linting, unsafe APIs, dependency hints | Feedback appears while the author still sees the code path | Too much noise causes warning blindness |
+| Pre-commit | New secrets, simple SAST patterns, changed-file linting | The commit can be stopped before bad data enters history | Hook becomes slow and gets bypassed |
+| Pre-push | Wider test or scan sets, branch-level checks | More time is acceptable before sharing changes | Developers discover failures after many commits |
+| CI / PR | Full SAST, dependency audit, IaC policy, tests | Central enforcement is consistent and auditable | Results arrive after context switching |
+| Server-side Git | Required checks, protected branches, secret scanning | Local bypass cannot skip remote enforcement | Poor error messages frustrate contributors |
+| Runtime | Attack detection, policy violations, drift | Only real traffic and deployed state reveal some risks | Incident response replaces prevention |
+
+A senior engineer uses that table as a design tool, not as a rulebook. For example, a high-risk payments service may run a stricter pre-push check than an internal prototype. A monorepo may use path-aware hooks so a documentation change does not trigger a Java dependency scan. A regulated team may require server-side enforcement for the same rule that developers also see locally.
+
+The important pattern is layered defense. IDE checks are coaching. Pre-commit checks are a local gate. CI checks are shared proof. Server-side rules are enforcement. Runtime controls are detection and response. Shift-left improves the early layers, but it never deletes the later layers because local tooling can be misconfigured, skipped, stale, or unavailable.
 
 ---
 
-## Implementing Pre-Commit Hooks
+## 2. Pre-Commit Security Controls
 
-### Option 1: Pre-commit Framework
+A Git pre-commit hook runs before Git creates a commit object. That timing matters because it can prevent a bad change from becoming part of local history at all. For secrets, this is the difference between "remove the string and try again" and "rotate the credential, rewrite history, notify downstream consumers, and audit access logs."
 
-The [pre-commit](https://pre-commit.com/) framework manages hooks across languages.
+```text
+Git Hook Lifecycle for Security
+──────────────────────────────────────────────────────────────────────────────
 
-**Installation:**
-```bash
-# Install pre-commit
-pip install pre-commit
+  Local developer machine                                      Shared systems
 
-# Or with homebrew
-brew install pre-commit
+  ┌────────────┐     ┌────────────┐     ┌────────────┐       ┌──────────────┐
+  │ pre-commit │────▶│ commit-msg │────▶│ pre-push   │──────▶│ pre-receive  │
+  └────────────┘     └────────────┘     └────────────┘       └──────────────┘
+       │                   │                  │                      │
+       │                   │                  │                      │
+       ├─ scan staged      ├─ validate        ├─ run broader         ├─ enforce rules
+       │  content          │  message         │  checks before       │  on the server
+       │                   │                  │  sharing branch      │
+       │                   │                  │                      │
+       └─ best place       └─ useful for      └─ useful for          └─ cannot be skipped
+          to stop             traceability       slower local           by local config
+          new secrets                            verification
 ```
 
-**Configuration (`.pre-commit-config.yaml`):**
-```yaml
-repos:
-  # Detect secrets
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
+The pre-commit stage should operate mostly on staged files rather than the entire repository. That keeps feedback fast and avoids surprising the developer with old unrelated findings. A whole-repository cleanup is still valuable, but it belongs in a planned remediation effort or CI report, not as a blocker for every small commit.
 
-  # Security linting for Python
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.5
-    hooks:
-      - id: bandit
-        args: ["-c", "pyproject.toml"]
-        additional_dependencies: ["bandit[toml]"]
+The most common framework for multi-language projects is `pre-commit`, which stores hook configuration in `.pre-commit-config.yaml`. The configuration is versioned with the repository, so every contributor can install the same checks. That is a major improvement over undocumented `.git/hooks` scripts, because native Git hooks live inside the local `.git` directory and are not normally committed.
 
-  # Security linting for Shell scripts
-  - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.9.0
-    hooks:
-      - id: shellcheck
-
-  # Dockerfile linting
-  - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
-    hooks:
-      - id: hadolint-docker
-```
-
-**Enable for repository:**
-```bash
-# Install hooks
-pre-commit install
-
-# Run against all files (first time)
-pre-commit run --all-files
-```
-
-### Option 2: Husky (JavaScript/TypeScript)
-
-For Node.js projects, [Husky](https://typicode.github.io/husky/) is popular:
-
-```bash
-# Install
-npm install husky --save-dev
-
-# Enable Git hooks
-npx husky install
-
-# Add pre-commit hook
-npx husky add .husky/pre-commit "npm run security-check"
-```
-
-**package.json:**
-```json
-{
-  "scripts": {
-    "security-check": "npm audit && eslint --plugin security ."
-  }
-}
-```
-
-### Option 3: Native Git Hooks
-
-For simple cases, native Git hooks work:
-
-```bash
-#!/bin/bash
-# .git/hooks/pre-commit
-
-echo "Running security checks..."
-
-# Check for secrets
-if grep -rn "password\s*=" --include="*.py" .; then
-    echo "ERROR: Possible hardcoded password found"
-    exit 1
-fi
-
-# Check for AWS keys
-if grep -rn "AKIA" --include="*" .; then
-    echo "ERROR: Possible AWS key found"
-    exit 1
-fi
-
-echo "Security checks passed"
-exit 0
-```
-
-Make executable:
-```bash
-chmod +x .git/hooks/pre-commit
-```
-
----
-
-## Did You Know?
-
-1. **GitHub found that 81% of data breaches involve leaked credentials** — and most of those credentials were committed to Git repositories. Pre-commit secrets detection could have prevented the majority of these breaches.
-
-2. **The first public Git hook was added in 2005** with Git 0.99.5. The `pre-commit` hook has been available since the very beginning of Git, but most developers still don't use it for security.
-
-3. **Uber's 2016 breach** started with credentials found in a GitHub repository. 57 million user records were exposed because an AWS key was committed to code. The fine: $148 million.
-
-4. **TruffleHog, a popular secrets scanner, got its name** from the French truffle-hunting pigs. Just like pigs sniff out valuable truffles underground, TruffleHog sniffs out valuable secrets hidden in code repositories.
-
----
-
-## Secrets Detection
-
-### The Secrets Problem
-
-Secrets in Git are forever (almost):
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  THE SECRET IN GIT PROBLEM                   │
-│                                                              │
-│  Commit 1: Add database connection                          │
-│            DB_PASSWORD = "super_secret_123"   ← Secret!     │
-│                                                              │
-│  Commit 2: Oops, remove password                            │
-│            DB_PASSWORD = os.getenv("DB_PASS")               │
-│                                                              │
-│  Current code looks safe... but:                            │
-│                                                              │
-│  $ git log -p                                                │
-│  commit abc123                                               │
-│  -DB_PASSWORD = "super_secret_123"   ← Still there!         │
-│  +DB_PASSWORD = os.getenv("DB_PASS")                         │
-│                                                              │
-│  The secret lives in Git history FOREVER                    │
-│  (unless you rewrite history, which is painful)             │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**The only safe secret is one that never enters Git.**
-
-### Popular Secrets Detection Tools
-
-| Tool | Strengths | Best For |
-|------|-----------|----------|
-| **detect-secrets** (Yelp) | Fast, baseline support, low false positives | Pre-commit |
-| **TruffleHog** | Deep history scanning, regex patterns | CI/CD, audits |
-| **gitleaks** | Fast, configurable, CI-friendly | CI/CD |
-| **git-secrets** (AWS) | AWS-focused, simple | AWS credentials |
-| **Talisman** (ThoughtWorks) | Pattern-based, checksum support | Pre-commit |
-
-### Implementing detect-secrets
-
-**Setup baseline (acknowledge existing secrets):**
-```bash
-# Generate baseline (treats existing findings as acknowledged)
-detect-secrets scan > .secrets.baseline
-
-# Review and acknowledge legitimate findings
-detect-secrets audit .secrets.baseline
-```
-
-**Pre-commit configuration:**
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json
+        args: ["--baseline", ".secrets.baseline"]
+
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.118.0
+    hooks:
+      - id: semgrep
+        args: ["--config", "p/secrets", "--config", "p/security-audit", "--error"]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-ll", "-ii"]
+        files: "\\.py$"
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint-docker
 ```
 
-**What it catches:**
+This configuration uses four different kinds of checks. `detect-secrets` focuses on credential patterns and baseline management. Semgrep catches configurable code patterns across several languages. Bandit adds Python-specific security analysis. Hadolint catches risky Dockerfile patterns before container builds reach CI.
+
+The versions are pinned because reproducibility matters. A floating branch or latest tag can silently change rule behavior, causing one developer to pass and another to fail. Pinning also creates an explicit upgrade workflow: test the new scanner version, examine rule changes, update baselines if needed, and commit the change intentionally.
+
+```bash
+# Run from the repository root after a .pre-commit-config.yaml exists.
+.venv/bin/pre-commit install
+.venv/bin/pre-commit run --all-files
+```
+
+The first command installs the framework-managed Git hook into the local repository. The second command runs every configured hook against all matching files, which is useful when introducing the framework to an existing project. After the initial setup, normal commits run checks only for files selected by the hooks and framework.
+
+If the repository does not already have the tools in its virtual environment, install them explicitly through the repository Python environment rather than relying on whatever happens to be on the machine path. A reproducible local environment reduces "works on my laptop" drift and makes onboarding documentation easier to trust.
+
+```bash
+.venv/bin/python -m pip install pre-commit detect-secrets semgrep bandit
+.venv/bin/pre-commit --version
+.venv/bin/detect-secrets --version
+.venv/bin/semgrep --version
+.venv/bin/bandit --version
+```
+
+Native Git hooks are still useful for tiny repositories or one-off experiments, but they do not scale as well for teams. A native hook must be copied or installed manually, and different contributors may edit it without versioned review. In a mature platform, native hooks are usually wrapped by a versioned framework or generated from a central template.
+
+```bash
+#!/usr/bin/env bash
+# .git/hooks/pre-commit
+set -euo pipefail
+
+echo "Running a minimal local secret pattern check..."
+
+if git diff --cached --name-only | grep -E '\.(py|js|ts|yaml|yml|env)$' >/dev/null; then
+  git diff --cached --unified=0 | grep -E '(AKIA[0-9A-Z]{16}|password[[:space:]]*=)' && {
+    echo "Potential secret pattern found in staged changes."
+    exit 1
+  }
+fi
+
+echo "No minimal secret pattern found."
+```
+
+This native hook is intentionally narrow. It scans staged diffs for a small set of obvious patterns, exits with a failure when it finds one, and leaves deeper detection to purpose-built tools. It is runnable, but it is not a substitute for a mature scanner because regex-only hooks miss many formats and can create false positives.
+
+| Hook Type | Strength | Weakness | Best Use |
+|---|---|---|---|
+| Native `.git/hooks/pre-commit` | Very simple and dependency-light | Not versioned by default and easy to drift | Small experiments or bootstrap checks |
+| `pre-commit` framework | Multi-language, versioned, repeatable | Requires installation and periodic updates | Most shared repositories |
+| Husky | Natural fit for Node projects | JavaScript-centric workflow | Frontend and TypeScript projects |
+| Server-side hook | Cannot be skipped locally | Requires Git hosting or admin control | Critical enforcement and protected repos |
+| CI required check | Central audit trail and consistent execution | Feedback arrives later than local hooks | Full verification and bypass backup |
+
+A platform team should document expected hook runtime. A practical target for pre-commit is usually under five seconds for common changes, with rare heavier checks clearly explained. When runtime grows, the team should profile the hook set instead of accepting bypasses as normal.
+
+**Pause and predict:** A Python service introduces Bandit and Semgrep in pre-commit. Developers report that commits touching documentation now run Python security checks anyway. What configuration mistake would cause that, and what should be changed?
+
+The likely mistake is a missing file filter. Hooks should use `files`, `types`, or scanner-specific include options so unrelated changes do not trigger irrelevant checks. This is not just a performance issue; irrelevant failures teach developers that security tooling is arbitrary. A good hook is scoped tightly enough that its result feels connected to the change being committed.
+
+---
+
+## 3. Secrets Detection and Git History
+
+Secrets detection deserves special treatment because a committed credential has a different failure mode from most bugs. A vulnerable function can often be fixed in the next commit. A leaked secret must be treated as compromised because the value may have been copied, logged, cached, indexed, or fetched by people and systems that are outside the current file view.
+
+```text
+The Secret-in-Git Problem
+──────────────────────────────────────────────────────────────────────────────
+
+  Commit A
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ settings.py                                                           │
+  │ DATABASE_URL = "postgres://admin:plaintext-value@db.example.internal" │
+  └────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+  Commit B
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ settings.py                                                           │
+  │ DATABASE_URL = os.environ["DATABASE_URL"]                             │
+  └────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+  Current file looks clean, but history still contains Commit A.
+
+  git log -p -- settings.py
+  git show <old-commit>:settings.py
+  git clone --mirror <repo>
+```
+
+The phrase "secrets in Git are forever" is shorthand for a practical reality. Git history is distributed, cached, cloned, and backed up. Rewriting history can remove a value from the main repository, but it cannot guarantee that every clone, fork, CI cache, artifact, or log has been cleaned. The correct response to a real secret in history is rotation plus investigation, not simply deleting the line.
+
+Pre-commit secret scanning prevents the easiest version of that incident. The scanner examines staged content before the commit exists. If it finds a likely credential, the developer can remove the value, replace it with an environment variable or secret manager reference, and commit a safe change without creating an incident.
+
 ```python
-# These would be blocked:
-api_key = "sk_live_abc123def456"      # Stripe key pattern
-aws_key = "AKIAIOSFODNN7EXAMPLE"       # AWS access key pattern
-password = "hunter2"                   # Keyword + string
-github_token = "ghp_xxxxxxxxxxxx"      # GitHub token pattern
+# insecure_config.py
+DATABASE_PASSWORD = "plain-text-password-for-demo"
+AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+GITHUB_TOKEN = "ghp_exampleexampleexampleexampleexample"
 ```
 
-### Implementing gitleaks
+Those examples should never be treated as realistic credentials, but they demonstrate the categories scanners look for: provider-specific prefixes, high-entropy strings, suspicious variable names, and known token formats. Scanners combine pattern matching, entropy detection, allowlists, and baselines to reduce false positives.
 
-**Configuration (`.gitleaks.toml`):**
+A baseline is a snapshot of acknowledged findings. It is often necessary when adding secret detection to an existing repository that already contains test fixtures, fake tokens, historical examples, or real findings being remediated in phases. The baseline prevents old findings from blocking every new commit while still blocking newly introduced secrets.
+
+```bash
+# Create or refresh a detect-secrets baseline from the repository root.
+.venv/bin/detect-secrets scan > .secrets.baseline
+
+# Audit the baseline interactively so false positives and real findings are distinguished.
+.venv/bin/detect-secrets audit .secrets.baseline
+
+# Run the pre-commit hook after the baseline exists.
+.venv/bin/pre-commit run detect-secrets --all-files
+```
+
+The baseline must not become a dumping ground for ignored risk. Each real finding needs an owner, severity, rotation decision, and remediation plan. If the value is a production credential, the first response is usually to rotate it immediately and inspect access logs. If it is a fake fixture, the team should make the fake nature obvious with names like `example`, `dummy`, or `not-a-real-secret`.
+
 ```toml
+# .gitleaks.toml
 [extend]
 useDefault = true
 
 [allowlist]
+description = "Allow documented examples and generated scanner baselines"
 paths = [
-    '''\.secrets\.baseline''',
-    '''package-lock\.json''',
+  '''\.secrets\.baseline''',
+  '''docs/security/examples/.*''',
 ]
 
 [[rules]]
-description = "Custom API Key"
-regex = '''mycompany_key_[a-zA-Z0-9]{32}'''
-tags = ["api", "custom"]
+id = "company-api-key"
+description = "Company API key format"
+regex = '''company_live_[A-Za-z0-9]{32}'''
+tags = ["company", "api-key"]
 ```
 
-**Run locally:**
-```bash
-# Scan current state
-gitleaks detect --source . -v
+Gitleaks is often used in CI because it can scan committed state and history efficiently. It also works locally, but a full history scan is usually too expensive for every commit. A common pattern is detect-secrets or a targeted gitleaks invocation in pre-commit, then broader gitleaks scanning in CI with `fetch-depth: 0` so history is available.
 
-# Scan Git history
-gitleaks detect --source . --log-opts="--all" -v
-```
-
-**CI integration (GitHub Actions):**
 ```yaml
 name: Secrets Scan
-on: [push, pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   gitleaks:
@@ -341,715 +317,765 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+This CI job is not a replacement for pre-commit. It is the backup layer for skipped hooks, stale local environments, and branch history. In a healthy design, the same category of issue is visible locally before commit and centrally before merge, but the central check remains authoritative.
+
+| Secret Scanner | Early-Stage Strength | Later-Stage Strength | Decision Guidance |
+|---|---|---|---|
+| detect-secrets | Strong baseline workflow and pre-commit fit | Less focused on deep verified history scanning | Use when legacy repositories need controlled adoption |
+| gitleaks | Fast rule-based scanning and CI support | Strong repository and history scanning | Use for pull requests, branch scans, and custom rules |
+| TruffleHog | Verified secret detection and deep discovery | Strong for audits and incident investigation | Use when confirming whether a finding is live or exploitable |
+| git-secrets | Simple AWS-oriented local patterns | Narrower than general scanners | Use for teams heavily exposed to AWS credential leakage |
+| Hosting-provider scanning | Central alerting for known token types | Depends on provider coverage and licensing | Use as an additional safety net, not the only layer |
+
+A senior response to a secrets finding has two tracks. The first track fixes the code path so the secret is not embedded again. The second track handles the credential lifecycle: revoke, rotate, audit use, and communicate impact. Shift-left tooling helps with the first track, but incident handling discipline is still required for any value that already escaped.
+
+**Pause and decide:** A scanner flags `tests/fixtures/payment_gateway.json` because it contains a realistic-looking test API key. The value is fake, but new developers keep asking whether it is safe. Should the team baseline it, rename it, suppress the rule, or move the fixture?
+
+The best answer is usually to make the test data obviously fake and keep the scanner strict. A value named `sk_live_example` is a bad fixture because it resembles a real production token. A value named `not-a-real-token-for-tests` is easier for humans and tools to classify. Baselines and suppressions are useful, but the cleanest solution is often to remove ambiguity from the artifact itself.
+
 ---
 
-## IDE Security Plugins
+## 4. IDE and SAST Feedback
 
-### The Fastest Feedback Loop
+IDE security plugins are the fastest feedback loop because they meet developers at the point of editing. Their job is not to prove that the repository is secure. Their job is to interrupt risky patterns while the code path is still visible and cheap to change.
 
-```
-Feedback Loop Speed
-───────────────────
+```text
+Feedback Speed and Depth
+──────────────────────────────────────────────────────────────────────────────
 
-IDE Plugin:        [=] seconds       ← Best!
-Pre-commit:        [===] seconds     ← Good
-CI/CD:             [============] minutes to hours
-Security Review:   [=========================] days to weeks
-```
+  Faster feedback                                                       Deeper proof
+  ◀──────────────────────────────────────────────────────────────────────────────▶
 
-IDE plugins give developers feedback while they type.
-
-### Recommended Plugins by IDE
-
-**VS Code:**
-| Plugin | Purpose |
-|--------|---------|
-| SonarLint | Real-time SAST |
-| Snyk | Vulnerability scanning |
-| GitLens | Git history, identify who added secrets |
-| ESLint (security plugin) | JavaScript security rules |
-| Semgrep | Custom security rules |
-
-**IntelliJ IDEA:**
-| Plugin | Purpose |
-|--------|---------|
-| SonarLint | Real-time SAST |
-| Snyk | Vulnerability scanning |
-| Checkmarx | Enterprise SAST |
-| SpotBugs | Java security bugs |
-
-**VS Code SonarLint Configuration:**
-```json
-// settings.json
-{
-  "sonarlint.rules": {
-    "javascript:S2068": {
-      "level": "on"   // Hard-coded credentials
-    },
-    "javascript:S5131": {
-      "level": "on"   // XSS
-    },
-    "javascript:S2076": {
-      "level": "on"   // OS command injection
-    }
-  }
-}
+  ┌─────────────┐       ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+  │ IDE hint    │──────▶│ pre-commit  │──────▶│ CI SAST     │──────▶│ review/audit │
+  └─────────────┘       └─────────────┘       └─────────────┘       └─────────────┘
+       │                     │                     │                     │
+       ├─ seconds            ├─ seconds            ├─ minutes            ├─ hours/days
+       ├─ partial context    ├─ staged context     ├─ repo context       ├─ human context
+       └─ coaching           └─ blocking           └─ enforcement        └─ judgment
 ```
 
-### What IDE Plugins Catch
-
-**Real-time examples:**
+A useful IDE rule usually identifies a local pattern: hardcoded credential strings, unsafe HTML rendering, string-built SQL, shell command construction, path traversal, deserialization of untrusted data, or dangerous crypto choices. The warning is valuable because it changes the author's next keystroke, not because it produces an audit artifact.
 
 ```python
-# Python with SonarLint
-query = "SELECT * FROM users WHERE id = " + user_id
-#       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-#       💡 SQL Injection vulnerability detected
-#          Use parameterized queries instead
+# app/users.py
+import sqlite3
 
-password = "admin123"
-#          ^^^^^^^^^
-#       💡 Hard-coded password detected
-#          Use environment variables or secrets manager
+def find_user(connection: sqlite3.Connection, user_id: str):
+    query = "SELECT id, email FROM users WHERE id = " + user_id
+    return connection.execute(query).fetchone()
+```
+
+A SAST rule may flag the string concatenation because untrusted input can alter the SQL statement. The secure fix is not to sanitize with a homegrown regex. The secure fix is to use parameterized queries, which keep data separate from the query structure.
+
+```python
+# app/users.py
+import sqlite3
+
+def find_user(connection: sqlite3.Connection, user_id: str):
+    query = "SELECT id, email FROM users WHERE id = ?"
+    return connection.execute(query, (user_id,)).fetchone()
+```
+
+That example shows why shift-left is a teaching strategy as well as a control strategy. The developer sees the risky construction and the safer pattern next to each other. Over time, the team learns preferred idioms instead of waiting for security review comments.
+
+JavaScript and TypeScript projects often combine ESLint security plugins, framework-specific linting, Semgrep, and IDE extensions. The same principle applies: use editor feedback for local patterns and CI for complete proof. A framework that escapes output by default may reduce XSS risk, but direct DOM writes still deserve local warnings.
+
+```javascript
+// app/renderProfile.js
+export function renderProfile(container, userInput) {
+  container.innerHTML = userInput;
+}
 ```
 
 ```javascript
-// JavaScript with ESLint security plugin
-document.innerHTML = userInput;
-//                   ^^^^^^^^^
-//       💡 Potential XSS vulnerability
-//          Sanitize user input before rendering
-
-exec("ls " + userInput);
-//           ^^^^^^^^^
-//       💡 Command injection risk
-//          Use spawn with array arguments instead
+// app/renderProfile.js
+export function renderProfile(container, userInput) {
+  const textNode = document.createTextNode(userInput);
+  container.replaceChildren(textNode);
+}
 ```
 
----
+The first version treats user input as markup. The second treats the same input as text. A good rule teaches that distinction. A noisy rule that flags every framework-managed rendering path without understanding the project will push developers toward broad suppressions, which is a design failure in the guardrail.
 
-## Static Analysis (SAST) Integration
+| IDE or Local Tool | Primary Signal | Good Team Standard | Risk if Misused |
+|---|---|---|---|
+| SonarLint | Local code smells and security warnings | Enable agreed high-value rules per language | Developers ignore broad warning sets |
+| Snyk extension | Dependency and container hints | Pair with CI dependency enforcement | Local results differ from central policy |
+| Semgrep extension | Custom organization rules | Start with a small trusted rule pack | Experimental rules create false positives |
+| ESLint security plugin | JavaScript risky patterns | Use project-specific overrides with review | Global disables hide real issues |
+| JetBrains inspections | Language-aware static checks | Share inspection profiles where practical | Personal IDE state drifts from team norms |
+| CodeQL in CI | Deep semantic analysis | Use for central verification and queries | Too slow for most local commit paths |
 
-### SAST at Different Stages
+SAST at pre-commit should be deliberately narrower than SAST in CI. Changed-file Semgrep rules, Bandit for touched Python files, or ESLint for staged JavaScript can be useful. Whole-program CodeQL analysis is usually better in CI because it needs time, dependencies, and repository context.
 
+```yaml
+# .semgrep.yaml
+rules:
+  - id: python-sql-string-concat
+    languages:
+      - python
+    severity: ERROR
+    message: "Use parameterized queries instead of concatenating SQL strings."
+    patterns:
+      - pattern: $CONN.execute("..." + $INPUT)
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    SAST INTEGRATION POINTS                   │
-│                                                              │
-│  IDE              Pre-commit           CI/CD                 │
-│  ┌──────┐        ┌──────┐            ┌──────┐               │
-│  │Sonar │        │Semgrep│           │CodeQL│               │
-│  │Lint  │        │(fast) │           │(full)│               │
-│  └──────┘        └──────┘            └──────┘               │
-│     │               │                   │                    │
-│ Real-time       Blocking           Comprehensive            │
-│ squiggles       on commit          report                    │
-│                                                              │
-│  Speed: Fast ◀──────────────────────────────▶ Slow          │
-│  Depth: Shallow ◀────────────────────────────▶ Deep         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
 
-**Strategy:** Fast, shallow checks early; deep analysis in CI.
-
-### Semgrep for Pre-commit
-
-Semgrep is fast enough for pre-commit:
+This rule is intentionally simple and would not catch every SQL injection pattern. That is acceptable for a teaching example. Production Semgrep rules should be tested against real code, tuned for false positives, and documented with examples of secure alternatives.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: https://github.com/returntocorp/semgrep
-    rev: v1.45.0
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.118.0
     hooks:
       - id: semgrep
-        args: ['--config', 'p/security-audit', '--error']
+        args: ["--config", ".semgrep.yaml", "--error"]
+        files: "\\.(py|js|ts)$"
 ```
 
-**Custom rules (`.semgrep.yaml`):**
-```yaml
-rules:
-  - id: hardcoded-secret
-    patterns:
-      - pattern-either:
-          - pattern: $X = "..."
-          - pattern: $X = '...'
-    message: "Potential hardcoded secret in variable $X"
-    severity: ERROR
-    languages: [python, javascript, typescript]
-```
-
-### Bandit for Python
-
-```yaml
-# .pre-commit-config.yaml
-repos:
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.5
-    hooks:
-      - id: bandit
-        args: ["-ll", "-ii"]  # Low severity = Low confidence
-```
-
-**What Bandit catches:**
-```python
-# B106: Hardcoded password
-connection = connect(password="secret123")
-
-# B102: Use of exec
-exec(user_input)
-
-# B608: SQL injection
-query = "SELECT * FROM users WHERE id = %s" % user_id
-
-# B301: Pickle usage
-pickle.loads(untrusted_data)
-```
-
-### ESLint Security Plugin for JavaScript
-
-```json
-// .eslintrc.json
-{
-  "plugins": ["security"],
-  "extends": ["plugin:security/recommended"],
-  "rules": {
-    "security/detect-object-injection": "error",
-    "security/detect-non-literal-regexp": "warn",
-    "security/detect-unsafe-regex": "error",
-    "security/detect-buffer-noassert": "error",
-    "security/detect-eval-with-expression": "error",
-    "security/detect-no-csrf-before-method-override": "error",
-    "security/detect-possible-timing-attacks": "warn"
-  }
-}
-```
+The `files` filter keeps the hook scoped to languages the rules understand. Without that filter, a documentation-only change could still start a scanner, increasing runtime and reducing trust. Good shift-left design pays attention to this small operational detail because developer experience determines whether the control survives.
 
 ---
 
-## War Story: The $0 Secret That Almost Cost Millions
+## 5. Configuration and IaC Security
 
-A startup was preparing for their Series B funding round. Due diligence included a security audit.
+Shift-left security is not limited to application code. Terraform, Kubernetes manifests, Helm charts, Dockerfiles, GitHub Actions workflows, and cloud configuration all encode production behavior. If a manifest grants privilege, opens a security group to the world, or runs a container as root, the risk can be caught before deployment.
 
-**The Discovery:**
+```text
+Configuration Risk Flow
+──────────────────────────────────────────────────────────────────────────────
 
-The auditors ran TruffleHog against their main repository:
-
-```bash
-$ trufflehog git https://github.com/startup/main-app --only-verified
-
-Found verified secret!
-Detector Type: AWS
-Decoder Type: PLAIN
-Raw result: AKIAIOSFODNN7EXAMPLE
-File: scripts/deploy.sh
-Commit: abc123def (2019)
-Author: Former Employee
+  Repository file                  Pipeline rendering              Cluster or cloud
+  ┌────────────────┐              ┌────────────────┐              ┌────────────────┐
+  │ deployment.yaml│─────────────▶│ templating     │─────────────▶│ API admission  │
+  │ terraform.tf   │              │ validation     │              │ runtime policy │
+  │ Dockerfile     │              │ image build    │              │ monitoring     │
+  └────────────────┘              └────────────────┘              └────────────────┘
+          │                                │                                │
+          ├─ fastest place to catch        ├─ best place to validate        ├─ final place to enforce
+          │  obvious insecure settings     │  rendered combined state       │  live environment rules
+          │                                │                                │
+          └─ examples: privileged pods,    └─ examples: Helm output,        └─ examples: admission control,
+             open ingress, root containers   policy bundles, image scans      drift, runtime detection
 ```
 
-An AWS key from 2019. The employee had left in 2020. The key was removed in a later commit. But it was still in Git history.
-
-**The Impact:**
-- Key had admin privileges
-- Had been in history for 4 years
-- Accessible to anyone with repo access
-- Past contractors, past employees
-
-**The Fix:**
-1. Immediately rotate the AWS key
-2. Audit CloudTrail for suspicious activity
-3. Rewrite Git history (painful, but necessary)
-4. Implement pre-commit secrets detection
-5. Set up AWS key rotation policy
-
-**The Lesson:**
-
-They implemented a three-layer defense:
-```
-Layer 1: Pre-commit hooks (detect-secrets)
-         → Blocks secrets before commit
-
-Layer 2: CI/CD scanning (gitleaks)
-         → Catches anything that slipped through
-
-Layer 3: GitHub secret scanning
-         → Alerts on known secret patterns
-```
-
-Cost to implement: A few hours.
-Cost if exploited: Could have been catastrophic.
-
----
-
-## Configuration as Code
-
-### IaC Security Scanning
-
-Infrastructure as Code (IaC) can have security issues too:
+A Kubernetes manifest that sets `privileged: true` is usually not a subtle vulnerability. It grants broad access from the container to the node and should require a strong exception process. A local IaC scanner can catch the field before the manifest reaches a cluster admission controller.
 
 ```yaml
-# Terraform - Insecure
-resource "aws_security_group" "bad" {
-  ingress {
-    from_port   = 0
-    to_port     = 65535
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Open to the world!
-  }
-}
-
-# Kubernetes - Insecure
 apiVersion: v1
 kind: Pod
+metadata:
+  name: insecure-demo
 spec:
   containers:
-  - name: app
-    securityContext:
-      privileged: true  # Never do this!
+    - name: app
+      image: nginx:1.27
+      securityContext:
+        privileged: true
 ```
 
-### Tools for IaC Scanning
+A safer baseline removes privileged mode, disables privilege escalation, sets a non-root identity, and uses a read-only root filesystem when the application permits it. Not every workload can use every hardening option immediately, but the manifest should make the risk explicit rather than accepting insecure defaults.
 
-| Tool | Targets | Pre-commit Support |
-|------|---------|-------------------|
-| **Checkov** | Terraform, K8s, CloudFormation, Dockerfile | Yes |
-| **tfsec** | Terraform | Yes |
-| **Kubesec** | Kubernetes | Yes |
-| **kube-linter** | Kubernetes, Helm | Yes |
-| **Trivy** | Everything + vulnerabilities | Yes |
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: safer-demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: nginx:1.27
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+```
 
-### Checkov Pre-commit Integration
+Tools such as Checkov, Trivy, kube-linter, and Kubesec can run locally and in CI. The early-stage version should focus on obvious high-confidence findings. The CI version can run broader checks against rendered Helm output, Terraform plans, or full configuration directories.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/bridgecrewio/checkov
-    rev: 2.4.0
+    rev: 3.2.405
     hooks:
       - id: checkov
-        args: [--quiet]
+        args: ["--quiet", "--framework", "kubernetes", "--framework", "terraform"]
+        files: "\\.(yaml|yml|tf)$"
 ```
 
-**What Checkov catches:**
-```hcl
-# CKV_AWS_23: Ensure every security group rule has a description
-resource "aws_security_group_rule" "bad" {
-  type        = "ingress"
-  # Missing: description = "..."
-}
-
-# CKV_AWS_79: Ensure Instance Metadata Service Version 1 is not enabled
-resource "aws_instance" "bad" {
-  # Missing: metadata_options block
-}
-```
-
-### Kubesec for Kubernetes
+The `files` selector matters again. Running a Kubernetes scanner against every YAML file in a repository may produce false findings for examples, CI workflow files, or documentation fixtures. When a repository contains mixed YAML types, path filters are often better than extension filters.
 
 ```yaml
 # .pre-commit-config.yaml
 repos:
-  - repo: local
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.405
     hooks:
-      - id: kubesec
-        name: kubesec
-        entry: bash -c 'kubesec scan "$@" | jq -e ".[].score >= 0"'
-        language: system
-        files: '\.(yaml|yml)$'
+      - id: checkov
+        args: ["--quiet", "--framework", "kubernetes"]
+        files: "^(deploy|helm|k8s)/.*\\.(yaml|yml)$"
 ```
+
+Infrastructure scanning has one trap that application SAST does not always share: templates may not represent final deployed state. A Helm chart, Kustomize base, or Terraform module can look safe alone but render insecurely after values are applied. That is why local file scanning should be paired with CI jobs that scan rendered output or planned changes.
+
+| IaC Target | Local Scanner Fit | CI Scanner Fit | Senior-Level Placement |
+|---|---|---|---|
+| Dockerfile | Strong for linting risky instructions | Strong for image and dependency scans | Lint locally, scan built image in CI |
+| Kubernetes YAML | Strong for direct manifests | Stronger for rendered Helm or Kustomize | Scan changed files locally and rendered output centrally |
+| Terraform code | Useful for obvious resource settings | Stronger with plan-aware policy checks | Run fast rules locally and plan checks in CI |
+| GitHub Actions | Useful for pinned action and permission checks | Useful for organization policy enforcement | Catch obvious workflow risk before PR |
+| Helm charts | Limited if values are missing | Strong after template rendering | Render in CI with representative values |
+| CloudFormation | Useful for static resource checks | Strong with account policy context | Use local checks as hints and CI as gate |
+
+**What would happen if:** A team scans only raw Helm chart templates in pre-commit and never scans rendered manifests in CI. A chart value enables host networking for a production environment. Decide which stage would miss the issue and which stage should catch it.
+
+The pre-commit stage may miss the issue because the risky field appears only after values are merged. The CI stage should render the chart with representative values and scan the resulting manifests. This is constructive alignment in engineering form: local checks teach and catch simple mistakes, while shared checks validate the artifact that will actually be deployed.
+
+---
+
+## 6. Challenge/Solution Worked Example: Debugging a Broken Shift-Left Control
+
+This worked example models the troubleshooting behavior expected in the hands-on exercise. The goal is not just to know which tool to install. The goal is to diagnose why a guardrail failed, decide whether the finding is real, and adjust the system without weakening security.
+
+### Challenge
+
+A payments team added `detect-secrets` and Semgrep to pre-commit. The next day, developers report three problems. Commits that change only Markdown still trigger Semgrep. A fake API key in a test fixture blocks every commit. One developer bypassed the hook with `--no-verify`, and CI still passed. The team lead asks whether pre-commit should be removed because it is slowing delivery.
+
+```text
+Observed Failure Report
+──────────────────────────────────────────────────────────────────────────────
+
+  Symptom A: Documentation commits run Semgrep and take too long.
+  Symptom B: A fake token in tests blocks unrelated changes.
+  Symptom C: A bypassed local hook still allows the pull request to pass CI.
+
+  Question: Is the control wrong, or is the control placed and configured poorly?
+```
+
+The common beginner reaction is to disable the noisy rules. The senior reaction is to separate the failures. Symptom A is a scoping problem. Symptom B is a test-data and baseline problem. Symptom C is a missing central enforcement problem. Each needs a different fix, and removing pre-commit would throw away the useful parts of the control.
+
+| Symptom | Diagnostic Question | Likely Root Cause | Correct Direction |
+|---|---|---|---|
+| Markdown changes trigger Semgrep | Is the hook filtered by file type or path? | Missing `files` filter | Scope the hook to supported languages |
+| Fake token blocks unrelated changes | Is the token obviously fake and audited? | Ambiguous fixture or unmanaged baseline | Rename fixture or baseline with review |
+| Local bypass passes CI | Does CI run equivalent checks? | Local-only enforcement | Add required CI checks |
+| Developers complain about speed | Which hook consumes time? | No runtime budget or profiling | Move slow checks later |
+| Warnings are ignored | Are findings actionable and trusted? | Rule noise or weak documentation | Tune rules and show fixes |
+
+### Solution
+
+Start with the scoping problem because it affects every developer. The Semgrep hook should run only on files where the configured rules apply. If the repository uses Python and JavaScript rules, a Markdown-only commit should not trigger those checks.
+
+```yaml
+# Before: Semgrep runs too broadly.
+repos:
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.118.0
+    hooks:
+      - id: semgrep
+        args: ["--config", ".semgrep.yaml", "--error"]
+```
+
+```yaml
+# After: Semgrep runs only for changed Python, JavaScript, and TypeScript files.
+repos:
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.118.0
+    hooks:
+      - id: semgrep
+        args: ["--config", ".semgrep.yaml", "--error"]
+        files: "\\.(py|js|ts)$"
+```
+
+Next, inspect the fake test token. If the value looks like a live provider token, rename the fixture so it is obviously non-secret. A scanner baseline can acknowledge unavoidable examples, but the better first move is to make examples unambiguous for both tools and humans.
+
+```json
+{
+  "provider": "example-payments",
+  "apiKey": "not-a-real-token-used-only-in-tests"
+}
+```
+
+If the fixture must preserve a realistic shape for parser tests, add a narrow allowlist entry with a clear path and description. Avoid a broad regex suppression that would hide real tokens elsewhere in the repository.
+
+```toml
+# .gitleaks.toml
+[allowlist]
+description = "Allow deliberately fake payment fixture values used by parser tests"
+paths = [
+  '''tests/fixtures/payment_gateway_parser\.json''',
+]
+```
+
+Finally, fix the enforcement gap. Local hooks are a convenience and teaching mechanism, not the final authority. CI must run equivalent or stronger checks, and branch protection should require them before merge. That way `--no-verify` can help a developer create a temporary local commit, but it cannot silently merge unscanned code.
+
+```yaml
+name: Security Gates
+on:
+  pull_request:
+
+jobs:
+  local-equivalent-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install security tools
+        run: |
+          python -m pip install pre-commit detect-secrets semgrep bandit
+      - name: Run pre-commit checks in CI
+        run: |
+          pre-commit run --all-files
+```
+
+The CI example uses the hosted runner's Python because that is the CI environment, not the local KubeDojo repository environment. In the KubeDojo repository itself, local commands should use `.venv/bin/python` and `.venv/bin/pre-commit`. The key principle is consistency: CI should execute the same rule set or a stricter one, not a completely different interpretation of security.
+
+The resulting decision is balanced. Keep pre-commit, but make it fast and scoped. Keep test fixtures, but make fake values obvious or narrowly allowlisted. Permit local bypass for emergencies if the organization chooses, but ensure CI and protected branches provide central enforcement. That is the troubleshooting behavior expected of a platform engineer: diagnose the control system instead of blaming either the developer or the tool.
+
+---
+
+## 7. Designing a Team-Level Shift-Left Program
+
+A shift-left program fails when it is introduced as a pile of tools. It succeeds when the team treats each check as a product feature: there is a user, a workflow, a failure mode, a runtime budget, documentation, ownership, and a support path. Developers do not need another mysterious gate; they need clear feedback that helps them ship safer code with less rework.
+
+The adoption sequence should begin with one or two high-confidence controls. Secrets detection is usually first because the risk is severe, the fix is easy to explain, and the benefit of preventing history contamination is concrete. A narrow SAST rule pack is often second. IaC scanning follows when the team has enough deployment configuration in the repository to make local checks useful.
+
+```text
+Practical Adoption Sequence
+──────────────────────────────────────────────────────────────────────────────
+
+  Step 1: Inventory common preventable findings.
+          │
+          ▼
+  Step 2: Choose one high-confidence local control.
+          │
+          ▼
+  Step 3: Run it in report-only mode or all-files mode once.
+          │
+          ▼
+  Step 4: Baseline or remediate existing findings.
+          │
+          ▼
+  Step 5: Block only new findings in pre-commit.
+          │
+          ▼
+  Step 6: Add equivalent CI enforcement.
+          │
+          ▼
+  Step 7: Track bypasses, runtime, false positives, and escaped issues.
+```
+
+The metrics should measure whether feedback is moving earlier and whether remediation is getting cheaper. Counting total findings without stage context can mislead leaders into thinking the program is getting worse when it is actually discovering issues earlier. Better metrics separate discovery stage, time to remediation, false-positive rate, and escaped issues.
+
+```text
+Shift-Left Metrics Model
+──────────────────────────────────────────────────────────────────────────────
+
+  Discovery Stage Distribution
+  ┌──────────────┬─────────────────────────────┬────────────────────────────┐
+  │ IDE          │ █████████████████████       │ desired to increase         │
+  │ pre-commit   │ ████████████████            │ desired to increase         │
+  │ CI / PR      │ ████████                    │ desired to decrease slowly  │
+  │ production   │ ██                          │ desired to approach zero    │
+  └──────────────┴─────────────────────────────┴────────────────────────────┘
+
+  Supporting Measures
+  ┌──────────────┬──────────────────────────────────────────────────────────┐
+  │ Hook runtime │ Median and high-percentile runtime for normal commits    │
+  │ Bypass rate  │ Frequency of commits created with local verification off │
+  │ Noise rate   │ Findings closed as false positive or accepted risk       │
+  │ Escape rate  │ Issues first detected in CI, deployment, or production   │
+  └──────────────┴──────────────────────────────────────────────────────────┘
+```
+
+A healthy program will see some findings move from CI to local stages. That does not mean the central pipeline becomes less important. It means the pipeline can spend less time catching preventable mistakes and more time proving integrated behavior. The deepest checks remain central because they require whole-repository context, built artifacts, cloud state, or human judgment.
+
+Exception handling is part of the design, not an afterthought. Some findings are false positives. Some risky patterns are accepted temporarily because migration would break production. Some suppressions are legitimate. The difference between mature risk acceptance and silent drift is documentation, ownership, expiration, and review.
+
+```yaml
+# .semgrepignore
+# Temporary exception for legacy report renderer.
+# Risk owner: appsec-platform
+# Tracking issue: SEC-1820
+# Review by: 2026-09-30
+legacy/reporting/unsafe_renderer.py
+```
+
+That example shows the minimum information a suppression should carry. Without ownership and review, exceptions accumulate until the scanner becomes decorative. With ownership and review, exceptions become visible engineering debt that can be prioritized like any other risk.
+
+| Design Decision | Beginner Approach | Senior Approach | Why the Senior Approach Works |
+|---|---|---|---|
+| Add a scanner | Enable the biggest default rule set | Start with high-confidence rules tied to common incidents | Trust grows from accurate findings |
+| Handle legacy findings | Block everything immediately | Baseline, triage, and block only new risk | Teams can keep shipping while reducing debt |
+| Deal with false positives | Disable the rule globally | Add narrow suppression with owner and review date | Useful signal remains intact |
+| Improve speed | Tell developers to be patient | Profile hooks and move slow checks later | The control fits the workflow |
+| Prevent bypass | Ban `--no-verify` culturally | Require equivalent CI checks and branch protection | Enforcement does not depend on local behavior |
+| Measure success | Count scanner findings | Track discovery stage, MTTR, escapes, runtime, and noise | Metrics reflect real risk reduction |
+
+**Pause and design:** A repository contains a small Go API, a Helm chart, Terraform for cloud resources, and Markdown documentation. The team wants a single command that runs local security checks. Decide which checks should run for every commit and which should run only when matching paths change.
+
+A reasonable design runs secret detection for most staged text files, Go security linting only for Go files, Helm or Kubernetes scanning only for chart and manifest paths, Terraform scanning only for Terraform paths, and no application scanner for documentation-only commits. The point is not to make the command clever for its own sake; the point is to keep the developer's feedback relevant to the change.
+
+---
+
+## Did You Know?
+
+1. **The `pre-commit` hook runs before Git creates the commit object**, which makes it uniquely valuable for stopping secrets before they enter local history. CI can catch a leaked value later, but the commit already exists by that point.
+
+2. **Most mature teams still keep central CI enforcement after adding local hooks**, because local hooks can be skipped, misconfigured, or outdated. Shift-left improves feedback speed; it does not remove the need for independent verification.
+
+3. **False positives are a product-design problem as much as a scanner problem**, because developers learn from the quality of the feedback loop. A small rule set with trusted findings often outperforms a huge rule set that everyone ignores.
+
+4. **IaC scanning gets more accurate when it sees rendered output**, because Helm, Kustomize, Terraform modules, and environment-specific values can change the final security posture. Local file scanning is useful, but CI should validate deployable artifacts.
 
 ---
 
 ## Common Mistakes
 
 | Mistake | Problem | Solution |
-|---------|---------|----------|
-| Hook bypass with `--no-verify` | Developers skip checks | Make CI/CD mandatory, monitor bypass rate |
-| Too many checks = slow hooks | Developers disable hooks | Keep pre-commit < 5 seconds |
-| No baseline for existing code | 1000 findings = ignored | Create baseline, focus on new issues |
-| Not sharing hook config | Inconsistent team setup | Commit `.pre-commit-config.yaml` |
-| IDE plugins without team standards | Different results per dev | Document recommended plugins |
-| Only checking on commit | Miss issues in development | Add IDE real-time analysis |
+|---|---|---|
+| Running every scanner in pre-commit | Commits become slow, developers bypass hooks, and useful controls lose credibility | Keep pre-commit fast, path-aware, and focused on high-confidence findings |
+| Treating local hooks as the only enforcement point | A developer can skip hooks or have stale tooling, allowing risky code into a pull request | Run equivalent or stronger checks in CI and require them before merge |
+| Adding scanners without baselining legacy findings | Old issues block unrelated work and create pressure to disable the scanner entirely | Generate a reviewed baseline, remediate real risk by priority, and block new findings |
+| Suppressing noisy rules globally | Real vulnerabilities disappear with the false positives, and future reviewers lose context | Use narrow suppressions with owner, reason, tracking issue, and review date |
+| Scanning raw templates only | Helm, Kustomize, and Terraform may render into risky deployable state that local scans never see | Scan changed source locally and rendered or planned output in CI |
+| Failing to document secure fixes | Developers see a block but do not learn the replacement pattern, so the same issue repeats | Include examples, links, and short remediation notes in rule messages or team docs |
+| Letting IDE rules drift per developer | Different engineers see different warnings, causing inconsistent security behavior | Share recommended profiles and mirror critical rules in pre-commit or CI |
+| Measuring only total findings | Increased early discovery can look like failure when it actually means the program is working | Track discovery stage, remediation time, false positives, bypasses, and production escapes |
 
 ---
 
-## Metrics for Shift-Left Success
-
-Track these to measure effectiveness:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SHIFT-LEFT METRICS                        │
-│                                                              │
-│  Issues by Discovery Stage                                   │
-│  ─────────────────────────                                   │
-│                                                              │
-│  IDE         ████████████████████  40%    ← Goal: increase  │
-│  Pre-commit  ███████████████       30%    ← Goal: increase  │
-│  CI/CD       █████████             20%    ← Goal: decrease  │
-│  Production  ████                  10%    ← Goal: minimize  │
-│                                                              │
-│  Mean Time to Remediation (by stage)                        │
-│  ─────────────────────────────────                          │
-│                                                              │
-│  IDE         5 minutes     ← Developer fixes while typing   │
-│  Pre-commit  15 minutes    ← Fix before commit              │
-│  CI/CD       2 hours       ← Context switch needed          │
-│  Production  2 weeks       ← Full incident response         │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Good signs:**
-- More issues caught in IDE/pre-commit
-- Fewer issues in CI/CD
-- Near-zero in production
-- MTTR decreasing at each stage
-
----
-
-## Quiz: Check Your Understanding
+## Quiz
 
 ### Question 1
-A developer uses `git commit --no-verify` to bypass pre-commit hooks because "the hook is slow." How should this be addressed?
+
+A team adds a pre-commit configuration that runs secrets detection, dependency auditing, full SAST, unit tests, container builds, and Terraform plan checks. Developers begin committing with `--no-verify` because local commits take several minutes. How should the platform team redesign the guardrail without removing security coverage?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Show answer</summary>
 
-**Address both the symptom and root cause:**
+The team should split the checks by feedback stage instead of treating pre-commit as the only gate. Fast, high-confidence checks such as staged-file secrets detection and narrow changed-file SAST rules should remain in pre-commit. Slower checks such as full dependency auditing, full SAST, container builds, and Terraform plans should move to pre-push or CI, where longer runtimes are acceptable and results are centrally visible.
 
-**Root cause (slow hooks):**
-- Audit which checks are slow
-- Move slow checks to CI (keep fast ones in pre-commit)
-- Target < 5 seconds for pre-commit
-- Use incremental scanning (only changed files)
-
-**Symptom (bypass):**
-- Monitor `--no-verify` usage (wrapper script or CI check)
-- Ensure CI runs same checks (can't skip)
-- Document why hooks matter (link to past incidents)
-- Make CI failure visible (Slack, email)
-
-**Technical solutions:**
-```bash
-# Git alias that logs bypass attempts
-git config --global alias.yolo '!f() {
-  echo "$(date): bypass used" >> ~/.git-bypass.log;
-  git commit --no-verify "$@";
-}; f'
-```
-
-**Cultural solutions:**
-- Discuss in retrospectives
-- Track as team metric
-- Celebrate when hooks catch issues
-
-Pre-commit is a safety net, not a punishment. If developers bypass it, the process needs fixing.
+The team should also measure hook runtime and set an explicit budget for normal commits. If a check is valuable but slow, the right fix is usually to move it later or make it path-aware, not to blame developers for bypassing it. CI should still run equivalent or stronger checks so a local bypass cannot merge unverified code.
 
 </details>
 
 ### Question 2
-You run `detect-secrets scan` on a legacy codebase and get 500 findings. What's the right approach?
+
+A repository introduces detect-secrets and immediately reports hundreds of findings in old fixtures, generated examples, and a few likely real credentials. Product teams complain that they cannot commit unrelated fixes. What adoption plan preserves security while avoiding a blocked rollout?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Show answer</summary>
 
-**Don't try to fix all 500 at once. Use baselining:**
+The team should create and audit a baseline rather than blocking all existing findings at once. Real credentials should be prioritized for rotation and investigation, while false positives and deliberately fake fixtures should be marked or rewritten so they are unambiguous. After the baseline is reviewed, the pre-commit hook should block newly introduced findings while legacy remediation proceeds separately.
 
-1. **Generate baseline:**
-   ```bash
-   detect-secrets scan > .secrets.baseline
-   ```
-
-2. **Audit baseline (mark false positives):**
-   ```bash
-   detect-secrets audit .secrets.baseline
-   ```
-   - Mark true positives for remediation
-   - Mark false positives as acknowledged
-   - Mark test data as acknowledged
-
-3. **Commit baseline:**
-   ```bash
-   git add .secrets.baseline
-   git commit -m "Add secrets baseline"
-   ```
-
-4. **Enable pre-commit with baseline:**
-   ```yaml
-   - repo: https://github.com/Yelp/detect-secrets
-     hooks:
-       - id: detect-secrets
-         args: ['--baseline', '.secrets.baseline']
-   ```
-
-5. **Now:**
-   - New secrets = blocked
-   - Existing secrets = tracked for remediation
-   - Legacy = addressed over time
-
-**Priority for remediation:**
-1. Production secrets (rotate immediately)
-2. API keys with external access
-3. Internal credentials
-4. Test/mock data (lowest priority, may be fine)
+This approach preserves the most important shift-left value: preventing new secrets from entering history. It also avoids turning the scanner into an all-or-nothing migration project. The key is that the baseline must be owned and reviewed, not used as a permanent hiding place for unresolved risk.
 
 </details>
 
 ### Question 3
-Why is secrets scanning in pre-commit critical, as opposed to just in CI/CD?
+
+A developer removes a hardcoded API token in a follow-up commit and argues that the problem is solved because the current file no longer contains the secret. The original commit was already pushed to the shared repository. What should the team do next, and why is deletion alone insufficient?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Show answer</summary>
 
-**Because Git history is (nearly) permanent:**
+The team should treat the token as compromised, rotate or revoke it, inspect relevant access logs, and decide whether history rewriting is necessary for the repository. Deleting the value in a later commit only changes the current file state. The token remains visible through Git history, clones, caches, forks, and any systems that already fetched the repository.
 
-Once a secret is committed:
-1. It's in local Git history
-2. After push, it's in remote history
-3. Anyone with repo access can find it
-4. `git revert` doesn't remove it (only the current file)
-5. Full removal requires `git filter-branch` or BFG (disruptive)
-
-**Pre-commit prevents the commit from happening:**
-```
-With pre-commit:
-  Code → Pre-commit → ❌ BLOCKED → Never in history
-
-Without pre-commit:
-  Code → Commit → Push → CI fails → Secret in history forever
-```
-
-**Even if you delete and push again:**
-```bash
-# This doesn't help:
-git rm secrets.txt
-git commit -m "Remove secrets"
-git push
-
-# Secret still visible:
-git log -p  # Shows the secret in history
-```
-
-**CI/CD scanning is still valuable** for:
-- Deep history scans (already committed secrets)
-- Backup if pre-commit bypassed
-- Broader pattern matching
-
-But pre-commit is the first line of defense that prevents the problem.
+This scenario is exactly why pre-commit secret scanning is valuable. If the token is blocked before commit, no history cleanup is needed. Once pushed, the response becomes an incident-handling problem rather than a simple code cleanup.
 
 </details>
 
 ### Question 4
-An IDE security plugin shows a warning for every use of `eval()` in JavaScript, but your codebase has legitimate uses in a sandboxed environment. How do you handle this?
+
+A Semgrep rule blocks `container.innerHTML = value` in a frontend project. One team claims the pattern is safe in their file because `value` is produced by a trusted sanitizer wrapper. Another team wants to disable the rule globally because the warning is annoying. What is the best engineering response?
 
 <details>
-<summary>Show Answer</summary>
+<summary>Show answer</summary>
 
-**Don't disable the rule globally. Use targeted suppression:**
+The team should avoid disabling the rule globally. They should verify whether the sanitizer wrapper is actually safe, then use a narrow suppression or rule refinement for the specific trusted pattern if the risk is accepted. The suppression should explain why the exception is safe, who owns it, and when it should be reviewed.
 
-**Option 1: Inline suppression with comment**
-```javascript
-// eslint-disable-next-line security/detect-eval-with-expression
-const result = sandboxedEval(expression);
-```
+Global disablement would hide real XSS risks in other files. A targeted exception preserves the useful signal while acknowledging the known safe case. If many safe cases exist, the rule should be improved to recognize the team's approved wrapper rather than forcing repeated suppressions.
 
-**Option 2: File-level suppression**
-```javascript
-/* eslint-disable security/detect-eval-with-expression */
-// This file contains sandboxed eval in controlled environment
-// Risk accepted: JIRA-1234
-```
+</details>
 
-**Option 3: Directory-level override**
-```json
-// .eslintrc.json in the specific directory
-{
-  "rules": {
-    "security/detect-eval-with-expression": ["warn", {
-      "allow": ["sandboxedEval"]
-    }]
-  }
-}
-```
+### Question 5
 
-**Best practice:**
-- Document WHY the suppression exists
-- Link to ticket/decision record
-- Require review for new suppressions
-- Periodically audit suppressions
+A Helm chart passes local YAML scanning in pre-commit, but the production release enables `hostNetwork: true` through an environment-specific values file. The risky rendered manifest was never scanned before deployment. Where did the shift-left design fail, and what should be added?
 
-**Never:**
-- Disable the rule globally
-- Suppress without documentation
-- Let suppressions accumulate without review
+<details>
+<summary>Show answer</summary>
 
-The goal is security awareness, not zero warnings. Acknowledged risks are fine; unknown risks are not.
+The design failed by scanning only raw source templates and never scanning the deployable rendered output. Local pre-commit scanning is useful for obvious mistakes in chart templates, but Helm values can change the final manifest. CI should render the chart with representative environment values and scan the resulting Kubernetes YAML before deployment.
+
+The team may keep the local scanner for fast feedback, but it should be paired with a CI check that validates what the cluster will actually receive. This layered approach catches both simple authoring mistakes and environment-specific configuration risk.
+
+</details>
+
+### Question 6
+
+A security hook flags a realistic-looking payment token inside a parser test fixture. The value is fake, but it causes repeated confusion and blocks commits from developers who are not working on the parser. What should the team change first?
+
+<details>
+<summary>Show answer</summary>
+
+The first improvement should be to make the fixture obviously fake if the parser test does not require a realistic provider token format. A value like `not-a-real-token-used-only-in-tests` is clearer to both humans and scanners than a string that resembles a live production credential. If the test truly requires a realistic shape, use a narrow allowlist or baseline entry tied to that exact fixture path.
+
+The team should not add a broad suppression for payment tokens across the repository. Broad suppressions solve the immediate annoyance by hiding future real leaks. The better fix reduces ambiguity while preserving scanner coverage.
+
+</details>
+
+### Question 7
+
+A team wants to measure whether shift-left security is working. Leadership asks for a monthly count of scanner findings. Why is that metric incomplete, and which additional measures would better show program health?
+
+<details>
+<summary>Show answer</summary>
+
+A raw finding count is incomplete because it does not show whether issues are being found earlier, fixed faster, or prevented from reaching production. A higher local finding count may actually be good if it means problems moved from CI or production into IDE and pre-commit feedback. Without stage context, leadership may misread healthy early discovery as failure.
+
+Better measures include discovery stage distribution, mean time to remediation by stage, pre-commit runtime, bypass rate, false-positive or accepted-risk rate, and escaped issues found in CI, deployment, or production. Together, those metrics show whether feedback is timely, trusted, and reducing real risk.
 
 </details>
 
 ---
 
-## Hands-On Exercise: Implement Pre-Commit Security
+## Hands-On Exercise: Build and Debug a Shift-Left Security Guardrail
 
-Set up a complete pre-commit security configuration for a project.
+In this exercise, the learner will create a small local repository, configure pre-commit security checks, trigger failures, fix real findings, and diagnose a noisy hook. The exercise mirrors the worked example: build the guardrail, observe failure, separate real risk from configuration problems, and add a central-style command that can run in CI.
 
-### Part 1: Setup Pre-commit Framework
+Run the commands from the KubeDojo repository root so `.venv/bin/python` and `.venv/bin/pip` refer to the existing local environment. The demo repository is created under `tmp/shift-left-demo` and can be deleted after the exercise.
+
+### Part 1: Create a Demo Repository
 
 ```bash
-# Create test directory
-mkdir shift-left-demo && cd shift-left-demo
+mkdir -p tmp
+rm -rf tmp/shift-left-demo
+mkdir tmp/shift-left-demo
+cd tmp/shift-left-demo
 git init
+git config user.email "learner@example.com"
+git config user.name "KubeDojo Learner"
+```
 
-# Install pre-commit
-pip install pre-commit
+Create a small application file, a test fixture, and a documentation file so the repository has multiple file types. This setup makes it possible to test whether hooks are scoped correctly.
 
-# Create configuration
+```bash
+mkdir -p app tests/fixtures docs
+
+cat > app/users.py << 'EOF'
+import sqlite3
+
+def find_user(connection: sqlite3.Connection, user_id: str):
+    query = "SELECT id, email FROM users WHERE id = " + user_id
+    return connection.execute(query).fetchone()
+EOF
+
+cat > tests/fixtures/payment_gateway.json << 'EOF'
+{
+  "provider": "example-payments",
+  "apiKey": "not-a-real-token-used-only-in-tests"
+}
+EOF
+
+cat > docs/notes.md << 'EOF'
+# Demo Notes
+
+This file should not trigger Python SAST checks when only documentation changes.
+EOF
+```
+
+### Part 2: Install and Configure Pre-Commit
+
+Return to the KubeDojo root in a second terminal if needed, then install the required tools into the repository virtual environment. The commands below use relative paths from the demo repository to the root virtual environment.
+
+```bash
+../../.venv/bin/python -m pip install pre-commit detect-secrets semgrep bandit
+../../.venv/bin/pre-commit --version
+../../.venv/bin/semgrep --version
+```
+
+Create a focused `.pre-commit-config.yaml`. The Semgrep hook is deliberately scoped to Python files so documentation-only commits do not trigger it.
+
+```bash
 cat > .pre-commit-config.yaml << 'EOF'
 repos:
-  # Secrets detection
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
+        args: ["--baseline", ".secrets.baseline"]
 
-  # General security
-  - repo: https://github.com/returntocorp/semgrep
-    rev: v1.45.0
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.118.0
     hooks:
       - id: semgrep
-        args: ['--config', 'p/secrets', '--config', 'p/security-audit', '--error']
+        args: ["--config", ".semgrep.yaml", "--error"]
+        files: "\\.py$"
 EOF
-
-# Install hooks
-pre-commit install
-
-# Create empty baseline
-echo "{}" > .secrets.baseline
 ```
 
-### Part 2: Test Secrets Detection
+Create a small Semgrep rule that catches the insecure query pattern from the demo application. This rule is intentionally narrow so the exercise stays focused on diagnosing placement and behavior.
 
 ```bash
-# Create file with secret
-cat > config.py << 'EOF'
-# Database configuration
-DB_HOST = "localhost"
-DB_PASSWORD = "super_secret_password_123"
-AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
+cat > .semgrep.yaml << 'EOF'
+rules:
+  - id: python-sql-string-concat-demo
+    languages:
+      - python
+    severity: ERROR
+    message: "Use parameterized queries instead of concatenating SQL strings."
+    patterns:
+      - pattern: $CONN.execute("..." + $INPUT)
 EOF
+```
 
-# Try to commit
+Create an initial secrets baseline and install the hooks.
+
+```bash
+../../.venv/bin/detect-secrets scan > .secrets.baseline
+../../.venv/bin/pre-commit install
+```
+
+### Part 3: Trigger and Diagnose a Real SAST Failure
+
+Stage the repository and try to commit. The commit should fail because `app/users.py` builds SQL with string concatenation.
+
+```bash
 git add .
-git commit -m "Add config"
-# Should FAIL with secrets detected
+git commit -m "Add initial demo app"
 ```
 
-### Part 3: Fix and Commit
+Inspect the failure and identify whether it is a real finding, a false positive, or a configuration problem. In this case, the finding is real because untrusted input can alter the SQL query structure.
+
+Fix the function by using a parameterized query.
 
 ```bash
-# Fix the secrets issue
-cat > config.py << 'EOF'
+cat > app/users.py << 'EOF'
+import sqlite3
+
+def find_user(connection: sqlite3.Connection, user_id: str):
+    query = "SELECT id, email FROM users WHERE id = ?"
+    return connection.execute(query, (user_id,)).fetchone()
+EOF
+```
+
+Run the checks again and commit the safe version.
+
+```bash
+git add .
+../../.venv/bin/pre-commit run --all-files
+git commit -m "Add initial demo app with local security hooks"
+```
+
+### Part 4: Prove the Hook Is Properly Scoped
+
+Change only the documentation file and run the hook. The Semgrep hook should not spend time analyzing Python if no Python files are staged, because the hook is filtered to `\\.py$`.
+
+```bash
+cat >> docs/notes.md << 'EOF'
+
+A documentation-only change should keep local feedback fast.
+EOF
+
+git add docs/notes.md
+git commit -m "Update demo notes"
+```
+
+If Semgrep runs for this documentation-only commit, inspect `.pre-commit-config.yaml` and verify the `files` filter is attached to the Semgrep hook rather than placed at the wrong indentation level.
+
+### Part 5: Trigger and Fix a Secret Finding
+
+Add a file that contains an obvious fake credential pattern. The point is to observe how the hook stops the commit before the value becomes part of Git history.
+
+```bash
+cat > app/insecure_settings.py << 'EOF'
+DATABASE_PASSWORD = "plain-text-password-for-demo"
+AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+EOF
+
+git add app/insecure_settings.py
+git commit -m "Add insecure settings"
+```
+
+The commit should fail. Fix the file by reading values from the environment instead of embedding them.
+
+```bash
+cat > app/insecure_settings.py << 'EOF'
 import os
 
-# Database configuration
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-AWS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+DATABASE_PASSWORD = os.environ.get("DATABASE_PASSWORD")
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
 EOF
 
-# Update baseline
-detect-secrets scan > .secrets.baseline
-
-# Now commit should work
-git add .
-git commit -m "Add config with environment variables"
+git add app/insecure_settings.py
+git commit -m "Add environment-based settings"
 ```
 
-### Part 4: Test SAST Rules
+### Part 6: Add a CI-Equivalent Local Command
+
+Create a script that runs the same checks against all files. This models what a pull request job should do centrally, even when a developer skips a local hook.
 
 ```bash
-# Create file with security issue
-cat > app.py << 'EOF'
-import os
+mkdir -p scripts
 
-def run_command(user_input):
-    # Vulnerable to command injection
-    os.system("echo " + user_input)
+cat > scripts/security-check.sh << 'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
 
-def get_user(user_id):
-    # Vulnerable to SQL injection
-    query = "SELECT * FROM users WHERE id = " + user_id
-    return query
+../../.venv/bin/pre-commit run --all-files
 EOF
 
-# Try to commit
-git add app.py
-git commit -m "Add app"
-# Should FAIL with security issues
+chmod +x scripts/security-check.sh
+./scripts/security-check.sh
+```
+
+A real CI workflow would install tools in the runner environment and run the same pre-commit configuration. The exact installation commands may differ, but the rule set should stay aligned with local development so developers can reproduce failures before pushing.
+
+### Part 7: Explain the Design
+
+Write a short note in the demo repository explaining which checks run early and which should stay in CI. This step forces the design reasoning, not just the tool commands.
+
+```bash
+cat > docs/security-design.md << 'EOF'
+# Shift-Left Demo Design
+
+Secrets detection runs in pre-commit because leaked values should be blocked before they enter Git history.
+
+The Semgrep demo rule runs in pre-commit only for Python files because documentation-only changes should not trigger Python analysis.
+
+The scripts/security-check.sh command runs all configured hooks and represents the kind of command a CI job should execute before merge.
+
+Slower checks such as full dependency audits, container image scans, and rendered IaC policy checks should run in CI rather than blocking every local commit.
+EOF
+
+git add docs/security-design.md scripts/security-check.sh
+git commit -m "Document shift-left security design"
 ```
 
 ### Success Criteria
 
-- [ ] Pre-commit framework installed
-- [ ] Secrets detection blocks hardcoded credentials
-- [ ] Baseline allows clean commits after fixing
-- [ ] SAST rules catch injection vulnerabilities
-- [ ] Understand how to fix flagged issues
-
----
-
-## Key Takeaways
-
-1. **Pre-commit is the earliest automated defense** — Catch issues before they enter Git history
-2. **Secrets in Git are forever** — Pre-commit is the only reliable way to prevent this
-3. **IDE plugins provide instant feedback** — Developers learn while coding
-4. **Baseline legacy issues** — Don't block all commits; focus on new issues
-5. **Speed matters** — Pre-commit hooks must be fast or developers will bypass them
-
----
-
-## Further Reading
-
-**Tools Documentation:**
-- **pre-commit** — pre-commit.com
-- **detect-secrets** — github.com/Yelp/detect-secrets
-- **gitleaks** — github.com/gitleaks/gitleaks
-- **Semgrep** — semgrep.dev
-
-**Books:**
-- **"Agile Application Security"** — Laura Bell et al.
-
-**Articles:**
-- **"Git Secrets: A Guide to Detection"** — AWS Security Blog
-- **"Shift Left Security"** — OWASP
-
-**Talks:**
-- **"Secrets in Source Code"** — DEF CON (YouTube)
-
----
-
-## Summary
-
-Shift-left security pushes security checks as early as possible in the development lifecycle:
-
-- **IDE plugins** give real-time feedback while coding
-- **Pre-commit hooks** catch issues before they enter Git
-- **Secrets detection** prevents credentials from ever being committed
-- **SAST in pre-commit** catches code vulnerabilities early
-
-The key is speed and developer experience. Checks must be fast (< 5 seconds) or developers will bypass them. Use baselining to handle legacy issues without blocking current work.
-
-The earlier you catch issues, the cheaper they are to fix—and the more developers learn secure coding practices.
+- [ ] A local demo repository exists under `tmp/shift-left-demo` with committed pre-commit configuration.
+- [ ] The first insecure SQL implementation fails before commit and is fixed with a parameterized query.
+- [ ] A documentation-only change commits without triggering irrelevant Python SAST work.
+- [ ] A hardcoded credential pattern is blocked before it enters Git history.
+- [ ] The credential example is fixed by reading values from the environment.
+- [ ] A local `scripts/security-check.sh` command runs all hooks and models CI enforcement.
+- [ ] The design note explains why some checks belong in pre-commit and slower checks belong in CI.
+- [ ] The learner can explain whether a hook failure is a real finding, a false positive, a scoping problem, or an enforcement gap.
 
 ---
 
 ## Next Module
 
-Continue to [Module 4.3: Security in CI/CD Pipelines](../module-4.3-security-cicd/) to learn how to implement comprehensive security scanning in your build and deployment pipelines.
-
----
-
-*"The best time to catch a security bug was at code time. The second best time is pre-commit."*
+Continue to [Module 4.3: Security in CI/CD Pipelines](../module-4.3-security-cicd/) to design the central verification layer that complements local shift-left security.
