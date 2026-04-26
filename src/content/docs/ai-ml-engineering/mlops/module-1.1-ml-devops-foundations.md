@@ -1,69 +1,62 @@
 ---
-revision_pending: true
 title: "ML DevOps Foundations"
 slug: ai-ml-engineering/mlops/module-1.1-ml-devops-foundations
 sidebar:
   order: 602
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours
-**Prerequisites**: Phase 9 complete
-
----
-
-## Why This Module Matters
-
-Knight Capital Group. August 1, 2012. 9:30 AM Eastern.
-
-The opening bell rang on Wall Street, and Knight Capital's new trading software went live. For roughly 45 minutes, the faulty rollout flooded the market with unintended orders and caused losses severe enough to threaten the firm's survival.
-
-The root cause was staggering in its simplicity: a deployment technician had pushed new code but forgot to update one of the eight core production servers. The old code on that single server, which had lain dormant for years, was suddenly activated by a repurposed system flag. It initiated an obsolete testing protocol on live markets. The incident exposed serious gaps in deployment controls, environment consistency checks, and incident response.
-
-This disaster was not fundamentally a technology failure; it was a process failure. It highlighted the terrifying absence of robust DevOps methodologies. Machine Learning systems magnify this danger exponentially. In ML, you are not merely deploying static application code—you are deploying an intertwined web of algorithms, evolving datasets, trained model weights, and hyperparameter configurations. A failure in any single component can silently degrade performance or cause catastrophic errors. This module provides the blueprint to ensure you never become the next Knight Capital, teaching you how to apply rigorous, version-controlled DevOps principles to the chaotic world of Machine Learning.
-
----
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours  
+> **Prerequisites**: Phase 9 complete
 
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
-- **Design** an end-to-end ML version control strategy that seamlessly integrates Git for code and DVC for data and model weights.
-- **Evaluate** model and data quality rigorously by writing automated tests within the extended ML testing pyramid.
-- **Implement** bulletproof pre-commit hooks to block secret leakage, prohibit massive binaries, and enforce formatting standards before code ever leaves a local workstation.
-- **Diagnose** pipeline failures and silent performance drift by utilizing deterministic experiment tracking and Kubernetes-based test execution.
 
----
+- **Design** an ML DevOps control plane that versions code, data, model artifacts, configuration, and experiment evidence as one reproducible system.
+- **Compare** traditional DevOps failure modes with ML-specific failure modes and select the right test layer for a given production symptom.
+- **Debug** a broken ML pipeline by tracing whether the fault came from source code, data lineage, feature transformation, model quality, deployment semantics, or runtime environment.
+- **Evaluate** pre-commit, DVC, experiment tracking, and Kubernetes Job controls against realistic team risks such as binary commits, data leakage, drift, and non-repeatable training.
+- **Implement** a small but production-shaped ML DevOps workflow that prevents large artifacts from entering Git and runs a finite validation workload on Kubernetes.
 
-## The Complexity Explosion
+## Why This Module Matters
 
-When a bug infiltrates traditional software, the root cause is usually deterministic: an unhandled exception, a logic error, or a missing dependency. The software behaves unexpectedly, the team locates the stack trace, rolls back the code, and applies a patch. While stressful, the blast radius is contained and the diagnostic path is clear.
+Knight Capital Group did not fail because one engineer lacked intelligence or because one server was unusually unreliable. On August 1, 2012, a deployment process allowed old behavior and new behavior to coexist inside one production system, and the market saw the result within minutes. A technician updated some production servers but missed another, a repurposed flag activated obsolete trading code, and the firm lost hundreds of millions of dollars before the team could regain control.
 
-Machine Learning systems shatter this predictability. If a production model's accuracy drops by three percent, the diagnostic search space is enormous. Is the algorithm flawed? Did the underlying data distribution shift over the weekend? Was a new feature processed incorrectly? Did someone update the learning rate in a configuration file?
+That story matters to ML engineers because machine learning systems have more moving parts than ordinary application deployments. A web service usually fails because code, configuration, dependency resolution, infrastructure, or traffic changed. An ML service can also fail because training data changed, a feature definition drifted, labels were corrected, a random seed moved, a tokenizer version changed, a model checkpoint was overwritten, or evaluation accidentally used examples that leaked from training.
 
-**Did You Know?** In 2015, Google researchers led by D. Sculley published "Hidden Technical Debt in Machine Learning Systems", revealing that ML code typically comprises less than 5% of the overall system codebase, with the remaining 95% devoted to surrounding infrastructure.
+A senior ML engineer therefore treats DevOps as a reproducibility discipline rather than a release ceremony. The question is not only, "Can we deploy this model?" The sharper question is, "Can we explain exactly what data, code, configuration, model artifact, and environment produced this result, and can we prove that the next deployment is not worse in ways the business cares about?"
+
+This module builds that discipline from first principles. You will start with the failure modes, then add version control for the right artifacts, then use tests to catch ML-specific defects, then place local safeguards before Git history, and finally run finite validation work on Kubernetes with the workload primitive that matches the job.
+
+## 1. The ML DevOps Problem Is Reproducibility
+
+Traditional DevOps assumes the source code repository is close to the truth. If two engineers checkout the same commit, install the same dependencies, and apply the same configuration, they usually expect the same behavior. There are still surprises, but most surprises come from runtime state, missing environment variables, or infrastructure differences that the team can inspect.
+
+ML DevOps changes the definition of "same." The same training script can produce a different model when the dataset changes, when a feature pipeline emits columns in a different order, when a dependency upgrades a numerical routine, when a GPU kernel behaves nondeterministically, or when an experimenter changes a hyperparameter in a notebook and forgets to commit the configuration. Git still matters, but Git alone no longer describes the system.
 
 ```text
 TRADITIONAL SOFTWARE vs ML SOFTWARE
-====================================
+===================================
 
 Traditional Software:                 ML Software:
 ├── Code changes                      ├── Code changes
 ├── Config changes                    ├── Config changes
 └── Dependencies                      ├── Dependencies
-                                      ├── DATA changes (huge!)
-                                      ├── MODEL changes (huge!)
+                                      ├── DATA changes
+                                      ├── MODEL changes
                                       ├── Hyperparameters
                                       ├── Training environment
                                       ├── Feature definitions
                                       ├── Label definitions
-                                      └── Random seeds (yes, really)
+                                      └── Random seeds
 
-Things that can break your system:
-Traditional: ~3                       ML: ~10+
+A traditional bug often asks:
+"What code path produced this output?"
 
-This is why ML DevOps is a distinct discipline, not just "DevOps + ML"
+An ML bug often asks:
+"What combination of code, data, config, model, and environment
+produced this output, and which part changed?"
 ```
-
-To visualize this complexity programmatically, we can map the dependencies:
 
 ```mermaid
 graph TD
@@ -76,8 +69,8 @@ graph TD
         M1[Code changes]
         M2[Config changes]
         M3[Dependencies]
-        M4[DATA changes]
-        M5[MODEL changes]
+        M4[Data changes]
+        M5[Model changes]
         M6[Hyperparameters]
         M7[Training environment]
         M8[Feature definitions]
@@ -86,96 +79,105 @@ graph TD
     end
 ```
 
-### The Three Pillars of ML Version Control
+The practical consequence is that every production model needs a chain of evidence. That chain should answer five questions without relying on memory: what code trained the model, what exact data it learned from, what configuration controlled training, what artifact was promoted, and what tests proved it was acceptable. If any one answer is missing, rollback and debugging become guesswork.
 
-Traditional software engineering relies on a single pillar of truth: Git. In Machine Learning, Git alone is entirely insufficient. You need a tripod of version control. If any single pillar collapses, the entire system loses reproducibility.
+A useful mental model is to treat ML delivery as a controlled experiment that happens to ship software. Experiments need hypotheses, controlled variables, measured results, and enough records for someone else to repeat the process. Releases need review, repeatable build steps, immutable artifacts, and a way to recover when something fails. ML DevOps sits where those two disciplines overlap.
+
+```text
+ML DEVOPS CONTROL QUESTIONS
+===========================
+
+┌─────────────────────┬────────────────────────────────────────────┐
+│ Question            │ Evidence you need                          │
+├─────────────────────┼────────────────────────────────────────────┤
+│ What changed?       │ Git commit, config diff, data pointer diff  │
+│ What trained it?    │ DVC data version, feature code, seed values │
+│ What was produced?  │ Model artifact hash, metrics, plots         │
+│ Why promote it?     │ Quality gates, fairness checks, review      │
+│ How recover?        │ Previous artifact, data version, deploy log │
+└─────────────────────┴────────────────────────────────────────────┘
+```
+
+Active learning prompt: imagine production accuracy drops on Monday morning, but no application code changed during the weekend. Before reading further, write down three possible non-code causes. A strong answer should include at least one data cause, one feature-processing cause, and one model-artifact or environment cause.
+
+A beginner often hears "MLOps" and thinks it means adding a model registry or a pipeline tool. A senior engineer asks a different question first: which decisions are currently unverifiable? Tooling is useful only when it closes a reproducibility gap, prevents a damaging class of mistakes, or shortens the time from symptom to root cause.
+
+The rest of this module uses a progressive design. First, you will build the version-control picture. Then you will attach tests to the right failure modes. After that, you will add local gates that prevent damage before a commit exists. Finally, you will place finite validation work on Kubernetes so the execution environment resembles production instead of a personal laptop.
+
+## 2. Version The Whole ML System, Not Just The Code
+
+Git is still the first pillar because training scripts, serving code, tests, configuration templates, infrastructure manifests, and documentation belong in ordinary source control. Git gives teams review, branching, history, and collaboration. The mistake is expecting Git to store every artifact directly, especially large datasets, model checkpoints, embeddings, and generated arrays.
+
+The correct pattern is a split-brain storage model with one logical history. Git stores small text files and pointers. Artifact storage stores large binary payloads. The pointer files connect the Git commit to the data or model object by hash, so a checkout can reconstruct the matching workspace. DVC is a common tool for this pattern, although the same principle also appears in lakehouse tables, feature stores, model registries, and object-storage-backed artifact systems.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    THE ML VERSION CONTROL TRIPOD                        │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
-│  1. CODE VERSIONING (Git)                                              │
-│     ├── Training scripts      → "How did we train this?"               │
-│     ├── Inference code        → "How do we use this?"                  │
-│     ├── Data preprocessing    → "How did we prepare the data?"         │
-│     └── Configuration files   → "What settings did we use?"            │
+│  1. CODE VERSIONING (Git)                                               │
+│     ├── Training scripts      -> "How did we train this?"               │
+│     ├── Inference code        -> "How do we use this?"                  │
+│     ├── Data preprocessing    -> "How did we prepare the data?"         │
+│     └── Configuration files   -> "What settings did we use?"            │
 │                                                                         │
-│  2. DATA VERSIONING (DVC, Delta Lake, etc.)                            │
-│     ├── Training datasets     → "What did we learn from?"              │
-│     ├── Validation datasets   → "How did we evaluate?"                 │
-│     ├── Feature stores        → "What features existed when?"          │
-│     └── Data transformations  → "How did we process it?"               │
+│  2. DATA VERSIONING (DVC, tables, feature stores)                       │
+│     ├── Training datasets     -> "What did we learn from?"              │
+│     ├── Validation datasets   -> "How did we evaluate?"                 │
+│     ├── Feature snapshots     -> "What features existed when?"          │
+│     └── Data transformations  -> "How did we process it?"               │
 │                                                                         │
-│  3. MODEL VERSIONING (MLflow, W&B, etc.)                               │
-│     ├── Model weights         → "What are the learned parameters?"     │
-│     ├── Hyperparameters       → "What knobs did we turn?"              │
-│     ├── Metrics               → "How well did it work?"                │
-│     └── Artifacts             → "What did it produce?"                 │
+│  3. MODEL VERSIONING (registry or artifact store)                       │
+│     ├── Model weights         -> "What are the learned parameters?"     │
+│     ├── Hyperparameters       -> "What knobs did we turn?"              │
+│     ├── Metrics               -> "How well did it work?"                │
+│     └── Artifacts             -> "What evidence did it produce?"        │
 │                                                                         │
-│  Remove ANY pillar = You cannot reproduce or debug your system          │
+│  Remove any pillar and reproducibility becomes partial.                  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ```mermaid
 graph TD
-    Tripod[The ML Version Control Tripod] --> Git[1. Code Versioning: Git]
-    Tripod --> DVC[2. Data Versioning: DVC]
-    Tripod --> Model[3. Model Versioning: MLflow]
-
+    Tripod[ML version control tripod] --> Git[Code versioning with Git]
+    Tripod --> DVC[Data versioning with DVC or table snapshots]
+    Tripod --> Registry[Model versioning with registry or artifact store]
     Git --> G1[Training scripts]
     Git --> G2[Inference code]
-    Git --> G3[Data preprocessing]
+    Git --> G3[Feature code]
     Git --> G4[Configuration files]
-
     DVC --> D1[Training datasets]
     DVC --> D2[Validation datasets]
-    DVC --> D3[Feature stores]
-    DVC --> D4[Data transformations]
-
-    Model --> M1[Model weights]
-    Model --> M2[Hyperparameters]
-    Model --> M3[Metrics]
-    Model --> M4[Artifacts]
+    DVC --> D3[Feature snapshots]
+    DVC --> D4[Data transforms]
+    Registry --> R1[Model weights]
+    Registry --> R2[Hyperparameters]
+    Registry --> R3[Metrics]
+    Registry --> R4[Plots and reports]
 ```
 
-**Did You Know?** Reproducing published ML results becomes much harder when papers omit key details such as hyperparameters, random seeds, data-processing steps, or environment settings.
-
----
-
-## Git Workflows for ML Projects
-
-### Why Standard Git Flow Fails for ML
-
-Standard Git Flow (utilizing strict feature branches, develop branches, and release tags) assumes every branch is marching toward a functional completion. A feature is either finished and merged, or it is discarded.
-
-Machine Learning is fundamentally scientific. You might initiate fifty branches to test various loss functions or optimizer combinations. Forty-nine of those branches might fail to beat the baseline model. However, those "failed" branches represent valuable empirical research. They should not be blindly deleted or haphazardly merged into `main`.
-
-### The ML-Adapted Git Workflow
+Git branches also need adaptation for ML work. A traditional feature branch usually aims to merge a completed behavior into `main`. An experiment branch may exist to disprove a hypothesis, and that negative result still has value. If a team deletes every failed experiment without preserving the hypothesis and measurements, the same idea can be repeated later because nobody can prove it was already tested.
 
 ```text
 ML GIT WORKFLOW
 ===============
 
-main ─────────────────●─────────────────●────────────────────→
-                      │                 │
-                      │                 │ (merge after validation)
-                      │                 │
-staging ──────●───────┼────●────────────┼─────────────────────→
-              │       │    │            │
-              │       │    │ (model validated on staging data)
-              │       │    │
-experiment/   │       │    │
-  exp-001 ────┴───────┘    │
-                           │
-experiment/                │
-  exp-002 ─────────────────┘
+main ─────────────────●────────────────────●───────────────────────>
+                      │                    │
+                      │                    │ release after validation
+                      │                    │
+staging ──────●───────┼────────●───────────┼───────────────────────>
+              │       │        │           │
+              │       │        │ model accepted on staging evidence
+              │       │        │
+experiment/   │       │        │
+  text-v2 ────┴───────┘        │
+                               │
+experiment/                    │
+  new-threshold ───────────────┘
 
-KEY DIFFERENCES FROM STANDARD GIT FLOW:
-1. "experiment" branches for ML experiments (can be long-lived)
-2. Staging branch for model validation (not just code review)
-3. Longer validation cycles (days, not hours)
-4. Experiments may never merge—and that's OK!
+Experiment branches are not feature branches with messier names.
+They are research records that should preserve hypothesis, config, and result.
 ```
 
 ```mermaid
@@ -184,322 +186,140 @@ gitGraph
     branch staging
     checkout staging
     commit
-    branch experiment/exp-001
-    checkout experiment/exp-001
+    branch experiment/text-v2
+    checkout experiment/text-v2
     commit id: "run-trial"
     checkout staging
-    commit id: "stage-update"
-    branch experiment/exp-002
-    checkout experiment/exp-002
-    commit id: "new-hyperparams"
+    commit id: "stage-data"
+    branch experiment/new-threshold
+    checkout experiment/new-threshold
+    commit id: "tune-threshold"
     checkout staging
-    merge experiment/exp-001 tag: "validate"
+    merge experiment/text-v2 tag: "validated"
     checkout main
     merge staging tag: "release"
 ```
 
-> **Stop and think**: If an experiment fails to beat the baseline, should you delete the branch or keep it? Consider the impact on future team members who might propose the exact same hypothesis six months later. Keeping the branch, heavily documented, acts as a scientific ledger.
+A good experiment commit explains the scientific claim behind the change. The commit should name the hypothesis, the controlled variable, the result, and the trade-off. A vague message like `update model` forces future engineers to reopen notebooks, compare configs, and infer intent from file diffs. A precise message turns the repository into an experiment ledger.
 
-### Branch Naming That Actually Helps
+```text
+Experiment commit checklist
+===========================
 
-When executing massive parallel sweeps, naming branches clearly is one of the best ways to avoid unnecessary chaos.
-
-```python
-# ML-specific branch naming conventions
-BRANCH_PATTERNS = {
-    # Standard development
-    "feature/": "New functionality (feature/add-streaming-inference)",
-    "fix/": "Bug fixes (fix/data-leak-in-validation)",
-
-    # ML-specific branches
-    "experiment/": "ML experiments (experiment/bert-large-lr-sweep)",
-    "exp/": "Short form for quick experiments (exp/dropout-0.3)",
-    "model/": "Model architecture changes (model/transformer-v2)",
-    "data/": "Dataset changes (data/add-2024-q4-samples)",
-    "baseline/": "Baseline experiments (baseline/logistic-regression)",
-
-    # Emergency
-    "hotfix/": "Production fixes (hotfix/oom-on-large-batch)",
-}
-
-# Good branch names tell a story
-GOOD_NAMES = [
-    "experiment/gpt4-finetune-customer-support-v2",   # What, why, version
-    "data/incorporate-user-feedback-nov-2024",        # What, when
-    "model/switch-attention-to-flash-attention",      # What, how
-    "exp/learning-rate-1e-5-warmup-1000",            # Hyperparameters visible
-]
-
-# Bad branch names create confusion
-BAD_NAMES = [
-    "test",           # Test what?
-    "my-changes",     # What changes?
-    "experiment1",    # Experiment about what?
-    "final",          # Nothing in ML is ever final
-    "final-v2",       # Proof that "final" is a lie
-    "asdf",           # Future you will hate past you
-]
+- Hypothesis: What did you expect to improve, and why?
+- Controlled variable: What changed compared with the baseline?
+- Dataset version: Which training and validation data versions were used?
+- Metrics: Which business and technical metrics changed?
+- Decision: Should this be promoted, repeated, abandoned, or split?
 ```
 
-### Commit Messages That Save Future You
+A workable branch naming scheme also reduces coordination costs. Use `feature/` for product behavior, `fix/` for defects, `experiment/` for measured trials, `data/` for dataset changes, `model/` for architecture changes, and `baseline/` for simple reference models. The branch name should make the review queue understandable before anyone opens the diff.
 
-```python
-# Conventional Commits adapted for ML
-COMMIT_TYPES = {
-    "feat": "New feature in the codebase",
-    "fix": "Bug fix",
-    "exp": "ML experiment (results included!)",      # ML-specific
-    "data": "Data changes (describe what changed)",  # ML-specific
-    "model": "Model architecture changes",           # ML-specific
-    "perf": "Performance improvement",
-    "refactor": "Code refactoring (no behavior change)",
-    "test": "Adding or updating tests",
-    "docs": "Documentation only",
-    "chore": "Maintenance tasks",
-}
+Worked example: suppose a churn model has a baseline F1 score of `0.78`, but the support team reports that enterprise customers are under-detected. A weak workflow creates a branch called `experiment2`, changes the feature set and threshold together, and reports only overall accuracy. A stronger workflow creates `experiment/add-enterprise-support-features`, changes only the feature set, records the dataset pointer, compares enterprise-segment F1 against the baseline, and leaves the threshold untouched until a separate experiment.
 
-# The secret sauce: Include metrics in experiment commits!
-EXPERIMENT_COMMIT_TEMPLATE = """
-exp: {short_description}
+Active learning prompt: your teammate wants to merge an experiment because overall accuracy improved by two percentage points, but latency doubled and one minority class regressed sharply. Decide whether this should merge to `main`, merge only to `staging`, or remain an experiment. Explain which evidence you would request before approving promotion.
 
-Experiment: {experiment_name}
-Hypothesis: {what_you_expected}
-Result: {what_actually_happened}
+DVC demonstrates the pointer-file model clearly. When you run `dvc add data/training.csv`, DVC computes a content hash, stores metadata in a small `.dvc` file, and updates `.gitignore` so the heavy local file does not enter Git. The team commits the pointer file to Git and pushes the binary payload to a remote such as S3, GCS, Azure Blob Storage, or a local shared directory for a lab.
 
-Metrics (vs baseline):
-- Accuracy: {accuracy} ({delta_accuracy:+.2%})
-- F1 Score: {f1} ({delta_f1:+.2%})
-- Latency: {latency}ms ({delta_latency:+}ms)
+```bash
+mkdir -p /tmp/ml-devops-demo
+cd /tmp/ml-devops-demo
+git init --initial-branch=main
+git config user.name "Lab User"
+git config user.email "lab@example.com"
 
-Config Changes:
-- learning_rate: {baseline_lr} → {new_lr}
-- batch_size: {baseline_batch} → {new_batch}
-- epochs: {epochs}
+python -m venv .venv
+. .venv/bin/activate
+pip install --quiet dvc==3.48.0
 
-Notes: {any_observations}
-"""
+dvc init
+mkdir -p data
+printf "id,label,score\n1,keep,0.9\n2,churn,0.2\n" > data/training.csv
+dvc add data/training.csv
 
-# Real example
-GOOD_COMMIT = """
-exp: Test BERT-large with cosine LR scheduler
-
-Experiment: bert-large-cosine-lr-v3
-Hypothesis: Cosine annealing should help with convergence stability
-Result: Confirmed - lower variance in final metrics
-
-Metrics (vs baseline):
-- Accuracy: 0.892 (+1.2%)
-- F1 Score: 0.876 (+0.8%)
-- Latency: 45ms (+5ms)
-
-Config Changes:
-- learning_rate: 2e-5 → 1e-5 (peak)
-- scheduler: linear → cosine
-- warmup_steps: 100 → 500
-
-Notes: Training loss curve much smoother. Worth the latency tradeoff.
-"""
+git add .dvc .dvcignore data/training.csv.dvc data/.gitignore
+git commit -m "data: track initial churn training data with DVC"
 ```
-
----
-
-## Data Version Control (DVC): Git for Your Data
-
-### The Problem That Breaks Everything
-
-Every developer has encountered this horror story: You finalize a model and it executes flawlessly. You commit the scripts. Months later, a colleague attempts to reproduce the metrics using the identical codebase. The result? Accuracy has plummeted by 15%. What happened? The data was silently updated. Someone patched a few incorrect labels directly in the CSV and failed to mention it. 
-
-Furthermore, you cannot simply commit massive datasets to Git. Git tracks the absolute history of every binary byte.
 
 ```text
 THE PROBLEM WITH LARGE FILES IN GIT
 ===================================
 
-Git stores EVERY version of EVERY file.
+Git stores every committed version of every file.
 
-Your ML project starts innocently:
-├── training_data.csv    (500 MB)
-├── model_v1.pkl         (200 MB)
-└── embeddings.npy       (1 GB)
+A project starts with:
+├── training_data.csv    500 MB
+├── model_v1.pkl         200 MB
+└── embeddings.npy       1 GB
 
-After 10 model iterations:
-├── training_data.csv    (500 MB × 1)   =  500 MB
-├── model_v1.pkl         (200 MB)
-├── model_v2.pkl         (200 MB)
-├── model_v3.pkl         (200 MB)
-├── ...                  (200 MB × 7)
-└── embeddings.npy       (1 GB × 3 versions)
+After several iterations:
+├── training_data.csv    500 MB
+├── model_v1.pkl         200 MB
+├── model_v2.pkl         200 MB
+├── model_v3.pkl         200 MB
+└── embeddings.npy       multiple large versions
 
-Total repository size: 500 + 2000 + 3000 = 5.5 GB 
-
-And now you try to push to GitHub...
-"Error: File model_v8.pkl is 200 MB; max file size is 100 MB"
+The repository becomes slow to clone, hard to mirror, and painful to repair.
+DVC keeps Git small by committing pointers while storing payloads elsewhere.
 ```
 
 ```mermaid
 graph TD
-    Repo[Git Repository Size Over Time] --> Initial[Initial Commit: 1.7 GB]
-    Repo --> Iteration10[After 10 Iterations: 5.5 GB]
-    Initial --> I1[training_data.csv: 500 MB]
-    Initial --> I2[model_v1.pkl: 200 MB]
-    Initial --> I3[embeddings.npy: 1 GB]
-    Iteration10 --> F1[training_data.csv: 500 MB]
-    Iteration10 --> F2[10x model versions: 2000 MB]
-    Iteration10 --> F3[3x embeddings: 3000 MB]
-    Iteration10 --> Push[Push fails: exceeds 100MB limit]
+    Repo[Git repository size over time] --> Initial[Initial large commit]
+    Repo --> Later[After repeated model iterations]
+    Initial --> I1[training data payload]
+    Initial --> I2[first model payload]
+    Initial --> I3[embedding payload]
+    Later --> L1[repeated checkpoints]
+    Later --> L2[repeated embeddings]
+    Later --> L3[slow clone and push failures]
 ```
 
-### DVC: The Solution
-
-Data Version Control (DVC) intercepts large files before they ever reach Git. [DVC hashes the binary data, stores the heavy files in remote block storage (like S3 or GCS), and generates a tiny `.dvc` pointer file](https://github.com/iterative/dvc). You commit the text pointer to Git, leaving the heavy lifting to the cloud.
-
-```bash
-# Install DVC
-pip install dvc
-
-# Initialize DVC in a Git repo
-cd my-ml-project
-dvc init
-
-# Track a large file
-dvc add data/training_data.csv
-
-# What just happened?
-# 1. Created: data/training_data.csv.dvc (small pointer file, ~100 bytes)
-# 2. Created: data/.gitignore (ignores the actual data file)
-# 3. The actual data stays local for now
-
-# Set up remote storage
-dvc remote add -d myremote s3://my-bucket/dvc-storage
-
-# Push data to remote
-dvc push
-
-# Now your collaborator can:
-git clone <repo>
-dvc pull  # Downloads the actual data files!
-```
-
-### The DVC + Git Dance
-
-```python
-"""
-DVC + Git Workflow: The Complete Picture
-"""
-
-# STEP 1: You make data changes
-# Added 5000 new labeled samples to training data
-# Fixed 200 incorrect labels
-# Removed 50 duplicate entries
-
-# STEP 2: Tell DVC about the changes
-"""
-$ dvc add data/training_data.csv
-$ dvc add data/labels.json
-
-DVC updates the .dvc pointer files with new hashes:
-  data/training_data.csv.dvc  →  md5: a1b2c3d4...
-  data/labels.json.dvc        →  md5: e5f6g7h8...
-"""
-
-# STEP 3: Commit the pointer files with Git
-"""
-$ git add data/training_data.csv.dvc data/labels.json.dvc
-$ git commit -m "data: Add 5000 Q4 samples, fix 200 labels, remove dupes"
-"""
-
-# STEP 4: Push both
-"""
-$ dvc push  # Uploads actual data to remote storage
-$ git push  # Uploads code + DVC pointers to Git
-"""
-
-# THE MAGIC: Time travel for data!
-"""
-$ git checkout experiment/bert-large  # Go to old experiment
-$ dvc checkout                        # DVC fetches the DATA from that time!
-
-Your data directory now has the EXACT data from when that experiment ran.
-You can reproduce results from any point in history.
-"""
-```
-
-### DVC Pipelines: Reproducibility on Rails
+DVC pipelines add another important idea: stages should declare their dependencies and outputs. If `prepare` depends on `data/raw/customers.csv` and `src/prepare.py`, DVC can rerun it when either changes and skip it when neither changes. If you forget to list a dependency, DVC can skip a stage incorrectly, which is a reproducibility bug disguised as a performance optimization.
 
 ```yaml
-# dvc.yaml - Your ML pipeline as code
-
 stages:
   prepare:
-    cmd: python src/prepare_data.py
+    cmd: python src/prepare.py
     deps:
-      - src/prepare_data.py
-      - data/raw/
+      - src/prepare.py
+      - data/raw/customers.csv
     outs:
-      - data/processed/
-
-  featurize:
-    cmd: python src/featurize.py --config configs/features.yaml
-    deps:
-      - src/featurize.py
-      - data/processed/
-      - configs/features.yaml
-    outs:
-      - data/features/
+      - data/processed/customers.parquet
 
   train:
     cmd: python src/train.py --config configs/train.yaml
     deps:
       - src/train.py
-      - data/features/
       - configs/train.yaml
+      - data/processed/customers.parquet
     outs:
-      - models/model.pkl
+      - models/churn.pkl
     metrics:
-      - metrics/train_metrics.json:
-          cache: false  # Always show latest
-    plots:
-      - metrics/loss_curve.csv:
-          x: epoch
-          y: loss
+      - metrics/train.json:
+          cache: false
 
   evaluate:
     cmd: python src/evaluate.py
     deps:
       - src/evaluate.py
-      - models/model.pkl
-      - data/test/
+      - models/churn.pkl
+      - data/processed/customers.parquet
     metrics:
-      - metrics/eval_metrics.json:
+      - metrics/eval.json:
           cache: false
 ```
 
 ```bash
-# Run the full pipeline
-$ dvc repro
+dvc repro
+dvc metrics show
+dvc dag
+```
 
-# DVC relies on cryptographic hashes of files explicitly listed in 'deps'.
-# It skips stages if these declared dependencies haven't changed.
-# Changed training config? Only re-runs train and evaluate.
-# Changed raw data but forgot to list it in 'deps'? DVC will incorrectly skip the stage.
-
-# Compare metrics across experiments
-$ dvc metrics diff
-Path                    Metric    HEAD      workspace
-metrics/eval.json       accuracy  0.845     0.872
-metrics/eval.json       f1        0.831     0.859
-
-# Visualize the pipeline
-$ dvc dag
-
+```text
          +---------+
          | prepare |
          +---------+
-              |
-              v
-        +-----------+
-        | featurize |
-        +-----------+
               |
               v
           +-------+
@@ -514,1187 +334,850 @@ $ dvc dag
 
 ```mermaid
 flowchart TD
-    prepare --> featurize
-    featurize --> train
-    train --> evaluate
+    prepare[prepare data] --> train[train model]
+    train --> evaluate[evaluate model]
 ```
 
----
+A senior review of an ML repository should therefore inspect both Git diffs and artifact diffs. A pull request that changes `src/features/customer.py` but does not update metrics may be incomplete. A pull request that changes `data/training.csv.dvc` but does not explain label or distribution impact may be risky. A pull request that updates a model artifact without linking it to the training run is not reviewable.
 
-## Testing Strategies for ML Code
+## 3. Test The Failure Mode You Actually Fear
 
-### The ML Testing Pyramid (Extended)
-
-Testing a machine learning system goes far beyond asserting that an API endpoint returns an HTTP 200. You must validate the conceptual integrity of the data and the statistical fairness of the predictions.
+Traditional test pyramids start with many unit tests, fewer integration tests, and a small number of end-to-end tests. ML keeps that structure but adds two layers that ordinary services rarely need: data quality tests and model quality tests. These layers matter because a model can pass every unit test and still be unsafe to deploy if the data distribution shifted or a subgroup regressed.
 
 ```text
 THE ML TESTING PYRAMID
 ======================
 
-                        △
-                       /│\
-                      / │ \         END-TO-END TESTS
-                     /  │  \        Full pipeline, production-like data
-                    /   │   \       "Does the whole thing work?"
-                   /────┼────\
-                  /     │     \     MODEL QUALITY TESTS  ← ML-specific!
-                 /      │      \    Accuracy, fairness, robustness
-                /       │       \   "Is the model good enough?"
-               /────────┼────────\
-              /         │         \   DATA QUALITY TESTS  ← ML-specific!
-             /          │          \  Schema, distributions, drift
-            /           │           \ "Is the data valid?"
-           /────────────┼────────────\
-          /             │             \ INTEGRATION TESTS
-         /              │              \Components together
-        /               │               \"Do pieces work together?"
-       /────────────────┼────────────────\
-      /                 │                 \ UNIT TESTS
-     /                  │                  \Individual functions
-    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔"Do building blocks work?"
+                        /\
+                       /  \
+                      /    \       END-TO-END TESTS
+                     /      \      Full pipeline, production-like data
+                    /--------\
+                   /          \    MODEL QUALITY TESTS
+                  /            \   Accuracy, fairness, robustness
+                 /--------------\
+                /                \ DATA QUALITY TESTS
+               /                  \Schema, distributions, leakage, drift
+              /--------------------\
+             /                      \ INTEGRATION TESTS
+            /                        \Components together
+           /--------------------------\
+          /                            \ UNIT TESTS
+         /                              \Small functions, fast feedback
+        /________________________________\
 
-MORE TESTS ────────────────────────────────► FEWER TESTS
-RUN FASTER ────────────────────────────────► RUN SLOWER
+Lower layers are cheaper and faster.
+Upper layers are closer to business risk.
 ```
 
 ```mermaid
 graph TD
     subgraph Testing Pyramid
         direction BT
-        E2E[End-to-End Tests]
-        MQ[Model Quality Tests]
-        DQ[Data Quality Tests]
-        IT[Integration Tests]
-        UT[Unit Tests]
+        UT[Unit tests]
+        IT[Integration tests]
+        DQ[Data quality tests]
+        MQ[Model quality tests]
+        E2E[End-to-end tests]
         UT --> IT --> DQ --> MQ --> E2E
     end
 ```
 
-> **Pause and predict**: If your model accuracy drops suddenly in production but your code has not changed in weeks, which test layer in the extended pyramid is most likely to catch the root cause? 
-
-### Unit Tests: Testing the Building Blocks
+Unit tests protect deterministic code such as tokenization, normalization, configuration parsing, feature assembly, and inference output shape. They should run quickly and fail with precise messages. Unit tests cannot prove a model is good, but they can catch transformations that silently corrupt the inputs before expensive training begins.
 
 ```python
-import pytest
 import numpy as np
-from src.preprocessing import normalize, tokenize, extract_features
-
-class TestPreprocessing:
-    """Unit tests for preprocessing functions.
-
-    These should be FAST and test edge cases that could silently
-    corrupt your data pipeline.
-    """
-
-    def test_normalize_scales_to_unit_range(self):
-        """Normalization should scale values to [0, 1]."""
-        data = np.array([0, 50, 100])
-        result = normalize(data)
-
-        assert result.min() >= 0, "Normalized data has negative values!"
-        assert result.max() <= 1, "Normalized data exceeds 1!"
-        assert np.isclose(result[0], 0), "Min value should normalize to 0"
-        assert np.isclose(result[2], 1), "Max value should normalize to 1"
-
-    def test_normalize_handles_constant_values(self):
-        """Normalization shouldn't crash on constant input.
-
-        This is a sneaky edge case: if all values are the same,
-        naive normalization divides by zero.
-        """
-        data = np.array([5, 5, 5])
-        result = normalize(data)
-
-        # Should handle gracefully, not produce NaN
-        assert not np.any(np.isnan(result)), "NaN in output!"
-
-    def test_normalize_handles_empty_array(self):
-        """Empty arrays shouldn't crash the pipeline."""
-        data = np.array([])
-        result = normalize(data)
-
-        assert len(result) == 0
-
-    def test_tokenize_handles_empty_string(self):
-        """Tokenizer should handle empty input gracefully."""
-        result = tokenize("")
-        assert result == [] or result == [""], "Unexpected empty string handling"
-
-    def test_tokenize_preserves_important_tokens(self):
-        """Tokenizer shouldn't drop semantically important words."""
-        text = "machine learning is transforming artificial intelligence"
-        tokens = tokenize(text)
-
-        # Core concepts should survive tokenization (allow for stemming)
-        important_stems = ["machin", "learn", "transform", "artificial", "intelligen"]
-        found_important = [any(stem in t.lower() for t in tokens) for stem in important_stems]
-        assert all(found_important), f"Lost important tokens. Got: {tokens}"
-
-    def test_extract_features_output_shape(self):
-        """Feature extraction should produce consistent dimensions."""
-        text = "sample input text for testing"
-        features = extract_features(text)
-
-        assert features.shape == (768,), f"Expected 768-dim, got {features.shape}"
-        assert features.dtype == np.float32, f"Expected float32, got {features.dtype}"
 
 
-class TestModelInference:
-    """Unit tests for model inference behavior."""
+def normalize(values: np.ndarray) -> np.ndarray:
+    if values.size == 0:
+        return values.astype(np.float32)
+    min_value = values.min()
+    max_value = values.max()
+    if max_value == min_value:
+        return np.zeros_like(values, dtype=np.float32)
+    return ((values - min_value) / (max_value - min_value)).astype(np.float32)
 
-    def test_model_output_shape(self, model):
-        """Model output should have correct shape."""
-        input_data = np.random.randn(1, 768).astype(np.float32)
-        output = model.predict(input_data)
 
-        assert output.shape == (1, 10), f"Expected (1, 10), got {output.shape}"
+def test_normalize_scales_to_unit_range() -> None:
+    values = np.array([10, 20, 30])
+    result = normalize(values)
+    assert result.min() >= 0
+    assert result.max() <= 1
+    assert np.isclose(result[0], 0)
+    assert np.isclose(result[-1], 1)
 
-    def test_model_output_is_probability(self, model):
-        """For classification, output should be valid probabilities."""
-        input_data = np.random.randn(1, 768).astype(np.float32)
-        output = model.predict(input_data)
 
-        assert np.all(output >= 0), "Negative probabilities!"
-        assert np.all(output <= 1), "Probabilities > 1!"
-        assert np.isclose(output.sum(), 1.0, atol=1e-5), "Probabilities don't sum to 1!"
-
-    def test_model_deterministic_inference(self, model):
-        """Same input should always produce same output."""
-        input_data = np.random.randn(1, 768).astype(np.float32)
-
-        output1 = model.predict(input_data)
-        output2 = model.predict(input_data)
-
-        np.testing.assert_array_almost_equal(
-            output1, output2, decimal=6,
-            err_msg="Model gives different outputs for same input!"
-        )
+def test_normalize_constant_input_does_not_emit_nan() -> None:
+    result = normalize(np.array([5, 5, 5]))
+    assert not np.any(np.isnan(result))
+    assert np.all(result == 0)
 ```
 
-### Data Quality Tests: The ML-Specific Layer
+Data quality tests protect the assumptions the model learned under. They check schema, nulls, ranges, duplicates, label balance, leakage between splits, and distribution stability. A missing label is not just a dirty row; it can change the loss function, hide sampling bias, or teach the model to ignore a class the business considers important.
 
 ```python
-import pytest
 import pandas as pd
-import great_expectations as ge
-from scipy import stats
-
-class TestDataQuality:
-    """Tests for data quality and schema validation.
-
-    These tests catch data issues BEFORE they corrupt your model.
-    """
-
-    @pytest.fixture
-    def training_data(self):
-        return pd.read_csv("data/training_data.csv")
-
-    def test_no_missing_labels(self, training_data):
-        """All samples should have labels.
-
-        Missing labels during training silently skews your loss function.
-        """
-        missing = training_data["label"].isna().sum()
-        assert missing == 0, f"Found {missing} samples with missing labels!"
-
-    def test_label_distribution_not_severely_imbalanced(self, training_data):
-        """Labels should be reasonably balanced.
-
-        Severe imbalance leads to models that predict the majority class.
-        """
-        label_counts = training_data["label"].value_counts()
-        imbalance_ratio = label_counts.max() / label_counts.min()
-
-        assert imbalance_ratio < 10, (
-            f"Label imbalance ratio is {imbalance_ratio:.1f}:1. "
-            f"Consider class weighting or resampling."
-        )
-
-    def test_no_data_leakage_between_splits(self, training_data):
-        """Training data shouldn't contain test samples.
-
-        Data leakage is one of the most common causes of overly
-        optimistic model evaluations.
-        """
-        test_ids = set(pd.read_csv("data/test_ids.csv")["id"])
-        train_ids = set(training_data["id"])
-
-        overlap = train_ids & test_ids
-        assert len(overlap) == 0, (
-            f"DATA LEAKAGE DETECTED! "
-            f"{len(overlap)} samples appear in both train and test: {list(overlap)[:5]}..."
-        )
-
-    def test_feature_values_in_expected_ranges(self, training_data):
-        """Features should be within plausible ranges.
-
-        Out-of-range values often indicate data corruption or encoding errors.
-        """
-        ge_df = ge.from_pandas(training_data)
-
-        # Age should be reasonable for humans
-        result = ge_df.expect_column_values_to_be_between(
-            "age", min_value=0, max_value=120
-        )
-        assert result.success, f"Invalid ages found: {result.result}"
-
-        # Prices should be positive
-        result = ge_df.expect_column_values_to_be_between(
-            "price", min_value=0, max_value=1_000_000
-        )
-        assert result.success, f"Invalid prices found: {result.result}"
-
-    def test_no_duplicate_samples(self, training_data):
-        """No duplicate samples in training data.
-
-        Duplicates cause the model to memorize instead of generalize.
-        """
-        duplicate_mask = training_data.duplicated(subset=["text", "label"])
-        n_duplicates = duplicate_mask.sum()
-
-        assert n_duplicates == 0, (
-            f"Found {n_duplicates} duplicate samples! "
-            f"First duplicates at indices: {training_data[duplicate_mask].index[:5].tolist()}"
-        )
 
 
-class TestDataDrift:
-    """Tests for data drift between training and production.
+def test_no_missing_labels() -> None:
+    training_data = pd.read_csv("data/training.csv")
+    missing = training_data["label"].isna().sum()
+    assert missing == 0, f"{missing} training examples have no label"
 
-    Your model was trained on historical data. If production data
-    looks different, performance will silently degrade.
-    """
 
-    def test_feature_distributions_stable(self):
-        """Production features should match training distribution."""
-        train_stats = load_training_statistics()
-        prod_sample = get_recent_production_sample(n=1000)
+def test_no_leakage_between_train_and_test() -> None:
+    train = pd.read_csv("data/train.csv")
+    test = pd.read_csv("data/test.csv")
+    overlap = set(train["id"]) & set(test["id"])
+    assert not overlap, f"{len(overlap)} ids appear in both train and test"
 
-        drift_detected = []
 
-        for feature in ["age", "income", "engagement_score"]:
-            # Two-sample KS test for distribution shift
-            train_values = train_stats[feature]["sample_values"]
-            prod_values = prod_sample[feature].values
-
-            statistic, p_value = stats.ks_2samp(train_values, prod_values)
-
-            if p_value < 0.01:  # Significant drift
-                drift_detected.append(
-                    f"{feature}: KS statistic={statistic:.3f}, p={p_value:.4f}"
-                )
-
-        assert len(drift_detected) == 0, (
-            f"DATA DRIFT DETECTED in features:\n" + "\n".join(drift_detected)
-        )
-
-    def test_categorical_distribution_stable(self):
-        """Categorical feature distributions shouldn't shift dramatically."""
-        train_dist = load_training_distributions()
-        prod_sample = get_recent_production_sample(n=1000)
-
-        for feature in ["category", "region", "device_type"]:
-            prod_dist = prod_sample[feature].value_counts(normalize=True)
-
-            for category, train_freq in train_dist[feature].items():
-                prod_freq = prod_dist.get(category, 0)
-
-                # Alert if frequency changed by more than 50%
-                if abs(prod_freq - train_freq) / train_freq > 0.5:
-                    pytest.fail(
-                        f"Category '{category}' in '{feature}' shifted: "
-                        f"train={train_freq:.2%} → prod={prod_freq:.2%}"
-                    )
+def test_age_feature_is_in_plausible_range() -> None:
+    training_data = pd.read_csv("data/training.csv")
+    invalid = training_data[~training_data["age"].between(0, 120)]
+    assert invalid.empty, f"invalid ages at rows {invalid.index.tolist()[:10]}"
 ```
 
-### Model Quality Tests: The Final Gatekeeper
+Model quality tests protect the promoted artifact. They compare candidate performance against business thresholds, the current production model, important segments, and robustness expectations. These tests are slower than unit tests because they run inference over evaluation data, but they answer questions unit tests cannot answer: is this model still good enough, and where did it get worse?
 
 ```python
-import pytest
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_curve
-from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
-
-class TestModelQuality:
-    """Tests for model quality and fairness.
-
-    These are your last line of defense before deployment.
-    """
-
-    @pytest.fixture
-    def model_and_data(self):
-        model = load_model("models/production_model.pkl")
-        X_test, y_test = load_test_data()
-        return model, X_test, y_test
-
-    def test_accuracy_meets_business_threshold(self, model_and_data):
-        """Model accuracy should meet minimum business requirement."""
-        model, X_test, y_test = model_and_data
-        y_pred = model.predict(X_test)
-
-        accuracy = accuracy_score(y_test, y_pred)
-        threshold = 0.85  # Business requirement
-
-        assert accuracy >= threshold, (
-            f"Accuracy {accuracy:.2%} below required {threshold:.2%}. "
-            f"DO NOT DEPLOY."
-        )
-
-    def test_no_class_left_behind(self, model_and_data):
-        """Every class should have acceptable F1 score.
-
-        A model with 95% overall accuracy but 20% F1 on class 3
-        is dangerous if class 3 matters to your users.
-        """
-        model, X_test, y_test = model_and_data
-        y_pred = model.predict(X_test)
-
-        f1_per_class = f1_score(y_test, y_pred, average=None)
-
-        for class_idx, f1 in enumerate(f1_per_class):
-            assert f1 >= 0.6, (
-                f"Class {class_idx} has F1 score {f1:.2f}. "
-                f"This class is being underserved by the model."
-            )
-
-    def test_no_performance_regression(self, model_and_data):
-        """New model should not be worse than current production."""
-        model, X_test, y_test = model_and_data
-
-        prod_metrics = load_production_metrics()
-        y_pred = model.predict(X_test)
-        new_accuracy = accuracy_score(y_test, y_pred)
-
-        # Allow 1% degradation for statistical noise
-        threshold = prod_metrics["accuracy"] - 0.01
-
-        assert new_accuracy >= threshold, (
-            f"REGRESSION DETECTED! "
-            f"New: {new_accuracy:.2%}, Prod: {prod_metrics['accuracy']:.2%}. "
-            f"Rolling back."
-        )
-
-    def test_fairness_demographic_parity(self, model_and_data):
-        """Model should have similar outcomes across demographic groups.
-
-        Required for compliance. Failures often stem from imbalanced
-        training data or feature engineering transformations that
-        inadvertently proxy for sensitive attributes (like zip codes).
-        """
-        model, X_test, y_test = model_and_data
-        sensitive_features = X_test["gender"]
-        y_pred = model.predict(X_test)
-
-        dpd = demographic_parity_difference(
-            y_test, y_pred,
-            sensitive_features=sensitive_features
-        )
-
-        assert abs(dpd) < 0.1, (
-            f"FAIRNESS VIOLATION: Demographic parity difference = {dpd:.3f}. "
-            f"Positive outcomes differ by more than 10% between groups."
-        )
+from sklearn.metrics import accuracy_score, f1_score
 
 
-class TestModelRobustness:
-    """Tests for edge cases that could crash production."""
+def test_candidate_accuracy_meets_threshold(candidate_model, evaluation_data) -> None:
+    x_eval, y_eval = evaluation_data
+    predictions = candidate_model.predict(x_eval)
+    accuracy = accuracy_score(y_eval, predictions)
+    assert accuracy >= 0.85, f"accuracy {accuracy:.3f} is below release threshold"
 
-    def test_handles_missing_values(self, model):
-        """Model should handle missing values gracefully."""
-        input_with_nan = pd.DataFrame({
-            "feature1": [1.0, np.nan, 3.0],
-            "feature2": [np.nan, 2.0, 3.0],
-        })
 
-        try:
-            predictions = model.predict(input_with_nan)
-            assert len(predictions) == 3
-            assert not np.any(np.isnan(predictions)), "Model returned NaN predictions!"
-        except Exception as e:
-            pytest.fail(f"Model crashed on missing values: {e}")
+def test_each_class_has_usable_f1(candidate_model, evaluation_data) -> None:
+    x_eval, y_eval = evaluation_data
+    predictions = candidate_model.predict(x_eval)
+    per_class = f1_score(y_eval, predictions, average=None)
+    weak_classes = [idx for idx, score in enumerate(per_class) if score < 0.60]
+    assert not weak_classes, f"weak F1 for classes {weak_classes}"
 
-    def test_handles_extreme_values(self, model):
-        """Model should handle outliers without crashing or NaN."""
-        extreme_input = pd.DataFrame({
-            "feature1": [1e10, -1e10, 0],
-            "feature2": [0, 0, 1e-10],
-        })
 
-        predictions = model.predict(extreme_input)
-
-        assert not np.any(np.isnan(predictions)), "NaN on extreme input!"
-        assert not np.any(np.isinf(predictions)), "Inf on extreme input!"
-        assert np.all((predictions >= 0) & (predictions <= 1)), "Invalid probabilities!"
+def test_candidate_does_not_regress_against_production(candidate_model, production_model, evaluation_data) -> None:
+    x_eval, y_eval = evaluation_data
+    candidate_accuracy = accuracy_score(y_eval, candidate_model.predict(x_eval))
+    production_accuracy = accuracy_score(y_eval, production_model.predict(x_eval))
+    assert candidate_accuracy >= production_accuracy - 0.01
 ```
 
-**Did You Know?** Many organizations struggle to move ML models into production, which is one reason teams invest in repeatable testing, deployment, and monitoring practices.
+Integration tests verify that components agree about contracts. A feature generator can pass its own tests while producing a column order the model server does not expect. A training script can write metrics to one path while the CI job reads another. Integration tests should run the smallest useful slice that crosses a boundary: load config, transform data, fit a tiny model, write an artifact, and evaluate it.
 
----
+End-to-end tests prove the delivery path still works. They should not run for every tiny edit if they take too long, but they should run before release or on a scheduled basis. In ML, an end-to-end test may use a small fixture dataset rather than the full training corpus, because the purpose is to verify orchestration rather than achieve production metrics.
 
-## Pre-commit Hooks: Your First Line of Defense
+Active learning prompt: a production recommender starts returning stale-looking results after a data ingestion migration. Unit tests pass, model quality from the last release looked acceptable, and the serving API has no errors. Which test layer should you inspect first, and what contract would you verify? A strong answer points to data quality or integration tests around feature freshness, schema, and ingestion-to-feature-store handoff.
 
-### The Philosophy of Pre-commit
+Choosing the right test is an engineering judgment. If a tokenizer drops important text, a unit test should catch it. If a train/test split leaks customers into both sets, a data quality test should catch it. If the candidate model underperforms a high-value segment, a model quality test should catch it. If the pipeline cannot move from raw data to registered artifact, an end-to-end test should catch it.
 
-Pre-commit hooks intercept local changes immediately before they are locked into the Git history. If the code violates rules, the commit aborts. This mechanism is profoundly critical in ML environments because committing a 2GB model weight to history is very difficult to undo cleanly and can disrupt the repository for collaborators. 
+The order matters because compute is not free. Run cheap deterministic checks first. Do not spend GPU hours training a model when the config file is invalid, the dataset has duplicate IDs, or the feature code fails on empty input. A good CI pipeline is staged so each gate earns the right to spend the next unit of time and money.
 
-```bash
-# Install pre-commit
-pip install pre-commit
+## 4. Put Guardrails Before Git History
 
-# Install hooks in your repo
-pre-commit install
+Pre-commit hooks are valuable because they fail before the mistake becomes repository history. In ordinary Python projects they enforce formatting, linting, YAML validity, and merge-conflict checks. In ML projects they also block large binary artifacts, notebook output, credentials in config files, and stale DVC pointers.
 
-# Now pre-commit runs automatically on every commit!
-# You can also run manually:
-pre-commit run --all-files
-```
-
-### The Ultimate ML Pre-commit Configuration
+The key design principle is to block irreversible or expensive mistakes locally. A formatting issue is easy to repair after CI fails. Accidentally committing a huge checkpoint is much more painful because Git records object history, and removing it cleanly can require coordinated history rewriting. Secret leakage is worse because the credential must be revoked even if the commit is later removed.
 
 ```yaml
-# .pre-commit-config.yaml
-
 repos:
-  # ============================================================
-  # STANDARD CODE QUALITY (Same as any Python project)
-  # ============================================================
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
     hooks:
-      - id: trailing-whitespace        # Remove trailing spaces
-      - id: end-of-file-fixer          # Ensure newline at end
-      - id: check-yaml                  # Valid YAML syntax
-      - id: check-json                  # Valid JSON syntax
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
       - id: check-added-large-files
-        args: ['--maxkb=1000']          # CRITICAL: Catch model files!
-      - id: detect-private-key          # Catch committed SSH keys
-      - id: check-merge-conflict        # Catch merge conflict markers
+        args: ["--maxkb=1000"]
+      - id: detect-private-key
+      - id: check-merge-conflict
 
-  - repo: https://github.com/psf/black
-    rev: 24.3.0
-    hooks:
-      - id: black                       # Auto-format Python code
-        language_version: python3.10
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort                       # Sort imports
-        args: ["--profile", "black"]
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
-    hooks:
-      - id: flake8                      # Lint Python code
-        args: ['--max-line-length=100', '--ignore=E203,W503']
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
-      - id: mypy                        # Type checking
-        additional_dependencies: [types-requests, numpy, pandas-stubs]
-
-  # ============================================================
-  # SECURITY CHECKS (Critical for ML with API keys)
-  # ============================================================
-
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.7.7
-    hooks:
-      - id: bandit                      # Security vulnerability scanner
-        args: ["-r", "src/", "-ll"]
-        exclude: tests/
-
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.1
-    hooks:
-      - id: gitleaks                    # Scan for secrets/API keys
-
-  # ============================================================
-  # ML-SPECIFIC HOOKS (The special sauce)
-  # ============================================================
-
-  # Clean notebook outputs before commit
   - repo: https://github.com/kynan/nbstripout
     rev: 0.7.1
     hooks:
-      - id: nbstripout                  # Remove outputs from notebooks
-        # Why? Outputs can contain:
-        # - Sensitive data samples
-        # - Large binary outputs (plots, tensors)
-        # - Makes diffs unreadable
+      - id: nbstripout
 
-  # Custom ML checks
   - repo: local
     hooks:
-      # Prevent committing model files directly
       - id: no-large-model-files
-        name: Check no model files committed
+        name: Check no model files are committed directly
         entry: python scripts/hooks/check_no_models.py
         language: python
         types: [file]
 
-      # Validate ML configurations
-      - id: validate-ml-config
-        name: Validate ML configurations
-        entry: python scripts/hooks/validate_ml_config.py
-        language: python
-        files: configs/.*\.(yaml|yml)$
-
-      # Check for hardcoded secrets in config
       - id: no-secrets-in-config
-        name: Check no secrets in config
+        name: Check config files for secret-looking values
         entry: python scripts/hooks/check_no_secrets.py
         language: python
         files: \.(yaml|yml|json|ini|env)$
 
-      # Validate DVC files are in sync
-      - id: dvc-check
-        name: Check DVC files are valid
+      - id: dvc-status
+        name: Check DVC workspace status
         entry: dvc status
         language: system
         pass_filenames: false
         always_run: true
 ```
 
-### Custom Hook Scripts
+A custom hook should be boring, narrow, and explicit. It should fail with a message that tells the developer what happened and how to fix it. Hooks that are too clever create false positives and get bypassed. Hooks that are too vague create frustration because the developer cannot tell whether the tool found a real risk.
 
 ```python
-# scripts/hooks/check_no_models.py
-"""Prevent accidentally committing large model files."""
-
 import sys
 from pathlib import Path
 
-# File extensions that are typically large model files
 MODEL_EXTENSIONS = {
-    '.pkl', '.pickle',      # Pickle files
-    '.pt', '.pth',          # PyTorch
-    '.h5', '.hdf5',         # Keras/TensorFlow
-    '.onnx',                # ONNX
-    '.bin',                 # Binary weights
-    '.safetensors',         # Safetensors
-    '.ckpt',                # Checkpoints
+    ".pkl",
+    ".pickle",
+    ".pt",
+    ".pth",
+    ".h5",
+    ".hdf5",
+    ".onnx",
+    ".bin",
+    ".safetensors",
+    ".ckpt",
 }
 
-# Size threshold (10MB)
-SIZE_THRESHOLD = 10 * 1024 * 1024
+SIZE_THRESHOLD_BYTES = 10 * 1024 * 1024
+
 
 def check_file(filepath: str) -> str | None:
-    """Check if a file looks like a model file."""
     path = Path(filepath)
+    if not path.exists() or not path.is_file():
+        return None
+    if path.suffix.lower() not in MODEL_EXTENSIONS:
+        return None
+    if path.stat().st_size <= SIZE_THRESHOLD_BYTES:
+        return None
+    size_mb = path.stat().st_size / 1024 / 1024
+    return (
+        f"{filepath} is {size_mb:.1f} MB and looks like a model artifact. "
+        f"Track it with DVC instead: dvc add {filepath}"
+    )
 
-    # Check extension
-    if path.suffix.lower() in MODEL_EXTENSIONS:
-        size = path.stat().st_size
-        if size > SIZE_THRESHOLD:
-            return (
-                f"  {filepath} ({size / 1024 / 1024:.1f}MB)\n"
-                f"   This looks like a model file. Use DVC to track it:\n"
-                f"   $ dvc add {filepath}"
-            )
 
-    return None
-
-def main():
-    issues = []
-    for filepath in sys.argv[1:]:
-        issue = check_file(filepath)
-        if issue:
-            issues.append(issue)
-
+def main() -> int:
+    issues = [issue for item in sys.argv[1:] if (issue := check_file(item))]
     if issues:
-        print(" Large model files detected!\n")
-        print("\n".join(issues))
-        print("\n Model files should be tracked with DVC, not Git.")
-        sys.exit(1)
+        print("Large model artifacts must not be committed directly.")
+        for issue in issues:
+            print(f"- {issue}")
+        return 1
+    return 0
 
-    sys.exit(0)
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 ```
 
-```python
-# scripts/hooks/check_no_secrets.py
-"""Check that config files don't contain secrets."""
+Secret scanning is equally important because ML projects often touch third-party APIs, cloud object storage, model-hosting services, observability platforms, and data warehouses. Configuration files are the common leak path. A hook cannot replace a real secret manager, but it can catch obvious mistakes before they leave the workstation.
 
+```python
 import re
 import sys
 from pathlib import Path
 
 SECRET_PATTERNS = [
-    (r'api[_-]?key\s*[:=]\s*["\']?[a-zA-Z0-9]{20,}', "API key"),
-    (r'password\s*[:=]\s*["\']?[^\s"\']+', "Password"),
-    (r'secret\s*[:=]\s*["\']?[a-zA-Z0-9]{20,}', "Secret"),
-    (r'sk-[a-zA-Z0-9]{48}', "OpenAI API key"),
-    (r'AKIA[A-Z0-9]{16}', "AWS Access Key"),
-    (r'ghp_[a-zA-Z0-9]{36}', "GitHub Personal Access Token"),
-    (r'xox[baprs]-[a-zA-Z0-9-]+', "Slack Token"),
+    (re.compile(r"api[_-]?key\s*[:=]\s*[\"']?[A-Za-z0-9]{20,}", re.I), "API key"),
+    (re.compile(r"password\s*[:=]\s*[\"']?[^\s\"']+", re.I), "password"),
+    (re.compile(r"secret\s*[:=]\s*[\"']?[A-Za-z0-9]{20,}", re.I), "secret"),
+    (re.compile(r"AKIA[A-Z0-9]{16}"), "AWS access key"),
+    (re.compile(r"ghp_[A-Za-z0-9]{30,}"), "GitHub token"),
 ]
 
-def check_file(filepath: str) -> list:
-    """Scan file for potential secrets."""
-    issues = []
-    content = Path(filepath).read_text()
 
-    for i, line in enumerate(content.split('\n'), 1):
-        # Skip comments
-        if line.strip().startswith('#'):
+def check_file(filepath: str) -> list[str]:
+    path = Path(filepath)
+    issues: list[str] = []
+    if not path.exists() or not path.is_file():
+        return issues
+
+    for line_number, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+        if line.strip().startswith("#"):
             continue
-
-        for pattern, secret_type in SECRET_PATTERNS:
-            if re.search(pattern, line, re.IGNORECASE):
-                # Don't show the actual secret!
-                issues.append(f"{filepath}:{i}: Potential {secret_type} detected")
-
+        for pattern, label in SECRET_PATTERNS:
+            if pattern.search(line):
+                issues.append(f"{filepath}:{line_number}: potential {label}")
     return issues
 
-def main():
-    all_issues = []
+
+def main() -> int:
+    issues: list[str] = []
     for filepath in sys.argv[1:]:
-        all_issues.extend(check_file(filepath))
+        issues.extend(check_file(filepath))
+    if issues:
+        print("Potential secrets detected. Use environment variables or a secret manager.")
+        for issue in issues:
+            print(f"- {issue}")
+        return 1
+    return 0
 
-    if all_issues:
-        print(" POTENTIAL SECRETS DETECTED!\n")
-        for issue in all_issues:
-            print(f"  {issue}")
-        print("\n Use environment variables or a secrets manager instead.")
-        print("   Example: api_key: ${OPENAI_API_KEY}")
-        sys.exit(1)
-
-    print(" No secrets detected")
-    sys.exit(0)
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 ```
 
-**Did You Know?** Public repositories regularly expose large numbers of leaked credentials, which is why automated secret scanning and pre-commit checks matter.
+Pre-commit is not a substitute for CI. Local hooks can be skipped, run on different operating systems, or use stale environments. CI must run the same critical checks in a clean environment, especially tests and DVC validation. The local hook is the fast seatbelt; CI is the independent gate before the team trusts the change.
 
----
+A senior engineer also watches for guardrail drift. If a hook produces too many false positives, developers will learn to bypass it. If a hook is slow, it may be disabled locally and rediscovered only in CI. Keep pre-commit checks fast, deterministic, and focused on mistakes that are either common or expensive.
 
-## Project Structure: A Place for Everything
+## 5. Structure Projects So Evidence Has A Home
 
-### The Recommended ML Project Layout
+A project layout teaches behavior. If data, models, notebooks, source, tests, configs, and scripts are mixed together, engineers improvise storage decisions. If the repository has clear paths for raw data pointers, processed outputs, training code, evaluation reports, and deployment manifests, review becomes faster because every artifact has an expected location.
 
 ```text
 ml-project/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                 # CI: tests, linting on every PR
-│       ├── train.yml              # Training pipeline (triggered manually)
-│       └── deploy.yml             # Deployment pipeline
+│       ├── ci.yml
+│       ├── train.yml
+│       └── deploy.yml
 ├── configs/
 │   ├── model/
-│   │   ├── base.yaml              # Shared model configuration
-│   │   ├── small.yaml             # Small model (fast iteration)
-│   │   └── large.yaml             # Large model (production)
+│   │   ├── base.yaml
+│   │   └── large.yaml
 │   ├── training/
-│   │   ├── default.yaml           # Default hyperparameters
-│   │   └── fine_tune.yaml         # Fine-tuning configuration
+│   │   ├── default.yaml
+│   │   └── fine_tune.yaml
 │   └── inference/
-│       └── production.yaml        # Production serving config
+│       └── production.yaml
 ├── data/
-│   ├── raw/                       # Raw data (DVC tracked, never modified)
-│   ├── processed/                 # Processed data (DVC tracked)
-│   ├── features/                  # Feature store outputs
-│   └── .gitignore                 # CRITICAL: Ignore actual data files
-├── models/
-│   ├── checkpoints/               # Training checkpoints (DVC tracked)
-│   ├── production/                # Production models (DVC tracked)
-│   └── .gitignore                 # Ignore actual model files
-├── notebooks/
-│   ├── exploration/               # EDA and data exploration
-│   ├── experiments/               # Experiment notebooks
-│   └── reports/                   # Stakeholder-facing notebooks
-├── src/
-│   ├── __init__.py
-│   ├── data/
-│   │   ├── __init__.py
-│   │   ├── load.py                # Data loading utilities
-│   │   ├── preprocess.py          # Preprocessing functions
-│   │   └── validate.py            # Data validation
+│   ├── raw/
+│   ├── processed/
 │   ├── features/
-│   │   ├── __init__.py
-│   │   └── extract.py             # Feature extraction
+│   └── .gitignore
+├── models/
+│   ├── checkpoints/
+│   ├── production/
+│   └── .gitignore
+├── notebooks/
+│   ├── exploration/
+│   ├── experiments/
+│   └── reports/
+├── src/
+│   ├── data/
+│   ├── features/
 │   ├── models/
-│   │   ├── __init__.py
-│   │   ├── train.py               # Training loop
-│   │   ├── evaluate.py            # Evaluation logic
-│   │   └── predict.py             # Inference logic
 │   └── utils/
-│       ├── __init__.py
-│       ├── config.py              # Configuration loading
-│       └── logging.py             # Logging setup
 ├── tests/
-│   ├── __init__.py
-│   ├── unit/                      # Fast, isolated tests
-│   ├── integration/               # Component integration tests
-│   └── data/                      # Data quality tests
+│   ├── unit/
+│   ├── integration/
+│   └── data/
 ├── scripts/
-│   ├── train.py                   # Training entry point
-│   ├── evaluate.py                # Evaluation entry point
-│   └── predict.py                 # Batch prediction
-├── .dvc/                          # DVC internals
-├── .pre-commit-config.yaml        # Pre-commit hooks
-├── dvc.yaml                       # DVC pipeline definition
-├── dvc.lock                       # DVC lock file (reproducibility)
-├── pyproject.toml                 # Modern Python project config
-├── requirements.txt               # Production dependencies
-├── requirements-dev.txt           # Development dependencies
-├── Makefile                       # Common commands
-└── README.md                      # Project documentation
+│   ├── train.py
+│   ├── evaluate.py
+│   └── predict.py
+├── .pre-commit-config.yaml
+├── dvc.yaml
+├── dvc.lock
+├── pyproject.toml
+└── README.md
 ```
 
 ```mermaid
 graph TD
-    Root[ml-project/] --> Configs[configs/]
-    Root --> Data[data/]
-    Root --> Models[models/]
-    Root --> Src[src/]
-    Root --> Tests[tests/]
-
-    Configs --> C1[model/]
-    Configs --> C2[training/]
-
-    Data --> D1[raw/ - DVC tracked]
-    Data --> D2[processed/ - DVC tracked]
-
-    Models --> M1[checkpoints/]
-    Models --> M2[production/]
-
-    Src --> S1[data/]
-    Src --> S2[features/]
-    Src --> S3[models/]
+    Root[ml-project] --> Configs[configs]
+    Root --> Data[data]
+    Root --> Models[models]
+    Root --> Src[src]
+    Root --> Tests[tests]
+    Configs --> C1[model config]
+    Configs --> C2[training config]
+    Configs --> C3[inference config]
+    Data --> D1[raw snapshots]
+    Data --> D2[processed snapshots]
+    Data --> D3[feature outputs]
+    Models --> M1[checkpoints]
+    Models --> M2[production artifacts]
+    Src --> S1[data code]
+    Src --> S2[feature code]
+    Src --> S3[training and inference code]
 ```
 
-### The Makefile: Your Command Center
+Configuration deserves special care because hardcoded training parameters are hidden variables. A training script that embeds `learning_rate = 0.001` inside code makes every experiment look like a source-code change. A versioned YAML file makes the controlled variable reviewable. It also lets pipeline tools compare runs and lets reviewers see whether an experiment changed architecture, optimizer, batch size, threshold, or several variables at once.
+
+```yaml
+seed: 42
+
+data:
+  train_path: data/processed/train.parquet
+  validation_path: data/processed/validation.parquet
+  target_column: churned
+
+model:
+  type: gradient_boosted_trees
+  max_depth: 6
+  learning_rate: 0.03
+
+training:
+  batch_size: 512
+  epochs: 20
+  early_stopping_rounds: 5
+
+evaluation:
+  minimum_accuracy: 0.85
+  minimum_enterprise_f1: 0.70
+```
+
+A Makefile or task runner is useful because it records common commands as team contracts. The exact tool is less important than consistency. Developers should not have to remember whether evaluation writes `metrics/eval.json` or `reports/eval.json`, and CI should not call a different entry point from local development unless there is a clear reason.
 
 ```makefile
-# Makefile - Common commands for the ML project
-# Usage: make <command>
+.PHONY: install test test-unit test-data lint train evaluate check
 
-.PHONY: install test lint train evaluate clean help
-
-# Default target: show help
-help:
-	@echo "ML Project Commands:"
-	@echo "  make install     - Install all dependencies"
-	@echo "  make test        - Run all tests"
-	@echo "  make test-unit   - Run unit tests only"
-	@echo "  make test-data   - Run data quality tests"
-	@echo "  make lint        - Run all linters"
-	@echo "  make train       - Run training pipeline"
-	@echo "  make evaluate    - Evaluate current model"
-	@echo "  make clean       - Remove artifacts"
-
-# Install all dependencies and set up pre-commit
 install:
 	pip install -r requirements.txt
 	pip install -r requirements-dev.txt
 	pre-commit install
-	@echo " Installation complete"
 
-# Run all tests with coverage
 test:
-	pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
-	@echo " Coverage report: htmlcov/index.html"
+	pytest tests/ -v
 
-# Run specific test suites
 test-unit:
 	pytest tests/unit/ -v
-
-test-integration:
-	pytest tests/integration/ -v
 
 test-data:
 	pytest tests/data/ -v --tb=short
 
-# Lint and format code
 lint:
-	black src/ tests/ scripts/
-	isort src/ tests/ scripts/
-	flake8 src/ tests/ scripts/
-	mypy src/
-	@echo " Linting complete"
+	ruff check src tests scripts
+	ruff format src tests scripts
 
-# Run the full DVC pipeline
 train:
 	dvc repro
-	@echo " Training complete. Check metrics with 'dvc metrics show'"
 
-# Evaluate the current model
 evaluate:
 	python scripts/evaluate.py --config configs/training/default.yaml
 
-# Clean all artifacts
-clean:
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type f -name "*.pyc" -delete
-	rm -rf .pytest_cache .mypy_cache .coverage htmlcov/
-	@echo " Cleaned"
-
-# Data management
-data-pull:
-	dvc pull
-	@echo " Data pulled from remote"
-
-data-push:
-	dvc push
-	@echo " Data pushed to remote"
-
-# Quick sanity check before committing
-check: lint test-unit
-	@echo " Ready to commit"
+check: lint test-unit test-data
 ```
 
----
+The project layout should also separate exploratory notebooks from production code. Notebooks are excellent for investigation, visualization, and stakeholder reports. They are poor as the only source of truth for training logic because execution order can be hidden, outputs can contain sensitive data, and state can linger across cells. Production training, preprocessing, and evaluation logic should live in importable modules with tests.
 
-## Reproducibility: The Ultimate Goal
-
-### The Reproducibility Checklist
-
-```python
-# The Complete ML Reproducibility Checklist
-
-REPRODUCIBILITY_CHECKLIST = {
-    "Random Seeds": {
-        "python": "import random; random.seed(42)",
-        "numpy": "import numpy as np; np.random.seed(42)",
-        "pytorch": """
-            import torch
-            torch.manual_seed(42)
-            torch.cuda.manual_seed_all(42)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-        """,
-        "tensorflow": "import tensorflow as tf; tf.random.set_seed(42)",
-    },
-
-    "Environment": {
-        "python_version": "Exact version (e.g., 3.10.12)",
-        "dependencies": "requirements.txt with pinned versions (pkg==1.2.3)",
-        "hardware": "Document GPU model, CUDA version, driver version",
-        "os": "Document OS and version",
-    },
-
-    "Data": {
-        "version": "DVC hash or explicit version tag",
-        "preprocessing": "All steps documented AND versioned",
-        "splits": "Fixed random seed for train/val/test splits",
-        "augmentation": "If any, document with seeds",
-    },
-
-    "Model": {
-        "architecture": "Full specification in config file",
-        "initialization": "Random, pretrained (which checkpoint?)",
-        "hyperparameters": "ALL of them, in versioned config",
-    },
-
-    "Training": {
-        "optimizer": "Type, learning rate, momentum, weight decay, etc.",
-        "scheduler": "Type, parameters, warmup steps",
-        "batch_size": "Training AND evaluation",
-        "epochs": "Number and early stopping criteria",
-        "hardware": "Single GPU? Multi-GPU? Which GPUs?",
-    },
-
-    "Evaluation": {
-        "metrics": "Exact formulas or library versions",
-        "test_set": "Versioned with DVC",
-        "preprocessing": "Same as training? Document any differences",
-    },
-}
-
-def verify_reproducibility(config_path: str) -> list[str]:
-    """Check if a configuration covers reproducibility requirements."""
-    missing = []
-    config = load_config(config_path)
-
-    for category, items in REPRODUCIBILITY_CHECKLIST.items():
-        for item, description in items.items():
-            if item not in config.get(category, {}):
-                missing.append(f"{category}.{item}: {description}")
-
-    return missing
-```
-
-### The Experiment Tracking Hierarchy
+Experiment tracking gives teams a vocabulary for organizing evidence. Projects should map to business problems, experiment groups should map to hypotheses, experiments should map to meaningful changes, and runs should capture parameter combinations. This hierarchy prevents dashboards from becoming a flat pile of timestamped attempts.
 
 ```text
 EXPERIMENT TRACKING HIERARCHY
-==============================
+=============================
 
-Project (lives: months to years)
-│   "Customer Churn Prediction"
+Project
+│   Customer Churn Prediction
 │
-└── Experiment Group (lives: weeks)
-    │   "Feature Engineering v2"
+└── Experiment Group
+    │   Feature Engineering v2
     │
-    └── Experiment (lives: days)
-        │   "Add behavioral features"
+    └── Experiment
+        │   Add enterprise support interactions
         │
-        └── Run (lives: hours)
-            │   "lr=0.001, batch=32, seed=42"
+        └── Run
+            │   lr=0.03, depth=6, seed=42
             │
-            └── Artifacts (lives: forever)
-                    Model weights, metrics, plots
-
-ORGANIZATION TIPS:
-- Name projects after business problems, not techniques
-- Name experiment groups after hypotheses, not dates
-- Name experiments after what changed
-- Let runs be automatically named with hyperparameters
+            └── Artifacts
+                Model weights, metrics, plots, config, logs
 ```
 
 ```mermaid
 graph TD
-    Project["Project (months-years): Customer Churn"] --> Group["Experiment Group (weeks): Feature Eng v2"]
-    Group --> Experiment["Experiment (days): Add behavioral features"]
-    Experiment --> Run["Run (hours): lr=0.001, batch=32, seed=42"]
-    Run --> Artifacts["Artifacts (forever): Model weights, metrics"]
+    Project["Project: Customer Churn Prediction"] --> Group["Experiment Group: Feature Engineering v2"]
+    Group --> Experiment["Experiment: Add support interactions"]
+    Experiment --> Run["Run: lr=0.03 depth=6 seed=42"]
+    Run --> Artifacts["Artifacts: weights metrics plots config logs"]
 ```
 
----
+The naming rule is simple: name things after the decision they help someone make. `April run` is weak because it tells you when work happened, not what changed. `Add support interaction features` is stronger because it tells a reviewer what hypothesis to evaluate. Time is still recorded automatically by tracking tools; the human name should carry intent.
 
-## Kubernetes-Based Pipeline Execution
+A mature repository also records operational assumptions. Which data source owns truth? Which metric is the promotion gate? Which subgroup cannot regress? Which model version is currently serving? Which artifact can be rolled back? These answers should not live only in Slack threads, notebook comments, or one engineer's memory.
 
-While local unit tests provide rapid feedback, diagnosing pipeline failures and running distributed training requires executing workloads in an environment that mirrors production. This is where Kubernetes becomes essential for ML DevOps.
+## 6. Run ML Workloads With The Right Kubernetes Primitive
 
-A common mistake engineers make when migrating ML pipelines to Kubernetes is utilizing standard `Deployment` resources. A `Deployment` is designed inherently for long-running, stateless services (like a web API) and [will continually restart the container if the process exits](https://kubernetes.io/docs/concepts/architecture/self-healing/). Machine Learning pipelines—whether they are data validation tests, model training, or batch evaluations—are finite, batch-oriented computational tasks. They must run to completion and then terminate.
+Kubernetes is useful for ML DevOps when the team needs reproducible execution near production conditions. Local tests are fast, but they do not prove that container images, service accounts, resource requests, object storage access, node selectors, or cluster policies are correct. Running validation or training in Kubernetes exposes those integration points before production traffic depends on them.
 
-To execute these pipelines, you must use a Kubernetes `Job` resource. [A `Job` correctly handles run-to-completion semantics, tracks the final success or failure state of the execution](https://kubernetes.io/docs/concepts/workloads/controllers/job/), and avoids infinite restart loops when a training script successfully finishes. Running deterministic experiment or validation workloads as a Kubernetes `Job` can make them easier to reproduce in an environment that is closer to production, which often makes failures easier to diagnose.
+A common mistake is using a `Deployment` for a training script. A Deployment is built for long-running services that should keep running. If the process exits, the controller tries to maintain the desired state by creating replacement Pods. Training, batch evaluation, data validation, and migration-style ML tasks are finite. They should start, run to completion, report success or failure, and stop.
 
----
+A Kubernetes `Job` matches that run-to-completion model. It records completion, retries according to policy, and lets the team inspect logs after the work finishes. For ML validation, this is exactly the behavior you want. The workload is not a web server; it is a controlled execution of a pipeline step.
 
-## Common Mistakes
-
-| Mistake | Why It Is Dangerous | How To Fix It |
-|---|---|---|
-| **Committing model binaries to Git** | Bloats the repository size, eventually breaking cloning. Rewriting history with `git filter-branch` is highly destructive and breaks collaborators' local repositories. | Use `git rm --cached <file>` to remove it from Git without deleting the local file, track it with DVC, and use pre-commit hooks to block future binaries. |
-| **Hardcoding hyperparameters** | Makes reproducing past experiments much harder and pollutes the code history with trivial constant changes. | Store all model hyperparameters and arguments in strict, versioned YAML configuration files. |
-| **Changing multiple variables simultaneously** | Violates the scientific method by making it much harder to empirically attribute any performance gains or regressions to a specific change (e.g., updating architecture and learning rate at once). | Strictly isolate experiments to modify exactly one fundamental variable per branch. |
-| **Ignoring random seeds** | Prevents deterministic training and evaluation, leading to unexplainable variations in model performance across identical runs. | Centralize seed initialization for Python, NumPy, and your ML framework at the very start of your orchestration scripts. |
-| **Squashing experiment branches blindly** | Destroys the invaluable historical context of what hypotheses were tested and what exact metrics they produced. | Include comprehensive metrics, hypothesis data, and firm conclusions in the commit message before merging. |
-| **Evaluating on training data** | Introduces massive data leakage, resulting in falsely high accuracy that often collapses in production. | Strictly isolate the validation/test sets before any feature engineering, balancing, or normalization steps occur. |
-| **Skipping data drift tests** | Allows models to degrade silently and destructively in production as real-world data distributions gradually shift. | Implement statistical checks (e.g., KS tests) to continuously compare production incoming data against original training baselines. |
-| **Using vague branch names** | Forces future engineers to perform tedious "experiment archaeology" to understand past work and prevents collaboration. | Adopt structured naming conventions like `experiment/model-feature-change` to communicate intent clearly. |
-
----
-
-## Quiz
-
-<details>
-<summary>1. A team member pushes a new feature branch, but the CI pipeline immediately fails because a 500MB `.pkl` file was committed. What is the precise technical remedy?</summary>
-The developer must forcefully remove the file from Git's caching index using `git rm --cached`, commit the removal to rewrite the branch state, and then track the file properly using DVC (`dvc add`). Finally, they should append the `.pkl` extension to the repository's `.gitignore` and configure a pre-commit hook to prevent future binary additions before they even hit the CI.
-</details>
-
-<details>
-<summary>2. You have inherited an ML project where the accuracy in production is 12% lower than the notebook logs from six months ago. No code has fundamentally changed. Diagnose the most likely missing practice.</summary>
-The project most likely lacks robust data versioning and data drift testing. Over six months, the underlying data distributions likely evolved in production, or the exact dataset used for the original training was modified locally without a DVC record, making it impossible to guarantee the model is still evaluating the same conceptual baseline.
-</details>
-
-<details>
-<summary>3. During a code review, you notice an experiment branch includes complex changes to the model architecture and the learning rate scheduler simultaneously. Evaluate the problem with this approach.</summary>
-This violates the core scientific method of isolating variables. By changing both the physical architecture and the behavioral scheduler simultaneously, it becomes much harder to empirically attribute any performance gains or regressions to a specific change. Experiments must strictly modify one fundamental variable at a time to yield reliable insights.
-</details>
-
-<details>
-<summary>4. Your data pipeline completes successfully, but the model quality test fails due to a demographic parity difference of 0.15. Compare the potential root causes.</summary>
-A demographic parity failure indicates severe bias in the model's predictions across sensitive groups. The root cause could be a statistical imbalance in the training data's representation of those groups, or feature engineering transformations that inadvertently proxy for sensitive attributes (like using zip codes that proxy for race). It requires auditing both the raw dataset distributions and the algorithm's feature importance metrics.
-</details>
-
-<details>
-<summary>5. You decide to run a DVC pipeline using `dvc repro`, but it entirely skips the `prepare` stage even though you modified the raw data CSV locally. Diagnose why DVC skipped it.</summary>
-DVC skipped the computational stage because the raw data CSV was not correctly defined as a strict dependency (`deps`) in the `dvc.yaml` file for the `prepare` stage. DVC relies entirely on dependency cryptographic hashes; if the file is not tracked explicitly as a dependency, DVC assumes the stage's inputs have not changed and utilizes the previously cached output.
-</details>
-
-<details>
-<summary>6. Your organization is upgrading to Kubernetes v1.35 to schedule distributed training pipelines. A developer suggests using a standard Deployment for the training pod. Criticize this approach.</summary>
-A standard Kubernetes Deployment is designed inherently for long-running, stateless services and will continually restart the pod if it exits. Training pipelines are finite, batch-oriented computational tasks that must run to completion and terminate. The developer must use a Kubernetes `Job` resource, which correctly handles run-to-completion semantics and tracks the final success or failure state of the execution.
-</details>
-
-<details>
-<summary>7. An engineer complains that their Git repository has grown to 5.5 GB, causing severe network timeouts during deployment. They propose using `git filter-branch` to forcefully rewrite history and strip old data files. Evaluate this strategy.</summary>
-While `git filter-branch` (or the more modern `git-filter-repo`) will technically reduce the repository size by rewriting historical hashes, it is a highly destructive operation that will break the local repositories of all other collaborators. A safer, forward-looking strategy is to freeze the current state, migrate to DVC for all future data versioning, and only perform a history rewrite during a strictly coordinated, organization-wide maintenance window.
-</details>
-
-<details>
-<summary>8. You are configuring an automated CI/CD pipeline for a new ML project. Which test layer from the extended ML testing pyramid should execute first, and why?</summary>
-Unit tests should invariably execute first because they are the fastest, cheapest, and most isolated layer of the pyramid. Running deep data quality tests or full model quality evaluations is computationally expensive and time-consuming; unit tests act as a rapid gatekeeper to ensure fundamental code mechanics (like array shapes and basic vector preprocessing) are absolutely correct before investing heavy resources in larger systemic tests.
-</details>
-
----
-
-## Hands-On Exercise: End-to-End ML DevOps Setup
-
-In this exercise, you will establish a production-grade ML environment from scratch, configuring Git, DVC, strict pre-commit hooks, and executing a simulated training run on Kubernetes v1.35.
-
-#### Task 1: Environment and Repository Initialization
-Create your project workspace and configure Git for deterministic behavior.
-
-<details>
-<summary>View Solution</summary>
-
-```bash
-# Create project directory
-mkdir -p /tmp/ml-ops-lab && cd /tmp/ml-ops-lab
-
-# Initialize Git with a modern default branch
-git init --initial-branch=main
-
-# Configure user identity locally
-git config user.name "Lab User"
-git config user.email "lab@example.com"
-
-# Verify initialization
-git status
-```
-</details>
-
-#### Task 2: DVC Initialization and Remote Configuration
-Install Data Version Control and configure a local remote to simulate an S3/GCS bucket.
-
-<details>
-<summary>View Solution</summary>
-
-```bash
-# Install DVC quietly
-pip install --quiet dvc==3.48.0
-
-# Initialize DVC in the repository
-dvc init
-
-# Create a directory to act as remote storage
-mkdir -p /tmp/dvc-remote
-
-# Add the local remote and set it as default
-dvc remote add -d local_remote /tmp/dvc-remote
-
-# Commit the DVC configuration
-git add .dvc/config .dvcignore
-git commit -m "chore: initialize DVC and configure local remote"
-
-# Verify DVC status
-dvc status
-```
-</details>
-
-#### Task 3: Data Versioning
-Simulate generating a large binary dataset, track it with DVC, and push it safely to the remote.
-
-<details>
-<summary>View Solution</summary>
-
-```bash
-# Create data directory
-mkdir data
-
-# Generate a simulated 10MB dataset
-dd if=/dev/urandom of=data/training.bin bs=1M count=10 status=none
-
-# Track the dataset with DVC
-dvc add data/training.bin
-
-# Commit the DVC pointer file and gitignore
-git add data/training.bin.dvc data/.gitignore
-git commit -m "data: add initial training data"
-
-# Push the actual data to the DVC remote
-dvc push
-
-# Verify remote storage contains the data payload
-ls -lh /tmp/dvc-remote
-```
-</details>
-
-#### Task 4: Enforcing Standards with Pre-commit Hooks
-Install pre-commit and configure it to prevent large files from accidentally slipping into Git history.
-
-<details>
-<summary>View Solution</summary>
-
-```bash
-# Install pre-commit quietly
-pip install --quiet pre-commit==3.7.0
-
-# Create the configuration file
-cat << 'EOF' > .pre-commit-config.yaml
-repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: check-added-large-files
-        args: ['--maxkb=1000']
-EOF
-
-# Install the hooks into the Git lifecycle
-pre-commit install
-
-# Commit the configuration file
-git add .pre-commit-config.yaml
-git commit -m "chore: configure pre-commit hooks"
-
-# Verify hooks by running against all files
-pre-commit run --all-files
-```
-</details>
-
-#### Task 5: Kubernetes v1.35 Training Job Execution
-Deploy a Kubernetes `Job` resource to simulate an isolated, repeatable training run.
-
-<details>
-<summary>View Solution</summary>
-
-```bash
-# Define the Kubernetes Job manifest targeted for v1.35
-cat << 'EOF' > train-job.yaml
+```yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: ml-train-job
+  name: ml-validation-job
   namespace: default
 spec:
   backoffLimit: 0
   template:
     spec:
-      containers:
-      - name: train
-        image: python:3.10-slim
-        command: ["python", "-c", "print('Training pipeline executed successfully.')"]
       restartPolicy: Never
-EOF
-
-# Apply the manifest to the cluster
-kubectl apply -f train-job.yaml
-
-# Wait for the job to complete (timeout ensures the lab doesn't hang)
-kubectl wait --for=condition=complete job/ml-train-job --timeout=60s
-
-# Verify the output logs
-kubectl logs job/ml-train-job
+      containers:
+        - name: validate
+          image: python:3.12-slim
+          command:
+            - python
+            - -c
+            - |
+              print("Running deterministic ML validation checks")
+              print("Validation completed successfully")
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
 ```
+
+After you have explained `kubectl`, it is common in Kubernetes courses to use `k` as a shell alias for speed. The alias is only a typing shortcut: `alias k=kubectl`. In scripts and documentation that may be copied into automation, prefer the full `kubectl` command unless the alias has been established in the exercise.
+
+```bash
+kubectl apply -f ml-validation-job.yaml
+kubectl wait --for=condition=complete job/ml-validation-job --timeout=60s
+kubectl logs job/ml-validation-job
+kubectl delete job/ml-validation-job
+```
+
+```mermaid
+flowchart LR
+    Commit[Git commit and DVC pointers] --> Image[Container image]
+    Image --> Job[Kubernetes Job]
+    Job --> Logs[Validation logs]
+    Job --> Metrics[Metrics artifact]
+    Metrics --> Decision{Promote model?}
+    Decision -->|passes gates| Registry[Register candidate]
+    Decision -->|fails gates| Experiment[Return to experiment]
+```
+
+Kubernetes does not magically make a pipeline reproducible. The container image must be immutable enough to identify its dependencies, the Job must mount or fetch the intended data version, and the command must record the model artifact and metrics. A Job that downloads "latest data" and writes "model.pkl" without a version is only a distributed way to create uncertainty.
+
+For senior teams, Kubernetes Jobs often become the execution substrate beneath higher-level orchestrators. Argo Workflows, Kubeflow Pipelines, Tekton, Airflow on Kubernetes, and managed ML platforms may create Pods and Jobs indirectly. The underlying principle remains the same: finite ML steps should have finite workload semantics, declared inputs, declared outputs, and inspectable results.
+
+The debugging workflow changes once the pipeline runs in Kubernetes. If a Job fails before the container starts, inspect image pull errors, service accounts, secrets, node scheduling, and resource limits. If the container starts but validation fails, inspect logs, mounted configuration, data access, and metrics. If validation passes locally but fails in cluster, compare image dependency versions, environment variables, file paths, and object storage credentials.
+
+A release gate should combine evidence from all earlier sections. The Git commit identifies code. DVC or equivalent pointers identify data. The config identifies hyperparameters. Tests identify quality. The Kubernetes Job identifies production-like execution. Promotion should happen only when these records agree, because that agreement is what makes rollback and incident response credible.
+
+## Did You Know?
+
+1. In many production ML systems, the model-training code is a small fraction of the total system; data pipelines, validation, deployment, monitoring, and recovery machinery often dominate the engineering effort.
+
+2. A model can become worse without any code deployment if the real-world data distribution moves away from the distribution used during training.
+
+3. Reproducing an ML result usually requires the data version, random seeds, dependency versions, preprocessing logic, model configuration, and evaluation method, not just the final model file.
+
+4. Kubernetes Jobs are designed for run-to-completion workloads, which makes them a better fit for training and validation tasks than Deployments that try to keep Pods running.
+
+## Common Mistakes
+
+| Mistake | Why It Is Dangerous | How To Fix It |
+|---|---|---|
+| Committing model binaries directly to Git | Large artifacts bloat repository history, slow down cloning, and can require disruptive history repair if they spread to shared branches. | Track large datasets and model artifacts with DVC or an artifact store, commit only pointer files, and block direct binary commits with pre-commit hooks. |
+| Treating Git commit hash as the whole experiment identity | The same code can produce different models when data, configuration, seeds, dependencies, or hardware behavior changes. | Record Git commit, data pointer, config file, seed values, dependency lockfile, metrics, and artifact hash for every candidate model. |
+| Changing several experiment variables at once | If architecture, features, scheduler, and threshold all change together, reviewers cannot tell which change caused improvement or regression. | Isolate one major variable per experiment branch unless the purpose is explicitly to test an integrated bundle. |
+| Running only software-style unit tests | Unit tests can pass while labels are missing, splits leak data, feature distributions drift, or one important segment regresses badly. | Add data quality tests, model quality tests, and segment-level regression checks to the pipeline. |
+| Using a Deployment for finite training work | Deployments are meant to keep services running and may restart a completed training container as though it failed to stay alive. | Use a Kubernetes Job for training, validation, batch evaluation, and other finite pipeline steps. |
+| Leaving hyperparameters hardcoded in scripts | Hidden constants make experiment review difficult and force meaningless code diffs for every training adjustment. | Move hyperparameters into versioned configuration files and include those files in pipeline dependencies. |
+| Trusting notebooks as the only source of truth | Notebook execution order, hidden state, bulky outputs, and local files make results hard to reproduce and review. | Promote stable logic into importable modules, test it, and strip notebook outputs before commit. |
+| Skipping negative experiment records | Teams repeat failed ideas when past hypotheses, configurations, and metrics disappear after branches are deleted. | Preserve failed experiments with clear commit messages, tracking records, or documented experiment summaries. |
+
+## Quiz
+
+<details>
+<summary>1. Your team deploys a candidate churn model with the same application code as the previous release. Two days later, enterprise customer recall drops sharply while overall accuracy looks almost unchanged. What do you inspect first, and why?</summary>
+
+Start with model quality evidence split by segment, then inspect data quality and feature distribution for enterprise customers. Overall accuracy can hide subgroup regressions, so the right debugging path is to compare segment-level F1 or recall against the previous model, verify whether enterprise examples are represented in validation data, and check whether feature generation changed for that population. Unit tests alone are unlikely to explain a business-segment regression.
+
 </details>
 
-#### Success Checklist
-- [ ] Git repository initialized locally on the `main` branch.
-- [ ] DVC installed, initialized, and successfully linked to `/tmp/dvc-remote`.
-- [ ] 10MB simulated dataset tracked exclusively by DVC and ignored by Git.
-- [ ] Pre-commit hook installed to reject accidental binary file commits.
-- [ ] Kubernetes Job successfully scheduled and evaluated to completion.
+<details>
+<summary>2. A pull request updates `data/training.csv.dvc`, `configs/train.yaml`, and `models/churn.pkl.dvc`, but the description says only "better model." As reviewer, what evidence do you require before approving?</summary>
 
----
+Require the hypothesis, dataset change summary, configuration diff, training run identity, metrics against baseline, segment-level checks, and artifact hash or registry link. The PR changed data, configuration, and model artifact together, so the reviewer must know which variable caused the improvement and whether any subgroup or operational metric regressed. Without that evidence, the change is not reproducible or reviewable.
 
-## ⏭️ Next Steps
+</details>
 
-With these foundational DevOps principles in place, you now possess the framework required to build resilient, reproducible ML systems that survive the journey to production.
+<details>
+<summary>3. CI reports that `dvc repro` skipped the `prepare` stage even though a raw customer CSV changed locally. The model then trained on stale processed data. What is the likely pipeline defect?</summary>
 
-**Up Next**: Module 1.2 - Docker & Containerization for ML — where we encapsulate the entire dependency matrix into immutable artifacts, ensuring absolute parity between the researcher's workstation and the production cluster.
+The raw CSV was probably missing from the `deps` list for the `prepare` stage in `dvc.yaml`, or the changed file was outside the path DVC tracks. DVC decides whether to rerun a stage by hashing declared dependencies. If the true input is not declared, DVC can reuse cached outputs even when the real-world input changed.
+
+</details>
+
+<details>
+<summary>4. An engineer proposes a pre-commit hook that runs the full training pipeline before every commit. Evaluate the proposal and recommend a better guardrail design.</summary>
+
+Running full training before every commit is too slow and will likely be bypassed, which makes it a weak local guardrail. Pre-commit should catch fast, expensive-to-repair mistakes such as large binary files, secrets, malformed YAML, merge conflicts, and notebook outputs. Full training or model-quality evaluation belongs in CI, scheduled validation, or explicit release gates where longer runtime is acceptable.
+
+</details>
+
+<details>
+<summary>5. A training container exits successfully after writing metrics, but the Kubernetes controller immediately starts another Pod. The developer used a Deployment because "Kubernetes runs containers." What change should you make?</summary>
+
+Replace the Deployment with a Kubernetes Job. A Deployment tries to maintain a continuously running service, so an exited training process can be treated as a desired-state mismatch. A Job is the correct primitive for finite training or validation because it records completion and stops when the task succeeds.
+
+</details>
+
+<details>
+<summary>6. Your model performs well in a notebook, but the Kubernetes validation Job fails because it cannot find `data/processed/train.parquet`. How do you debug the difference between local and cluster execution?</summary>
+
+Compare how the file is produced or fetched in each environment. Check whether the Job image contains the code, whether the DVC pull or object-storage download runs, whether credentials and service accounts are available, whether the working directory matches expectations, and whether the pipeline declared the processed file as an output. The failure is likely an environment, artifact-fetching, or path-contract issue rather than a modeling issue.
+
+</details>
+
+<details>
+<summary>7. A candidate model improves accuracy from `0.86` to `0.88`, but latency increases from `40ms` to `120ms` and the rollback artifact is not recorded. Should it be promoted to production?</summary>
+
+It should not be promoted directly to production. The accuracy improvement may be useful, but the latency regression could violate service objectives, and missing rollback evidence makes recovery unsafe. The candidate should remain in staging or experiment review until latency is evaluated against business requirements and the previous production artifact, data version, and deployment path are recorded.
+
+</details>
+
+<details>
+<summary>8. A teammate wants to delete all failed experiment branches after a cleanup because "only the winning model matters." How do you respond as the senior engineer?</summary>
+
+Do not delete the evidence until the hypotheses, configurations, data versions, and results are preserved elsewhere. Failed experiments prevent repeated work and explain why certain paths were rejected. Branches can eventually be pruned if the experiment tracking system or written summary retains enough evidence for future engineers to understand the decision.
+
+</details>
+
+## Hands-On Exercise: Build A Minimal ML DevOps Safety Net
+
+In this exercise, you will build a small workflow that demonstrates the core controls from the module. You will initialize a repository, track data with DVC, block large model artifacts before commit, create a reproducible pipeline definition, and run a finite Kubernetes validation Job. The goal is not to train a useful model; the goal is to practice the controls that make a real model reviewable.
+
+### Task 1: Initialize A Reproducible Workspace
+
+Create a temporary project and initialize Git with an explicit default branch. This gives the lab a clean history and avoids relying on global defaults that may differ across machines.
+
+```bash
+mkdir -p /tmp/ml-devops-foundations
+cd /tmp/ml-devops-foundations
+
+git init --initial-branch=main
+git config user.name "Lab User"
+git config user.email "lab@example.com"
+
+python -m venv .venv
+. .venv/bin/activate
+pip install --quiet dvc==3.48.0 pre-commit==3.7.0 pytest==8.2.0 pandas==2.2.2 scikit-learn==1.4.2
+
+git status
+```
+
+Success criteria:
+
+- [ ] The project exists at `/tmp/ml-devops-foundations`.
+- [ ] Git is initialized on the `main` branch.
+- [ ] A local virtual environment exists and is activated.
+- [ ] DVC, pre-commit, pytest, pandas, and scikit-learn are installed.
+
+### Task 2: Track Training Data With DVC
+
+Create a tiny dataset, initialize DVC, configure a local remote, and commit only the pointer files. This simulates the same workflow you would use with object storage in a team environment.
+
+```bash
+dvc init
+mkdir -p data /tmp/ml-devops-dvc-remote
+
+cat > data/training.csv <<'EOF'
+id,age,plan,churned
+1,29,basic,0
+2,54,enterprise,1
+3,41,team,0
+4,37,enterprise,0
+5,62,basic,1
+EOF
+
+dvc remote add -d local_remote /tmp/ml-devops-dvc-remote
+dvc add data/training.csv
+
+git add .dvc .dvcignore data/training.csv.dvc data/.gitignore
+git commit -m "data: track initial training dataset with DVC"
+
+dvc push
+git status --short
+```
+
+Success criteria:
+
+- [ ] `data/training.csv.dvc` exists and is tracked by Git.
+- [ ] `data/training.csv` is ignored by Git rather than committed directly.
+- [ ] `dvc push` stores the payload in `/tmp/ml-devops-dvc-remote`.
+- [ ] `git status --short` does not show the raw CSV as an untracked Git file.
+
+### Task 3: Add A Fast Data Quality Test
+
+Create a simple test that checks label completeness and plausible age ranges. These checks model the data-quality layer of the ML testing pyramid.
+
+```bash
+mkdir -p tests/data
+
+cat > tests/data/test_training_data.py <<'EOF'
+import pandas as pd
+
+
+def test_no_missing_labels() -> None:
+    training_data = pd.read_csv("data/training.csv")
+    assert training_data["churned"].isna().sum() == 0
+
+
+def test_age_values_are_plausible() -> None:
+    training_data = pd.read_csv("data/training.csv")
+    invalid = training_data[~training_data["age"].between(0, 120)]
+    assert invalid.empty, f"invalid ages at rows {invalid.index.tolist()}"
+EOF
+
+pytest tests/data -v
+```
+
+Success criteria:
+
+- [ ] The data quality test file exists under `tests/data/`.
+- [ ] `pytest tests/data -v` passes.
+- [ ] The tests check data assumptions rather than only checking that files exist.
+
+### Task 4: Configure Pre-commit To Block Large Files
+
+Install a hook that rejects large files before they enter Git. Then verify that the hook passes for the current repository state.
+
+```bash
+cat > .pre-commit-config.yaml <<'EOF'
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: ["--maxkb=1000"]
+EOF
+
+pre-commit install
+pre-commit run --all-files
+
+git add .pre-commit-config.yaml tests/data/test_training_data.py
+git commit -m "test: add data quality checks and pre-commit guardrails"
+```
+
+Success criteria:
+
+- [ ] `.pre-commit-config.yaml` exists.
+- [ ] `pre-commit run --all-files` passes.
+- [ ] The hook configuration includes `check-added-large-files`.
+- [ ] The test and hook configuration are committed.
+
+### Task 5: Define A Tiny DVC Pipeline
+
+Create a pipeline with one validation stage. This demonstrates dependency declaration: when the dataset or validation script changes, the stage should rerun.
+
+```bash
+mkdir -p scripts metrics
+
+cat > scripts/validate_data.py <<'EOF'
+import json
+from pathlib import Path
+
+import pandas as pd
+
+data = pd.read_csv("data/training.csv")
+metrics = {
+    "rows": int(len(data)),
+    "missing_labels": int(data["churned"].isna().sum()),
+    "minimum_age": int(data["age"].min()),
+    "maximum_age": int(data["age"].max()),
+}
+Path("metrics").mkdir(exist_ok=True)
+Path("metrics/data_validation.json").write_text(json.dumps(metrics, indent=2) + "\n")
+print(metrics)
+EOF
+
+cat > dvc.yaml <<'EOF'
+stages:
+  validate_data:
+    cmd: python scripts/validate_data.py
+    deps:
+      - scripts/validate_data.py
+      - data/training.csv
+    metrics:
+      - metrics/data_validation.json:
+          cache: false
+EOF
+
+dvc repro
+dvc metrics show
+
+git add dvc.yaml dvc.lock scripts/validate_data.py metrics/data_validation.json
+git commit -m "test: add DVC data validation stage"
+```
+
+Success criteria:
+
+- [ ] `dvc.yaml` declares `scripts/validate_data.py` and `data/training.csv` as dependencies.
+- [ ] `dvc repro` creates `metrics/data_validation.json`.
+- [ ] `dvc metrics show` displays the validation metrics.
+- [ ] `dvc.lock` is committed to preserve the pipeline state.
+
+### Task 6: Run A Kubernetes Job For Finite Validation
+
+Create a Kubernetes Job that performs a small validation command and exits. If you do not have a cluster available, read the manifest and explain why `kind: Job` is correct for this workload.
+
+```bash
+cat > ml-validation-job.yaml <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ml-validation-job
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: validate
+          image: python:3.12-slim
+          command:
+            - python
+            - -c
+            - |
+              print("Finite ML validation workload completed successfully")
+EOF
+
+kubectl apply -f ml-validation-job.yaml
+kubectl wait --for=condition=complete job/ml-validation-job --timeout=60s
+kubectl logs job/ml-validation-job
+kubectl delete job/ml-validation-job
+```
+
+Success criteria:
+
+- [ ] The manifest uses `apiVersion: batch/v1` and `kind: Job`.
+- [ ] The Pod template uses `restartPolicy: Never`.
+- [ ] The Job completes successfully if a cluster is available.
+- [ ] You can explain why a Deployment would be the wrong primitive for this finite workload.
+
+### Task 7: Review The Evidence Chain
+
+Before calling the lab complete, inspect the evidence you created. The goal is to verify that another engineer could understand the workflow without relying on your memory.
+
+```bash
+git log --oneline
+git status --short
+dvc status
+dvc metrics show
+```
+
+Success criteria:
+
+- [ ] Git history shows separate commits for data tracking, tests, and pipeline definition.
+- [ ] `dvc status` is clean or explains only intentional local changes.
+- [ ] Metrics are available outside notebook state.
+- [ ] You can identify the code, data pointer, validation script, metrics file, and Kubernetes workload definition.
+
+## Next Module
+
+Up next: [Module 1.2 - Docker & Containerization for ML](./module-1.2-docker-containerization-for-ml.md), where you package ML dependencies into repeatable container images so local, CI, and Kubernetes execution environments stay aligned.
 
 ## Sources
 
-- [DVC: Data Versioning and ML Experiments](https://github.com/iterative/dvc) — Explains how DVC keeps lightweight metadata in Git while storing large data and model artifacts externally for reproducible ML workflows.
 - [Kubernetes Self-Healing](https://kubernetes.io/docs/concepts/architecture/self-healing/) — Describes how Kubernetes controllers replace failed containers and Pods to keep workloads running as intended.
 - [Kubernetes Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Defines Jobs as run-to-completion workloads that track completion and failure state.
 - [MLOps: Continuous delivery and automation pipelines in machine learning](https://docs.cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning) — Provides a high-level reference for ML pipeline maturity, automation, and production operating models.
