@@ -38,3 +38,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T03:47:27Z	ai-open-models-local-inference-module-1.6-choosing-between-ollama-mlx-transformers-vllm	2.20		0			gemini	claude	approve	
 2026-04-26T04:04:46Z	ai-ml-engineering-generative-ai-module-1.3-text-generation-sampling-strategies	3.40		0			codex	claude	approve	
 2026-04-26T04:14:56Z	ai-ml-engineering-prerequisites-module-1.1-prerequisites-environment-setup	4.10		0			gemini	claude	approve	
+2026-04-26T04:15:47Z	ai-ml-engineering-advanced-genai-module-1.3-diffusion-models	5.00		0			codex	claude	approve	
