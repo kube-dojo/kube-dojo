@@ -79,3 +79,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T11:49:17Z	platform-disciplines-core-platform-platform-engineering-module-2.2-developer-experience	4.50		0			codex	claude	approve	
 2026-04-26T12:12:47Z	platform-disciplines-reliability-security-devsecops-module-4.6-security-culture	3.20		0			codex	claude	approve	
 2026-04-26T12:16:46Z	k8s-kcna-part3-cloud-native-architecture-module-3.8-ai-ml-cloud-native	3.70		0			codex	claude	approve	
+2026-04-26T12:29:37Z	k8s-cgoa-module-1.1-exam-strategy-and-blueprint-review	1.50		0			codex	claude	approve	
