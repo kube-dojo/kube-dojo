@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 3.10: Green Computing and Sustainability"
 slug: k8s/kcna/part3-cloud-native-architecture/module-3.10-green-computing
 sidebar:

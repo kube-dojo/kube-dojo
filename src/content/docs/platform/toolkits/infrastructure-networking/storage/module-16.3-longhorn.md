@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 16.3: Longhorn - Lightweight Distributed Block Storage for Kubernetes"
 slug: platform/toolkits/infrastructure-networking/storage/module-16.3-longhorn
 sidebar:
