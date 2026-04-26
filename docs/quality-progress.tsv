@@ -123,3 +123,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T18:39:10Z	k8s-cnpe-module-1.2-gitops-and-delivery-lab	2.50		0			codex	claude	approve	
 2026-04-26T18:48:37Z	platform-disciplines-core-platform-platform-engineering-module-2.5-self-service-infrastructure	4.20		0			codex	claude	approve	
 2026-04-26T18:56:00Z	k8s-cka-part5-troubleshooting-module-5.1-methodology	4.20		1	5.00	strong	codex	claude	approve	
+2026-04-26T19:03:55Z	on-premises-security-module-6.4-compliance	3.80		0			claude	codex	approve	
