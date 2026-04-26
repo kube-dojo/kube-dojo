@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 4.5: Threat Modeling & Supply Chain Theory"
 slug: k8s/kcsa/part4-threat-model/module-4.5-threat-modeling-supply-chain-theory
 sidebar:
