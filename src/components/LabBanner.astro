@@ -192,11 +192,11 @@ const env = envLabels[environment] ?? envLabels.ubuntu;
       const reminder = document.createElement('div');
       reminder.className = 'lab-reminder';
       reminder.style.cssText = 'background:#EBF1FF;border:1px solid #326CE5;border-radius:12px;padding:1rem 1.25rem;margin:2rem 0 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap';
-      
+
       const icon = document.createElement('span');
       icon.style.fontSize = '1.25rem';
       icon.innerHTML = '&#9654;'; // Static HTML entity
-      
+
       const textDiv = document.createElement('div');
       textDiv.style.flex = '1';
       const strong = document.createElement('strong');
@@ -231,7 +231,7 @@ const env = envLabels[environment] ?? envLabels.ubuntu;
       reminder.appendChild(launchLink);
       reminder.appendChild(completeSpan);
       reminder.appendChild(doneSpan);
-      
+
       pagination.parentNode?.insertBefore(reminder, pagination);
     }
   });

@@ -36,7 +36,7 @@ function buildChips(complexity: string | null, time: string | null): HTMLDivElem
     const cls = upper === 'QUICK' ? 'kd-chip-quick' :
                 (upper === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced');
     const icon = upper === 'QUICK' ? '✓' : upper === 'MEDIUM' ? '⚠' : '⚡';
-    
+
     const chip = document.createElement('span');
     chip.className = `kd-chip ${cls}`;
     chip.textContent = `${icon} ${upper.charAt(0) + upper.slice(1).toLowerCase()}`;
@@ -160,11 +160,11 @@ function enhanceWarStories(root: Element): void {
 
     const header = document.createElement('div');
     header.className = 'kd-warstory-header';
-    
+
     const iconSpan = document.createElement('span');
     iconSpan.textContent = '🔥';
     header.appendChild(iconSpan);
-    
+
     const titleSpan = document.createElement('span');
     titleSpan.textContent = text.replace(/war story:?\s*/i, '').trim() || 'War Story';
     header.appendChild(titleSpan);
