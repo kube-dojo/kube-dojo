@@ -1,286 +1,192 @@
 ---
-revision_pending: true
 title: "Docker for ML"
 slug: ai-ml-engineering/mlops/module-1.2-docker-for-ml
 sidebar:
   order: 603
 ---
 
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
+> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 hours | Prerequisites: Python packaging, basic Linux shell, HTTP APIs, and introductory ML workflow concepts
 
-## The $165 Million Bug That Containers Could Have Prevented
+## Learning Outcomes
 
-**NASA's Jet Propulsion Laboratory. September 23, 1999.**
+By the end of this module, you will be able to:
 
-The Mars Climate Orbiter had traveled 286 days and 416 million miles through space. As it approached Mars for orbital insertion, ground controllers sent the commands to slow down and enter orbit. Nine minutes of radio silence followed—normal for a maneuver behind the planet. The signal never returned. The spacecraft had approached Mars 100 kilometers too low, skipping off the atmosphere and burning up. The root cause? Lockheed Martin's navigation software produced thrust data in pound-force seconds. NASA's system expected newton-seconds. One team's environment assumed imperial units; another assumed metric. 
-
-Chris Mattmann, now Chief Technology and Innovation Officer at NASA JPL and a long-time open source contributor, has spent years advocating for better software engineering practices in aerospace. He later wrote: "The Mars Climate Orbiter wasn't lost to physics. It was lost to environment assumptions. The code worked perfectly—in the environment it was written for." This miscalculation cost NASA a $165 million spacecraft and years of scientific research.
-
-This is the "it works on my machine" problem at its most extreme. While your machine learning model probably won't crash a spacecraft into Mars, the same class of problem—code that works perfectly in one environment but fails catastrophically in another—costs organizations billions of dollars annually in debugging, downtime, and lost revenue. Containers act as the definitive solution to this problem. They package your code, dependencies, and environment assumptions into a single, immutable, and portable unit that behaves identically regardless of where it executes.
-
----
-
-## What You'll Be Able to Do
-
-By the end of this module, you will:
-- **Diagnose** environment-related failures in machine learning pipelines using container isolation principles.
-- **Design** optimized, multi-stage Dockerfiles that dramatically minimize image size and accelerate build times.
-- **Implement** GPU-accelerated container environments using the NVIDIA Container Toolkit.
-- **Evaluate** caching strategies and volume mounts to manage large machine learning artifacts without bloating images.
-- **Debug** common orchestration issues using Docker Compose for local, multi-service machine learning development.
-
----
+- **Diagnose** environment-related ML failures by comparing host, image, container, dependency, CUDA, and artifact boundaries.
+- **Design** Dockerfiles that separate build-time and runtime concerns while preserving reproducibility, cache efficiency, and security posture.
+- **Implement** GPU-capable ML containers that correctly align host drivers, container CUDA libraries, PyTorch wheels, and runtime device mounts.
+- **Evaluate** model artifact strategies by choosing between baked images, runtime downloads, mounted volumes, and model registries.
+- **Debug** local multi-service ML stacks with Docker Compose by tracing networking, health checks, shared memory, zombie processes, and persistent state.
 
 ## Why This Module Matters
 
-### The Reproducibility Crisis Nobody Talks About
+A retail ML platform team once shipped a recommendation model that passed every notebook experiment, every unit test, and every offline evaluation gate. The model worked on the lead engineer's workstation, worked inside the training notebook, and worked during a short smoke test on a staging VM. Then production traffic arrived, the service began restarting, conversion metrics dropped, and the incident channel filled with people asking why a model that had already been "validated" could not survive real requests.
 
-Here is a difficult reality of machine learning: most machine learning research cannot be reproduced. This is rarely because researchers are careless; it is because machine learning has an environment configuration problem that is vastly more complex than traditional software engineering. 
+The failure was not a bad algorithm. The service had been trained and tested with one set of operating system libraries, built in CI with another base image, and deployed onto hosts with a different CUDA driver boundary. One missing OpenMP runtime only appeared when NumPy used parallel execution under load, and the production container had no readiness check capable of detecting the broken path before traffic arrived. The model was treated as the risky part, but the environment was the part that failed first.
 
-**Did You Know?** In 2019, researchers Odd Erik Gundersen and Sigbjørn Kjensmo surveyed 400 machine learning papers and found that only 6% provided all the necessary information required to completely reproduce the documented results. The missing pieces were rarely the algorithms themselves—they were the environment specifications.
+Docker matters in ML because ML systems are not just Python code. They are Python code plus native libraries, numerical kernels, CUDA runtime libraries, CPU instruction sets, model files, preprocessing assets, environment variables, network services, process behavior, and storage assumptions. A virtual environment can pin Python packages, but it cannot freeze the operating system layer, GPU user-space libraries, `/dev/shm`, UID permissions, or the shape of the filesystem that your training and serving code expects.
 
-```text
-THE "IT WORKS ON MY MACHINE" PROBLEM IN ML
-==========================================
+This module teaches Docker as an engineering control for ML reproducibility rather than as a collection of commands. You will start with the basic image/container mental model, then move into Dockerfile design, GPU boundaries, model artifact handling, Compose-based development stacks, and production debugging. The goal is not to memorize `docker run` flags; the goal is to reason about what changed when an ML workload behaves differently across machines.
 
-Your Laptop                     Production Server
------------                     -----------------
-Python 3.10.4                   Python 3.10.1      <- Minor version = different bytecode
-PyTorch 2.0.1                   PyTorch 2.0.0      <- Different numerical precision
-CUDA 11.8                       CUDA 11.7          <- Different kernel implementations
-cuDNN 8.6.0                     cuDNN 8.5.0        <- Different convolution algorithms
-Ubuntu 22.04                    Ubuntu 20.04       <- Different glibc, different syscalls
-libc 2.35                       libc 2.31          <- Affects everything that uses C
-numpy 1.24.0                    numpy 1.23.5       <- Different BLAS binding
+## Core Content
 
-Your model accuracy:            Production accuracy:
-         94.2%                              91.7%
+### 1. The ML Container Mental Model
 
-You: "But I didn't change anything!"
-Reality: You changed EVERYTHING by moving machines.
-```
+Docker solves a specific class of failure: the application assumes an environment, but the runtime provides a different one. In traditional web services, that mismatch might be a missing package or an unexpected locale. In ML systems, the mismatch can be a different BLAS backend, a different CUDA minor version, a model cache path that is empty, a CPU without the expected instruction set, or a host driver that cannot support the CUDA libraries inside the image.
 
-### Why Virtual Environments Aren't Enough
-
-Many practitioners rely on tools like `virtualenv`, `conda`, or `poetry`. While excellent for their specific use cases, these tools only isolate Python packages. They do not isolate system libraries (like `libc` or `OpenSSL`), the CUDA toolkit, cuDNN, system Python patches, operating system discrepancies, or the host file system structure.
-
-**Did You Know?** Donald Stufft, a core maintainer of `pip` and PyPI, once traced a `pip install tensorflow` failure across 48 different system configurations. He discovered that the identical command produced over a dozen different outcomes depending on the OS, Python build, and installed system libraries. His conclusion was absolute: "pip install reproduces packages, not environments."
-
-### What Containers Actually Solve
-
-Containers give you something virtual environments cannot: a complete, isolated environment that encapsulates everything from the kernel user-space upward. 
+A useful mental model is to separate the system into four layers: code, dependencies, operating system user space, and host kernel resources. The image freezes the first three layers into a reproducible package. The host kernel, GPU driver, physical GPU, network stack, and mounted volumes remain outside the image and are injected at runtime. Most Docker confusion comes from forgetting which side of that boundary a problem belongs to.
 
 ```mermaid
 graph TD
-    subgraph Container["YOUR CONTAINER (Frozen and Reproducible)"]
-        Code["Your Application Code<br/>(train.py, model.py, requirements.txt)"]
-        Pkgs["Python Packages<br/>(torch==2.0.1, transformers==4.30.0)"]
-        CUDA["CUDA Toolkit & cuDNN<br/>(cuda-11.8, cudnn-8.6.0)"]
-        SysLibs["System Libraries<br/>(libc-2.35, libstdc++-11)"]
-        BaseOS["Base OS<br/>(Ubuntu 22.04)"]
-
-        Code --> Pkgs
-        Pkgs --> CUDA
-        CUDA --> SysLibs
-        SysLibs --> BaseOS
+    subgraph Image["Docker Image: frozen user-space environment"]
+        Code["Application code<br/>train.py, serve.py, preprocessing"]
+        PyDeps["Python dependencies<br/>torch, numpy, fastapi, mlflow"]
+        NativeDeps["Native libraries<br/>libgomp, libstdc++, OpenSSL"]
+        CudaUser["Optional CUDA user libraries<br/>cuBLAS, cuDNN, NCCL"]
+        BaseOS["Base OS user space<br/>Debian, Ubuntu, Alpine"]
+        Code --> PyDeps
+        PyDeps --> NativeDeps
+        NativeDeps --> CudaUser
+        CudaUser --> BaseOS
     end
 
-    subgraph Host["HOST KERNEL (Shared)"]
-        Kernel["Linux Kernel 5.15.x"]
+    subgraph Runtime["Runtime boundary: injected when container starts"]
+        Volumes["Volumes<br/>models, data, checkpoints"]
+        Env["Environment variables<br/>MODEL_URI, LOG_LEVEL"]
+        Network["Container network<br/>ports, DNS, service names"]
     end
 
-    BaseOS -->|System Calls Only| Kernel
+    subgraph Host["Host machine: not inside the image"]
+        Kernel["Linux kernel"]
+        Driver["NVIDIA kernel driver"]
+        GPU["Physical GPU"]
+        Disk["Host disk"]
+    end
+
+    BaseOS --> Kernel
+    CudaUser --> Driver
+    Driver --> GPU
+    Volumes --> Disk
+    Code --> Env
+    Code --> Network
 ```
 
-Everything inside the container is frozen, versioned, and entirely reproducible. Moving this container to any Linux machine running a container engine guarantees identical behavior.
-
-**Did You Know?** Solomon Hykes created Docker in 2013 while working at dotCloud, fundamentally shifting the industry from hardware virtualization to process-level isolation. The breakthrough was not the underlying Linux container technology (LXC existed since 2008), but the standard `Dockerfile` developer experience.
-
----
-
-## Docker Fundamentals: The Mental Model
-
-### Containers vs. Virtual Machines
-
-Think of virtual machines as building custom houses, and containers as renting apartments in a larger complex. Virtual machines require a massive footprint because they duplicate the entire operating system stack. Containers share the host's kernel, making them exceptionally lightweight.
+The image is the blueprint, while a container is one running instance created from that blueprint. This distinction matters during incidents. If a container's writable filesystem changes because a model downloads into `/tmp`, that change is not part of the image unless you rebuild and tag a new image. If you run ten containers from the same image, they begin with the same filesystem layers but can diverge through mounted volumes, environment variables, and runtime writes.
 
 ```mermaid
 graph TD
-    subgraph VM["Virtual Machine (10-50 GB, Boots in minutes)"]
-        VApp["Application"]
-        VBins["Bins/Libs"]
-        VGuest["Guest OS (Full Linux)"]
-        VHyp["Hypervisor"]
-        VApp --> VBins --> VGuest --> VHyp
-    end
-
-    subgraph Cont["Container (100 MB - 2 GB, Boots in seconds)"]
-        CApp["Application"]
-        CBins["Bins/Libs"]
-        CEng["Container Engine"]
-        CApp --> CBins --> CEng
-    end
-
-    subgraph Hardware["Infrastructure"]
-        HostOS["Host OS"]
-        HW["Hardware"]
-        HostOS --> HW
-    end
-
-    VHyp --> HostOS
-    CEng --> HostOS
+    Image["Image<br/>fraud-api:1.8.2<br/>immutable layers"]
+    Image --> C1["Container A<br/>MODEL_URI=v12<br/>port 8000"]
+    Image --> C2["Container B<br/>MODEL_URI=v12<br/>port 8000"]
+    Image --> C3["Container C<br/>MODEL_URI=v11<br/>rollback candidate"]
+    C1 --> V1["Mounted model cache"]
+    C2 --> V1
+    C3 --> V2["Different mounted cache"]
 ```
 
-### Images vs. Containers
-
-An **Image** is the immutable blueprint or recipe. It defines exactly what belongs in the environment but is not actively running. A **Container** is the running instance of that image. You can instantiate dozens of identical containers from a single image blueprint.
+A container is not a virtual machine. It does not boot a separate kernel, and it does not magically include hardware drivers from the host. It starts one or more ordinary Linux processes with namespaces, cgroups, filesystem layers, and runtime configuration applied. That is why containers are fast to start, but it is also why kernel-level dependencies such as GPU drivers and some filesystem behavior remain host-sensitive.
 
 ```mermaid
 graph TD
-    Image["Docker Image<br/>(myapp:v1.0)<br/>Blueprint"]
-    Image --> C1["Container (web-1)<br/>Running"]
-    Image --> C2["Container (web-2)<br/>Running"]
-    Image --> C3["Container (web-3)<br/>Stopped"]
+    subgraph VM["Virtual Machine"]
+        VMApp["ML service process"]
+        VMLibs["Python and native libraries"]
+        VMOS["Guest operating system"]
+        VMKernel["Guest kernel"]
+        Hypervisor["Hypervisor"]
+        VMApp --> VMLibs --> VMOS --> VMKernel --> Hypervisor
+    end
+
+    subgraph Container["Container"]
+        CApp["ML service process"]
+        CLibs["Python and native libraries"]
+        CNamespaces["Namespaces and cgroups"]
+        CApp --> CLibs --> CNamespaces
+    end
+
+    subgraph Physical["Host"]
+        HostKernel["Host Linux kernel"]
+        Hardware["CPU, memory, disk, GPU"]
+        HostKernel --> Hardware
+    end
+
+    Hypervisor --> HostKernel
+    CNamespaces --> HostKernel
 ```
 
-> **Stop and think**: If a container strictly isolates the file system and network, how can an application inside the container communicate with an NVIDIA GPU, which is a physical piece of hardware managed exclusively by the host kernel? We will explore this bridge shortly.
+**Active learning prompt:** Before reading further, imagine a PyTorch service that works in a notebook but fails inside a container with `ImportError: libgomp.so.1: cannot open shared object file`. Which boundary is most likely broken: Python code, Python package dependencies, native operating system libraries, host kernel, or model artifacts? Write down your answer, because the next section shows why this exact failure appears in slim production images.
 
-### The Layer System
+The practical value of this model is that it turns vague "Docker is broken" complaints into targeted questions. Does the failure happen during `docker build`, which points to build context, package resolution, or Dockerfile order? Does it happen during `docker run`, which points to runtime flags, environment variables, volumes, ports, or device mounts? Does it happen only under load, which points to memory limits, `/dev/shm`, worker processes, GPU memory, or readiness checks?
 
-Docker images are not monolithic blobs; they are composed of stacked, read-only layers. This layer caching mechanism allows Docker to reuse unmodified steps across builds, saving immense amounts of time. 
+A beginner often treats Docker as a black box that either starts or fails. A senior practitioner treats Docker as an explicit contract: the image owns user-space dependencies, the runtime owns configuration and mounts, and the host owns kernel resources. When those responsibilities are clear, debugging becomes a matter of locating which contract was violated.
 
-**Did You Know?** Jérôme Petazzoni designed the Docker layer caching system, a mechanism that now saves millions of compute hours daily globally. He realized that since most builds follow the same pattern (OS -> dependencies -> code), unchanged foundation layers could be infinitely reused.
+### 2. Images Are Layered, So Dockerfile Order Is Architecture
+
+Docker images are built from layers, and each Dockerfile instruction usually creates a new layer. Docker caches layers by comparing the instruction and the files used by that instruction. If a layer changes, every later layer must be rebuilt because Docker cannot assume that downstream state remains valid. This is why a single misplaced `COPY . .` can make every small code or documentation change reinstall gigabytes of ML dependencies.
 
 ```mermaid
 graph BT
-    L1["Layer 1: FROM ubuntu:22.04 (Almost never changes)"]
-    L2["Layer 2: RUN apt-get install python (Changes rarely)"]
-    L3["Layer 3: COPY requirements.txt . (Changes when deps change)"]
-    L4["Layer 4: RUN pip install -r req.txt (Changes when deps change)"]
-    L5["Layer 5: COPY model.pkl . (Changes when model updates)"]
-    L6["Layer 6: COPY app.py . (Changes every commit)"]
-
+    L1["Layer 1<br/>FROM python:3.12-slim<br/>changes rarely"]
+    L2["Layer 2<br/>apt-get install runtime libs<br/>changes occasionally"]
+    L3["Layer 3<br/>COPY requirements.txt<br/>changes when dependencies change"]
+    L4["Layer 4<br/>pip install dependencies<br/>expensive layer"]
+    L5["Layer 5<br/>COPY src/<br/>changes often"]
+    L6["Layer 6<br/>CMD or ENTRYPOINT<br/>changes rarely"]
     L1 --> L2 --> L3 --> L4 --> L5 --> L6
 ```
 
-If you change Layer 6, Docker only rebuilds Layer 6. The build takes 5 seconds. If you accidentally modify Layer 3, Docker throws away the cache for Layers 3, 4, 5, and 6, turning a 5-second build into a 10-minute ordeal.
-
-### Essential Docker Commands
-
-```bash
-# ============================================================
-# IMAGE COMMANDS (Working with blueprints)
-# ============================================================
-docker build -t myapp:v1 .              # Build image from Dockerfile
-docker images                            # List all local images
-docker pull pytorch/pytorch:2.0.0       # Download from registry
-docker push myrepo/myapp:v1             # Upload to registry
-docker rmi myapp:v1                     # Delete image
-docker history myapp:v1                 # Show layer history
-docker image prune                      # Remove unused images
-
-# ============================================================
-# CONTAINER COMMANDS (Working with running instances)
-# ============================================================
-docker run myapp:v1                     # Create + start container
-docker run -it myapp:v1 bash            # Interactive mode with shell
-docker run -d myapp:v1                  # Detached (background) mode
-docker run --name mycontainer myapp:v1  # Named container
-docker run -p 8000:8000 myapp:v1        # Map port 8000
-docker run -v /host/path:/container/path myapp:v1  # Mount volume
-docker run --gpus all myapp:v1          # Enable GPU access
-
-docker ps                               # List running containers
-docker ps -a                            # List ALL containers
-docker stop mycontainer                 # Stop gracefully
-docker kill mycontainer                 # Force stop
-docker rm mycontainer                   # Remove stopped container
-docker logs mycontainer                 # View stdout/stderr
-docker logs -f mycontainer              # Follow logs (like tail -f)
-docker exec -it mycontainer bash        # Shell into running container
-docker inspect mycontainer              # Detailed JSON info
-docker stats                            # Live resource usage
-
-# ============================================================
-# CLEANUP COMMANDS (Reclaim disk space)
-# ============================================================
-docker system df                        # Show disk usage
-docker system prune                     # Remove all unused data
-docker system prune -a                  # Remove everything unused
-docker volume prune                     # Remove unused volumes
-```
-
----
-
-## Writing Dockerfiles for ML
-
-### The Naive Approach
-
-A typical beginner Dockerfile looks harmless but introduces massive technical debt:
+A naive Dockerfile often works during a demo and still creates long-term operational debt. It copies the entire repository before dependency installation, runs as root, includes test data and notebook outputs in the image, and leaves build tools in the runtime environment. That combination wastes registry storage, slows CI, increases vulnerability scanner noise, and makes cache reuse unpredictable.
 
 ```dockerfile
-# NAIVE DOCKERFILE - Do not use this in production
-FROM python:3.10
+# Naive Dockerfile: useful for seeing the problems, not for production use.
+FROM python:3.12
 
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
 
-CMD ["python", "train.py"]
+CMD ["python", "serve.py"]
 ```
 
-This functions, but suffers from bloated size (easily exceeding 4GB due to massive base layers), cache busting on every code change, missing GPU support, and severe security risks by executing everything as the root user.
+The main error is not that the Dockerfile is short. The error is that it mixes concerns that should be separated. Dependency manifests should be copied before application source because dependencies change less frequently than source code. Build tools should exist only in a builder stage because compilers are not needed to serve requests. Runtime images should contain only the files required to execute the service.
 
-### The Optimized Approach: Multi-Stage Builds
-
-Multi-stage builds leverage a "builder" stage to compile dependencies, then port only the strictly necessary runtime artifacts into a pristine "production" stage.
+A production-oriented Dockerfile starts by making the expensive, slow-changing layers stable. It installs dependencies after copying only dependency manifests, then copies application code after those dependencies are already cached. It also creates an unprivileged user, sets predictable Python behavior, and uses an explicit command that starts the intended application process.
 
 ```dockerfile
-# OPTIMIZED ML DOCKERFILE
+# Production-minded CPU serving image for a FastAPI ML service.
+FROM python:3.12-slim AS builder
 
-# ==============================================================
-# STAGE 1: Builder
-# Contains build tools, downloads deps, compiles wheels
-# ==============================================================
-FROM python:3.10-slim AS builder
+WORKDIR /build
 
-WORKDIR /app
-
-# Install build dependencies (only needed for compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
-    g++ \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies optimally
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# ==============================================================
-# STAGE 2: Production
-# Clean, minimal image with only runtime requirements
-# ==============================================================
-FROM python:3.10-slim AS production
+FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-# Copy virtual environment from builder (excluding raw build tools)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Security: Create non-root user
-RUN groupadd --gid 1000 appgroup && \
-    useradd --uid 1000 --gid appgroup --shell /bin/bash appuser
+RUN groupadd --gid 10001 appgroup && \
+    useradd --uid 10001 --gid appgroup --create-home --shell /usr/sbin/nologin appuser
 
-# Copy only production code explicitly
 COPY --chown=appuser:appgroup src/ ./src/
-COPY --chown=appuser:appgroup models/ ./models/
+COPY --chown=appuser:appgroup pyproject.toml ./pyproject.toml
 
 USER appuser
 
@@ -290,257 +196,448 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/ready || exit 1
 
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### The Dramatic Size Reduction
+The `builder` stage contains compilation tools because some Python packages still compile native extensions. The `runtime` stage receives only the virtual environment and the application files. Notice that `libgomp1` appears in the runtime stage too. That is intentional: if a compiled dependency links to a runtime library, removing compilers is safe but removing the runtime library is not.
 
 ```mermaid
 graph TD
-    subgraph Naive["Naive Dockerfile (~3.8 GB)"]
-        N1["python:3.10 base (900 MB)"]
-        N2["build-essential (300 MB)"]
-        N3["pip packages (2.5 GB)"]
-        N4["source code + tests + .git (100 MB)"]
-        N1 --> N2 --> N3 --> N4
+    subgraph Builder["Builder stage"]
+        B1["python:3.12-slim"]
+        B2["build-essential, gcc"]
+        B3["pip install wheels into /opt/venv"]
+        B1 --> B2 --> B3
     end
 
-    subgraph Opt["Multi-Stage (~2.2 GB) - 42% smaller"]
-        O1["python:3.10-slim base (150 MB)"]
-        O2["pip packages runtime only (2.0 GB)"]
-        O3["source code only (20 MB)"]
-        O1 --> O2 --> O3
+    subgraph Runtime["Runtime stage"]
+        R1["python:3.12-slim"]
+        R2["runtime native libraries"]
+        R3["copy /opt/venv from builder"]
+        R4["copy application source"]
+        R5["run as non-root user"]
+        R1 --> R2 --> R3 --> R4 --> R5
     end
+
+    B3 --> R3
 ```
 
-By discarding compilers and raw build layers, your deployment speeds up, container registry costs plummet, and your attack surface shrinks significantly.
+**Worked example:** Suppose CI rebuilds an image for every pull request, and the build takes twelve minutes even when the pull request changes only a README file. The likely Dockerfile has `COPY . .` before `RUN pip install`. The README change invalidates the `COPY` layer, which invalidates the dependency installation layer, which forces PyTorch and scikit-learn to reinstall. Moving dependency manifests above source copying turns a documentation-only change into a small rebuild instead of a full dependency rebuild.
 
----
+The fix is architectural rather than cosmetic. You first copy `requirements.txt`, `pyproject.toml`, `poetry.lock`, or the equivalent dependency lock file. You install dependencies. Only after that do you copy `src/`, `configs/`, or other fast-changing project files. In ML repositories, this order is especially important because dependency layers may be gigabytes and may include slow native wheels.
 
-## GPU Containers with NVIDIA Container Toolkit
+**Active learning prompt:** In the optimized Dockerfile above, what would happen if `COPY src/ ./src/` were moved above `RUN pip install --no-cache-dir -r requirements.txt` in the builder stage? Predict the next CI symptom before checking the explanation. The symptom would be that application code changes invalidate dependency installation, so the build cache becomes fragile and ordinary feature work pays the cost of reinstalling the full ML stack.
 
-### The GPU Problem and Architecture
+A `.dockerignore` file is part of Dockerfile architecture because it controls what enters the build context before Docker even starts executing instructions. If your build context includes `.git`, local model files, notebooks, cached datasets, and `mlruns`, Docker must send those files to the daemon and may accidentally bake them into the image. That slows builds and can leak secrets or proprietary data.
 
-Containers must share the host's kernel, yet GPUs require specific, kernel-level drivers. To solve this, the CUDA toolkit is packaged *inside* the container, while the NVIDIA driver remains *on the host*. The NVIDIA Container Toolkit dynamically bridges the two at runtime.
+```text
+# .dockerignore for an ML application repository
+.git
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+notebooks/
+data/
+datasets/
+models/
+checkpoints/
+mlruns/
+outputs/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.csv
+*.parquet
+dist/
+node_modules/
+```
+
+The rule is simple: the image should contain software, not local history or bulky operational state. Models, datasets, experiment outputs, and checkpoints usually belong in volumes, object storage, model registries, or artifact stores. When you intentionally bake a small model into an image, make that choice explicit and document why the faster cold start is worth the larger deployment artifact.
+
+### 3. Debugging Environment Drift in ML Images
+
+Environment drift is the gap between what the code assumes and what the runtime provides. In ML, drift is often subtle because the process may start successfully, import every package, and still compute different results or fail only under workload-specific paths. A service can pass `/health` while its first real prediction fails because the health endpoint never loads the model or touches the GPU.
+
+```text
+THE ENVIRONMENT DRIFT CHECKLIST
+===============================
+
+Training notebook            Containerized service             Risk
+--------------------------   -------------------------------   --------------------------
+Python 3.12.2                Python 3.12.1                     Wheel ABI or behavior drift
+torch CPU wheel              torch CUDA wheel                  Device behavior changes
+Ubuntu full image            Debian slim image                 Missing native runtime libs
+Local model cache present    Empty container filesystem        Slow startup or model failure
+Host path /mnt/models        Container path /models            Broken file assumptions
+Large host /dev/shm          Docker default small /dev/shm     DataLoader bus errors
+Interactive shell process    PID 1 service process             Signal handling and zombies
+```
+
+The fastest way to debug drift is to compare the environment from inside the running container, not from the host. Host commands tell you what the host has installed; container commands tell you what the process can actually see. That distinction is critical when the same machine has a working global CUDA installation but the container has a mismatched PyTorch wheel.
+
+```bash
+docker run --rm -it ml-api:v1 bash
+
+python -V
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+python -c "import numpy; numpy.show_config()"
+ldd "$(python -c 'import sklearn, pathlib; print(pathlib.Path(sklearn.__file__).parent / "__check_build" / "_check_build.cpython-312-x86_64-linux-gnu.so")')" || true
+env | sort
+id
+pwd
+ls -la /app
+```
+
+A senior debugging habit is to locate the first broken assumption instead of changing many variables at once. If an import fails, inspect native library links before rebuilding the image. If the model path is missing, inspect mounts and environment variables before changing Python code. If GPU availability is false, inspect host driver visibility and runtime device mounts before reinstalling PyTorch.
+
+The following table gives a practical mapping from symptoms to boundaries. It is not a replacement for logs, but it prevents random changes during an incident.
+
+| Symptom | Likely Boundary | First Diagnostic | High-Value Fix |
+|---|---|---|---|
+| `ModuleNotFoundError` inside container | Python dependency layer | `pip freeze` inside container | Rebuild from pinned dependency manifest |
+| `libgomp.so.1` missing | Native OS runtime library | `ldd` on failing extension | Install runtime library in final stage |
+| `torch.cuda.is_available()` is false | GPU runtime boundary | `nvidia-smi` inside container | Use NVIDIA runtime and matching wheel |
+| `FileNotFoundError` for model path | Artifact or volume boundary | `ls -la` on container path | Mount volume or configure model URI |
+| Slow rebuild after small source change | Layer cache boundary | `docker history` and Dockerfile order | Copy dependency files before source |
+| Works in shell, fails in orchestrator | Entrypoint or process boundary | Inspect `CMD`, `ENTRYPOINT`, and logs | Run the same command the platform runs |
+
+A common beginner mistake is to debug the image without recreating the runtime conditions. If production starts the container with `MODEL_URI`, a mounted `/models` volume, `--gpus all`, and a memory limit, then a local `docker run ml-api:v1` test is not equivalent. Your local reproduction should include the same environment variables, port mappings, mounted paths, shared memory, and device settings as the failing deployment.
+
+```bash
+docker run --rm \
+  --name ml-api-debug \
+  -p 8000:8000 \
+  -e MODEL_URI=s3://company-models/fraud/v12 \
+  -e LOG_LEVEL=DEBUG \
+  -v "$(pwd)/models:/models:ro" \
+  --shm-size=2g \
+  ml-api:v1
+```
+
+Health checks should verify the behavior that matters to the platform. A liveness check answers, "Should this process be restarted?" A readiness check answers, "Should this process receive traffic?" For ML services, readiness should usually confirm that the model is loaded, required artifacts exist, dependency services are reachable, and the service has enough memory to handle requests.
+
+```python
+# src/health.py
+from pathlib import Path
+
+import psutil
+import torch
+from fastapi import FastAPI, Response, status
+
+app = FastAPI()
+
+MODEL_PATH = Path("/models/fraud-detector")
+model_loaded = False
+
+
+@app.get("/live")
+def live():
+    return {"live": True}
+
+
+@app.get("/ready")
+def ready(response: Response):
+    checks = {
+        "model_path_exists": MODEL_PATH.exists(),
+        "memory_available": psutil.virtual_memory().available > 512 * 1024 * 1024,
+        "cuda_visible_if_expected": torch.cuda.is_available(),
+        "model_loaded": model_loaded,
+    }
+
+    if not all(checks.values()):
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return {"ready": all(checks.values()), "checks": checks}
+```
+
+This example deliberately separates `/live` from `/ready`. Restarting a process because an external model registry is temporarily slow can make an outage worse, but withholding traffic until the model is loaded is usually correct. Treat health checks as contracts with the orchestrator rather than as decorative endpoints.
+
+### 4. GPU Containers: The Host Driver Is Still Outside the Box
+
+GPU containers are powerful because they let you package CUDA user-space libraries with your application while relying on the host for the kernel driver and physical device. The host driver cannot be fully hidden inside the image because it is tied to the kernel. The container receives device files and driver libraries at runtime through the NVIDIA Container Toolkit.
 
 ```mermaid
 graph TD
-    subgraph Container["CONTAINER"]
-        App["Your ML Application (PyTorch/TensorFlow)"]
-        CUDA["CUDA Toolkit Libraries (nvcc, cuBLAS, cuDNN, NCCL)"]
-        App --> CUDA
+    subgraph Container["Container image"]
+        App["ML application"]
+        Torch["PyTorch CUDA wheel"]
+        CudaRuntime["CUDA runtime libraries"]
+        Cudnn["cuDNN and NCCL libraries"]
+        App --> Torch --> CudaRuntime --> Cudnn
     end
 
-    subgraph Bridge["MAGIC BRIDGE"]
-        Toolkit["NVIDIA Container Toolkit"]
+    subgraph Runtime["NVIDIA Container Toolkit at runtime"]
+        Devices["/dev/nvidia* device files"]
+        DriverLibs["Mounted driver libraries<br/>libcuda.so"]
+        RuntimeHook["OCI runtime hook"]
+        RuntimeHook --> Devices
+        RuntimeHook --> DriverLibs
     end
 
-    subgraph Host["HOST"]
-        Driver["NVIDIA Driver (>= CUDA version)"]
-        Kernel["Linux Kernel"]
-        GPU["GPU Hardware (RTX 4090, A100, H100, etc.)"]
-        Driver --> Kernel --> GPU
+    subgraph Host["Host machine"]
+        KernelDriver["NVIDIA kernel driver"]
+        GPU["GPU hardware"]
+        KernelDriver --> GPU
     end
 
-    CUDA -->|Mounts libcuda.so, /dev/nvidia0| Toolkit
-    Toolkit --> Driver
+    CudaRuntime --> DriverLibs
+    DriverLibs --> KernelDriver
+    Devices --> KernelDriver
 ```
 
-### GPU Dockerfile for ML Training
+The compatibility rule is easier to remember if you think of the host driver as the ceiling. A newer host driver can usually run containers built with older CUDA user-space versions, but an older host driver cannot run a container that requires newer CUDA capabilities. If the container requires CUDA 12.4 behavior and the host driver only supports an older CUDA line, the application may fail with a driver version error even though the image itself built successfully.
+
+```text
+CUDA COMPATIBILITY REASONING
+============================
+
+Host driver capability        Container CUDA user space        Expected result
+---------------------------   -----------------------------   ----------------------------
+New enough for CUDA 12.4      CUDA 11.8                       Usually works
+New enough for CUDA 12.4      CUDA 12.2                       Usually works
+New enough for CUDA 12.0      CUDA 12.4                       Fails or behaves unsupported
+No NVIDIA runtime mounted     Any CUDA image                  GPU invisible in container
+CPU-only PyTorch wheel        CUDA libraries present          torch cannot use CUDA
+```
+
+A minimal GPU smoke test should prove three separate things: the host driver exists, the container can see the device, and your framework uses the expected CUDA build. Running `nvidia-smi` proves the first two in a coarse way, but it does not prove PyTorch was installed with CUDA support. A complete test checks both.
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+
+docker run --rm --gpus all pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime \
+  python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+```
+
+A GPU training Dockerfile should start from a base image whose CUDA line matches the framework wheels you plan to install. Installing a CPU-only PyTorch wheel into a CUDA image is a surprisingly common mistake. The CUDA libraries may exist in the image, and `nvidia-smi` may work, but the Python framework still cannot schedule GPU kernels if the installed wheel was built for CPU execution.
 
 ```dockerfile
-# GPU-enabled ML Training Dockerfile
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+# GPU training image with explicit CUDA-aligned PyTorch installation.
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
+    python3.12 \
     python3-pip \
-    python3.10-venv \
-    python3.10-dev \
+    python3.12-venv \
+    libgomp1 \
     curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.10 /usr/bin/python \
-    && ln -sf /usr/bin/pip3 /usr/bin/pip
+    tini \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# IMPORTANT: PyTorch CUDA version must explicitly match container CUDA version
-RUN pip install --no-cache-dir \
-    torch==2.0.1+cu118 \
-    torchvision==0.15.2+cu118 \
-    torchaudio==2.0.2+cu118 \
-    --extra-index-url https://download.pytorch.org/whl/cu118
+RUN python3.12 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+      torch==2.4.1 \
+      torchvision==0.19.1 \
+      --index-url https://download.pytorch.org/whl/cu124
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
 
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+ENV NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    PYTHONUNBUFFERED=1
 
-VOLUME ["/data", "/output", "/checkpoints"]
+VOLUME ["/data", "/checkpoints", "/models"]
 
-ENTRYPOINT ["python", "-m", "src.train"]
+ENTRYPOINT ["tini", "--"]
+CMD ["python", "-m", "src.train"]
 ```
 
-### CUDA Version Compatibility: The Gotcha
+The `tini` entrypoint is not cosmetic. Containers often run the application as process ID 1, and PID 1 has special signal-handling and child-reaping behavior on Linux. Training jobs that spawn data workers can leave zombie child processes if PID 1 does not reap them correctly. In long-running ML services, zombie accumulation can exhaust process table resources or make shutdown behavior unreliable during deployments.
 
-The immutable rule of GPU containers: **The host driver must be greater than or equal to the container's CUDA toolkit version.**
+**Active learning prompt:** Your container prints a valid `nvidia-smi` table, but `torch.cuda.is_available()` returns `False`. Which layer is now most suspicious? The host driver and runtime mount are probably working, so the next suspect is the Python framework installation: you may have installed a CPU-only PyTorch wheel, a wheel compiled for a different CUDA line, or a package set that overwrote the intended wheel.
+
+GPU containers also need enough shared memory for workloads that use multiprocessing data loaders. Docker's default `/dev/shm` is small, and PyTorch workers can crash with bus errors when they pass tensors through shared memory. The fix is not to reduce model quality or remove workers blindly; the fix is to size shared memory for the workload and verify memory behavior under realistic batch sizes.
+
+```bash
+docker run --rm --gpus all \
+  --shm-size=16g \
+  -v "$(pwd)/data:/data:ro" \
+  -v "$(pwd)/checkpoints:/checkpoints" \
+  training-image:v1
+```
+
+In Kubernetes, the equivalent concerns become resource requests, GPU device plugins, shared memory volumes, and readiness behavior. Docker is still the right place to learn the mechanics because it lets you isolate the environment contract before adding scheduler complexity. When the container contract is clean locally, orchestration failures are easier to recognize.
+
+### 5. Model Artifacts: Keep Images Portable Without Hiding State
+
+ML containers differ from ordinary application containers because the model artifact can be larger than the application and dependencies combined. A small FastAPI service may be measured in megabytes, while a transformer checkpoint can be measured in many gigabytes. Baking that checkpoint into every image may improve cold start for one deployment, but it also slows builds, inflates registry storage, and makes rollback depend on transferring huge layers.
 
 ```text
-CUDA COMPATIBILITY MATRIX
-=========================
+MODEL ARTIFACT PLACEMENT OPTIONS
+================================
 
-Host Driver Version    Supports Container CUDA Versions
--------------------    ---------------------------------
-550.x (newest)         CUDA 12.4 and ALL earlier versions
-535.x                  CUDA 12.2 and ALL earlier versions
-525.x                  CUDA 12.0 and ALL earlier versions
-515.x                  CUDA 11.7 and ALL earlier versions
-460.x                  CUDA 11.4 and ALL earlier versions
-
-EXAMPLE:
-- Host has driver 525.85 (supports up to CUDA 12.0)
-- Container with CUDA 11.8   -> Works perfectly
-- Container with CUDA 12.1   -> Fails: "CUDA driver version insufficient"
+Option                         Best fit
+----------------------------   ------------------------------------------------------------
+Bake into image                Small stable model, strict offline runtime, rare updates
+Download at startup            Medium model, reliable network, acceptable warm-up time
+Mount host or named volume     Local development, shared cache, repeated experiments
+Use model registry             Production governance, versioning, approvals, rollbacks
+Stream from object storage     Large artifacts, separate software and model release cycles
 ```
 
----
-
-## Handling Large ML Artifacts
-
-### The Model Size Problem
-
-```text
-MODEL SIZE HALL OF FAME (2024)
-==============================
-BERT-base-uncased:           440 MB
-GPT-2:                       1.5 GB
-Stable Diffusion v1.5:       4 GB
-LLaMA-7B:                    13 GB
-Mistral-7B:                  14 GB
-LLaMA-70B:                   140 GB
-gpt-5 (rumored):             ~1.7 TB (!)
-```
-
-Baking massive models directly into Docker images explodes registry storage costs, cripples deployment speeds, and breaks CI/CD workflows. 
-
-### Strategy 1: Download at Runtime
-
-```python
-# download_model.py
-"""Download model at container startup if not cached."""
-import os
-from pathlib import Path
-from huggingface_hub import snapshot_download
-
-MODEL_ID = os.environ.get("MODEL_ID", "bert-base-uncased")
-CACHE_DIR = Path(os.environ.get("MODEL_CACHE", "/models"))
-
-def download_if_needed():
-    model_path = CACHE_DIR / MODEL_ID.replace("/", "--")
-    if model_path.exists():
-        print(f" Model {MODEL_ID} already cached at {model_path}")
-        return model_path
-
-    print(f" Downloading {MODEL_ID}...")
-    path = snapshot_download(
-        MODEL_ID,
-        cache_dir=CACHE_DIR,
-        local_dir=model_path,
-    )
-    print(f" Downloaded to {path}")
-    return path
-
-if __name__ == "__main__":
-    download_if_needed()
-```
-
-### Strategy 2: Volume Mounts
-
-For large local environments, manage the files on the host and mount them into the executing container:
+There is no universal answer because artifact strategy is an engineering trade-off. Baking a small preprocessing vocabulary into an image can be reasonable because the file is part of the software contract. Baking a large checkpoint into every image is usually harmful because each software patch becomes a model transfer event. Pulling from a registry at startup improves separation but requires readiness checks, retries, and observability around model loading.
 
 ```mermaid
 graph LR
-    Host["/host/models/"]
-    Host --> B["bert-base-uncased/"]
-    Host --> G["gpt2/"]
-    Host --> C["custom-model-v3/"]
-```
+    subgraph ImageOption["Image contains model"]
+        I1["Build image"]
+        I2["Push large image"]
+        I3["Deploy image"]
+        I1 --> I2 --> I3
+    end
 
-```bash
-docker run -v /host/models:/models myapp:v1
-docker volume create ml-models
-docker run -v ml-models:/models myapp:v1
-```
-
-### Strategy 3: Registry Integration
-
-Fetch directly from an upstream service like MLflow during container execution:
-
-```python
-# src/serve.py
-import os
-import mlflow
-
-MLFLOW_URI = os.environ["MLFLOW_TRACKING_URI"]
-MODEL_NAME = os.environ["MODEL_NAME"]
-MODEL_STAGE = os.environ.get("MODEL_STAGE", "Production")
-
-mlflow.set_tracking_uri(MLFLOW_URI)
-model_uri = f"models:/{MODEL_NAME}/{MODEL_STAGE}"
-print(f"Loading model from {model_uri}")
-model = mlflow.pyfunc.load_model(model_uri)
-```
-
-```bash
-docker run \
-    -e MLFLOW_TRACKING_URI=http://mlflow-server:5000 \
-    -e MODEL_NAME=fraud-detector \
-    -e MODEL_STAGE=Production \
-    myapp:v1
-```
-
-> **Pause and predict**: If you use a persistent Docker volume mapping to cache large models downloaded at runtime, what happens to the cached model files when you stop and entirely remove the container using `docker rm -f mycontainer`? 
-
----
-
-## Docker Compose for ML Development
-
-Managing inter-dependent ML systems manually via standalone `docker run` commands rapidly becomes a nightmare. Docker Compose consolidates these networks.
-
-```mermaid
-graph TD
-    subgraph Network["Docker Network Stack"]
-        Train["Model Training (GPU)"]
-        API["API Server"]
-        VecDB["Vector DB (Qdrant)"]
-        Cache["Redis Cache"]
-        MLflow["MLflow Tracking"]
-        Jup["Jupyter Lab"]
-        PG["Postgres (meta)"]
-
-        API --> VecDB
-        API --> Cache
-        API --> MLflow
-        Train --> MLflow
-        Jup --> MLflow
-        MLflow --> PG
+    subgraph RegistryOption["Image references model"]
+        R1["Build small image"]
+        R2["Push image"]
+        R3["Start container"]
+        R4["Fetch approved model"]
+        R5["Become ready"]
+        R1 --> R2 --> R3 --> R4 --> R5
     end
 ```
 
-### Complete ML Development docker-compose.yml
+A robust runtime download path should be idempotent. The container may restart, multiple replicas may start at the same time, and a partially downloaded artifact may remain from a failed previous attempt. The application should download into a temporary path, verify the artifact, and then atomically promote it to the cache path. That pattern prevents serving a half-written model.
+
+```python
+# src/model_loader.py
+from pathlib import Path
+import os
+import shutil
+import tempfile
+
+from huggingface_hub import snapshot_download
+
+MODEL_ID = os.environ.get("MODEL_ID", "sentence-transformers/all-MiniLM-L6-v2")
+CACHE_DIR = Path(os.environ.get("MODEL_CACHE_DIR", "/models"))
+
+
+def local_model_dir(model_id: str) -> Path:
+    return CACHE_DIR / model_id.replace("/", "--")
+
+
+def ensure_model_present() -> Path:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    target = local_model_dir(MODEL_ID)
+
+    if target.exists() and any(target.iterdir()):
+        return target
+
+    with tempfile.TemporaryDirectory(dir=CACHE_DIR) as tmp_dir:
+        downloaded = snapshot_download(
+            repo_id=MODEL_ID,
+            local_dir=tmp_dir,
+            local_dir_use_symlinks=False,
+        )
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.move(downloaded, target)
+
+    return target
+```
+
+Volume mounts are useful because they decouple the container lifecycle from cached artifacts. Removing a container does not remove a named Docker volume unless you explicitly remove the volume. That is exactly what you want for repeated local experiments, but it can surprise learners who expect `docker rm` to clean every downloaded model file.
+
+```mermaid
+graph TD
+    HostVolume["Named Docker volume<br/>ml-model-cache"]
+    C1["Container run 1<br/>downloads model"]
+    C2["Container run 2<br/>reuses model"]
+    Removed["Container deleted<br/>docker rm"]
+    HostVolume --> C1
+    HostVolume --> C2
+    C1 --> Removed
+    Removed -. "volume still exists" .-> HostVolume
+```
+
+```bash
+docker volume create ml-model-cache
+
+docker run --rm \
+  -e MODEL_CACHE_DIR=/models \
+  -v ml-model-cache:/models \
+  ml-api:v1
+
+docker volume ls
+docker volume inspect ml-model-cache
+```
+
+Model registries add governance that raw volume mounts do not provide. A registry can record who approved a model, which training data and metrics produced it, and which production stage it belongs to. The serving image can remain stable while `MODEL_NAME` and `MODEL_STAGE` select the model version at runtime, provided readiness checks fail closed when the requested model cannot be loaded.
+
+```python
+# src/serve_mlflow.py
+import os
+
+import mlflow.pyfunc
+
+MLFLOW_TRACKING_URI = os.environ["MLFLOW_TRACKING_URI"]
+MODEL_NAME = os.environ["MODEL_NAME"]
+MODEL_STAGE = os.environ.get("MODEL_STAGE", "Production")
+
+
+def load_model():
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    model_uri = f"models:/{MODEL_NAME}/{MODEL_STAGE}"
+    return mlflow.pyfunc.load_model(model_uri)
+```
+
+```bash
+docker run --rm \
+  -e MLFLOW_TRACKING_URI=http://mlflow:5000 \
+  -e MODEL_NAME=fraud-detector \
+  -e MODEL_STAGE=Production \
+  -p 8000:8000 \
+  ml-api:v1
+```
+
+The senior-level design question is whether software releases and model releases should be coupled. If the model format changes and the serving code must change with it, coupling may be appropriate for that release. If the model is updated daily but the serving code changes monthly, decoupling artifacts from images prevents unnecessary rebuilds and safer rollbacks.
+
+### 6. Docker Compose for Local ML Systems
+
+Real ML applications rarely run as one process. A local development environment may include an API server, a vector database, Redis, MLflow, Postgres, a notebook server, and a training worker. Running each service with a separate `docker run` command forces humans to remember networks, ports, environment variables, and startup order. Docker Compose captures those relationships in one file.
+
+```mermaid
+graph TD
+    subgraph ComposeNetwork["Docker Compose project network"]
+        API["api<br/>FastAPI inference"]
+        Worker["trainer<br/>GPU training job"]
+        Jupyter["jupyter<br/>experiments"]
+        Redis["redis<br/>feature cache"]
+        Qdrant["qdrant<br/>vector search"]
+        MLflow["mlflow<br/>experiment tracking"]
+        Postgres["postgres<br/>metadata store"]
+        ModelCache["model-cache volume"]
+        API --> Redis
+        API --> Qdrant
+        API --> MLflow
+        Worker --> MLflow
+        Worker --> ModelCache
+        Jupyter --> MLflow
+        Jupyter --> ModelCache
+        MLflow --> Postgres
+    end
+```
+
+Compose gives each service a DNS name matching the service name. From the host, you might call `http://127.0.0.1:8000`. From another container in the same Compose network, the API should call `http://redis:6379` or `http://mlflow:5000`, not `127.0.0.1`, because each container has its own loopback interface. This is one of the most common networking mistakes in local containerized ML systems.
 
 ```yaml
-# docker-compose.yml - ML Development Environment
-version: '3.8'
-
 services:
   api:
     build:
@@ -548,459 +645,535 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ./src:/app/src              # Hot reload during development
-      - model-cache:/app/models     # Shared model cache
     environment:
-      - MODEL_PATH=/app/models
-      - QDRANT_HOST=qdrant
-      - REDIS_HOST=redis
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - LOG_LEVEL=DEBUG
+      MODEL_CACHE_DIR: /models
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - model-cache:/models
     depends_on:
-      - redis
-      - qdrant
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      mlflow:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/ready"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant-data:/qdrant/storage
-    environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.5
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
 
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.8.0
+    image: ghcr.io/mlflow/mlflow:v2.17.2
     ports:
       - "5000:5000"
     volumes:
       - mlflow-data:/mlflow
-      - ./mlruns:/mlflow/mlruns
-    environment:
-      - MLFLOW_TRACKING_URI=sqlite:///mlflow/mlflow.db
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --backend-store-uri sqlite:////mlflow/mlflow.db
       --default-artifact-root /mlflow/artifacts
-
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile.jupyter
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/app/notebooks
-      - ./src:/app/src
-      - model-cache:/app/models
-    environment:
-      - JUPYTER_TOKEN=dev-token-change-in-prod
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_USER=mlflow
-      - POSTGRES_PASSWORD=mlflow_password
-      - POSTGRES_DB=mlflow
 
 volumes:
   model-cache:
-    name: ml-model-cache
-  qdrant-data:
-    name: ml-qdrant-data
   redis-data:
-    name: ml-redis-data
+  qdrant-data:
   mlflow-data:
-    name: ml-mlflow-data
-  postgres-data:
-    name: ml-postgres-data
 ```
 
-### Development vs Production Environments
-
-By layering your override files, you seamlessly toggle debugging context locally without sacrificing production rigor.
-
-```yaml
-# docker-compose.yml (base - always loaded)
-version: '3.8'
-services:
-  api:
-    build: .
-    environment:
-      - MODEL_PATH=/app/models
-
-# docker-compose.override.yml (development - loaded automatically)
-version: '3.8'
-services:
-  api:
-    volumes:
-      - ./src:/app/src                    # Live code reload
-    environment:
-      - LOG_LEVEL=DEBUG
-      - RELOAD=true
-    ports:
-      - "8000:8000"                       # Expose for local access
-
-# docker-compose.prod.yml (production - must specify explicitly)
-version: '3.8'
-services:
-  api:
-    image: myregistry/api:v1.0.0          # Use pre-built image
-    environment:
-      - LOG_LEVEL=WARNING
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          memory: 8G
-        reservations:
-          memory: 4G
-```
-
----
-
-## Production Best Practices
-
-### The .dockerignore File
-
-Mirroring a `.gitignore`, your `.dockerignore` prohibits secret sprawl and massively accelerates your build context transfer.
-
-```text
-# .dockerignore for ML Projects
-.git
-.env*
-docs/
-tests/
-.vscode/
-notebooks/
-__pycache__/
-*.csv
-*.pt
-models/
-mlruns/
-Dockerfile*
-```
-
-### Health Checks That Actually Work
-
-Kubernetes orchestration heavily relies on your application reporting accurate hardware health states. A proper liveness probe verifies the deep logic state, not just that the process exists.
-
-```python
-# src/health.py
-"""Health check endpoints for container orchestration."""
-from fastapi import FastAPI, Response, status
-import torch
-import psutil
-import os
-
-app = FastAPI()
-model = None
-model_ready = False
-
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "pid": os.getpid()}
-
-@app.get("/ready")
-async def ready(response: Response):
-    checks = {
-        "model_loaded": model is not None,
-        "model_ready": model_ready,
-        "memory_ok": psutil.virtual_memory().percent < 90,
-    }
-
-    if torch.cuda.is_available():
-        checks["gpu_available"] = True
-        checks["gpu_memory_ok"] = (
-            torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated() < 0.95
-            if torch.cuda.max_memory_allocated() > 0
-            else True
-        )
-
-    all_ready = all(checks.values())
-    if not all_ready:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-
-    return {"ready": all_ready, "checks": checks}
-
-@app.get("/live")
-async def live(response: Response):
-    try:
-        _ = 1 + 1  
-        _ = os.getcwd()  
-        if torch.cuda.is_available():
-            _ = torch.cuda.current_device()  
-        return {"live": True}
-    except Exception as e:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return {"live": False, "error": str(e)}
-```
-
----
-
-## Debugging and War Stories
-
-### The Black Friday Meltdown
-
-**Seattle. Major E-commerce retailer.** Everything was ready for the massive holiday rush. The ML team deployed their recommendation model achieving 94% accuracy. By 7:30 AM on launch day, pods were crashing and restarting every 2 minutes. The fallback static recommendations kicked in, resulting in a 23% plunge in conversion rates. 
-
-**The post-mortem**: The team had developed locally on `python:3.10` but executed their CI/CD release using `python:3.10-slim`. The slim variant aggressively strips OS tooling and lacked `libgomp1`, an essential library that `numpy` demands for multi-threading operations. As load spiked, `numpy` parallelized and then faulted out.
-
-The fix was a single line of code added back into the multi-stage layer:
-```dockerfile
-RUN apt-get install -y libgomp1
-```
-
-**Lesson**: Test your exact production images entirely. A difference of a single missing C-extension library can decimate revenue.
-
-### The GPU Memory Leak That Took Down Production
-
-**San Francisco. AI startup serving real-time image generation.** A heavily utilized Stable Diffusion cluster began cascading out-of-memory (OOM) errors. GPU utilization indicated 100%, yet almost no API requests returned successfully. After automated container restarts, the stack survived roughly four hours before freezing again.
-
-**The root cause**: Model inference logic unintentionally captured gradient histories.
-```python
-# The bug: model wasn't being garbage collected 
-async def generate_image(prompt: str):
-    model = load_model()  # Called every request
-    image = model(prompt)
-    return image
-```
-
-**The fix**: Explicitly disable computational graphs during service execution.
-```python
-# Load model once at container startup
-model = None
-def get_model():
-    global model
-    if model is None:
-        model = load_model()
-        model.eval()  
-        torch.cuda.empty_cache()
-    return model
-
-async def generate_image(prompt: str):
-    with torch.no_grad():  # No gradient caching
-        image = get_model()(prompt)
-    return image
-```
-
-### Common Container Mistakes
-
-| Mistake | Why It Happens | How to Fix |
-|---------|----------------|------------|
-| **Using `latest` tags** | Base layers change silently under your feet, causing intermittent failures. | Explicitly pin OS and tooling versions (e.g., `python:3.10.12-slim`). |
-| **`COPY . .` too early** | Placing this instruction before package installations destroys layer cache hits entirely. | Copy `requirements.txt` first, compile dependencies, *then* copy source logic. |
-| **Running as root** | Most containers default to `root`, posing a disastrous security pivot vulnerability. | Create an unprivileged user early in your build and execute `USER appuser`. |
-| **Default `/dev/shm`** | Docker restricts shared memory to an abysmal 64MB, often crashing PyTorch parallel DataLoaders. | In many GPU workloads, execute GPU operations with an increased shared-memory setting such as `--shm-size=16g`. |
-| **Baking models in image** | Images swell beyond 15GB, making registry transfers agonising and rollbacks much harder. | Refactor containers to fetch large artifacts dynamically at runtime. |
-| **Missing cache in CI** | CI pipelines execute fully isolated clean builds, burning tens of minutes per commit. | Inject `--cache-from` arguments into your pipeline builders. |
-
----
-
-## System Design and Economics
-
-### Economics of Containerization for ML
-
-| Cost Component | Virtual Machines | Containers |
-|----------------|-----------------|------------|
-| Instance startup time | 30-60 seconds | < 1 second |
-| Resource overhead | 10-20% CPU, 500MB+ RAM | < 1% CPU, < 10MB RAM |
-| Disk per deployment | 10-50 GB | 1-5 GB |
-| Deployment time | 5-15 minutes | 30 seconds - 2 minutes |
-| Rollback time | 5-15 minutes | < 30 seconds |
-| Environment setup | 4-8 hours per developer | 30 minutes |
-| Dependency conflicts | Regular occurrence | Isolated perfectly |
-
-### Containerized ML Platform Architecture
-
-A resilient engineering platform heavily categorizes infrastructure responsibilities.
+Compose is a development tool, not a full production orchestrator. It can model service relationships and help teams reproduce a local stack, but it does not replace Kubernetes deployment policies, autoscaling, secret management, network policies, or production-grade storage. Its value is that it lets you debug the container contract before you add the complexity of a cluster.
 
 ```mermaid
 graph TD
-    LB["Load Balancer"]
-    LB --> MA["Model A Service (3 replicas)<br/>Image: registry/model-a:v1.2.0<br/>Model: s3://models/model-a/v7"]
-    LB --> MB["Model B Service (5 replicas)<br/>Image: registry/model-b:v2.1.0<br/>Model: s3://models/model-b/v12"]
+    Dev["Local development<br/>Docker Compose"]
+    Contract["Container contract<br/>ports, env, volumes, health"]
+    CI["CI image build<br/>same Dockerfile"]
+    Prod["Production orchestration<br/>Kubernetes or managed platform"]
+    Dev --> Contract
+    Contract --> CI
+    CI --> Prod
 ```
 
-1. **Base Images (Registry):** High-cadence security patched layers rebuilt autonomously every week.
-2. **Team Images (CI/CD):** Compiled on Pull Request merges, extending Base Images.
-3. **Training (Slurm/K8s):** Distributed containers mounting massive network file storage arrays for persistent state.
+A useful Compose setup separates base configuration from local overrides. The base file describes services and environment contracts. The development override adds bind mounts, debug logging, and host ports. A production-like file uses prebuilt images and removes live source mounts so that the behavior matches deployment more closely.
 
----
+```yaml
+# docker-compose.yml
+services:
+  api:
+    image: ml-api:${IMAGE_TAG:-dev}
+    environment:
+      MODEL_CACHE_DIR: /models
+    volumes:
+      - model-cache:/models
 
-## Hands-On Exercises
+volumes:
+  model-cache:
+```
 
-The following exercises must be executed iteratively. Each step builds upon the previous context. Ensure you have Docker desktop installed locally.
+```yaml
+# docker-compose.override.yml
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - model-cache:/models
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_LEVEL: DEBUG
+      RELOAD: "true"
+```
 
-### Task 1: Create and Run a Naive ML Container
+```yaml
+# docker-compose.prod-like.yml
+services:
+  api:
+    image: registry.example.com/ml-api:1.8.2
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_LEVEL: INFO
+      MODEL_URI: models:/fraud-detector/Production
+```
 
-**Objective:** Build a basic FastAPI application serving a mock ML endpoint to observe the baseline image size.
+When debugging Compose, inspect the actual generated configuration. Compose merges files, interpolates environment variables, and applies defaults, so the file you wrote is not always the configuration that runs. The `docker compose config` command is one of the fastest ways to find a missing variable, an unexpected image tag, or an accidental bind mount.
+
+```bash
+docker compose config
+docker compose up -d
+docker compose ps
+docker compose logs -f api
+docker compose exec api env | sort
+docker compose exec api curl -fsS http://127.0.0.1:8000/ready
+docker compose down
+```
+
+**Active learning prompt:** Your API container cannot connect to Redis, but `redis-cli` works from your host. The API uses `REDIS_URL=redis://127.0.0.1:6379/0`. What should you change, and why? Inside the API container, `127.0.0.1` points back to the API container itself, so the URL should use the Compose service name: `redis://redis:6379/0`.
+
+### 7. Production Readiness: Security, Processes, and Economics
+
+A production ML image must be reproducible, small enough to deploy quickly, observable enough to debug, and constrained enough to reduce blast radius. Those goals reinforce each other. Smaller images scan faster and deploy faster. Non-root users reduce the impact of application compromise. Clear entrypoints improve signal handling. Health checks prevent traffic from reaching containers that are alive but not ready.
+
+```mermaid
+graph TD
+    Source["Source repository"]
+    Build["Docker build<br/>pinned base and lockfiles"]
+    Scan["Image scan<br/>runtime dependencies only"]
+    Registry["Container registry<br/>versioned tags"]
+    Deploy["Deployment platform"]
+    Runtime["Runtime config<br/>env, volumes, devices"]
+    Observe["Logs, metrics, traces, health"]
+    Source --> Build --> Scan --> Registry --> Deploy --> Runtime --> Observe
+    Observe --> Source
+```
+
+Running as root is rarely necessary for an ML API. A compromised root process inside a container is still constrained by container isolation, but it has more power over the container filesystem and any mounted volumes than an unprivileged user. If the service only needs to read model files and bind to a high port such as `8000`, an unprivileged UID is the better default.
+
+Pinning image tags is another production control. The tag `latest` means the base image can change without a Dockerfile change, which makes rebuilds non-reproducible. A team might rebuild the same commit next week and unknowingly receive a different operating system patch set, different Python patch release, or different CUDA base. Security updates matter, but they should enter through deliberate rebuilds and tracked version changes.
+
+```text
+PRODUCTION IMAGE CONTRACT
+=========================
+
+Control                         Why it matters
+-----------------------------   ----------------------------------------------------------
+Pinned base image tag           Rebuilds are explainable and reviewable
+Dependency lockfile             Python package graph stays stable
+Non-root runtime user           Reduces write and privilege blast radius
+Runtime-only final stage        Removes compilers and unused tools
+Explicit health endpoints       Lets orchestrators route traffic safely
+Tini or proper init behavior    Reaps child processes and handles signals
+No baked secrets                Prevents credential leakage through image layers
+Externalized large artifacts    Keeps deploys and rollbacks fast
+```
+
+The process model deserves special attention in ML containers. Training and serving code often starts subprocesses for data loading, tokenization, parallel inference, logging agents, or worker pools. If the container's PID 1 process does not handle `SIGTERM` and reap children, deployments can hang during shutdown or leave zombie processes behind. This is why a minimal init such as `tini` is often useful for Python ML containers.
+
+```bash
+docker run --rm ml-api:v1 ps -eo pid,ppid,stat,comm
+
+docker exec ml-api ps -eo pid,ppid,stat,comm | awk '$3 ~ /Z/ { print }'
+```
+
+A zombie process is a child process that has exited but has not been reaped by its parent. It does not consume CPU, but it still occupies a process table entry and signals that process management is wrong. In ML services with worker pools, repeated worker crashes can create zombie accumulation that hides behind normal request logs until shutdown or process limits fail.
+
+Resource limits should be tested with realistic workloads. An image that passes a single prediction can still fail when ten concurrent requests load tokenizers, allocate GPU memory, or fan out worker processes. For CPU services, inspect memory and thread behavior. For GPU services, inspect GPU memory allocation, batch sizing, and whether inference uses `torch.no_grad()` or `torch.inference_mode()`.
+
+```python
+# src/inference.py
+import torch
+
+model = None
+
+
+def get_model():
+    global model
+    if model is None:
+        model = load_model_from_registry()
+        model.eval()
+    return model
+
+
+def predict(batch):
+    with torch.inference_mode():
+        return get_model()(batch)
+```
+
+The economic case for Docker in ML is not only developer convenience. Smaller, reproducible images reduce CI time, registry storage, node pull time, rollback duration, and incident ambiguity. The following comparison is approximate, but it captures why image design affects real operational cost.
+
+| Cost Component | Poorly Designed ML Image | Well-Designed ML Image |
+|---|---|---|
+| CI rebuild time | Reinstalls dependencies after small source changes | Reuses dependency layers when manifests are unchanged |
+| Registry storage | Stores repeated model and build-tool layers | Stores runtime software and references artifacts externally |
+| Node pull time | Slow rollout because every node pulls huge layers | Faster rollout because layers are smaller and cached |
+| Vulnerability noise | Flags compilers and unused tooling in runtime | Scans mostly runtime dependencies that actually ship |
+| Rollback speed | Previous version requires pulling massive image | Previous software image and model pointer can roll back quickly |
+| Incident diagnosis | Environment assumptions are scattered | Image, runtime config, and artifacts have clear boundaries |
+
+A senior ML infrastructure engineer treats the image as one artifact in a larger release system. The image tag records the software environment. The model registry records the model artifact and evaluation metadata. Runtime configuration records which approved model the service should load. Observability records whether the running container actually loaded that model and is ready for traffic.
+
+## Did You Know?
+
+1. Docker popularized a developer-friendly image format and Dockerfile workflow in 2013, but the underlying Linux isolation primitives were already evolving through namespaces, cgroups, and earlier container tooling.
+
+2. A Docker image can contain CUDA user-space libraries, but it does not contain the host's kernel-level NVIDIA driver; GPU access depends on runtime device injection and host driver compatibility.
+
+3. Docker's default shared memory mount is often too small for multiprocessing-heavy ML workloads, which is why PyTorch DataLoader crashes can appear even when CPU, RAM, and GPU capacity look sufficient.
+
+4. Removing a container with `docker rm` does not automatically delete named Docker volumes, so downloaded models can persist across container lifecycles until the volume itself is removed.
+
+## Common Mistakes
+
+| Mistake | Why It Happens | How to Fix |
+|---|---|---|
+| Using floating `latest` tags for base images | Rebuilds silently receive different operating system or framework layers, making incidents hard to reproduce. | Pin base images and upgrade them through reviewed dependency changes. |
+| Placing `COPY . .` before dependency installation | Any source, notebook, or documentation change invalidates expensive dependency layers. | Copy lockfiles or requirement files first, install dependencies, then copy source. |
+| Running ML services as root | The default container user is often root, and teams forget to change it after the prototype works. | Create a dedicated unprivileged user and use `USER` in the runtime stage. |
+| Baking large model checkpoints into every image | It feels simple during the first deployment, but it couples software releases to artifact transfer. | Use a model registry, object storage download, or mounted cache unless the model is small and stable. |
+| Assuming `nvidia-smi` proves PyTorch GPU support | `nvidia-smi` proves device visibility, not that the Python wheel was built with CUDA support. | Test both `nvidia-smi` and `torch.cuda.is_available()` inside the same container. |
+| Ignoring `/dev/shm` for data loaders | Docker's default shared memory can be too small for tensor transfer across worker processes. | Set `--shm-size` or an equivalent orchestrator configuration and load-test worker behavior. |
+| Leaving zombie worker processes unmanaged | Python training or serving code spawns children while PID 1 does not reap exited processes correctly. | Use `tini`, handle `SIGTERM`, inspect process state, and fix worker crash loops. |
+| Treating Compose `127.0.0.1` as the host from inside containers | Each container has its own loopback interface, so localhost usually points to the same container. | Use Compose service DNS names such as `redis`, `qdrant`, or `mlflow` for container-to-container calls. |
+
+## Quiz
 
 <details>
-<summary>Step-by-Step Solution</summary>
+<summary>1. Your team changes only `README.md`, but the CI image build still spends ten minutes reinstalling PyTorch and scikit-learn. What Dockerfile issue do you investigate first, and what change would you recommend?</summary>
 
-1. Create your application directory:
+The first issue to investigate is whether `COPY . .` appears before dependency installation. That order invalidates the dependency layer whenever any file in the build context changes. Recommend copying only dependency manifests first, installing dependencies in a cached layer, and copying source files afterward. Also add a `.dockerignore` so notebooks, datasets, checkpoints, and local outputs do not enter the build context.
+</details>
+
+<details>
+<summary>2. A FastAPI model service starts successfully and returns `{"live": true}`, but the first real prediction fails because `/models/fraud-detector` is missing. How should the readiness design change?</summary>
+
+The readiness check should verify the conditions required to serve traffic, not merely prove that the process is alive. Add a `/ready` endpoint that confirms the model path exists, the model is loaded, required memory is available, and any dependency services are reachable. Keep `/live` simple so the orchestrator does not restart a healthy process just because an external artifact store is temporarily slow.
+</details>
+
+<details>
+<summary>3. Your GPU container prints a valid `nvidia-smi` table, but the application logs show `torch.cuda.is_available()` is `False`. What boundary has already been validated, and what do you check next?</summary>
+
+The host driver and NVIDIA runtime device mount are at least partially validated because `nvidia-smi` can see the GPU from inside the container. The next boundary is the Python framework installation. Check whether the installed PyTorch wheel is CPU-only, whether it matches the intended CUDA line, and whether a later package installation replaced the GPU-capable wheel.
+</details>
+
+<details>
+<summary>4. A training container crashes with a bus error only when `num_workers` is greater than zero in the PyTorch DataLoader. The host has plenty of RAM. What container setting is most likely missing?</summary>
+
+The likely missing setting is a larger shared memory mount. PyTorch workers use shared memory to pass tensor data between processes, and Docker's default `/dev/shm` can be too small for that pattern. Run the container with a workload-appropriate `--shm-size`, then retest with the same batch size and worker count used in production.
+</details>
+
+<details>
+<summary>5. A vulnerability scan flags `gcc`, `build-essential`, and other compilers in your production inference image. The service does not compile anything at runtime. How should the Dockerfile be redesigned?</summary>
+
+Use a multi-stage build. Put compilers and build tools in a builder stage where Python wheels or native extensions are installed into a virtual environment. Copy only the resulting runtime environment and application source into a slim final stage. Keep runtime native libraries that compiled packages actually need, but omit compilers and build-only utilities from the final image.
+</details>
+
+<details>
+<summary>6. Your Compose-based API service cannot reach Redis when configured with `redis://127.0.0.1:6379/0`, even though Redis is healthy and reachable from the host. What change fixes the service-to-service connection?</summary>
+
+Inside the API container, `127.0.0.1` points to the API container itself, not the Redis container or the host. In Compose, services can reach each other by service name on the project network. Change the URL to `redis://redis:6379/0`, then verify with `docker compose exec api` from inside the API container.
+</details>
+
+<details>
+<summary>7. A production image contains a large model checkpoint, and rollback during an incident takes too long because nodes must pull a huge image. What artifact strategy would you evaluate?</summary>
+
+Evaluate decoupling the model artifact from the software image. The image can contain serving code and dependencies while loading an approved model from a registry, object storage location, or mounted cache at startup. This requires robust readiness checks and artifact verification, but it lets software rollbacks and model rollbacks happen without repeatedly transferring massive image layers.
+</details>
+
+<details>
+<summary>8. A long-running inference container gradually accumulates zombie worker processes after request spikes, and deployments sometimes hang during shutdown. What container process concern should you address?</summary>
+
+Address PID 1 behavior and child process reaping. Python applications that spawn workers need proper signal handling and a parent process that reaps exited children. Add a minimal init such as `tini`, ensure the application handles `SIGTERM`, inspect process states during load tests, and fix the worker crash path rather than only increasing process limits.
+</details>
+
+## Hands-On Exercise
+
+In this exercise, you will build a small ML-style API container, improve its Dockerfile, run it with Compose, and debug the most common runtime boundaries. The goal is not to create a sophisticated model. The goal is to practice the same environment reasoning you will use for real training and inference systems.
+
+### Task 1: Build a Naive ML API Image
+
+Create a clean lab directory and a minimal API that behaves like an inference endpoint. This first image is intentionally naive so you can observe why it becomes expensive and fragile as the project grows.
+
 ```bash
-mkdir -p ml-labs && cd ml-labs
+mkdir -p ml-docker-lab/src
+cd ml-docker-lab
 ```
 
-2. Create the `requirements.txt` manifest:
 ```text
-fastapi==0.103.1
-uvicorn==0.23.2
-scikit-learn==1.3.0
+fastapi==0.115.6
+uvicorn==0.34.0
+scikit-learn==1.6.0
+psutil==6.1.1
 ```
 
-3. Create the API logic in `app.py`:
+Save that dependency list as `requirements.txt`, then create the application file.
+
 ```python
+# src/api.py
 from fastapi import FastAPI
+
 app = FastAPI()
+
+
+@app.get("/live")
+def live():
+    return {"live": True}
+
+
+@app.get("/ready")
+def ready():
+    return {"ready": True, "model_loaded": True}
+
 
 @app.get("/predict")
 def predict():
     return {"status": "success", "prediction": "mock_output"}
 ```
 
-4. Create the naive `Dockerfile`:
 ```dockerfile
-FROM python:3.10
+# Dockerfile.naive
+FROM python:3.12
+
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-5. Build the image and inspect the unoptimized footprint:
 ```bash
-docker build -t ml-naive:v1 .
-docker image ls | grep ml-naive
+docker build -f Dockerfile.naive -t ml-naive:v1 .
+docker image ls ml-naive:v1
+docker run --rm -p 8000:8000 ml-naive:v1
 ```
 
-**Verification:** The terminal output will show the image size severely bloated (often ~1.2GB) primarily due to the heavy `python:3.10` Debian OS layer.
-</details>
+Open a second terminal while the container is running and test the endpoint.
 
-### Task 2: Implement Multi-Stage Builds
+```bash
+curl -fsS http://127.0.0.1:8000/predict
+```
 
-**Objective:** Slash your image overhead by separating the build compilers from the execution binaries.
+Success criteria:
 
-<details>
-<summary>Step-by-Step Solution</summary>
+- [ ] The image `ml-naive:v1` builds without dependency installation errors.
+- [ ] `docker image ls ml-naive:v1` shows the image size so you can compare it later.
+- [ ] The container starts and exposes the API on `127.0.0.1:8000`.
+- [ ] The `/predict` endpoint returns `{"status":"success","prediction":"mock_output"}`.
+- [ ] You can explain why changing any file in the directory can invalidate the dependency installation layer.
 
-1. Create a new file named `Dockerfile.multi`:
+### Task 2: Replace the Naive Dockerfile with a Multi-Stage Runtime Image
+
+Now create a more production-minded Dockerfile that separates dependency building from runtime execution. Keep the application behavior the same so the comparison focuses on image structure rather than feature changes.
+
 ```dockerfile
-# Stage 1: Build logic
-FROM python:3.10-slim AS builder
-WORKDIR /app
-COPY requirements.txt .
+# Dockerfile
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Stage 2: Production execution
-FROM python:3.10-slim
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12-slim AS runtime
+
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    curl \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-COPY app.py .
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+RUN groupadd --gid 10001 appgroup && \
+    useradd --uid 10001 --gid appgroup --create-home --shell /usr/sbin/nologin appuser
+
+COPY --chown=appuser:appgroup src/ ./src/
+
+USER appuser
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/ready || exit 1
+
+ENTRYPOINT ["tini", "--"]
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-2. Compile and contrast the sizes:
+Create a `.dockerignore` file before building so the build context remains small and predictable.
+
+```text
+.git
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+notebooks/
+data/
+models/
+checkpoints/
+mlruns/
+outputs/
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.csv
+*.parquet
+```
+
 ```bash
-docker build -f Dockerfile.multi -t ml-optimized:v1 .
-docker image ls | grep ml-
+docker build -t ml-api:v1 .
+docker image ls ml-naive:v1 ml-api:v1
+docker run --rm -p 8000:8000 ml-api:v1
 ```
 
-**Verification:** The `ml-optimized:v1` architecture will drop the footprint downward drastically (typically hovering around ~250MB).
-</details>
+Success criteria:
 
-### Task 3: Compose an ML Environment
+- [ ] The optimized image `ml-api:v1` builds successfully.
+- [ ] The final image runs as a non-root user; verify with `docker run --rm ml-api:v1 id`.
+- [ ] The final image includes runtime libraries but not unnecessary build compilers in the active runtime layer.
+- [ ] The `/ready` endpoint returns a successful response.
+- [ ] You can explain why `requirements.txt` is copied before `src/`.
 
-**Objective:** Form an internal Docker network linking your API inference engine directly to a persistent Redis backing cache.
+### Task 3: Add Compose with Redis and Persistent Model Cache
 
-<details>
-<summary>Step-by-Step Solution</summary>
+Next, create a Compose stack that models a more realistic local ML environment. The API will run beside Redis and use a named volume for model cache state. This teaches service DNS names, persistent volumes, and the difference between host access and container-to-container access.
 
-1. Generate `docker-compose.yml`:
 ```yaml
-version: '3.8'
+# docker-compose.yml
 services:
   api:
-    image: ml-optimized:v1
+    image: ml-api:v1
     ports:
       - "8000:8000"
+    environment:
+      MODEL_CACHE_DIR: /models
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - model-cache:/models
     depends_on:
-      - redis
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+volumes:
+  model-cache:
+  redis-data:
 ```
 
-2. Initialize and interact:
 ```bash
-docker-compose up -d
-curl http://localhost:8000/predict
+docker compose config
+docker compose up -d
+docker compose ps
+docker compose logs api
+curl -fsS http://127.0.0.1:8000/predict
+docker compose exec api env | sort
+docker compose down
+docker volume ls | grep ml-docker-lab || true
 ```
 
-3. Halt and cleanly purge the infrastructure:
+Success criteria:
+
+- [ ] `docker compose config` renders the expected service definitions without missing variables.
+- [ ] Both `api` and `redis` services start successfully.
+- [ ] The API is reachable from the host through `127.0.0.1:8000`.
+- [ ] The API configuration uses `redis` as the service DNS name rather than `127.0.0.1`.
+- [ ] After `docker compose down`, you can identify whether named volumes still exist.
+
+### Task 4: Run a GPU Boundary Smoke Test When NVIDIA Hardware Is Available
+
+Only run this task on a machine with an NVIDIA GPU, installed host drivers, and the NVIDIA Container Toolkit. If your machine does not have that hardware, read the commands and record which boundary each command validates.
+
 ```bash
-docker-compose down
+docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
 ```
 
-**Verification:** The `curl` command reliably returns `{"status":"success","prediction":"mock_output"}` verifying the container mapped its internal port correctly to your host.
-</details>
+```bash
+docker run --rm --gpus all pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime \
+  python -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+```
 
-### Task 4: GPU Execution via Docker Compose
+Create a GPU Compose smoke-test file if the direct Docker commands work.
 
-**Objective:** Validate that the container runtime properly mounts host NVIDIA hardware mappings securely.
-
-<details>
-<summary>Step-by-Step Solution</summary>
-
-1. Augment your compose orchestration config to reserve host devices:
 ```yaml
-version: '3.8'
+# docker-compose.gpu.yml
 services:
-  gpu-worker:
-    image: nvidia/cuda:11.8.0-base-ubuntu22.04
-    command: nvidia-smi
+  gpu-smoke:
+    image: pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+    command: >
+      python -c "import torch;
+      print(torch.__version__);
+      print(torch.cuda.is_available());
+      print(torch.cuda.get_device_name(0))"
     deploy:
       resources:
         reservations:
@@ -1010,73 +1183,43 @@ services:
               capabilities: [gpu]
 ```
 
-2. Command execution test:
 ```bash
-docker-compose up gpu-worker
+docker compose -f docker-compose.gpu.yml up --abort-on-container-exit
 ```
 
-**Verification:** Your terminal will output the classic NVIDIA system metrics table directly from inside the isolated process wrapper. If it faults, verify your host NVIDIA drivers are running.
-</details>
+Success criteria:
 
----
+- [ ] `nvidia-smi` runs inside a CUDA container, proving GPU device visibility.
+- [ ] PyTorch reports `torch.cuda.is_available()` as `True` inside a PyTorch CUDA container.
+- [ ] You can distinguish a host driver/runtime mount problem from a CPU-only PyTorch wheel problem.
+- [ ] The Compose GPU smoke test exits successfully when NVIDIA hardware is available.
+- [ ] If no NVIDIA hardware is available, you can explain which commands would validate each GPU boundary.
 
-## Knowledge Check
+### Task 5: Debug Process and Shared Memory Behavior
 
-<details>
-<summary>1. Scenario: Your continuous integration pipeline agonizingly takes 12 minutes to build your ML Docker image for every commit, even when only a trivial Markdown document changes. What is the explicit architectural error occurring?</summary>
+Finally, inspect runtime process behavior and practice the checks that catch ML-specific container failures. This task is small, but it trains the habit of debugging the running container rather than guessing from the host.
 
-**Answer:**
-The `COPY . .` instruction is almost certainly placed before the `RUN pip install` instruction in the Dockerfile stack. Because Docker invalidates the layer cache for all subsequent layers following an altered file, modifying a trivial document forces the dependency installation layer to rebuild dynamically. To rectify this, developers must copy only `requirements.txt`, run the package installation process, and *then* copy the sprawling source tree.
-</details>
+```bash
+docker run -d --name ml-api-debug -p 8000:8000 --shm-size=1g ml-api:v1
+docker exec ml-api-debug ps -eo pid,ppid,stat,comm
+docker exec ml-api-debug df -h /dev/shm
+docker exec ml-api-debug curl -fsS http://127.0.0.1:8000/ready
+docker logs ml-api-debug
+docker stop ml-api-debug
+docker rm ml-api-debug
+```
 
-<details>
-<summary>2. Scenario: A containerized PyTorch training script running on an extremely heavily provisioned GPU EC2 instance crashes immediately with a "bus error" during inference loop testing when utilizing multiple DataLoader workers. What is missing?</summary>
+Success criteria:
 
-**Answer:**
-The container entirely lacks sufficient shared memory capacities. By default, the Docker daemon violently restricts the `/dev/shm` partition allocation to a marginal 64MB. PyTorch DataLoader workers heavily leverage shared memory maps to rapidly pass multidimensional tensor data across threads. Executing the container with the `--shm-size=16g` argument explicitly resolves this throttle limit.
-</details>
+- [ ] You can identify the PID 1 process inside the container.
+- [ ] `/dev/shm` reflects the shared-memory size you configured.
+- [ ] The readiness endpoint works from inside the container.
+- [ ] Container logs show the API startup path and shutdown path.
+- [ ] You can explain why zombie processes and signal handling matter for ML services with worker pools.
 
-<details>
-<summary>3. Scenario: An enterprise vulnerability scanner violently flags your production NLP serving container for possessing severe CVE exploits affecting `build-essential`, `gcc`, and `curl`, none of which are utilized whatsoever by your application payload at runtime. How should this be patched?</summary>
+## Next Module
 
-**Answer:**
-The container blueprint requires an aggressive refactoring into a multi-stage execution model. Compilers and arbitrary network utilities belong explicitly within an isolated "builder" staging tier where Python dependencies are natively compiled. The final artifact pushes only the isolated virtual environment folder to a pristine, bare-metal "slim" runtime foundation, totally omitting the compromised tooling.
-</details>
-
-<details>
-<summary>4. Scenario: A team attempts to deploy a highly sophisticated newly minted image mandating CUDA 12.1 to a legacy on-premise cluster. The application aggressively terminates reporting "CUDA driver version insufficient." What is the conflict matrix at fault?</summary>
-
-**Answer:**
-The bare-metal host machine's internal NVIDIA kernel module driver is outdated and fails to bridge support for the extremely modern CUDA toolkit version bundled inside the container. NVIDIA driver integrations are securely forward-compatible (ancient containers run properly on modern drivers), but they absolutely break if backwards-compatibility is attempted. The team must either patch the host environment or downgrade their container baseline.
-</details>
-
-<details>
-<summary>5. Scenario: In the midst of a disastrous midnight incident, rolling back your monolithic deep learning API microservice to the prior stable deployment forces the platform off-line for 48 minutes simply because the orchestration platform struggles to rapidly ingress a 16GB image payload. What is the fundamental redesign required?</summary>
-
-**Answer:**
-The machine learning operational artifacts must be completely decoupled from the underlying software execution image. By leveraging robust dynamic mechanisms to pull deep learning models over external network calls during initialization, or mounting hardware volumes directly natively, the core container footprint collapses gracefully under a gigabyte, empowering near-instant horizontal scalability operations.
-</details>
-
-<details>
-<summary>6. Scenario: Your deployed image generation endpoint processes initial requests seamlessly, but infrastructure graphs show the process memory consuming an extra 100MB per hour reliably until the OOM killer rips the process entirely out of memory. What PyTorch execution context is dangerously missing?</summary>
-
-**Answer:**
-The forward-pass inference logic is inadvertently retaining historical computational execution graphs because it lacks a `torch.no_grad()` context wrapper. PyTorch natively caches vast webs of multidimensional intermediate tensors because it aggressively assumes you may trigger retroactive gradient loss operations. By deliberately wrapping your production logic within this protective block, PyTorch skips constructing the massive trace logs and the leak evaporates.
-</details>
-
----
-
-## Next Steps
-
-You now possess the technical capability to structurally design, deploy, and debug enterprise-grade ML environments natively inside containers. This operational baseline heavily dictates the reliability of modern scaling methodologies.
-
-- **CI/CD pipelines** (Module 45) - Automate integration testing parameters.
-- **Kubernetes deployments** (Modules 46-48) - Construct horizontally scaling, massively orchestrated container platforms.
-- **MLOps experiment tracking** (Module 49) - Persist metric parameters perfectly natively.
-
-**Up Next**: Module 45 - CI/CD for AI/ML Development
-
-*Module Complete! You now have the containerization skills to ship ML code that executes identically everywhere.*
+Continue to [Module 1.3: CI/CD for AI/ML Development](./module-1.3-ci-cd-for-ai-ml-development.md) to turn reproducible containers into tested, versioned, and deployable ML delivery pipelines.
 
 ## Sources
 
