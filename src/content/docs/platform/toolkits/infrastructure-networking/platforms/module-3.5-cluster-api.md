@@ -1,4 +1,5 @@
 ---
+qa_pending: true
 title: "Module 3.5: Cluster API (CAPI)"
 slug: platform/toolkits/infrastructure-networking/platforms/module-3.5-cluster-api
 sidebar:
