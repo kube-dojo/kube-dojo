@@ -30,11 +30,11 @@ End-to-end pipeline (audit → route → write → citation_verify → review �
 
 ### Phase 1 + 2a batch — running
 
-**Driver**: `scripts/run_rewrite_batch.sh`  
-**Queue**: `/tmp/388-rewrite-queue.tsv` (383 modules, banner-set ground truth, prioritized)  
-**Logs**: `logs/quality/phase-rewrite-batch.log` + per-module status TSV `logs/quality/phase-rewrite-status.tsv`  
-**PID**: see `logs/quality/batch.pid`  
-**Workers**: 1 (per `feedback_claude_owns_pipeline.md` and `feedback_batch_worker_cap.md`)
+**Driver**: `scripts/run_rewrite_batch.sh` (parameterized via `REWRITE_QUEUE` and `REWRITE_SUFFIX` env)  
+**Queues**: `/tmp/388-queue-A.tsv` (191) + `/tmp/388-queue-B.tsv` (191), interleaved split of priority-ordered list, slug-1 in-flight orphan excluded from both  
+**Logs**: `logs/quality/phase-rewrite-batch-{A,B}.log` + per-module status TSVs `phase-rewrite-status-{A,B}.tsv`  
+**PIDs**: `logs/quality/batch-A.pid`, `logs/quality/batch-B.pid` (+ orphan python on slug 1 from initial workers=1 run)  
+**Workers**: 2 parallel halves (within hard cap 3 per `feedback_batch_worker_cap.md`); each half runs sequential. Combined throughput ~50% faster than workers=1.
 
 Tier ordering:
 
@@ -53,17 +53,21 @@ Tier ordering:
 ### Resume / observe / kill
 
 ```bash
-# Tail current module
-tail -F logs/quality/phase-rewrite-batch.log
+# Tail both halves
+tail -F logs/quality/phase-rewrite-batch-A.log logs/quality/phase-rewrite-batch-B.log
 
-# Status table (live)
-column -t -s $'\t' logs/quality/phase-rewrite-status.tsv | tail -30
+# Status tables (live, both halves combined)
+{ tail -n +2 logs/quality/phase-rewrite-status-A.tsv 2>/dev/null; \
+  tail -n +2 logs/quality/phase-rewrite-status-B.tsv 2>/dev/null; } \
+  | sort -n | column -t -s $'\t' | tail -40
 
-# Kill the batch (graceful)
+# Kill the batches (graceful)
 pkill -f run_rewrite_batch.sh
 
-# Resume after a kill (script skips COMMITTED slugs)
-nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup.log 2>&1 &
+# Resume (skips COMMITTED slugs automatically)
+REWRITE_QUEUE=/tmp/388-queue-A.tsv REWRITE_SUFFIX=-A nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup-A.log 2>&1 &
+disown
+REWRITE_QUEUE=/tmp/388-queue-B.tsv REWRITE_SUFFIX=-B nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup-B.log 2>&1 &
 disown
 ```
 
