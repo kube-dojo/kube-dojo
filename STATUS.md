@@ -2,7 +2,36 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~03:35 local — #388 batch resumed under hardened rewrite prompt after 3/3 first-wave failure)
+## Active Work (2026-04-26 ~06:40 local — #388 single-batch mode after concurrency-race compounding)
+
+**Update**: Two parallel batch halves produced compounding races at the v2 pipeline's merge_lock + state-lease boundary (orphan `assigned_writer` stickiness, ledger-row commit collisions, lease-contention timeouts). The pipeline's concurrency contract isn't airtight enough for two concurrent batch drivers + we hit Anthropic + Gemini throttling on the same window. Consolidated to **single batch (workers=1 effective)** running `/tmp/388-queue-merged.tsv` (382 unique slugs in priority order, retries appended).
+
+Two env overrides live:
+- `KUBEDOJO_BEGINNER_FALLBACK=codex` — redirects ai/foundations + ai/open-models-local-inference + complexity=quick to Codex (Gemini truncation rate hit ~75% during peak hours).
+- `KUBEDOJO_TERTIARY_FALLBACK=codex` — redirects unenumerated tracks (ai/ai-for-kubernetes-platform-work, ai/ai-native-work, ai/ai-building) from Claude (consecutive-call throttle) to Codex.
+
+Restored Codex 10x window through 2026-05-17 covers this.
+
+**Throughput**: at workers=1 sequential, ~480-700s/module = ~5.5-7.5 modules/hour. Remaining ~330 modules → **~2 days**.
+
+**Known FAILED needing manual attention**:
+- `ai-ml-engineering-ai-native-development-module-1.1-ai-coding-tools-landscape` — Codex deterministically converts 10 ASCII diagrams → 8 tables (visual-aid gate fails ASCII 10→2). Two attempts both produced same substitution. Either loosen the gate (treat visual-aid types as fungible) or manually rewrite preserving ASCII.
+
+**Resume / observe / kill**:
+```bash
+tail -F logs/quality/phase-rewrite-batch.log
+column -t -s $'\t' logs/quality/phase-rewrite-status.tsv | tail -30
+pkill -f run_rewrite_batch.sh
+
+KUBEDOJO_BEGINNER_FALLBACK=codex KUBEDOJO_TERTIARY_FALLBACK=codex \
+  REWRITE_QUEUE=/tmp/388-queue-merged.tsv REWRITE_SUFFIX="" \
+  nohup bash scripts/run_rewrite_batch.sh > logs/quality/phase-rewrite-nohup.log 2>&1 &
+disown
+```
+
+---
+
+## Prior — 2026-04-26 ~03:35 local — #388 batch resumed under hardened rewrite prompt after 3/3 first-wave failure
 
 **Update**: First-wave batch completed 3/3 modules with structural-gate failures (slug 1 visual-aid drop 6→3 mermaid; slug 2 density pad-bomb w/ln 10.9; slug 3 density punchy-bullets wpp 12.5). Diagnosis: the rewrite_prompt was advisory-only on density and best-effort on visual aids. Hardened in commit `5f1cab70`:
 
