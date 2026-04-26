@@ -16,3 +16,9 @@
   - Memory: Magnetic core memory (crucial for reliability), up to 32,768 words.
   - Speed: ~40,000 instructions per second; hardware floating-point math (up to 12,000 floating-point additions per second).
   - Significance: It was the only machine powerful enough with enough reliable memory to support early list processing and symbolic manipulation, leading McCarthy to develop LISP on it.
+
+### Alternative Early Architectures
+- **JOHNNIAC (1953):**
+  - Built at the RAND Corporation.
+  - Memory: Upgraded to magnetic core memory in 1955. 40-bit word length.
+  - Significance: Crucial infrastructure for running Newell and Simon's *Logic Theorist* program, representing early list processing before McCarthy's formalization of LISP.
