@@ -1,1431 +1,690 @@
 ---
-revision_pending: true
 title: "Local Models for AI Coding"
 slug: ai-ml-engineering/ai-native-development/module-1.2-local-models-for-ai-coding
 sidebar:
   order: 203
 ---
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4
-# Or: How to Stop Paying OpenAI and Start Loving Your GPU
+
+> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 3-4 hours
+
+# Local Models for AI Coding
 
 **Reading Time**: 3-4 hours
-**Prerequisites**: Module 1.1 complete, 16GB+ RAM recommended (8GB minimum)
+
+**Prerequisites**: Module 1.1 complete, comfort using a terminal, basic Git workflow, and at least 8 GB RAM. A 16 GB machine is strongly recommended for the examples in this module.
 
 ---
 
-## The $600/Year Mistake That Changed Everything
+## Learning Outcomes
 
-**Austin, Texas. March 15, 2024. 8:43 PM.**
+By the end of this module, you will be able to:
 
-Marcus stared at his credit card statement in disbelief. Three hundred and twelve dollars. In a single month. All from OpenAI.
+1. **Compare** local, API, and hybrid AI coding workflows against cost, privacy, latency, quality, and operational constraints.
 
-He'd been working on a side project—a code analysis tool—and had been iterating rapidly with gpt-5. Every experiment, every prompt tweak, every debugging session had added up. The tokens had accumulated silently while he was in the flow of coding.
+2. **Design** a local-model setup using Ollama, Aider, and Continue.dev that matches a developer workstation's memory and workflow needs.
 
-"There has to be another way," he muttered, opening a new browser tab.
+3. **Evaluate** when a coding task should stay local and when it should be escalated to a stronger API model.
 
-That night, Marcus discovered Ollama. By midnight, he had DeepSeek Coder running on his MacBook. The responses were slower, sure, but the quality was surprisingly good. And the cost? Zero. He ran the same prompts that had cost him fifty dollars the day before—completely free.
+4. **Debug** common local-model failures such as missing Ollama services, oversized model downloads, slow inference, and tool configuration errors.
 
-Two months later, Marcus's approach had evolved. He used local models for 80% of his work: code completion, test generation, documentation, routine refactoring. For the hard problems—complex architecture decisions, tricky bugs—he'd spend a few dollars on Claude. His monthly API bill dropped from $300 to $15.
-
-> "Local models aren't a replacement for gpt-5 or Claude. They're more like a capable junior developer who handles the routine work so your expensive senior developer can focus on what matters. Once you think about it that way, the hybrid approach becomes obvious."
-> — Marcus Chen, at PyCon 2025
-
-That $600/year in savings? It funded Marcus's new GPU, which made his local models even faster. The cycle of value continued.
+5. **Implement** a repeatable hybrid workflow that uses local models for routine coding and API models for high-reasoning tasks.
 
 ---
 
-## What You'll Be Able to Do
+## Why This Module Matters
 
-By the end of this module, you will:
-- Understand the local vs API trade-offs for AI coding
-- Install and run Ollama with coding-focused models
-- Use local models with Aider for terminal-based AI coding
-- Configure Continue.dev to use local models in VS Code
-- Implement cost-optimization strategies (local + API hybrid)
-- Know which local models excel at which coding tasks
-- Troubleshoot common local model issues
+Marcus was not trying to become an AI infrastructure engineer when his monthly API bill crossed three hundred dollars. He was trying to build an internal code analysis tool after work, and the cost grew quietly because every small experiment felt harmless. A prompt to generate tests became another prompt to revise the tests, which became another prompt to explain a failing edge case, which became another prompt to refactor the helper function.
 
-**Why this matters**: Running models locally means **$0/month** AI coding, complete privacy, and offline capability. Perfect for learning, experimentation, and cost-conscious development.
+By the time he looked at the credit card statement, the problem was no longer a single expensive request. The problem was that he had built a workflow where every tiny coding thought required a paid round trip to somebody else's server. His code left his machine, his work stopped when the network was unstable, and his budget depended on how often he experimented.
+
+Local models changed the shape of that workflow. Marcus did not replace every API call, and that distinction matters. He started using local models for boilerplate, tests, documentation, small refactors, and exploratory prompts where speed and privacy mattered more than peak reasoning. He still used strong hosted models for architecture decisions and subtle debugging, but those calls became deliberate instead of automatic.
+
+That is the senior-level lesson in this module. Local models are not magic, and they are not automatically better than hosted models. They are another execution environment for AI coding work, with different economics and constraints. A strong practitioner knows how to place the right task in the right environment, just as they know when to run a service locally, deploy it to staging, or hand it to a managed cloud service.
 
 ---
 
-## The Local Models Revolution: Why This Changes Everything
+## 1. Build The Mental Model First
 
-### The Problem Everyone Faces
+A local model is an AI model that runs on your machine instead of a provider's servers. The model weights are downloaded to disk, loaded into memory, and executed by your CPU, GPU, or Apple Silicon accelerator. Tools such as Ollama hide much of that complexity, but the basic trade-off remains: you exchange cloud cost and network dependency for local resource usage and setup responsibility.
 
-**Without local models** (API-only approach):
+API models are the opposite deployment shape. You send prompts and context to a provider, the provider runs inference on their infrastructure, and you receive the response over the network. This is usually faster to start, often stronger for complex reasoning, and easier to use across machines, but it introduces recurring cost, external data handling, rate limits, and dependency on internet access.
 
-```
-Week 1: Sign up for Claude API
-Week 2: $10 in API costs (moderate coding)
-Week 3: $15 (got ambitious with refactoring)
-Week 4: $25 (trying different models, debugging)
+Hybrid workflows combine both. They use local models for high-volume, lower-risk, repetitive work and reserve API models for the smaller number of tasks where quality matters more than cost. This is the pattern most professional teams eventually land on because it treats AI coding like any other engineering resource: cheap capacity handles routine throughput, while expensive capacity is saved for decisions where quality changes the outcome.
 
-Monthly total: $50-100 in API costs
-Annual: $600-1,200
-
-Plus:
-- Need internet connection always
-- Code sent to external servers
-- Rate limits during heavy use
-- Billing surprises
-```
-
-**With local models** (hybrid approach):
-
-```
-Week 1: Install Ollama (free), download DeepSeek Coder (free)
-Week 2: Use local for 80% of tasks, API for complex 20%
-Week 3: API costs: $3 (only used for hard problems)
-Week 4: API costs: $2
-
-Monthly total: $5-10 in API costs
-Annual: $60-120 (10× cheaper!)
-
-Plus:
-- Works offline
-- Code stays on your machine
-- No rate limits
-- Predictable costs
+```ascii
++-------------------------+       +---------------------------+
+| Developer workstation   |       | Hosted model provider     |
+|                         |       |                           |
+|  Editor                 |       |  Large model runtime      |
+|  Terminal               |       |  Managed GPUs             |
+|  Git repository         |       |  Billing and rate limits  |
+|                         |       |                           |
+|  +-------------------+  |       |  +---------------------+  |
+|  | Ollama            |  |       |  | API endpoint         |  |
+|  | local model       |  |       |  | hosted model         |  |
+|  +-------------------+  |       |  +---------------------+  |
+|                         |       |                           |
++-----------+-------------+       +-------------+-------------+
+            |                                   |
+            | local requests                    | network calls
+            v                                   v
++-------------------------------------------------------------+
+| Hybrid workflow: choose local or API based on task risk      |
++-------------------------------------------------------------+
 ```
 
-**The difference**: $600-1,200/year vs $60-120/year. **10× cost reduction!**
+The important question is not "Are local models good enough?" That question is too broad to answer usefully. A better question is "Good enough for which task, on which machine, with which failure cost?" A local seven-billion-parameter coding model may be excellent for writing straightforward unit tests and poor for designing a security-sensitive authentication architecture. A hosted frontier model may be excellent for architecture but wasteful for converting a block of repeated assertions into a table-driven test.
+
+**Stop and think:** If your team currently uses AI coding tools, which three tasks happen most often: generating tests, explaining code, refactoring files, designing architecture, debugging incidents, or writing documentation? Mark which of those tasks would still be acceptable if the answer were a little slower but free and private.
+
+A useful analogy is the difference between a local development database and a managed production database. You do not expect SQLite on your laptop to behave like a globally replicated managed database, but you still use it constantly because it is fast to access, cheap, private, and enough for many development tasks. Local models occupy a similar role in AI coding. They are not the whole platform, but they can absorb a large amount of daily work.
+
+The deployment model also changes behavior. When every prompt costs money, learners often under-experiment and accept the first answer that seems plausible. When local iteration is free, they can ask the model to produce alternatives, critique its own patch, generate tests, and compare designs without worrying about a meter running. That experimentation is valuable, but it must be paired with engineering judgment because a free wrong answer is still wrong.
+
+| Deployment type | Where the model runs | Main advantage | Main risk | Best fit |
+|---|---|---|---|---|
+| Local | Your workstation | Privacy and predictable cost | Hardware limits and slower inference | Tests, docs, boilerplate, small refactors |
+| API | Provider infrastructure | Strong quality and large context | Cost, network dependency, data handling | Architecture, subtle bugs, large analysis |
+| Hybrid | Both local and API | Balanced cost and quality | Requires deliberate routing | Professional daily workflow |
+
+The table shows why "local versus API" is a false binary for serious work. The real skill is task routing. You want a mental habit where you quickly classify a request before choosing a model. Routine, low-risk, repetitive, and privacy-sensitive tasks usually start local. High-risk, ambiguous, cross-system, or large-context tasks usually deserve an API model or at least a second pass from one.
 
 ---
 
-## Did You Know? The Open Source AI Boom
+## 2. Choose Models By Constraint, Not Hype
 
-**2023**: OpenAI dominates, local models struggle to compete
+Most beginners choose local models by reputation, download size, or benchmark screenshots. That is understandable, but it leads to predictable problems. A model that looks impressive on a leaderboard may be unusable on an 8 GB laptop, and a model that fits comfortably may be weak for the task you are assigning it. The first practical constraint is memory, not marketing.
 
-**2024**: Meta releases Llama 4 - changes everything
-- Open source models catch up dramatically
-- DeepSeek Coder beats GPT-3.5 on coding tasks
-- Qwen 2.5-Coder rivals commercial models
+The model name often includes a size such as `7b`, `14b`, `16b`, or `32b`. The `b` means billions of parameters. More parameters can improve capability, but they also require more memory and usually run more slowly. Quantization reduces memory use by storing parameters in fewer bits, which is why a `7b` model can often fit in several gigabytes instead of requiring the full memory implied by raw sixteen-bit weights.
 
-**2025**: Local models are now **viable alternatives**
-- DeepSeek R1 competes with o1 on reasoning
-- Qwen 2.5-Coder:32B rivals gpt-5 on code
-- Can run 7B models on MacBook Air!
+```ascii
++----------------------+----------------------+----------------------+
+| Model size           | Typical workstation  | Practical expectation|
++----------------------+----------------------+----------------------+
+| 3B to 4B             | 4 GB to 8 GB RAM     | Fast, limited depth  |
+| 7B                   | 8 GB to 16 GB RAM    | Good daily driver    |
+| 14B to 16B           | 16 GB to 24 GB RAM   | Better refactoring   |
+| 22B to 32B           | 32 GB+ RAM or GPU    | Stronger, slower     |
+| Very large models    | High-end GPU setup   | Not laptop-friendly  |
++----------------------+----------------------+----------------------+
+```
 
-**The trend**: Gap between local and API models shrinking fast. By 2026, local models may match gpt-5 quality.
+Treat these numbers as operational estimates, not guarantees. The exact memory footprint depends on quantization, context length, runtime settings, and what else is running on your machine. A developer with 16 GB RAM may run a `16b` model acceptably when the editor and browser are modest, then experience heavy swapping when a container stack and many browser tabs are also open.
+
+For this module, start with `qwen2.5-coder:7b` because it is a practical default for many learners. It is small enough to run on common developer machines while still being useful for coding tasks. If you have 16 GB RAM or more, add `deepseek-coder-v2:16b` as a higher-quality option for more difficult refactors. If your machine is constrained, use a smaller model and route complex work to an API.
+
+| Situation | Recommended local model | Why this choice works | When to escalate |
+|---|---|---|---|
+| 8 GB laptop | `qwen2.5-coder:7b` or smaller | Fits common machines and handles routine coding | Architecture, large context, subtle bugs |
+| 16 GB laptop | `qwen2.5-coder:7b` plus `deepseek-coder-v2:16b` | Balances speed and quality | Security design or complex debugging |
+| 32 GB workstation | `qwen2.5-coder:32b` or similar larger model | Better output for heavier code tasks | Whole-repo reasoning or high-stakes decisions |
+| Low-resource machine | `phi3.5:3.8b` or another small model | Fast enough for simple prompts | Most production-quality coding decisions |
+
+A senior practitioner also considers context size. A local model may answer well when you give it one function, but degrade when you paste several files and ask for a design decision. Hosted models often support larger context windows and stronger retrieval workflows. If the task depends on understanding many modules, a local model might still help summarize individual files, but the final integration decision may belong to a stronger model or a human review.
+
+**Stop and think:** Suppose a local model generates a correct-looking patch for a billing calculation. The patch is small, the tests pass, and the model explains itself confidently. What extra evidence would you require before merging if the code affects real customer invoices? Your answer should include more than "use a bigger model."
+
+The answer is engineering evidence: focused tests, edge-case analysis, code review, and comparison against the business rule. Model choice is only one layer of quality control. Local models lower the cost of producing candidate changes, but they do not lower the standard for accepting those changes.
 
 ---
 
-## Introduction: Understanding Local Models
+## 3. Install Ollama And Run A First Coding Model
 
-### What Are Local Models?
+Ollama is a local model runtime and model manager. It downloads model artifacts, runs an inference server, exposes a local API, and provides a command-line interface. You can think of it as the part of the system that turns "run this model" into an actual process listening on your machine.
 
-**The Personality**: Local models are **self-sufficient coding assistants** - they live on your machine, not in the cloud.
-
-Think of local models like having a reference library in your home versus using the public library downtown. The public library (API models) has more books, expert librarians, and the latest publications—but you have to drive there, pay parking, and work within their hours. Your home library (local models) has fewer books, but it's usually available, stays private on your machine, and costs little to nothing after the initial purchase.
-
-**Three types of AI model deployment**:
-
-```
-1. API Models (ChatGPT, Claude, Gemini)
-   ├─ Run on company servers
-   ├─ Access via internet
-   ├─ Pay per request
-   └─ Example: claude-4.6-sonnet-20241022
-
-2. Local Models (Qwen, DeepSeek, Llama)
-   ├─ Downloaded to your machine
-   ├─ Run on your CPU/GPU
-   ├─ One-time download cost
-   └─ Example: qwen2.5-coder:7b
-
-3. Hybrid (Mix of both)
-   ├─ Local for simple/repetitive tasks
-   ├─ API for complex reasoning
-   └─ Best of both worlds
-```
-
-**Scale analogy**:
-- API models = Cloud computing (AWS, Google Cloud)
-- Local models = Your own server
-- Hybrid = Edge computing + cloud
-
-**Process analogy**:
-- API models = Calling a consultant (pay per hour, expert knowledge)
-- Local models = Hiring an intern (one-time training, available 24/7)
-- Hybrid = Small team with occasional expert advice
-
----
-
-## Local vs API: When to Use Each
-
-### Use Local Models When:
-
-**1. Cost is a concern** ($0/month vs $50-100/month)
-```python
-# Scenario: Learning Python, writing 100+ functions/week
-# API cost: $20-40/month (Claude/gpt-5)
-# Local cost: $0/month (after download)
-# Annual savings: $240-480
-```
-
-**2. Privacy matters** (proprietary code)
-```python
-# Scenario: Working on closed-source company project
-# API: Code sent to Anthropic/OpenAI servers 
-# Local: Code never leaves your machine 
-```
-
-**3. Offline work needed**
-```python
-# Scenario: Coding on airplane, no WiFi
-# API: Cannot work 
-# Local: Full functionality 
-```
-
-**4. Repetitive tasks** (boilerplate, tests, docs)
-```python
-# Scenario: Generating 50 unit tests
-# API: $2-5 in costs
-# Local: Free, unlimited
-```
-
-**5. Learning and experimentation**
-```python
-# Scenario: Trying different prompts, models
-# API: Costs add up with experimentation
-# Local: Experiment freely
-```
-
----
-
-### Use API Models When:
-
-**1. Maximum quality needed**
-```python
-# Scenario: Complex algorithm design, architecture decisions
-# API: Claude Opus 4, gpt-5 (best reasoning)
-# Local: Good, but not as strong
-```
-
-**2. Latest capabilities required**
-```python
-# Scenario: Using newest features (vision, long context, etc.)
-# API: Always cutting-edge
-# Local: Lags behind by 6-12 months
-```
-
-**3. Very large context windows**
-```python
-# Scenario: Analyzing entire 50K line codebase
-# API: Claude (200K tokens), Gemini (2M tokens)
-# Local: Most models max at 8-32K tokens
-```
-
-**4. Zero setup time**
-```python
-# Scenario: Need to start coding NOW
-# API: Sign up, get key, start (5 minutes)
-# Local: Download (30min-2hrs depending on model size)
-```
-
----
-
-### The Decision Matrix
-
-| Factor | Local Models | API Models | Winner |
-|--------|-------------|------------|--------|
-| **Cost** | $0/month | $20-100/month |  Local |
-| **Privacy** | Code stays local | Sent to servers |  Local |
-| **Offline** | Works offline | Needs internet |  Local |
-| **Quality** | Good | Excellent |  API |
-| **Speed** | Slower (CPU) | Very fast |  API |
-| **Context** | 8-32K tokens | 200K-2M tokens |  API |
-| **Latest features** | 6-12mo lag | Cutting-edge |  API |
-| **Setup** | 30min-2hrs | 5 minutes |  API |
-
-**Verdict**: **Use both!** Local for most work, API for complex tasks.
-
-Think of the hybrid approach like a restaurant kitchen. You don't fly in a Michelin-starred chef (expensive API model) to chop onions and wash dishes—that's what your reliable prep cooks (local models) are for. But when it's time to create the signature dish that brings customers back, you want the master chef's expertise. The kitchen runs best when everyone works together, each handling what they do best.
-
----
-
-## The Local Model Landscape (2025)
-
-### Category 1: **Best for Coding Quality** ⭐⭐⭐
-
-#### **DeepSeek Coder V2** (China - DeepSeek AI)
-
-**What it is**: Specialized coding model that rivals gpt-5 on benchmarks
-
-**The Good**:
-- **Best code quality** among local models
-- Supports 338 programming languages
-- Strong at debugging and refactoring
-- Reasoning capabilities (R1 model)
-- 16B version runs on 16GB RAM
-
-**The Not-So-Good**:
-- ️ Newer, less community support
-- ️ 236B version needs GPU
-- ️ Less documentation than Llama
-
-**Sizes available**:
-```bash
-ollama pull deepseek-coder-v2:16b   # Recommended
-ollama pull deepseek-coder-v2:236b  # Needs GPU
-ollama pull deepseek-r1:7b          # Reasoning model
-ollama pull deepseek-r1:14b
-```
-
-**Best for**: Complex algorithms, code review, refactoring
-**Benchmarks**: Beats GPT-3.5-Turbo, rivals gpt-5 on HumanEval
-
----
-
-#### **Qwen 2.5-Coder** (China - Alibaba)
-
-**What it is**: Latest coding model from Alibaba, excellent quality
-
-**The Good**:
-- **Top-tier code generation**
-- Fast inference
-- Great at multiple languages (especially Asian languages)
-- Strong reasoning (QwQ model)
-- 7B version very efficient
-
-**The Not-So-Good**:
-- ️ Less known in Western dev community
-- ️ Some English docs still being translated
-
-**Sizes available**:
-```bash
-ollama pull qwen2.5-coder:7b    # Best balance
-ollama pull qwen2.5-coder:14b
-ollama pull qwen2.5-coder:32b   # High quality
-ollama pull qwq:32b             # Reasoning
-```
-
-**Best for**: Code generation, multi-language projects, daily coding
-**Benchmarks**: Often beats CodeLlama, competitive with GPT-3.5
-
----
-
-### Category 2: **Most Popular & Mature** ⭐
-
-#### **CodeLlama** (USA - Meta)
-
-**What it is**: Meta's specialized coding version of Llama 4
-
-**The Good**:
-- Huge community, best documentation
-- Well-tested and stable
-- Great Python support
-- Multiple size options
-- Excellent code completion
-
-**The Not-So-Good**:
-- ️ Being overtaken by newer models (DeepSeek, Qwen)
-- ️ Not as strong at reasoning
-
-**Sizes available**:
-```bash
-ollama pull codellama:7b
-ollama pull codellama:13b
-ollama pull codellama:34b
-```
-
-**Best for**: Beginners, Python development, stable choice
-**Benchmarks**: Solid, but DeepSeek and Qwen now beat it
-
----
-
-### Category 3: **Fastest Inference** 
-
-#### **Codestral** (France - Mistral AI)
-
-**What it is**: Mistral's coding-specialized model
-
-**The Good**:
-- **Very fast** inference
-- 22B params, good quality
-- Excellent for autocomplete
-- Strong European backing
-
-**The Not-So-Good**:
-- ️ 22B size needs more RAM
-- ️ Not as widely used as Llama
-
-**Sizes available**:
-```bash
-ollama pull codestral:22b
-```
-
-**Best for**: Real-time autocomplete, fast iteration
-**Benchmarks**: Competitive with CodeLlama 34B
-
----
-
-### Category 4: **Smallest & Most Efficient** 
-
-#### **Phi-3.5** (USA - Microsoft)
-
-**What it is**: Microsoft's tiny but capable model
-
-**The Good**:
-- **Only 3.8B params** - runs anywhere!
-- Surprisingly good for size
-- Great for learning
-- Fast on CPU
-
-**The Not-So-Good**:
-- ️ Limited capabilities vs larger models
-- ️ Small context window
-- ️ Not suitable for complex tasks
-
-**Sizes available**:
-```bash
-ollama pull phi3:3.8b
-ollama pull phi3.5:3.8b
-```
-
-**Best for**: Low-resource machines, learning, quick tasks
-**Benchmarks**: Punches above its weight class
-
----
-
-### Category 5: **Google's Offering**
-
-#### **CodeGemma** (USA - Google)
-
-**What it is**: Google's open-source coding model
-
-**The Good**:
-- Google quality
-- Good Python support
-- Active development
-
-**The Not-So-Good**:
-- ️ Less popular than Llama/Qwen
-- ️ Smaller community
-
-**Sizes available**:
-```bash
-ollama pull codegemma:7b
-ollama pull gemma2:9b
-ollama pull gemma2:27b
-```
-
-**Best for**: Google ecosystem, Python-focused work
-
----
-
-## Comparison Table: Which Model Should You Use?
-
-| Model | Size | RAM Needed | Code Quality | Speed | Best Use Case |
-|-------|------|------------|--------------|-------|---------------|
-| **DeepSeek Coder V2** | 16B | 16GB | ⭐⭐⭐⭐⭐ | Medium | Complex coding, refactoring |
-| **Qwen 2.5-Coder** | 7B | 8GB | ⭐⭐⭐⭐⭐ | Fast | Daily driver, general coding |
-| **Qwen 2.5-Coder** | 32B | 32GB | ⭐⭐⭐⭐⭐ | Medium | High-quality code gen |
-| **CodeLlama** | 13B | 16GB | ⭐⭐⭐⭐ | Fast | Python, stable choice |
-| **Codestral** | 22B | 24GB | ⭐⭐⭐⭐ | Very Fast | Autocomplete, real-time |
-| **CodeGemma** | 7B | 8GB | ⭐⭐⭐ | Fast | Python-focused |
-| **Phi-3.5** | 3.8B | 4GB | ⭐⭐⭐ | Very Fast | Learning, low-resource |
-
----
-
-## Recommendations by Your Situation
-
-### **You Have: MacBook with 16GB RAM** (Most Common)
-```bash
-# Your best setup:
-ollama pull qwen2.5-coder:7b          # Daily driver (uses ~6GB)
-ollama pull deepseek-coder-v2:16b     # Heavy lifting (uses ~14GB)
-```
-**Why**: Qwen 7B for fast tasks, DeepSeek 16B when you need quality
-
----
-
-### **You Have: MacBook with 8GB RAM**
-```bash
-# Your best setup:
-ollama pull qwen2.5-coder:7b          # Main model
-ollama pull phi3.5:3.8b               # Quick tasks
-```
-**Why**: Stay under 8GB, both are excellent for their size
-
----
-
-### **You Have: Desktop with 32GB+ RAM (or GPU)**
-```bash
-# Go big!
-ollama pull qwen2.5-coder:32b         # Highest quality
-ollama pull deepseek-coder-v2:236b    # If you have GPU
-```
-**Why**: Use the full power available
-
----
-
-### **You Have: Budget Laptop (4GB RAM)**
-```bash
-# Lightweight only:
-ollama pull phi3.5:3.8b
-```
-**Why**: Only model that will run smoothly on 4GB
-
----
-
-## Did You Know? The Apple Silicon Revolution
-
-### Why Your MacBook Can Run AI Now
-
-Before 2020, running AI models locally was painful. You needed expensive Nvidia GPUs, separate RAM for graphics, and complex CUDA drivers. Most developers couldn't do it.
-
-Then Apple released the **M1 chip** in November 2020. Everything changed.
-
-**The breakthrough**: Apple's "Unified Memory Architecture" means the CPU and GPU share the same fast memory. For AI inference, this is perfect - no copying data back and forth between CPU and GPU RAM.
-
-**The numbers**:
-- M1 MacBook Air (8GB): Can run 7B parameter models
-- M1 Pro (16GB): Can run 14B parameter models comfortably
-- M1 Max (32GB): Can run 32B+ parameter models
-- M1 Ultra (64-128GB): Can run models that normally need datacenter GPUs
-
-**The surprise**: A $999 MacBook Air can now run models that would have cost $10,000+ in GPU hardware just 3 years ago.
-
-**Why this matters for you**: If you have any Mac with M-series chip (M1, M2, M3, M4), you can run production-quality AI models locally. No cloud costs, complete privacy, works offline. This was science fiction in 2019.
-
----
-
-## ️ Hands-On: Installing Ollama
-
-### What is Ollama?
-
-**The Personality**: Ollama is your **model manager** - like Docker for AI models.
-
-Think of Ollama like a video game console for AI models. Just like how a PlayStation lets you download, manage, and play games without worrying about hardware compatibility or installation headaches, Ollama handles all the complexity of running AI models. You just say "I want this model," and Ollama figures out the memory management, optimization, and APIs automatically.
-
-**What it does**:
-- Downloads and manages models
-- Runs models locally
-- Provides simple API
-- Works with coding tools (Aider, Continue.dev)
-
-> ** Did You Know?**
->
-> Ollama was created by Jeffrey Morgan and Michael Chiang in 2023. They were frustrated that running local AI models required deep knowledge of CUDA drivers, quantization formats, and memory optimization. Their goal was simple: make local models as easy as `docker run`. Within a year, Ollama had over 500,000 users and became the de facto standard for running local models. The name "Ollama" is a playful take on "llama" (Meta's model family) combined with the idea of models being "portable" (O-llama, like a friendly llama you can carry around).
-
----
-
-### Installation (macOS)
+On macOS, Homebrew is the simplest installation path for many developers. On Linux, the official install script is common, and systemd may manage the service after installation. On Windows, the installer provides the same command-line interface through PowerShell. Use the installation method that matches your operating system and verify with `ollama --version` before moving on.
 
 ```bash
-# Method 1: Homebrew (recommended)
+# macOS with Homebrew
 brew install ollama
 
-# Method 2: Official installer
-# Download from https://ollama.com/download
-
-# Verify installation
+# Verify the CLI is available
 ollama --version
-# Output: ollama version 0.x.x
 ```
 
----
-
-### Installation (Linux)
-
 ```bash
-# Single command install
+# Linux installation
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Verify
+# Verify the CLI is available
 ollama --version
 
-# Start service (if needed)
+# Start the service if your installation did not start it automatically
 sudo systemctl start ollama
-sudo systemctl enable ollama
 ```
-
----
-
-### Installation (Windows)
 
 ```powershell
-# Download installer from https://ollama.com/download
-# Run OllamaSetup.exe
-
-# Verify in PowerShell
+# Windows verification after installing Ollama
 ollama --version
 ```
 
----
-
-### Your First Model
+After the CLI is available, pull a coding model. The first download can take several minutes because model files are large. Choose one model first, test it, and only then add more. Downloading five models before you know which one fits your workflow wastes disk space and makes troubleshooting harder.
 
 ```bash
-# Pull a small model to test
+# Pull a practical coding model for daily work
 ollama pull qwen2.5-coder:7b
 
-# This downloads ~4GB, takes 5-15 minutes depending on connection
-# Output:
-# pulling manifest
-# pulling 8934d96d3f08... 100% ▕████████████▏ 4.7 GB
-# pulling 8c17c2ebb0ea... 100% ▕████████████▏ 7.0 KB
-# pulling 590d74a5569b... 100% ▕████████████▏ 6.0 KB
-# pulling 56bb8bd477a5... 100% ▕████████████▏  96 B
-# pulling 1d21db061cdd... 100% ▕████████████▏ 485 B
-# success
+# Confirm the model is installed
+ollama list
 ```
 
----
-
-### Test Your Model
+A successful `ollama list` output should show the model name, an ID, a size, and the modification time. If the command fails, solve that before configuring editor tools. Aider and Continue.dev depend on the Ollama service, so debugging the editor first wastes time when the runtime itself is not healthy.
 
 ```bash
-# Interactive mode
+# Run the model interactively
 ollama run qwen2.5-coder:7b
 
-# You'll see a prompt:
-# >>>
-
-# Try it:
->>> Write a Python function to reverse a string
-
-# Model generates code!
-# Exit with: /bye
+# At the prompt, ask for a small coding task
+# Write a Python function named is_palindrome that ignores spaces and case.
 ```
 
----
+Here is a worked example of how to evaluate the first response. Do not only ask "Did it produce code?" Ask whether the code matches the requirement, whether it handles edge cases, and whether it is simple enough to maintain. Local models can produce useful code, but you should train yourself to inspect outputs immediately.
 
-### List Your Models
-
-```bash
-# See what models you have
-ollama list
-
-# Output:
-# NAME                    ID              SIZE      MODIFIED
-# qwen2.5-coder:7b        abc123          4.7 GB    2 minutes ago
+```python
+def is_palindrome(text: str) -> bool:
+    normalized = "".join(char.lower() for char in text if not char.isspace())
+    return normalized == normalized[::-1]
 ```
 
----
-
-### Remove Models (Free Up Space)
+This answer handles spaces and case, but it does not ignore punctuation. That is acceptable only if the requirement truly says spaces and case, not all non-alphanumeric characters. A careful reviewer might add tests before accepting it. The important habit is to treat the model output as a candidate implementation, not as proof.
 
 ```bash
-# Remove a model
-ollama rm codellama:13b
+# Create a quick test file to validate the behavior
+cat > test_palindrome.py <<'EOF'
+from palindrome import is_palindrome
 
-# Check space saved
-ollama list
+def test_ignores_spaces_and_case():
+    assert is_palindrome("Never odd or even")
+
+def test_detects_non_palindrome():
+    assert not is_palindrome("local model")
+EOF
 ```
 
----
+The command above writes a small test file, but in a real project you would use the repository's existing test framework and style. The goal is not to create isolated toy files forever. The goal is to connect the model's output to verification as quickly as possible.
 
-<!-- v4:generated type=no_quiz model=codex turn=1 -->
-## Quiz
+**Stop and think:** Before you run a local model on a real repository, what files would you add to the prompt and what files would you leave out? Consider whether the model needs implementation files, tests, configuration, logs, or secrets, and justify each choice.
 
-
-**Q1.** Your team is building an internal tool with proprietary source code, and several developers need to keep working during a long flight with no Wi-Fi. They also want to reduce monthly AI spend. Which approach fits this situation best: API-only, local-only, or a hybrid setup, and why?
-
-<details>
-<summary>Answer</summary>
-A hybrid setup is the best fit, with local models handling most day-to-day work. The module recommends local models when privacy matters, offline work is needed, and cost is a concern, because code stays on the machine, works without internet, and costs $0 after download. A hybrid setup is even better because the team can use local models for routine coding tasks and switch to an API model only for the small number of tasks that need stronger reasoning.
-</details>
-
-**Q2.** You are helping a developer with a 16GB MacBook choose an Ollama setup for daily coding and occasional heavier refactoring. They want one model for fast everyday work and another for higher-quality results when needed. Which two models should you recommend?
-
-<details>
-<summary>Answer</summary>
-Recommend `qwen2.5-coder:7b` for the daily driver and `deepseek-coder-v2:16b` for heavier work. The module explicitly recommends this pairing for a MacBook with 16GB RAM because Qwen 7B is fast and efficient for routine tasks, while DeepSeek 16B provides better quality for complex coding and refactoring.
-</details>
-
-**Q3.** A teammate with an 8GB laptop says local models are “too weak” after using a 7B model to design a complicated authentication architecture. What is the most appropriate fix based on the module?
-
-<details>
-<summary>Answer</summary>
-The fix is to match the model to the task complexity instead of assuming all local models are bad. The module says 7B models are good for many tasks but not great for complex reasoning. For that scenario, the teammate should either switch to a stronger local model like `deepseek-coder-v2:16b` if their hardware allows it, or use an API model such as Gemini Flash for the architecture work while keeping local models for simpler implementation and test generation.
-</details>
-
-**Q4.** Your VS Code setup uses Continue.dev with Ollama, but Continue reports “model not found” even though you already edited `config.json`. What should you check first, and what is the likely fix?
-
-<details>
-<summary>Answer</summary>
-Check whether Ollama is actually running by using `ollama list`. The module says this is the first diagnosis step. If it errors or shows nothing because the service is not running, start Ollama with `ollama serve` on macOS/Linux, or `sudo systemctl start ollama` on Linux. The Continue config should also point to `http://localhost:11434` as the `apiBase`.
-</details>
-
-**Q5.** A developer on your team downloaded `deepseek-coder-v2:236b` onto a 16GB MacBook because they assumed “bigger is always better.” The laptop becomes unresponsive and starts swapping heavily. What caused the problem, and what should they do instead?
-
-<details>
-<summary>Answer</summary>
-The problem is that the 236B model is far too large for a 16GB machine. The module explains that this size needs massive RAM or a GPU and can freeze a smaller system. The developer should remove it with `ollama rm deepseek-coder-v2:236b` and use an appropriately sized model such as `deepseek-coder-v2:16b`, which is the recommended high-quality option for a 16GB MacBook.
-</details>
-
-**Q6.** You want Aider to use a local model by default for routine coding so you do not have to pass `--model` every time. What configuration should you add, and what benefit does it provide?
-
-<details>
-<summary>Answer</summary>
-Create `~/.aider.conf.yml` and set the default model to a local Ollama model such as `ollama/qwen2.5-coder:7b`. The module’s example also enables helpful options like auto-commits, diffs, and prettier output. This lets you run `aider` without repeating the model flag each time, which makes the local workflow faster and more consistent.
-</details>
-
-**Q7.** Your team is implementing a new feature and wants to minimize cost without sacrificing quality. They need help with architecture, writing the actual classes, generating unit tests, and then doing a moderate refactor for error handling. How should they split those tasks between API and local models?
-
-<details>
-<summary>Answer</summary>
-Use an API model for the architecture step, then local models for implementation and tests, and choose local or API for the refactor based on how complex it is. The module’s recommended pattern is “use local for iteration, API for innovation.” That means architecture design should go to a stronger API model because it needs deeper reasoning, while implementing classes and generating tests are repetitive tasks that local models handle well at zero cost. A moderate refactor can go to a stronger local model like DeepSeek 16B unless it turns into a truly complex design problem.
-</details>
-
-<!-- /v4:generated -->
-## Hands-On: Using Local Models with Aider
-
-### What is Aider?
-
-**Aider** = AI pair programmer in your terminal
-- Edits multiple files
-- Git integration
-- Works with any LLM (API or local!)
+Local execution improves privacy because prompts do not leave your machine through a model provider API. It does not remove every privacy risk. If you paste secrets into terminal history, commit generated files containing credentials, or use plugins that call external services, you can still leak sensitive data. Local models are one part of a privacy posture, not a complete security program.
 
 ---
 
-### Installing Aider
+## 4. Connect Local Models To Coding Tools
+
+Running `ollama run` proves that the model works, but most coding value appears when the model is connected to tools that understand files, diffs, and editor context. Two common tools are Aider for terminal-based pair programming and Continue.dev for editor-integrated assistance. They solve different workflow problems, so many developers use both.
+
+Aider is useful when you want the model to edit files directly in a Git repository. It can read selected files, propose patches, apply changes, and create commits. This makes it powerful, but also means you should use it inside a clean repository state whenever possible. If your working tree already has unrelated changes, review them before inviting an AI tool to edit nearby files.
 
 ```bash
-# Install via pip
+# Install Aider in your normal Python tool environment
 pip install aider-chat
 
-# Or in your venv
-source venv/bin/activate
-pip install aider-chat
-
-# Verify
+# Verify the command is available
 aider --version
 ```
 
----
-
-### Using Aider with Local Models
-
 ```bash
-# Basic usage with Qwen
+# Start Aider with a local Ollama model
 aider --model ollama/qwen2.5-coder:7b
 
-# With specific files
-aider --model ollama/qwen2.5-coder:7b myfile.py
-
-# With DeepSeek for complex work
-aider --model ollama/deepseek-coder-v2:16b
+# Start Aider with a specific file in context
+aider --model ollama/qwen2.5-coder:7b src/example.py
 ```
 
----
+A useful first Aider task is narrow and testable. Instead of asking "Improve this project," ask for one function, one bug, or one test gap. Local models perform better when the prompt is concrete, the context is small, and the acceptance criteria are explicit.
 
-### Example Session
-
-```bash
-# Start Aider with local model
-aider --model ollama/qwen2.5-coder:7b test.py
-
-# Aider opens, you see:
-# Aider v0.x.x
-# Model: ollama/qwen2.5-coder:7b
-# Git repo: /path/to/project
-# Added test.py to the chat
-
-# Now ask it to code:
-> Create a Python function to calculate fibonacci numbers with memoization
-
-# Aider generates code:
-# Applied edit to test.py
-# Commit changes? (Y)es/(N)o/(D)on't ask again [Yes]: y
-# Commit message: Add fibonacci function with memoization
-
-# Success! Code written, tests added, committed to git
+```text
+Add table-driven tests for parse_duration in src/time_utils.py.
+Cover seconds, minutes, hours, and invalid input.
+Do not change production code unless a test exposes a bug.
 ```
 
----
+That prompt gives the model a role, a target file, coverage expectations, and a constraint. If the model changes production code unnecessarily, you have a clear reason to reject or revise the patch. Good prompts are not long because they are verbose; they are long enough to define the engineering contract.
 
-### Aider Configuration File
-
-Create `~/.aider.conf.yml`:
+Aider can also use a configuration file so you do not repeat the model flag on every command. The exact options evolve across Aider versions, so treat this as a starting point and confirm against the installed version if an option fails. The key idea is to make the local path easy enough that you use it by default for routine tasks.
 
 ```yaml
-# Use local model by default
+# ~/.aider.conf.yml
 model: ollama/qwen2.5-coder:7b
-
-# Auto-commit changes
 auto-commits: true
-
-# Show diffs
 show-diffs: true
-
-# Prettier output
 pretty: true
 ```
 
-Now just run:
-```bash
-aider  # Uses config automatically
-```
-
----
-
-### Cost Comparison: Aider Local vs API
-
-**Scenario**: Refactor 10 files (500 lines each)
-
-**With Claude API**:
-```
-Input: ~100K tokens
-Output: ~50K tokens
-Cost: ~$5-8 per refactoring session
-Monthly (4 sessions): $20-32
-```
-
-**With Local Qwen**:
-```
-Input: Unlimited
-Output: Unlimited
-Cost: $0
-Monthly (unlimited sessions): $0
-```
-
-**Savings**: $20-32/month = $240-384/year!
-
----
-
-## Hands-On: Using Local Models with Continue.dev
-
-### What is Continue.dev?
-
-**Continue.dev** = VS Code extension for AI coding
-- Like Copilot, but works with ANY model
-- Supports local models!
-- Open source
-
----
-
-### Installing Continue.dev
-
-1. Open VS Code
-2. Extensions (Cmd/Ctrl+Shift+X)
-3. Search "Continue"
-4. Install "Continue - Codestral, Claude, and more"
-
----
-
-### Configuring for Local Models
-
-1. Open Continue settings (Cmd/Ctrl+Shift+J)
-2. Click gear icon ️
-3. Edit `config.json`:
+Continue.dev solves a different problem by bringing local models into VS Code and compatible editor workflows. It can provide chat, inline editing, and autocomplete-style assistance depending on configuration. The main failure mode is assuming Continue is broken when Ollama is not running or the configured model name does not match `ollama list`.
 
 ```json
 {
   "models": [
     {
-      "title": "Qwen 2.5 Coder (Local)",
+      "title": "Qwen 2.5 Coder Local",
       "provider": "ollama",
       "model": "qwen2.5-coder:7b",
-      "apiBase": "http://localhost:11434"
+      "apiBase": "http://127.0.0.1:11434"
     },
     {
-      "title": "DeepSeek Coder (Local)",
+      "title": "DeepSeek Coder Local",
       "provider": "ollama",
       "model": "deepseek-coder-v2:16b",
-      "apiBase": "http://localhost:11434"
+      "apiBase": "http://127.0.0.1:11434"
     }
   ],
   "tabAutocompleteModel": {
     "title": "Qwen Autocomplete",
     "provider": "ollama",
-    "model": "qwen2.5-coder:7b"
+    "model": "qwen2.5-coder:7b",
+    "apiBase": "http://127.0.0.1:11434"
   }
 }
 ```
 
-4. Save and reload VS Code
+The `apiBase` value points to the local Ollama server. Using `127.0.0.1` makes the local network boundary explicit, which is helpful when teaching and debugging. If your tool documentation shows `localhost`, the intent is the same for most developer machines, but consistency makes configuration easier to reason about.
 
----
-
-### Using Continue with Local Models
-
-**Tab Autocomplete**:
-- Start typing code
-- Continue suggests completions
-- Press Tab to accept
-- All running locally!
-
-**Chat**:
-- Open Continue sidebar (Cmd/Ctrl+Shift+J)
-- Select "Qwen 2.5 Coder (Local)"
-- Ask questions:
-  ```
-  You: Refactor this function to use async/await
-
-  Qwen: [Generates refactored code]
-  ```
-
-**Inline Editing**:
-- Highlight code
-- Cmd/Ctrl+I
-- Describe change: "Add error handling"
-- Continue edits inline!
-
----
-
-### Multi-Model Setup (Best Practice)
-
-Use different models for different tasks:
-
-```json
-{
-  "models": [
-    {
-      "title": "Quick (Phi-3.5)",
-      "provider": "ollama",
-      "model": "phi3.5:3.8b",
-      "description": "Fast for simple tasks"
-    },
-    {
-      "title": "Balanced (Qwen)",
-      "provider": "ollama",
-      "model": "qwen2.5-coder:7b",
-      "description": "Daily driver"
-    },
-    {
-      "title": "Quality (DeepSeek)",
-      "provider": "ollama",
-      "model": "deepseek-coder-v2:16b",
-      "description": "Complex refactoring"
-    },
-    {
-      "title": "API (Claude)",
-      "provider": "anthropic",
-      "model": "claude-4.6-sonnet-20241022",
-      "apiKey": "YOUR_KEY",
-      "description": "When you need the best"
-    }
-  ]
-}
+```ascii
++----------------------+       +---------------------+
+| VS Code / Continue   |       | Terminal / Aider    |
+|                      |       |                     |
+| Chat with file ctx   |       | Patch files in Git  |
+| Inline edits         |       | Show diffs          |
+| Autocomplete         |       | Commit changes      |
++----------+-----------+       +----------+----------+
+           |                              |
+           | HTTP to local runtime        | HTTP to local runtime
+           v                              v
++----------------------------------------------------+
+| Ollama server on 127.0.0.1:11434                   |
+|                                                    |
+| Loaded model: qwen2.5-coder:7b                     |
+| Optional model: deepseek-coder-v2:16b              |
++----------------------------------------------------+
 ```
 
-Switch models based on task complexity!
+**Stop and think:** Which interface should you use for a change that touches four files and must be reviewed as a Git diff: editor chat, inline editing, or Aider? Which interface should you use for quickly asking what a selected function does? Explain the workflow reason, not just the tool name.
+
+The practical split is straightforward. Use Continue when you are reading, asking questions, applying small inline edits, or using editor context. Use Aider when you want a deliberate patch across files and expect Git integration. Use raw `ollama run` when you are testing a model, experimenting with prompts, or isolating whether the runtime works before blaming another tool.
 
 ---
 
-## Cost Optimization: Hybrid Strategy
+## 5. Route Tasks With A Hybrid Strategy
 
-### The 80/20 Rule
+A local model is most valuable when it becomes part of a routing strategy. Without routing, teams swing between two bad habits. They either send every task to the most expensive model because it feels safest, or they force every task through a local model because it feels cheapest. Both habits waste something important.
 
-**80% of tasks**: Simple, use local models (FREE)
-- Code completion
-- Boilerplate generation
-- Unit tests
-- Documentation
-- Simple refactoring
+A good hybrid strategy starts by classifying the task. Ask whether the work is routine or novel, low-risk or high-risk, small-context or large-context, private or shareable, and reversible or hard to undo. This classification is faster than it sounds once the team practices it. It becomes a short design reflex before choosing the model.
 
-**20% of tasks**: Complex, use API (PAY)
-- Architecture design
-- Complex algorithms
-- Debugging subtle bugs
-- Code review of large changes
+| Task type | Start with local? | Escalate to API when | Verification required |
+|---|---|---|---|
+| Generate unit tests | Yes | Test logic is domain-heavy or security-sensitive | Run tests and inspect assertions |
+| Write boilerplate | Yes | Framework behavior is unfamiliar or production-critical | Compile, lint, and review diff |
+| Explain one function | Yes | Explanation affects incident response or compliance | Compare with code and logs |
+| Refactor one module | Usually | Behavior is subtle or many callers are involved | Tests, diff review, possibly API second pass |
+| Design architecture | Usually no | Local may draft alternatives, but final needs stronger reasoning | Human design review and constraints check |
+| Debug production issue | Sometimes | Impact is high, context is broad, or time pressure is severe | Logs, reproduction, rollback plan |
 
-**Result**: 80% cost reduction!
+The phrase "start with local" does not mean "trust local." It means local is allowed to produce the first draft. For low-risk tasks, that first draft may be enough after tests and review. For high-risk tasks, the local draft can still be useful as a sketch, but the final decision needs stronger evidence.
 
----
+A common pattern is "local for iteration, API for judgment." For example, a developer might ask a local model to generate three possible test structures for a parser, then choose one and refine it manually. Later, if the parser handles a complex production format and failures are expensive, the developer might ask a stronger API model to review the final test strategy for missing classes of input.
 
-### Your Hybrid Setup (Recommended)
-
-**For daily coding**:
 ```bash
-# VS Code + Continue.dev
-# Autocomplete: Qwen 2.5-Coder:7b (local)
-# Chat: Mix of local (simple) + Gemini Flash (complex, your free tier)
+# Local model for routine implementation
+aider --model ollama/qwen2.5-coder:7b src/user_profile.py tests/test_user_profile.py
+
+# Higher-quality local model for a more difficult refactor
+aider --model ollama/deepseek-coder-v2:16b src/billing_rules.py tests/test_billing_rules.py
+
+# API model only when the task needs stronger reasoning or broad context
+aider --model gemini/gemini-2.5-flash src/auth_design.md src/auth_service.py
 ```
 
-**For terminal work**:
-```bash
-# Aider with local
-aider --model ollama/qwen2.5-coder:7b
+Cost control is not only about reducing the bill. It is about making experimentation cheap enough that developers can ask better questions. If a local model can generate ten variants for no token cost, the developer can compare approaches, find edge cases, and sharpen the final prompt before using a paid model. That often improves the paid model's answer because the expensive request becomes more specific.
 
-# When stuck, switch to API
-aider --model gemini/gemini-2.5-flash
+```python
+def estimate_monthly_api_savings(
+    local_sessions_per_week: int,
+    average_tokens_per_session: int,
+    api_cost_per_million_tokens: float,
+) -> float:
+    weekly_tokens = local_sessions_per_week * average_tokens_per_session
+    monthly_tokens = weekly_tokens * 4
+    return (monthly_tokens / 1_000_000) * api_cost_per_million_tokens
+
+
+if __name__ == "__main__":
+    savings = estimate_monthly_api_savings(
+        local_sessions_per_week=25,
+        average_tokens_per_session=8_000,
+        api_cost_per_million_tokens=3.0,
+    )
+    print(f"Estimated monthly API cost avoided: ${savings:.2f}")
 ```
 
-**Monthly cost**:
-- Local models: $0
-- Gemini Flash (free tier): $0
-- Overflow to paid API: $3-5/month
+This calculator is intentionally simple. Real pricing distinguishes input tokens, output tokens, cache hits, and model tiers. The purpose is not perfect accounting; the purpose is to make the hidden cost of frequent experimentation visible. Once you can estimate the cost, you can choose deliberately instead of reacting to a surprise invoice.
 
-**Total**: ~$5/month vs $50-100 API-only!
+**Stop and think:** A local model proposes a refactor that reduces duplicate code but changes the order of validation errors returned by an API. Is this a local-model problem, a prompt problem, or a review problem? Decide what you would do before reading the next paragraph.
 
----
-
-## Performance Benchmarks
-
-### Code Generation Quality
-
-**HumanEval Benchmark** (Python coding tasks):
-
-| Model | Score | Cost/1M tokens | Speed |
-|-------|-------|----------------|-------|
-| gpt-5 | 67% | $30 | Fast |
-| Claude 3.5 Sonnet | 64% | $15 | Fast |
-| DeepSeek Coder V2 16B | 62% | **$0** | Medium |
-| Qwen 2.5-Coder 32B | 61% | **$0** | Medium |
-| CodeLlama 34B | 54% | **$0** | Medium |
-| Gemini Flash 2.5 | 71% | **$0** (free tier) | Very Fast |
-
-**Insight**: Local models are 90-95% as good as API, at 0% of the cost!
+It is primarily a review problem. The model may have followed a reasonable refactoring instinct while missing an externally observable behavior. A better prompt could have said "preserve error order," and a stronger model might have noticed the contract, but the team's acceptance process must catch this. Hybrid AI coding does not remove the need to define compatibility constraints before refactoring.
 
 ---
 
-### Speed Comparison (MacBook Pro 16GB)
+## 6. Debug And Operate The Local Workflow
 
-**Task**: Generate 100-line Python function
+Local AI coding introduces a small operational surface area. You now have a runtime service, downloaded model artifacts, editor configuration, terminal tools, memory pressure, and sometimes GPU acceleration. The upside is control; the cost is that you must debug the stack when something breaks.
 
-| Model | Time | Quality |
-|-------|------|---------|
-| gpt-5 (API) | 2-3 sec | ⭐⭐⭐⭐⭐ |
-| Qwen 2.5-Coder:7b (local) | 8-12 sec | ⭐⭐⭐⭐ |
-| DeepSeek V2:16b (local) | 15-20 sec | ⭐⭐⭐⭐⭐ |
-| Phi-3.5:3.8b (local) | 5-8 sec | ⭐⭐⭐ |
+Start every diagnosis at the bottom of the stack. If Continue.dev cannot find a model, first verify Ollama. If Aider is slow, first check whether the model is too large for available memory. If responses are low quality, first check whether the task is too complex for the selected model before assuming local models are useless.
 
-**Trade-off**: Local is 3-6× slower, but free and private!
-
----
-
-## Common Mistakes: Learn From Others' Pain
-
-### Mistake #1: "Downloaded 236B Model, My Mac is Frozen"
-
-**Symptom**: Downloaded DeepSeek 236B on 16GB MacBook, system unresponsive
-
-**Why It's Bad**:
-- 236B model needs 200+ GB RAM or GPU
-- CPU-only inference would take minutes per response
-- System swaps to disk, grinds to halt
-
-**The Fix**:
 ```bash
-# Remove the huge model
-ollama rm deepseek-coder-v2:236b
+# Confirm Ollama is installed
+ollama --version
 
-# Use appropriately-sized model
-ollama pull deepseek-coder-v2:16b  # Much better!
-```
-
-**Rule**: Match model size to your RAM (model params × 2 = GB needed)
-
----
-
-### Mistake #2: "Local Model Gives Worse Code Than I Expected"
-
-**Symptom**: Qwen 7B generates buggy code, frustrated
-
-**Why It's Bad**:
-- Used 7B model for complex architecture task
-- 7B models are good, but not great at complex reasoning
-
-**The Fix**:
-```bash
-# For complex tasks, use bigger model OR API
-aider --model ollama/deepseek-coder-v2:16b  # Better
-# or
-aider --model gemini/gemini-2.5-flash       # Your free tier
-```
-
-**Rule**: Match model capability to task complexity!
-
----
-
-### Mistake #3: "Ollama Using 100% CPU, Laptop is Hot"
-
-**Symptom**: Fan running loud, laptop hot during code generation
-
-**Why It's Normal**:
-- Local models use CPU/GPU intensively
-- This is expected behavior
-- Not harmful unless sustained for hours
-
-**The Fix** (if bothered):
-```bash
-# Use smaller model for less intensive work
-ollama pull phi3.5:3.8b
-
-# Or use API for complex stuff
-# Save local for offline/simple tasks
-```
-
-**Rule**: Local models trade electricity for cost savings!
-
----
-
-### Mistake #4: "Continue.dev Not Finding My Local Model"
-
-**Symptom**: Set up Ollama, but Continue.dev says "model not found"
-
-**Diagnosis**:
-```bash
-# Check Ollama is running
+# Confirm the service responds and models are available
 ollama list
 
-# If empty or error, Ollama service isn't running
-```
-
-**The Fix**:
-```bash
-# Start Ollama service (macOS/Linux)
-ollama serve
-
-# Or on Linux:
-sudo systemctl start ollama
-
-# Then in Continue config:
-# Make sure apiBase is: http://localhost:11434
-```
-
-**Prevention**: Always verify `ollama list` works before configuring tools!
-
----
-
-## Best Practices for Local Models
-
-### 1. **Start Small, Scale Up**
-
-**Why**: Don't download every model at once
-
-```bash
-# BAD (downloading everything)
+# Pull a missing model if needed
 ollama pull qwen2.5-coder:7b
-ollama pull qwen2.5-coder:14b
-ollama pull qwen2.5-coder:32b
-ollama pull deepseek-coder-v2:16b
-ollama pull codellama:34b
-# (Uses 80+ GB disk space!)
 
-# GOOD (start with one)
+# Run a direct test outside editor tools
+ollama run qwen2.5-coder:7b "Write a Python function that adds two integers."
+```
+
+The direct test matters because it separates runtime problems from integration problems. If `ollama run` fails, Continue and Aider are not the right place to debug. If `ollama run` works but Continue fails, check the model name, provider, and `apiBase`. If Continue works but autocomplete is slow, try a smaller model for tab completion and keep the larger model for chat.
+
+```ascii
++-----------------------------+
+| Tool reports model failure  |
++--------------+--------------+
+               |
+               v
++-----------------------------+
+| Does ollama list work?      |
++-------+---------------------+
+        | yes
+        v
++-----------------------------+
+| Does ollama run model work? |
++-------+---------------------+
+        | yes
+        v
++-----------------------------+
+| Check tool config:          |
+| provider, model, apiBase    |
++-----------------------------+
+
+If any earlier check fails, fix Ollama before editing tool settings.
+```
+
+Memory pressure has a distinct feel. The machine becomes sluggish, fans increase, responses take much longer than expected, and other applications pause because the operating system is swapping memory to disk. The fix is usually not a clever prompt. The fix is to use a smaller model, reduce context size, close memory-heavy applications, or move the task to an API model.
+
+```bash
+# Remove a model that is too large for your machine
+ollama rm deepseek-coder-v2:236b
+
+# Keep a practical daily model instead
 ollama pull qwen2.5-coder:7b
-# Test it for a week
-# If you need more quality, then add:
-ollama pull deepseek-coder-v2:16b
 ```
 
-**Benefit**: Save disk space, learn what works for you
+Quality problems require a different diagnosis. Ask whether the prompt included enough context, whether the model was asked to perform reasoning beyond its capability, whether the task needs tests, and whether the output was evaluated against the real acceptance criteria. Many "bad model" experiences are actually context failures, vague prompts, or attempts to use a small model for senior-level design.
 
----
-
-### 2. **Use Local for Iteration, API for Innovation**
-
-**Pattern**:
-```python
-# Scenario: Building new feature
-
-# Step 1: Architecture (use API - needs reasoning)
-aider --model gemini/gemini-2.5-flash
-> "Design class structure for user authentication system"
-
-# Step 2: Implementation (use local - repetitive)
-aider --model ollama/qwen2.5-coder:7b
-> "Implement the User class with methods we designed"
-
-# Step 3: Tests (use local - boilerplate)
-> "Generate unit tests for all User methods"
-
-# Step 4: Refactoring (use API if complex, local if simple)
-aider --model ollama/deepseek-coder-v2:16b
-> "Refactor for better error handling"
-```
-
-**Benefit**: Best quality where it matters, zero cost where it doesn't
-
----
-
-### 3. **Create Model Aliases for Workflows**
-
-**Setup** (in `~/.bashrc` or `~/.zshrc`):
-```bash
-# Quick coding tasks
-alias aider-quick="aider --model ollama/phi3.5:3.8b"
-
-# Daily driver
-alias aider-local="aider --model ollama/qwen2.5-coder:7b"
-
-# High quality
-alias aider-quality="aider --model ollama/deepseek-coder-v2:16b"
-
-# API fallback (your Gemini free tier)
-alias aider-api="aider --model gemini/gemini-2.5-flash"
-```
-
-**Usage**:
-```bash
-# Simple task
-aider-quick add_tests.py
-
-# Normal coding
-aider-local main.py
-
-# Complex refactoring
-aider-quality --architect
-```
-
-**Benefit**: Fast workflow switching!
-
----
-
-### 4. **Monitor Your Costs (Even $0 Has Opportunity Cost)**
-
-**Track usage**:
-```bash
-# Create usage log
-echo "$(date): Used DeepSeek 16B for refactoring - 5 min CPU time" >> ~/ai_usage.log
-
-# Weekly review
-cat ~/ai_usage.log | grep "$(date +%Y-%m)"
-```
-
-**Calculate savings**:
-```python
-# If you used API instead
-api_cost_per_1m_tokens = 3  # Claude Haiku
-estimated_tokens = 50_000   # Your usage
-monthly_savings = (estimated_tokens / 1_000_000) * api_cost_per_1m_tokens * 30
-print(f"Saved ${monthly_savings:.2f} this month by using local models")
-```
-
-**Benefit**: Quantify your cost optimization!
-
----
-
-## Deep Dive (Optional): How Local Models Work
-
-**For the curious**: What happens when you run `ollama run qwen2.5-coder:7b`?
-
-### The Technical Stack
-
-**1. Model Download**:
-```
-Ollama downloads:
-├─ Model weights (4.7 GB) - the "brain"
-├─ Tokenizer (7 KB) - converts text to numbers
-├─ Config (6 KB) - model parameters
-└─ Prompt template (485 B) - how to format inputs
-```
-
-**2. Loading into RAM**:
-```
-7B model × 2 bytes/param = 14 GB quantized
-Actually uses: 4-6 GB (thanks to quantization!)
-```
-
-**3. Inference**:
-```
-Your prompt → Tokenizer → Model → Detokenizer → Code output
-
-Example:
-"Write Python function" → [1234, 5678, 9012] → Transformer layers → [4567, 8901, 2345] → "def fibonacci(n):"
-```
-
-**4. Quantization Magic**:
-```
-Full precision: 16-bit floats = 14 GB
-Quantized (Q4): 4-bit ints = 3.5 GB
-Quantized (Q8): 8-bit ints = 7 GB
-
-Ollama uses Q4 by default - 4× memory reduction!
-```
-
-**5. CPU vs GPU**:
-```
-CPU inference: Uses all cores, ~10-20 tokens/sec
-GPU inference (CUDA): Uses GPU, ~50-100 tokens/sec
-Apple Silicon (Metal): Uses GPU, ~30-60 tokens/sec
-```
-
----
-
-## Try This: Interactive Challenges
-
-### Challenge 1: The Model Comparison Test
-
-**Goal**: See which model is best for YOUR coding style
-
-**Task**: Generate the same function with 3 different models, compare
+A useful escalation rule is to switch models when the failure mode repeats after one good prompt revision. If the first answer is weak because your prompt was vague, improve the prompt and try again. If the second answer is still weak on a well-scoped task, change the model or route the task to an API. Repeating the same weak request wastes time even when tokens are free.
 
 ```bash
-# Create test file
-cat > compare_models.md << 'EOF'
-# Model Comparison
-Task: Write a Python function to find prime numbers up to N using Sieve of Eratosthenes
+# Smaller, faster model for quick tasks
+aider --model ollama/qwen2.5-coder:7b tests/test_parser.py
 
-## Model 1: Qwen 2.5-Coder:7b
-[Paste output here]
+# Stronger local model for more demanding refactoring
+aider --model ollama/deepseek-coder-v2:16b src/parser.py tests/test_parser.py
 
-## Model 2: DeepSeek Coder V2:16b
-[Paste output here]
-
-## Model 3: CodeLlama:13b
-[Paste output here]
-
-## Winner: [Your choice]
-Why: [Your reasoning]
-EOF
-
-# Test each model
-ollama run qwen2.5-coder:7b "Write Python function for Sieve of Eratosthenes"
-ollama run deepseek-coder-v2:16b "Write Python function for Sieve of Eratosthenes"
-ollama run codellama:13b "Write Python function for Sieve of Eratosthenes"
+# API fallback when the reasoning risk is higher than the local model can handle
+aider --model gemini/gemini-2.5-flash src/parser.py tests/test_parser.py docs/parser-contract.md
 ```
+
+The senior move is to make these decisions visible to the team. Document which local model is the daily default, which one is the heavier local option, which API model is approved for escalation, and what kinds of code must not be sent to external providers. Without that shared agreement, each developer invents their own policy, and the team's privacy and cost posture becomes accidental.
+
+---
+
+## Did You Know?
+
+1. Ollama exposes a local HTTP API by default, which is why editor tools can talk to it without each tool implementing its own model runtime.
+
+2. Quantization is the reason many local models fit on ordinary developer machines; it stores model weights with fewer bits while accepting some quality trade-off.
+
+3. Local execution can improve code privacy, but it does not protect secrets from terminal history, editor plugins, logs, screenshots, or accidental commits.
+
+4. The best hybrid workflows often reduce paid model usage by making the expensive prompt more specific after local experimentation has clarified the problem.
+
+---
+
+## Common Mistakes
+
+| Mistake | What it looks like | Why it causes trouble | Better practice |
+|---|---|---|---|
+| Downloading the largest model first | A developer pulls a huge model onto a laptop and the machine becomes unresponsive | Model size must match memory, or the operating system starts swapping heavily | Start with `qwen2.5-coder:7b`, then add larger models only after measuring performance |
+| Treating local output as automatically safe | A local model writes plausible code and the developer merges without tests | Local privacy does not equal correctness, and generated code can still break contracts | Run tests, inspect diffs, and review behavior against acceptance criteria |
+| Using a small model for architecture decisions | A team asks a 7B model to design authentication, authorization, and audit logging | Small models can miss cross-system constraints and security implications | Use local models for drafts, then escalate high-risk design decisions |
+| Debugging the editor before the runtime | Continue.dev says a model is missing, so the developer repeatedly edits JSON config | If Ollama is not running or the model was not pulled, editor settings cannot fix it | Verify `ollama list` and `ollama run` before changing tool configuration |
+| Sending too much context | The prompt includes entire files, logs, and unrelated documentation | Local models have limited context and may focus on irrelevant details | Provide the smallest set of files needed for the decision |
+| Never escalating to API models | The team insists on local-only even when results are repeatedly weak | Free iteration becomes expensive in developer time and review risk | Escalate after a good prompt revision still fails |
+| Ignoring operational cost | A laptop runs hot for long sessions during every coding task | Local inference uses electricity, memory, and developer time even when token cost is zero | Use smaller models for frequent tasks and reserve heavier models for harder work |
+| Forgetting team policy | Each developer chooses different tools, models, and data-sharing habits | Cost, privacy, and review expectations become inconsistent | Document approved local models, API fallback rules, and data restrictions |
+
+---
+
+## Quiz
+
+**Q1.** Your team works on proprietary payment code and wants AI help generating unit tests. The tests are repetitive, the repository is private, and developers will run the normal test suite afterward. Which model routing decision should you make, and what verification still remains necessary?
 
 <details>
-<summary>Expected Results</summary>
+<summary>Answer</summary>
 
-**Likely winner**: DeepSeek V2:16b (most optimized, best comments)
-**Runner-up**: Qwen 2.5-Coder:7b (fast, correct, good enough)
-**Lesson**: Bigger models produce slightly better code, but 7B is often sufficient!
+Start with a local model because the task is repetitive, privacy-sensitive, and easy to verify with tests. The remaining verification is still essential: inspect the generated assertions, run the project's test suite, and confirm the tests check meaningful behavior rather than simply mirroring the implementation. Local execution reduces data exposure and token cost, but it does not prove the generated tests are useful.
+
+</details>
+
+**Q2.** A developer with an 8 GB laptop pulls a large model because a benchmark says it performs well. After starting the model, the editor freezes, the terminal lags, and responses take a very long time. What is the most likely root cause, and how should the developer recover?
+
+<details>
+<summary>Answer</summary>
+
+The most likely cause is memory pressure from running a model that is too large for the machine. The developer should stop using that model, remove it if necessary with `ollama rm`, and switch to a smaller daily model such as `qwen2.5-coder:7b` or another model that fits comfortably. For complex tasks that exceed the laptop's local capacity, they should escalate to an API model instead of forcing the local machine to swap.
+
+</details>
+
+**Q3.** Continue.dev reports that `qwen2.5-coder:7b` cannot be found, but the configuration looks correct at first glance. What diagnostic sequence should you follow before changing more editor settings?
+
+<details>
+<summary>Answer</summary>
+
+First run `ollama list` to verify that Ollama is installed, running, and aware of the model. Then run `ollama run qwen2.5-coder:7b` with a tiny prompt to confirm the model works outside the editor. Only after those checks pass should you inspect Continue.dev configuration for provider, exact model name, and `apiBase`. This sequence isolates the runtime from the editor integration.
+
+</details>
+
+**Q4.** A local model writes a refactor that removes duplicate code but changes the order of validation errors returned by a public API. The test suite still passes because no test checks error ordering. How should the team respond?
+
+<details>
+<summary>Answer</summary>
+
+The team should treat this as a review and test-coverage issue, not merely a model issue. They should decide whether error ordering is part of the API contract, add or update tests to capture the expected behavior, and revise or reject the refactor if it breaks compatibility. A stronger model might have noticed the risk, but the acceptance process must define and verify externally visible behavior.
+
+</details>
+
+**Q5.** Your team needs help designing a new authorization model, implementing straightforward data classes, generating unit tests, and writing documentation. How should you split the work between local and API models?
+
+<details>
+<summary>Answer</summary>
+
+Use an API model or a strong reviewed design process for the authorization model because it is high-risk and reasoning-heavy. Use local models for the straightforward data classes, unit test drafts, and documentation because those tasks are more repetitive and easier to verify. The key is not local-only or API-only; it is routing each task based on risk, context size, and verification cost.
+
+</details>
+
+**Q6.** A teammate says local models are useless because a 7B model produced poor advice for a large cross-repository migration. What question should you ask before accepting that conclusion, and what routing change might you recommend?
+
+<details>
+<summary>Answer</summary>
+
+Ask whether the task was appropriate for the selected model and context window. A large cross-repository migration requires broad context, careful sequencing, and higher-level reasoning, so a small local model may be the wrong tool. The teammate could still use local models to summarize individual files or draft mechanical changes, but the migration plan should be reviewed by a stronger API model and humans familiar with the system.
+
+</details>
+
+**Q7.** A developer uses a local model to generate tests for a parser and then asks an API model to review the final test strategy. Why can this be better than sending the whole task to the API immediately?
+
+<details>
+<summary>Answer</summary>
+
+Local iteration lets the developer explore test cases, clarify edge conditions, and produce a concrete draft without paying for every experiment. The later API review can focus on a sharper question: whether the drafted strategy misses important input classes or behavioral risks. This often reduces cost while improving the quality of the expensive request because the prompt is more specific and evidence-rich.
+
+</details>
+
+**Q8.** During a flight, a developer needs AI assistance for code explanation and small refactors, but cannot access the internet. The same repository contains sensitive internal logic. What setup would have prevented the interruption, and what limits should the developer still remember?
+
+<details>
+<summary>Answer</summary>
+
+A local Ollama setup with a suitable coding model, connected to Aider or Continue.dev, would allow code explanation and small refactors without internet access and without sending prompts to a hosted model provider. The developer should still remember local models have limited context and capability compared with stronger API models, and generated changes still require tests and review before being trusted.
+
 </details>
 
 ---
 
-### Challenge 2: Cost Savings Calculator
+## Hands-On Exercise
 
-**Goal**: Calculate your actual savings from using local models
+In this exercise, you will build a small local-model workflow and make a routing decision the way a professional team would. You do not need a production repository; a small Git repository with one or two source files is enough. The goal is to practice setup, verification, task routing, and review rather than to produce a large application.
 
-**Task**: Track one week of coding, calculate what it would cost with API
+### Scenario
+
+Your team maintains a small Python utility library. You want to use AI assistance to add tests and improve one function, but the repository is private and the team wants to avoid unnecessary API usage. You will start with a local model, verify the runtime, use a coding tool, and then decide whether escalation is justified.
+
+### Step 1: Verify The Runtime
+
+Run the following commands and record what each one proves. If a command fails, fix that layer before continuing to the next step. Do not configure editor tooling until the model works directly.
+
+```bash
+ollama --version
+ollama list
+ollama pull qwen2.5-coder:7b
+ollama run qwen2.5-coder:7b "Write a Python function that validates an email-like string."
+```
+
+Success criteria:
+
+- [ ] You can explain whether Ollama is installed, running, and able to execute the selected model.
+
+- [ ] You can identify the exact model name shown by `ollama list`.
+
+- [ ] You have confirmed the model can answer a direct coding prompt outside any editor integration.
+
+### Step 2: Create A Small Test Target
+
+Create or choose a small function with behavior that can be tested. The example below is intentionally simple, but it includes enough edge cases to make test generation meaningful.
 
 ```python
-# Create savings_calculator.py
-def calculate_savings():
-    # Your actual usage this week
-    coding_sessions = 15  # How many times you used Aider/Continue
-    avg_tokens_per_session = 5000  # Rough estimate
+# src/durations.py
+def parse_duration_seconds(value: str) -> int:
+    text = value.strip().lower()
 
-    total_tokens = coding_sessions * avg_tokens_per_session
+    if text.endswith("ms"):
+        return int(text[:-2]) // 1000
 
-    # API costs
-    claude_sonnet_cost = (total_tokens / 1_000_000) * 3  # $3/M input
-    gemini_flash_cost = 0  # Your free tier
+    if text.endswith("s"):
+        return int(text[:-1])
 
-    # Local cost
-    local_cost = 0
+    if text.endswith("m"):
+        return int(text[:-1]) * 60
 
-    weekly_savings = claude_sonnet_cost
-    monthly_savings = weekly_savings * 4
-    annual_savings = monthly_savings * 12
+    if text.endswith("h"):
+        return int(text[:-1]) * 3600
 
-    print(f" Your Cost Savings Report")
-    print(f"   Weekly:  ${weekly_savings:.2f}")
-    print(f"   Monthly: ${monthly_savings:.2f}")
-    print(f"   Annual:  ${annual_savings:.2f}")
-    print(f"\n    You saved enough for: [insert fun comparison]")
-
-calculate_savings()
+    raise ValueError(f"Unsupported duration: {value}")
 ```
 
-**Run it**:
-```bash
-python savings_calculator.py
+Success criteria:
+
+- [ ] You have a function with at least four valid input categories and one invalid category.
+
+- [ ] You can describe one edge case the current implementation handles poorly or ambiguously.
+
+- [ ] You have initialized a Git repository or are working inside an existing one where diffs can be reviewed.
+
+### Step 3: Ask A Local Model For Tests
+
+Use Aider or your editor integration to ask for tests. Your prompt should include constraints, not just a general request. For example, ask for table-driven tests, invalid input coverage, and no production-code changes unless a test reveals a bug.
+
+```text
+Add pytest tests for parse_duration_seconds.
+Cover milliseconds, seconds, minutes, hours, whitespace, uppercase suffixes, and invalid input.
+Do not change production code unless a test exposes behavior that contradicts the intended contract.
+Show the diff before committing.
 ```
 
-<details>
-<summary>Expected Output</summary>
+Success criteria:
 
+- [ ] The model produced tests rather than only explaining what tests could exist.
+
+- [ ] You inspected the generated assertions and removed or revised any weak tests.
+
+- [ ] You ran the tests with your project's normal test command.
+
+- [ ] You can explain whether any production-code change was necessary.
+
+### Step 4: Make A Routing Decision
+
+Now classify the task. Decide whether the local model was sufficient or whether escalation to an API model is justified. Your answer should refer to task risk, context size, model output quality, and verification evidence.
+
+Use this structure:
+
+```text
+Task:
+Local model used:
+Evidence collected:
+Risk level:
+Decision:
+Reason:
 ```
- Your Cost Savings Report
-   Weekly:  $0.23
-   Monthly: $0.90
-   Annual:  $10.80
 
-    You saved enough for: 1 month of Spotify Premium!
-```
+Success criteria:
 
-Note: Actual savings depend on usage. Heavy users save $200-500/year!
-</details>
+- [ ] Your routing decision is based on evidence, not preference.
 
----
+- [ ] You identify at least one situation that would cause you to escalate the same task.
 
-## Module 1.2 Complete Checklist
+- [ ] You identify at least one situation where staying local is clearly the better choice.
 
-Use this to verify you're ready for Module 2:
+### Step 5: Document A Team Workflow
 
-### Setup 
-- [ ] Ollama installed and working (`ollama --version`)
-- [ ] At least one coding model downloaded (Qwen or DeepSeek)
-- [ ] Tested model in terminal (`ollama run qwen2.5-coder:7b`)
-- [ ] Aider installed (`aider --version`)
-- [ ] Continue.dev extension installed in VS Code
+Write a short team policy for local AI coding. Keep it practical enough that another developer could follow it without attending a meeting.
 
-### Practice 
-- [ ] Generated code with local model (any task)
-- [ ] Used Aider with local model
-- [ ] Configured Continue.dev to use local model
-- [ ] Tried at least 2 different models, compared results
-- [ ] Set up hybrid workflow (local + Gemini Flash)
+Your policy should include:
 
-### Understanding 
-- [ ] Can explain local vs API trade-offs
-- [ ] Know which model to use for which task
-- [ ] Understand cost savings (calculated your own)
-- [ ] Know when to use local vs when to switch to API
+- [ ] Default local model for routine tasks.
 
-### Reflection 
-- [ ] Identified 3 tasks you'll do with local models
-- [ ] Calculated potential monthly savings
-- [ ] Planned your hybrid workflow (80% local, 20% API)
+- [ ] Heavier local model or API fallback for complex tasks.
 
-**All checked?**  **You're ready for Module 2: Prompt Engineering!**
+- [ ] Examples of tasks that must not be sent to external APIs.
+
+- [ ] Required verification before accepting generated code.
+
+- [ ] Troubleshooting sequence for "model not found" or slow inference.
+
+### Completion Checklist
+
+You are ready for the next module when the following are true:
+
+- [ ] You can run a local coding model through Ollama.
+
+- [ ] You can connect at least one coding tool to that local model.
+
+- [ ] You can choose between local, API, and hybrid routing for a realistic coding task.
+
+- [ ] You can debug the first three layers of failure: runtime, model availability, and tool configuration.
+
+- [ ] You can explain why local models reduce cost and improve privacy without making generated code automatically correct.
 
 ---
 
-## Further Reading
+## Next Module
 
-### Essential Resources
+Next: **Module 1.3: Prompt Engineering Fundamentals**
 
-**Ollama Documentation**:
-- Official docs: https://github.com/ollama/ollama
-- Model library: https://ollama.com/library
-- Community models: https://ollama.com/search
-
-**Model Benchmarks**:
-- HumanEval: https://github.com/openai/human-eval
-- LiveCodeBench: https://livecodebench.github.io/
-- BigCodeBench: https://bigcode-bench.github.io/
-
-**Tools Integration**:
-- Aider docs: https://aider.chat/docs/
-- Continue.dev docs: https://continue.dev/docs
+In the next module, you will learn how to write prompts that produce better code, better tests, and better reviews across both local and API models. The workflow from this module gives you the execution environment; prompt engineering gives you the control surface for using that environment well.
 
 ---
-
-## ️ Next Steps
-
-**Congratulations!** You now have cost-effective AI coding with local models!
-
-**You've learned**:
-- How to install and run Ollama
-- The best local models for coding (DeepSeek, Qwen, etc.)
-- Using local models with Aider
-- Configuring Continue.dev for local models
-- Hybrid optimization strategies (local + API)
-- Real cost savings ($200-500/year potential!)
-
-**Next Module**: **Module 2: Prompt Engineering Fundamentals** 
-
-In Module 2, you'll learn:
-- The art and science of prompt engineering
-- How to structure prompts for best results
-- Few-shot learning techniques
-- Chain-of-thought prompting
-- Works with BOTH local AND API models!
-
-**Why Module 2 is critical**: Master prompting → Get 3-5× better results from ANY model (local or API)!
-
----
-
-**Ready? Let's master prompt engineering in Module 2!** 
-
----
-
-_Last updated: 2025-11-22_
-_Module status:  Complete_
-_Cost impact: $200-500/year savings potential_
-_Tools: Ollama, Aider, Continue.dev_
 
 ## Sources
 
