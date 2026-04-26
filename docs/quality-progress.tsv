@@ -62,3 +62,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T08:30:50Z	platform-toolkits-infrastructure-networking-k8s-distributions-module-14.4-talos	3.50		0			codex	claude	approve	
 2026-04-26T08:37:51Z	linux-foundations-system-essentials-module-1.1-kernel-architecture	4.50		1	5.00	strong	codex	claude	approve	
 2026-04-26T09:45:03Z	ai-foundations-module-1.2-what-are-llms	3.90		0			codex	claude	approve	
+2026-04-26T09:51:55Z	ai-open-models-local-inference-module-1.7-gemma-4-and-the-open-model-landscape	2.00		1	3.80	adequate:below_threshold	codex	claude	approve	
