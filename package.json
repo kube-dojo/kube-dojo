@@ -22,7 +22,6 @@
     "sharp": "^0.34.2"
   },
   "overrides": {
-    "postcss": "^8.5.12",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
