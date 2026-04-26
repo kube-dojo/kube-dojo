@@ -38,7 +38,7 @@ They mathematically modeled this artificial neuron as a "threshold logic unit." 
 
 The 1943 paper was a breathtaking theoretical leap. McCulloch and Pitts proved that if you connected enough of these simple, idealized artificial neurons together into a network, the network could theoretically compute any logical proposition. 
 
-They had effectively bridged the gap between biology and computing. They demonstrated that the brain, when viewed through this idealized mathematical lens, was functionally identical to the logic machines being theorized by mathematicians like Alan Turing. Intelligence—whether housed in biological meat or, eventually, electrical hardware—was just a massive network of binary switches calculating logic.
+They had effectively bridged the gap between biological models and computing. They argued that an idealized neural network could be analyzed with the exact same logical framework as the early computing machines being theorized by mathematicians like Alan Turing. In this abstract mathematical model, the biological firing of neurons was treated as a network of binary switches calculating logic.
 
 However, the McCulloch-Pitts model had a critical limitation. Their artificial network was "hard-coded." The specific thresholds and the connections between the neurons were fixed by the mathematician designing the network. The model had no mechanism for *learning* from data or adjusting its own connections over time. 
 
