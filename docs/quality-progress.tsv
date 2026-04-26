@@ -137,3 +137,4 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T20:39:36Z	k8s-kcsa-part1-cloud-native-security-module-1.1-four-cs	3.70		0			codex	claude	approve	
 2026-04-26T20:48:06Z	platform-foundations-observability-theory-module-3.2-the-three-pillars	4.80		0			claude	codex	approve	
 2026-04-26T20:54:56Z	on-premises-planning-module-1.2-server-sizing	4.30		0			claude	codex	approve	
+2026-04-26T20:59:30Z	linux-operations-troubleshooting-module-6.3-process-debugging	3.80		0			codex	claude	approve	
