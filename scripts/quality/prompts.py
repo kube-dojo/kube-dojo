@@ -95,13 +95,30 @@ Produce a complete, replacement module that teaches the topic from beginner to s
 Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
 - Do NOT preserve `revision_pending:` if present in input frontmatter — drop it from output. The banner is a queue marker that the merge step removes; carrying it through into a fresh rewrite would leave a "queued for revision" banner on a freshly-shipped module.
-- Preserve every existing visual aid (ASCII, Mermaid, tables) — they are protected assets. Improve them if you can, but never remove.
+- **Visual-aid preservation is COUNT-BASED, not "best-effort"**: count the input's ` ```mermaid ` fenced blocks, ` ```ascii ` blocks, and `|---|` table rows. Your output MUST contain AT LEAST as many of each. Dropping any is a hard fail that bounces the module back to you.
 - Preserve any existing `## Sources` section verbatim (heading, ordering, citation lines, URLs). Do NOT modify, reorder, deduplicate, or "improve" entries. Do NOT add a NEW `## Sources` section if one isn't already present — citation insertion runs in a separate downstream stage.
 - Address each gap from the audit explicitly.
 - Minimum 600 content lines (250 for KCNA theory modules). Code/visuals don't count.
 - All quiz questions scenario-based (Bloom L3+). No recall questions.
 - Exactly 4 "Did You Know?" facts. 6-8 rows in "Common Mistakes". 6-8 quiz questions.
 - Do NOT use emojis. Do NOT use the number 47.
+
+**Prose density (HARD GATE — automatically enforced after merge):**
+
+Your output is run through a density classifier before it can ship. Modules that fail bounce back to you and after 2 retries are FAILED for manual rewrite. The classifier rejects three patterns we've seen LLMs produce:
+
+1. **Pad-bomb (one-sentence-per-paragraph)** — every sentence on its own line, single newlines between sentences. Looks "structured" but reads like a stack of bullets without the bullets. Fail signal: words-per-line < 12.
+2. **Punchy-bullets / fragments** — short stubs, two-clause "headers" used as paragraphs, heavy bullet-only sections with no surrounding prose. Fail signal: words-per-paragraph < 18.
+3. **Essay-filler** — paragraphs that look dense but say nothing concrete (corporate generality, no examples, no sequencing). Fail signal: w/ln passes but reviewer + audit both downgrade teaching.
+
+**Required prose shape:**
+- **Average ≥ 22 words per prose paragraph** (target 25–60). A paragraph is text between blank lines, NOT counting code fences, lists, tables, or front-matter blocks.
+- **Average ≥ 18 words per non-blank line** (target ≥ 20). Wrap your sentences into multi-sentence paragraphs; do not put one sentence per line.
+- **Minimum 1500 prose words** (≥ 2500 strongly preferred). Prose words = words outside code fences, frontmatter, and tables.
+- A teaching paragraph should typically be 3–6 sentences long, with the first sentence stating the claim and the rest grounding it with mechanism, example, or trade-off. Do not split that into 4 separate one-sentence paragraphs.
+- Bullets are allowed for genuine lists (steps, options, anti-patterns, rules). They are NOT a substitute for explanation. A section that's 90% bullets fails. If you find yourself writing 5+ consecutive single-line bullets where each is essentially a sentence of an argument, merge them into a paragraph.
+
+You are writing for a learner who reads the page top-to-bottom. Flowing multi-sentence paragraphs are how you teach mechanism, sequence, and nuance. Fragmented one-line "paragraphs" are how style guides for status pages are written, and that is the wrong genre.
 
 Return the complete module. Starting with `---`.
 """
