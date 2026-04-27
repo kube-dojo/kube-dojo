@@ -1,1 +1,16 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 4
+chapter: 19
+review_state: approved_after_gemini_and_claude_fixes
+last_updated: 2026-04-27
+notes:
+  - "Codex expanded the placeholder into an anchored research contract for MYCIN, rule-based expert systems, and the knowledge-acquisition bottleneck."
+  - "Gemini approved for 4,000-4,800 words; Claude approved with light fixes now applied."
+  - "Core frame: expert systems traded generality for narrow, inspectable, editable domain expertise."
+  - "Primary anchors include Buchanan/Shortliffe 1984 chapters and Feigenbaum 1977 IJCAI."
+  - "Guardrail: do not present MYCIN as a post-Lighthill invention; it was a parallel Stanford current that became more attractive in the first-winter era."
+  - "Guardrail: do not claim MYCIN was deployed clinically; Ch36 says ward testing was never undertaken and the infectious-disease knowledge base was laid to rest in 1978."
+  - "Shortliffe 1983 adds bounded non-deployment causes: experimental status, no hospital installation, collaborator loss, research-machine constraints, slow consultation time, cost-effective hardware limits, and unsettled liability."
+  - "Guardrail: use the JAMA evaluation narrowly: 10 meningitis cases, blinded outside evaluators, antimicrobial therapy selection; avoid global 'better than doctors' phrasing."
+  - "Guardrail: leave XCON/DEC commercialization to Ch21."
