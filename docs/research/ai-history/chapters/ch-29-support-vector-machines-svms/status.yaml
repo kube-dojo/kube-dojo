@@ -1,8 +1,8 @@
-status: reviewing
+status: prose_ready
 owner: Codex
 part: 5
 chapter: 29
-review_state: gemini_gap_fix_and_claude_constraints_applied
+review_state: gemini_and_claude_research_approved
 last_updated: 2026-04-27
 notes:
   - "Initial placeholder expanded into a claim-level research contract for SVMs."
@@ -10,4 +10,5 @@ notes:
   - "Primary anchors include Vapnik/Chervonenkis 1971, Boser/Guyon/Vapnik 1992, Cortes/Vapnik 1995, and Burges 1998."
   - "Gemini gap review requested real VC-theory page anchors before a 4k+ draft; clean Vapnik/Chervonenkis 1971 PDF anchors were added."
   - "Claude prose-readiness review requested boundary wording for VC theory, LeNet attribution, and no false 1990s winner story; constraints were applied."
+  - "Gemini follow-up review returned PROSE_READY with no remaining must-fix findings or nits."
   - "Guardrail: do not portray SVMs as a deep-learning replacement or as purely theoretical; they were a 1990s infrastructure answer to small/medium data, controlled capacity, and convex training."
