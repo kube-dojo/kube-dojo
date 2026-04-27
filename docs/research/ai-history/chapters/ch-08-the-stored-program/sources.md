@@ -6,7 +6,8 @@
 |---|---|---|---|---|---|
 | ENIAC was programmed via physical cables by women mathematicians | 1 | Oral histories of ENIAC programmers | Haigh et al. 2016 | Green | None |
 | Von Neumann's EDVAC draft formalized the stored-program concept | 2 | von Neumann 1945 | [Dyson 2012] | Green | None |
-| Eckert and Mauchly disputed the sole credit of von Neumann | 3 | Moore School meeting notes | Haigh et al. 2016 | Green | High historical tension regarding patent rights.
+| Von Neumann omitted Eckert and Mauchly's names on the EDVAC draft | 2 | Original EDVAC draft title page | [Dyson 2012] | Green | High historical tension regarding patent rights and collaborative origin. |
+| Eckert and Mauchly disputed the sole credit of von Neumann | 3 | Moore School meeting notes | Haigh et al. 2016 | Green | High historical tension regarding patent rights. |
 
 ## Bibliography
 ### Primary

@@ -4,7 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Turing framed the test via a teletype interface to remove physical biases | 2 | Turing 1950, p. 433 | [Hodges 1983] | Green | None |
+| Turing framed the test via a teletype interface | 2 | Turing 1950, p. 433 | [Hodges 1983] | Green | None |
+| The teletype interface served to abstract away physical embodiment | 2 | N/A (Interpretive inference of Turing 1950) | [Hodges 1983] | Green | Historical inference rather than explicit Turing quote. |
 | Turing predicted a requirement of 10^9 bits of storage for a thinking machine | 3 | Turing 1950, p. 442 | [Hodges 1983] | Green | None |
 
 ## Bibliography

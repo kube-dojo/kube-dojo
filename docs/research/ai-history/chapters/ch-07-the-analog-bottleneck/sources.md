@@ -5,10 +5,11 @@
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
 | The tortoises exhibited complex behavior from 2 vacuum tubes | 1, 2 | Walter 1951, *A Machine That Learns* | [Boden 2006], p. 222 | Green | None |
-| Vacuum tubes presented physical scaling limitations for AI | 3 | N/A | [Boden 2006] | Yellow | Need specific contemporary engineering citation for the scale limits of analog robotics.
+| Vacuum tubes presented physical scaling limitations for complex computing | 3 | Shannon 1953, "Computers and Automata" | [Boden 2006] | Green | Contemporary source confirming the failure rates and constraints of massive vacuum tube systems. |
 
 ## Bibliography
 ### Primary
+- **Shannon, Claude E. "Computers and Automata." *Proceedings of the IRE* 41, no. 10 (1953): 1234-1241.**
 - **Walter, W. Grey. "A Machine That Learns." *Scientific American*, Vol. 185, No. 2. (August 1951).** [URL: https://www.scientificamerican.com/article/a-machine-that-learns/]
 - **Walter, W. Grey. *The Living Brain*. (1953).**
 

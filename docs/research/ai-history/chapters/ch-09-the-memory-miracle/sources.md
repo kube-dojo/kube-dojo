@@ -5,7 +5,8 @@
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
 | Core memory replaced volatile electrostatic memory | 1, 2 | Forrester 1951 | [Ceruzzi 2003], p. 50 | Green | None |
-| Multiple inventors (Wang, Forrester, Rajchman) claimed credit | 2 | US Patent filings (e.g., Wang 1955) | History of Information | Green | Intense patent litigation and historical dispute over true "inventor".
+| Multiple inventors (Wang, Forrester, Rajchman) claimed credit | 2 | US Patent filings (e.g., Wang 1955) | History of Information | Green | Intense patent litigation and historical dispute over true "inventor". |
+| Manufacturing core memory grids required manual textile weaving | 3 | MIT Whirlwind project archival photos/documents | [Ceruzzi 2003] | Green | None |
 
 ## Bibliography
 ### Primary
