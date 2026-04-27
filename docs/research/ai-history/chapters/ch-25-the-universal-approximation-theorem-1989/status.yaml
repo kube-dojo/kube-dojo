@@ -2,10 +2,11 @@ status: researching
 owner: Codex
 part: 5
 chapter: 25
-review_state: research_contract_in_progress
+review_state: gap_analysis_received
 last_updated: 2026-04-27
 notes:
   - "Initial research contract populated from verified bibliographic sources."
   - "Not ready for prose lock: theorem statements need page anchors and the 1989 cluster needs careful priority mapping."
   - "Core guardrail: universal approximation is representation capacity, not trainability, generalization, or deployment."
   - "Gemini review rejected a forced 4k-7k target; natural prose target is now 2.5k-4k unless further historical evidence supports more."
+  - "Gemini gap analysis recorded in gap-analysis.md; stretch path is 3.9k-5.9k if 1989 cluster and approximation-limit anchors are extracted."

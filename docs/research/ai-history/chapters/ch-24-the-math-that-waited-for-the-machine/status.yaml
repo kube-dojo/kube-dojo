@@ -2,9 +2,10 @@ status: researching
 owner: Codex
 part: 5
 chapter: 24
-review_state: example_contract_in_progress
+review_state: gap_analysis_received
 last_updated: 2026-04-27
 notes:
   - "Example research contract for Part 5."
   - "Not ready for prose lock: Werbos/Linnainmaa page anchors and experiment hardware details still open."
   - "Includes a prose-capacity plan for reaching 4000-7000 words without padding."
+  - "Gemini gap analysis recorded in gap-analysis.md; next step is anchor extraction."
