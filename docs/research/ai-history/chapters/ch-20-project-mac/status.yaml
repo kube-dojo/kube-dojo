@@ -6,8 +6,9 @@ review_state: needs_gemini_and_claude_gap_review
 last_updated: 2026-04-27
 notes:
   - "Codex expanded the scrubbed placeholder into an anchored research contract for Project MAC."
+  - "Gemini requested outside ARPA/IPTO context before a 4,000+ word target; Codex added Norberg/O'Neill and DARPA Project MAC to the core citation bar."
   - "Core frame: Project MAC changed AI working conditions through time-sharing, funding, shared tools, and interactive machine rooms."
-  - "Primary anchors include Project MAC Progress Reports II, VI, VIII, and X plus Fano 1967."
+  - "Primary anchors include Project MAC Progress Reports II, VI, VIII, and X plus Fano 1967; outside strategy anchor is Norberg/O'Neill Ch2 pp.92-100."
   - "Guardrail: do not treat Project MAC as only an AI lab; it was both Machine-Aided Cognition and Multiple-Access Computer systems."
   - "Guardrail: separate CTSS, Multics, and ITS; they represent different infrastructure paths."
   - "Guardrail: leave DEC/XCON commercialization to Ch21 and Lisp-machine commercialization to Ch22."

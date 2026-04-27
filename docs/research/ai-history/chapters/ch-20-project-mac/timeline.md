@@ -4,6 +4,8 @@
   Project MAC and should be treated as a root, not a MAC invention.
 - Spring 1963: Project MAC is organized at MIT for Machine-Aided Cognition and
   Multiple-Access Computer systems under ONR acting for ARPA.
+- Early 1963: Norberg/O'Neill describe DARPA approval of a $3-million Project
+  MAC contract after Licklider's direct involvement in the proposal and review.
 - July 1, 1963: MIT's MAC50 retrospective gives this as Project MAC's founding
   date.
 - Fall 1963: a substantially improved CTSS installation is at Project MAC,

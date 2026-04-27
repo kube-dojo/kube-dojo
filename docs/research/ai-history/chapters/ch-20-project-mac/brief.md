@@ -67,15 +67,17 @@ MACLISP/MATHLAB/MACSYMA, PLANNER, and ARPANET/resource-sharing experiments.
 
 Word Count Discipline label: `4k-4.8k confirmed; 4.8k-5.4k requires stretch unlocks`
 
-Core range: 4,000-4,800 words supported by current verified anchors. Stretch
-range: 4,800-5,400 words only if one more outside historical source is added on
-ARPA/IPTO funding strategy or the Project MAC/AI Lab split.
+Core range: 4,000-4,800 words supported by current verified anchors, including
+Norberg/O'Neill for the ARPA/IPTO strategy layer. Stretch range: 4,800-5,400
+words only if one more source is added for the 1963 summer study or the
+Project MAC/AI Lab split.
 
 - 550-700 words: open with the computer-utility vision and Fano's 1967
   social/technical argument, anchored by Fano 1967 lines 12-20 and 48-80.
-- 550-700 words: Project MAC's founding form, dual meaning, ARPA/ONR contract,
-  interdepartmental structure, and broad MIT participation, anchored by Progress
-  Report II p.xiii and MIT MAC50.
+- 700-900 words: ARPA/IPTO strategy, Licklider/Fano, command-and-control
+  context, the $3-million contract, and Project MAC as an R&D enterprise rather
+  than just a local time-sharing service, anchored by Norberg/O'Neill pp.92-100,
+  DARPA Project MAC, Progress Report II p.xiii, and MIT MAC50.
 - 650-800 words: CTSS as service and laboratory, with concrete details about
   response time, terminals, commands, file sharing, and user-developed tools,
   anchored by Progress Report II p.63 and Fano 1967 lines 22-47, 74-79.
@@ -88,10 +90,10 @@ ARPA/IPTO funding strategy or the Project MAC/AI Lab split.
 - 450-650 words: ARPANET/resource-sharing and networked access to Multics,
   ITS, MUDDLE, and MACSYMA, anchored by Progress Report VIII pp.67-69 and
   Progress Report X pp.7, 91.
-- 350-500 words: close with reorganization/split and handoff to Ch21/Ch22,
+- 250-400 words: close with reorganization/split and handoff to Ch21/Ch22,
   anchored by Project MAC Progress Report X p.iii, MIT Museum, and MIT MAC50.
 
 Honesty close: If prose cannot reach 4,000 words without reciting lists of
-projects, stop around the lower bound and flag the missing outside ARPA/IPTO or
-MIT AI Lab split history. The chapter's job is to explain infrastructure, not to
-catalog every Project MAC technical report.
+projects, stop around the lower bound and flag the missing summer-study or AI
+Lab split detail. The chapter's job is to explain infrastructure, not to catalog
+every Project MAC technical report.
