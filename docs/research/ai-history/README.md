@@ -5,6 +5,7 @@
 This directory contains the operational research files for the definitive 68-chapter AI History Epic.
 
 - **Golden Research (Parts 1-2, Chapters 1-10):** Currently under revision based on cross-family review (downgraded to `reviewing` while we convert to claim-level anchoring and resolve factual disputes).
+- **Part 3 (The Birth of Symbolic AI & Early Optimism, 1950s-1960s):** Claimed by **Claude** for primary research.
 - **Part 5 (The Mathematical Resurrection, 1980s-1990s):** Claimed by **Codex** for primary research.
 - **Part 6 (The Rise of Data & Distributed Compute, 1990s-2000s):** Claimed by **Gemini**. Research contracts populated to Golden Standard; status is `reviewing`.
 
@@ -21,7 +22,7 @@ Coordination happens across 9 Part Tracking issues linked to Epic #394:
 
 - #399 : Part 1: The Mathematical Foundations (Ch 1-5) (Gemini)
 - #400 : Part 2: The Analog Dream & Digital Blank Slate (Ch 6-10) (Gemini)
-- #401 : Part 3: The Birth of Symbolic AI & Early Optimism (Ch 11-16)
+- #401 : Part 3: The Birth of Symbolic AI & Early Optimism (Ch 11-16) (Claude)
 - #402 : Part 4: The First Winter & The Shift to Knowledge (Ch 17-23)
 - #403 : Part 5: The Mathematical Resurrection (Ch 24-31) (Codex)
 - #404 : Part 6: The Rise of Data & Distributed Compute (Ch 32-40) (Gemini)
