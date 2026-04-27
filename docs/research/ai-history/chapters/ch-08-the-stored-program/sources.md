@@ -4,11 +4,11 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| ENIAC was programmed via physical cables by women mathematicians | 1 | Bartik 2013 (*Pioneer Programmer*) | Light 1999 | Green | None |
-| The stored-program concept evolved collaboratively | 2 | Moore School Archives, "Minutes of EDVAC meetings," March 14, 1945, Box 3, Folder 14 | Haigh et al. 2014, p. 18 | Green | None |
-| Von Neumann's EDVAC draft formalized the concept | 3 | von Neumann 1945 | [Dyson 2012] | Green | None |
-| Goldstine mimeographed and distributed the report | 4 | Goldstine 1972 | [Dyson 2012] | Green | None |
-| Eckert disputed the sole credit of von Neumann | 4 | Eckert Oral History (CBI, OH 13, p. 11) | Haigh et al. 2014 | Green | High historical tension regarding patent rights. |
+| ENIAC was programmed via physical cables by women mathematicians | 1 | Bartik 2013 (*Pioneer Programmer*) | Light 1999 | Yellow | Need exact verified page/section anchors. |
+| The stored-program concept evolved collaboratively | 2 | Moore School Archives | Haigh et al. 2014 | Yellow | Need exact verified page/section anchors. |
+| Von Neumann's EDVAC draft formalized the concept | 3 | von Neumann 1945 | [Dyson 2012] | Yellow | Need exact verified page/section anchors. |
+| Goldstine mimeographed and distributed the report | 4 | Goldstine 1972 | [Dyson 2012] | Yellow | Need exact verified page/section anchors. |
+| Eckert disputed the sole credit of von Neumann | 4 | Eckert Oral History (CBI, OH 13) | Haigh et al. 2014 | Yellow | High historical tension regarding patent rights. |
 
 ## Bibliography
 ### Primary

@@ -1,4 +1,3 @@
 # Open Questions
 
-- Need exact page/section anchors for Sohl-Dickstein 2015 and Ho 2020.
-- Need secondary sources tracing the adoption from DDPM to Stable Diffusion/Midjourney.
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

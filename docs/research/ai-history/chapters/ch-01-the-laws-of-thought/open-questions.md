@@ -1,3 +1,3 @@
-# Open Questions: Chapter 1
+# Open Questions
 
-- Are there any specific primary sources from the engineering community (late 19th/early 20th century) explicitly dismissing or ignoring Boolean logic? (Scene 5).
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

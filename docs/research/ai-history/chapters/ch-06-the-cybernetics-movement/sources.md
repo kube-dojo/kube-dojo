@@ -4,10 +4,10 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Wiener modeled predictive feedback loops for anti-aircraft guns | 1 | Wiener 1956 (*I Am a Mathematician*), pp. 250-255 | [Kline 2015] | Green | None |
-| Purpose and teleology can be modeled via feedback loops | 2 | Rosenblueth, Wiener, Bigelow 1943 | [Kline 2015] | Green | None |
-| The Macy Conferences established interdisciplinary cybernetics | 3 | Pias 2003 (*The Complete Transactions*) | Heims 1991 | Green | None |
-| Ashby's Homeostat expanded homeostasis to a real machine | 4 | Ashby 1952 (*Design for a Brain*) | Pickering 2010 | Green | None |
+| Wiener modeled predictive feedback loops for anti-aircraft guns | 1 | Wiener 1956 (*I Am a Mathematician*) | [Kline 2015] | Yellow | Need exact verified page/section anchors. |
+| Purpose and teleology can be modeled via feedback loops | 2 | Rosenblueth, Wiener, Bigelow 1943 | [Kline 2015] | Yellow | Need exact verified page/section anchors. |
+| The Macy Conferences established interdisciplinary cybernetics | 3 | Pias 2003 (*The Complete Transactions*) | Heims 1991 | Yellow | Need exact verified page/section anchors. |
+| Ashby's Homeostat expanded homeostasis to a real machine | 4 | Ashby 1952 (*Design for a Brain*) | Pickering 2010 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

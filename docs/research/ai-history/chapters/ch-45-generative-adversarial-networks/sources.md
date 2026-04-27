@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| GANs use a minimax game between a generator and discriminator | 2 | Goodfellow et al. 2014 (Generative adversarial nets) | Goodfellow 2016 (NIPS Tutorial) | Green | None |
-| The concept was formalized by Goodfellow in 2014 | 1, 2 | Goodfellow et al. 2014 | MIT Tech Review (2016 profile) | Green | Schmidhuber (1992) proposed predictable predictability, but Goodfellow is the verified originator of the modern GAN formulation. |
+| GANs use a minimax game between a generator and discriminator | 2 | Goodfellow et al. 2014 (Generative adversarial nets) | Goodfellow 2016 (NIPS Tutorial) | Yellow | Need exact verified page/section anchors. |
+| The concept was formalized by Goodfellow in 2014 | 1, 2 | Goodfellow et al. 2014 | MIT Tech Review (2016 profile) | Yellow | Schmidhuber (1992) proposed predictable predictability, but Goodfellow is the verified originator of the modern GAN formulation. |
 
 ## Bibliography
 ### Primary

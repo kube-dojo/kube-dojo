@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Dennard scaling breakdown created unmanageable power density limits | 2 | Borkar 1999, pp. 23-24 | Hennessy & Patterson 2011 | Green | None |
-| Intel cancelled Tejas and shifted to multicore due to thermal walls | 2, 3 | Intel Press Release, May 7, 2004 (Cancellation of Tejas) | Hennessy & Patterson 2011 | Green | None |
-| Software engineers were forced to adopt concurrency | 3 | Sutter 2005, Section "The Free Lunch Is Over" | Hennessy & Patterson 2011 | Green | None |
+| Dennard scaling breakdown created unmanageable power density limits | 2 | Borkar 1999 | Hennessy & Patterson 2011 | Yellow | Need exact verified page/section anchors. |
+| Intel cancelled Tejas and shifted to multicore due to thermal walls | 2, 3 | Intel Press Release, May 7, 2004 (Cancellation of Tejas) | Hennessy & Patterson 2011 | Yellow | Need exact verified page/section anchors. |
+| Software engineers were forced to adopt concurrency | 3 | Sutter 2005, Section "The Free Lunch Is Over" | Hennessy & Patterson 2011 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary
