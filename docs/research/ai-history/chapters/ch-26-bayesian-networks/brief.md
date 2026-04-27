@@ -31,10 +31,10 @@ This chapter can support a substantial narrative if it avoids becoming a statist
 - 600-900 words: computational limits, including why exact inference can become expensive and why algorithms/approximations matter.
 - 400-800 words: legacy bridge to probabilistic graphical models, causal reasoning, and later ML, with causal material kept as forward pointer rather than main story.
 
-If the primary anchors do not support enough institutional or deployment detail, the chapter should stay closer to 3,500-4,500 words rather than padding with generic Bayes examples.
+With the current anchors, a 3,500-4,500 word draft is plausible without padding. A 5,000+ word draft should wait for full Pearl 1986/1988 access or a stronger early-application/terminology source.
 
 ## Citation Bar
 
 - Minimum primary sources before review: Pearl 1986, Pearl 1988, Lauritzen and Spiegelhalter 1988 or equivalent graphical-model inference source, Cooper 1990 for complexity limits.
 - Minimum secondary sources before review: Charniak 1991 tutorial and one later survey/tutorial that distinguishes Bayesian networks from causal networks and probabilistic programming.
-- Current status: initial contract populated, but not prose-locked. Need page anchors for Pearl's network definition, propagation claims, and computational limits.
+- Current status: Cooper 1990, Lauritzen/Spiegelhalter 1988, and Charniak 1991 have page anchors. Pearl 1986 is only abstract-level anchored from ScienceDirect p.241 because the full article is closed access; Pearl 1988 has chapter ranges and publisher-description anchors but not internal passages.
