@@ -63,7 +63,7 @@ application framing, and the later IKBS/Alvey revival.
 
 ## Prose Capacity Plan
 
-Word Count Discipline label: `4k-5k likely`
+Word Count Discipline label: `4k-4.7k confirmed; 4.7k-5.4k requires stretch unlocks`
 
 Core range: 4,000-4,700 words supported by current verified anchors.
 Stretch range: 4,700-5,400 words only if the BBC debate is watched/logged or a

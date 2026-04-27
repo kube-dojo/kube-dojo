@@ -2,13 +2,14 @@ status: capacity_plan_anchored
 owner: Codex
 part: 4
 chapter: 18
-review_state: needs_gemini_and_claude_gap_review
+review_state: gemini_approve_claude_approve_with_fixes_applied_ready_to_draft_with_cap
 last_updated: 2026-04-27
 notes:
   - "Codex expanded the placeholder into an anchored research contract for the Lighthill/SRC episode."
   - "Core frame: Lighthill did not reject all AI; he supported application-linked automation and CNS modeling while attacking the bridge/basic category B."
   - "Primary anchors include Lighthill's report, Sutherland's response, Needham's response, and Michie's response in the SRC paper symposium."
   - "Institutional aftermath anchors include Chilton/UKRI STFC overview and House of Lords 2018; exact budget cuts remain an open gap."
-  - "Agar is included as secondary historiography for Lighthill's practical-problem orientation and 1982 Alvey context; local curl returned 403, but browser fetch verified page anchors."
+  - "Agar is included as secondary historiography for Lighthill's practical-problem orientation and 1982 Alvey context, using the canonical UCL Discovery URL."
   - "Guardrail: keep aftermath UK-centered and do not claim British AI stopped."
   - "Guardrail: do not use the BBC debate for participant claims until the 81-minute video is watched/logged."
+  - "Gemini approved on gemini-3-flash-preview after gemini-3.1-pro-preview availability check timed out; Claude approved with fixes, now applied."

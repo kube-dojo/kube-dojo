@@ -2,13 +2,15 @@
 
 ## Current Verdict
 
-`NEEDS_REVIEW`, likely close to `READY_TO_DRAFT_WITH_CAP`.
+`READY_TO_DRAFT_WITH_CAP`.
 
 The chapter has enough anchored evidence for a 4,000-4,700 word draft. It should
 not expand past that range unless one of two things is added: a logged BBC debate
 source or a primary SRC/SERC funding-decision source. The safe long-form path is
 to spend real explanatory space on Lighthill's technical critique and the
 Sutherland/Needham/Michie rebuttal, not to inflate the aftermath.
+
+Word Count Discipline label: `4k-4.7k confirmed; 4.7k-5.4k requires stretch unlocks`
 
 ## Green Scenes
 

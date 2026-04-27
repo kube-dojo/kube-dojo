@@ -3,9 +3,6 @@
 - Sir James Lighthill: Cambridge applied mathematician and report author. Treat
   him as an outsider reviewer with a coherent practical-problem-solving
   philosophy, not as a cartoon anti-AI figure.
-- Sir Brian Flowers: SRC chairman named in secondary accounts as the
-  commissioner of the inquiry; do not over-narrate unless a primary SRC
-  commissioning document is added.
 - N. S. Sutherland: Sussex experimental psychologist; defended the central
   category as Basic AI and argued that Lighthill's definition of B was
   misleading.

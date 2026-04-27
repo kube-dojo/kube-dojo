@@ -48,3 +48,7 @@ confidence lasting almost a decade; House of Lords says the report is mostly
 known for reduced UK support but funding data are scant; AI continued and
 returned in major policy form under IKBS/Alvey. The devastation is a change in
 legitimacy and framing, not a total stop.
+
+The BBC debate may be mentioned as a public flashpoint anchored by the AIAI
+listing, but do not paraphrase what any participant said unless the video is
+watched and logged.
