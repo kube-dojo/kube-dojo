@@ -34,6 +34,8 @@ from ._config import (
     _MODEL_CACHE_TTL,
     _PARENT_ENV,
     GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODEL,
+    PYTHON_CMD,
     REPO_ROOT,
 )
 from ._github import _post_review_to_github
@@ -45,7 +47,7 @@ from ._messaging import (
     send_message,
     send_to_gemini,
 )
-from ._model import _detect_model_error
+from ._model import _detect_model_error, check_model
 from ._prompts import build_gemini_prompt
 
 try:
@@ -95,10 +97,16 @@ def ask_gemini(content: str, task_id: str | None = None, msg_type: str = "query"
         if not available:
             age = time.time() - cached_at
             if age < _MODEL_CACHE_TTL:
-                print(f"❌ Model '{model}' was unavailable {int(age)}s ago (cached). Skipping.")
-                print("💡 To switch accounts: run 'gemini auth login' or ask the user to switch.")
-                print("   To retry: --skip-model-check (clears cache)")
-                return None
+                if model == GEMINI_FALLBACK_MODEL:
+                    print(f"❌ Model '{model}' was unavailable {int(age)}s ago (cached). Skipping.")
+                    print("💡 To switch accounts: run 'gemini auth login' or ask the user to switch.")
+                    print("   To retry: --skip-model-check (clears cache)")
+                    return None
+                print(
+                    f"⚠️  Model '{model}' was unavailable {int(age)}s ago "
+                    f"(cached); falling back to '{GEMINI_FALLBACK_MODEL}'."
+                )
+                model = GEMINI_FALLBACK_MODEL
 
     # Auto-enable async for handoff type
     if msg_type == "handoff":
@@ -107,6 +115,8 @@ def ask_gemini(content: str, task_id: str | None = None, msg_type: str = "query"
 
     # Warn if handoff message is too long
     _warn_long_handoff(content, msg_type, task_id)
+
+    model = _resolve_gemini_model(model, async_mode, skip_model_check)
 
     # Send the message
     msg_id = _send_gemini_message(content, task_id, msg_type, data, from_model, model,
@@ -129,6 +139,19 @@ def ask_gemini(content: str, task_id: str | None = None, msg_type: str = "query"
             _extract_and_print(response, extract_tags)
 
     return msg_id
+
+
+def _resolve_gemini_model(model: str, async_mode: bool, skip_model_check: bool) -> str:
+    """Return an available Gemini model, falling back before sync invocation."""
+    if async_mode or skip_model_check or model == GEMINI_FALLBACK_MODEL:
+        return model
+    if check_model(model):
+        return model
+    print(
+        f"⚠️  Gemini model '{model}' is unavailable; "
+        f"falling back to '{GEMINI_FALLBACK_MODEL}'."
+    )
+    return GEMINI_FALLBACK_MODEL
 
 
 def _warn_long_handoff(content: str, msg_type: str, task_id: str | None):
@@ -220,7 +243,7 @@ def _launch_gemini_background(msg: dict, message_id: int, model: str, prompt: st
 
     try:
         bridge_cmd = [
-            sys.executable, str(Path(__file__).parent / "__main__.py"),
+            PYTHON_CMD, str(Path(__file__).parent / "__main__.py"),
             "process", str(message_id),
             "--model", model,
             "--no-timeout"
