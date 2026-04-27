@@ -5,7 +5,9 @@
 Start with a DEC customer order that names a CPU, memory, devices, and options,
 but is not yet a buildable system. The factory needs to know what is missing,
 where the pieces go, which backplanes and cables are possible, and what a
-technician should assemble.
+technician should assemble. Ground the opening in the physical artifact R1 made
+useful: configuration descriptions and diagrams that could guide cabinet,
+backplane, cable, and floor-layout work.
 
 ## Scene 2: The Knowledge Hidden in Constraints
 
@@ -31,7 +33,9 @@ This is where the knowledge-acquisition bottleneck becomes visual and human.
 
 Render the 50-order validation stage: six experts, one to two hours per order,
 12 pieces of errorful knowledge, rules modified, orders resubmitted, then the
-decision to integrate R1 into manufacturing.
+decision to integrate R1 into manufacturing. Keep the validation concrete: the
+experts are not grading an abstraction, they are inspecting output diagrams and
+asking whether a technician could actually assemble the resulting machine.
 
 ## Scene 6: The Mentor Beside the Expert System
 
@@ -49,7 +53,8 @@ never stops being maintained.
 
 Introduce XSEL and ad-hoc constraints. A customer-specific need enters as a
 command, temporarily takes control, reshapes part of the configuration, and then
-lets ordinary rules continue.
+lets ordinary rules continue. Treat this as a full scene, not a passing bridge:
+commercial use means customers push exceptions back into the rule base.
 
 ## Scene 9: Fortune With a Maintenance Contract
 

@@ -75,10 +75,12 @@ and why production use exposed a different class of problems from research use.
    to 3300, 5500 component descriptions, new system types, reliability/testing,
    performance metrics, mentors, and errors caused by missing parts or changing
    products.
-7. **Advice, Customers, and Commercial Reality:** use the ad-hoc constraints
-   paper and Smith to show that successful commercial expert systems had to
-   accept customer-specific constraints, avoid demo mentality, involve domain
-   experts, and survive technology transfer.
+7. **Advice, Customers, and Commercial Reality:** give XSEL/ad-hoc constraints
+   a standalone scene: customer-specific commands temporarily bend R1's clean
+   ordinary-case configuration flow, then ordinary rules resume. Use Smith to
+   show that successful commercial expert systems had to accept customer
+   pressure, avoid demo mentality, involve domain experts, and survive
+   technology transfer.
 8. **The Fortune and the Trap:** close with the expert-system boom's legitimate
    excitement and the hidden cost: rule-based systems could make money when
    narrow, structured, and maintained, but their value depended on permanent
@@ -112,8 +114,8 @@ economic claims or the 1993 "R1/XCON at age 12" retrospective.
   correctness metric, more than 80,000 orders, missing/incorrect rules falling
   below one in a thousand orders, and why early high-volume deployment would
   have been dangerous, anchored by Bachant/McDermott 1984 pp.28-32.
-- 300-400 words: ad-hoc/customer constraints and XSEL relationship, anchored by
-  McDermott/Steele 1981 pp.824-828.
+- 300-400 words: standalone ad-hoc/customer-constraints scene and XSEL
+  relationship, anchored by McDermott/Steele 1981 pp.824-828.
 - 300-400 words: broader commercial expert-system lesson: avoid demonstration
   mentality, use domain experts and knowledge engineers, plan transfer and
   progressive releases, anchored by Smith 1984 pp.66-69.

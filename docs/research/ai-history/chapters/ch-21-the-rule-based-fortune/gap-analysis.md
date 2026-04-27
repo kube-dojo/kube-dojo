@@ -30,7 +30,9 @@ Word Count Discipline label: `4k-5k confirmed; 5k-5.6k requires stretch unlocks`
   support regular DEC manufacturing use, almost all VAX-11 systems shipped, and
   the 15-person maintenance group.
 - **Ad-hoc/customer constraints:** McDermott/Steele 1981 supports XSEL commands,
-  customer-specific constraints, and the bounded extension to R1.
+  customer-specific constraints, and the bounded extension to R1. This should be
+  drafted as a standalone scene because it shows commercialization forcing a
+  rule system to absorb customer exceptions.
 - **Commercial expert-system context:** Smith 1984 supports the broader lesson:
   commercial systems are not demos and require domain experts, knowledge
   engineering, programming support, progressive releases, and transfer planning.
@@ -70,12 +72,15 @@ Natural supported range: 4,000-5,000 words.
 Path to 4,000 without bloat:
 
 - Open with a DEC order and the factory need for diagrams.
+- Keep the physical output visible: diagrams, backplane placement, cables, and
+  technicians using R1's configuration descriptions.
 - Explain configuration as ad-hoc constraint knowledge rather than abstract
   theorem proving.
 - Spend real space on how production rules and Match made the task tractable.
 - Use the expert-review/validation story as the human center.
 - Move into production growth, mentors, problem reporting, and 80,000 orders.
-- Use XSEL/ad-hoc constraints as a short pressure scene.
+- Use XSEL/ad-hoc constraints as a full pressure scene, not only a bridge
+  paragraph.
 - Close with Smith's commercial-development frame and the maintenance promise.
 
 Path to 5,000-5,600 without bloat:
