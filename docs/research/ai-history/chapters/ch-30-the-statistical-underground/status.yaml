@@ -1,14 +1,15 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 5
 chapter: 30
-review_state: gemini_and_claude_gap_reviews_ready_with_cap
+review_state: prose_drafted_awaiting_cross_family_review
 last_updated: 2026-04-27
-prose_words: 0
+prose_words: 4280
 notes:
   - "Initial placeholder expanded into a claim-level research contract for statistical speech recognition."
   - "Core frame: IBM and related speech groups made uncertainty operational through maximum-likelihood decoding, acoustic/language model decomposition, Markov/HMM machinery, sparse-data smoothing, and benchmarkable error rates."
   - "Primary anchors include Bahl/Jelinek/Mercer 1983, Rabiner 1989, CMU Sphinx HMM papers, and IBM statistical MT spillover papers."
   - "Jelinek 1976 is deliberately capped at bibliographic/abstract use only until a real full PDF is located."
   - "Claude and Gemini gap reviews found the contract prose-ready with cap discipline; capacity plan tightened to 4,100-5,400 words."
+  - "Codex drafted prose at 4,280 words from the approved research contract."
   - "Guardrail: do not use the famous Jelinek linguist quote without a primary or near-primary source; do not frame the chapter as anti-linguistics folklore."
