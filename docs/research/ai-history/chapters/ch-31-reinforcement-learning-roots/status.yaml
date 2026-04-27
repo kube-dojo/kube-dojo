@@ -1,12 +1,14 @@
-status: research_review
+status: prose_ready
 owner: Codex
 part: 5
 chapter: 31
-review_state: awaiting_cross_family_gap_review
+review_state: gemini_and_claude_gap_reviews_approved_with_caps
 last_updated: 2026-04-27
 notes:
   - "Codex expanded the scrubbed placeholder into a source-anchored research contract for reinforcement-learning roots."
   - "Core frame: delayed reward became a mathematical/computational problem through Bellman-style sequential decisions, Samuel-style game evaluation, actor-critic control, temporal differences, and Q-learning action values."
   - "Primary anchors include Samuel 1959, Barto/Sutton/Anderson 1983, Sutton 1988, Watkins 1989, Watkins/Dayan 1992, Kaelbling/Littman/Moore 1996, and Tesauro 1995."
   - "Guardrail: do not overclaim Q-learning convergence beyond the finite/Markovian/repeated-sampling/learning-rate conditions recorded in Watkins and Dayan 1992."
-  - "Guardrail: Barto/Sutton/Anderson 1983 is visually anchored from a fetched PDF but not cleanly text-extracted; reviewers should decide whether more OCR is needed before prose."
+  - "Gemini and Claude gap reviews approved prose drafting with caps."
+  - "Guardrail: Barto/Sutton/Anderson 1983 is visually anchored from a fetched PDF but not cleanly text-extracted; use p.834 for abstract-level claims only unless clean OCR is added."
+  - "Guardrail: keep Sutton 1984, SARSA, Sutton/Barto 1998 retrospective framing, and Minsky/SNARC out of this chapter for scope control."
