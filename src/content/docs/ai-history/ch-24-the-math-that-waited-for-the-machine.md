@@ -63,7 +63,7 @@ optimization trick had appeared. It was that the internal layer, the layer that
 had made neural networks expressive but hard to train, could be brought under a
 learning rule.
 
-The longer PDP chapter made the same issue more explicit. Networks without
+The longer PDP treatment made the same issue more explicit. Networks without
 hidden units could only work with representations that were already present.
 Networks with hidden units could, in principle, recode the problem internally.
 That distinction mattered because the old perceptron critique had exposed the
@@ -77,22 +77,20 @@ hidden layer was obvious enough. The missing piece was a widely usable method
 for teaching those internal features. The field had a representational hope but
 not yet a repeatable training procedure.
 
-That bottleneck also explains why backpropagation should be treated as
-infrastructure, not just as math. A mathematical expression can say what an
-ideal derivative is. A training procedure has to compute enough of those
-derivatives, for enough weights, often enough to change the behavior of a
-network. The historical obstacle was not the chain rule in isolation. It was
-the chain rule as an operational system.
+That bottleneck made backpropagation into infrastructure, not just math. A
+mathematical expression can say what an ideal derivative is. A training
+procedure has to compute enough of those derivatives, for enough weights, often
+enough to change the behavior of a network. The historical obstacle was not the
+chain rule in isolation. It was the chain rule as an operational system.
 
-The PDP chapter's opening discussion of internal representations is valuable
-because it keeps this point from becoming abstract. A system that cannot recode
-its inputs has to live with the features it is given. If the right distinction
-is not already visible, no amount of adjustment at the final layer can create
-the missing middle description. Hidden units promised a way out: they could
-turn the raw input into a more useful internal coordinate system. But that
-promise only mattered if the hidden layer could be trained. Without a training
-signal, the hidden layer was just a place where a programmer could hide another
-hand-built feature extractor.
+The PDP discussion of internal representations kept this point concrete. A
+system that cannot recode its inputs has to live with the features it is given.
+If the right distinction is not already visible, no amount of adjustment at the
+final layer can create the missing middle description. Hidden units promised a
+way out: they could turn the raw input into a more useful internal coordinate
+system. But that promise only mattered if the hidden layer could be trained.
+Without a training signal, the hidden layer was just a place where a programmer
+could hide another hand-built feature extractor.
 
 This is the hinge between the perceptron story and the backpropagation story.
 The old single-layer machine made learning concrete, but only for a constrained
@@ -124,13 +122,12 @@ errors it helped produce. The same pattern repeats layer by layer. Each weight
 update is based on two facts: what arrived during the forward pass, and how
 sensitive the final error is to that connection during the backward pass.
 
-This is why the PDP chapter's description matters historically. Rumelhart,
-Hinton, and Williams were not simply saying "use calculus." They described a
-procedure: a forward pass through the network, a backward pass computing error
-signals, and a generalized delta rule that could adjust hidden-layer weights.
-They also emphasized that the backward computation reused the same network
-structure in reverse. The method was not a separate hand derivation for every
-weight. It was an algorithm.
+Rumelhart, Hinton, and Williams were not simply saying "use calculus." They
+described a procedure: a forward pass through the network, a backward pass
+computing error signals, and a generalized delta rule that could adjust
+hidden-layer weights. They also emphasized that the backward computation reused
+the same network structure in reverse. The method was not a separate hand
+derivation for every weight. It was an algorithm.
 
 The word "bookkeeping" can sound small, but in this history it is the key. A
 large neural network is mostly bookkeeping. It contains many repeated
@@ -181,26 +178,24 @@ signal from the consequences of its own activity.
 
 ## The Older Trail
 
-The careful version of this chapter has to pause here, because 1986 was not the
-first appearance of the underlying derivative idea.
+However, 1986 was not the first appearance of the underlying derivative idea.
 
 Paul Werbos's thesis described calculating derivatives backward through ordered
 systems before the PDP revival made backpropagation famous in neural-network
-circles. The thesis is not the same event as the 1986 Nature paper, and it
-should not be forced into a simple origin myth. Its importance is that it shows
-the backward-derivative machinery was already available as a way to adapt
-trainable systems. Werbos described ordered derivatives and backward
+circles. The thesis is not the same event as the 1986 Nature paper, and it does
+not turn the later PDP work into a simple retelling of Werbos. Its importance is
+that it shows the backward-derivative machinery was already available as a way
+to adapt trainable systems. Werbos described ordered derivatives and backward
 calculation through a table of dependencies. That is close enough to the later
 neural-network procedure to matter, while still leaving open the historical
 question of transmission.
 
-That last caveat is essential. A responsible account can say that Werbos had
-earlier described related backward derivative propagation. It can say that
-later histories connect his thesis to the broader lineage of reverse-mode
-differentiation and learning systems. It should not say, without evidence, that
-Rumelhart, Hinton, and Williams directly inherited their 1986 work from Werbos.
-Influence is a stronger claim than priority. Priority can be anchored by texts.
-Influence needs a path.
+Werbos had earlier described related backward derivative propagation, and later
+histories connect his thesis to the broader lineage of reverse-mode
+differentiation and learning systems. There is no evidence in the research
+record gathered here that Rumelhart, Hinton, and Williams directly inherited
+their 1986 work from Werbos. Influence is a stronger claim than priority.
+Priority can be anchored by texts. Influence needs a path.
 
 Automatic differentiation adds another layer. Griewank's historical survey
 describes reverse-mode ideas as having multiple incarnations before neural
@@ -226,32 +221,30 @@ mathematical technique waiting for the right research problem and the right
 computing conditions, the story becomes more useful. It shows that AI progress
 often depends on old ideas becoming operational in a new infrastructure.
 
-The priority correction also protects the chapter from a second error: treating
-the existence of earlier math as proof that the breakthrough should have
-happened earlier. An algorithm can exist in a thesis, a numerical-analysis
-paper, or a control-theory context and still not reorganize AI. To reorganize a
-field, it has to attach to a problem that researchers recognize, produce
-examples they can run, and fit the available machines. The 1986 work did that
-for connectionism.
+The priority correction also protects against a second error: treating the
+existence of earlier math as proof that the breakthrough should have happened
+earlier. An algorithm can exist in a thesis, a numerical-analysis paper, or a
+control-theory context and still not reorganize AI. To reorganize a field, it
+has to attach to a problem that researchers recognize, produce examples they
+can run, and fit the available machines. The 1986 work did that for
+connectionism.
 
-This is also why the automatic-differentiation lineage should be present but
-not allowed to take over the chapter. Griewank's history shows that reverse
-mode was not born inside connectionism. It had a numerical life of its own,
-with computational graphs, adjoints, and concerns about the cost of gradients.
-Those details are not side trivia. They clarify what backpropagation is: a
-particular cultural and technical packaging of a more general reverse-mode
-calculation. The PDP authors made that calculation matter to a community that
-wanted learned internal representations. Numerical analysts could recognize
-the derivative machinery; connectionists could recognize the representational
-breakthrough.
+The automatic-differentiation lineage deepens the point without taking over the
+story. Griewank's history shows that reverse mode was not born inside
+connectionism. It had a numerical life of its own, with computational graphs,
+adjoints, and concerns about the cost of gradients. Those details are not side
+trivia. They clarify what backpropagation is: a particular cultural and
+technical packaging of a more general reverse-mode calculation. The PDP authors
+made that calculation matter to a community that wanted learned internal
+representations. Numerical analysts could recognize the derivative machinery;
+connectionists could recognize the representational breakthrough.
 
-The fairest sentence is therefore deliberately layered. Reverse-mode
-differentiation had earlier forms. Werbos described related backward
-derivative methods for trainable systems. Rumelhart, Hinton, and Williams made
-the method persuasive as a neural-network learning procedure for hidden
-representations. Each part of that sentence does a different job. Collapsing
-them into "X invented backpropagation" loses the infrastructure story the book
-is trying to tell.
+The resulting history has three layers. Reverse-mode differentiation had
+earlier forms. Werbos described related backward derivative methods for
+trainable systems. Rumelhart, Hinton, and Williams made the method persuasive
+as a neural-network learning procedure for hidden representations. Collapsing
+those layers into a single sentence about who "invented backpropagation" loses
+the infrastructure story.
 
 ## The PDP Moment
 
@@ -268,12 +261,11 @@ The family-tree and symmetry tasks were small, but they let the authors make a
 large point: hidden units could organize information internally in a way that
 was useful for the task.
 
-This is the moment where the chapter's language has to be precise. The network
-did not wake up with human understanding. It did not learn concepts in the same
-sense a person learns a social category. It adjusted weights until internal
-units carried structure useful for reducing error. But that was already
-historically significant. It meant the researcher did not have to prescribe
-every intermediate feature by hand.
+The network did not wake up with human understanding. It did not learn concepts
+in the same sense a person learns a social category. It adjusted weights until
+internal units carried structure useful for reducing error. But that was
+already historically significant. It meant the researcher did not have to
+prescribe every intermediate feature by hand.
 
 For a field that had been split between symbolic rule systems and older neural
 hopes, this was a strong result. Rule-based expert systems could be impressive
@@ -311,12 +303,11 @@ hard to train to be serious. The proper historical weight is therefore
 moderate but firm. Backpropagation did not settle the whole AI debate. It
 changed what connectionists could demonstrate.
 
-That distinction is important for the book's larger arc. AI history is full of
-moments where a method works in a small, clean setting and later becomes
-absorbed into a larger infrastructure. Backpropagation in 1986 belongs to that
-category. It was not yet an industry. It was a working grammar for a future
-industry: forward computation, loss, backward sensitivities, weight updates,
-repeat.
+AI history is full of moments where a method works in a small, clean setting
+and later becomes absorbed into a larger infrastructure. Backpropagation in
+1986 belongs to that category. It was not yet an industry. It was a working
+grammar for a future industry: forward computation, loss, backward
+sensitivities, weight updates, repeat.
 
 ## Why the Math Waited
 
@@ -351,13 +342,12 @@ That tradeoff is not a footnote. It is the infrastructure signature of the
 method. To send sensitivities backward, the system needs access to information
 from the forward pass. The algorithm is elegant, but it is not free.
 
-This is why the chapter should not invent exact 1986 hardware details where the
-research contract has not found them. The evidence supports the broader claim:
-backpropagation converted hidden-layer learning into a repeatable numerical
-procedure. It does not support a detailed story about specific machines,
-runtimes, or lab conditions unless those are later sourced. The safe
-infrastructure point is enough: the algorithm aligned learning with digital
-simulation, and later hardware would make that alignment decisive.
+The available evidence supports the broader claim: backpropagation converted
+hidden-layer learning into a repeatable numerical procedure. It does not, by
+itself, support a detailed story about specific machines, runtimes, or lab
+conditions. The infrastructure point is still strong: the algorithm aligned
+learning with digital simulation, and later hardware would make that alignment
+decisive.
 
 That safe point still has substance. Backpropagation is a storage and reuse
 strategy as much as a calculus lesson. The forward pass produces activations
@@ -368,8 +358,7 @@ across many examples. Later GPUs, tensor libraries, and autodiff systems would
 make this pattern routine, but the shape was already visible: learning as a
 cycle of numerical traces.
 
-The word "waited" in this chapter's title should be read in that sense. The
-math did not wait because no one knew calculus. It waited because useful AI
+The math did not wait because no one knew calculus. It waited because useful AI
 methods are not only ideas. They are ideas embedded in a practice: papers,
 examples, machines, software, and a community ready to believe the result is
 worth pursuing. In 1986, backpropagation finally met enough of those conditions
@@ -397,13 +386,18 @@ needed, how to avoid poor training dynamics, how to regularize, how to exploit
 specialized hardware, and how to connect learned representations to real
 systems.
 
-The next chapters follow some of those consequences. Universal approximation
-theorems would clarify what networks could represent in principle, while also
-making it necessary to distinguish existence from trainability. Convolutional
-networks would show how architectural constraint and real document-processing
-workloads could turn backpropagation into a practical recognition system.
-Support vector machines and statistical methods would offer competing answers
-to the same era's questions about generalization, data, and reliable learning.
+The consequences spread into several different research programs. Universal
+approximation theorems clarified what networks could represent in principle,
+while also making it necessary to distinguish existence from trainability.
+Convolutional networks showed how architectural constraint and real
+document-processing workloads could turn backpropagation into a practical
+recognition system. Support vector machines and statistical methods offered
+competing answers to the same era's questions about generalization, data, and
+reliable learning.
+
+For a few years, all of those answers coexisted. Backpropagation had returned
+layered networks to the agenda, but it had not given the field a monopoly
+method or a settled theory of why learned representations would generalize.
 
 That sequence matters because it prevents hindsight from flattening the 1980s.
 Backpropagation was not automatically the winning path. It was one reopened
@@ -415,10 +409,9 @@ other statistical methods were more reliable, and whether real-world
 architectures could exploit the learning rule without drowning in computation.
 Backpropagation supplied a door, not a finished building.
 
-Chapter 24 sits before those developments. Its job is to explain why 1986
-changed the direction of the field without exaggerating what changed. The math
-had a past. The demonstrations were small. The biological story was unsettled.
-The hardware was not yet ready for the scale that would come later.
+That later history should not be read backward into 1986. The math had a past.
+The demonstrations were small. The biological story was unsettled. The hardware
+was not yet ready for the scale that would come later.
 
 Still, the shift was real. Hidden layers were no longer merely a representational
 wish. They could be trained by a procedure that reused the structure of the
@@ -443,8 +436,8 @@ rule do industrial work.
   encoder, and symmetry examples.
 - Paul Werbos, ["Beyond Regression"](https://gwern.net/doc/ai/nn/1974-werbos.pdf),
   Harvard PhD thesis (1974/1975): earlier backward derivative machinery and
-  ordered derivative recurrence. This chapter does not claim direct
-  transmission to the 1986 PDP work.
+  ordered derivative recurrence. The text makes no direct-transmission claim to
+  the 1986 PDP work.
 - Andreas Griewank, ["Who Invented the Reverse Mode of
   Differentiation?"](https://ems.press/books/dms/251/4949), *Documenta
   Mathematica* (2012): reverse-mode automatic-differentiation history,
@@ -453,4 +446,4 @@ rule do industrial work.
 - Francis Crick, ["The recent excitement about neural
   networks"](https://www.nature.com/articles/337129a0), *Nature* 337, 129-132
   (1989): article-level anchor for contemporary caution about biological
-  realism. Detailed internal claims should wait for full text access.
+  realism. Detailed internal claims require full text access.

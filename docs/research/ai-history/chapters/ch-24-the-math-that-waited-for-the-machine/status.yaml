@@ -5,7 +5,7 @@ chapter: 24
 review_state: prose_review_requested
 last_updated: 2026-04-27
 prose_path: src/content/docs/ai-history/ch-24-the-math-that-waited-for-the-machine.md
-prose_words: 4115
+prose_words: 4018
 notes:
   - "Example research contract for Part 5."
   - "Review follow-up extracted page anchors for Nature 1986, PDP 1986, Werbos 1974, and Griewank 2012."
@@ -13,4 +13,4 @@ notes:
   - "Includes a prose-capacity plan for reaching 4000-7000 words without padding."
   - "Gemini gap analysis recorded in gap-analysis.md; safe prose core is now 4000-5000 words if drafted cautiously."
   - "Gemini prose-readiness review cleared drafting with cap; do not wait on hardware/full-Crick/Linnainmaa unless expanding beyond the safe core."
-  - "First public prose draft is 4115 words and has been sent for Gemini prose review."
+  - "First public prose draft is 4018 words and has been sent for Gemini prose review."
