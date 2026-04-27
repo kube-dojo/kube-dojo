@@ -38,7 +38,7 @@ They proved that models trained on specific datasets (like PASCAL VOC) failed ca
 > [!note] Pedagogical Insight: The Overfitting Trap
 > If a dataset is small and lacks variance (e.g., all photos of cars happen to be taken on sunny days from the front), the machine will learn that "sunshine" is a necessary feature of a "car." When presented with a novel photo of a car in the rain, it will fail. This failure to generalize from a small dataset to the real world is known as overfitting.
 
-By the dawn of the 2010s, it was glaringly apparent that the field of computer vision was starved for variance. To break through the plateau, researchers would have to abandon their elegant hand-crafted math and find a way to expose their algorithms to millions of varied, real-world images. The stage was perfectly set for ImageNet.
+By the dawn of the 2010s, it was glaringly apparent that the field of computer vision was starved for variance. To break through the plateau, researchers would have to abandon their elegant hand-crafted math and find a way to expose their algorithms to millions of varied, real-world images. This created a strong demand for massive, varied datasets like ImageNet.
 
 ## Sources
 

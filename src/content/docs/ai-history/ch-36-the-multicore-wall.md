@@ -7,7 +7,7 @@ sidebar:
 
 # Chapter 36: The Multicore Wall
 
-For over thirty years, software engineers lived in a golden age. Thanks to Moore's Law and a corollary known as Dennard scaling, processors predictably doubled in transistor count and clock speed every 18 to 24 months. If a programmer wrote a piece of software that ran too slowly, they didn't need to rewrite the code; they simply had to wait two years for Intel or AMD to release a faster chip.
+For over thirty years, software engineers lived in a golden age. Thanks to Moore's Law and a corollary known as Dennard scaling, processors predictably doubled in transistor count every 18 to 24 months, while clock speeds steadily increased. If a programmer wrote a piece of software that ran too slowly, they didn't need to rewrite the code; they simply had to wait two years for Intel or AMD to release a faster chip.
 
 But in the mid-2000s, this free ride abruptly and violently ended. The hardware industry hit a thermodynamic wall, fundamentally altering the trajectory of computation. To keep scaling compute, engineers were forced to abandon single-thread speed and embrace massive parallelism.
 
@@ -30,7 +30,7 @@ This hardware pivot was a nightmare for software engineers. In 2005, prominent s
 To take advantage of multicore processors, programmers had to learn how to write concurrent software—breaking a task into smaller, independent pieces that could be calculated simultaneously across multiple cores. 
 
 > [!note] Pedagogical Insight: Parallel Math
-> This forced transition to concurrency perfectly primed the industry for modern AI. Neural networks rely heavily on matrix multiplication, which is highly parallelizable. Because the entire software industry was forced to learn how to distribute calculations across multiple cores to survive the thermal wall of 2004, the software frameworks and mindsets required to train massive parallel AI models a decade later were already being forged.
+> This forced transition to concurrency accelerated the industry's familiarity with parallel programming paradigms. Because the software industry was forced to learn how to distribute calculations across multiple cores to survive the thermal wall of 2004, it laid important technical groundwork for the massively parallel software frameworks that would later become essential for modern computing and AI model training.
 
 ## Sources
 

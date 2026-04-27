@@ -11,7 +11,7 @@ By the 1990s, statistical methods had begun to prove their worth in speech recog
 
 Statistical models, like the ones pioneered by Fred Jelinek at IBM, require massive amounts of data to learn probabilities. But digitized text was incredibly rare and expensive to produce. 
 
-For decades, the gold standard in computational linguistics was the Brown Corpus. Compiled in the 1960s by Henry Kucera and W. Nelson Francis, it contained exactly one million words of carefully curated American English. It was a monumental achievement for its time, but a million words is statistically tiny. A machine cannot learn the deep, nuanced probabilities of human language from just a million words. The models were starving.
+For decades, the gold standard in computational linguistics was the Brown Corpus. Compiled in the 1960s by Henry Kucera and W. Nelson Francis, it contained exactly one million words of carefully curated American English. It was a monumental achievement for its time, but a million words is statistically small. A machine struggles to learn the deep, nuanced probabilities of human language from just a million words. The models were starving.
 
 The solution did not come from an academic linguistics lab. It came from a physicist in Switzerland trying to organize his research notes, inadvertently creating the largest, messiest, and most powerful dataset in human history.
 
@@ -33,7 +33,7 @@ Banko and Brill ran a simple experiment. They tested various algorithms on a sta
 
 The results were astonishing. When trained on one billion words, even the worst algorithm outperformed the best algorithm trained on one million words. The learning curves showed that accuracy continued to climb strictly as a function of data size. 
 
-The chaotic noise of the web didn't matter. When the dataset was large enough, the sheer volume of statistical probability overwhelmed the typos and the bad grammar. Size had become a substitute for curation. The web had solved the data famine, permanently shifting AI from a discipline of curated rules to a discipline of massive, unstructured scale.
+The chaotic noise of the web didn't matter. When the dataset was large enough, the sheer volume of statistical probability overwhelmed the typos and the bad grammar. Size had become a substitute for curation. The web provided a massive new resource, heavily influencing the shift in NLP towards empirical, data-driven scale.
 
 ## Sources
 

@@ -31,7 +31,7 @@ The linguists were appalled. They viewed this statistical approach as intellectu
 
 Jelinek famously captured this tension with a quip that would define the era. While the exact 1980s origin of the quote is apocryphal, Jelinek himself verified the sentiment in a 2005 retrospective: *"Every time I fire a linguist, the performance of the speech recognizer goes up."*
 
-The DARPA SUR program and the subsequent success of IBM's statistical models proved that in the messy reality of the physical world, "dumb" data and probabilities beat elegant human theory. It was the first major victory for empirical machine learning, and it signaled the beginning of the end for symbolic, rule-based AI.
+The DARPA SUR program and the subsequent success of IBM's statistical models proved that in the messy reality of the physical world, "dumb" data and probabilities often beat elegant human theory. It was a major victory for empirical machine learning, and it signaled a significant shift away from purely symbolic, rule-based approaches in speech recognition.
 
 ## Sources
 

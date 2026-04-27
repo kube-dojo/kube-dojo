@@ -33,9 +33,9 @@ MTurk was a revolutionary piece of labor infrastructure. It completely abstracte
 
 Academic AI researchers quickly realized that MTurk was the missing piece of the puzzle. In 2008, a landmark paper by Rion Snow and colleagues at Stanford validated the platform, proving that the aggregated labels of cheap, non-expert MTurk workers were just as accurate as the labels produced by highly paid linguistic experts.
 
-This validation opened the floodgates. Academic labs abandoned traditional curation and adopted MTurk as their primary annotation engine. This shift culminated heavily in 2009 with projects like ImageNet, which explicitly cited MTurk as the core operational mechanism required to label millions of images at an unprecedented scale. 
+This validation opened the floodgates. Many academic labs began supplementing traditional curation and adopting MTurk as a powerful annotation engine. This shift culminated heavily in 2009 with projects like ImageNet, which explicitly cited MTurk as the core operational mechanism required to label millions of images at an unprecedented scale. 
 
-By transforming human cognitive labor into a callable API, MTurk broke the annotation bottleneck. It proved that the foundation of modern artificial intelligence was not just silicon and algorithms, but the distributed, underpaid clicks of thousands of anonymous human workers.
+By transforming human cognitive labor into a callable API, MTurk drastically reduced the annotation bottleneck. It proved that the development of large-scale machine learning datasets could rely on the distributed micro-tasks of thousands of anonymous human workers.
 
 ## Sources
 
