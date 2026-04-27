@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 5.1: MLOps Fundamentals"
 slug: platform/disciplines/data-ai/mlops/module-5.1-mlops-fundamentals
 sidebar:
