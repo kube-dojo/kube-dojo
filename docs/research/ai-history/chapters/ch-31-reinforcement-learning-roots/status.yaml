@@ -1,9 +1,10 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 5
 chapter: 31
-review_state: gemini_and_claude_gap_reviews_approved_with_caps
+review_state: prose_drafted_awaiting_cross_family_review
 last_updated: 2026-04-27
+prose_words: 4026
 notes:
   - "Codex expanded the scrubbed placeholder into a source-anchored research contract for reinforcement-learning roots."
   - "Core frame: delayed reward became a mathematical/computational problem through Bellman-style sequential decisions, Samuel-style game evaluation, actor-critic control, temporal differences, and Q-learning action values."
@@ -12,3 +13,4 @@ notes:
   - "Gemini and Claude gap reviews approved prose drafting with caps."
   - "Guardrail: Barto/Sutton/Anderson 1983 is visually anchored from a fetched PDF but not cleanly text-extracted; use p.834 for abstract-level claims only unless clean OCR is added."
   - "Guardrail: keep Sutton 1984, SARSA, Sutton/Barto 1998 retrospective framing, and Minsky/SNARC out of this chapter for scope control."
+  - "Codex drafted a 4,026-word prose chapter from the approved research contract; Gemini and Claude process-language fixes applied."
