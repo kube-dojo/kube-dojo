@@ -1,3 +1,3 @@
 # Open Questions
 
-- None. Archival anchors extracted and verified.
+- Need exact meeting dates and folder/page anchors for the Moore School Archives documenting the collaborative evolution of the stored-program concept.

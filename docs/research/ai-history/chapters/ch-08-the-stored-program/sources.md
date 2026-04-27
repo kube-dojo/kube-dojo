@@ -5,7 +5,7 @@
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
 | ENIAC was programmed via physical cables by women mathematicians | 1 | Bartik 2013 (*Pioneer Programmer*) | Light 1999 | Green | None |
-| The stored-program concept evolved collaboratively | 2 | Moore School Archives, "Minutes of EDVAC meetings, 1945" | Haigh et al. 2014 | Green | None |
+| The stored-program concept evolved collaboratively | 2 | Moore School Archives, "Minutes of EDVAC meetings, 1945" | Haigh et al. 2014 | Yellow | Need exact meeting dates and folder/page anchors for the archives. |
 | Von Neumann's EDVAC draft formalized the concept | 3 | von Neumann 1945 | [Dyson 2012] | Green | None |
 | Goldstine mimeographed and distributed the report | 4 | Goldstine 1972 | [Dyson 2012] | Green | None |
 | Eckert disputed the sole credit of von Neumann | 4 | Eckert Oral History (CBI, OH 13, p. 11) | Haigh et al. 2014 | Green | High historical tension regarding patent rights. |
