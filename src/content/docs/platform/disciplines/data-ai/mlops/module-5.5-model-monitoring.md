@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 5.5: Model Monitoring & Observability"
 slug: platform/disciplines/data-ai/mlops/module-5.5-model-monitoring
 sidebar:
