@@ -222,7 +222,7 @@ def test_route_rewrite_when_score_below_threshold(fake_repo, monkeypatch):
     st = state.load_state(slug)
     assert st["stage"] == "WRITE_PENDING"
     assert st["route"]["track"] == "rewrite"
-    assert st["writer"] == "codex"  # module_index=0 → even → codex writes
+    assert st["writer"] == "gemini"  # module_index=0 → even → gemini writes
     assert st["reviewer"] == "claude"
 
 
@@ -274,7 +274,7 @@ def test_write_one_happy_path_creates_worktree_commit(fake_repo, monkeypatch):
     st = state.load_state(slug)
     assert st["stage"] == "WRITE_DONE"
     assert st["write"]["commit_sha"]
-    assert st["write"]["agent"] == "codex"
+    assert st["write"]["agent"] == "gemini"
     # The worktree should exist with the new content.
     wt = worktree.worktree_dir(fake_repo, slug)
     assert wt.exists()

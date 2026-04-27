@@ -289,7 +289,7 @@ def route_one(slug: str) -> None:
         if claim_result.writer is None:
             return  # blocked, no transition; retry on next sweep
         agent, writer_model = queue.model_to_agent(claim_result.writer)
-        reviewer = "claude" if agent != "claude" else "codex"
+        reviewer = "claude" if agent != "claude" else "gemini"
 
         state.transition(
             st, "AUDITED", "ROUTED",

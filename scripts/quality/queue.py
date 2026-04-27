@@ -42,7 +42,7 @@ from .state import (
 # routing to whichever the order ended up.
 
 PRIMARY_BEGINNER = "gemini-3.1-pro-preview"
-PRIMARY_ADVANCED = "gpt-5.5"
+PRIMARY_ADVANCED = "gemini-3.1-pro-preview"
 TERTIARY = "claude-opus-4-7"
 
 # Map writer-model identifiers (returned by route_writer / stored in the
@@ -52,7 +52,6 @@ TERTIARY = "claude-opus-4-7"
 # corresponding case in scripts/dispatch.py.
 _MODEL_TO_AGENT: dict[str, tuple[str, str]] = {
     PRIMARY_BEGINNER: ("gemini", PRIMARY_BEGINNER),
-    PRIMARY_ADVANCED: ("codex", PRIMARY_ADVANCED),
     TERTIARY: ("claude", TERTIARY),
 }
 
@@ -112,17 +111,8 @@ def _read_complexity(module_path: Path) -> str | None:
 def _beginner_writer() -> str:
     """Resolve the beginner-track writer, honouring a runtime degraded
     fallback.
-
-    During the 2026-04-26 batch run, Gemini-3.1-pro-preview hit a peak-hour
-    capacity window where ~75% of writes returned truncated output (odd
-    triple-backtick count = unclosed code fence). Setting
-    ``KUBEDOJO_BEGINNER_FALLBACK=codex`` reroutes the beginner-track
-    modules to Codex gpt-5.5 for the duration. Unset to restore the
-    Gemini default once capacity returns.
     """
     fallback = os.environ.get("KUBEDOJO_BEGINNER_FALLBACK", "").lower().strip()
-    if fallback in {"codex", "gpt-5.5"}:
-        return PRIMARY_ADVANCED
     if fallback in {"claude", "claude-opus", "claude-opus-4-7"}:
         return TERTIARY
     return PRIMARY_BEGINNER
@@ -130,16 +120,8 @@ def _beginner_writer() -> str:
 
 def _tertiary_writer() -> str:
     """Resolve the tertiary writer, honouring a runtime degraded fallback.
-
-    Same shape as ``_beginner_writer``. Anthropic-side throttling on
-    consecutive heavy claude calls (~10 min cool-down) made Claude an
-    unreliable batch writer during the 2026-04-26 run; setting
-    ``KUBEDOJO_TERTIARY_FALLBACK=codex`` reroutes any module that would
-    otherwise default to Claude (unenumerated tracks) to Codex gpt-5.5.
     """
     fallback = os.environ.get("KUBEDOJO_TERTIARY_FALLBACK", "").lower().strip()
-    if fallback in {"codex", "gpt-5.5"}:
-        return PRIMARY_ADVANCED
     if fallback in {"gemini", "gemini-3.1-pro-preview"}:
         return PRIMARY_BEGINNER
     return TERTIARY
