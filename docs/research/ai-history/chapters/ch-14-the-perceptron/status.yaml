@@ -1,12 +1,29 @@
-status: capacity_plan_anchored
+status: prose_ready
+prose_word_cap: 4500
 owner: Codex
 part: 3
 chapter: 14
-review_state: claude_integrated_gemini_gap_audit_2026-04-27
-last_updated: 2026-04-27
+review_state: claude_integrated_gemini_gap_audit_2026-04-27;dual_cross_family_verdict_2026-04-28
+last_updated: 2026-04-28
 green_claims: 26
 yellow_claims: 20
 red_claims: 10
+verdicts:
+  gemini:
+    model: gemini-3-flash-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 4500
+    bridge_msg: 2944
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 4500
+    note: independent-prose-capacity verdict via fresh headless agent (Codex authored, integrating Claude conflict-of-interest)
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 4500
+  resolution_rule: dual_concurring_verdict
 notes: |
   Full 8-file contract drafted for Chapter 14 by Codex, then dual-reviewed: Codex authored,
   Gemini gap-audited (gemini-3-flash-preview, message #2919), Claude integrated.
@@ -66,3 +83,26 @@ notes: |
   Local cold-start failed because this worktree lacks a local .venv. Browser-accessible
   PDF/HTML extraction was used for anchors. Book-only checklist applies: changed files
   are limited to docs/research/ai-history/chapters/ch-14-the-perceptron/.
+
+  Dual cross-family verdict pass 2026-04-28:
+   - Gemini (gemini-3-flash-preview): READY_TO_DRAFT_WITH_CAP at 4,500 words.
+     The integration successfully anchors the 1958 NPL collision and independent
+     mathematical legitimacy, but unextracted hardware manuals (MarkI-Manual60)
+     and press scans (NYT58) necessitate the 4,500-word ceiling to avoid
+     overclaiming in the engineering and reception beats. Stayed in lane per
+     feedback_gemini_hallucinates_anchors.md, no URLs cited (msg #2944).
+   - Independent Claude (claude-opus-4-7, fresh headless agent):
+     READY_TO_DRAFT_WITH_CAP at 4,500 words. The 26 Greens fund a faithful
+     4,000-4,500-word chapter with disciplined Yellow supplementation. Six
+     named page extractions remain outstanding (operator manual, NYT scan,
+     NPL pages, Block62, Novikoff62, Widrow-Hoff). The contract's own capped
+     core range should govern.
+   - Codex (gpt-5.5) is the chapter's author so cross-family conflict-of-
+     interest applies; he is excluded from the verdict step.
+   - Resolution: dual_concurring_verdict -> READY_TO_DRAFT_WITH_CAP at 4,500
+     words.
+
+  Status advances from capacity_plan_anchored to prose_ready. Drafting may
+  begin on a codex/394-ch14-prose branch off main, capped at 4,500 words.
+  This contract has cleared dual cross-family review (Codex authored +
+  Gemini gap-audited + Claude integrated + dual verdict pass).
