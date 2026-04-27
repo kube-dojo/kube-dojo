@@ -26,7 +26,7 @@ However, they realized that not all votes are equal. A link from a highly truste
 To solve this, they modeled the internet as a massive probability distribution. They imagined a "random surfer" clicking links endlessly. The PageRank of a specific website is mathematically defined as the probability that the random surfer will eventually land on that site. 
 
 > [!note] Pedagogical Insight: The Eigenvector
-> PageRank is fundamentally a calculation of a mathematical concept known as an eigenvector. It creates a massive matrix representing every single link on the internet. Because the rank of a page depends on the rank of the pages linking *to* it, the math requires solving a recursive, circular equation. Page and Brin successfully mapped human semantic trust onto a massive, solvable mathematical matrix. 
+> PageRank is fundamentally a calculation of a mathematical concept known as an eigenvector. It creates a massive matrix representing every single link on the internet. Because the rank of a page depends on the rank of the pages linking *to* it, the math requires solving a recursive, circular equation. Page and Brin turned the web’s link structure into a solvable probability model that approximated authority from linking behavior. 
 
 ## The Pizza Box Servers
 

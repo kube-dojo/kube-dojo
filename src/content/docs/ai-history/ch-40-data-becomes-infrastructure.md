@@ -9,7 +9,7 @@ sidebar:
 
 By the late 2000s, the field of computer vision was stagnating. Researchers were attempting to teach machines to recognize objects—like cars, cats, or airplanes—by painstakingly writing complex mathematical formulas to define the edges and corners of those objects. 
 
-They tested their algorithms on academic datasets like the PASCAL VOC challenge, which contained roughly 20,000 images categorized into just 20 visual classes. The algorithms would perform adequately on the small test set, but when exposed to novel images from the chaotic real world, they failed miserably. The algorithms were "overfitting"—memorizing the tiny dataset rather than learning generalized visual rules.
+They tested their algorithms on academic datasets like the PASCAL VOC challenge, which contained roughly 20,000 images categorized into just 20 visual classes. The algorithms would perform adequately on the small test set, but when exposed to novel images from the chaotic real world, they failed miserably. The algorithms were memorizing the tiny datasets rather than demonstrating robust real-world generalization from the small benchmarks.
 
 The prevailing wisdom in the academic community was that the algorithms simply needed better mathematical tuning. But a young computer science professor named Fei-Fei Li realized that the field was looking at the wrong bottleneck. The problem was not the math; the problem was the data.
 

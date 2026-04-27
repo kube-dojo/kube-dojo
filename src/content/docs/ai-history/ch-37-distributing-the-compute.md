@@ -1,6 +1,6 @@
 ---
 title: "Chapter 37: Distributing the Compute"
-description: "How the invention of MapReduce and Hadoop abstracted away the nightmare of network failures, democratizing cluster computing."
+description: "How the invention of MapReduce and Hadoop abstracted away the nightmare of network failures, widely distributing Google-style large-scale batch processing via open source."
 sidebar:
   order: 37
 ---

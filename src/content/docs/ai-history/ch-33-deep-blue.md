@@ -23,7 +23,7 @@ Software algorithms, running on standard, general-purpose central processing uni
 
 Hsu’s radical approach was to abandon the flexibility of general-purpose software. Instead of writing a chess program to run on a standard chip, he decided to physically burn the chess rules and the evaluation functions directly into custom-designed silicon.
 
-He designed VLSI (Very Large Scale Integration) chips with specialized circuitry dedicated exclusively to massively accelerating the chess evaluation function and move generation. The hardware *was* the chess algorithm. By moving the heavy lifting from software into physical silicon, the operations could execute at blinding speeds. 
+He designed VLSI (Very Large Scale Integration) chips with specialized circuitry dedicated exclusively to massively accelerating the chess evaluation function and move generation. By moving the heavy lifting from software into physical silicon, these critical operations could execute at blinding speeds inside a broader search system. 
 
 > [!note] Pedagogical Insight: Custom Silicon vs. Software
 > Imagine a factory that can build any type of vehicle (a CPU). If you ask it to build a million red bicycles, it will take a long time because the factory has to constantly reconfigure its tools. Hsu built a factory that could *only* build red bicycles (a custom VLSI chip). It could do nothing else, but it could build them incredibly fast.
