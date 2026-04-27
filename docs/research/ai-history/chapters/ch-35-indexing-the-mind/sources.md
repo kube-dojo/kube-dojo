@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| PageRank modeled web links as a probability distribution (eigenvector) | 2 | Page et al., 1999 | Levy 2011 | Green | None |
-| Google built its infrastructure on clusters of cheap commodity PCs | 3 | Barroso et al., 2003 | Levy 2011 | Green | None |
+| PageRank modeled web links as a probability distribution (eigenvector) | 2 | Page et al., 1999 | Levy 2011 | Yellow | Need exact verified page/section anchors. |
+| Google built its infrastructure on clusters of cheap commodity PCs | 3 | Barroso et al., 2003 | Levy 2011 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

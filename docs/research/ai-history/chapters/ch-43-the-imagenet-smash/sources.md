@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| AlexNet was trained on consumer GTX 580 GPUs | 2 | Krizhevsky et al. 2012 (ImageNet classification) | Goodfellow et al. 2016 | Green | None |
-| AlexNet defeated traditional algorithms by a margin of 10.8% | 3 | ILSVRC 2012 official results | Gershgorn 2017 | Green | None |
+| AlexNet was trained on consumer GTX 580 GPUs | 2 | Krizhevsky et al. 2012 (ImageNet classification) | Goodfellow et al. 2016 | Yellow | Need exact verified page/section anchors. |
+| AlexNet defeated traditional algorithms by a margin of 10.8% | 3 | ILSVRC 2012 official results | Gershgorn 2017 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

@@ -5768,6 +5768,144 @@ def _parse_status_md(status_path: Path) -> dict[str, Any]:
     return data
 
 
+_AI_HISTORY_PARTS: tuple[dict[str, Any], ...] = (
+    {"part": 1, "name": "The Mathematical Foundations", "range": (1, 5), "issue": 399},
+    {"part": 2, "name": "The Analog Dream & Digital Blank Slate", "range": (6, 10), "issue": 400},
+    {"part": 3, "name": "The Birth of Symbolic AI & Early Optimism", "range": (11, 16), "issue": 401},
+    {"part": 4, "name": "The First Winter & The Shift to Knowledge", "range": (17, 23), "issue": 402},
+    {"part": 5, "name": "The Mathematical Resurrection", "range": (24, 31), "issue": 403},
+    {"part": 6, "name": "The Rise of Data & Distributed Compute", "range": (32, 40), "issue": 404},
+    {"part": 7, "name": "The Deep Learning Revolution & GPU Coup", "range": (41, 49), "issue": 405},
+    {"part": 8, "name": "The Transformer, Scale & Open Source", "range": (50, 58), "issue": 406},
+    {"part": 9, "name": "The Product Shock & Physical Limits", "range": (59, 68), "issue": 407},
+)
+
+_BOOK_NUMERIC_KEYS = frozenset({"part", "chapter", "green_claims", "yellow_claims", "red_claims"})
+
+
+def _parse_status_yaml(path: Path) -> dict[str, Any]:
+    """Minimal tolerant parser for chapter status.yaml top-level scalars.
+
+    The codebase deliberately avoids a yaml dependency. Chapter status
+    files use a small subset: ``key: value`` pairs plus an occasional
+    ``notes: |`` block scalar. We only need the top-level scalars
+    (status, owner, part, chapter, review_state, last_updated, and the
+    Green/Yellow/Red counts), so a line-based parser is sufficient.
+
+    Returns an empty dict if the file is missing or unreadable.
+    """
+    out: dict[str, Any] = {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return out
+
+    for raw in text.splitlines():
+        # Indented lines belong to nested dicts or block scalars; skip.
+        if raw.startswith((" ", "\t")):
+            continue
+        line = raw.rstrip()
+        if not line or line.startswith("#") or line.startswith("---"):
+            continue
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        # Block-scalar markers (`|`, `>`) and bare empty values mean the
+        # value is on subsequent indented lines, which we skip.
+        if value in ("", "|", ">", "|-", ">-"):
+            continue
+        if value.startswith('"') and value.endswith('"'):
+            value = value[1:-1]
+        elif value.startswith("'") and value.endswith("'"):
+            value = value[1:-1]
+        if key in _BOOK_NUMERIC_KEYS:
+            try:
+                out[key] = int(value)
+                continue
+            except ValueError:
+                pass
+        out[key] = value
+    return out
+
+
+def build_book_briefing(repo_root: Path) -> dict[str, Any]:
+    """Aggregate status across all AI-history book chapters.
+
+    Scans ``docs/research/ai-history/chapters/ch-NN-<slug>/status.yaml``
+    and groups chapters into the 9 Parts. Each chapter entry carries
+    number, slug, status, owner, review_state, last_updated, and (when
+    present) Green/Yellow/Red claim counts. Each part rolls up status
+    counts and the set of owners observed.
+
+    Cheap to compute (68 small files, no parsing dependencies) so this
+    is not background-refreshed; it just reads on every call.
+    """
+    chapters_dir = repo_root / "docs" / "research" / "ai-history" / "chapters"
+    chapters_by_num: dict[int, dict[str, Any]] = {}
+    if chapters_dir.is_dir():
+        for entry in sorted(chapters_dir.iterdir()):
+            if not entry.is_dir() or not entry.name.startswith("ch-"):
+                continue
+            stem = entry.name[len("ch-") :]
+            num_part, _, slug_tail = stem.partition("-")
+            try:
+                ch_num = int(num_part)
+            except ValueError:
+                continue
+            data = _parse_status_yaml(entry / "status.yaml")
+            chapters_by_num[ch_num] = {
+                "chapter": ch_num,
+                "slug": entry.name,
+                "title_slug": slug_tail,
+                "status": data.get("status"),
+                "owner": data.get("owner"),
+                "review_state": data.get("review_state"),
+                "green_claims": data.get("green_claims"),
+                "yellow_claims": data.get("yellow_claims"),
+                "red_claims": data.get("red_claims"),
+                "last_updated": data.get("last_updated"),
+            }
+
+    parts_out: list[dict[str, Any]] = []
+    total_status: dict[str, int] = {}
+    for spec in _AI_HISTORY_PARTS:
+        lo, hi = spec["range"]
+        chapters = [chapters_by_num[n] for n in range(lo, hi + 1) if n in chapters_by_num]
+        rollup: dict[str, int] = {}
+        owners_seen: set[str] = set()
+        for ch in chapters:
+            status_value = ch.get("status") or "unknown"
+            rollup[status_value] = rollup.get(status_value, 0) + 1
+            total_status[status_value] = total_status.get(status_value, 0) + 1
+            owner = ch.get("owner")
+            if owner:
+                owners_seen.add(owner)
+        parts_out.append(
+            {
+                "part": spec["part"],
+                "name": spec["name"],
+                "chapter_range": [lo, hi],
+                "tracking_issue": spec["issue"],
+                "owners_seen": sorted(owners_seen),
+                "chapter_count": len(chapters),
+                "status_rollup": rollup,
+                "chapters": chapters,
+            }
+        )
+
+    return {
+        "epic_issue": 394,
+        "chapter_count": sum(p["chapter_count"] for p in parts_out),
+        "expected_chapter_count": 68,
+        "total_status_rollup": total_status,
+        "parts": parts_out,
+    }
+
+
 def _recent_commits(repo_root: Path, limit: int = 5) -> list[dict[str, Any]]:
     result = subprocess.run(
         ["git", "log", f"-n{limit}", "--pretty=format:%h%x09%s"],
@@ -6263,6 +6401,10 @@ def build_api_schema() -> dict[str, Any]:
                 "query": ["compact=1"],
                 "freshness": "background-refreshed every 15s",
             },
+            {
+                "path": "/api/briefing/book",
+                "desc": "AI-history book chapter status rollup. Scans chapters/ch-NN-*/status.yaml and groups by Part (1-9). Each part includes status_rollup, owners_seen, tracking_issue, and a per-chapter list with Green/Yellow/Red counts when present.",
+            },
             {"path": "/api/status/summary", "desc": "Repo status (fast)"},
             {"path": "/api/missing-modules/status", "desc": "Modules missing from nav/sidebar"},
             {"path": "/api/activity/recent", "desc": "Recent commits, pipeline events, bridge messages, watched issue (grouped by source)"},
@@ -6490,6 +6632,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         if compact:
             briefing = _compact_briefing(briefing)
         return 200, briefing, "application/json; charset=utf-8"
+    if path == "/api/briefing/book":
+        return 200, build_book_briefing(repo_root), "application/json; charset=utf-8"
     if path == "/api/cache/stats":
         return 200, _cache_stats(), "application/json; charset=utf-8"
     if path == "/api/pipeline/leases":

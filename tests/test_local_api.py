@@ -2954,3 +2954,163 @@ def test_session_briefing_surfaces_git_hygiene_alert(tmp_path: Path) -> None:
         "git hygiene" in a and "older than 7 days" in a
         for a in briefing["alerts"]
     )
+
+
+def _seed_book_chapter(
+    repo_root: Path,
+    chapter_num: int,
+    slug: str,
+    *,
+    status: str | None = "researching",
+    owner: str | None = None,
+    review_state: str | None = None,
+    green: int | None = None,
+    yellow: int | None = None,
+    red: int | None = None,
+    last_updated: str | None = None,
+    notes_block: bool = False,
+) -> None:
+    chapters_dir = repo_root / "docs" / "research" / "ai-history" / "chapters"
+    chapter_dir = chapters_dir / f"ch-{chapter_num:02d}-{slug}"
+    chapter_dir.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = []
+    if status is not None:
+        lines.append(f"status: {status}")
+    if owner is not None:
+        lines.append(f"owner: {owner}")
+    lines.append(f"chapter: {chapter_num}")
+    if review_state is not None:
+        lines.append(f"review_state: {review_state}")
+    if green is not None:
+        lines.append(f"green_claims: {green}")
+    if yellow is not None:
+        lines.append(f"yellow_claims: {yellow}")
+    if red is not None:
+        lines.append(f"red_claims: {red}")
+    if last_updated is not None:
+        lines.append(f"last_updated: {last_updated}")
+    if notes_block:
+        # Block-scalar; the parser must skip the indented continuation.
+        lines.append("notes: |")
+        lines.append("  Free-form notes line one.")
+        lines.append("  Should be ignored by the top-level parser.")
+    (chapter_dir / "status.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_briefing_book_groups_chapters_by_part_with_rollup(tmp_path: Path) -> None:
+    _seed_book_chapter(tmp_path, 1, "the-laws-of-thought", status="ready_to_draft_with_cap", owner="Gemini")
+    _seed_book_chapter(tmp_path, 6, "the-cybernetics-movement", status="accepted", owner="Gemini")
+    _seed_book_chapter(
+        tmp_path,
+        11,
+        "the-summer-ai-named-itself",
+        status="capacity_plan_anchored",
+        owner="Claude",
+        review_state="codex_approved_2026-04-27",
+        green=13,
+        yellow=12,
+        red=1,
+        notes_block=True,
+    )
+    _seed_book_chapter(
+        tmp_path,
+        24,
+        "the-math-that-waited-for-the-machine",
+        status="prose_ready",
+        owner="Codex",
+        last_updated="2026-04-27",
+    )
+    _seed_book_chapter(tmp_path, 50, "attention-is-all-you-need", status="researching", owner="Codex")
+    _seed_book_chapter(tmp_path, 68, "the-infinite-datacenter", status="researching", owner="Claude")
+
+    status_code, payload, content_type = local_api.route_request(tmp_path, "/api/briefing/book")
+    assert status_code == 200
+    assert content_type.startswith("application/json")
+    assert isinstance(payload, dict)
+    assert payload["epic_issue"] == 394
+    assert payload["expected_chapter_count"] == 68
+    assert payload["chapter_count"] == 6
+    assert len(payload["parts"]) == 9
+
+    parts_by_num = {p["part"]: p for p in payload["parts"]}
+    # Part 3 (Ch 11-16): one anchored chapter with all the GYR counts.
+    part3 = parts_by_num[3]
+    assert part3["chapter_range"] == [11, 16]
+    assert part3["tracking_issue"] == 401
+    assert part3["chapter_count"] == 1
+    assert part3["status_rollup"] == {"capacity_plan_anchored": 1}
+    assert part3["owners_seen"] == ["Claude"]
+    ch11 = part3["chapters"][0]
+    assert ch11["chapter"] == 11
+    assert ch11["green_claims"] == 13
+    assert ch11["yellow_claims"] == 12
+    assert ch11["red_claims"] == 1
+    assert ch11["review_state"] == "codex_approved_2026-04-27"
+
+    # Empty parts still appear with zero counts so consumers can render the grid.
+    part4 = parts_by_num[4]
+    assert part4["chapter_count"] == 0
+    assert part4["status_rollup"] == {}
+    assert part4["owners_seen"] == []
+    assert part4["chapters"] == []
+
+    # Total rollup aggregates across all parts.
+    assert payload["total_status_rollup"] == {
+        "ready_to_draft_with_cap": 1,
+        "accepted": 1,
+        "capacity_plan_anchored": 1,
+        "prose_ready": 1,
+        "researching": 2,
+    }
+
+
+def test_briefing_book_handles_missing_or_malformed_status_files(tmp_path: Path) -> None:
+    chapters_dir = tmp_path / "docs" / "research" / "ai-history" / "chapters"
+    chapters_dir.mkdir(parents=True)
+
+    # Chapter dir present, no status.yaml.
+    (chapters_dir / "ch-12-logic-theorist-gps").mkdir()
+
+    # Chapter dir with non-numeric prefix — must be ignored.
+    (chapters_dir / "ch-foo-bar").mkdir()
+
+    # Chapter with a status.yaml that uses comments and quoted values.
+    weird = chapters_dir / "ch-13-the-list-processor"
+    weird.mkdir()
+    (weird / "status.yaml").write_text(
+        '# leading comment\nstatus: "researching"\nowner: \'Claude\'\nchapter: 13\n',
+        encoding="utf-8",
+    )
+
+    payload = local_api.build_book_briefing(tmp_path)
+    parts_by_num = {p["part"]: p for p in payload["parts"]}
+    part3 = parts_by_num[3]
+    # ch-12 has no status.yaml — its status field is None and rolled up under "unknown".
+    statuses_in_part3 = sorted(
+        (c["chapter"], c["status"]) for c in part3["chapters"]
+    )
+    assert (12, None) in statuses_in_part3
+    assert (13, "researching") in statuses_in_part3
+    assert part3["status_rollup"].get("unknown") == 1
+    assert part3["status_rollup"].get("researching") == 1
+
+    # The non-numeric directory must not appear anywhere.
+    all_slugs = {c["slug"] for p in payload["parts"] for c in p["chapters"]}
+    assert "ch-foo-bar" not in all_slugs
+
+
+def test_briefing_book_returns_empty_skeleton_when_directory_missing(tmp_path: Path) -> None:
+    payload = local_api.build_book_briefing(tmp_path)
+    assert payload["chapter_count"] == 0
+    assert payload["expected_chapter_count"] == 68
+    assert len(payload["parts"]) == 9
+    assert all(p["chapter_count"] == 0 for p in payload["parts"])
+    assert payload["total_status_rollup"] == {}
+
+
+def test_briefing_book_endpoint_listed_in_schema(tmp_path: Path) -> None:
+    status_code, payload, _ = local_api.route_request(tmp_path, "/api/schema")
+    assert status_code == 200
+    assert any(
+        ep.get("path") == "/api/briefing/book" for ep in payload["endpoints"]
+    ), "schema must advertise /api/briefing/book"

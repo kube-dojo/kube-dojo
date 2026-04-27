@@ -1,25 +1,24 @@
 # Brief: Chapter 9 - The Memory Miracle
 
 ## Thesis
-Von Neumann's architecture required fast, reliable, non-volatile memory. The invention of magnetic core memory by researchers like Jay Forrester, An Wang, and Jan Rajchman provided the physical infrastructure necessary for complex software, replacing fragile electrostatic tubes.
+Von Neumann's architecture required fast, reliable, non-volatile memory. The invention of magnetic core memory solved the volatility of electrostatic tubes, providing the physical infrastructure necessary for complex software.
 
 ## Scope
-- IN SCOPE: Williams tubes, Jay Forrester (MIT Whirlwind), An Wang (pulse transfer device), Jan Rajchman (RCA), the patent disputes, the physical weaving of core memory.
-- OUT OF SCOPE: Semiconductor RAM (1970s).
+- IN SCOPE: Williams tubes (electrostatic memory constraints), Jay Forrester (MIT Whirlwind), Jan Rajchman (RCA), the transition from acoustics to magnetic core, the SAGE to IBM 704 commercialization arc.
+- OUT OF SCOPE: Semiconductor RAM. (Note: "Woven by hand" claim is deliberately shrunk pending exact primary archival photos).
 
 ## Scenes Outline
-1. **The Amnesiac Machines:** The volatility and crash-rates of Williams tubes and delay lines.
-2. **The Magnetic Solution:** Wang, Forrester, and Rajchman independently develop core memory solutions, leading to complex patent battles.
-3. **Manufacturing Infrastructure:** The labor-intensive, precision wiring required to build core memory grids.
+1. **The Amnesiac Machines:** The extreme volatility of Williams tubes, backed by the original 1948 Williams/Kilburn paper.
+2. **Project Whirlwind:** Forrester's drive for real-time simulation requires stable memory.
+3. **The Magnetic Solution:** Forrester and Rajchman independently develop core memory solutions.
+4. **Commercialization:** The arc from SAGE to the IBM 704, bridging into the Dartmouth era.
 
-## 4k-7k Prose Capacity Plan
+## 3k-4.5k Prose Capacity Plan
+This chapter can support a detailed narrative only if it is built from verified layers rather than padding:
+- 600-900 words: The fragility of Williams tubes (Williams & Kilburn 1948).
+- 800-1200 words: Project Whirlwind and Forrester's first-person account (Redmond & Smith 1980, Forrester Oral History).
+- 800-1200 words: The development of core memory and Rajchman's parallel work (Rajchman 1953).
+- 200-400 words: A short bridging coda to the IBM 704 commercialization via SAGE (Pugh 1984).
+*(Note: Manual weaving scenes are constrained to a brief mention due to lack of strong primary archival photos).*
 
-This chapter can support a long narrative only if it is built from verified layers rather than padding:
-
-- 500-800 words: Historical context and setup, bridging from the previous era.
-- 933-1233 words: Detailed narrative surrounding The Amnesiac Machines:, heavily anchored to primary sources.
-- 933-1233 words: Detailed narrative surrounding The Magnetic Solution:, heavily anchored to primary sources.
-- 933-1233 words: Detailed narrative surrounding Manufacturing Infrastructure:, heavily anchored to primary sources.
-- 400-700 words: Honest close that summarizes the infrastructural shift and transitions to the next chapter.
-
-Most layers now have page-level anchors. Do not invent lab drama or dialogue to reach the top of the range. If the verified evidence runs out, cap the chapter.
+Do not invent dialogue. The historical record genuinely supports ~3,000-4,500 words; cap the chapter here without padding to 7k.

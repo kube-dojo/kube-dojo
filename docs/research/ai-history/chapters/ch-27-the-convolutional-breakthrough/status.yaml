@@ -1,9 +1,11 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 5
 chapter: 27
-review_state: ready_to_draft_with_cap
+review_state: gemini_and_claude_prose_approved
 last_updated: 2026-04-27
+prose_path: src/content/docs/ai-history/ch-27-the-convolutional-breakthrough.md
+prose_words: 4020
 notes:
   - "Initial research contract populated for LeNet/convolutional document-recognition chapter."
   - "Review follow-up extracted page anchors for Fukushima 1980, LeCun et al. 1989, LeCun et al. 1990, and LeCun et al. 1998."
@@ -11,3 +13,5 @@ notes:
   - "Core guardrail: LeNet is constrained architecture plus document-processing infrastructure, not a lone sudden invention of all CNN ideas."
   - "Gemini gap analysis recorded in gap-analysis.md; stretch path now depends on disciplined use of production/check-system anchors, not generic CNN exposition."
   - "Gemini prose-readiness review cleared drafting with cap; mirrored LeCun 1989 anchors are acceptable if bibliography keeps official DOI/MIT authority."
+  - "Codex drafted 4020-word golden-format prose with separate Fukushima, USPS/Buffalo, MNIST, and 1998 check-pipeline lanes."
+  - "Gemini and Claude approved with no must-fix findings; Codex applied Claude polish on Buffalo totals, 1989 error/rejection figures, and mail-workflow wording."

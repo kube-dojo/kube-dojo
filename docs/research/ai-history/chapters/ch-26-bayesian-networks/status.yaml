@@ -1,9 +1,11 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 5
 chapter: 26
-review_state: ready_to_draft_with_cap
+review_state: gemini_and_claude_prose_approved
 last_updated: 2026-04-27
+prose_path: src/content/docs/ai-history/ch-26-bayesian-networks.md
+prose_words: 4049
 notes:
   - "Initial research contract populated from Pearl, graphical-model, tutorial, and complexity anchors."
   - "Review follow-up extracted page anchors for Cooper 1990, Lauritzen/Spiegelhalter 1988, and Charniak 1991."
@@ -11,3 +13,5 @@ notes:
   - "Core guardrail: Bayesian networks structure uncertain reasoning; they do not make inference or knowledge elicitation free."
   - "Gemini gap analysis recorded in gap-analysis.md; safe prose core is no longer zero, but Gemini should decide whether full Pearl access is required before prose lock."
   - "Gemini prose-readiness review cleared drafting with cap; proceed with Pearl access caveat and lean on Lauritzen/Spiegelhalter, Cooper, and Charniak anchors."
+  - "First public prose draft was 4016 words, using the contract's safe 4k path: expert-system contrast, DAG/CPT explanation, Pearl propagation, local-structure maintenance costs, Cooper complexity limits, and a bounded causal/learning bridge."
+  - "Gemini and Claude prose reviews approved PR #417; review nits were applied, including tense consistency and a sharper Ch27 handoff. Current prose markdown is 4049 words."

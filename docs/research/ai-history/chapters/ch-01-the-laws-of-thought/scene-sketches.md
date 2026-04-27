@@ -14,4 +14,4 @@
 - **Action:** Boole's untimely death in 1864 and Mary Everest Boole's dedicated effort to preserve and teach his mathematical legacy.
 
 ## Scene 5: The Dormant Blueprint
-- **Action:** Boole's algebra lies dormant for decades, viewed as elegant but practically useless by the engineering community of the era.
+- **Action:** A short, cautious coda noting that while Boole's algebra was mathematically profound, there is currently limited primary evidence of its practical engineering uptake during his era.

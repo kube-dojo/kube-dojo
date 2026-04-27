@@ -1,4 +1,3 @@
 # Open Questions
 
-- Need explicit hardware specifics from verified technical teardowns of the Azure supercomputer.
-- Need secondary sources analyzing the 2019 capped-profit restructure.
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

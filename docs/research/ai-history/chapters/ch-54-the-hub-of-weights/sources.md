@@ -9,7 +9,7 @@
 
 ## Bibliography
 ### Primary
-- **Wolf, Thomas, et al. "Transformers: State-of-the-art natural language processing." In *Proceedings of the 2020 conference on empirical methods in natural language processing: system demonstrations*, pp. 38-45. 2020.**
+- **Wolf, Thomas, et al. "Transformers: State-of-the-art natural language processing." In *Proceedings of the 2020 conference on empirical methods in natural language processing: system demonstrations*. 2020.**
 
 ### Secondary
 - **Forbes/TechCrunch profiles on Hugging Face (TBD).**

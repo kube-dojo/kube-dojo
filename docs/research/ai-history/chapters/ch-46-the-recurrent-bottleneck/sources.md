@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Standard RNNs suffer from vanishing/exploding gradients | 1 | Hochreiter 1991 (Diploma thesis); Bengio et al. 1994 | Goodfellow et al. 2016 | Green | None |
-| LSTMs solved the vanishing gradient problem for long sequences | 2 | Hochreiter & Schmidhuber 1997 (Long short-term memory) | Goodfellow et al. 2016 | Green | None |
-| RNNs require sequential O(N) processing, bottlenecking parallelism | 3 | Vaswani et al. 2017 (Attention is all you need, Intro) | Goodfellow et al. 2016 | Green | None |
+| Standard RNNs suffer from vanishing/exploding gradients | 1 | Hochreiter 1991 (Diploma thesis); Bengio et al. 1994 | Goodfellow et al. 2016 | Yellow | Need exact verified page/section anchors. |
+| LSTMs solved the vanishing gradient problem for long sequences | 2 | Hochreiter & Schmidhuber 1997 (Long short-term memory) | Goodfellow et al. 2016 | Yellow | Need exact verified page/section anchors. |
+| RNNs require sequential O(N) processing, bottlenecking parallelism | 3 | Vaswani et al. 2017 (Attention is all you need, Intro) | Goodfellow et al. 2016 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

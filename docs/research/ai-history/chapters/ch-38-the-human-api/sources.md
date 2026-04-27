@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| MTurk was built to solve Amazon's internal duplicate catalog issues | 1 | Jeff Bezos MIT Address, 2006 | Pontin 2007 | Green | None |
-| MTurk was launched as 'Artificial Artificial Intelligence' | 2 | AWS MTurk Launch Post (Nov 2, 2005) | Pontin 2007 | Green | None |
-| Academic researchers adopted MTurk for cheap, scalable labeling | 3 | Snow et al. 2008, Section 3, p. 255 | Deng et al. 2009 (ImageNet) | Green | None |
+| MTurk was built to solve Amazon's internal duplicate catalog issues | 1 | Jeff Bezos MIT Address, 2006 | Pontin 2007 | Yellow | Need exact verified page/section anchors. |
+| MTurk was launched as 'Artificial Artificial Intelligence' | 2 | AWS MTurk Launch Post (Nov 2, 2005) | Pontin 2007 | Yellow | Need exact verified page/section anchors. |
+| Academic researchers adopted MTurk for cheap, scalable labeling | 3 | Snow et al. 2008, Section 3 | Deng et al. 2009 (ImageNet) | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

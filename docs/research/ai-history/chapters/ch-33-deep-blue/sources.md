@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Deep Blue relied on custom VLSI chips for chess evaluation | 2 | Hsu, *Behind Deep Blue* (2002) | Campbell et al. 2002 | Green | None |
-| Kasparov was defeated in 1997 by a machine evaluating 200m positions/sec | 3 | IBM match logs (1997) | Campbell et al. 2002 | Green | Kasparov initially claimed human intervention; later retracted. |
+| Deep Blue relied on custom VLSI chips for chess evaluation | 2 | Hsu, *Behind Deep Blue* (2002) | Campbell et al. 2002 | Yellow | Need exact verified page/section anchors. |
+| Kasparov was defeated in 1997 by a machine evaluating 200m positions/sec | 3 | IBM match logs (1997) | Campbell et al. 2002 | Yellow | Kasparov initially claimed human intervention; later retracted. |
 
 ## Bibliography
 ### Primary

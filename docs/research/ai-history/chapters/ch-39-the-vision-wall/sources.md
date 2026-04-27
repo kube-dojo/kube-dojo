@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Computer vision relied on hand-engineered features like SIFT and HOG | 1 | Lowe 1999; Dalal & Triggs 2005 | Szeliski 2022 | Green | None |
-| PASCAL VOC accuracy plateaus around 2010 | 2 | Everingham et al. 2015, Section 4.2, Fig 4 | Fei-Fei Li 2023 | Green | None |
-| Pre-ImageNet datasets lacked variance and suffered from dataset bias | 3 | Torralba & Efros 2011, Section 2 | Gershgorn 2017 | Green | None |
+| Computer vision relied on hand-engineered features like SIFT and HOG | 1 | Lowe 1999; Dalal & Triggs 2005 | Szeliski 2022 | Yellow | Need exact verified page/section anchors. |
+| PASCAL VOC accuracy plateaus around 2010 | 2 | Everingham et al. 2015, Section 4.2, Fig 4 | Fei-Fei Li 2023 | Yellow | Need exact verified page/section anchors. |
+| Pre-ImageNet datasets lacked variance and suffered from dataset bias | 3 | Torralba & Efros 2011, Section 2 | Gershgorn 2017 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

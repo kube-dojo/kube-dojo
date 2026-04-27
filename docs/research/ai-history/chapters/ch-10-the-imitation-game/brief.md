@@ -1,25 +1,23 @@
 # Brief: Chapter 10 - The Imitation Game
 
 ## Thesis
-Alan Turing decoupled the concept of intelligence from biological mimicry. Through the Imitation Game, he argued that the physical implementation (analog vs. digital) mattered less than the measurable, behavioral output, establishing the empirical baseline for AI.
+Alan Turing decoupled the concept of intelligence from biological mimicry. Through the Imitation Game, he argued that physical implementation mattered less than measurable behavioral output, establishing the empirical baseline for AI.
 
 ## Scope
-- IN SCOPE: Turing's 1950 *Mind* paper. The original structure of the Imitation Game. The shift away from robotics to symbolic/text interfaces.
-- OUT OF SCOPE: Later, simplified pop-culture versions of the "Turing Test".
+- IN SCOPE: Turing's 1947 lecture, 1948 NPL report, 1950 *Mind* paper, 1952 BBC broadcast, the gender-imitation origins of the test, the teleprinter interface, the 10^9 storage claim.
+- OUT OF SCOPE: Later pop-culture simplifications of the test.
 
 ## Scenes Outline
-1. **The Parlor Game:** Turing introduces the concept via a gender-guessing game (man, woman, interrogator) before substituting the machine.
-2. **The Teleprinter Constraint:** By enforcing a text-only interface, Turing explicitly separates intelligence from physical embodiment.
-3. **The 10^9 Storage Claim:** Turing predicts the memory infrastructure (10^9 binary digits) needed to play the game successfully by the year 2000.
+1. **The Precursors:** Turing's 1947 and 1948 arguments that programs constitute intelligence.
+2. **The Parlor Game:** The 1950 *Mind* paper and the original gender-imitation structure (Proudfoot 2011).
+3. **Abstracting Embodiment:** Turing explicitly defends the lack of physical embodiment, reinforced by his 1952 BBC broadcast quotes.
+4. **The Storage Prediction:** The 10^9 bits prediction and its subsequent reception history.
 
-## 4k-7k Prose Capacity Plan
+## 3.5k-5k Prose Capacity Plan
+This chapter can support a detailed narrative only if it is built from verified layers rather than padding:
+- 600-900 words: The 1947 London Mathematical Society lecture and 1948 NPL report (Copeland 2004).
+- 1000-1400 words: The 1950 *Mind* paper and the true gender-imitation origins of the game (Proudfoot 2011).
+- 1000-1500 words: The teleprinter constraint, utilizing the 1952 BBC broadcast transcript to directly quote Turing's views on embodiment.
+- 600-1000 words: The 10^9 storage prediction and its 50-year reception (Saygin 2000), cementing the philosophical pivot.
 
-This chapter can support a long narrative only if it is built from verified layers rather than padding:
-
-- 500-800 words: Historical context and setup, bridging from the previous era.
-- 933-1233 words: Detailed narrative surrounding The Parlor Game:, heavily anchored to primary sources.
-- 933-1233 words: Detailed narrative surrounding The Teleprinter Constraint:, heavily anchored to primary sources.
-- 933-1233 words: Detailed narrative surrounding The 10^9 Storage Claim:, heavily anchored to primary sources.
-- 400-700 words: Honest close that summarizes the infrastructural shift and transitions to the next chapter.
-
-Most layers now have page-level anchors. Do not invent lab drama or dialogue to reach the top of the range. If the verified evidence runs out, cap the chapter.
+Do not invent dialogue. The historical record genuinely supports ~3,500-5,000 words; cap the chapter here without padding to 7k.
