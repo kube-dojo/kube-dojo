@@ -24,6 +24,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import psutil
+
 from ai_agent_bridge._prompts import build_review_message
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -699,15 +701,42 @@ def _gemini_quiet_mode_enabled() -> bool:
 
 def _kill_process_tree(proc) -> None:
     """Terminate a subprocess and any children left behind by CLI wrappers."""
+    pid = getattr(proc, "pid", None)
     try:
-        if getattr(proc, "pid", None):
+        if pid:
+            killed_processes = []
+            killed_parent = False
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-                return
-            except ProcessLookupError:
-                return
-            except OSError:
+                parent = psutil.Process(pid)
+                descendants = parent.children(recursive=True)
+                for child in descendants:
+                    try:
+                        child.kill()
+                        killed_processes.append(child)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+
+                try:
+                    parent.kill()
+                    killed_processes.append(parent)
+                    killed_parent = True
+                except psutil.NoSuchProcess:
+                    pass
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
+
+            if killed_processes:
+                psutil.wait_procs(killed_processes, timeout=1)
+
+            try:
+                os.killpg(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                if not killed_parent:
+                    proc.kill()
+            return
+
         proc.kill()
     except OSError:
         pass

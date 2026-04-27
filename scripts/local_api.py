@@ -63,6 +63,7 @@ RUNTIME_SERVICE_ORDER = tuple(svc["name"] for svc in RUNTIME_SERVICES)
 # at the edges, no absolute paths. The per-segment check rejects traversal
 # attempts like "..", ".", or leading-dot hidden names.
 _MODULE_KEY_SEGMENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_ETAG_HEADER_RE = re.compile(r'^(?:W/)?"[A-Za-z0-9_./:-]+"$')
 
 
 def _validate_module_key(repo_root: Path, raw: str) -> str | None:
@@ -88,6 +89,21 @@ def _validate_module_key(repo_root: Path, raw: str) -> str | None:
     except (OSError, ValueError):
         return None
     return normalized
+
+
+def _header_value_has_crlf(value: str) -> bool:
+    return "\r" in value or "\n" in value
+
+
+def _safe_header_value(value: str) -> str:
+    return value.replace("\r", "").replace("\n", "")
+
+
+def _safe_etag_header_value(etag: str) -> str:
+    safe = _safe_header_value(etag)
+    if _ETAG_HEADER_RE.match(safe):
+        return safe
+    return _weak_etag(safe.encode("utf-8"))
 
 
 def _json_default(value: Any) -> Any:
@@ -411,6 +427,13 @@ def _path_mtime(p: Path) -> float:
         return p.stat().st_mtime
     except OSError:
         return 0.0
+
+
+def _venv_python_for_repo(repo_root: Path) -> str:
+    for candidate in (repo_root / ".venv" / "bin" / "python", REPO_ROOT / ".venv" / "bin" / "python"):
+        if candidate.exists():
+            return str(candidate)
+    return ".venv/bin/python"
 
 
 # Persistent read-only sqlite connections keyed by absolute db path.
@@ -1781,6 +1804,22 @@ def _module_key_to_review_filename(module_key: str) -> str:
     return module_key.replace("/", "__") + ".md"
 
 
+def _safe_review_path_for_module_key(repo_root: Path, module_key: str) -> Path | None:
+    normalized = _validate_module_key(repo_root, module_key)
+    if normalized is None:
+        return None
+    reviews_dir = (repo_root / _REVIEW_AUDIT_DIR).resolve()
+    filename = _module_key_to_review_filename(normalized)
+    if "/" in filename or "\\" in filename:
+        return None
+    try:
+        path = (reviews_dir / filename).resolve()
+        path.relative_to(reviews_dir)
+    except (OSError, ValueError):
+        return None
+    return path
+
+
 def _fact_check_summary(review_body: str) -> dict[str, Any]:
     latest = next(iter(_LATEST_REVIEW_RE.findall(review_body)), "")
     failed = [m.strip() for m in _FAILED_FACT_CHECK_RE.findall(latest)]
@@ -1846,8 +1885,9 @@ def build_module_reviews(
     agents can parse what they need without the API pretending to
     understand every variation of the format.
     """
-    reviews_dir = repo_root / _REVIEW_AUDIT_DIR
-    path = reviews_dir / _module_key_to_review_filename(module_key)
+    path = _safe_review_path_for_module_key(repo_root, module_key)
+    if path is None:
+        return None
     if not path.is_file():
         return None
     try:
@@ -3279,6 +3319,10 @@ _QUALITY_BOARD_IN_FLIGHT_STAGES = frozenset({
 })
 _QUALITY_BOARD_DONE_STAGES = frozenset({"COMMITTED", "SKIPPED"})
 _QUALITY_BOARD_REVISION_RE = re.compile(r"^revision_pending\s*:\s*true", re.MULTILINE)
+_QUALITY_BOARD_REVIEW_VERDICT_RE = re.compile(
+    r"^## .*?— `REVIEW`(?: — `(?P<verdict>APPROVE|REJECT)`)?.*?$",
+    re.MULTILINE,
+)
 
 
 def _quality_board_slug_for_path(rel_path: str) -> str:
@@ -3338,18 +3382,47 @@ def _quality_board_load_post_review_queue(repo_root: Path) -> set[str]:
     return {line.strip() for line in text.splitlines() if line.strip()}
 
 
-def _quality_board_review_log_keys(repo_root: Path) -> set[str]:
-    """Module keys (docs-relative path without ``.md``) that have at
-    least one review-log file under ``.pipeline/reviews``."""
+def _quality_board_count_revision_pending_docs(docs_root: Path) -> int:
+    if not docs_root.exists():
+        return 0
+    count = 0
+    for path in docs_root.rglob("*.md"):
+        if path.name == "index.md":
+            continue
+        try:
+            if _quality_board_has_revision_banner(path.read_text(encoding="utf-8")):
+                count += 1
+        except OSError:
+            continue
+    return count
+
+
+def _quality_board_latest_review_verdicts(repo_root: Path) -> dict[str, str]:
+    """Latest explicit REVIEW verdict from ``.pipeline/reviews`` logs.
+
+    The audit format is append-only markdown. Older entries may omit a
+    verdict in the heading, so only explicit APPROVE/REJECT markers are
+    returned.
+    """
     reviews_dir = repo_root / _REVIEW_AUDIT_DIR
     if not reviews_dir.is_dir():
-        return set()
-    keys: set[str] = set()
+        return {}
+    verdicts: dict[str, str] = {}
     for path in reviews_dir.glob("*.md"):
         if path.name.endswith(".lock"):
             continue
-        keys.add(_review_filename_to_module_key(path.name))
-    return keys
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        explicit = [
+            match.group("verdict").lower()
+            for match in _QUALITY_BOARD_REVIEW_VERDICT_RE.finditer(text)
+            if match.group("verdict")
+        ]
+        if explicit:
+            verdicts[_review_filename_to_module_key(path.name)] = explicit[-1]
+    return verdicts
 
 
 def _quality_board_classify(
@@ -3367,11 +3440,12 @@ def _quality_board_classify(
       in_flight > both > needs_review > needs_rewrite > done.
     """
     score_val = float(score) if score is not None else 0.0
+    needs_deferred_review = auto_approved and in_post_review_queue
     if stage in _QUALITY_BOARD_IN_FLIGHT_STAGES:
         return "in_flight"
-    if auto_approved and (score_val < 4.0 or revision_pending):
+    if needs_deferred_review and (score_val < 4.0 or revision_pending):
         return "both"
-    if auto_approved or in_post_review_queue:
+    if needs_deferred_review:
         return "needs_review"
     if revision_pending or score_val < 3.0 or stage == "FAILED":
         return "needs_rewrite"
@@ -3417,7 +3491,7 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
 
     states = _quality_board_load_states(repo_root)
     post_review_queue = _quality_board_load_post_review_queue(repo_root)
-    review_log_keys = _quality_board_review_log_keys(repo_root)
+    latest_review_verdicts = _quality_board_latest_review_verdicts(repo_root)
 
     # Iterate every EN module on disk so we cover modules with no state
     # file (e.g. UNAUDITED) and modules with no review log yet.
@@ -3429,8 +3503,20 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
     )
 
     modules: list[dict[str, Any]] = []
-    track_buckets: dict[str, dict[str, int]] = {}
+    track_buckets: dict[str, dict[str, Any]] = {}
     totals = {"done": 0, "needs_rewrite": 0, "needs_review": 0, "both": 0, "in_flight": 0, "total": 0}
+    source_counts = {
+        "quality_pipeline_records": len(states),
+        "committed_full_review": sum(
+            1 for state in states.values() if state.get("stage") == "COMMITTED" and (state.get("review") or {}).get("auto_approved") is not True
+        ),
+        "committed_auto_approved": sum(
+            1 for state in states.values() if state.get("stage") == "COMMITTED" and (state.get("review") or {}).get("auto_approved") is True
+        ),
+        "revision_pending": _quality_board_count_revision_pending_docs(docs_root),
+        "english_module_revision_pending": 0,
+        "post_review_queue": len(post_review_queue),
+    }
 
     for path in paths:
         rel = path.relative_to(docs_root)
@@ -3441,6 +3527,8 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         except OSError:
             text = ""
         revision_pending = _quality_board_has_revision_banner(text)
+        if revision_pending:
+            source_counts["english_module_revision_pending"] += 1
 
         score_entry = score_by_path.get(rel_str)
         score = float(score_entry["score"]) if score_entry and score_entry.get("score") is not None else None
@@ -3455,17 +3543,14 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             str(verdict_raw).strip().lower() if isinstance(verdict_raw, str) and verdict_raw else None
         )
 
-        _, module_key_label = _quality_title_and_label(rel, text)
+        title, module_key_label = _quality_title_and_label(rel, text)
         track = _quality_track_label(rel)
 
         # Review-log lookup uses the docs-relative key without the .md
         # suffix (matches _module_key_to_review_filename semantics).
         review_key = rel_str[:-3] if rel_str.endswith(".md") else rel_str
-        if latest_verdict is None and review_key in review_log_keys:
-            # Review log exists but the state file didn't carry a
-            # verdict — treat as "review present, verdict unknown" so
-            # rule 5 won't shortcut to ``done``.
-            latest_verdict = "unknown"
+        if latest_verdict is None:
+            latest_verdict = latest_review_verdicts.get(review_key)
 
         status = _quality_board_classify(
             score=score,
@@ -3476,8 +3561,9 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             latest_verdict=latest_verdict,
         )
 
-        modules.append({
+        module = {
             "module_key": module_key_label,
+            "title": title,
             "slug": slug,
             "path": rel_str,
             "track": track,
@@ -3486,26 +3572,42 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
             "revision_pending": revision_pending,
             "stage": stage,
             "auto_approved": auto_approved,
+            "in_post_review_queue": slug in post_review_queue,
             "latest_review_verdict": latest_verdict,
-        })
+        }
+        modules.append(module)
 
         totals[status] += 1
         totals["total"] += 1
         bucket = track_buckets.setdefault(
             track,
-            {"done": 0, "needs_rewrite": 0, "needs_review": 0, "both": 0, "in_flight": 0, "total": 0},
+            {
+                "done": 0,
+                "needs_rewrite": 0,
+                "needs_review": 0,
+                "both": 0,
+                "in_flight": 0,
+                "total": 0,
+                "modules": [],
+            },
         )
         bucket[status] += 1
         bucket["total"] += 1
+        bucket["modules"].append(module)
 
     tracks = [
-        {"track": track, **counts}
+        {
+            "track": track,
+            "totals": {k: v for k, v in counts.items() if k != "modules"},
+            **counts,
+        }
         for track, counts in sorted(track_buckets.items(), key=lambda item: item[0].lower())
     ]
 
     return {
         "generated_at": int(time.time()),
         "totals": totals,
+        "source_counts": source_counts,
         "tracks": tracks,
         "modules": modules,
     }
@@ -3743,7 +3845,7 @@ def build_delivery_status(repo_root: Path) -> dict[str, Any]:
         "up_to_date": bool(dist_files) and newest_dist >= newest_source,
     }
 
-    health_cmd = [sys.executable, "scripts/check_site_health.py"]
+    health_cmd = [_venv_python_for_repo(repo_root), "scripts/check_site_health.py"]
     try:
         result = subprocess.run(
             health_cmd,
@@ -4303,6 +4405,153 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     .readiness-section-counts .inflight {{ color: var(--amber); }}
     .readiness-section-counts .cleared {{ color: var(--green); }}
 
+    /* Quality Board */
+    .qb-wrap {{ padding: 14px 18px 18px; }}
+    .qb-stack {{
+      display: flex;
+      height: 14px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }}
+    .qb-seg {{ min-width: 2px; height: 100%; }}
+    .qb-done {{ background: var(--green); }}
+    .qb-needs_rewrite {{ background: var(--red); }}
+    .qb-needs_review {{ background: var(--amber); }}
+    .qb-both {{ background: #c084fc; }}
+    .qb-in_flight {{ background: var(--accent); }}
+    .qb-legend {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin-bottom: 14px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }}
+    .qb-legend span {{ display: inline-flex; align-items: center; gap: 5px; }}
+    .qb-dot {{ width: 8px; height: 8px; border-radius: 2px; display: inline-block; }}
+    .qb-tracks {{
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }}
+    .qb-track {{
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      min-width: 0;
+    }}
+    .qb-track-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 12px;
+    }}
+    .qb-track-name {{ font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .qb-track-total {{ color: var(--text-dim); font-variant-numeric: tabular-nums; }}
+    .qb-mini {{
+      display: flex;
+      height: 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--border);
+      margin-bottom: 7px;
+    }}
+    .qb-track-counts {{
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      font-size: 10px;
+      color: var(--text-dim);
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+    }}
+    .qb-tools {{
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 170px 170px;
+      gap: 8px;
+      margin-bottom: 10px;
+    }}
+    .qb-input, .qb-select {{
+      width: 100%;
+      background: var(--surface-1);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 12px;
+      outline: none;
+    }}
+    .qb-input:focus, .qb-select:focus {{ border-color: rgba(56,189,248,0.55); }}
+    .qb-table-wrap {{
+      max-height: 330px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }}
+    .qb-table {{ width: 100%; border-collapse: collapse; }}
+    .qb-table th {{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--surface-1);
+      color: var(--text-dim);
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }}
+    .qb-table td {{
+      padding: 7px 10px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }}
+    .qb-table tr:last-child td {{ border-bottom: 0; }}
+    .qb-table tr:hover td {{ background: rgba(255,255,255,0.02); }}
+    .qb-module {{ color: var(--text); font-weight: 500; }}
+    .qb-path {{ color: var(--text-dim); font-size: 11px; }}
+    .qb-num {{ text-align: right; font-variant-numeric: tabular-nums; }}
+    .qb-chip {{
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }}
+    .qb-chip.done {{ background: var(--green-muted); color: var(--green); }}
+    .qb-chip.needs_rewrite {{ background: var(--red-muted); color: var(--red); }}
+    .qb-chip.needs_review {{ background: var(--amber-muted); color: var(--amber); }}
+    .qb-chip.both {{ background: rgba(192,132,252,0.14); color: #c084fc; }}
+    .qb-chip.in_flight {{ background: var(--accent-muted); color: var(--accent); }}
+    .qb-detail {{
+      margin-top: 10px;
+      background: var(--surface-1);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1.2fr repeat(5, auto);
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }}
+    .qb-detail-title {{ font-weight: 600; color: var(--text); min-width: 0; }}
+    .qb-detail-kv {{ color: var(--text-dim); font-size: 11px; white-space: nowrap; }}
+    .qb-detail-kv strong {{ color: var(--text-secondary); font-weight: 600; }}
+    @media (max-width: 900px) {{
+      .qb-tools {{ grid-template-columns: 1fr; }}
+      .qb-detail {{ grid-template-columns: 1fr 1fr; }}
+    }}
+
     /* Activity feed */
     .activity-feed {{
       list-style: none; margin: 0; padding: 0;
@@ -4417,6 +4666,21 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
             <span class="panel-badge" id="readiness-badge" style="background:var(--teal-muted);color:var(--teal);">&nbsp;</span>
           </div>
           <div class="panel-body-flush readiness-wrap" id="readiness-body">
+            <div class="empty-state">Loading&hellip;</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-full">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span class="panel-icon" style="background:var(--accent-muted);color:var(--accent);">Q</span>
+              Quality Board
+            </div>
+            <span class="panel-badge" id="qb-badge" style="background:var(--accent-muted);color:var(--accent);">&nbsp;</span>
+          </div>
+          <div class="panel-body-flush" id="quality-board">
             <div class="empty-state">Loading&hellip;</div>
           </div>
         </div>
@@ -5164,6 +5428,161 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       }}).join('');
     }}
 
+    const QB_STATUS = ['done', 'needs_rewrite', 'needs_review', 'both', 'in_flight'];
+    const QB_LABEL = {{
+      done: 'Done',
+      needs_rewrite: 'Rewrite',
+      needs_review: 'Review',
+      both: 'Both',
+      in_flight: 'In flight',
+    }};
+    let qualityBoardData = null;
+    let qualityBoardSelected = null;
+
+    function qbSegs(counts, total, mini=false) {{
+      const denom = Math.max(1, total || 0);
+      return QB_STATUS.map(status => {{
+        const n = counts?.[status] || 0;
+        if (!n) return '';
+        const pct = Math.max(mini ? 1.5 : 0.5, n / denom * 100);
+        return `<div class="qb-seg qb-${{status}}" title="${{QB_LABEL[status]}}: ${{n}}" style="width:${{pct}}%"></div>`;
+      }}).join('');
+    }}
+
+    function qbChip(status) {{
+      return `<span class="qb-chip ${{esc(status)}}">${{QB_LABEL[status] || status}}</span>`;
+    }}
+
+    function renderQualityBoardDetail(module) {{
+      const el = $('#qb-detail');
+      if (!el) return;
+      if (!module) {{
+        el.innerHTML = '<div class="qb-detail-title">No module selected</div>';
+        return;
+      }}
+      el.innerHTML = `
+        <div>
+          <div class="qb-detail-title">${{esc(module.title || module.module_key || module.path)}}</div>
+          <div class="qb-path mono">${{esc(module.path || module.slug)}}</div>
+        </div>
+        <div class="qb-detail-kv">Status<br><strong>${{QB_LABEL[module.status] || module.status}}</strong></div>
+        <div class="qb-detail-kv">Score<br><strong>${{module.score == null ? 'n/a' : Number(module.score).toFixed(1)}}</strong></div>
+        <div class="qb-detail-kv">Banner<br><strong>${{module.revision_pending ? 'pending' : 'clear'}}</strong></div>
+        <div class="qb-detail-kv">Stage<br><strong>${{esc(module.stage || 'none')}}</strong></div>
+        <div class="qb-detail-kv">Review<br><strong>${{esc(module.latest_review_verdict || (module.auto_approved ? 'auto' : 'none'))}}</strong></div>
+        <div class="qb-detail-kv">Queue<br><strong>${{module.in_post_review_queue ? 'yes' : 'no'}}</strong></div>`;
+    }}
+
+    function renderQualityBoardTable() {{
+      if (!qualityBoardData) return;
+      const modules = qualityBoardData.modules || [];
+      const q = ($('#qb-search')?.value || '').trim().toLowerCase();
+      const track = $('#qb-track')?.value || '';
+      const status = $('#qb-status')?.value || '';
+      const statusRank = Object.fromEntries(QB_STATUS.map((s, i) => [s, i]));
+      const rows = modules
+        .filter(m => !track || m.track === track)
+        .filter(m => !status || m.status === status)
+        .filter(m => {{
+          if (!q) return true;
+          return String(m.title || '').toLowerCase().includes(q)
+            || String(m.module_key || '').toLowerCase().includes(q)
+            || String(m.path || '').toLowerCase().includes(q)
+            || String(m.slug || '').toLowerCase().includes(q);
+        }})
+        .sort((a, b) => (statusRank[a.status] ?? 99) - (statusRank[b.status] ?? 99)
+          || String(a.track).localeCompare(String(b.track))
+          || String(a.title || a.path).localeCompare(String(b.title || b.path)));
+
+      $('#qb-count').textContent = `${{rows.length}} shown`;
+      const selected = rows.find(m => m.slug === qualityBoardSelected) || rows[0] || null;
+      qualityBoardSelected = selected?.slug || null;
+      $('#qb-table-body').innerHTML = rows.map(m => `
+        <tr data-slug="${{esc(m.slug)}}" class="${{m.slug === qualityBoardSelected ? 'selected' : ''}}">
+          <td>${{qbChip(m.status)}}</td>
+          <td>
+            <div class="qb-module">${{esc(m.title || m.module_key)}}</div>
+            <div class="qb-path mono">${{esc(m.path)}}</div>
+          </td>
+          <td>${{esc(m.track || '')}}</td>
+          <td class="mono">${{esc(m.stage || 'none')}}</td>
+          <td class="qb-num">${{m.score == null ? '' : Number(m.score).toFixed(1)}}</td>
+        </tr>`).join('');
+      for (const tr of document.querySelectorAll('#qb-table-body tr')) {{
+        tr.addEventListener('click', () => {{
+          qualityBoardSelected = tr.dataset.slug;
+          const picked = modules.find(m => m.slug === qualityBoardSelected);
+          renderQualityBoardTable();
+          renderQualityBoardDetail(picked);
+        }});
+      }}
+      renderQualityBoardDetail(selected);
+    }}
+
+    function renderQualityBoard(data) {{
+      const el = $('#quality-board');
+      const badge = $('#qb-badge');
+      if (!data || data.error) {{
+        el.innerHTML = `<div class="empty-state">${{esc(data?.error || 'No data')}}</div>`;
+        badge.textContent = 'Unknown';
+        return;
+      }}
+      qualityBoardData = data;
+      const totals = data.totals || {{}};
+      const total = totals.total || 0;
+      const needs = (totals.needs_rewrite || 0) + (totals.needs_review || 0) + (totals.both || 0);
+      badge.textContent = `${{totals.done || 0}} / ${{total}} done · ${{needs}} left`;
+      badge.style.background = needs ? 'var(--amber-muted)' : 'var(--green-muted)';
+      badge.style.color = needs ? 'var(--amber)' : 'var(--green)';
+
+      const tracks = data.tracks || [];
+      const trackOptions = tracks.map(t => `<option value="${{esc(t.track)}}">${{esc(t.track)}} (${{t.total || t.totals?.total || 0}})</option>`).join('');
+      const legend = QB_STATUS.map(s => {{
+        const n = totals[s] || 0;
+        return `<span><i class="qb-dot qb-${{s}}"></i>${{QB_LABEL[s]}} <strong>${{n}}</strong></span>`;
+      }}).join('');
+      const trackCards = tracks.map(t => {{
+        const c = t.totals || t;
+        const tTotal = c.total || 0;
+        const counts = QB_STATUS.map(s => c[s] ? `<span>${{QB_LABEL[s]}}:${{c[s]}}</span>` : '').filter(Boolean).join('');
+        return `<div class="qb-track">
+          <div class="qb-track-head">
+            <span class="qb-track-name">${{esc(t.track)}}</span>
+            <span class="qb-track-total">${{c.done || 0}}/${{tTotal}}</span>
+          </div>
+          <div class="qb-mini">${{qbSegs(c, tTotal, true)}}</div>
+          <div class="qb-track-counts">${{counts || '<span>empty</span>'}}</div>
+        </div>`;
+      }}).join('');
+
+      el.innerHTML = `
+        <div class="qb-wrap">
+          <div class="qb-stack">${{qbSegs(totals, total)}}</div>
+          <div class="qb-legend">${{legend}}</div>
+          <div class="qb-tracks">${{trackCards || '<div class="empty-state">No tracks</div>'}}</div>
+          <div class="qb-tools">
+            <input class="qb-input" id="qb-search" type="search" placeholder="Search modules">
+            <select class="qb-select" id="qb-track"><option value="">All tracks</option>${{trackOptions}}</select>
+            <select class="qb-select" id="qb-status">
+              <option value="">All statuses</option>
+              ${{QB_STATUS.map(s => `<option value="${{s}}">${{QB_LABEL[s]}}</option>`).join('')}}
+            </select>
+          </div>
+          <div class="qb-table-wrap">
+            <table class="qb-table">
+              <thead><tr><th>Status</th><th>Module</th><th>Track</th><th>Stage</th><th class="qb-num">Score</th></tr></thead>
+              <tbody id="qb-table-body"></tbody>
+            </table>
+          </div>
+          <div class="qb-detail" id="qb-detail"></div>
+          <div class="qb-path mono" id="qb-count" style="margin-top:8px"></div>
+        </div>`;
+      $('#qb-search').addEventListener('input', renderQualityBoardTable);
+      $('#qb-track').addEventListener('change', renderQualityBoardTable);
+      $('#qb-status').addEventListener('change', renderQualityBoardTable);
+      renderQualityBoardTable();
+    }}
+
     function formatRelTime(epoch, nowEpoch) {{
       const dt = Math.max(0, nowEpoch - epoch);
       if (dt < 60) return `${{dt}}s`;
@@ -5226,7 +5645,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
 
       try {{
         const [summary, missing, services, worktree, feedback, reviews, v2Status, transStatus,
-               briefing, readiness, activity] = await Promise.all([
+               briefing, readiness, qualityBoard, activity] = await Promise.all([
           fetchJson('/api/status/summary'),
           fetchJson('/api/missing-modules/status'),
           fetchJson('/api/runtime/services'),
@@ -5237,6 +5656,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           fetchJson('/api/translation/v2/status'),
           fetchJson('/api/briefing/session?compact=1'),
           fetchJson('/api/tracks/readiness'),
+          fetchJson('/api/quality/board'),
           fetchJson('/api/activity?limit=60'),
         ]);
 
@@ -5246,6 +5666,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         const t2Queue = transStatus.queue || transStatus;
         renderOperator(briefing);
         renderReadiness(readiness);
+        renderQualityBoard(qualityBoard);
         renderActivity(activity);
         renderMetrics(summary, worktree, feedback, t2Queue);
         renderServices(services);
@@ -5833,6 +6254,7 @@ def build_api_schema() -> dict[str, Any]:
         },
         "endpoints": [
             {"path": "/", "desc": "HTML dashboard", "content_type": "text/html"},
+            {"path": "/quality-board", "desc": "HTML dashboard focused on the Quality Board panel", "content_type": "text/html"},
             {"path": "/healthz", "desc": "Liveness probe"},
             {"path": "/api/schema", "desc": "This document"},
             {
@@ -5940,7 +6362,7 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
     path = parsed.path.rstrip("/") or "/"
     query = parse_qs(parsed.query)
 
-    if path in {"/", "/dashboard"}:
+    if path in {"/", "/dashboard", "/quality-board"}:
         return 200, render_dashboard_html(), "text/html; charset=utf-8"
     if path == "/healthz":
         return 200, {"ok": True}, "application/json; charset=utf-8"
@@ -6192,6 +6614,41 @@ def _v_translation_db(repo_root: Path) -> tuple:
     return ("t2", _sqlite_version_key(repo_root / ".pipeline" / "translation_v2.db"))
 
 
+def _v_quality_board(repo_root: Path) -> tuple:
+    docs_root = repo_root / "src" / "content" / "docs"
+    state_dir = repo_root / ".pipeline" / "quality-pipeline"
+    reviews_dir = repo_root / _REVIEW_AUDIT_DIR
+    sig = hashlib.sha1()
+
+    for base, pattern in (
+        # Count reconciliation scans all docs Markdown, so the ETag must too.
+        (docs_root, "**/*.md"),
+        (state_dir, "*.json"),
+        (reviews_dir, "*.md"),
+    ):
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob(pattern)):
+            try:
+                rel = path.relative_to(repo_root).as_posix()
+                stat = path.stat()
+            except OSError:
+                continue
+            sig.update(rel.encode("utf-8"))
+            sig.update(f":{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8"))
+
+    queue_path = state_dir / "post-review-queue.txt"
+    try:
+        stat = queue_path.stat()
+    except OSError:
+        pass
+    else:
+        sig.update(queue_path.relative_to(repo_root).as_posix().encode("utf-8"))
+        sig.update(f":{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8"))
+
+    return ("quality-board", sig.hexdigest())
+
+
 # Map fixed paths (query-independent beyond ``?compact=1``) to policies.
 # (ttl_seconds, version_fn_or_None)
 CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
@@ -6206,7 +6663,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/pipeline/v2/status": (5.0, _v_v2_db),
     "/api/translation/v2/status": (5.0, _v_translation_db),
     "/api/labs/status": (10.0, None),
-    "/api/quality/board": (15.0, None),
+    "/api/quality/board": (30.0, _v_quality_board),
     "/api/quality/upgrade-plan": (30.0, None),
     "/api/citations/status": (30.0, None),
     "/api/ztt/status": (30.0, None),
@@ -6312,6 +6769,13 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
 
             if 200 <= status_code < 300:
                 inm = self.headers.get("If-None-Match", "")
+                if _header_value_has_crlf(inm):
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                etag = _safe_etag_header_value(etag)
                 if _match_etag(inm, etag):
                     self.send_response(304)
                     self.send_header("ETag", etag)
@@ -6320,6 +6784,8 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                     return
 
             try:
+                content_type = _safe_header_value(content_type)
+                etag = _safe_etag_header_value(etag)
                 self.send_response(status_code)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
@@ -6346,6 +6812,7 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                 content_type = "application/json; charset=utf-8"
 
             body = _serialize_payload(payload, content_type)
+            content_type = _safe_header_value(content_type)
             self.send_response(status_code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))

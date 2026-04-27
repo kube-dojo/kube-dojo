@@ -28,21 +28,29 @@ function enhanceContent(): void {
  * POC shows: ⚠ Medium | ⏱ 45-55 min | 🏆 CKA Exam (as colored pills on one line)
  */
 function buildChips(complexity: string | null, time: string | null): HTMLDivElement | null {
-  const chips: string[] = [];
+  const div = document.createElement('div');
+  div.className = 'kd-meta-chips';
+
   if (complexity) {
     const upper = complexity.toUpperCase();
     const cls = upper === 'QUICK' ? 'kd-chip-quick' :
                 (upper === 'MEDIUM' ? 'kd-chip-medium' : 'kd-chip-advanced');
     const icon = upper === 'QUICK' ? '✓' : upper === 'MEDIUM' ? '⚠' : '⚡';
-    chips.push(`<span class="kd-chip ${cls}">${icon} ${upper.charAt(0) + upper.slice(1).toLowerCase()}</span>`);
+
+    const chip = document.createElement('span');
+    chip.className = `kd-chip ${cls}`;
+    chip.textContent = `${icon} ${upper.charAt(0) + upper.slice(1).toLowerCase()}`;
+    div.appendChild(chip);
   }
+
   if (time) {
-    chips.push(`<span class="kd-chip kd-chip-time">⏱ ${time}</span>`);
+    const chip = document.createElement('span');
+    chip.className = 'kd-chip kd-chip-time';
+    chip.textContent = `⏱ ${time}`;
+    div.appendChild(chip);
   }
-  if (chips.length === 0) return null;
-  const div = document.createElement('div');
-  div.className = 'kd-meta-chips';
-  div.innerHTML = chips.join('');
+
+  if (div.children.length === 0) return null;
   return div;
 }
 
@@ -152,9 +160,20 @@ function enhanceWarStories(root: Element): void {
 
     const header = document.createElement('div');
     header.className = 'kd-warstory-header';
-    header.innerHTML = `<span>🔥</span><span>${text.replace(/war story:?\s*/i, '').trim() || 'War Story'}</span>`;
+
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = '🔥';
+    header.appendChild(iconSpan);
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = text.replace(/war story:?\s*/i, '').trim() || 'War Story';
+    header.appendChild(titleSpan);
+
     if (impactMatch) {
-      header.innerHTML += `<span class="impact">${impactMatch[0].trim()}</span>`;
+      const impactSpan = document.createElement('span');
+      impactSpan.className = 'impact';
+      impactSpan.textContent = impactMatch[0].trim();
+      header.appendChild(impactSpan);
     }
 
     const body = document.createElement('div');
@@ -204,13 +223,16 @@ function enhanceDidYouKnow(root: Element): void {
 
     const header = document.createElement('div');
     header.className = 'kd-dyk-header';
-    header.innerHTML = '💡 Did You Know?';
+    header.textContent = '💡 Did You Know?';
 
     wrapper.appendChild(header);
     blockquotes.forEach((bq) => {
       const div = document.createElement('div');
       div.className = 'kd-dyk-item';
-      div.innerHTML = bq.innerHTML;
+      // Move all children from the blockquote to our new div
+      while (bq.firstChild) {
+        div.appendChild(bq.firstChild);
+      }
       wrapper.appendChild(div);
     });
 

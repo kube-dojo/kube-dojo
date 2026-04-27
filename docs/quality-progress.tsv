@@ -127,3 +127,15 @@ ts_utc	slug	heuristic_before	heuristic_after	real_llm_sampled	real_llm_teaching_
 2026-04-26T19:10:13Z	platform-disciplines-core-platform-platform-engineering-module-2.6-platform-maturity	4.60		0			codex	claude	approve	
 2026-04-26T19:34:14Z	on-premises-planning-module-1.1-case-for-on-prem	3.80		0			codex	codex	approve	
 2026-04-26T19:44:06Z	on-premises-security-module-6.7-policy-as-code	3.00		0			claude	codex	approve	
+2026-04-26T19:51:19Z	on-premises-storage-module-4.3-local-storage	3.80		0			claude	codex	approve	
+2026-04-26T19:56:14Z	k8s-kcsa-part3-security-fundamentals-module-3.1-pod-security	4.00		0			codex	claude	approve	
+2026-04-26T20:03:23Z	platform-foundations-security-principles-module-4.3-identity-and-access	4.80		0			claude	codex	approve	
+2026-04-26T20:08:05Z	k8s-cka-part1-cluster-architecture-module-1.4-kustomize	3.80		0			codex	claude	approve	
+2026-04-26T20:12:16Z	platform-toolkits-infrastructure-networking-platforms-module-3.5-cluster-api	2.80		0			codex	claude	approve	
+2026-04-26T20:19:24Z	platform-foundations-observability-theory-module-3.3-instrumentation-principles	5.00		0			claude	codex	approve	
+2026-04-26T20:35:07Z	on-premises-operations-module-7.8-observability-at-scale	2.80		0			claude	codex	approve	
+2026-04-26T20:39:36Z	k8s-kcsa-part1-cloud-native-security-module-1.1-four-cs	3.70		0			codex	claude	approve	
+2026-04-26T20:48:06Z	platform-foundations-observability-theory-module-3.2-the-three-pillars	4.80		0			claude	codex	approve	
+2026-04-26T20:54:56Z	on-premises-planning-module-1.2-server-sizing	4.30		0			claude	codex	approve	
+2026-04-26T20:59:30Z	linux-operations-troubleshooting-module-6.3-process-debugging	3.80		0			codex	claude	approve	
+2026-04-26T21:04:25Z	k8s-ckad-part3-observability-module-3.1-probes	3.80		0			codex	claude	approve	

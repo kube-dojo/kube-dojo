@@ -135,7 +135,7 @@ function updateButtonState(btn: HTMLButtonElement, slug: string): void {
   const completed = isComplete(slug);
   btn.className = `kd-complete-btn${completed ? ' completed' : ''}`;
   btn.setAttribute('aria-pressed', String(completed));
-  btn.innerHTML = completed
+  btn.textContent = completed
     ? '✓ Completed — click to undo'
     : '○ Mark as Complete';
 }
