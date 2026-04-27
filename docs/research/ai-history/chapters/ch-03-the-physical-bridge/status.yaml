@@ -1,1 +1,79 @@
-status: researching
+status: capacity_plan_anchored
+prose_word_cap: null
+review_state: claude_research_lead_2026-04-28;awaiting_dual_cross_family_verdict
+green_claims: 26
+yellow_claims: 3
+red_claims: 0
+verdicts:
+  resolved: null
+  resolved_word_cap: null
+notes: |
+  Claude (research lead, Part 1, per the 2026-04-28 role split) authored the
+  full chapter contract on a fresh `claude/394-ch03-research` worktree off
+  `main`. All Green claims are verified by direct `pdftotext` extraction
+  against live primary or secondary source PDFs, captured in this session
+  on 2026-04-28:
+
+   - Shannon 1937 thesis (MIT DSpace, `bitstream/handle/1721.1/11173/...`):
+     14 Green claims for the axiomatic structure (postulates, theorems by
+     perfect induction, hindrance definition, make/break-contact-as-negation,
+     explicit Boole identification, Figure 5 → Figure 6 simplification with
+     element-count drop from 13 to 5, Section V Selective Circuit 20 → 15
+     → 14 reduction).
+
+   - Shannon 1938 Trans. AIEE paper (Wiley 1993 reissue mirror at
+     harrymoreno.com): 5 Green claims for the publication metadata, the
+     Hitchcock/Bush/Caldwell acknowledgement, and the section-level
+     anchors (Postulates / Negation / Boole identification / Table I /
+     Figure 5/6 simplification). The original AIEE pp.713-723 endpoints
+     are anchored via ADS bibcode 1938TAIEE..57..713S plus Wikipedia
+     metadata WebFetch (2026-04-28).
+
+   - Stanković & Astola 2008 TICSP Report 40 (Wayback Machine snapshot of
+     ETHW mirror; the live ETHW URL returns HTTP 404): 5 Green claims for
+     Nakashima's biography, publication priority (Nichiden Geppo serial
+     1934-1935; Sept 1935 paper; May 1936 English summary), August 1938
+     Boole-equivalence recognition, 1940 first-Boole-citation, side-by-
+     side notation comparison Figure 1, and the Shannon 1949 BSTJ first-
+     citation milestone.
+
+   - Owens 1986 Technology and Culture (worrydream.com mirror): 5 Green
+     claims for the 1931 Bush analyzer architecture (six disc integrators,
+     drawing boards), the disc integrator as "the heart of the analyzer,"
+     the March 1936 Rockefeller $85,000 grant, the automatic-control
+     problem framed as "in fact, a software problem," and the post-1942
+     scale of the Rockefeller Differential Analyzer (~2000 vacuum tubes,
+     several thousand relays).
+
+  Verifying total: 26 Green / 3 Yellow / 0 Red claims in the scene-level
+  claim table. The 3 Yellow claims are: (1) Howard Gardner's "possibly the
+  most important master's thesis of the century" phrase awaits a specific
+  Gardner 1985 page anchor; (2) Piesch 1939 and Plechl-Duschek 1946 German-
+  language parallel-formulation in-paper anchors are not yet extracted (only
+  TICSP-40 bibliographic-metadata Green); (3) the framing "Shannon worked on
+  the 1931 mechanical machine while the 1936 Rockefeller successor was being
+  designed" combines Owens chronology with Shannon's 1938 byline employment
+  status — Owens does not name Shannon, so the explicit conjunction is
+  Yellow.
+
+  Prose Capacity Plan: 5 layers, totaling 3,000-4,500 words. Word Count
+  Discipline label: `3k-5k likely`. Each layer cites at least one specific
+  page anchor from sources.md, satisfying the capacity-plan gate per
+  TEAM_WORKFLOW.md.
+
+  Pre-existing Gemini PR #433 (gemini/394-ch03-research branch) is
+  superseded by this contract per the 2026-04-28 role split (research
+  duties taken from Gemini after URL/anchor hallucination self-admission,
+  epic commit `03640e20`, Issue #421). Gemini's PR #433 attempted to
+  upgrade four legacy Yellow claims to Green via vague page anchors
+  ("Shannon 1938, §VI, p. 721"; "Owens 1986, pp. 63-66"; "Stanković &
+  Astola 2008, pp. 7-10") that have not been independently verified —
+  the pp.7-10 Stanković anchor in particular does not match the actual
+  pp.13-17 location of the relevant content per Claude's pdftotext
+  extraction. Gemini's PR should be closed by the orchestrator without
+  merge.
+
+  Awaiting dual cross-family verdict (Codex + Gemini per TEAM_WORKFLOW.md).
+  Drafting unlocks only after both reviewers issue READY_TO_DRAFT or
+  READY_TO_DRAFT_WITH_CAP. Status remains `capacity_plan_anchored` until
+  then.
