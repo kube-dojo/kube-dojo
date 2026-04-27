@@ -251,8 +251,10 @@ Funahashi's 1989 paper, "On the approximate realization of continuous mappings
 by neural networks," supplied another route through the same landscape. Its
 abstract stated the problem in terms of approximating continuous mappings by
 neural networks, and its theorem statements described approximation by
-three-layer networks. Funahashi is important in this chapter not because every
-reader needs a priority chart, but because his work reminds us that the
+three-layer networks. In that terminology, the input, hidden, and output
+layers are counted; this is not a contradiction of the one-hidden-layer framing
+used elsewhere. Funahashi is important in this chapter not because every reader
+needs a priority chart, but because his work reminds us that the
 representational question was being closed from multiple sides.
 
 The convergence is the story. Different authors, journals, and mathematical
@@ -443,12 +445,6 @@ was narrowed into an architecture built for images and characters.
 The Universal Approximation Theorem did not solve AI. It changed what kind of
 unsolved problem AI had.
 
-> [!note] Honesty Over Output
-> This chapter treats the theorem as a representational legitimacy result, not
-> as proof that neural networks can learn any task. The sources support a
-> careful capacity claim under assumptions; they do not support a blanket story
-> about training, generalization, or practical deployment.
-
 ## Sources
 
 ### Primary
@@ -482,3 +478,9 @@ unsolved problem AI had.
   *IEEE Transactions on Information Theory* 39(3), 930-945 (1993): follow-up
   anchor for approximation efficiency and the difference between existence and
   practical cost.
+
+> [!note] Honesty Over Output
+> This chapter treats the theorem as a representational legitimacy result, not
+> as proof that neural networks can learn any task. The sources support a
+> careful capacity claim under assumptions; they do not support a blanket story
+> about training, generalization, or practical deployment.
