@@ -23,7 +23,7 @@ Software algorithms, running on standard, general-purpose central processing uni
 
 Hsu’s radical approach was to abandon the flexibility of general-purpose software. Instead of writing a chess program to run on a standard chip, he decided to physically burn the chess rules and the evaluation functions directly into custom-designed silicon.
 
-He designed VLSI (Very Large Scale Integration) chips whose physical, microscopic wiring was dedicated exclusively to generating and evaluating chess moves. The hardware *was* the chess algorithm. By moving the logic from software into physical silicon, the operations could execute at blinding speeds. 
+He designed VLSI (Very Large Scale Integration) chips with specialized circuitry dedicated exclusively to massively accelerating the chess evaluation function and move generation. The hardware *was* the chess algorithm. By moving the heavy lifting from software into physical silicon, the operations could execute at blinding speeds. 
 
 > [!note] Pedagogical Insight: Custom Silicon vs. Software
 > Imagine a factory that can build any type of vehicle (a CPU). If you ask it to build a million red bicycles, it will take a long time because the factory has to constantly reconfigure its tools. Hsu built a factory that could *only* build red bicycles (a custom VLSI chip). It could do nothing else, but it could build them incredibly fast.
@@ -38,11 +38,11 @@ Deep Blue did not "learn" from its mistakes during the match. It did not use neu
 
 ## The Ghost in the Machine
 
-The sheer scale of this calculation led to the dramatic climax of the match. In Game 2, Kasparov set a subtle trap that would typically tempt a computer into capturing a pawn, leading to a long-term strategic disadvantage. Deep Blue, searching deep into the future possibilities, saw the flaw in the trap and refused to take the pawn, playing a surprisingly human-like, positional move instead.
+The sheer scale of this calculation led to the dramatic climax of the match. In Game 2, Deep Blue played a surprisingly human-like, positional move instead of capturing a pawn. 
 
-Kasparov was deeply rattled. The move was so counterintuitive for a machine that Kasparov later suggested there must have been a human grandmaster secretly intervening behind the scenes. 
+Kasparov was deeply unsettled. The move was so counterintuitive for a machine at the time that Kasparov later suggested there might have been human intervention. 
 
-The reality was far colder. There was no ghost in the machine, and there was no human intervention. Deep Blue simply evaluated 200 million positions a second, crunching the brute-force math until the optimal path emerged. 
+The reality was far colder. There was no ghost in the machine. Deep Blue simply evaluated 200 million positions a second, crunching the brute-force math until a highly effective path emerged. 
 
 Deep Blue’s victory was a monumental engineering achievement, but it was an architectural dead end for Artificial General Intelligence (AGI). The machine was arguably the smartest entity on the planet at a 64-square grid, but it did not know how to play checkers or tic-tac-toe. Its intelligence was hardwired into the physical constraints of its silicon. Yet, the match proved a principle that would eventually dominate the AI industry: when elegant software algorithms fail, sheer infrastructural scale often succeeds.
 

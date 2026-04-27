@@ -11,9 +11,9 @@ By the late 1990s, the World Wide Web had exploded in size. Anyone with an inter
 
 Early search engines operated much like the index of a traditional book. They crawled webpages and simply counted how many times a specific keyword appeared. This approach was highly vulnerable to spam. Unscrupulous webmasters could hide the word "casino" thousands of times in invisible text on a page, tricking the search engine into ranking it highly. 
 
-The problem of search was not just a data retrieval issue; it was a semantic issue. How do you mathematically determine which page is the most trusted, authoritative, and relevant answer to a human query? 
+The problem of search was not just a data retrieval issue; it was a trust issue. How do you mathematically determine which page is the most trusted, authoritative, and relevant answer to a human query? 
 
-The solution, pioneered by two Stanford graduate students named Larry Page and Sergey Brin, transformed the chaotic internet into structured infrastructure. To execute their mathematical vision, they had to invent a completely new model of data center architecture, inadvertently laying the groundwork for modern artificial intelligence infrastructure.
+The solution, pioneered by two Stanford graduate students named Larry Page and Sergey Brin, transformed the chaotic internet into structured infrastructure. To execute their mathematical vision, they had to invent a completely new model of data center architecture, inadvertently laying the groundwork that heavily influenced later massive-scale artificial intelligence compute.
 
 ## The Random Surfer
 

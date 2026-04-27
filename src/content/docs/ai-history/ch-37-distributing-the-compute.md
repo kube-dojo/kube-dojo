@@ -40,7 +40,7 @@ This changed thanks to Doug Cutting, an open-source developer working at Yahoo. 
 
 Cutting explicitly used the Google papers as a specification to write an open-source clone of the system. He named the project Hadoop, after his son’s yellow toy elephant. 
 
-Hadoop successfully democratized planetary-scale compute. Because it was open-source, any university, startup, or corporation could download Hadoop, wire together a rack of cheap PCs, and possess the same distributed data-processing power as Google. Hadoop broke the monopoly on big data. It ensured that when the Deep Learning revolution arrived a few years later, the entire industry had access to the distributed computational infrastructure required to clean, process, and shuffle the massive datasets needed to train neural networks.
+Hadoop widely distributed Google-style large-scale batch data processing via open source. Any university, startup, or corporation could download Hadoop, wire together a rack of cheap PCs, and possess similar distributed data-processing power as Google. Hadoop broke the monopoly on big data. It ensured that when the Deep Learning revolution arrived a few years later, the entire industry had access to the distributed computational infrastructure required to clean, process, and shuffle the massive datasets needed to train neural networks.
 
 ## Sources
 
