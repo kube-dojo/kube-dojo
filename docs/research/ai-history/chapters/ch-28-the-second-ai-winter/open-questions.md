@@ -1,14 +1,18 @@
 # Open Questions: Chapter 28 - The Second AI Winter
 
-## Must Resolve Before Prose
+## Resolved for Prose
 
-- Is a dedicated primary/business source needed for the Lisp-machine market collapse, or should that remain a short secondary-framed context note?
-- Should FGCS be framed only as expectation amplifier and final-research context, or should the chapter add an independent evaluation source before making any "under-delivered" claim?
+- Gemini requested a concrete Symbolics/Lisp-machine economics anchor before prose. Bates 1988 in the LA Times now covers Symbolics layoffs, losses, and workstation competition, enough for a short hardware scene.
+- Claude requested a non-ICOT anchor for FGCS as international expectation trigger. Roland/Shiman pp.5, 37, and 56-57 now cover U.S. concern, Strategic Computing rationale, and congressional/political leverage.
+
+## Still Open Before Prose
+
+- Should the chapter add an independent evaluation source before making any "under-delivered" claim about FGCS? Current contract can safely frame FGCS as expectation amplifier and final research/prototype context, not as failure.
 - Which title emphasis should the prose use: "hand-coded rules broke under maintenance complexity" or broader "winter as infrastructure reallocation"?
 
 ## Optional Expansion Paths
 
-- Add Symbolics/Lisp-machine market source if it gives concrete revenue, bankruptcy, or workstation-competition evidence.
+- Add a second broader Lisp-machine market source if the chapter wants to generalize beyond Symbolics.
 - Add a short source on expert-system shell vendors only if it directly supports market contraction.
 - Add a brief quote-free summary of Hendler's 2008 retrospective once a PDF/page anchor is available.
 

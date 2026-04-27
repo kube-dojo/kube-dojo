@@ -2,7 +2,8 @@
 
 ## Compute and Hardware
 
-- Specialized AI machines and Lisp environments belong in the chapter only if sourced. The current contract has better anchors for DARPA's shift toward general high-performance architectures than for the commercial Lisp-machine collapse.
+- Specialized AI machines and Lisp environments can now appear as a short Symbolics scene. Bates 1988 reports layoffs, losses, and competition from less expensive Sun/Apollo workstations.
+- Broader "entire Lisp-machine market collapse" language still needs cautious phrasing unless another market-wide source is added.
 - Roland/Shiman p.285 gives the infrastructure pivot: Strategic Computing's machine-intelligence ambition was absorbed into HPC and networking.
 
 ## Knowledge Infrastructure

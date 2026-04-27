@@ -19,7 +19,8 @@ This chapter must preserve two truths at once. Expert systems delivered real val
 2. **The Knowledge Acquisition Bottleneck:** Explain why extracting informal human expertise into production rules became the bottleneck even when shells and tools improved.
 3. **The Demonstration Trap:** Use DARPA Strategic Computing and the ALV/AI program reviews to show the gap between demonstrations, benchmarks, transition, and durable systems.
 4. **The Fifth Generation Shadow:** Japan's FGCS program raised international expectations around knowledge processing, logic programming, and parallel inference; by the early 1990s, its final results were more research-platform than world-changing product.
-5. **Winter as Reallocation:** The winter did not end computing progress; it redirected money and prestige toward architectures, high-performance computing, benchmarks, and statistical methods.
+5. **Hardware Loses Its Moat:** Symbolics gives the concrete business scene: specialized AI hardware was pressured by cheaper general workstations while losses and layoffs made the market correction visible.
+6. **Winter as Reallocation:** The winter did not end computing progress; it redirected money and prestige toward architectures, high-performance computing, benchmarks, and statistical methods.
 
 ## 4k-6k Prose Capacity Plan
 
@@ -28,12 +29,13 @@ This chapter must preserve two truths at once. Expert systems delivered real val
 - 700-1,000 words: knowledge-acquisition bottleneck and why domain experts' tacit heuristics resisted easy encoding.
 - 800-1,100 words: DARPA Strategic Computing, Schwartz's 1987-1990 cuts, the "no new ideas" critique, shift toward architectures/HPC, and congressional demand for products.
 - 500-800 words: FGCS as international expectation amplifier and final-results nuance.
+- 300-600 words: hardware economics via Symbolics layoffs/losses and Sun/Apollo workstation competition.
 - 500-800 words: conclusion/handoff to Ch29-Ch31: margin methods, statistical speech recognition, and RL roots grow as alternatives to brittle rule maintenance.
 
-Stretch path to 6k: add a short hardware-economics scene if a primary source for Symbolics/Lisp-machine market collapse is found. Do not stretch with generic "AI hype cycle" commentary.
+Stretch path to 6k: add hardware economics only through the Symbolics anchor and, if needed, one additional business-press source. Do not stretch with generic "AI hype cycle" commentary.
 
 ## Citation Bar
 
 - Minimum primary/near-primary sources before prose: Neumann 1988 on XCON maintenance; NASA/JSC 1987 or Atkinson 1990 on knowledge acquisition; Roland and Shiman 2002 on DARPA Strategic Computing; ICOT FGCS 1992 proceedings for the Japanese program's stated goals/final context.
 - Minimum secondary/context sources: Hendler 2008 or equivalent for the later "perfect storm" framing; one source for Lisp-machine market collapse if that scene is included.
-- Current status: enough anchored source material for a 4,000-5,500 word chapter once Gemini confirms no major gap.
+- Current status: enough anchored source material for a 4,000-5,500 word chapter.

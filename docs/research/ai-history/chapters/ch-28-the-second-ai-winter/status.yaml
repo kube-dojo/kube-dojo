@@ -1,11 +1,13 @@
-status: reviewing
+status: prose_ready
 owner: Codex
 part: 5
 chapter: 28
-review_state: gemini_gap_analysis_requested
+review_state: gemini_gap_analysis_passed_claude_gap_addressed
 last_updated: 2026-04-27
 notes:
   - "Initial placeholder expanded into a claim-level research contract for the second AI winter."
   - "Core frame: the winter is a convergence of expert-system maintenance limits, knowledge-acquisition bottlenecks, specialized hardware economics, and DARPA/FGCS expectation correction."
   - "Primary anchors now include NASA/JSC 1987 expert-systems transfer report, Atkinson IAAI-90, Neumann 1988 XCON configuration-system maintenance analysis, Roland/Shiman on DARPA Strategic Computing, and ICOT FGCS 1992 proceedings."
   - "Do not reduce the chapter to 'expert systems were stupid' or 'hype alone caused winter'; preserve useful narrow successes and show why scaling/maintenance/infrastructure made the boom brittle."
+  - "Gemini gap analysis approved the contract and requested a concrete Symbolics/Lisp-machine economics anchor before prose; LA Times 1988 layoffs/losses/workstation-competition anchor was added."
+  - "Claude requested a non-ICOT anchor for FGCS as a Western trigger; Roland/Shiman pp.5, 37, and 56-57 were added."
