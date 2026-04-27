@@ -4,7 +4,7 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| arXiv usage for machine learning papers exploded post-2012 | 2 | arXiv submission statistics / API data | Sutton 2019 | Green | None |
+| arXiv usage for machine learning papers exploded post-2012 | 2 | arXiv submission statistics / API data | Sutton 2019 | Yellow | Need exact verified page/section anchors. |
 | Releasing code alongside papers became the standard in ML | 3 | GitHub repository metrics for popular ML frameworks | N/A | Yellow | Need a specific secondary source documenting this cultural shift in ML. |
 
 ## Bibliography

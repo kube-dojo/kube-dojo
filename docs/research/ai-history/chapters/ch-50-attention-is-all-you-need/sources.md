@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| RNNs suffered from sequential bottlenecks on parallel hardware | 1 | Vaswani et al. 2017, Introduction | Rush et al. 2018 | Green | None |
-| The Transformer dropped recurrence entirely in favor of attention | 2, 3 | Vaswani et al. 2017 | Rush et al. 2018 | Green | None |
+| RNNs suffered from sequential bottlenecks on parallel hardware | 1 | Vaswani et al. 2017, Introduction | Rush et al. 2018 | Yellow | Need exact verified page/section anchors. |
+| The Transformer dropped recurrence entirely in favor of attention | 2, 3 | Vaswani et al. 2017 | Rush et al. 2018 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

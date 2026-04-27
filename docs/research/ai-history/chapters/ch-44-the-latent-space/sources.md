@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Discrete word representations suffered from the curse of dimensionality | 1 | Bengio et al. 2003 (A neural probabilistic language model) | Jurafsky & Martin 2024 | Green | None |
-| Word2Vec introduced efficient CBOW and Skip-gram architectures | 2 | Mikolov et al. 2013 (Efficient estimation of word representations in vector space) | Jurafsky & Martin 2024 | Green | None |
-| Vector arithmetic mirrors semantic relationships | 3 | Mikolov et al. 2013 (Linguistic regularities in continuous space word representations) | Jurafsky & Martin 2024 | Green | None |
+| Discrete word representations suffered from the curse of dimensionality | 1 | Bengio et al. 2003 (A neural probabilistic language model) | Jurafsky & Martin 2024 | Yellow | Need exact verified page/section anchors. |
+| Word2Vec introduced efficient CBOW and Skip-gram architectures | 2 | Mikolov et al. 2013 (Efficient estimation of word representations in vector space) | Jurafsky & Martin 2024 | Yellow | Need exact verified page/section anchors. |
+| Vector arithmetic mirrors semantic relationships | 3 | Mikolov et al. 2013 (Linguistic regularities in continuous space word representations) | Jurafsky & Martin 2024 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

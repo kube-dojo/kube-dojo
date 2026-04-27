@@ -1,5 +1,3 @@
 # Open Questions
 
-- Extract exact page/section anchors for Jouppi 2017.
-- Source Google product/deployment history and TPU v1 rollout context.
-- Find external reactions about custom silicon as an infrastructural strategy.
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

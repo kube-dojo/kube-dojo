@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| CPUs were too slow for deep learning training | 1 | Steinkraus et al. 2005 (Machine Learning on GPUs) | [Ceruzzi 2003] | Green | None |
-| GPUs are inherently parallel and suited for matrix math | 2 | Lindholm et al. 2001 (A user-programmable vertex engine) | Szeliski 2022 | Green | None |
-| Early GPGPU required hacking graphics APIs like OpenGL/Cg | 3 | Oh & Jung 2004 (GPU implementation of neural networks) | [Gleick 2011] | Green | None |
+| CPUs were too slow for deep learning training | 1 | Steinkraus et al. 2005 (Machine Learning on GPUs) | [Ceruzzi 2003] | Yellow | Need exact verified page/section anchors. |
+| GPUs are inherently parallel and suited for matrix math | 2 | Lindholm et al. 2001 (A user-programmable vertex engine) | Szeliski 2022 | Yellow | Need exact verified page/section anchors. |
+| Early GPGPU required hacking graphics APIs like OpenGL/Cg | 3 | Oh & Jung 2004 (GPU implementation of neural networks) | [Gleick 2011] | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

@@ -3,4 +3,4 @@
 - **1815:** George Boole is born.
 - **1854:** Publication of *An Investigation of the Laws of Thought*.
 - **1864:** Boole dies of pneumonia; Mary Everest Boole begins preserving his legacy.
-- **Late 19th - Early 20th Century:** Boole's algebra lies dormant, ignored by practical engineers, until its rediscovery by Claude Shannon in 1937.
+- **Late 19th - Early 20th Century:** Boole's algebra remains a subject of theoretical and philosophical study; its transition to practical engineering awaits the 20th century.

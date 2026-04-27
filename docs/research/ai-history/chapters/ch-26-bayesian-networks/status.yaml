@@ -1,13 +1,1 @@
-status: prose_ready
-owner: Codex
-part: 5
-chapter: 26
-review_state: ready_to_draft_with_cap
-last_updated: 2026-04-27
-notes:
-  - "Initial research contract populated from Pearl, graphical-model, tutorial, and complexity anchors."
-  - "Review follow-up extracted page anchors for Cooper 1990, Lauritzen/Spiegelhalter 1988, and Charniak 1991."
-  - "Pearl 1986 is currently anchored at ScienceDirect abstract/page-241 level only; Pearl 1988 has chapter/page ranges and publisher-description anchors but not internal passage anchors."
-  - "Core guardrail: Bayesian networks structure uncertain reasoning; they do not make inference or knowledge elicitation free."
-  - "Gemini gap analysis recorded in gap-analysis.md; safe prose core is no longer zero, but Gemini should decide whether full Pearl access is required before prose lock."
-  - "Gemini prose-readiness review cleared drafting with cap; proceed with Pearl access caveat and lean on Lauritzen/Spiegelhalter, Cooper, and Charniak anchors."
+status: researching

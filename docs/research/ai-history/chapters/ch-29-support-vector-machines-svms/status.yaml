@@ -1,1 +1,19 @@
-status: researching
+status: prose_review
+owner: Codex
+part: 5
+chapter: 29
+review_state: gemini_flash_followup_fixes_applied
+last_updated: 2026-04-27
+prose_words: 4015
+notes:
+  - "Initial placeholder expanded into a claim-level research contract for SVMs."
+  - "Core frame: after the second AI winter, SVMs made machine learning look disciplined by combining statistical learning theory, maximum-margin geometry, kernels, convex optimization, and benchmark credibility."
+  - "Primary anchors include Vapnik/Chervonenkis 1971, Boser/Guyon/Vapnik 1992, Cortes/Vapnik 1995, and Burges 1998."
+  - "Gemini gap review requested real VC-theory page anchors before a 4k+ draft; clean Vapnik/Chervonenkis 1971 PDF anchors were added."
+  - "Claude prose-readiness review requested boundary wording for VC theory, LeNet attribution, and no false 1990s winner story; constraints were applied."
+  - "Gemini follow-up review returned PROSE_READY with no remaining must-fix findings or nits."
+  - "Codex drafted prose at 4,121 words from the approved research contract."
+  - "Gemini prose review flagged prompt/meta leakage; fixes applied and draft tightened to 4,013 words."
+  - "Claude prose review approved and requested two OCR audit nits; 1.1% multiclass wording and image dimensions were tightened."
+  - "Gemini Flash follow-up found two remaining meta references; both were removed and draft now stands at 4,015 words."
+  - "Guardrail: do not portray SVMs as a deep-learning replacement or as purely theoretical; they were a 1990s infrastructure answer to small/medium data, controlled capacity, and convex training."

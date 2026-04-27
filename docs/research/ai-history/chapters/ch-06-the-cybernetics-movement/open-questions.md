@@ -1,3 +1,3 @@
-# Open Questions: Chapter 6
+# Open Questions
 
-- What was the specific military contract number or project name for Wiener's anti-aircraft predictor work?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

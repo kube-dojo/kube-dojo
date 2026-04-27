@@ -16,7 +16,7 @@ from ._codex import (
     process_all_codex,
     process_for_codex,
 )
-from ._config import GEMINI_DEFAULT_MODEL
+from ._config import GEMINI_DEFAULT_MODEL, GEMINI_REVIEW_MODEL
 from ._db import get_db
 from ._gemini import ask_gemini, converse_gemini, process_and_respond
 from ._messaging import (
@@ -437,7 +437,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ask_gemini_parser.add_argument("--type", default="query", help="Message type (default: query)")
     ask_gemini_parser.add_argument("--data", help="Path to data file to attach")
     ask_gemini_parser.add_argument(
-        "--model", default=GEMINI_DEFAULT_MODEL, help="Gemini model to use"
+        "--model", default=None,
+        help=(
+            "Gemini model to use "
+            f"(default: {GEMINI_REVIEW_MODEL} for --review, "
+            f"else {GEMINI_DEFAULT_MODEL})"
+        )
     )
     ask_gemini_parser.add_argument("--from-model", dest="from_model",
                                    help="Exact sender model ID")
@@ -623,7 +628,8 @@ def _handle_ask_gemini(args):
         data = Path(args.data).read_text()
     content = sys.stdin.read() if args.content == "-" else args.content
     content = build_review_message(content) if args.review else content
-    ask_gemini(content, args.task_id, args.type, data, args.model,
+    model = args.model or (GEMINI_REVIEW_MODEL if args.review else GEMINI_DEFAULT_MODEL)
+    ask_gemini(content, args.task_id, args.type, data, model,
                getattr(args, 'from_model', None),
                getattr(args, 'async_mode', False),
                getattr(args, 'stdout_only', False),
