@@ -4,15 +4,16 @@ This is a living operating document for the AI History book. Update it when the 
 
 ## Operating Principle
 
-Honesty over output is the highest rule. A chapter should be shorter if verified research cannot support the desired length. Agents must not invent scenes, dialogue, institutional motives, deployment numbers, hardware details, or causal links to satisfy a word target.
+Honesty over output is the highest rule. The team should still strive for the intended 4,000-7,000 word range when the subject can support it, but expansion must come from verified evidence, not filler. Agents must not invent scenes, dialogue, institutional motives, deployment numbers, hardware details, or causal links to satisfy a word target.
 
 ## Roles
 
 - Human editor: sets ambition, accepts scope tradeoffs, resolves taste and book-level direction.
 - Primary researcher: owns the chapter contract and keeps claims tied to evidence.
-- Gemini reviewer: stress-tests research completeness, source choice, word-count honesty, and prose readiness.
-- Claude reviewer: when available, provides cross-family review for narrative coherence, overclaiming, and final prose quality.
-- Codex reviewer/writer: may research, implement docs, draft prose after gates, and maintain workflow artifacts.
+- Cross-family reviewer: stress-tests research completeness, source choice, word-count honesty, and prose readiness. The reviewer must not be from the same model family as the primary researcher or prose writer.
+- Claude reviewer: when available and cross-family for the current author, provides review for narrative coherence, overclaiming, and final prose quality.
+- Gemini reviewer: when cross-family for the current author, provides review for research completeness, source gaps, and prose readiness.
+- Codex reviewer/writer: may research, implement docs, draft prose after gates, maintain workflow artifacts, or review non-Codex-authored work.
 
 Agents should help each other by naming gaps plainly. A useful refusal or downgrade is better than a confident but unsupported expansion.
 
@@ -54,6 +55,7 @@ After research-contract approval, request or create a gap analysis before prose 
 - Which narrative scenes are strong enough to draft?
 - Which scenes are too thin or speculative?
 - What word count is naturally supported by verified evidence?
+- What would be required to reach 4,000-7,000 words without bloat?
 - Which chapter ambitions should be reduced?
 - What should Gemini, Claude, Codex, or the human editor help source?
 
@@ -72,7 +74,7 @@ Do not upgrade a claim to Green just because a source is famous. Upgrade it only
 
 ### 4. Prose-Readiness Review
 
-Ask Gemini to review the full contract plus gap analysis. The expected verdicts are:
+Ask a cross-family reviewer to review the full contract plus gap analysis. The expected verdicts are:
 
 - `READY_TO_DRAFT`: page anchors and gaps are sufficient for a faithful chapter.
 - `READY_TO_DRAFT_WITH_CAP`: draft, but cap the word count below the target.
@@ -90,7 +92,7 @@ If a chapter cannot honestly reach 4,000 words, write the natural chapter length
 
 ### 6. Prose Review
 
-Ask Gemini to review the drafted chapter for:
+Ask a cross-family reviewer to review the drafted chapter for:
 
 - factual overclaims
 - unsupported scenes
@@ -132,14 +134,37 @@ The human editor decides:
 
 ## Word Count Discipline
 
-Word count must follow evidence. Use these labels in briefs and gap analyses:
+The default ambition is 4,000-7,000 words for major chapters, but agents must not min-max by either padding to the target or prematurely shrinking the scope. Use a two-number plan:
 
-- `4k-7k supported`: verified sources can support a long narrative without padding.
+- `core range`: what the verified evidence can support today.
+- `stretch range`: what the chapter could support if specific missing evidence is found.
+
+Expansion must follow an evidence ladder:
+
+- primary-source anchors
+- deployment or institutional detail
+- infrastructure and hardware constraints
+- competing interpretations or priority disputes
+- consequences and later reception
+- clear explanation of technical ideas tied to historical sources
+
+Expansion must not come from:
+
+- generic textbook explanation unrelated to the historical event
+- invented lab scenes or motives
+- repeated summary of the same claim
+- modern hindsight that the chapter's sources do not support
+- unanchored deployment scale, hardware, or business impact
+
+Use these labels in briefs and gap analyses:
+
+- `4k-7k supported`: verified sources already support a long narrative without padding.
+- `4k-7k stretch`: possible if named gaps are filled.
 - `3k-5k likely`: chapter has enough evidence, but some scenes should stay compact.
 - `2k-4k natural`: conceptually important but structurally compact.
 - `short chapter recommended`: expansion would require filler or unrelated material.
 
-When in doubt, lower the target and ask for help sourcing the missing layer.
+When in doubt, do not simply lower the target. First identify the missing evidence that could support responsible expansion. Lower the target only after the team agrees the missing layer is unavailable, out of scope, or not worth the narrative cost.
 
 ## Review Request Template
 
@@ -158,7 +183,8 @@ Questions:
 2. Which exact page/section anchors are required before prose?
 3. Which scenes are strong enough to draft, and which are thin?
 4. What natural word-count range is supported by verified evidence?
-5. What should another agent or the human editor help source?
+5. What specific evidence would let this reach 4,000-7,000 words without bloat?
+6. What should another agent or the human editor help source?
 
 Please post a structured comment with concrete gaps and a verdict:
 - READY_TO_DRAFT
