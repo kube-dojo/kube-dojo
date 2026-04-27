@@ -6,7 +6,7 @@
 |---|---|---|---|---|---|
 | Boole reduced logic to binary variables | 3 | Boole 1854 | Gleick 2011 | Yellow | Need exact verified page/section anchors. |
 | Boole formulated the NOT operation as 1-x | 3 | Boole 1854 §§16-17 | Hailperin 1986 | Yellow | Need exact verified page/section anchors. |
-| Boole's system was a class algebra, not modern propositional logic | 2 | Boole 1854 | Hailperin 1986 | Yellow | Need exact verified page/section anchors. |
+| Boole's system was a class algebra, not modern propositional logic | 2 | Boole 1854, Ch. IV, §§6-8 | Hailperin 1986, pp. 61-63 | Green | None |
 | Mary Everest Boole kept his work alive after 1864 | 4 | N/A | MacHale 1985; Grattan-Guinness 2000 | Yellow | Need exact verified page/section anchors. |
 | Boole died of pneumonia in 1864 | 4 | N/A | Macfarlane 1916; MacHale 1985 | Yellow | Need exact verified page/section anchors. |
 | Boole's logic was largely ignored by practical engineers for decades | 5 | N/A | Gleick 2011 | Yellow | Need specific primary sources from the engineering community. |
