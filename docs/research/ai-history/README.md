@@ -10,6 +10,8 @@ This directory contains the operational research files for the definitive 68-cha
 
 All drafting is paused until chapter contracts are locked. 
 
+The team workflow is maintained in `TEAM_WORKFLOW.md`. It defines the gates between research contracts, gap analysis, anchor extraction, prose readiness, drafting, and cross-family review.
+
 ## Structure
 
 *   `source-catalog.md`: Shared bibliography for recurring sources (e.g., Hodges, Gleick, Dyson).
