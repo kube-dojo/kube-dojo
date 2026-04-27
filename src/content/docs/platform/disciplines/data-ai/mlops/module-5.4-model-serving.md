@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 5.4: Model Serving & Inference"
 slug: platform/disciplines/data-ai/mlops/module-5.4-model-serving
 sidebar:
