@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "GPU Nodes & Accelerated Computing"
 description: "Architecture, provisioning, and operational management of GPU resources in on-premises Kubernetes clusters using device plugins and operators."
 slug: on-premises/ai-ml-infrastructure/module-9.1-gpu-nodes-accelerated
