@@ -25,7 +25,8 @@
 - LT and GPS required a language/infrastructure for symbolic lists, memory references, goals, and expressions rather than ordinary numerical computation.
 - `P-868`, pp. 5-16 anchors the pseudo-code/interpretive-language requirement, symbols, memories, theorem/problem lists, instructions, and routines.
 - `P-1584`, p. 6 says realizing GPS-like programs was a major programming task and explicitly points to information-processing languages.
-- `IPL-V` and `Programming-LT` remain tractable follow-up sources for the implementation-specific story.
+- **IPL versioning fix (per Gemini gap audit 2026-04-27):** the LT JOHNNIAC implementation used the *early* IPL line — IPL-I (drafted 1956) and IPL-II (implemented on JOHNNIAC 1956-57), with IPL-III as the LT-era successor. The widely-cited `IPL-V` manual is *RAND P-1897, 1960*; using it as the implementation reference for the 1956-57 LT runtime is a technical anachronism that risks misrepresenting the extreme memory and instruction-set constraints under which LT actually ran. Sources.md `IPL-V` entry now flags this distinction; `IPL-I/II/III` is added as a separate Yellow primary-source row.
+- `Programming-LT` remains the tractable follow-up for the implementation-specific story.
 
 ### *Principia Mathematica*
 
@@ -39,9 +40,15 @@
 - `P-868`, p. 3 supports the broader fact that LT could be hand simulated, barely.
 - The specific Theorem 2.01/typewriter scene requires `Simon-Models` or another primary page anchor before prose drafting.
 
+### RAND-Carnegie Correspondence as Infrastructure (per Gemini gap audit 2026-04-27)
+
+- The two-node Newell-at-RAND / Simon-at-CIT collaboration was sustained by a steady flow of letters, memos, and technical drafts between Santa Monica and Pittsburgh.
+- This "paper trail" infrastructure is as load-bearing as the JOHNNIAC memory map: without the regular correspondence, neither the hand-trace specification nor the move from chess-machine reasoning to LT to GPS happens at the speed it did.
+- `CBI91` retrospectively confirms the bicoastal pattern but the correspondence itself sits in the RAND/CMU archives — Yellow worklist for any session with archival access.
+
 ## Infrastructure Lesson
 
-The infrastructure is not just the computer. It is the whole chain: a symbolic task domain; a paper-traceable specification; a pseudo-code/list-processing language; a machine with enough memory and speed; and a research program willing to treat program traces as evidence about human problem solving.
+The infrastructure is not just the computer. It is the whole chain: a symbolic task domain; a paper-traceable specification; a pseudo-code/list-processing language (and the *correct* IPL version for the date); a machine with enough memory and speed; and a research program willing to treat program traces as evidence about human problem solving — all sustained by the cross-coast correspondence that kept Newell and Simon working as one team.
 
 ## Claims to Keep Narrow
 

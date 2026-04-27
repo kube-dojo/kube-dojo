@@ -41,6 +41,10 @@ If the theorem-count, Theorem 2.85, and JSL rejection anchors remain Yellow, cap
 
 ## Citation Bar
 
-- Minimum primary sources before prose review: `P-868`, `P-1584`, `GPS61`, and one implementation source (`IPL-V` or "Programming the Logic Theory Machine") with page anchors.
+- Minimum primary sources before prose review: `P-868`, `P-1584`, `GPS61`, and one implementation source — `IPL-I/II/III` for the 1956-57 LT runtime (not `IPL-V` 1960), or "Programming the Logic Theory Machine" (`Programming-LT`) — with page anchors.
 - Minimum secondary/context sources before prose review: McCorduck, Crevier, Nilsson, and one critique or retrospective source on GPS's limits.
-- Current status: core LT representation and GPS means-ends architecture are Green from verified PDF page anchors. Exact theorem-count folklore, Theorem 2.85/JSL rejection, and typewriter-driven Theorem 2.01 remain Yellow until a primary page anchor is extracted.
+- Current status: core LT representation and GPS means-ends architecture are Green from verified PDF page anchors. Exact theorem-count folklore and typewriter-driven Theorem 2.01 remain Yellow until a primary page anchor is extracted. The Theorem 2.85/JSL rejection anecdote was demoted to Red 2026-04-27 per Gemini gap audit (the "Luddite establishment" framing is contested and primary-source-blocked).
+
+## Historiographic Axis (per Gemini gap audit 2026-04-27)
+
+The Performance-vs-Simulation tension should be surfaced explicitly: did GPS fail because it could not solve hard problems (Performance reading, Dreyfus 1972 trajectory) or succeed because it failed in the same way humans do (Simulation reading, the GPS61 protocol-data trajectory)? The chapter is more honest if it presents this as a structural debate than if it picks a side. Scene 5 carries this framing.
