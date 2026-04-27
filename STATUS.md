@@ -32,7 +32,7 @@
 **Cross-family review (gemini on codex)**: caught 3 must-fixes on the route changes — security route inversion (CKA→CKS→KCSA), redundant legacy sections, relative links. All applied in commit c3f114f7. Reinforced lessons #2 from v3 handoff: do NOT skip cross-family review even on "small" content changes.
 
 **Open for next session**:
-- **AI history book** — each agent populates their assigned chapter `brief.md` + `sources.md` (gemini ch1/6/8, claude ch2/3/4/9, codex ch5/7/10). Cross-family reviewer signs off on each contract before prose drafting starts.
+- **AI history book** — Chapter 1 prose drafting completed (2.8k-4k capacity plan met). Agents populate `brief.md` + `sources.md` for their assigned Parts (Gemini: Parts 1, 2, 6, 7; Claude: Parts 3, 9; Codex: Parts 4, 5, 8). Cross-family reviewer signs off on each contract before prose drafting starts.
 - **#246 still open** — 4 bridge pages (k8s→on-prem, k8s→platform, ai/ml→platform-data-ai, ai/ml→on-prem-ai-infra). Deferred this session because the design needs sidebar wiring + location decision (probably under each source track's `bridges/` subdir with new sidebar autogenerate entries).
 - **#392** What's New page refresh (codex's #2 priority after #388).
 - **#391** Public status page (depends on #389 quality board which is also open).

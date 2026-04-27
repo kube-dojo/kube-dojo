@@ -4,12 +4,12 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Hilbert posed the Entscheidungsproblem in 1928 | 1 | Hilbert & Ackermann 1928 | Hodges 1983 | Green | None |
-| Gödel proved incompleteness in 1931 | 1 | Gödel 1931 | Hodges 1983 | Green | None |
-| Church published lambda calculus prior to Turing | 2 | Church 1936 | Davis 2000 | Green | None |
-| Turing proposed the Universal Machine to solve it | 3, 4 | Turing 1936 | Hodges 1983 | Green | None |
-| Turing formalized the Halting Problem | 3 | Turing 1936 | Davis 2000 | Green | None |
-| Turing and Church collaborated at Princeton | 5 | N/A | Hodges 1983 | Green | None |
+| Hilbert posed the Entscheidungsproblem in 1928 | 1 | Hilbert & Ackermann 1928 | Hodges 1983 | Yellow | Need exact verified page/section anchors. |
+| Gödel proved incompleteness in 1931 | 1 | Gödel 1931 | Hodges 1983 | Yellow | Need exact verified page/section anchors. |
+| Church published lambda calculus prior to Turing | 2 | Church 1936 | Davis 2000 | Yellow | Need exact verified page/section anchors. |
+| Turing proposed the Universal Machine to solve it | 3, 4 | Turing 1936 | Hodges 1983 | Yellow | Need exact verified page/section anchors. |
+| Turing formalized the Halting Problem | 3 | Turing 1936 | Davis 2000 | Yellow | Need exact verified page/section anchors. |
+| Turing and Church collaborated at Princeton | 5 | N/A | Hodges 1983 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

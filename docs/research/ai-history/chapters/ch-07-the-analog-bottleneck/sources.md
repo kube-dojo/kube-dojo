@@ -4,14 +4,17 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| The tortoises exhibited complex behavior from 2 vacuum tubes | 1, 2 | Walter 1951, *A Machine That Learns* | [Boden 2006], p. 222 | Green | None |
-| Vacuum tubes presented physical scaling limitations for complex computing | 3 | Shannon 1953, "Computers and Automata" | [Boden 2006] | Green | Contemporary source confirming the failure rates and constraints of massive vacuum tube systems. |
+| The tortoises exhibited complex behavior from 2 vacuum tubes | 1, 2 | Walter 1950 (*An Imitation of Life*) | Holland 1997 | Yellow | Need exact verified page/section anchors. |
+| Walter's circuit diagrams prove the minimalist analog approach | 2 | Burden Neurological Institute Archives, "Circuit Diagrams for M. speculatrix, 1949" | Holland 1997 | Yellow | Need exact verified page/section anchors. |
+| The analog bottleneck forced a transition to digital logic | 4 | von Neumann 1952 | [Boden 2006] | Yellow | Need exact verified page/section anchors. |
+| Vacuum tubes presented physical scaling and reliability limitations | 3 | von Neumann 1952 (*Probabilistic Logics...*) | [Boden 2006] | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary
-- **Shannon, Claude E. "Computers and Automata." *Proceedings of the IRE* 41, no. 10 (1953): 1234-1241.**
-- **Walter, W. Grey. "A Machine That Learns." *Scientific American*, Vol. 185, No. 2. (August 1951).** [URL: https://www.scientificamerican.com/article/a-machine-that-learns/]
-- **Walter, W. Grey. *The Living Brain*. (1953).**
+- **Walter, W. Grey. "An Imitation of Life." *Scientific American* 182, no. 5 (1950).**
+- **von Neumann, John. "Probabilistic Logics and the Synthesis of Reliable Organisms from Unreliable Components." (Caltech lectures, Jan 1952).**
 
 ### Secondary
+- **Holland, Owen. "Grey Walter: The Pioneer of Real Artificial Life." *Proc. 5th Intl. Workshop on Artificial Life*, MIT Press, 1997.**
+- **Hayward, Rhodri. "The Tortoise and the Love-Machine." *Science in Context* 14(4), 2001.**
 - **[Boden 2006]** (See source-catalog.md)

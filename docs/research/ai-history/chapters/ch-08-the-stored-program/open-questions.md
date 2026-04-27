@@ -1,3 +1,3 @@
-# Open Questions: Chapter 8
+# Open Questions
 
-- What specific date did Goldstine mass-mail the EDVAC report without Eckert and Mauchly's names on the byline?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

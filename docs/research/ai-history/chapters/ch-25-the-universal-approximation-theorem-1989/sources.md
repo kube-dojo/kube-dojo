@@ -28,11 +28,11 @@
 
 | Claim | Scene | Primary Anchor | Secondary Anchor | Status | Notes |
 |---|---|---|---|---|---|
-| Cybenko proved a one-hidden-layer sigmoidal network family is dense enough to uniformly approximate continuous functions on compact/unit-hypercube domains under stated conditions. | Existence, Not Recipe | Cybenko 1989, pp.303, 306, 310, 313 | Pinkus 1999 | Green | Phrase with the actual mathematical conditions; do not say "any function" without qualifiers. |
-| Hornik/Stinchcombe/White and Funahashi published related 1989 universal-approximation results. | The 1989 Cluster | Hornik/Stinchcombe/White 1989; Funahashi 1989, pp.183-185, 191 | Pinkus 1999 | Yellow | Funahashi anchors are extracted; Hornik/Stinchcombe/White anchors still needed before making a full priority narrative. |
+| Cybenko proved a one-hidden-layer sigmoidal network family is dense enough to uniformly approximate continuous functions on compact/unit-hypercube domains under stated conditions. | Existence, Not Recipe | Cybenko 1989, 306, 310, 313 | Pinkus 1999 | Yellow | Phrase with the actual mathematical conditions; do not say "any function" without qualifiers. |
+| Hornik/Stinchcombe/White and Funahashi published related 1989 universal-approximation results. | The 1989 Cluster | Hornik/Stinchcombe/White 1989; Funahashi 1989, 191 | Pinkus 1999 | Yellow | Funahashi anchors are extracted; Hornik/Stinchcombe/White anchors still needed before making a full priority narrative. |
 | The theorem addressed representation capacity, not the ability to train a useful finite network from data. | A Useful Misunderstanding | Cybenko 1989 scope; Hornik/Stinchcombe/White 1989 scope | Pinkus 1999; Valiant 1984 context | Yellow | This is the chapter's most important caveat; source it tightly. |
 | The theorem mattered historically because it helped counter the perception that neural networks were intrinsically too weak after perceptron-era limitations. | The Aftertaste of Perceptrons | Cybenko references Minsky/Papert and PDP context | Ch17 research; Pinkus 1999 | Yellow | Needs cross-chapter anchor from Ch17. |
-| Universal approximation became a durable slogan that can mislead if detached from optimization, sample complexity, approximation rates, and compute. | A Useful Misunderstanding | The theorem papers' limited claims | Pinkus 1999; Barron 1993, pp.930-931; Leshno et al. 1993 | Yellow | Barron anchors efficiency/rate nuance; still need Pinkus/Leshno anchors for the broader slogan caveat. |
+| Universal approximation became a durable slogan that can mislead if detached from optimization, sample complexity, approximation rates, and compute. | A Useful Misunderstanding | The theorem papers' limited claims | Pinkus 1999; Barron 1993; Leshno et al. 1993 | Yellow | Barron anchors efficiency/rate nuance; still need Pinkus/Leshno anchors for the broader slogan caveat. |
 
 ## Conflict Notes
 

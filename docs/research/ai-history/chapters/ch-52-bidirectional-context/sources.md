@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Unidirectional models failed to capture deep context | 1 | Devlin et al. 2018 (BERT) | Jurafsky & Martin 2024 | Green | None |
-| BERT used Masked Language Modeling to train bidirectionally | 2 | Devlin et al. 2018 | Jurafsky & Martin 2024 | Green | None |
+| Unidirectional models failed to capture deep context | 1 | Devlin et al. 2018 (BERT) | Jurafsky & Martin 2024 | Yellow | Need exact verified page/section anchors. |
+| BERT used Masked Language Modeling to train bidirectionally | 2 | Devlin et al. 2018 | Jurafsky & Martin 2024 | Yellow | Need exact verified page/section anchors. |
 | Pre-training and fine-tuning became the dominant NLP paradigm | 3 | Devlin et al. 2018 | N/A | Yellow | Need a secondary source confirming the industry-wide shift. |
 
 ## Bibliography

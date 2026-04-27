@@ -1,1 +1,61 @@
-# Sources: Chapter 30
+# Sources: Chapter 30 - The Statistical Underground
+
+## Verification Legend
+
+- Green: source is strong enough for drafting the stated claim with recorded page anchors.
+- Yellow: source is relevant but needs another anchor, access check, or cautious wording.
+- Red: claim should remain out of prose until sourced.
+
+## Primary and Near-Primary Sources
+
+| Source | Use | Verification |
+|---|---|---|
+| Lalit R. Bahl, Frederick Jelinek, and Robert L. Mercer, ["A Maximum Likelihood Approach to Continuous Speech Recognition"](https://doi.org/10.1109/TPAMI.1983.4767370), *IEEE Transactions on Pattern Analysis and Machine Intelligence* PAMI-5(2), 179-190, 1983. Accessible PDF used for page extraction: https://www.cse.iitb.ac.in/~pb/cs626-2013/word-alignment/jelineck-speech-1983.pdf | Core IBM source for maximum-likelihood decoding, acoustic/language model decomposition, Markov sources, Viterbi/stack decoding, sparse-data parameter estimation, perplexity, and IBM task results. | Green. p.179 formulates speech recognition as maximum-likelihood decoding with statistical models and sparse-data parameter estimation; p.180 gives the Bayes decomposition into language-model probability and acoustic-channel probability; pp.180-183 build Markov-source language/acoustic models; p.183 describes Viterbi decoding; pp.184-185 describe graph/stack search; p.186 introduces parameter estimation from insufficient data and a trigram model for the IBM laser patent corpus based on 1.5 million words; p.188 defines perplexity and connects it to error rate; p.189 reports training-set effects, acoustic-model comparisons, and task results for CMU-AIX05, Raleigh, and Laser. |
+| Lawrence R. Rabiner, ["A Tutorial on Hidden Markov Models and Selected Applications in Speech Recognition"](https://www.cs.umb.edu/~rvetro/vetroBioComp/HMM/Rabiner1989%20A%20Tutorial%20on%20Hidden%20Markov%20Models%20and%20Selected%20Applications%20in%20Speech%20Recognition.pdf), *Proceedings of the IEEE* 77(2), 257-286, 1989. | Tutorial consolidation of HMM theory and speech-recognition applications. | Green. pp.257-258 (PDF pp.1-2) frame Markov-source/HMM statistical modeling as increasingly popular and practically effective, state that HMM theory and speech applications were not new, and trace the theory to Baum and colleagues; p.261 (PDF p.5) defines the three basic HMM problems: evaluation, uncovering state sequence, and parameter optimization; p.264 (PDF p.8) describes Viterbi for best-state-sequence decoding and Baum-Welch/EM for local likelihood maximization; pp.276-284 (PDF pp.20-28) cover speech-recognition use cases, large-vocabulary potential, and limitations including independence assumptions. |
+| Frederick Jelinek, ["Continuous Speech Recognition by Statistical Methods"](https://research.ibm.com/publications/continuous-speech-recognition-by-statistical-methods), *Proceedings of the IEEE* 64(4), 532-556, 1976. IBM Research publication page. | Bibliographic and abstract evidence for Jelinek's 1976 statistical-methods speech-recognition paper. | Yellow. IBM Research page confirms title, author, venue, date, IBM affiliation, and abstract: statistical methods for continuous speech recognition, speaker/acoustic-processor modeling, parameter extraction, hypothesis search, likelihood computation, and experimental results. A real full-paper PDF was not located during this pass; do not cite page-level claims from this source yet. |
+| Xuedong Huang, Hsiao-Wuen Hon, and Kai-Fu Lee, ["Large-Vocabulary Speaker-Independent Continuous Speech Recognition with Semi-Continuous Hidden Markov Models"](https://aclanthology.org/H89-2038.pdf), HLT 1989. | Evidence that HMM methods moved into CMU Sphinx-style large-vocabulary speaker-independent speech recognition. | Green. PDF p.1 states the semi-continuous HMM was applied to Sphinx, a speaker-independent continuous speech-recognition system, and reports error-rate reductions for a 1000-word task; PDF pp.3-4 describe Resource Management data, 4,358 training sentences from 105 speakers and 300 test sentences from 12 speakers, and compare semi-continuous, discrete, and continuous-mixture HMMs. |
+| Xuedong Huang, Fileno Alleva, Mei-Yuh Hwang, and Ronald Rosenfeld, ["An Overview of the SPHINX-II Speech Recognition System"](https://aclanthology.org/H93-1016.pdf), HLT 1993. | Evidence of statistical speech recognition becoming DARPA-evaluation infrastructure. | Green. PDF p.1 says SPHINX-II achieved the lowest error rate in the November 1992 DARPA evaluations and reduced 5000-word speaker-independent continuous-speech error to 5%; PDF p.5 discusses n-gram language modeling, N-best hypotheses, and acoustic/language model optimization; PDF p.6 reports application word-error rates and stress-test results. |
+| Peter F. Brown, John Cocke, Stephen A. Della Pietra, Vincent J. Della Pietra, Fredrick Jelinek, John D. Lafferty, Robert L. Mercer, and Paul S. Roossin, ["A Statistical Approach to Machine Translation"](https://aclanthology.org/J90-2002.pdf), *Computational Linguistics* 16(2), 79-85, 1990. | Spillover from IBM speech/statistical language modeling into statistical machine translation. | Green for spillover only. p.79 presents an IBM statistical approach to French-English machine translation, invokes Weaver/information-theoretic framing, and argues that earlier statistical approaches lacked machine-readable text and computing power; p.80 uses n-gram language models and notes their value in speech recognition; p.85 references Bahl/Jelinek/Mercer 1983 and Jelinek/Mercer sparse-data estimation. |
+| Peter F. Brown, Stephen A. Della Pietra, Vincent J. Della Pietra, and Robert L. Mercer, ["The Mathematics of Statistical Machine Translation: Parameter Estimation"](https://aclanthology.org/J93-2003.pdf), *Computational Linguistics* 19(2), 263-311, 1993. | Optional closing evidence for the IBM probabilistic style moving from speech to bilingual text alignment and parameter estimation. | Green for closing context. p.263 describes five statistical translation models, parameter-estimation algorithms from sentence pairs, word-by-word alignment, and minimal linguistic content; p.264 outlines the statistical approach, terminology, and data-estimation agenda. |
+
+## Secondary / Context Sources
+
+| Source | Use | Verification |
+|---|---|---|
+| Frederick Jelinek, *Statistical Methods for Speech Recognition*, MIT Press, 1997/1998; MIT Press page: https://mitpress.mit.edu/9780262100663/statistical-methods-for-speech-recognition/ | Retrospective context on the field's statistical foundations. | Yellow. MIT Press page gives bibliographic facts and description of HMMs, EM, information-theoretic criteria, maximum entropy, clustering, smoothing, and self-organization from real data. Do not use for exact historical claims unless page anchors are added from the book. |
+| Reddy et al. / ARPA speech-understanding context in the 1976 *Proceedings of the IEEE* speech-recognition issue. Local downloaded PDF during research was a Reddy survey, not Jelinek 1976. | Background contrast for earlier speech-understanding systems. | Yellow. Useful only if a reviewer asks for ARPA/SUR contrast. Current Ch30 can stand without this source because Bahl/Jelinek/Mercer and Sphinx anchors already carry the statistical story. |
+
+## Scene-Level Claim Table
+
+| Claim | Scene | Anchor | Status | Notes |
+|---|---|---|---|---|
+| Jelinek's 1976 IBM paper had already framed continuous speech recognition as a statistical-methods problem. | Speech After the Rule Boom | IBM Research page abstract for Jelinek 1976 | Yellow | Bibliographic/abstract use only; no page-level claims until a full paper is located. |
+| IBM statistical speech recognition framed continuous speech recognition as maximum-likelihood decoding over word strings, requiring statistical models of speech production. | Noisy-Channel Decomposition | Bahl/Jelinek/Mercer 1983 p.179 | Green | Core thesis anchor. |
+| The recognizer decomposed the problem into a language-model prior and an acoustic-channel likelihood. | Noisy-Channel Decomposition | Bahl/Jelinek/Mercer 1983 p.180 | Green | Use notation only lightly in prose; explain historically. |
+| Markov-source models supplied a tractable representation for text/language and acoustic-channel components. | Markov Models Make Search Possible | Bahl/Jelinek/Mercer 1983 pp.180-183 | Green | Avoid saying all speech recognition was HMM-only at this point. |
+| Viterbi-style dynamic programming and stack/graph search made decoding through the hypothesis space operational. | Markov Models Make Search Possible | Bahl/Jelinek/Mercer 1983 pp.183-185; Rabiner 1989 PDF p.8 | Green | Good place to explain search without deriving it. |
+| Sparse data forced interpolation/smoothing and automatic parameter-estimation machinery. | Sparse Data Becomes Enemy | Bahl/Jelinek/Mercer 1983 p.186; p.190 references Jelinek/Mercer 1980 sparse-data estimation | Green | Do not overstate the 1980 paper unless located; cite it through the 1983 reference only. |
+| Perplexity made task difficulty measurable beyond vocabulary size and correlated with error rate in their reported experiments. | Sparse Data Becomes Enemy | Bahl/Jelinek/Mercer 1983 pp.188-189 | Green | Phrase carefully as their reported results, not a universal law. |
+| HMMs were not invented for speech recognition; by 1989, Rabiner could present them as a mature mathematical toolkit whose speech use had grown because it worked in practice. | HMMs Become Toolkit | Rabiner 1989 PDF pp.1-2 | Green | Important anti-fabrication guardrail. |
+| HMM practice rested on three operational problems: evaluation, state-sequence decoding, and training/parameter adjustment. | HMMs Become Toolkit | Rabiner 1989 PDF p.5; PDF p.8 | Green | Use as explanatory scaffolding. |
+| HMMs had limitations, including independence assumptions for successive speech frames. | HMMs Become Toolkit | Rabiner 1989 PDF p.28 | Green | Needed for honest prose. |
+| CMU Sphinx shows statistical/HMM recognition becoming a larger-vocabulary, speaker-independent benchmark program. | From IBM to Sphinx | Huang/Hon/Lee 1989 PDF pp.1, 3-4; Huang/Alleva/Hwang/Rosenfeld 1993 PDF p.1 | Green | Avoid saying Sphinx was directly descended from IBM unless a source says so. It is evidence of field diffusion. |
+| IBM's statistical-language culture spilled into statistical machine translation by modeling translation probabilistically and estimating from bilingual corpora. | Statistical NLP Spillover | Brown et al. 1990 pp.79-80; Brown et al. 1993 pp.263-264 | Green | Closing bridge, not the main chapter. |
+| Jelinek's "every time I fire a linguist" quote proves the field rejected linguistics. | Any | None | Red | Exclude until an exact primary or near-primary source is found; even then, contextualize as anecdote, not proof. |
+
+## Conflict Notes
+
+- Do not claim the IBM group solved unrestricted speech understanding. Bahl/Jelinek/Mercer 1983 reports constrained experimental tasks and single-talker / task-specific restrictions.
+- Do not turn Jelinek into a lone inventor. The verified sources name Bahl, Mercer, Bakis, Baker, Brown, the Della Pietras, Lafferty, Roukos, Sphinx researchers, and Baum's mathematical lineage.
+- Do not cite Jelinek 1976 page numbers. A source search located IBM's publication page and a Reddy PDF from the same issue, but not the Jelinek article itself.
+- Do not claim that HMMs were perfect. Rabiner 1989 gives usable limitation anchors.
+- Do not present statistical machine translation as the main body of Ch30. Use it as a final bridge showing that the speech-recognition statistical style spread into language.
+
+## Page Anchor Worklist
+
+- Resolved: Bahl/Jelinek/Mercer 1983 full PDF extracted and anchored.
+- Resolved: Rabiner 1989 full PDF extracted and anchored.
+- Resolved: Sphinx 1989/1993 ACL PDFs extracted and anchored.
+- Resolved: Brown et al. 1990/1993 ACL PDFs extracted and anchored for closing spillover.
+- Missing: full Jelinek 1976 PDF with pages 532-556. Current IBM page is bibliographic/abstract evidence only.
+- Optional: locate Jelinek/Mercer 1980 "Interpolated estimation of Markov source parameters from sparse data" if the prose needs more than a compact sparse-data section.

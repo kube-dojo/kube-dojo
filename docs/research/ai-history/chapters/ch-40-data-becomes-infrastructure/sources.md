@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| ImageNet was built using WordNet as its semantic ontology | 2 | Deng et al. 2009 (ImageNet paper) | Gershgorn 2017 | Green | None |
-| Fei-Fei Li used MTurk to label millions of images, creating unprecedented scale | 3 | Deng et al. 2009 | Fei-Fei Li, *The Worlds I See* (2023) | Green | None |
+| ImageNet was built using WordNet as its semantic ontology | 2 | Deng et al. 2009 (ImageNet paper) | Gershgorn 2017 | Yellow | Need exact verified page/section anchors. |
+| Fei-Fei Li used MTurk to label millions of images, creating unprecedented scale | 3 | Deng et al. 2009 | Fei-Fei Li, *The Worlds I See* (2023) | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

@@ -1,3 +1,3 @@
 # Open Questions
 
-- None. Archival anchors extracted and verified.
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.
