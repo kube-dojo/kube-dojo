@@ -52,3 +52,11 @@ If the Russell anecdote, exact first interpreter chronology, and S-expression ad
 ## Historiographic Axis
 
 The chapter should surface a Tool-vs.-Theory tension. One reading treats LISP as an elegant mathematical notation for recursive symbolic functions. Another treats it as the practical workshop that let AI researchers build, inspect, and mutate symbolic structures. The chapter should not choose one against the other. LISP's historical force is that the notation and the workshop became the same thing.
+
+## Additional Framing Constraints (per Gemini gap audit 2026-04-27)
+
+- **The "Purely Functional" myth.** LISP 1.5 included `prog`, `setq`, and property-list mutation. Adopting a modern "LISP as pure functional language" lens without naming these imperative escapes is a retrospective projection. Scene 5 must mention them explicitly.
+- **The "REPL" anachronism.** Use READ / EVAL / PRINT cycle as the period-accurate phrase. The acronym "REPL" is later usage; do not let it leak into prose framing the LISP 1.5 environment.
+- **The "LISP is Math" trap.** `car` and `cdr` are direct artifacts of the IBM 704's *Contents of Address Register* and *Contents of Decrement Register* opcodes. LISP is machine-derived math, not Platonic discovery. Guard against the Graham-esque "LISP was discovered" framing.
+- **The Advice Taker motivation.** McCarthy's "Programs with Common Sense" (1959, already cross-linked from Ch11) supplied the *requirements* for LISP — predicate-calculus representation, M-expressions as a logic language for commonsense reasoning. Scene 1 should connect the *need* (Advice Taker) to the *creation* (LISP), not present LISP as design-internal.
+- **The IBM 704 cultural tension.** A machine designed for numerical simulation was repurposed for symbolic work. The FORTRAN group's disinterest in symbolic manipulation is the foil for LISP's birth, not just background.
