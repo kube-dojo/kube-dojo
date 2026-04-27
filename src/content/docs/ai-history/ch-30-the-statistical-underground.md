@@ -73,12 +73,11 @@ processor, parameter extraction, hypothesis search, and likelihood
 computation. The mature version of that program appears most clearly in the
 1983 paper by Bahl, Jelinek, and Mercer.
 
-The stronger anchor comes from Bahl, Jelinek, and Mercer's 1983 paper. Its
-opening formulation is direct: speech recognition is treated as maximum
-likelihood decoding. That sentence matters because it changes the object of the
-problem. The recognizer is not asked to produce a hand-built explanation of a
-sentence. It is asked to choose the word string that best accounts for the
-observed evidence under statistical models.
+Bahl, Jelinek, and Mercer's 1983 paper made the formulation direct: speech
+recognition is treated as maximum likelihood decoding. That sentence matters
+because it changes the object of the problem. The recognizer is not asked to
+produce a hand-built explanation of a sentence. It is asked to choose the word
+string that best accounts for the observed evidence under statistical models.
 
 This was a disciplined narrowing. The paper distinguishes isolated word
 recognition from continuous speech recognition. It notes that experimental
@@ -102,12 +101,6 @@ part of the system. The contrast was not "linguistics versus no linguistics."
 The contrast was between a hand-authored understanding machine and a
 probabilistic recognizer that could assign likelihoods, search, and improve
 from data.
-
-That distinction matters because a famous Jelinek anecdote is often used as a
-shortcut for this era. The line about firing a linguist is not used here. It is
-too easy for that quote to turn a technical history into folklore. The verified
-story is better without it: IBM's speech researchers treated uncertainty as a
-modeling problem and built a machinery of probabilities around it.
 
 ## The Noisy-Channel Contract
 
@@ -200,13 +193,12 @@ the acoustic channel. Word models, phonetic subsources, and acoustic subsources
 can be embedded in larger structures. The whole apparatus is a way of making
 sequence generation probabilistic and finite enough to compute.
 
-This is where the history can become too mathematical if handled carelessly.
-The important point is not the full formalism. The important point is that a
-speech recognizer needs to search over many possible hidden explanations for
-the observed evidence. A sequence of acoustic observations may correspond to
-many paths through a model. A word string may have many possible pronunciations
-and alignments. The recognizer needs a best path or a best string without
-brute-forcing everything.
+The mathematical formalism of Markov sources is extensive, but the historical
+shift is simpler. A speech recognizer needs to search over many possible hidden
+explanations for the observed evidence. A sequence of acoustic observations may
+correspond to many paths through a model. A word string may have many possible
+pronunciations and alignments. The recognizer needs a best path or a best
+string without brute-forcing everything.
 
 Bahl, Jelinek, and Mercer discuss dynamic programming through the Viterbi
 algorithm. The Viterbi idea is to keep the best partial path to each state as
