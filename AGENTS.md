@@ -40,11 +40,9 @@ If the API is down, fall back to `STATUS.md` + `CLAUDE.md`.
 
 ### Book-only AI History PR exception
 
-For PRs that only touch AI History book/research material and do not affect executable code, generated state, or the published Astro site, do **not** run the expensive curriculum pipeline gate. These PRs include changes limited to:
+For PRs that only touch AI History book/research material and do not affect executable code, generated state, or the published Astro site, do **not** run the expensive curriculum pipeline gate. These PRs include changes strictly limited to:
 
-- `docs/research/ai-history/**`
-- AI History narrative/research markdown drafts
-- AI History workflow or coordination docs
+- `docs/research/ai-history/**` (including all narrative drafts, workflow, and coordination docs within this path)
 
 Required checks for these book-only PRs are:
 
@@ -52,7 +50,6 @@ Required checks for these book-only PRs are:
 - [ ] cross-family review posted as a PR comment
 - [ ] no generated artifacts included
 - [ ] primary repo remains on `main`
-- [ ] `npm run build` only if the PR touches `src/content/docs/` or Astro config
 
 Skip `.venv/bin/python scripts/test_pipeline.py` for this category. That test suite validates the curriculum pipeline and has low signal for unpublished book research while consuming substantial local and model resources. If a book PR also changes Python, scripts, pipeline behavior, `src/content/docs/`, Astro config, or shared tooling, this exception does not apply and the full checklist above is required.
 
