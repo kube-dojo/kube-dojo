@@ -1,9 +1,12 @@
 ---
 title: "Chapter 24: The Math That Waited for the Machine"
+description: "How backpropagation turned the chain rule into executable infrastructure for training hidden layers."
 slug: ai-history/ch-24-the-math-that-waited-for-the-machine
 sidebar:
   order: 24
 ---
+
+# Chapter 24: The Math That Waited for the Machine
 
 Backpropagation is often told as a sudden rediscovery of neural networks: the
 moment when the old perceptron story ended and multilayer learning began. That
@@ -31,6 +34,11 @@ did not make neural networks large by modern standards. It did not make them
 biologically settled. It did not make training easy. But it made hidden
 representation learning executable, and that was enough to reopen a path that
 had looked blocked.
+
+> [!note] Pedagogical Insight: The Chain Rule as Infrastructure
+> Backpropagation was not a new calculus. Its practical force came from turning
+> the chain rule into a reusable procedure that could assign error signals to
+> hidden weights across a layered network.
 
 ## The Frozen Hidden Layer
 
@@ -423,7 +431,9 @@ That is the reason backpropagation became one of the central infrastructures of
 modern AI. It was not a magic spark. It was a disciplined way to make the chain
 rule do industrial work.
 
-## Source Notes
+## Sources
+
+### Primary
 
 - Rumelhart, Hinton, and Williams, ["Learning representations by
   back-propagating errors"](https://www.nature.com/articles/323533a0),
@@ -438,12 +448,21 @@ rule do industrial work.
   Harvard PhD thesis (1974/1975): earlier backward derivative machinery and
   ordered derivative recurrence. The text makes no direct-transmission claim to
   the 1986 PDP work.
+- Francis Crick, ["The recent excitement about neural
+  networks"](https://www.nature.com/articles/337129a0), *Nature* 337, 129-132
+  (1989): article-level anchor for contemporary caution about biological
+  realism. Detailed internal claims require full text access.
+
+### Secondary
+
 - Andreas Griewank, ["Who Invented the Reverse Mode of
   Differentiation?"](https://ems.press/books/dms/251/4949), *Documenta
   Mathematica* (2012): reverse-mode automatic-differentiation history,
   Linnainmaa context, adjoints, cheap gradients, and memory/checkpointing
   concerns.
-- Francis Crick, ["The recent excitement about neural
-  networks"](https://www.nature.com/articles/337129a0), *Nature* 337, 129-132
-  (1989): article-level anchor for contemporary caution about biological
-  realism. Detailed internal claims require full text access.
+
+> [!note] Honesty Over Output
+> The evidence supports a convergence story, not a single-inventor story. The
+> account separates older reverse-mode derivative work, Werbos's trainable
+> systems thesis, and the 1986 PDP demonstration instead of collapsing them into
+> one origin myth.
