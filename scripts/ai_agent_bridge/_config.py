@@ -30,6 +30,12 @@ CLAUDE_CMD = ["npx", "@anthropic-ai/claude-code@latest"]
 GEMINI_CLI = shutil.which("gemini") or "gemini"
 CODEX_CLI = shutil.which("codex") or "codex"
 CLAUDE_DEFAULT_MODEL = os.environ.get("AB_CLAUDE_MODEL", "claude-opus-4-7")
+GEMINI_REVIEW_MODEL = os.environ.get(
+    "AB_GEMINI_REVIEW_MODEL", "gemini-3.1-pro-preview"
+)
+GEMINI_FALLBACK_MODEL = os.environ.get(
+    "AB_GEMINI_FALLBACK_MODEL", "gemini-3-flash-preview"
+)
 GEMINI_DEFAULT_MODEL = os.environ.get("AB_GEMINI_MODEL", "")
 if not GEMINI_DEFAULT_MODEL:
     try:
@@ -37,7 +43,7 @@ if not GEMINI_DEFAULT_MODEL:
 
         GEMINI_DEFAULT_MODEL = FLASH_MODEL
     except ImportError:
-        GEMINI_DEFAULT_MODEL = "gemini-2.0-flash"
+        GEMINI_DEFAULT_MODEL = GEMINI_FALLBACK_MODEL
 
 # Snapshot environment for passing to detached children
 # Set GEMINI_SESSION so .bashrc disables hostile aliases (eza, bat, zoxide)

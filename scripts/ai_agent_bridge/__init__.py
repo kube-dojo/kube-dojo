@@ -11,7 +11,9 @@ Configuration:
 - ``AB_WAKE_DIR``: defaults to ``{REPO_ROOT}/.agent/wake``.
 - ``AB_MONITOR_URL``: defaults to empty string (Monitor API disabled).
 - ``AB_GEMINI_MODEL``: defaults to ``batch_gemini_config.FLASH_MODEL`` when importable,
-  else ``gemini-2.0-flash``.
+  else ``gemini-3-flash-preview``.
+- ``AB_GEMINI_REVIEW_MODEL``: defaults to ``gemini-3.1-pro-preview``.
+- ``AB_GEMINI_FALLBACK_MODEL``: defaults to ``gemini-3-flash-preview``.
 - ``AB_PIPELINE_ENV_KEY``: defaults to ``LEARN_UKRAINIAN_PIPELINE``.
 
 All public functions are re-exported here for backward compatibility.
@@ -39,6 +41,8 @@ from ._config import (
     DB_PATH,
     GEMINI_CLI,
     GEMINI_DEFAULT_MODEL,
+    GEMINI_FALLBACK_MODEL,
+    GEMINI_REVIEW_MODEL,
     GH_CHAR_LIMIT,
     PID_DIR,
     REPO_ROOT,
@@ -73,6 +77,8 @@ __all__ = [
     "DB_PATH",
     "GEMINI_CLI",
     "GEMINI_DEFAULT_MODEL",
+    "GEMINI_FALLBACK_MODEL",
+    "GEMINI_REVIEW_MODEL",
     "GH_CHAR_LIMIT",
     "PID_DIR",
     "REPO_ROOT",
