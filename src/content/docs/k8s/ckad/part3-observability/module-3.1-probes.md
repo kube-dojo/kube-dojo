@@ -1,5 +1,4 @@
 ---
-qa_pending: true
 title: "Module 3.1: Application Probes"
 slug: k8s/ckad/part3-observability/module-3.1-probes
 sidebar:
