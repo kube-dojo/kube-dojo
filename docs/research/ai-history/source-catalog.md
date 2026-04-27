@@ -1,31 +1,18 @@
-# Cross-chapter source catalog
+# Central Source Catalog
 
-Sources cited in 2+ chapters. Per-chapter sources go in `chapters/ch-NN-slug/sources.md`.
+This catalog contains recurring secondary and primary sources referenced across multiple chapters in the AI History Epic. Individual chapters reference these by shortname in their `sources.md` matrices.
 
-When you add a source here, **link from the per-chapter `sources.md`** with the catalog ID rather than re-annotating.
+## Shared Bibliography
 
-## Format
-
-```
-### [CAT-NN] Author — "Title" — Year — Type
-
-- **URL / DOI:** ...
-- **Type:** primary | secondary | retrospective | tertiary
-- **Verification:** Green / Yellow / Red
-- **Used by chapters:** 1, 5, 7
-- **Key claims it supports:** ...
-- **Conflicts with:** [CAT-NN] (note nature of disagreement)
-- **Notes:** access constraints, paywalls, archival URL, citation bar this source meets
-```
-
-## Catalog
-
-_to be populated as cross-chapter sources are identified during research_
-
-### [CAT-01] _placeholder_
-
-- **URL / DOI:** TBD
-- **Type:** TBD
-- **Verification:** TBD
-- **Used by chapters:** TBD
-- **Notes:** First entry will land when chapter 1 (Gemini) and chapter 2 (Claude) overlap on Dartmouth coverage.
+- **[Gleick 2011]** Gleick, James. *The Information: A History, a Theory, a Flood*. Pantheon, 2011.
+  - Used in: Ch01 (Boole), Ch03 (Shannon), Ch04 (Markov).
+- **[Hodges 1983]** Hodges, Andrew. *Alan Turing: The Enigma*. Burnett Books, 1983.
+  - Used in: Ch02 (Universal Machine), Ch10 (Imitation Game).
+- **[Dyson 2012]** Dyson, George. *Turing's Cathedral: The Origins of the Digital Universe*. Pantheon, 2012.
+  - Used in: Ch08 (Stored Program).
+- **[Kline 2015]** Kline, Ronald R. *The Cybernetics Moment: Or Why We Call Our Age the Information Age*. Johns Hopkins University Press, 2015.
+  - Used in: Ch06 (Cybernetics).
+- **[Boden 2006]** Boden, Margaret A. *Mind as Machine: A History of Cognitive Science*. Oxford University Press, 2006.
+  - Used in: Ch07 (Analog Bottleneck).
+- **[Ceruzzi 2003]** Ceruzzi, Paul E. *A History of Modern Computing*. MIT Press, 2003.
+  - Used in: Ch09 (Memory Miracle).

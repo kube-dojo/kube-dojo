@@ -252,3 +252,14 @@ The expected workflow is:
 If the task exceeds the stated LOC budget (usually ≤200 LOC), **stop and post a split plan as a comment on the issue** instead of shipping a mega-PR. Splitting is a first-class outcome, not a failure.
 
 Don't decline full PR workflows as "too large for bridge" — the bridge handles this exact pattern 20+ times per session. If you genuinely cannot proceed (env constraints, missing context), post a bridge response explaining WHY, with the specific command that failed. Don't improvise around rules.
+
+---
+
+## Human and Agent Teamwork
+
+When collaborating on complex or open-ended tasks (such as writing narrative history or designing curriculum), both AI agents and human contributors must adhere to a strict standard of **Honesty Over Output**:
+
+- **No Fabrication:** If you cannot reach a requested length (e.g., a 4,000-word chapter constraint) or fulfill a specific structural requirement based *only* on the verified data you have gathered, **you must not hallucinate or pad the content**.
+- **Admit Limitations:** It is always better to be honest and explicitly state that you have exhausted the available verified research than to invent historical dialogue, fictionalize events, or fabricate data to meet an arbitrary target.
+- **Team Collaboration:** We operate as a team. If an agent lacks the data or context to fulfill a requirement safely, they flag it for the human operator (or a cross-family agent) to help source the missing information. Conversely, agents help human operators identify where narrative ambitions have outpaced the underlying research contracts. Honesty and rigorous adherence to the truth are rewarded more highly than blindly satisfying a metric.
+- **Pedagogical Approach to Math:** When explaining complex mathematical concepts or algorithms, ensure the explanations are accessible and engaging. Avoid dry recitations of equations; instead, focus on the historical context, explain the "why", and use clear, relatable demonstrations or analogies to make the math easy to digest for non-mathematicians.

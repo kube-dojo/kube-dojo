@@ -1219,7 +1219,7 @@ Success criteria:
 
 ## Next Module
 
-Continue to [Module 1.3: CI/CD for AI/ML Development](./module-1.3-ci-cd-for-ai-ml-development.md) to turn reproducible containers into tested, versioned, and deployable ML delivery pipelines.
+Continue to [Module 1.3: CI/CD for AI/ML Development](./module-1.3-ci-cd-for-ai-ml-development/) to turn reproducible containers into tested, versioned, and deployable ML delivery pipelines.
 
 ## Sources
 

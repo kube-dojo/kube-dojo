@@ -769,7 +769,7 @@ python validate_prompt_response.py
 
 ## Next Module
 
-Next, continue to [Module 1.7: AI-Powered Code Generation](./module-1.7-ai-powered-code-generation.md), where you will apply prompt design to code generation workflows, review generated changes, and build stronger feedback loops between AI assistance and ordinary engineering verification.
+Next, continue to [Module 1.7: AI-Powered Code Generation](./module-1.7-ai-powered-code-generation/), where you will apply prompt design to code generation workflows, review generated changes, and build stronger feedback loops between AI assistance and ordinary engineering verification.
 
 ---
 

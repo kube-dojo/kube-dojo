@@ -587,4 +587,4 @@ If you complete the exercise well, you should have more than working code. You s
 
 ## Next Module
 
-Continue to [Module 1.10: AI-Native Testing and Review Workflows](./module-1.10-ai-native-testing-and-review-workflows.md).
+Continue to [Module 1.10: AI-Native Testing and Review Workflows](./module-1.10-ai-native-testing-and-review-workflows/).

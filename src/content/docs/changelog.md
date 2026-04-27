@@ -25,8 +25,8 @@ Hub pages were rewritten as **route guides** instead of catalogs (#246):
 - The Platform hub gained a "Common Entry Mistakes" callout that the earlier rewrite had dropped
 - New bridge pages help learners cross between tracks: K8s → On-Prem, K8s → Platform Engineering, AI/ML → AI Platform Engineering, AI/ML → Private AI Infrastructure (also part of #246)
 
-### AI History Book — Planning Locked
-A multi-agent narrative AI history book is in planning (#394). Ten chapters, infrastructure-history angle (Chip Wars in tone), strict sourcing standard (≥ 2 independent sources per scene-level passage). Module 1.1 of the AI/ML Engineering history section stays untouched as the technical-timeline appendix; the book is greenfield. Research wiki scaffolded at `docs/research/ai-history/` with per-chapter brief / sources / timeline / people / infrastructure-log / scene-sketches templates.
+### AI History Book — 68-Chapter Expansion & First Drafts
+The AI History Book epic (#394) has been expanded into a definitive 68-chapter roadmap, intertwining infrastructural milestones with critical mathematical breakthroughs (from Boole and Markov to Backpropagation and PageRank). The rigorous KubeDojo sourcing standard (claim-level matrices, primary/secondary confirmation) has been applied to Parts 1, 2, and 6. The first 10 chapters (Parts 1 and 2)—covering from George Boole's algebra to Turing's Imitation Game—as well as the entirety of Part 6 (Chapters 32-40, focusing on the Rise of Data and Distributed Compute) have been drafted as the "Golden Standard" for the book's narrative tone.
 
 ### Internal Reliability Improvements
 - Atomic-drain pattern documented for the quality pipeline — the deferred-review queue and the rewrite batch race when run concurrently, so they now alternate

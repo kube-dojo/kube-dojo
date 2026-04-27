@@ -2055,4 +2055,4 @@ Consider NCCL timeout environment variables only after validating basic shared m
 
 ## Next Module
 
-Next: [Module 9.4: GPU Observability and Cost Control](./module-9.4-gpu-observability-cost-control.md)
+Next: [Module 9.4: GPU Observability and Cost Control](./module-9.4-gpu-observability-cost-control/)
