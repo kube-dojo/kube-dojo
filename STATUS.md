@@ -2,7 +2,37 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-26 ~20:15 local — v4 handoff: bridges + drain-fix + What's New shipped)
+## Active Work (2026-04-27 evening — Part 3 dual-reviewed pipeline + ownership rebalance)
+
+**Branch**: `claude/394-part3-symbolic-ai` → `epic/394-ai-history` via PR **#419** (latest commit `a3e227ae`).
+
+**This session's deliverables**:
+- **Ch11 (Summer AI Named Itself)** — already at `capacity_plan_anchored` from last session; today closed out two tractable anchor-upgrade leads as dead-ends (world.std.com mirror is HTTP 404; McCarthy whatisai retrospective contains no naming-decision passage on the 6 real subpages; 7-15 are 404). Documented in `chapters/ch-11-the-summer-ai-named-itself/sources.md` so future sessions don't re-investigate. 13 G / 12 Y / 1 R.
+- **Ch12 (Logic Theorist & GPS)** — full 8-file contract drafted today by Codex (gpt-5.5, sandbox=workspace-write) and dual-cross-family-reviewed. 14 G / 4 Y / 4 R. Codex authored, Gemini gap-audited (4 must-fixes, 4 should-adds, 3 framing notes, 1 Yellow→Red — Theorem 2.85/JSL anecdote), Claude integrated with hallucination filter. `capacity_plan_anchored`. Pending only human final pass before drafting unlocks. Commits: `8898e30b` (Codex draft) + `a3e227ae` (Gemini integration).
+- **Ch13 (LISP / The List Processor)** — Codex draft dispatch running in background as of evening; same pattern as Ch12. Codex sandbox blocks `curl` (DNS); he extracts anchors from browser-accessible PDF text (CMU/iiif, gwern, conservancy.umn.edu). Will need Gemini gap audit + Claude integration on landing.
+- **Part ownership rebalance — refined split**:
+  - Claude: Research contracts for Parts 1, 2, 3, 6, 7, 9. Prose drafting for Part 9. Prose expansion for Parts 1, 2, 3, 6, 7. Integration + dual verdict.
+  - Codex: Research contracts for Parts 4, 5, 8. Anchor extraction helper on scanned/old PDFs. Prose drafting for Parts 4, 5, 8. First-pass prose for Part 3.
+  - Gemini: Gap analysis on every chapter (core strength, no fabrication risk). First-pass prose for Parts 1, 2, 6, 7.
+- **`/api/briefing/book` endpoint** added to `scripts/local_api.py` — scans all 68 `chapters/ch-NN-*/status.yaml`, groups into 9 Parts, returns rollup with Green/Yellow/Red counts. 4 tests passing. Schema entry added. **Local commit `6c97456d` on `main` not yet pushed; live local_api at PID 34519 not yet restarted — both awaiting human nod.**
+- **AI history README** rebalanced — Status Board explains the 3-3-3 routing rationale, per-chapter live snapshot table added, source-of-truth pointer table added.
+
+**Reusable patterns confirmed this session**:
+1. **Per-chapter contract pipeline**: Codex (`codex exec` workspace-write -m gpt-5.5 -c model_reasoning_effort=high) drafts the full 8-file wiki via PDF text extraction → Gemini gap-audits via bridge `ask-gemini` (NO page anchors per hallucination filter) → Claude integrates inline → commit. Wall: ~30-60 min Codex + ~30s Gemini + ~5 min Claude integration = ~1 hr per chapter contract.
+2. **Codex sandbox limit**: workspace-write blocks external DNS (`curl` fails). PDF text extraction via the iiif/gwern/etc. paths still works through Codex's browser. Document this in the sources.md preamble so reviewers know what was verified vs what was archive-blocked.
+3. **Codex commit limitation**: workspace-write blocks `.git/worktrees/<name>/index.lock` writes — Codex cannot self-commit on a worktree branch. Claude commits on his behalf.
+
+**Open for next session**:
+- **Ch13 integration** (when Codex draft lands) — Gemini gap audit + Claude integrate + commit + push.
+- **Ch14, Ch15, Ch16** — same pipeline. Once those four hit `capacity_plan_anchored`, all 6 Part 3 chapters are contract-ready and prose drafting can unlock chapter-by-chapter as user accepts.
+- **#421 Gemini anchor cleanup** — Gemini committed via bridge ACK to prioritize this. Affects his Parts 1, 2, 6 Status Board state.
+- **Codex on Parts 4 + 8** — paced; he'll start when he's ready (he ACKed on bridge "I'm not starting execution from this broker reply").
+- **Push main commit `6c97456d`** + restart local_api (PID 34519) — once human nods.
+- **#388 batch** — still alive (PID `cat logs/quality/batch.pid`), not the focus this session.
+
+---
+
+## Prior — 2026-04-26 ~20:15 local — v4 handoff: bridges + drain-fix + What's New shipped
 
 **Latest handoff**: [`docs/sessions/2026-04-26-388-handoff-v4.md`](docs/sessions/2026-04-26-388-handoff-v4.md)
 **Prior handoff**: [`docs/sessions/2026-04-26-388-handoff-v3.md`](docs/sessions/2026-04-26-388-handoff-v3.md)
