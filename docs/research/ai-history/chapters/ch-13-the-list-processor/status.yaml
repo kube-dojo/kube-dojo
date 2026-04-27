@@ -2,16 +2,33 @@ status: capacity_plan_anchored
 owner: Codex
 part: 3
 chapter: 13
-review_state: codex_initial_draft_2026-04-27
+review_state: codex_initial_draft_2026-04-27;gemini_gap_audit_integrated_2026-04-27
 last_updated: 2026-04-27
 green_claims: 15
-yellow_claims: 7
-red_claims: 5
+yellow_claims: 6
+red_claims: 7
 notes: |
-  Full 8-file contract drafted for Chapter 13. Green anchors cover AIM-001 for FLPL/FORTRAN boundary, IBM 704 context, S-expressions, M-expressions, lambda, recursion, conditionals, free storage, and early list operations; LISP 1.5 manual for implementer credits, expression syntax, functions, eval, read/evaluate/print console behavior, garbage collection, FEXPRs, and macros; and Ch12 contract files for the IPL-before-LISP boundary.
+  Full 8-file contract drafted for Chapter 13. Green anchors cover AIM-001 for FLPL/FORTRAN boundary, IBM 704 context, S-expressions, M-expressions, lambda, recursion, conditionals, free storage, and early list operations; LISP 1.5 manual for implementer credits, expression syntax, functions, eval, READ/EVAL/PRINT console behavior, garbage collection (mark-and-sweep automation), FEXPRs, and macros; and Ch12 contract files for the IPL-before-LISP boundary.
 
-  Yellow claims remain for Russell's famous eval realization, exact first interpreter chronology, S-expressions becoming the universal user-facing Lisp notation, garbage-collection priority wording, AIM-008 bridge material, Project MAC/time-sharing forward-link, and broad claims about LISP's spread through later AI labs.
+  Yellow claims remain for Russell's famous eval realization, exact first interpreter chronology, S-expressions becoming the universal user-facing Lisp notation, the safer "LISP automated GC earlier and more cleanly" upgrade-target wording, AIM-008 bridge material, Project MAC/time-sharing forward-link, and broad claims about LISP's spread through later AI labs.
 
-  Red claims block five unsafe framings: LISP as first list-processing language; LISP as a single completed 1958 invention; LISP-machine hardware as Ch13 content; GPS as LISP-based; and McCarthy as sole implementer.
+  Red claims now block seven unsafe framings: LISP as first list-processing language; LISP as a single completed 1958 invention; LISP-machine hardware as Ch13 content; GPS as LISP-based; McCarthy as sole implementer/designer (strengthened to also block "lone designer" framing per Gemini gap audit); LISP as the *first AI language* (newly Red, IPL has prior claim); and "LISP invented garbage collection" full stop (newly Red, demoted from Yellow — LISP automated mark-and-sweep is the defensible claim, the broader concept predates via Gelernter 1960 reference counting and IPL list management).
+
+  Gemini cross-family gap audit (gemini-3-flash-preview) 2026-04-27: 4 must-fixes, 4 should-adds, 3 framing observations, 3 Yellow→Red proposals (2 newly applied; 1 already covered by Codex). Per `feedback_gemini_hallucinates_anchors.md` Gemini provided NO page anchors or URLs (correct lane discipline). Integration applied:
+   - Must-fix #1 (Advice Taker motivation): Scene 1 motivation context added connecting "Programs with Common Sense" need to LISP design.
+   - Must-fix #2 (Purely Functional myth): Scene 5 names prog/setq/property mutation explicitly; Hard Rule "use READ/EVAL/PRINT cycle, not REPL" added; brief.md Additional Framing Constraints section added; open-questions.md drafting warning added.
+   - Must-fix #3 (First Run / IBM 704 culture): infrastructure-log.md IBM/FORTRAN cultural mismatch section added; Scene 1 cultural foil framing added.
+   - Must-fix #4 (Lisp-1 vs Lisp-2 namespace): Scene 3 namespace warning added with forward-link to later-chapter coverage.
+   - Should-adds: IBM/FORTRAN tension (Scene 1); Steve Russell hacker context Spacewar!/TMRC (Scene 3); Cambridge Lisp Conference 1962 (Scene 5 bridge); 4 new Yellow primary sources (AIM-040, AIM-099, Bobrow-BBN-Lisp, Baker78-GC).
+   - Framing #1 (LISP is Math trap): brief.md Additional Framing Constraints; infrastructure-log.md `car`/`cdr` IBM 704 register-opcode origin (Contents of Address Register / Contents of Decrement Register).
+   - Framing #2 (REPL terminology): Hard Rule added in brief.md and infrastructure-log.md.
+   - Framing #3 (Stoyan/Hart compiler line): Scene 5b added.
+   - Yellow→Red #1 (LISP invented GC): demoted in scene-level claim table; Yellow upgrade target row added for the safer "LISP automated GC mark-and-sweep" claim.
+   - Yellow→Red #2 (McCarthy sole designer): existing "McCarthy alone implemented LISP" Red row strengthened to also block "lone designer" framing.
+   - Yellow→Red #3 (LISP as first AI language): new Red row added.
+
+  Counts: Codex's initial 15/7/5 → after integration 15/6/7. Net Yellow drops by 1 (GC out) and net Red grows by 2 (GC in, "first AI language" in).
 
   Local cold-start failed because this worktree lacks a local .venv. Browser-accessible PDF/HTML extraction was used for anchors. Book-only checklist applies: changed files are limited to docs/research/ai-history/chapters/ch-13-the-list-processor/.
+
+  Pending: human final pass before drafting unlocks. This contract has cleared dual cross-family review (Codex authored + Gemini gap-audited + Claude integrated).
