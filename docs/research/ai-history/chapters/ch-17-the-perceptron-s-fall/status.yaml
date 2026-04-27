@@ -2,12 +2,14 @@ status: capacity_plan_anchored
 owner: Codex
 part: 4
 chapter: 17
-review_state: research_contract_drafted_awaiting_gap_review
+review_state: gemini_and_claude_ready_to_draft_with_cap_fixes_applied
 last_updated: 2026-04-27
 notes:
   - "Codex expanded the scrubbed placeholder into an anchored research contract for the perceptron fall."
   - "Core frame: the chapter must correct the XOR-killed-neural-nets myth by separating Rosenblatt's connectionist program, Minsky/Papert's single-layer/local perceptron results, and the later funding/official-history interpretation."
   - "Primary anchors include ONR Digital Computer Newsletter July 1960, Rosenblatt 1958, and Minsky/Papert Perceptrons intro pages."
   - "Secondary/historiographic anchors include Bottou 2017 foreword and Olazaran 1996 OCR pages."
+  - "Gemini requested exact Rosenblatt 1961 anchors and a tighter 4,000-4,700 core cap; Codex added pp.5, 94-95, 303-308, and 575-576 anchors."
+  - "Claude independently verified anchors and approved READY_TO_DRAFT_WITH_CAP; Codex added OCR verification notes and a Ch14 lower-bound guardrail."
   - "Guardrail: do not claim multilayer networks were proved impossible; Olazaran explicitly limits the strict proof to single-layer nets defined in a particular way."
   - "Guardrail: use XOR only as a parity shorthand, not as the whole story."

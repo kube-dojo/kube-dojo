@@ -13,8 +13,9 @@
 
 ## Still Open Before Prose
 
-- Should prose use Rosenblatt 1961 beyond light context? If yes, extract exact
-  page anchors from the OCR rather than relying on broad chapter references.
+- Should prose use Rosenblatt 1961 beyond the now-anchored pp.5, 94-95,
+  303-308, and 575-576 claims? If yes, extract additional exact page anchors
+  rather than relying on broad chapter references.
 - Do we need a primary ARPA/IPTO document for the funding shift, or is
   Olazaran's interview-based historiography sufficient for a cautious funding
   paragraph?

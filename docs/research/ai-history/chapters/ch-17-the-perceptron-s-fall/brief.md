@@ -52,7 +52,9 @@ the decline of neural-network work inside AI.
    predicates over partial predicates and show why locality/order restrictions
    matter.
 4. **Parity, Connectedness, and Scale:** the central failure is not one toy XOR
-   example, but predicates whose required order grows with the retina.
+   example, but the parity theorem and connectedness predicates whose required
+   order grows with the retina. XOR belongs only as later shorthand for the
+   parity issue.
 5. **From Theorem to Winter:** the technical result became a social/funding
    argument during symbolic AI's institutional rise.
 6. **The Door Left Open:** the chapter should close by distinguishing a killed
@@ -61,25 +63,35 @@ the decline of neural-network work inside AI.
 
 ## Prose Capacity Plan
 
-Word Count Discipline label: `4k-7k stretch`
+Word Count Discipline label: `3k-5k likely`
 
-Core range: 4,000-5,000 words supported by current verified anchors.
-Stretch range: 5,000-6,000 words if an additional primary reception/funding
-anchor is added beyond Olazaran and Bottou.
+Core range: 4,000-4,700 words supported by current verified anchors.
+Stretch range: 4,700-5,700 words if an additional primary reception/funding
+anchor is added beyond Olazaran and Bottou. Without that primary
+institutional layer, prose should cap near 4,000-4,500 words.
 
 - 650-850 words: Mark I public demonstration and hardware limits, anchored by
-  ONR Digital Computer Newsletter July 1960 pp.1-3 and Scene 1.
-- 650-850 words: Rosenblatt's connectionist theory and memory-as-association
-  framing, anchored by Rosenblatt 1958 pp.386-389 and Scene 2.
+  ONR Digital Computer Newsletter July 1960 pp.1-3 and Scene 1. Stay near the
+  lower bound until Ch14's perceptron-origin contract is final.
+- 600-750 words: Rosenblatt's connectionist theory and memory-as-association
+  framing, anchored by Rosenblatt 1958 pp.386-389 and Scene 2. Avoid retelling
+  the full origin story that belongs in Ch14.
 - 750-950 words: Minsky/Papert's definition of perceptrons, locality/order
   restrictions, and connectedness theorem, anchored by Perceptrons intro
   pp.7-8, 12-14 and Scene 3.
 - 650-850 words: scaling/prior-structure critique, anchored by Perceptrons
   intro pp.16-20 and Scene 4.
-- 700-950 words: interpretive/funding closure, anchored by Bottou 2017
+- 500-700 words: Rosenblatt's own three-layer/minimal-perceptron limits and
+  multilayer/cross-coupled hopes, anchored by Rosenblatt 1961 pp.303-308,
+  575-576 and Scenes 2-4.
+- 550-750 words: interpretive/funding closure, anchored by Bottou 2017
   foreword pp.vii-viii and Olazaran 1996 pp.613, 629-631, 637-641 and Scene 5.
 - 500-700 words: continuity handoff to symbolic AI, expert systems, and the
   later resurrection, anchored by Olazaran 1996 pp.640-641 and Ch24/Ch25/Ch31
   already-merged Part 5 context.
 
 Honesty close: If the verified evidence runs out, cap the chapter.
+
+Ch14 guardrail: Ch17 may summarize Rosenblatt's positive program only enough to
+make the 1969 critique intelligible. The origin, promise, and first perceptron
+enthusiasm should remain available for Ch14.
