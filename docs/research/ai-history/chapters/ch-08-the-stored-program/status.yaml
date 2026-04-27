@@ -1,1 +1,10 @@
-status: reviewing
+status: drafting
+brief_signoff:
+  reviewer: "codex"
+  date: "2026-04-27"
+  comment_url: "https://github.com/kube-dojo/kube-dojo.github.io/issues/400"
+sources_signoff:
+  reviewer: "codex"
+  date: "2026-04-27"
+  comment_url: "https://github.com/kube-dojo/kube-dojo.github.io/issues/400"
+prose_path: "src/content/docs/ai-history/ch-08-the-stored-program.md"
