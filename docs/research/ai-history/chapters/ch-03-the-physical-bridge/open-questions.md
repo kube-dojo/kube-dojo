@@ -1,3 +1,4 @@
-# Open Questions: Chapter 3
+# Open Questions
 
-- Exactly how many relays were in the complex telephone exchanges Shannon studied at Bell Labs prior to writing his thesis?
+- Need exact page/section anchors for N/A / Owens 1986 (Bush's Differential Analyzer relied on complex relays)
+- Need exact page/section anchors for Nakashima 1935 (Japanese papers) / Stanković & Astola 2008 (Nakashima independently discovered switching algebra)
