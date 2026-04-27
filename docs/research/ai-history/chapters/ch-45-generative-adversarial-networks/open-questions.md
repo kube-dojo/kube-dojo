@@ -1,4 +1,5 @@
 # Open Questions
 
-- Need exact page/section anchors for Goodfellow 2014.
-- Need the precise date/bar details from a verified biographical source (MIT Tech Review profile).
+- Extract exact section/page anchors for Goodfellow 2014.
+- Find a verified biographical source for the Montreal bar origin story (e.g., MIT Tech Review profile).
+- Find a later GAN retrospective/survey covering high-res faces and milestones post-2014.
