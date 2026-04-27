@@ -8,7 +8,7 @@ machine struggling to keep everyone interactive. The point is not nostalgia; it
 is to make response time and address space feel like research constraints. The
 Lisp Machine begins as relief from this environment.
 
-Evidence: AIM-444 pp.1-5; Gabriel/Steele pp.22-24.
+Evidence: AIM-444 pp.1-3; Gabriel/Steele pp.22-24.
 
 ## Scene 2 - One Processor Per Programmer
 

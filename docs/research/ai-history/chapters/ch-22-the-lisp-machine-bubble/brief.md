@@ -94,7 +94,7 @@ participant account is parsed as clearly labeled Yellow context.
 
 - 500-600 words: open with the PDP-10/time-sharing pressure, interactive Lisp
   workloads, Macsyma/LUNAR, and address-space limits, anchored by AIM-444
-  pp.1-4 and Gabriel/Steele pp.22-24.
+  pp.1-3 and Gabriel/Steele pp.22-24.
 - 550-650 words: explain the personal-computer-for-AI design: one processor and
   memory per user, shared resources, no time-division multiplexing, full
   processor/disk throughput, and the service-over-efficiency principle,
