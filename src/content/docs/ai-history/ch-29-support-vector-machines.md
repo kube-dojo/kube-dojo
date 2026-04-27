@@ -192,10 +192,9 @@ classifier setting. Their algorithm could work with nonlinear decision
 surfaces through kernel evaluations while still preserving the maximum-margin
 training logic. Cortes and Vapnik later connected this to a longer lineage of
 potential functions and Mercer's theorem, explicitly citing earlier work by
-Aizerman, Braverman, and Rozonoer. That lineage matters. The safe historical
-claim is not that kernels were invented from nothing in 1992. The safer claim
-is that SVMs made the kernelized maximum-margin classifier central and
-practical.
+Aizerman, Braverman, and Rozonoer. That lineage matters. Kernels were not
+invented from nothing in 1992; SVMs made the kernelized maximum-margin
+classifier central and practical.
 
 This was a major infrastructure idea. A kernel lets the machine behave as if it
 has entered a high-dimensional feature space without paying the full cost of
@@ -313,15 +312,13 @@ measurable performance on shared recognition tasks.
 
 The results made SVMs hard to ignore. Cortes and Vapnik report strong
 polynomial support-vector network performance and a 1.1 percent test error on
-the NIST task for a fourth-degree polynomial classifier. They also compare
-their results with LeNet and other classifiers. The LeNet comparison should be
-read carefully: in this chapter, those comparison figures are Cortes and
-Vapnik's report, not an independent reanalysis. If the comparison itself were
-to become the center of the story, the safer move would be to anchor the
-original comparison studies separately. For the present chapter, the point is
-bounded: SVMs entered the same OCR terrain as neural networks and performed
-credibly enough to become part of the central 1990s machine-learning
-conversation.
+the NIST task for a fourth-degree polynomial multiclass system built from
+one-vs-rest binary classifiers. They also compare their results with LeNet and
+other classifiers. The LeNet comparison should be read carefully: in this
+chapter, those comparison figures are Cortes and
+Vapnik's report, not an independent reanalysis. SVMs entered the same OCR
+terrain as neural networks and performed credibly enough to become part of the
+central 1990s machine-learning conversation.
 
 This is where the false "SVMs defeated neural networks" story becomes
 tempting. The benchmarks were real. The SVM results were impressive. The
@@ -380,11 +377,10 @@ explained without pretending that all knowledge has been written down by hand?
 
 ## What SVMs Changed
 
-SVMs did not end the 1990s with a permanent victory. No method did. That is
-the first guardrail. The second is its mirror image: neural networks did not
-simply lose the decade. Both lineages continued, and both would shape later
-AI. The difference is that SVMs gave the 1990s a particularly persuasive form
-of statistical discipline.
+SVMs did not end the 1990s with a permanent victory. No method did.
+Conversely, neural networks did not simply lose the decade. Both lineages
+continued, and both would shape later AI. The difference is that SVMs gave the
+1990s a particularly persuasive form of statistical discipline.
 
 They changed the terms of trust. Expert systems had asked organizations to
 trust encoded expertise. Neural networks asked researchers to trust trained
@@ -453,10 +449,3 @@ trust learning itself.
   *Data Mining and Knowledge Discovery* 2, 121-167 (1998): tutorial anchor for
   margins, support vectors, convex quadratic programming, kernels, Mercer
   conditions, implementation concerns, VC dimension, and generalization.
-
-> [!note] Honesty Over Output
-> This chapter treats SVMs as a disciplined statistical-learning turn, not as a
-> victory over neural networks. It uses Vapnik/Chervonenkis 1971 only for
-> conceptual VC-theory lineage, attributes LeNet comparisons to Cortes and
-> Vapnik's report, and does not expand into unsupported lab, hardware, or
-> modern scikit-learn detail.
