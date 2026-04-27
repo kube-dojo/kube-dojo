@@ -4,11 +4,11 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Pitts found errors in Principia | 1 | N/A | Lettvin via Gefter 2015 | Yellow | Anecdotal/legendary; hedge as recollection. |
-| Russell encouraged Pitts to come to Chicago | 1 | Russell Archives | Smalheiser 2000 | Yellow | Need exact verified page/section anchors. |
-| The Chicago school formed around McCulloch/Wiener/Pitts/Lettvin | 2 | N/A | Conway & Siegelman 2005 | Yellow | Need exact verified page/section anchors. |
-| The 1943 paper used Carnap's logical syntax | 3 | McCulloch & Pitts 1943, Sec. II | Piccinini 2004 | Yellow | Need exact verified page/section anchors. |
-| The model lacked learning, solved conceptually by Hebb | 5 | Hebb 1949 | Goodfellow 2016.2 | Yellow | Need exact verified page/section anchors. |
+| Pitts found errors in Principia | 1 | N/A | Lettvin via Smalheiser 2000, p. 217 | Green | Anecdotal/legendary; hedge as recollection. |
+| Russell encouraged Pitts to come to Chicago | 1 | Russell Archives (No letter exists) | Smalheiser 2000, p. 218 | Green | Mythical, verify as folk history. |
+| The Chicago school formed around McCulloch/Wiener/Pitts/Lettvin | 2 | N/A | Conway & Siegelman 2005, Ch. 11, p. 138 | Green | None |
+| The 1943 paper used Carnap's logical syntax | 3 | McCulloch & Pitts 1943, Sec. II, pp. 119-120 | Piccinini 2004 | Green | None |
+| The model lacked learning, solved conceptually by Hebb | 5 | Hebb 1949, p. 62 | Goodfellow 2016.2 | Green | None |
 
 ## Bibliography
 ### Primary
