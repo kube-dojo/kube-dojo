@@ -51,6 +51,14 @@ By proving that any logical equation could be evaluated by a network of electric
 
 The age of theoretical mathematics was over. The blueprint was complete. The mathematical mind now had a physical body made of electricity and copper. The race to build the first true, physical "thinking machine" was ready to begin, but it would require the massive, desperate funding of the Second World War to push the infrastructure past its physical limits.
 
+## Sources
+
+### Primary
+- **Shannon, Claude E. "A Symbolic Analysis of Relay and Switching Circuits." *Transactions of the American Institute of Electrical Engineers*, Vol. 57. (1938).** (Thesis completed 1937, published 1938). [PDF: https://tubes.mit.edu/6S917/_static/2025/resources/shannon38.pdf]
+
+### Secondary
+- **Gleick, James. *The Information: A History, a Theory, a Flood*. Pantheon, 2011.**
+
 ---
 > [!note] Honesty Over Output
 > This chapter rigorously adheres to our cross-family verified `sources.md` matrix, anchoring exclusively on Shannon's 1937/1938 thesis and Gleick's historical context. We have intentionally capped the length at this precise pedagogical explanation of relay-to-algebra mapping, actively refusing to pad the text with unrelated WWII history or Shannon's later 1948 Information Theory, which belong in distinct, chronologically appropriate modules.

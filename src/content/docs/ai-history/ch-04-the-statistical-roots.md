@@ -44,6 +44,15 @@ Markov’s 1913 study offered the mathematical foundation for an entirely differ
 
 Markov's manual counting of 20,000 characters was the absolute physical limit of his era. The math of predictive sequences was proven, but without massive digital memory and processing infrastructure to scale it, it could not be applied to entire words, sentences, or billions of documents. The concept would lay waiting for the computational power and the massive datasets of the digital age to finally catch up to the mathematics.
 
+## Sources
+
+### Primary
+- **Markov, Andrey. "An Example of Statistical Investigation of the Text Eugene Onegin Concerning the Connection of Samples in Chains." (1913).** [English Translation: Science in Context, 2006]
+
+### Secondary
+- **Hayes, Brian. "First Links in the Markov Chain." *American Scientist*, 2013.** [URL: https://www.americanscientist.org/article/first-links-in-the-markov-chain]
+- **Gleick, James. *The Information: A History, a Theory, a Flood*. Pantheon, 2011.**
+
 ---
 > [!note] Honesty Over Output
 > Following our team's standard of verified research, this chapter is scoped strictly to the historical boundaries established in our `sources.md` matrix (Markov 1913, Hayes 2013). We have explicitly framed Markov's work as the *statistical ancestry* of predictive text, taking care not to overclaim that he envisioned modern LLMs or that language generation was his primary goal. Because the historical record of this specific mathematical milestone is focused and brief, we have intentionally capped the length of this chapter rather than padding it with unrelated history.

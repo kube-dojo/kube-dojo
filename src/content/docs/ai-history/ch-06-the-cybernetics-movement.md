@@ -50,6 +50,15 @@ You could not "reprogram" Wiener's anti-aircraft predictor to play a game of che
 
 The Cybernetics movement had correctly identified that intelligence required interaction and adaptation. But by tying their philosophy to the inflexible, specialized hardware of analog engineering, they had inadvertently trapped themselves. The pursuit of the thinking machine was about to hit a physical wall, perfectly demonstrated by a pair of robotic tortoises in England.
 
+## Sources
+
+### Primary
+- **Rosenblueth, Arturo, Norbert Wiener, and Julian Bigelow. "Behavior, Purpose and Teleology." *Philosophy of Science*, Vol. 10, No. 1. (1943).** [URL: https://www.cambridge.org/core/journals/philosophy-of-science/article/behavior-purpose-and-teleology/73ACBBEC616CE78767088694F357D57B]
+- **Wiener, Norbert. *Cybernetics: Or Control and Communication in the Animal and the Machine*. (1948).** (Page anchors for feedback: pp. 15-20, 113-115).
+
+### Secondary
+- **Kline, Ronald R. *The Cybernetics Moment: Or Why We Call Our Age the Information Age*. Johns Hopkins University Press, 2015.**
+
 ---
 > [!note] Honesty Over Output
 > This chapter rigorously adheres to the verified claims established in our `sources.md` matrix, anchoring exclusively to Wiener's 1948 text, the 1943 Rosenblueth paper, and Kline's 2015 historical analysis of the Macy Conferences. We intentionally focus on the pedagogical explanation of negative feedback and homeostasis, refusing to pad the chapter with unrelated post-war history. The narrative seamlessly hands off the consequences of this analog philosophy to Grey Walter in Chapter 7.

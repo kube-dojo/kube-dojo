@@ -53,6 +53,15 @@ The physical infrastructure of the era simply could not support Boole's vision. 
 
 The theoretical foundation for artificial intelligence had been laid. Human reasoning had been successfully reduced to binary algebra. But the blueprint was trapped on paper. Before the "thinking machine" could be realized, someone had to figure out how to pull Boole's 1s and 0s out of the textbook and build them into physical reality. The mathematical mind was waiting for its body.
 
+## Sources
+
+### Primary
+- **Boole, George. *An Investigation of the Laws of Thought*. (1854).** [Project Gutenberg: https://www.gutenberg.org/ebooks/15114]
+
+### Secondary
+- **Gleick, James. *The Information: A History, a Theory, a Flood*. Pantheon, 2011.**
+- **Grattan-Guinness, Ivor. *The Search for Mathematical Roots* (2000).** (Addresses what Boole did and did not mean by 0/1).
+
 ---
 > [!note] Honesty Over Output
 > Following our team's standard of verified research, this chapter deliberately concludes its narrative arc at this natural boundary. While a standard non-fiction chapter aims for 4,000 words, George Boole's story is purely philosophical and mathematical. To pad this chapter further would require fabricating historical dialogue or drifting out of scope. We have exhausted the verified primary sources (Boole 1854) and secondary confirmations (Gleick 2011) available in the research matrix. The story continues seamlessly in Chapter 2 with Alan Turing.

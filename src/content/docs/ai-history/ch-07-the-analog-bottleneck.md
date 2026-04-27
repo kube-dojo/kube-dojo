@@ -48,6 +48,16 @@ It was thermodynamically impossible. In 1953, Claude Shannon mathematically anal
 
 The Cybernetics movement was intellectually profound, but it was physically trapped in its own hardware. Intelligence could not scale if it required soldering irons, fragile glass tubes, and continuous analog voltages. To achieve true artificial intelligence, the field had to abandon biological mimicry entirely. It needed a completely blank slate, an architecture where the logic was separated from the physical wiring. It needed the stored-program computer.
 
+## Sources
+
+### Primary
+- **Shannon, Claude E. "Computers and Automata." *Proceedings of the IRE* 41, no. 10 (1953): 1234-1241.**
+- **Walter, W. Grey. "A Machine That Learns." *Scientific American*, Vol. 185, No. 2. (August 1951).** [URL: https://www.scientificamerican.com/article/a-machine-that-learns/]
+- **Walter, W. Grey. *The Living Brain*. (1953).**
+
+### Secondary
+- **Boden, Margaret A. *Mind as Machine: A History of Cognitive Science*. Oxford University Press, 2006.**
+
 ---
 > [!note] Honesty Over Output
 > This chapter strictly adheres to the claims verified in our `sources.md` matrix, anchored to Grey Walter's 1951/1953 publications, Boden (2006), and explicitly leveraging Shannon's 1953 engineering analysis to ground the scaling limitations of vacuum tubes. We have avoided fabricating speculative conversations or exaggerating the scale limits beyond contemporary engineering analysis. The narrative naturally pivots here, handing off the solution to this analog bottleneck to John von Neumann in Chapter 8.

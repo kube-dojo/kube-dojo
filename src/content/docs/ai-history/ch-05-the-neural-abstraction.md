@@ -44,6 +44,15 @@ However, the McCulloch-Pitts model had a critical limitation. Their artificial n
 
 The mathematical abstraction of the brain had been successfully drafted. But the missing ingredient—the algorithm that would allow these neural networks to adapt, learn, and rewrite their own logic—was still years away. And before algorithms could be perfected, the physical infrastructure of the era would have to endure a massive evolutionary leap.
 
+## Sources
+
+### Primary
+- **McCulloch, Warren, and Walter Pitts. "A Logical Calculus of the Ideas Immanent in Nervous Activity." *Bulletin of Mathematical Biophysics*, Vol. 5. (1943).** [PhilPapers: https://philpapers.org/rec/MCCALC]
+
+### Secondary
+- **Piccinini, Gualtiero. "The First Computational Theory of Mind and Brain: A Close Look at McCulloch and Pitts's 'Logical Calculus'." *Synthese*. (2004).** (Confirms the model is idealized, not literal biology).
+- **Gefter, Amanda. "The Man Who Tried to Redeem the World with Logic." *Nautilus*, 2015.**
+
 ---
 > [!note] Honesty Over Output
 > Following our KubeDojo standard, this chapter rigorously adheres to its `sources.md` matrix, drawing directly from the 1943 McCulloch and Pitts paper and historically verified contexts (e.g., Piccinini 2004). We take special care to clarify that the McCulloch-Pitts model was an *idealized mathematical abstraction*, not a literal, perfect representation of biological neurons. Because the historical record for this specific mathematical milestone is concise, we intentionally end the narrative here. We will not artificially pad the chapter to hit a 4,000-word target, prioritizing factual accuracy and tight pedagogical focus.

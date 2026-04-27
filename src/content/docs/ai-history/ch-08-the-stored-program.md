@@ -48,6 +48,17 @@ Despite the intense historical dispute over patent rights and collaborative orig
 
 Regardless of who deserved the ultimate credit, the infrastructural paradigm had officially shifted. The theoretical Universal Machine dreamed up by Alan Turing was now a tangible engineering blueprint. The blank slate required for artificial intelligence had been designed. But von Neumann's elegant architecture had a fatal flaw: it required memory that was fast, large, and perfectly reliable. And in 1945, that physical memory did not exist.
 
+## Sources
+
+### Primary
+- **Fritz, W. Barkley. "The Women of ENIAC." *IEEE Annals of the History of Computing* 18, no. 3 (1996): 13-28.**
+- **Moore School of Electrical Engineering Archives. "Minutes of EDVAC meetings, 1945."**
+- **von Neumann, John. "First Draft of a Report on the EDVAC." (1945).** [Smithsonian Scan: https://library.si.edu/digital-library/book/firstdraftofrepo00vonn]
+
+### Secondary
+- **Haigh, Thomas, Mark Priestley, and Crispin Rope. *ENIAC in Action: Making and Remaking the Modern Computer*. MIT Press, 2016.** [URL: https://mitpress.mit.edu/9780262535175/eniac-in-action/]
+- **Dyson, George. *Turing's Cathedral: The Origins of the Digital Universe*. Pantheon, 2012.**
+
 ---
 > [!note] Honesty Over Output
 > This chapter is rigorously anchored to the historical claim matrix in `sources.md`, relying on Fritz (1996) for the ENIAC programmers, von Neumann's original 1945 draft, and Haigh et al. (2016) / Dyson (2012) to accurately navigate the highly contested credit dispute between von Neumann and the Eckert/Mauchly team. We intentionally maintain a tight narrative focus on the *infrastructural shift* (physical cabling to stored software) without padding the text with unrelated WWII history.

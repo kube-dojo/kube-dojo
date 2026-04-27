@@ -46,6 +46,16 @@ To build the memory banks for machines like the MIT Whirlwind and the early IBM 
 
 The physical prerequisite for complex software and symbolic AI was finally in place. The stored-program computer now had a reliable, non-volatile brain. The digital blank slate was ready. All that remained was for someone to write the software that could make that slate actually think.
 
+## Sources
+
+### Primary
+- **Forrester, Jay W. "Digital Information Storage in Three Dimensions Using Magnetic Cores." *Journal of Applied Physics*. (1951).**
+- **Wang, An. US Patent 2,708,722 (Pulse transfer controlling device). Filed 1949, issued 1955.**
+
+### Secondary
+- **Ceruzzi, Paul E. *A History of Modern Computing*. MIT Press, 2003.**
+- **History of Information: "Jay Forrester Files a Patent for Magnetic Core Memory"** [URL: https://www.historyofinformation.com/detail.php?id=5195]
+
 ---
 > [!note] Honesty Over Output
 > This chapter rigorously adheres to the verified claims established in our `sources.md` matrix, anchoring the technological transition to Forrester's 1951 paper and Ceruzzi's (2003) historical analysis. We explicitly acknowledge the contested patent history between Wang, Forrester, and Rajchman, and we highlight the manual labor required for manufacturing based on secondary archival research. We intentionally cap the narrative here, preserving the strict pedagogical focus on the physical memory transition without padding the text with unrelated computing trivia.

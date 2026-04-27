@@ -65,6 +65,15 @@ In 1936, the digital computer had been fully mapped out in the realm of pure mat
 
 Yet, just like George Boole's algebra, Turing's Universal Machine was trapped on paper. It was an infrastructural impossibility. A physical machine requiring infinite paper tape and operating at the speed of a mechanical scanner would take thousands of years to solve a complex equation. Turing had provided the ultimate blueprint for artificial intelligence, but the physical bridge from theoretical mathematics to electrical engineering had not yet been crossed. That bridge would require a graduate student at MIT, and a realization about the routing switches of the Bell Telephone system.
 
+## Sources
+
+### Primary
+- **Turing, Alan. "On Computable Numbers, with an Application to the Entscheidungsproblem." (1936).** [DOI: 10.1112/plms/s2-42.1.230 | PhilPapers: https://philpapers.org/rec/TUROCN]
+- **Hilbert, David, and Wilhelm Ackermann. *Grundzüge der theoretischen Logik*. (1928).**
+
+### Secondary
+- **Hodges, Andrew. *Alan Turing: The Enigma*. Burnett Books, 1983.**
+
 ---
 > [!note] Honesty Over Output
 > Following our team's standard of verified research, this chapter is scoped strictly to the historical and mathematical boundaries established in our `sources.md` matrix (Turing 1936, Hodges 1983, Hilbert 1928). We have focused entirely on the pedagogical "why" of the Turing Machine and the birth of software abstraction. To artificially inflate this chapter to 4,000 words would require padding the narrative with Turing's later WWII codebreaking efforts, which violates our strict chronological boundaries. We prioritize concise, accurate, claim-anchored history.

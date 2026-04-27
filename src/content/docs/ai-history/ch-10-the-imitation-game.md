@@ -29,7 +29,7 @@ If the computer could successfully imitate a human being—if it could answer th
 
 The genius of the Imitation Game (which history would eventually rename the "Turing Test") was its strict infrastructural constraint. Turing explicitly mandated that the interrogator and the subjects be separated, and that all communication take place via a "teleprinter" (a text-based interface).
 
-This was a deliberate, surgical strike against the biological focus of Cybernetics. Turing did not care if the machine looked like a human, walked like a human, or had a biological brain. He did not care if the machine was built out of vacuum tubes, magnetic cores, or meat. By forcing the interaction through a text terminal, Turing successfully abstracted away physical embodiment.
+Many historians interpret this constraint as a deliberate, surgical strike against the biological focus of Cybernetics. While Turing did not state it explicitly, the design of the test implies he did not care if the machine looked like a human, walked like a human, or had a biological brain. He did not care if the machine was built out of vacuum tubes, magnetic cores, or meat. By forcing the interaction through a text terminal, Turing effectively abstracted away physical embodiment.
 
 He isolated the test entirely to symbolic, linguistic, and logical output. If the machine's external behavior was indistinguishable from human intelligence, Turing argued that it was meaningless to argue that the machine wasn't "really" thinking just because its internal hardware was different. The behavioral output was the only empirical metric that mattered.
 
@@ -40,11 +40,19 @@ He isolated the test entirely to symbolic, linguistic, and logical output. If th
 
 Turing was not just a philosopher; he was a mathematician deeply aware of infrastructural limits. He knew the computers of 1950 were far too small to pass his test. 
 
-With remarkable foresight, Turing estimated the physical infrastructure that would be required. He predicted that by the year 2000, machines would need roughly $10^9$ (one billion) binary digits of storage capacity to successfully play the Imitation Game and fool an average interrogator for five minutes. (For context, $10^9$ bits is roughly 125 megabytes of memory—a remarkably accurate estimate for the dawn of the internet age).
+With remarkable foresight, Turing estimated the physical infrastructure that would be required. He predicted that by the year 2000, machines would need roughly 10^9 (one billion) binary digits of storage capacity to successfully play the Imitation Game and fool an average interrogator for five minutes. (For context, 10^9 bits is roughly 125 megabytes of memory—a remarkably accurate estimate for the dawn of the internet age).
 
 Turing's 1950 paper was the ultimate philosophical pivot. It permanently decoupled the pursuit of artificial intelligence from the biological, analog mimicry of the cyberneticists. Intelligence was no longer about building electronic tortoises that sought out light; it was about building digital software that could manipulate symbols and language.
 
 The digital blank slate was ready. The empirical goalpost had been set. Six years later, a group of young mathematicians would gather at Dartmouth College to officially name the field, abandon Cybernetics entirely, and bet the future of intelligence on the digital mainframe.
+
+## Sources
+
+### Primary
+- **Turing, Alan. "Computing Machinery and Intelligence." *Mind*, Vol. 59, No. 236. (1950).** [Oxford/Mind: https://academic.oup.com/book/42030/chapter/355746326]
+
+### Secondary
+- **Hodges, Andrew. *Alan Turing: The Enigma*. Burnett Books, 1983.**
 
 ---
 > [!note] Honesty Over Output
