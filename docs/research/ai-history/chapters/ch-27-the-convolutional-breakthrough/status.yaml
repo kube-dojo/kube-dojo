@@ -6,6 +6,7 @@ review_state: gap_analysis_received
 last_updated: 2026-04-27
 notes:
   - "Initial research contract populated for LeNet/convolutional document-recognition chapter."
-  - "Not ready for prose lock: deployment scale, hardware, dataset chronology, and exact architecture passages need page anchors."
+  - "Review follow-up extracted page anchors for Fukushima 1980, LeCun et al. 1989, LeCun et al. 1990, and LeCun et al. 1998."
+  - "Deployment scale, hardware/training context, dataset chronology, and architecture passages are now anchored; remaining decision is prose scope and LeCun 1989 access provenance."
   - "Core guardrail: LeNet is constrained architecture plus document-processing infrastructure, not a lone sudden invention of all CNN ideas."
-  - "Gemini gap analysis recorded in gap-analysis.md; stretch path depends on LeCun 1998 production/hardware and dataset chronology anchors."
+  - "Gemini gap analysis recorded in gap-analysis.md; stretch path now depends on disciplined use of production/check-system anchors, not generic CNN exposition."

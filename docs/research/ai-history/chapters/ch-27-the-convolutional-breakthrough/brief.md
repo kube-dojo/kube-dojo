@@ -31,10 +31,10 @@ This chapter has enough concrete infrastructure to support more prose than Ch25,
 - 500-800 words: why this mattered historically: backprop became useful when paired with architecture and an industrial workflow.
 - 300-600 words: handoff to later CNN resurgence, noting that the 1990s achievement still waited for larger datasets and GPUs.
 
-If production-deployment details cannot be anchored, cap the chapter closer to 3,500-4,500 words and avoid invented Bell Labs scenes.
+Production-deployment details are now anchored for the 1998 bank-check system, so a 4,000-6,000 word draft is plausible. Keep the 1989 USPS digit recognizer, later MNIST benchmark, and 1998 check-recognition deployment in separate chronological lanes.
 
 ## Citation Bar
 
 - Minimum primary sources before review: Fukushima 1980; LeCun et al. 1989; LeCun et al. 1990; LeCun/Bottou/Bengio/Haffner 1998.
 - Minimum secondary/context sources before review: LeCun/Bengio/Hinton 2015 or equivalent retrospective, plus a stable source for MNIST/USPS/check-processing context.
-- Current status: source scaffold assembled, but not prose-locked. Production throughput, exact deployment, and hardware claims remain Yellow/Red until anchored.
+- Current status: primary-source page anchors extracted for architecture, USPS data, training/hardware, DSP throughput, LeNet-5, MNIST construction, and 1998 check-recognition deployment. Remaining prose-readiness questions are source-access provenance for LeCun et al. 1989 and whether to add Denker/Bell Labs lineage.
