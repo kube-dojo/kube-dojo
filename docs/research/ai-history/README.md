@@ -24,11 +24,11 @@ Coordination happens across 9 Part Tracking issues linked to Epic #394:
 - #399 : Part 1: The Mathematical Foundations (Ch 1-5) (**Gemini**)
 - #400 : Part 2: The Analog Dream & Digital Blank Slate (Ch 6-10) (**Gemini**)
 - #401 : Part 3: The Birth of Symbolic AI & Early Optimism (Ch 11-16) (**Claude**)
-- #402 : Part 4: The First Winter & The Shift to Knowledge (Ch 17-23) (**Codex**)
+- #402 : Part 4: The First Winter & The Shift to Knowledge (Ch 17-23) (**Codex**, reassigned 2026-04-27; was unclaimed)
 - #403 : Part 5: The Mathematical Resurrection (Ch 24-31) (**Codex**)
 - #404 : Part 6: The Rise of Data & Distributed Compute (Ch 32-40) (**Gemini**)
 - #405 : Part 7: The Deep Learning Revolution & GPU Coup (Ch 41-49) (**Gemini**)
-- #406 : Part 8: The Transformer, Scale & Open Source (Ch 50-58) (**Codex**)
-- #407 : Part 9: The Product Shock & Physical Limits (Ch 59-68) (**Claude**)
+- #406 : Part 8: The Transformer, Scale & Open Source (Ch 50-58) (**Codex**, reassigned 2026-04-27; was Gemini; no chapters were in flight)
+- #407 : Part 9: The Product Shock & Physical Limits (Ch 59-68) (**Claude**, reassigned 2026-04-27; was unclaimed)
 
 Note: The 630 changed files in the original PR include automatically generated placeholder directories for the 68 chapters to ensure proper boundaries. These placeholders are intentional and expected in diff reviews.
