@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Module 5.2: Feature Engineering & Stores"
 slug: platform/disciplines/data-ai/mlops/module-5.2-feature-stores
 sidebar:
