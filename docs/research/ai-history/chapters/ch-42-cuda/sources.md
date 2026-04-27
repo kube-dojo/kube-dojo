@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Nvidia recognized the GPGPU market and hired researchers like Ian Buck | 1, 2 | Nvidia Corporate Archives / Press Releases (2006) | Hookway 2014 | Green | None |
-| CUDA abstracted the graphics pipeline into a C-like interface | 3 | Nickolls et al. 2008 (Scalable parallel programming with CUDA) | Hennessy & Patterson 2011 | Green | None |
-| The G80 was the first unified architecture designed for CUDA | 3 | Lindholm et al. 2008 (NVIDIA Tesla: A unified graphics and computing architecture) | Hennessy & Patterson 2011 | Green | None |
+| Nvidia recognized the GPGPU market and hired researchers like Ian Buck | 1, 2 | Nvidia Corporate Archives / Press Releases (2006) | Hookway 2014 | Yellow | Need exact verified page/section anchors. |
+| CUDA abstracted the graphics pipeline into a C-like interface | 3 | Nickolls et al. 2008 (Scalable parallel programming with CUDA) | Hennessy & Patterson 2011 | Yellow | Need exact verified page/section anchors. |
+| The G80 was the first unified architecture designed for CUDA | 3 | Lindholm et al. 2008 (NVIDIA Tesla: A unified graphics and computing architecture) | Hennessy & Patterson 2011 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

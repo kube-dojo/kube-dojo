@@ -1,3 +1,3 @@
-# Open Questions: Chapter 1
+# Open Questions
 
-- Which specific contemporary of Boole criticized the practical utility of his logic system most vocally? (Need a direct quote for Scene 3).
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

@@ -4,8 +4,8 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Deep networks suffered from a degradation problem (higher training error) | 1 | He et al. 2016 (Deep residual learning for image recognition) | Goodfellow et al. 2016 | Green | None |
-| Skip connections allowed training of networks up to 152 layers deep | 2, 3 | He et al. 2016 | Szeliski 2022 | Green | None |
+| Deep networks suffered from a degradation problem (higher training error) | 1 | He et al. 2016 (Deep residual learning for image recognition) | Goodfellow et al. 2016 | Yellow | Need exact verified page/section anchors. |
+| Skip connections allowed training of networks up to 152 layers deep | 2, 3 | He et al. 2016 | Szeliski 2022 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

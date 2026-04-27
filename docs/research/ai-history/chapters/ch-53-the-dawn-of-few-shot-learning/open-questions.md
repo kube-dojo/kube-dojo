@@ -1,4 +1,3 @@
 # Open Questions
 
-- Need exact page/section anchors for Radford 2019 and Brown 2020.
-- Need secondary sources covering the GPT-2 release controversy.
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

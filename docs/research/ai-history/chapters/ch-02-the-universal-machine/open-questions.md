@@ -1,3 +1,3 @@
-# Open Questions: Chapter 2
+# Open Questions
 
-- Did Turing and Alonzo Church communicate directly *before* Turing submitted his 1936 paper, or was their discovery completely parallel?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

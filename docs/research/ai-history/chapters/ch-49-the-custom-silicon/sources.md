@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Google faced a data center doubling crisis due to voice search inference | 1 | Jouppi et al. 2017 (In-datacenter performance analysis of a TPU) | Patterson 2017 | Green | None |
-| The TPU v1 was an ASIC utilizing a 256x256 systolic array for matrix math | 2 | Jouppi et al. 2017 | Hennessy & Patterson 2017 (Computer Architecture, 6th ed) | Green | None |
-| TPUs provided 15x-30x performance/Watt improvements over contemporary GPUs | 3 | Jouppi et al. 2017 | Hennessy & Patterson 2017 | Green | None |
+| Google faced a data center doubling crisis due to voice search inference | 1 | Jouppi et al. 2017 (In-datacenter performance analysis of a TPU) | Patterson 2017 | Yellow | Need exact verified page/section anchors. |
+| The TPU v1 was an ASIC utilizing a 256x256 systolic array for matrix math | 2 | Jouppi et al. 2017 | Hennessy & Patterson 2017 (Computer Architecture, 6th ed) | Yellow | Need exact verified page/section anchors. |
+| TPUs provided 15x-30x performance/Watt improvements over contemporary GPUs | 3 | Jouppi et al. 2017 | Hennessy & Patterson 2017 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

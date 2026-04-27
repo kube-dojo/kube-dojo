@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Early statistical models were bottlenecked by tiny corpora like the Brown Corpus | 1 | Kucera & Francis 1967, Introduction | Church 2011 | Green | None |
-| The WWW provided an unprecedented scale of unstructured text for NLP | 2, 3 | Resnik 1999 ("Mining the Web for Bilingual Text"), Section 1 | Halevy et al. 2009 | Green | None |
-| Massive web data replaced curated data, demonstrating scale beats precision | 3 | Banko & Brill 2001, Fig. 1 (Learning Curves) | Halevy et al. 2009 | Green | None |
+| Early statistical models were bottlenecked by tiny corpora like the Brown Corpus | 1 | Kucera & Francis 1967, Introduction | Church 2011 | Yellow | Need exact verified page/section anchors. |
+| The WWW provided an unprecedented scale of unstructured text for NLP | 2, 3 | Resnik 1999 ("Mining the Web for Bilingual Text"), Section 1 | Halevy et al. 2009 | Yellow | Need exact verified page/section anchors. |
+| Massive web data replaced curated data, demonstrating scale beats precision | 3 | Banko & Brill 2001, Fig. 1 (Learning Curves) | Halevy et al. 2009 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary

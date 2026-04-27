@@ -4,13 +4,18 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Markov modeled dependent character sequences in Pushkin | 2 | Markov 1913, *An Example of Statistical Investigation...* | Hayes 2013 | Green | None |
-| This work is the statistical ancestor of predictive text | 3 | N/A | Hayes 2013 | Green | None |
+| Nekrasov and Markov debated free will and probability | 1 | Original correspondence | Sheynin 2004 | Yellow | Need exact verified page/section anchors. |
+| Markov proved the Law of Large Numbers for dependent variables | 2 | Markov 1906 | N/A | Yellow | Need exact verified page/section anchors. |
+| Markov calculated 1-step and 2-step chains in Pushkin | 3 | Markov 1913 | Hayes 2013 | Yellow | Need exact verified page/section anchors. |
+| Shannon 1948 cited Markov for English n-grams | 4 | Shannon 1948, §II | Gleick 2011 | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary
-- **Markov, Andrey. "An Example of Statistical Investigation of the Text Eugene Onegin Concerning the Connection of Samples in Chains." (1913).** [English Translation: Science in Context, 2006]
+- **Markov, Andrey. "Extension of the Law of Large Numbers to Dependent Variables." *Izvestiya Fiz.-Mat. Obsch. Pri Kazansk. Univ.*, 1906.**
+- **Markov, Andrey. "An Example of Statistical Investigation of the Text Eugene Onegin." (1913).**
+- **Shannon, Claude E. "A Mathematical Theory of Communication." *Bell System Technical Journal* 27 (1948).**
 
 ### Secondary
-- **Hayes, Brian. "First Links in the Markov Chain." *American Scientist*, 2013.** [URL: https://www.americanscientist.org/article/first-links-in-the-markov-chain]
-- **[Gleick 2011]** (See source-catalog.md)
+- **Sheynin, Oscar. *Russian Papers on the History of Probability and Statistics*. Berlin, 2004.**
+- **Hayes, Brian. "First Links in the Markov Chain." *American Scientist*, 2013.**
+- **Gleick, James. *The Information: A History, a Theory, a Flood*. Pantheon, 2011.**

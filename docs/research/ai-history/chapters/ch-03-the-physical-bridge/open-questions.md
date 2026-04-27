@@ -1,3 +1,3 @@
-# Open Questions: Chapter 3
+# Open Questions
 
-- Exactly how many relays were in the complex telephone exchanges Shannon studied at Bell Labs prior to writing his thesis?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

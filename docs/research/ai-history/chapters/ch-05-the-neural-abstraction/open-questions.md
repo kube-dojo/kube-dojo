@@ -1,3 +1,3 @@
-# Open Questions: Chapter 5
+# Open Questions
 
-- To what extent did von Neumann immediately reference McCulloch-Pitts when drafting the EDVAC report two years later?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

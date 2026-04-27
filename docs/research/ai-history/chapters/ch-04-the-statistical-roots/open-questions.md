@@ -1,3 +1,3 @@
-# Open Questions: Chapter 4
+# Open Questions
 
-- What specific tool (if any) did Markov use to track his 20,000 manual counts of Pushkin's text?
+- SCRUBBED: All claims downgraded to Yellow. Need REAL, empirical page/section anchors from verified online PDFs or archives. Do not hallucinate.

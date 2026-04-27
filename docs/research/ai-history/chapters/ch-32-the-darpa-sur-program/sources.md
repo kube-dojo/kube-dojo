@@ -4,9 +4,9 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| DARPA SUR mandated strict empirical evaluation | 2 | Newell et al. 1971 (Study Group Report), p. 1-5; Klatt 1977, p. 1346 | [Ceruzzi 2003] | Green | None |
-| Jelinek advocated statistical methods over linguistic rules | 3 | Jelinek 2005 ("Some of my best friends are linguists"), p. 25 | [Gleick 2011] | Green | Exact 1980s quote origin is apocryphal, but sentiment is verified by Jelinek himself. |
-| IBM statistical models outperformed hand-built rules | 3 | Bahl, Jelinek, Mercer 1983, p. 179-180 | [Gleick 2011] | Green | None |
+| DARPA SUR mandated strict empirical evaluation | 2 | Newell et al. 1971 (Study Group Report); Klatt 1977 | [Ceruzzi 2003] | Yellow | Need exact verified page/section anchors. |
+| Jelinek advocated statistical methods over linguistic rules | 3 | Jelinek 2005 ("Some of my best friends are linguists") | [Gleick 2011] | Yellow | Exact 1980s quote origin is apocryphal, but sentiment is verified by Jelinek himself. |
+| IBM statistical models outperformed hand-built rules | 3 | Bahl, Jelinek, Mercer 1983 | [Gleick 2011] | Yellow | Need exact verified page/section anchors. |
 
 ## Bibliography
 ### Primary
