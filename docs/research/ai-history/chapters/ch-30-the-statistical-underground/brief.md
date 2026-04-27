@@ -28,14 +28,14 @@ The chapter must not skip limitations. Rabiner 1989 identifies independence assu
 5. **HMMs Become a Shared Toolkit:** Use Rabiner 1989 to show HMMs becoming a standard tutorialized framework: evaluation, decoding, training, Baum-Welch/EM, Viterbi, and speech examples.
 6. **From IBM to Sphinx and Statistical NLP:** Use CMU Sphinx and IBM statistical machine translation to show diffusion. The underground becomes infrastructure: HMMs, n-grams, smoothing, alignments, and probabilistic decoding move across speech and language.
 
-## 4k-6k Prose Capacity Plan
+## 4k-5.5k Prose Capacity Plan
 
-- 550-750 words: speech as the post-winter uncertainty problem and why continuous recognition resisted hand-coded certainty, anchored by Scene 1 and Bahl/Jelinek/Mercer 1983 pp.179-180 plus IBM's Jelinek 1976 publication abstract in `sources.md`.
+- 550-650 words: speech as the post-winter uncertainty problem and why continuous recognition resisted hand-coded certainty, anchored by Scene 1 and Bahl/Jelinek/Mercer 1983 pp.179-180 plus IBM's Jelinek 1976 publication abstract in `sources.md`.
 - 800-1,050 words: noisy-channel / maximum-likelihood decomposition into language model and acoustic channel, anchored by Scene 2 and Bahl/Jelinek/Mercer 1983 pp.179-180.
 - 750-1,000 words: Markov-source modeling, Viterbi decoding, and practical search, anchored by Scene 3 and Bahl/Jelinek/Mercer 1983 pp.180-185 plus Rabiner 1989 PDF pp.5, 8.
 - 700-950 words: sparse data, interpolation, perplexity, automatic estimation, and why "more data" still required statistical discipline, anchored by Scene 4 and Bahl/Jelinek/Mercer 1983 pp.186, 188-189.
 - 650-900 words: HMM tutorial consolidation and limits, anchored by Scene 5 and Rabiner 1989 PDF pp.1-2, 5, 8, 28.
-- 650-950 words: diffusion into CMU Sphinx and IBM statistical machine translation, anchored by Scene 6 and Huang/Hon/Lee 1989 PDF pp.1, 3-4; Huang/Alleva/Hwang/Rosenfeld 1993 PDF pp.1, 5-6; Brown et al. 1990 pp.79-80; Brown et al. 1993 pp.263-264.
+- 650-850 words: diffusion into CMU Sphinx and IBM statistical machine translation, anchored by Scene 6 and Huang/Hon/Lee 1989 PDF pp.1, 3-4; Huang/Alleva/Hwang/Rosenfeld 1993 PDF pp.1, 5-6; Brown et al. 1990 pp.79-80; Brown et al. 1993 pp.263-264.
 
 Honesty close: If the verified evidence runs out, cap the chapter.
 
@@ -44,4 +44,4 @@ Honesty close: If the verified evidence runs out, cap the chapter.
 - Minimum primary sources before prose: Bahl/Jelinek/Mercer 1983; Rabiner 1989; at least one Sphinx paper for diffusion beyond IBM.
 - Minimum context source: IBM Research page for Jelinek 1976 as bibliographic/abstract evidence only; do not cite page numbers unless a real full paper is found and parsed.
 - Minimum spillover source: Brown et al. 1990 or Brown et al. 1993 if the chapter claims IBM's statistical speech culture helped shape statistical machine translation.
-- Current status: anchored enough for a 4,000-5,500 word chapter after cross-family prose-readiness review, with one explicit cap: no Jelinek folklore quote and no detailed 1976 paper claims beyond the IBM abstract unless a full PDF is located.
+- Current status: anchored enough for a 4,100-5,400 word chapter after cross-family prose-readiness review, with one explicit cap: no Jelinek folklore quote and no detailed 1976 paper claims beyond the IBM abstract unless a full PDF is located.
