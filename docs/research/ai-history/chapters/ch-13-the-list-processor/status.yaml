@@ -1,1 +1,17 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 3
+chapter: 13
+review_state: codex_initial_draft_2026-04-27
+last_updated: 2026-04-27
+green_claims: 15
+yellow_claims: 7
+red_claims: 5
+notes: |
+  Full 8-file contract drafted for Chapter 13. Green anchors cover AIM-001 for FLPL/FORTRAN boundary, IBM 704 context, S-expressions, M-expressions, lambda, recursion, conditionals, free storage, and early list operations; LISP 1.5 manual for implementer credits, expression syntax, functions, eval, read/evaluate/print console behavior, garbage collection, FEXPRs, and macros; and Ch12 contract files for the IPL-before-LISP boundary.
+
+  Yellow claims remain for Russell's famous eval realization, exact first interpreter chronology, S-expressions becoming the universal user-facing Lisp notation, garbage-collection priority wording, AIM-008 bridge material, Project MAC/time-sharing forward-link, and broad claims about LISP's spread through later AI labs.
+
+  Red claims block five unsafe framings: LISP as first list-processing language; LISP as a single completed 1958 invention; LISP-machine hardware as Ch13 content; GPS as LISP-based; and McCarthy as sole implementer.
+
+  Local cold-start failed because this worktree lacks a local .venv. Browser-accessible PDF/HTML extraction was used for anchors. Book-only checklist applies: changed files are limited to docs/research/ai-history/chapters/ch-13-the-list-processor/.
