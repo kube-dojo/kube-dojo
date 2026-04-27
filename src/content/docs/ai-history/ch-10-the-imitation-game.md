@@ -29,7 +29,7 @@ If the computer could successfully imitate a human being—if it could answer th
 
 The genius of the Imitation Game (which history would eventually rename the "Turing Test") was its strict infrastructural constraint. Turing explicitly mandated that the interrogator and the subjects be separated, and that all communication take place via a "teleprinter" (a text-based interface).
 
-Many historians interpret this constraint as a deliberate, surgical strike against the biological focus of Cybernetics. While Turing did not state it explicitly, the design of the test implies he did not care if the machine looked like a human, walked like a human, or had a biological brain. He did not care if the machine was built out of vacuum tubes, magnetic cores, or meat. By forcing the interaction through a text terminal, Turing effectively abstracted away physical embodiment.
+Some historians interpret this constraint as a deliberate, surgical strike against the biological focus of Cybernetics. While Turing did not state it explicitly, the design of the test implies he did not care if the machine looked like a human, walked like a human, or had a biological brain. He did not care if the machine was built out of vacuum tubes, magnetic cores, or meat. By forcing the interaction through a text terminal, Turing effectively abstracted away physical embodiment.
 
 He isolated the test entirely to symbolic, linguistic, and logical output. If the machine's external behavior was indistinguishable from human intelligence, Turing argued that it was meaningless to argue that the machine wasn't "really" thinking just because its internal hardware was different. The behavioral output was the only empirical metric that mattered.
 
