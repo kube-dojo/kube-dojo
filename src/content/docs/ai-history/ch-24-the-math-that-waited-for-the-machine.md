@@ -193,24 +193,19 @@ systems before the PDP revival made backpropagation famous in neural-network
 circles. The thesis is not the same event as the 1986 Nature paper, and it does
 not turn the later PDP work into a simple retelling of Werbos. Its importance is
 that it shows the backward-derivative machinery was already available as a way
-to adapt trainable systems. Werbos described ordered derivatives and backward
-calculation through a table of dependencies. That is close enough to the later
-neural-network procedure to matter, while still leaving open the historical
-question of transmission.
-
-Werbos had earlier described related backward derivative propagation, and later
-histories connect his thesis to the broader lineage of reverse-mode
-differentiation and learning systems. There is no evidence in the research
-record gathered here that Rumelhart, Hinton, and Williams directly inherited
-their 1986 work from Werbos. Influence is a stronger claim than priority.
-Priority can be anchored by texts. Influence needs a path.
+to adapt trainable systems. That is close enough to the later neural-network
+procedure to matter, while still leaving open the historical question of
+transmission. There is no evidence in the research record gathered here that
+Rumelhart, Hinton, and Williams directly inherited their 1986 work from
+Werbos. Influence is a stronger claim than priority. Priority can be anchored
+by texts. Influence needs a path.
 
 Automatic differentiation adds another layer. Griewank's historical survey
 describes reverse-mode ideas as having multiple incarnations before neural
 networks made the term backpropagation familiar to a wider AI audience. He
-places Linnainmaa's 1976 work in a lineage motivated by accumulated rounding
-error and computational graphs, and he describes the reverse accumulation of
-adjoints as a broader numerical method. In that light, backpropagation is not a
+places Linnainmaa's work in a lineage motivated by accumulated rounding error
+and computational graphs, and he describes the reverse accumulation of adjoints
+as a broader numerical method. In that light, backpropagation is not a
 mathematical island. It is one application of a deeper pattern: compute a
 function as a graph of intermediate values, then sweep backward to find how
 changes propagate through that graph.
