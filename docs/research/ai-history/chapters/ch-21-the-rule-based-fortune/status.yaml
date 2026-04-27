@@ -1,1 +1,15 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 4
+chapter: 21
+review_state: needs_cross_family_review
+last_updated: 2026-04-28
+notes:
+  - "Codex expanded the placeholder into an anchored research contract for R1/XCON and the commercial expert-system turn."
+  - "Core frame: R1/XCON made expert systems commercially credible because a narrow, structured, high-value manufacturing task fit production rules and sustained maintenance."
+  - "Primary anchors include McDermott 1982, McDermott/Steele 1981, Bachant/McDermott 1984, and Smith 1984."
+  - "Capacity target: 4,000-5,000 words confirmed; 5,000-5,600 only after later XCON retrospective or economic anchors are parsed."
+  - "Guardrail: do not use unverified savings numbers or first-commercial-system absolutes."
+  - "Guardrail: separate R1/XCON from XSEL."
+  - "Guardrail: Gemini may gap-audit capacity/narrative only; source-discipline review should come from Claude under the 2026-04-28 role split."
+  - "Next transition: READY_TO_DRAFT after word-budget reconciliation is accepted and Bachant/McDermott 1984 mirror anchors are independently verified or consciously drafted as Yellow-caveated material."
