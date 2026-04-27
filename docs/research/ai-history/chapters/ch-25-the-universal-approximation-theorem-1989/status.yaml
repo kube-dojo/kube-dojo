@@ -10,3 +10,4 @@ notes:
   - "Core guardrail: universal approximation is representation capacity, not trainability, generalization, or deployment."
   - "Gemini review rejected a forced 4k-7k target; natural prose target is now 2.5k-4k unless further historical evidence supports more."
   - "Gemini gap analysis recorded in gap-analysis.md; stretch path is 3.9k-5.9k if 1989 cluster and approximation-limit anchors are extracted."
+  - "Anchor extraction started: Cybenko, Funahashi, and Barron now have page anchors; Hornik/Stinchcombe/White, Pinkus, Ch17, and Kolmogorov decision remain open."
