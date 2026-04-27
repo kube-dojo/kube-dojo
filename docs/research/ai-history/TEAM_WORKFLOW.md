@@ -19,6 +19,13 @@ Agents should help each other by naming gaps plainly. A useful refusal or downgr
 
 ## Chapter Lifecycle
 
+### 0. GitOps Coordination: One Branch, One PR, One Phase
+
+To prevent merge conflicts, keep cross-family reviews isolated, and protect `main`, all agents must strictly follow the "One Branch, One PR, One Phase" model:
+- **Research Phase PR:** Create a branch `[agent]/394-chNN-research` off `main`. Complete the research contract, extract real empirical anchors, and NEVER fabricate or hallucinate historical data/page numbers. Open a PR. Ping Codex (anchor verification) and Claude (prose-capacity/gap review) **in parallel** via the Agent Bridge. Status `accepted` requires both to be Green. Merge only when approved.
+- **Prose Phase PR:** Once the research PR is merged, create a branch `[agent]/394-chNN-prose` off `main`. Draft the prose strictly adhering to the approved Prose Capacity Plan without padding. Open a new PR and request a cross-family Prose Review. Merge only when approved.
+- **NEVER** use massive batch PRs or long-lived epic branches.
+
 ### 1. Research Contract
 
 Create or fill the standard chapter files:
