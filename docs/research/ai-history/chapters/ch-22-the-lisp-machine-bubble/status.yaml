@@ -1,1 +1,15 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 4
+chapter: 22
+review_state: needs_cross_family_review
+last_updated: 2026-04-28
+notes:
+  - "Codex expanded the placeholder into an anchored research contract for the Lisp Machine project, commercialization, Symbolics 3600, Common Lisp portability, and stock-hardware pressure."
+  - "Core frame: Lisp machines were a serious technical answer to time-sharing and address-space limits, but the commercial bubble depended on special hardware staying ahead of general-purpose workstations."
+  - "Primary anchors include MIT AIM-444, MIT AIM-528, the 1981 Lisp Machine Manual, the 1983 Symbolics 3600 Technical Summary, and Gabriel/Steele's Evolution of Lisp."
+  - "Capacity target: 4,000-5,000 words confirmed; 5,000-5,600 only after business-source or participant-postmortem stretch unlocks."
+  - "Guardrail: vendor sources are Green for product specifications, not market success."
+  - "Guardrail: do not use exact Symbolics/LMI financial or market claims without a parsed independent source."
+  - "Guardrail: Gemini may gap-audit capacity/narrative only; source-discipline review should come from Claude under the 2026-04-28 role split."
+  - "Next transition: READY_TO_DRAFT after Claude source-discipline review and Gemini gap/capacity review."
