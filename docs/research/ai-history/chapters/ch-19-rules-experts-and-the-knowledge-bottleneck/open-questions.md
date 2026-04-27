@@ -21,11 +21,12 @@
   non-installation, clinical non-use, liability ambiguity, workflow/cost limits,
   collaborator loss, and EMYCIN/PUFF reuse.
 
-## Still Open Before Prose
+## Still Open / Stretch Unlocks
 
-- Should we add Shortliffe's 1976 *Computer-Based Medical Consultations: MYCIN*
-  as a separate primary source, or is the 1984 retrospective plus reprinted
-  chapter excerpts enough?
+- Shortliffe's 1976 *Computer-Based Medical Consultations: MYCIN* is not a
+  prose blocker because the 1984 retrospective includes dissertation
+  condensations and the 1983 interview adds contemporary retrospective context.
+  Add the 1976 source only if the draft needs a direct origin/detail hardening.
 - Should we add an outside historical source on expert systems to counterbalance
   the Stanford-authored retrospective?
 - Should Ch19 include a brief mention of legal concerns around clinical

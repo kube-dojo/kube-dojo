@@ -44,8 +44,9 @@ Word Count Discipline label: `4k-4.8k confirmed; 4.8k-5.5k requires stretch unlo
   ambiguity, but does not prove that liability was the decisive deployment
   blocker.
 - **Shortliffe 1976 dissertation/book:** The 1984 reprints cite it and include
-  condensed material, but a separate direct source could strengthen exact origin
-  claims.
+  condensed material, and the 1983 interview adds contemporary retrospective
+  context. Add the direct 1976 source only as stretch hardening if prose needs
+  exact origin/detail support.
 - **Reception beyond Stanford:** Feigenbaum gives in-period movement framing,
   but an outside review or SIGART/AI Magazine source would help if prose wants
   a broader field-response paragraph.
@@ -78,7 +79,8 @@ Path to 4,000 without bloat:
 Path to 4,800-5,500 without bloat:
 
 - Add one outside historical/reception source.
-- Add one direct Shortliffe 1976 source if accessible.
+- Add the direct Shortliffe 1976 source if the draft needs exact origin/detail
+  hardening.
 - Add one source on clinical deployment/legal/ethical constraints.
 
 ## Reviewer Questions
@@ -87,7 +89,8 @@ Path to 4,800-5,500 without bloat:
    explicit and avoids broad field claims?
 2. Is the Ch31 evaluation enough to support a strong "real performance" scene
    if the 10-case limit is included immediately?
-3. Should prose require a direct Shortliffe 1976 anchor before drafting, or is
-   the 1984 retrospective/reprint plus the 1983 interview sufficient?
+3. Is the direct Shortliffe 1976 source worth adding as stretch hardening after
+   drafting, or is the 1984 retrospective/reprint plus the 1983 interview
+   sufficient?
 4. Should PUFF remain a short Feigenbaum example, or be used as a second scene
    showing reusable shells after MYCIN?

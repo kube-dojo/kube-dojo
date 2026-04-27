@@ -2,14 +2,14 @@
 
 ## Thesis
 
-Expert systems were the first winter's pragmatic answer: if general intelligence
-would not scale, encode narrow expertise explicitly. MYCIN showed the bargain
-clearly. Separating a knowledge base from an inference engine made medical
-rules inspectable, editable, explainable, and strong enough to rival specialists
-in a bounded evaluation. But the same architecture exposed the bottleneck that
-would haunt the field: knowledge had to be extracted, formalized, debugged, and
-maintained through labor-intensive collaboration between experts and knowledge
-engineers.
+Expert systems became a pragmatic answer in the first-winter era: if general
+intelligence would not scale, encode narrow expertise explicitly. MYCIN showed
+the bargain clearly. Separating a knowledge base from an inference engine made
+medical rules inspectable, editable, explainable, and strong enough to rival
+specialists in a bounded evaluation. But the same architecture exposed the
+bottleneck that would haunt the field: knowledge had to be extracted,
+formalized, debugged, and maintained through labor-intensive collaboration
+between experts and knowledge engineers.
 
 ## Scope
 
@@ -28,9 +28,16 @@ Ch21.
   says ward testing was intended but never undertaken, and the infectious-disease
   knowledge base was laid to rest in 1978 despite strong decision-performance
   studies.
+- Do not present MYCIN as a reaction to Lighthill or the first winter. MYCIN's
+  architecture and 1973 grant goals predate the winter's effects; frame expert
+  systems as a parallel current that the winter made newly attractive, not as a
+  post-Lighthill invention.
 - Do not turn the blinded meningitis evaluation into general medical supremacy.
   It used 10 challenging cases, eight independent outside evaluators, and a
   narrow antimicrobial-selection task.
+- Do not summarize the evaluation as "MYCIN scored higher than nine doctors."
+  Say that MYCIN's prescriptions received acceptable ratings more often than
+  those of any of the nine human prescribers, on that study's stated criterion.
 - Do not imply rule-based systems solved general intelligence. EMYCIN's own
   retrospective says good applications are bounded classification/evidence
   problems with a reasonably small closed-world vocabulary.
@@ -61,8 +68,10 @@ Ch21.
 5. **The Bottleneck Appears:** building the knowledge base requires iterative
    expert interviews, prototype feedback, debugging, and tools like TEIRESIAS.
 6. **Power and Fragility:** MYCIN's blinded evaluation was strong, but the
-   system was narrow, not ward-deployed, and difficult to maintain; the lesson
-   points toward expert-system shells and later commercialization.
+   system was narrow, not ward-deployed, and difficult to maintain.
+7. **Handoff to the Boom:** the reusable-shell idea points toward Ch20/Ch21:
+   domain rules, expert interviews, and packaged inference engines become
+   economically tempting, but the DEC/XCON business story stays out of Ch19.
 
 ## Prose Capacity Plan
 
