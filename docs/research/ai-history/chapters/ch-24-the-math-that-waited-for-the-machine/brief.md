@@ -31,10 +31,10 @@ This chapter can support a long narrative only if it is built from verified laye
 - 700-1,000 words: infrastructure limits of the 1980s, why the algorithm waited for more compute, and why its matrix/gradient shape later mattered.
 - 300-600 words: honest close that distinguishes mathematical possibility, practical trainability, and biological plausibility.
 
-If page-level evidence cannot support one of these layers, the chapter should shrink rather than inventing lab drama.
+Most layers now have page-level anchors. The hardware/compute layer should stay compact unless an exact machine/runtime source is found; do not invent lab drama to reach the top of the range.
 
 ## Citation Bar
 
 - Minimum primary sources before review: Rumelhart/Hinton/Williams 1986 Nature, Rumelhart/Hinton/Williams 1986 PDP chapter, Werbos 1974 thesis, and one automatic-differentiation lineage source.
 - Minimum secondary sources before review: at least one modern survey/history source and one technical explainer that distinguishes backpropagation from biological learning.
-- Current status: solid example contract, but not prose-locked. The biological-plausibility, exact hardware, and priority-history claims remain Yellow/Red until page-level citations are added.
+- Current status: Nature 1986, PDP 1986, Werbos 1974, and Griewank 2012 have page anchors. Biological plausibility is anchored at Nature 1986 p.536 and Crick 1989 article metadata/standfirst, but detailed Crick passages and exact 1986 hardware remain open.
