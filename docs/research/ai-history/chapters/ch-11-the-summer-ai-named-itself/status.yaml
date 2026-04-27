@@ -1,1 +1,34 @@
-status: researching
+status: capacity_plan_anchored
+review_state: codex_approved_2026-04-27;gemini_substance_integrated_with_hallucination_filter_2026-04-27
+green_claims: 13
+yellow_claims: 12
+red_claims: 1
+notes: |
+  Codex cross-family review (gpt-5.4) 2026-04-27: NEEDS_CHANGES with 4 must-fixes,
+  all integrated. Codex anchor-extraction via `pdftotext` on Stanford Dartmouth
+  Proposal PDF promoted 7 claims to Green. Codex APPROVED the integrated contract.
+
+  Gemini cross-family review (gemini-3-flash-preview) 2026-04-27: NEEDS_CHANGES
+  with 4 must-fixes. Gemini subsequently admitted via user message 2026-04-27
+  (epic commit 03640e20, Issue #421) to systemic URL/anchor hallucination across
+  37 chapters. Gemini's substantive findings were partially correct but multiple
+  citations were fabricated:
+   - The McCarthy "I chose it to avoid cybernetics" verbatim quote URL was 404.
+   - The Mauchly IRE March 1956 claim was not verifiable in dartray.pdf.
+
+  Claude independently fetched dartray.pdf and ran local pdftotext extraction,
+  which promoted 6 more claims to Green via the legitimate dartray + McCorduck
+  paraphrase chain (8-week duration corrects the "6-week" myth; 3 full-time
+  attendees; McCarthy naming motive substance; alternative-names list; Trenchard
+  More 3-week rotation; date conflict reconciliation Aug 31 drafted vs Sep 2
+  sent). The fabricated Gemini citations were removed rather than carried as
+  Yellow placeholders, per feedback_citation_verify_or_remove.md.
+
+  Total Green: 13 (Codex 7 + Claude 6 via dartray). Yellow: 12. Red: 1 (Wiener
+  exclusion remains archive-blocked). Gemini's actual review must-fixes #2-#4
+  (Solomonoff precision, McCarthy motive promotion via verified chain, Moor
+  framing) all integrated using verified anchors. Must-fix #1 (Mauchly IRE)
+  declined as unverifiable.
+
+  Pending: Claude/human final pass before drafting unlocks. This contract has
+  cleared dual cross-family review with hallucination-cleanup applied.
