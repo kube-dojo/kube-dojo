@@ -2,7 +2,7 @@
 
 ## Current Verdict
 
-`NEEDS_REVIEW_AFTER_ARPA_SOURCE_ADDED`, likely close to `READY_TO_DRAFT_WITH_CAP`.
+`READY_TO_DRAFT_WITH_CAP` at 4,800 words, pending Claude cross-family check.
 
 The chapter has enough anchored evidence for a 4,000-4,800 word draft if it
 keeps Project MAC as infrastructure history rather than a full history of MIT
