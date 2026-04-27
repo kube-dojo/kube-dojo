@@ -1,5 +1,4 @@
 ---
-revision_pending: true
 title: "Private AI Training Infrastructure"
 description: "Architecting and operating bare-metal Kubernetes infrastructure for distributed AI training workloads using PyTorch, NCCL, InfiniBand, and advanced batch schedulers."
 slug: on-premises/ai-ml-infrastructure/module-9.2-private-ai-training
