@@ -76,8 +76,9 @@ integration became economically risky when general-purpose computers caught up.
    half-million-line system, graphics, networking, Zmacs, debugger, Flavors,
    Common Lisp plans, and AI/CAD/expert-system applications.
 7. **Portability Arrives:** narrate Common Lisp as both a unifying success and
-   a warning: the Lisp-machine companies helped shape it, but a portable Lisp
-   standard made "Lisp on stock hardware" a serious path.
+   a warning: Maclisp, Interlisp, Spice Lisp, and Lisp-machine dialects had
+   diverged; the Lisp-machine companies helped shape the unifying standard, but
+   portable Lisp made "Lisp on stock hardware" a serious path.
 8. **The Bubble Logic:** close with the contradiction: Lisp machines were not
    wrong because they were technically weak. They were vulnerable because the
    special machine had to stay far enough ahead of general hardware to justify
@@ -115,8 +116,9 @@ participant account is parsed as clearly labeled Yellow context.
   development tools, and AI/CAD/expert-system application list, anchored by
   Symbolics 3600 pp.2-18 and 31-46.
 - 450-500 words: Common Lisp portability: ARPA's 1981 community meeting, the
-  four diverging Lisp communities, LMI/Symbolics participation, features left
-  outside the portable standard, and criticisms that Common Lisp assumed large
+  four diverging Lisp communities (Maclisp, Interlisp, Spice Lisp, and
+  Lisp-machine dialects), LMI/Symbolics participation, features left outside the
+  portable standard, and criticisms that Common Lisp assumed large
   Lisp-machine-like resources, anchored by Gabriel/Steele pp.36-44.
 - 300-400 words: close on the bubble: stock hardware pressure and the danger of
   turning a brilliant local infrastructure solution into a special-vendor market

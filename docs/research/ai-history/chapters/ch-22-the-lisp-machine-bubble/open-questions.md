@@ -16,8 +16,11 @@
 - Should Stallman's GNU/Lisp account be used at all? If yes, it must be framed
   as partisan memory about software-sharing conflict, not as neutral history.
 - Are the Common Lisp sections proportioned correctly? The current plan gives
-  it 450-600 words as portability pressure, not as a full language-history
+  it 450-500 words as portability pressure, not as a full language-history
   chapter.
+- Can a verified source be added for the exact "Space-cadet keyboard" label?
+  Current anchors support Control/Meta keyboard commands, keyboard/mouse input,
+  and Symbolics' 88-key keyboard, but not that exact term.
 
 ## Stretch Unlocks
 

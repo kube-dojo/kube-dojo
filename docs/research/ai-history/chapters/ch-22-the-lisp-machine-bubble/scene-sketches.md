@@ -33,12 +33,13 @@ Evidence: AIM-528 pp.1-4.
 
 Make the machine's soul visible through the editor and I/O stack. A user edits
 on a bitmapped display, points with a mouse, asks for help, extends commands in
-Lisp, and lives inside an environment whose system code is inspectable and
+Lisp, uses Control/Meta-style keyboard commands and later Symbolics' 88-key
+keyboard, and lives inside an environment whose system code is inspectable and
 modifiable. Include the tradeoff that rich display interaction made ordinary
 remote-terminal use less central.
 
 Evidence: AIM-444 pp.7-8, 26-28; Manual front matter and pp.1-2; Symbolics 3600
-pp.30-34.
+pp.13-18.
 
 ## Scene 5 - From Lab Artifact to Product Company
 

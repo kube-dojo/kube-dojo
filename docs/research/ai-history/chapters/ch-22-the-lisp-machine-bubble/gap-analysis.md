@@ -81,7 +81,8 @@ Path to 4,000 without bloat:
   center of the chapter.
 - Treat Symbolics 3600 as a mature product scene with vendor-source caveats.
 - Use Common Lisp as the portability turn, not as a language-specification
-  detour.
+  detour; name Maclisp, Interlisp, Spice Lisp, and Lisp-machine dialects as the
+  four communities being pulled toward a standard.
 - Close on timing and economics: special hardware had to keep outrunning stock
   hardware.
 

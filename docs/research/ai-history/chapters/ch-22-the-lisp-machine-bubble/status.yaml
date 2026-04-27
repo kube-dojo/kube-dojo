@@ -2,7 +2,7 @@ status: capacity_plan_anchored
 owner: Codex
 part: 4
 chapter: 22
-review_state: needs_cross_family_review
+review_state: gemini_and_claude_ready_to_draft_with_cap_fixes_applied
 last_updated: 2026-04-28
 notes:
   - "Codex expanded the placeholder into an anchored research contract for the Lisp Machine project, commercialization, Symbolics 3600, Common Lisp portability, and stock-hardware pressure."
@@ -12,4 +12,6 @@ notes:
   - "Guardrail: vendor sources are Green for product specifications, not market success."
   - "Guardrail: do not use exact Symbolics/LMI financial or market claims without a parsed independent source."
   - "Guardrail: Gemini may gap-audit capacity/narrative only; source-discipline review should come from Claude under the 2026-04-28 role split."
-  - "Next transition: READY_TO_DRAFT after Claude source-discipline review and Gemini gap/capacity review."
+  - "Claude approved READY_TO_DRAFT_WITH_CAP and Codex applied the AIM-444 page-anchor nits."
+  - "Gemini approved READY_TO_DRAFT_WITH_CAP on gap/capacity using the fallback gemini-3-flash-preview after gemini-3.1-pro-preview was unavailable; Codex applied the narrative nits without adding unverified Space-cadet terminology."
+  - "Next transition: prose drafting may begin at the capped 4,000-5,000 word target."
