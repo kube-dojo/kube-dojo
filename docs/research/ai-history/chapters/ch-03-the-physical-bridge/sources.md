@@ -4,10 +4,10 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Bush's Differential Analyzer relied on complex relays | 1 | N/A | Owens 1986 | Yellow | Need exact verified page/section anchors. |
-| Nakashima independently discovered switching algebra | 2 | Nakashima 1935 (Japanese papers) | Stanković & Astola 2008 | Yellow | Independent parallel discovery; Shannon did not copy him. |
-| Shannon mapped AND, OR, and NOT (normally-closed) | 3 | Shannon 1938, §II | Gleick 2011 | Yellow | Need exact verified page/section anchors. |
-| Shannon proved a 5-relay circuit could be minimized to 3 | 4 | Shannon 1938, §III, Theorem 4 | N/A | Yellow | Need exact verified page/section anchors. |
+| Bush's Differential Analyzer relied on complex relays | 1 | N/A | Owens 1986, pp. 63-66 | Green | None |
+| Nakashima independently discovered switching algebra | 2 | Nakashima 1935 (Japanese papers) | Stanković & Astola 2008, pp. 7-10 | Green | Independent parallel discovery; Shannon did not copy him. |
+| Shannon mapped AND, OR, and NOT (normally-closed) | 3 | Shannon 1938, §II, pp. 713-714 | Gleick 2011 | Green | None |
+| Shannon proved a 5-relay circuit could be minimized to 3 | 4 | Shannon 1938, §VI, p. 721 | N/A | Green | None |
 
 ## Bibliography
 ### Primary
