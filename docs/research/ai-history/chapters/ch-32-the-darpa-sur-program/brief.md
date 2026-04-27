@@ -11,3 +11,15 @@ The transition of AI from a theoretical, rule-based academic pursuit to an empir
 1. **The Linguist's Challenge:** Early attempts to hand-code speech recognition rules break under real human accents and noise.
 2. **The DARPA Mandate:** DARPA demands measurable, empirical results with common test evaluations.
 3. **"Every time I fire a linguist..."** Fred Jelinek and the IBM team demonstrate that statistical models and probabilities beat elegant linguistic theory on speech tasks.
+
+## 4k-7k Prose Capacity Plan
+
+This chapter can support a long narrative only if it is built from verified layers rather than padding:
+
+- 500-800 words: Historical context and setup, bridging from the previous era.
+- 933-1233 words: Detailed narrative surrounding The Linguist's Challenge:, heavily anchored to primary sources.
+- 933-1233 words: Detailed narrative surrounding The DARPA Mandate:, heavily anchored to primary sources.
+- 933-1233 words: Detailed narrative surrounding "Every time I fire a linguist...", heavily anchored to primary sources.
+- 400-700 words: Honest close that summarizes the infrastructural shift and transitions to the next chapter.
+
+Most layers now have page-level anchors. Do not invent lab drama or dialogue to reach the top of the range. If the verified evidence runs out, cap the chapter.

@@ -11,3 +11,15 @@ McCulloch and Pitts created the first mathematical model of artificial neurons. 
 1. **The Collaboration:** The neurophysiologist (McCulloch) meets the self-taught logician (Pitts).
 2. **The Idealized Neuron:** They model neural firing as a binary (all-or-nothing) threshold function.
 3. **The Logical Network:** They prove that networks of these idealized units can calculate logical propositions.
+
+## 4k-7k Prose Capacity Plan
+
+This chapter can support a long narrative only if it is built from verified layers rather than padding:
+
+- 500-800 words: Historical context and setup, bridging from the previous era.
+- 933-1233 words: Detailed narrative surrounding The Collaboration:, heavily anchored to primary sources.
+- 933-1233 words: Detailed narrative surrounding The Idealized Neuron:, heavily anchored to primary sources.
+- 933-1233 words: Detailed narrative surrounding The Logical Network:, heavily anchored to primary sources.
+- 400-700 words: Honest close that summarizes the infrastructural shift and transitions to the next chapter.
+
+Most layers now have page-level anchors. Do not invent lab drama or dialogue to reach the top of the range. If the verified evidence runs out, cap the chapter.
