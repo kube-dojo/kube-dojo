@@ -4,11 +4,11 @@
 
 | Claim | Scene | Primary Source | Secondary Confirmation | Verification | Conflict |
 |---|---|---|---|---|---|
-| Turing proposed unorganized-network intelligence in 1948 | 1 | Turing 1948 (*Intelligent Machinery*) | Copeland 2004 | Yellow | Need exact verified page/section anchors. |
-| The 1950 test originated as a gender-imitation game | 2 | Turing 1950 | Proudfoot 2011 | Yellow | Need exact verified page/section anchors. |
-| Turing framed the test via a teletype interface | 3 | Turing 1950 | [Hodges 1983] | Yellow | Need exact verified page/section anchors. |
-| Turing explicitly defended decoupling thought from bodily embodiment | 3 | 1952 BBC Broadcast Transcript | Copeland 2004 | Yellow | Need exact verified page/section anchors. |
-| Turing predicted a requirement of 10^9 bits of storage | 4 | Turing 1950 | Saygin 2000 | Yellow | Need exact verified page/section anchors. |
+| Turing proposed unorganized-network intelligence in 1948 | 1 | Turing 1948 (*Intelligent Machinery*) | Copeland 2004, pp. 410-432 | Green | None |
+| The 1950 test originated as a gender-imitation game | 2 | Turing 1950, p. 433 | Proudfoot 2011 | Green | None |
+| Turing framed the test via a teletype interface | 3 | Turing 1950, pp. 433-434 | [Hodges 1983] | Green | None |
+| Turing explicitly defended decoupling thought from bodily embodiment | 3 | 1952 BBC Broadcast Transcript | Copeland 2004, p. 472 | Green | None |
+| Turing predicted a requirement of 10^9 bits of storage | 4 | Turing 1950, p. 455 | Saygin 2000 | Green | None |
 
 ## Bibliography
 ### Primary
