@@ -1,1 +1,138 @@
-status: researching
+status: capacity_plan_anchored
+researcher: claude
+research_branch: claude/394-ch01-research
+research_date: 2026-04-28
+supersedes:
+  - branch: gemini/394-ch01-research
+    pr: 425
+    reason: |
+      Gemini's PR #425 promoted "Hailperin pp. 61-63" to Green without independent
+      verification, in the same pattern as the URL/anchor hallucinations the team
+      addressed in epic commit 03640e20 (Issue #421). Per the 2026-04-28 research
+      role split, Claude now owns Part 1 research; Gemini's PR is reference-only
+      and should be closed without merging.
+
+claim_counts:
+  green: 27
+  yellow: 3
+  red: 2
+  total: 32
+  notes: |
+    27 Green + 3 Yellow + 2 Red = 32 rows in the Scene-Level Claim Table.
+    Yellow rows: (1) the November 24, 1864 rain-walk date (Britannica only);
+    (2) "Boole did not foresee/anticipate physical machinery" (no primary
+    anchor; framed cautiously as "Boole stated his purpose was the laws of
+    thought, not engineering"); (3) the Hailperin pp.61-63 anchor (the
+    underlying class-algebra claim is independently Green via primary text +
+    SEP, but the Hailperin-specific page anchor is unverified).
+    Red rows: (1) "Mary Everest Boole preserved his mathematical legacy"
+    legend; (2) "Boolean algebra dormant for 80 years" framing.
+
+prose_capacity_plan:
+  total_words_low: 3500
+  total_words_high: 4800
+  word_count_label: "4k-7k stretch (3k-5k likely from currently-anchored sources alone)"
+  layers:
+    - id: scene_1
+      title: "Lincoln, self-instruction, the road to Cork"
+      words_low: 600
+      words_high: 900
+      anchored_sources:
+        - "Macfarlane 1916 p.37"
+        - "Macfarlane 1916 pp.37-38"
+        - "Macfarlane 1916 pp.38-39"
+        - "Macfarlane 1916 p.39"
+        - "SEP §1 (#LifeWork)"
+    - id: scene_2
+      title: "the calculus of classes (Chapter II of Laws of Thought)"
+      words_low: 800
+      words_high: 1100
+      anchored_sources:
+        - "Boole 1854 Ch.II Prop.I §4 book p.18"
+        - "Boole 1854 Ch.II §6 book p.20"
+        - "Boole 1854 Ch.II §7 book pp.20-21"
+        - "Boole 1854 Ch.II §11 book p.23"
+        - "SEP §4 (#LawsThou1854)"
+    - id: scene_3
+      title: "two symbols, one law (Chapter III of Laws of Thought)"
+      words_low: 900
+      words_high: 1200
+      anchored_sources:
+        - "Boole 1854 Ch.III Prop.II §13 book pp.33-34"
+        - "Boole 1854 Ch.III Prop.III §14 book p.34"
+        - "Boole 1854 Ch.III Prop.IV §15 book pp.34-35"
+        - "Boole 1854 Ch.III §16 book p.35"
+        - "SEP §3.3 (#3.3)"
+    - id: scene_4
+      title: "the disjoint-sum problem and the Jevons hinge"
+      words_low: 700
+      words_high: 900
+      anchored_sources:
+        - "Boole 1854 Ch.IV §7-8 book pp.40-41"
+        - "Boole 1854 Chs.XI-XII book pp.124-142"
+        - "SEP §5.1 (#5.1)"
+        - "SEP §5.2 (#5.2)"
+        - "SEP §6.3 (#BoolGeneMethForSecoProp)"
+    - id: scene_5
+      title: "Cork, rain, and the Mary Everest Boole correction"
+      words_low: 500
+      words_high: 700
+      anchored_sources:
+        - "Macfarlane 1916 p.39"
+        - "SEP §1 (#LifeWork)"
+        - "MacTutor (St Andrews) Boole entry"
+        - "MacTutor (St Andrews) Mary Everest Boole entry"
+        - "Britannica online Boole entry"
+
+primary_sources_anchored:
+  - title: "An Investigation of the Laws of Thought"
+    author: "George Boole"
+    year: 1854
+    publisher: "Walton & Maberly, London"
+    archive: "Project Gutenberg #15114"
+    url: "https://www.gutenberg.org/files/15114/15114-pdf.pdf"
+    verification: "pdftotext -layout, Claude 2026-04-28; pagination preserved in running heads"
+  - title: "Lectures on Ten British Mathematicians of the Nineteenth Century"
+    author: "Alexander Macfarlane"
+    year: 1916
+    publisher: "Wiley"
+    archive: "Project Gutenberg #9942"
+    url: "https://www.gutenberg.org/files/9942/9942-pdf.pdf"
+    verification: "pdftotext -layout, Claude 2026-04-28"
+
+secondary_sources_anchored:
+  - title: "George Boole"
+    author: "Stanley Burris"
+    year: 2024
+    venue: "Stanford Encyclopedia of Philosophy"
+    url: "https://plato.stanford.edu/entries/boole/"
+    verification: "WebFetch, Claude 2026-04-28; section IDs are stable URL fragments"
+  - title: "George Boole"
+    author: "J. J. O'Connor and E. F. Robertson"
+    venue: "MacTutor History of Mathematics Archive (University of St Andrews)"
+    url: "https://mathshistory.st-andrews.ac.uk/Biographies/Boole/"
+    verification: "WebFetch, Claude 2026-04-28"
+  - title: "Mary Everest Boole"
+    author: "J. J. O'Connor and E. F. Robertson"
+    venue: "MacTutor History of Mathematics Archive (University of St Andrews)"
+    url: "https://mathshistory.st-andrews.ac.uk/Biographies/Boole_Mary/"
+    verification: "WebFetch, Claude 2026-04-28"
+  - title: "George Boole"
+    venue: "Encyclopædia Britannica online"
+    url: "https://www.britannica.com/biography/George-Boole"
+    verification: "WebFetch, Claude 2026-04-28; tertiary, used only for cross-checking"
+
+cross_family_review_requested:
+  codex:
+    role: "anchor verification"
+    asks:
+      - "Independently re-extract any one Boole 1854 anchor and confirm or dispute"
+      - "Confirm SEP section anchors (#LifeWork, #LawsThou1854, #5.1, #5.2, #6.3, #3.3) resolve to the cited claims"
+      - "Probe Hailperin 1986 pp.61-63 if the book is locally accessible"
+  gemini:
+    role: "capacity-plan / gap audit"
+    asks:
+      - "Is the boundary contract sharp enough against Ch3 (Shannon) and Ch5 (McCulloch-Pitts)?"
+      - "Is the Mary Everest Boole 'preservation legend → folk history' move defensible on present evidence?"
+      - "Is the Jevons reframing (modern Boolean algebra descends from Jevons-Peirce-Schröder, not from Boole 1854 unmodified) defensible without Grattan-Guinness 2000?"
+      - "STRICT: do not assert any URL or page anchor. Audit prose-capacity honesty and gaps only."
