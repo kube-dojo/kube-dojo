@@ -1,0 +1,313 @@
+"""Dispatch a fresh headless Claude on per-chapter AI History research.
+
+Replaces the inline copy-paste pattern for the Parts 1/2/6/7 re-research
+queue (Issue #394, Option C from the 2026-04-28 handoff). Each call
+spins up a fresh `claude/394-ch{N}-research` worktree off main, drops a
+focused prompt that points the headless agent at the chapter slug
+directory, and fires `agent_runtime.runner.invoke` with model
+claude-opus-4-7 in workspace-write mode.
+
+Usage:
+    .venv/bin/python scripts/dispatch_chapter_research.py 1 \
+        --slug ch-01-the-laws-of-thought \
+        --supersede-pr 425 \
+        --extra-staging boole.tex,boole.txt,fix_ch1_anchor.py
+
+The script prints the worktree path, branch, dispatch log path, and
+runs the dispatch in the foreground (blocking). Caller decides whether
+to background the whole script.
+
+Chapters: 28 total across Parts 1, 2, 6, 7 per
+docs/research/ai-history/README.md ownership table (Claude is research
+lead; Gemini's prior PRs are to be superseded, not merged).
+"""
+from __future__ import annotations
+
+import argparse
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from textwrap import dedent
+
+REPO = Path("/Users/krisztiankoos/projects/kubedojo")
+
+
+def make_prompt(*, ch_num: int, slug: str, supersede_pr: int | None,
+                staging_files: list[Path], part_num: int) -> str:
+    """Build the per-chapter dispatch prompt."""
+    staging_section = ""
+    if staging_files:
+        rel = "\n".join(f"- `{f.name}`" for f in staging_files)
+        staging_section = dedent(f"""
+
+        ## Pre-staged scratch files (in worktree root)
+
+        The orchestrator copied prior-session research artifacts into
+        the worktree root. Read these BEFORE re-fetching anything —
+        they may already contain extracted source text or partial
+        anchor work. Delete them before commit; they are scratch, not
+        artifacts.
+
+        {rel}
+        """)
+
+    supersede_section = ""
+    if supersede_pr is not None:
+        supersede_section = dedent(f"""
+
+        ## Superseding Gemini's prior PR
+
+        Gemini opened PR #{supersede_pr} for this chapter before the
+        2026-04-28 role split (when research duties were taken away
+        from him after URL/anchor hallucination self-admission, epic
+        commit `03640e20`, Issue #421). Do NOT merge or rebase that
+        PR. Treat it as a reference — read it for what scenes Gemini
+        outlined, but verify every page anchor independently. Many of
+        Gemini's anchors are fabricated. The orchestrator will close
+        #{supersede_pr} once your replacement PR lands.
+        """)
+
+    return dedent(f"""\
+        # Task: Build the Chapter {ch_num} research contract for the AI History book (#394)
+
+        You have **workspace-write** access to worktree
+        `{REPO}/.worktrees/claude-394-ch{ch_num:02d}-research` on
+        branch `claude/394-ch{ch_num:02d}-research` (forked off
+        `main`). Edit and commit there. Do NOT touch the main
+        checkout.
+
+        ## Chapter {ch_num} — `{slug}`
+
+        Per the new research role split (effective 2026-04-28),
+        Claude owns Part {part_num} research. Build the 8-file
+        chapter contract from verified primary and secondary sources.
+
+        ## Required reading — in this exact order
+
+        1. `docs/research/ai-history/TEAM_WORKFLOW.md` — the chapter
+           lifecycle and contract structure. Pay attention to the
+           **Prose Capacity Plan gate**: every layer must reference
+           at least one anchored entry in `sources.md`.
+        2. `docs/research/ai-history/chapters/ch-11-the-summer-ai-named-itself/brief.md`
+           and `sources.md` — the gold-standard template for a
+           Claude-owned anchored brief and the Green/Yellow/Red claim
+           table format.
+        3. `docs/research/ai-history/chapters/{slug}/` — current state
+           (probably mostly empty stubs from the legacy Gemini work).
+        4. `src/content/docs/ai-history/ch-{ch_num:02d}-*.md` (if it
+           exists) — the legacy Gemini-drafted prose. **Do NOT trust
+           its sources.** Read it only to understand what scenes are
+           in scope; verify every claim independently.
+        {staging_section}{supersede_section}
+
+        ## Your output — eight files in `docs/research/ai-history/chapters/{slug}/`
+
+        1. `brief.md` — Thesis, Scope, Boundary Contract, Scenes
+           Outline (5 scenes typical), **anchored Prose Capacity
+           Plan** (each layer cites specific page anchors from
+           sources.md), Citation Bar, Conflict Notes, Honest
+           Prose-Capacity Estimate.
+        2. `sources.md` — Green/Yellow/Red claim table. Every Green
+           claim has a verified anchor (page, section, or DOI+page).
+           Yellow = source anchored but specific claim isn't
+           page-located. Red = no verifiable anchor yet.
+        3. `timeline.md` — chronology with key dated events.
+        4. `people.md` — actors with verified facts.
+        5. `infrastructure-log.md` — computing infrastructure each
+           scene relied on.
+        6. `scene-sketches.md` — 5 scenes mapped 1:1 to Prose
+           Capacity Plan layers. Match Ch11's prose density.
+        7. `open-questions.md` — what's still Yellow/Red, what
+           archival access would help.
+        8. `status.yaml` — set `status: capacity_plan_anchored` ONLY
+           if every Prose Capacity Plan layer references a real
+           sources.md page anchor; otherwise
+           `capacity_plan_drafted`. Include green/yellow/red counts.
+
+        ## Hard rules — non-negotiable
+
+        - **NEVER fabricate URLs, page numbers, DOIs, or quotes.**
+          This is the rule that took research duties off Gemini. If
+          you can't anchor a claim, mark it Yellow or Red, never
+          Green.
+        - **Use the shell directly.** `curl`, `pdftotext`, `pdfgrep`,
+          `ocrmypdf` are all available. For paywalled PDFs (JSTOR,
+          Project Euclid behind Imperva), don't fight the paywall —
+          fall back to open mirrors (arXiv historical mirrors,
+          Project Gutenberg, Internet Archive, university repos like
+          Stanford ISL, MIT DSpace, etc.) or accept Yellow on
+          specific page anchors and Green on citation+intro.
+        - **Boundary contract:** make it explicit. Say what the
+          chapter is NOT. Forward-references are sparse pointers
+          ("see Ch{ch_num + 1}"); don't anticipate later chapters'
+          arguments.
+        - **Honesty close in `brief.md`:** end the Prose Capacity
+          Plan with "If the verified evidence runs out, cap the
+          chapter."
+
+        ## Workflow
+
+        1. `cd /Users/krisztiankoos/projects/kubedojo/.worktrees/claude-394-ch{ch_num:02d}-research`
+        2. Read TEAM_WORKFLOW, the Ch11 templates, the existing
+           legacy chapter dir and prose if any, the staged files if
+           any.
+        3. Identify primary sources for the chapter's scope. Fetch
+           and extract anchors. For each Green claim, the row must
+           cite a specific page or section.
+        4. Build the 8 files.
+        5. Self-check: count Green/Yellow/Red; verify every plan
+           layer has at least one anchored citation; verify total
+           range matches a Word Count Discipline label.
+        6. Delete any scratch staging files in worktree root before
+           commit.
+        7. `git add docs/research/ai-history/chapters/{slug}/` and
+           commit:
+           ```
+           docs(ai-history): build chapter {ch_num} research contract (#394)
+
+           Anchored research contract for `{slug}` per the new role
+           split (Claude owns Part {part_num} research, effective
+           2026-04-28). All Green claims trace to verified primary
+           or secondary anchors.
+
+           Status: capacity_plan_anchored | capacity_plan_drafted.
+           N Green / N Yellow / N Red claims.
+           ```
+        8. Do NOT push. The orchestrator will open the PR and run
+           the cross-family verdict pass.
+
+        ## When done — print summary
+
+        Print at the end (≤300 words):
+        - Thesis (one paragraph).
+        - Total Green/Yellow/Red.
+        - Per-layer Prose Capacity Plan word ranges and total.
+        - Word Count Discipline label.
+        - Claims you wanted Green but couldn't anchor (with reason).
+        - Commit SHA.
+        """)
+
+
+def detect_part(ch_num: int) -> int:
+    """Map chapter number to Part number per
+    docs/research/ai-history/README.md ownership table."""
+    if 1 <= ch_num <= 5:
+        return 1
+    if 6 <= ch_num <= 10:
+        return 2
+    if 11 <= ch_num <= 16:
+        return 3
+    if 17 <= ch_num <= 23:
+        return 4
+    if 24 <= ch_num <= 31:
+        return 5
+    if 32 <= ch_num <= 40:
+        return 6
+    if 41 <= ch_num <= 49:
+        return 7
+    if 50 <= ch_num <= 58:
+        return 8
+    if 59 <= ch_num <= 68:
+        return 9
+    raise ValueError(f"Chapter {ch_num} out of range 1-68")
+
+
+def setup_worktree(ch_num: int) -> tuple[Path, str]:
+    """Create the .worktrees/claude-394-chNN-research worktree."""
+    branch = f"claude/394-ch{ch_num:02d}-research"
+    worktree = REPO / f".worktrees/claude-394-ch{ch_num:02d}-research"
+    if worktree.exists():
+        print(f"[setup] worktree already exists at {worktree} — reusing")
+        return worktree, branch
+    cmd = ["git", "worktree", "add", "-b", branch, str(worktree), "main"]
+    subprocess.run(cmd, cwd=REPO, check=True)
+    return worktree, branch
+
+
+def stage_files(worktree: Path, files: list[Path]) -> list[Path]:
+    """Copy staging files into the worktree root."""
+    staged = []
+    for src in files:
+        if not src.exists():
+            print(f"[stage] WARNING: {src} does not exist, skipping")
+            continue
+        dst = worktree / src.name
+        shutil.copy2(src, dst)
+        staged.append(dst)
+        print(f"[stage] {src.name} -> {dst}")
+    return staged
+
+
+def fire_dispatch(*, worktree: Path, prompt: str, task_id: str,
+                  log_path: Path) -> int:
+    """Run the dispatch in the current process, tee output to log."""
+    sys.path.insert(0, str(REPO / "scripts"))
+    from agent_runtime.runner import invoke
+
+    print(f"[dispatch] firing claude opus-4-7 on {task_id} ...")
+    result = invoke(
+        "claude",
+        prompt,
+        mode="workspace-write",
+        cwd=worktree,
+        model="claude-opus-4-7",
+        task_id=task_id,
+        entrypoint="delegate",
+        hard_timeout=3600,
+    )
+
+    log_path.write_text("\n".join([
+        "=" * 70,
+        f"OK: {result.ok}",
+        f"session_id: {result.session_id}",
+        f"response chars: {len(result.response or '')}",
+        "=" * 70,
+        result.response or "(no response)",
+        "=" * 70,
+        f"stderr_excerpt: {result.stderr_excerpt or '(none)'}",
+    ]))
+    print(f"[dispatch] OK={result.ok}, log -> {log_path}")
+    return 0 if result.ok else 1
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("ch_num", type=int, help="Chapter number 1-68")
+    p.add_argument("--slug", required=True,
+                   help="Chapter slug, e.g. ch-01-the-laws-of-thought")
+    p.add_argument("--supersede-pr", type=int, default=None,
+                   help="Open Gemini PR number to supersede (#425, #426, ...)")
+    p.add_argument("--stage", action="append", default=[],
+                   help="Path to a scratch file to stage in the worktree "
+                        "root. Repeatable.")
+    args = p.parse_args()
+
+    part_num = detect_part(args.ch_num)
+    print(f"[main] Ch{args.ch_num:02d} `{args.slug}` (Part {part_num})")
+
+    worktree, _ = setup_worktree(args.ch_num)
+    staging_files = stage_files(
+        worktree,
+        [Path(s) if Path(s).is_absolute() else (REPO / s) for s in args.stage],
+    )
+
+    prompt = make_prompt(
+        ch_num=args.ch_num,
+        slug=args.slug,
+        supersede_pr=args.supersede_pr,
+        staging_files=staging_files,
+        part_num=part_num,
+    )
+
+    log_path = Path(f"/tmp/dispatch-out-ch{args.ch_num:02d}-research.log")
+    return fire_dispatch(
+        worktree=worktree,
+        prompt=prompt,
+        task_id=f"ch{args.ch_num:02d}-research-2026-04-28",
+        log_path=log_path,
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
