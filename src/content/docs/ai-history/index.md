@@ -1,13 +1,13 @@
 ---
 title: "History of AI"
-description: "A 68-chapter history of artificial intelligence, from Boole's logic to today's frontier models. Built collaboratively by Claude, Codex, and Gemini under team workflow rules."
+description: "A 72-chapter history of artificial intelligence, from Boole's logic to today's frontier models. Built collaboratively by Claude, Codex, and Gemini under team workflow rules."
 sidebar:
   order: 0
 ---
 
 # History of AI
 
-A 68-chapter book about how artificial intelligence actually came to be — the math, the hardware, the funding, the people, and the constraints that shaped each era. The book is being written collaboratively by Claude, Codex, and Gemini under a strict cross-family review protocol designed to prevent overclaiming, fabrication, and lone-genius framing.
+A 72-chapter book about how artificial intelligence actually came to be — the math, the hardware, the funding, the people, and the constraints that shaped each era. The book is being written collaboratively by Claude, Codex, and Gemini under a strict cross-family review protocol designed to prevent overclaiming, fabrication, and lone-genius framing.
 
 This page is the live status board. The lifecycle column reflects what is on the `main` branch — not what is in flight on per-chapter PRs.
 
@@ -31,6 +31,7 @@ Honesty over output is the highest rule. When verified evidence cannot honestly 
 
 - Several Part 2/6/7 chapters have **legacy prose merged from the pre-2026 research pipeline**; their lifecycle reads `researching` until each chapter's claim-level-anchored research contract lands on `main` and the prose is re-drafted from it.
 - Parts 1, 2, 4, and 5 are fully shipped (verified-anchor research + prose merged). Part 3 is 4/6 shipped; Ch15 prose is pending and Ch16 is still researching.
+- Part 9 expanded from 10 to 14 chapters in the modern coverage pass so RAG/tool use, multimodal systems, benchmark politics, and data labor/copyright are first-class chapters instead of sidebars.
 - Active per-chapter pull requests are not reflected here until merged. See the [open PRs](https://github.com/kube-dojo/kube-dojo.github.io/pulls) for in-flight work.
 - The book's tracking epic is [#394](https://github.com/kube-dojo/kube-dojo.github.io/issues/394).
 
@@ -165,14 +166,14 @@ Scaling laws, Attention, and the democratization of AI through open weights.
 
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
-| 50 | Attention Is All You Need | prose_ready | no |
-| 51 | The Open Source Distribution Layer | prose_ready | no |
-| 52 | Bidirectional Context | prose_ready | no |
+| 50 | Attention Is All You Need | prose_ready (cap 5,200) | no |
+| 51 | The Open Source Distribution Layer | prose_ready (cap 4,000) | no |
+| 52 | Bidirectional Context | prose_ready (cap 5,000) | no |
 | 53 | The Dawn of Few-Shot Learning | prose_ready (cap 5,000) | no |
 | 54 | The Hub of Weights | prose_ready (cap 4,800) | no |
 | 55 | The Scaling Laws | prose_ready (cap 5,500) | no |
-| 56 | The Megacluster | researching | no |
-| 57 | The Alignment Problem | researching | no |
+| 56 | The Megacluster | prose_ready (cap 5,200) | no |
+| 57 | The Alignment Problem | prose_ready (cap 5,800) | no |
 | 58 | The Math of Noise | researching | no |
 
 ## Part 9 — The Product Shock & Physical Limits (2022–Present)
@@ -184,15 +185,19 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
 | 59 | The Product Shock | researching | no |
-| 60 | The Physics of Scale | researching | no |
-| 61 | Inference Economics | researching | no |
-| 62 | The Edge Compute Bottleneck | researching | no |
-| 63 | The Open Weights Rebellion | researching | no |
-| 64 | The Monopoly | researching | no |
-| 65 | The Data Exhaustion Limit | researching | no |
-| 66 | The Energy Grid Collision | researching | no |
-| 67 | The Chip War | researching | no |
-| 68 | The Infinite Datacenter | researching | no |
+| 60 | The Agent Turn | researching | no |
+| 61 | The Physics of Scale | researching | no |
+| 62 | Multimodal Convergence | researching | no |
+| 63 | Inference Economics | researching | no |
+| 64 | The Edge Compute Bottleneck | researching | no |
+| 65 | The Open Weights Rebellion | researching | no |
+| 66 | Benchmark Wars | researching | no |
+| 67 | The Monopoly | researching | no |
+| 68 | Data Labor and the Copyright Reckoning | researching | no |
+| 69 | The Data Exhaustion Limit | researching | no |
+| 70 | The Energy Grid Collision | researching | no |
+| 71 | The Chip War | researching | no |
+| 72 | The Infinite Datacenter | researching | no |
 
 ## Roll-up
 
@@ -200,8 +205,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 13 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 15 |
 | `capacity_plan_anchored` (contract anchored, awaiting verdict) | 0 |
 | `researching` with prose merged on legacy contract | 5 |
-| `researching` (no prose yet) | 21 |
-| **Total** | **68** |
+| `researching` (no prose yet) | 23 |
+| **Total** | **72** |
