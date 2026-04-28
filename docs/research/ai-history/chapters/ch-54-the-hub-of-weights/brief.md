@@ -33,3 +33,4 @@ Do not stretch toward 7,000 words without a verified interview or archival sourc
 - Do not claim all models were open, safe, high quality, or production-ready because they appeared on the Hub.
 - Do not invent Dropbox/Google Drive anecdotes unless a source is added. The safe source-backed problem is distribution, caching, fine-tuning, deployment, and framework friction.
 - Do not imply Hugging Face erased corporate advantage. Large pre-training and production deployment still required money, data, expertise, and infrastructure.
+- Do not write "three lines of code" as a sourced claim. The paper's concrete FlauBERT example uses two `from_pretrained(...)` calls.

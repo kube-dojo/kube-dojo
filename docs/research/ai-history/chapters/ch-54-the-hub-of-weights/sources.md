@@ -47,6 +47,7 @@
 - Do not invent a scene where Delangue/Wolf "realized" the side project was more popular than the chatbot. Use contemporary coverage and paper evidence.
 - Do not say Hugging Face alone created open-source NLP infrastructure. The paper explicitly situates Transformers among Torch Hub, TensorFlow Hub, AllenNLP, Fairseq, OpenNMT, Texar, Megatron-LM, Marian NMT, spaCy, Stanza, and others.
 - Do not use current Model Hub counts as historical 2020 facts.
+- Do not write "three lines of code" unless a separate source is added. The anchored paper example uses two `from_pretrained(...)` calls.
 
 ## Page/Section Anchor Worklist
 
