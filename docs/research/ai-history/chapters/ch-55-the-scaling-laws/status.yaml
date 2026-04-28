@@ -1,1 +1,38 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 8
+chapter: 55
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
+last_updated: 2026-04-28
+green_claims: 8
+yellow_claims: 2
+red_claims: 0
+guardrail_count: 6
+prose_word_cap_recommendation: 5500
+prose_word_cap: 5500
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/495#issuecomment-4333990124
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 5500
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/495#issuecomment-4334117142
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5500
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: Kaplan et
+  al. 2020 PDF, Sutton 2019 Bitter Lesson essay, and Hoffmann et al. 2022
+  Chinchilla PDF.
+
+  Strongest safe prose range: 4,500-5,500 words. The math and caveat layers are
+  strong enough for a full chapter, but the contract must not drift into
+  unsourced dollar figures, AGI extrapolation, or internal planning scenes.
+  Guardrail_count records explicit prohibitions; red_claims is reserved for
+  in-scope claims that fail verification.
