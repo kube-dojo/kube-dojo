@@ -6,7 +6,7 @@ The Transformer was not magic and it was not simply "looking at every word at on
 
 ## Scope
 
-- IN SCOPE: the RNN/LSTM bottleneck in sequence transduction; fixed-vector sequence-to-sequence and attention as predecessors; the 2017 Transformer paper; scaled dot-product attention; multi-head attention; positional encoding; masking in the decoder; WMT 2014 training/evaluation claims; the hardware-training facts reported by the paper.
+- IN SCOPE: the RNN/LSTM bottleneck in sequence transduction; fixed-vector sequence-to-sequence and attention as predecessors; convolutional parallelization attempts named by the Transformer paper; the 2017 Transformer paper; scaled dot-product attention; multi-head attention; positional encoding; masking in the decoder; WMT 2014 training/evaluation claims; the hardware-training facts reported by the paper.
 - OUT OF SCOPE: BERT and bidirectional pretraining (Chapter 52); GPT-style few-shot prompting (Chapter 53); Hugging Face distribution infrastructure (Chapter 54); scaling laws (Chapter 55); OpenAI/Azure superclusters (Chapter 56); RLHF (Chapter 57); diffusion image generation (Chapter 58).
 
 ## Boundary Contract
@@ -19,9 +19,11 @@ The chapter also should not invent a private Google Brain brainstorming scene. T
 
 1. **The Recurrent Bottleneck:** RNN/LSTM encoder-decoder models had become the standard for machine translation, but their hidden state moved position by position. This made long sequences difficult and limited parallelization within a training example.
 2. **Attention Before the Transformer:** Bahdanau-style attention had already weakened the fixed-vector bottleneck by letting the decoder retrieve source-side information selectively, but it still lived inside recurrent encoder-decoder systems.
-3. **The Architecture Swap:** The Transformer kept the encoder-decoder frame but replaced sequence-aligned recurrence with stacked self-attention, feed-forward blocks, residual connections, layer normalization, positional encodings, and decoder masking.
-4. **Why Matrix Hardware Cared:** Scaled dot-product attention computes query-key/value interactions in matrices; multi-head attention runs several projected attention operations in parallel; the paper explicitly compares self-attention, recurrence, and convolution by complexity, parallelizable operations, and path length.
-5. **The Measured Break:** On WMT 2014 translation, the paper reports state-of-the-art BLEU scores and a concrete training setup: one machine with 8 NVIDIA P100 GPUs, 12 hours for base models, and 3.5 days for big models.
+3. **The Convolutional Detour:** The paper itself names Extended Neural GPU, ByteNet, and ConvS2S as attempts to reduce sequential computation through convolutional architectures, which gives the chapter a middle path between "RNNs failed" and "attention appeared from nowhere."
+4. **The Architecture Swap:** The Transformer kept the encoder-decoder frame but replaced sequence-aligned recurrence and convolution with stacked self-attention, feed-forward blocks, residual connections, layer normalization, positional encodings, and decoder masking.
+5. **Why Matrix Hardware Cared:** Scaled dot-product attention computes query-key/value interactions in matrices; multi-head attention runs several projected attention operations in parallel; the paper explicitly compares self-attention, recurrence, and convolution by complexity, parallelizable operations, and path length.
+6. **The Trade:** Self-attention reduced sequential operations and path length, but Table 1 also records the per-layer O(n^2 * d) cost in sequence length. The chapter should present this as an engineering trade, not a free lunch.
+7. **The Measured Break:** On WMT 2014 translation, the paper reports state-of-the-art BLEU scores and a concrete training setup: one machine with 8 NVIDIA P100 GPUs, 12 hours for base models, and 3.5 days for big models.
 
 ## 4k-7k Prose Capacity Plan
 
@@ -30,8 +32,9 @@ This chapter can support a 4,000-5,200 word draft now. Stretching beyond that sh
 - 500-750 words: bridge from Chapter 49's vision/data wall to machine translation as the language task where recurrent sequence models were under pressure.
 - 700-950 words: the recurrent bottleneck, using Sutskever et al. 2014 and Vaswani et al. 2017 Section 1 rather than generic complaints about RNNs.
 - 650-850 words: attention before the Transformer, centered on Bahdanau et al. 2014's fixed-vector bottleneck and soft alignment.
-- 900-1,200 words: architectural explanation of scaled dot-product attention, multi-head attention, positional encodings, and decoder masking, written pedagogically without drowning in equations.
-- 700-950 words: infrastructure/hardware layer: parallelizable operations, path length, 8 P100 training setup, FLOP-cost comparison, and why "matrix-friendly" is the right phrase while "perfect alignment" is too strong.
+- 650-850 words: convolutional alternatives named by the paper, especially ByteNet and ConvS2S as attempts to parallelize sequence modeling before the attention-only answer.
+- 900-1,150 words: architectural explanation of scaled dot-product attention, multi-head attention, positional encodings, and decoder masking, written pedagogically without drowning in equations.
+- 700-950 words: infrastructure/hardware layer: parallelizable operations, path length, the O(n^2 * d) self-attention cost, 8 P100 training setup, FLOP-cost comparison, and why "matrix-friendly" is the right phrase while "perfect alignment" is too strong.
 - 400-550 words: honest close that states what changed in 2017 and what did not yet exist: BERT, GPT-2, the model hub, scaling-law formalism, RLHF, and diffusion belong to later chapters.
 
 Do not fill missing team-drama space with speculation. If the draft cannot exceed about 5,200 words from these verified layers, cap it and flag the missing evidence.

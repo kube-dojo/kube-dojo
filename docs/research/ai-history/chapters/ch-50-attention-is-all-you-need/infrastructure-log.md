@@ -15,7 +15,9 @@
 
 - **Sequential operations comparison:**
   - Vaswani 2017 Section 4/Table 1 is the strongest hardware-shape anchor: self-attention connects positions with a constant number of sequentially executed operations per layer, while a recurrent layer requires O(n).
-  - Caveat: self-attention has its own costs for very long sequences; the paper says it is faster than recurrent layers when sequence length is smaller than representation dimensionality, which was usually true for then-standard sentence representations.
+  - Caveat: Table 1 lists self-attention's per-layer complexity as O(n^2 * d), so the gain in parallelizable work and path length came with a sequence-length cost.
+  - The paper says self-attention layers are faster than recurrent layers when sequence length is smaller than representation dimensionality, which was usually true for then-standard sentence representations.
+  - Section 2 also names convolutional alternatives, including Extended Neural GPU, ByteNet, and ConvS2S, as prior efforts to reduce sequential computation.
 
 - **Training hardware:**
   - Vaswani 2017 Section 5.2: one machine with 8 NVIDIA P100 GPUs.
