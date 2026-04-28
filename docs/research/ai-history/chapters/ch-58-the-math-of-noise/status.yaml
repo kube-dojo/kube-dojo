@@ -1,29 +1,29 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 8
 chapter: 58
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: dual_cross_family_verdict_accepted
 last_updated: 2026-04-28
 green_claims: 16
 yellow_claims: 3
 red_claims: 0
 guardrail_count: 6
-prose_word_cap_recommendation: 5800
-word_count_range: "4000-5800"
+prose_word_cap_recommendation: 5200
+word_count_range: "4000-5200"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/507#issuecomment-4339255007
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3-flash-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5200
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/507#issuecomment-4339289194
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5200
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Rebuilt from scrubbed/yellow skeleton into an anchored research contract using
@@ -46,7 +46,6 @@ notes: |
   Stable Diffusion first-party adoption claims, and the transition to
   open-weights/copyright politics. No Red claims remain in the drafting spine.
 
-  Safe prose range is 4,000-5,800 words. The chapter should not exceed that
-  unless a reviewer adds independent adoption/public-impact anchors. Do not pad
+  Safe prose range is 4,000-5,200 words after Gemini gap/capacity audit. Do not pad
   with Midjourney internals, copyright/labor analysis, or open-weights politics;
   those belong to later chapters.

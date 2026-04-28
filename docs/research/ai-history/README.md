@@ -9,7 +9,7 @@ This directory contains the operational research files for the definitive 72-cha
 - **Part 6 (The Rise of Data & Distributed Compute):** Ch32-37 dual-cleared `prose_ready` 2026-04-28 (caps 5,600 / 4,900 / 5,200 / 4,300 / 5,000 / 5,000); Ch38-40 not yet rebuilt.
 - **Part 4 (The First Winter):** Ch17-23 cross-family cleared for capped prose drafting; Ch21 carries a Yellow-caveated Bachant/McDermott mirror-source guardrail.
 - **Part 5 (The Mathematical Resurrection):** Ch24-31 prose `accepted`.
-- **Part 8 (The Transformer, Scale & Open Source):** Ch50-57 dual-cleared `prose_ready`; Ch58 rebuilt to `capacity_plan_anchored` 2026-04-28 and awaits Gemini gap/capacity audit.
+- **Part 8 (The Transformer, Scale & Open Source):** Ch50-58 dual-cleared `prose_ready`; Ch58 cap is 5,200 words.
 - **Part 9 (The Product Shock & Physical Limits):** Ch59-Ch61 rebuilt to `capacity_plan_anchored` 2026-04-28 and await Gemini gap/capacity audit; Ch62 and Ch63 dual-cleared `prose_ready` with 4,800- and 4,500-word caps.
 
 All drafting is paused for any chapter whose contract is not at `prose_ready` or beyond.

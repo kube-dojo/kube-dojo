@@ -174,7 +174,7 @@ Scaling laws, Attention, and the democratization of AI through open weights.
 | 55 | The Scaling Laws | accepted | no |
 | 56 | The Megacluster | accepted | no |
 | 57 | The Alignment Problem | accepted | no |
-| 58 | The Math of Noise | capacity_plan_anchored | no |
+| 58 | The Math of Noise | prose_ready | no |
 
 ## Part 9 — The Product Shock & Physical Limits (2022–Present)
 
@@ -205,8 +205,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 17 |
-| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 4 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 18 |
+| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 3 |
 | `researching` with prose merged on legacy contract | 5 |
 | `researching` (no prose yet) | 17 |
 | **Total** | **72** |
