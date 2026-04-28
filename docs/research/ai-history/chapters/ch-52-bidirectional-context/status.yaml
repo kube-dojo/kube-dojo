@@ -1,1 +1,19 @@
 status: researching
+owner: Codex
+part: 8
+chapter: 52
+review_state: codex_rebuilt_scrubbed_contract_needs_cross_family_review
+last_updated: 2026-04-28
+green_claims: 11
+yellow_claims: 3
+red_claims: 5
+prose_word_cap_recommendation: 5000
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: Devlin et al.
+  2018 BERT paper, Google Research BERT open-source announcement, and GitHub API
+  metadata for google-research/bert.
+
+  Strongest safe prose range: 4,000-5,000 words. Core mechanics, data, training
+  hardware, fine-tuning economics, benchmark claims, and open-release artifacts
+  are anchored. Expansion above 5,000 words needs independent adoption sources,
+  benchmark papers, or maintainer/user accounts.
