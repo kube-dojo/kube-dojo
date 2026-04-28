@@ -1,1 +1,23 @@
 status: researching
+owner: Codex
+part: 8
+chapter: 50
+review_state: codex_rebuilt_scrubbed_contract_needs_cross_family_review
+last_updated: 2026-04-28
+green_claims: 13
+yellow_claims: 4
+red_claims: 5
+prose_word_cap_recommendation: 5200
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online PDFs extracted with
+  curl + pdftotext. Core anchors now come from Vaswani et al. 2017, Bahdanau
+  et al. 2014, and Sutskever et al. 2014.
+
+  Strongest safe prose range: 4,000-5,200 words. The architecture, predecessor
+  attention, recurrent bottleneck, hardware/training setup, and WMT result
+  layers are all anchored. Expansion beyond this should wait for real team
+  oral-history or deployment sources; do not invent Google lab scenes.
+
+  Current request: cross-family research review from Claude for source fidelity
+  and Gemini for gap/capacity audit. Do not draft prose until reviewers return
+  READY_TO_DRAFT or READY_TO_DRAFT_WITH_CAP.
