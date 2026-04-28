@@ -1,1 +1,19 @@
-status: researching
+status: research_review
+owner: Codex
+part: 8
+chapter: 55
+review_state: awaiting_cross_family_review
+last_updated: 2026-04-28
+green_claims: 8
+yellow_claims: 2
+red_claims: 6
+prose_word_cap_recommendation: 5500
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: Kaplan et
+  al. 2020 PDF, Sutton 2019 Bitter Lesson essay, and Hoffmann et al. 2022
+  Chinchilla PDF.
+
+  Strongest safe prose range: 4,500-5,500 words. The math and caveat layers are
+  strong enough for a full chapter, but the contract must not drift into
+  unsourced dollar figures, AGI extrapolation, or internal planning scenes.
+  The red_claims count reflects explicit guardrail prohibitions.
