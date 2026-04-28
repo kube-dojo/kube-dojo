@@ -1,1 +1,35 @@
-status: researching
+status: capacity_plan_anchored
+researcher: claude
+research_branch: claude/394-ch04-research
+research_date: 2026-04-28
+word_count_label: 3k-5k likely
+word_count_range: 3100-4600
+claim_counts:
+  green: 20
+  yellow: 4
+  red: 0
+prose_capacity_plan_layer_anchors:
+  layer_1_nekrasov_dispute: anchored
+  layer_2_1906_counterexample: anchored
+  layer_3_onegin_lecture: anchored
+  layer_4_shannon_1948: anchored
+  layer_5_honest_close: anchored
+primary_sources_verified_at_page_level:
+  - "Markov 1913 (Link et al. English translation, Science in Context 19(4):591-600)"
+  - "Shannon 1948 (BSTJ 27, section-level anchors §3, §4, §4 footnote 6)"
+secondary_sources_verified_at_page_level:
+  - "Hayes 2013 (American Scientist 101(2):92-97, section-level anchors)"
+  - "Link 2006 Traces of the Mouth (History of Science 44(145):321-348, page-level)"
+  - "Link 2006 Chains to the West (Science in Context 19(4):561-589, page-level)"
+  - "Seneta 2006 Markov and the Creation of Markov Chains (Markov Anniversary Meeting, page-level)"
+sources_attempted_dead_ended:
+  - "Basharin Langville Naumov 2004 (LAA 386:3-26) - 404 / 403 on all routes"
+  - "Sheynin 1989 (AHES 39:337-377) - Springer paywall"
+  - "Seneta 2003 (ISR 71:319-334) - Wiley paywall"
+  - "Markov 1906 Russian original - not anchored at page level; content via Seneta 2006"
+  - "Nekrasov 1902 Russian original - not anchored; content via Seneta 2006 + Hayes 2013"
+needs_review_from:
+  - codex_anchor_verification
+  - gemini_gap_analysis
+supersedes:
+  - "PR #435 (Gemini-authored research, withdrawn 2026-04-28 per role-split commit 03640e20)"
