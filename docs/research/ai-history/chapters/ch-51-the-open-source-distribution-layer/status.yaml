@@ -1,1 +1,21 @@
 status: researching
+owner: Codex
+part: 8
+chapter: 51
+review_state: codex_rebuilt_scrubbed_contract_needs_cross_family_review
+last_updated: 2026-04-28
+green_claims: 8
+yellow_claims: 4
+red_claims: 5
+prose_word_cap_recommendation: 5000
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: arXiv About,
+  arXiv category taxonomy, arXiv monthly-submissions CSV, arXiv Annual Report
+  2021, GitHub API repository metadata, Google TensorFlow announcement, Meta
+  PyTorch 1.0 announcement, and Zhang et al. 2019.
+
+  Strongest safe prose range: 4,000-5,000 words. The chapter is infrastructure-
+  heavy and character-light. Do not invent individual anecdotes or claim open
+  source erased corporate advantage. Expansion above 5,000 words needs stronger
+  primary sources on ML-specific arXiv growth, conference code norms, or named
+  maintainer histories.
