@@ -98,7 +98,7 @@ The failure of early neural networks and the rise of hard-coded Expert Systems.
 | 19 | Rules, Experts, and the Knowledge Bottleneck | accepted | yes |
 | 20 | Project MAC | accepted | yes |
 | 21 | The Rule-Based Fortune | accepted | yes |
-| 22 | The LISP Machine Bubble | prose_review | yes |
+| 22 | The LISP Machine Bubble | accepted | yes |
 | 23 | The Japanese Threat | capacity_plan_anchored | no |
 
 ## Part 5 — The Mathematical Resurrection (1980s–1990s)

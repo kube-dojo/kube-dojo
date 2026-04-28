@@ -298,19 +298,13 @@ CADR machines before commercialization. If AI labs, universities, and companies
 were building larger symbolic systems, why not sell machines designed for that
 work?
 
-The move from lab artifact to product company produced LMI and Symbolics. The
-split should not be narrated here as a morality play. The current contract does
-not support a partisan account of blame, culture, or software-sharing conflict.
-What matters for this chapter is the market bet that both companies embodied:
-specialized Lisp hardware and its integrated environment were valuable enough
-to become a business.
-
-That restraint is important. The human story of the split is real, but a
-single partisan memory would distort the chapter's purpose. Ch22 is not a
-trial over who wronged whom in Cambridge. It is the story of how a technical
-solution moved from a shared research culture into companies that had to sell
-machines, support customers, and defend a specialized stack against a changing
-hardware market.
+The move from lab artifact to product company produced LMI and Symbolics,
+shifting the Lisp machine from a shared research tool toward competitive
+commercial products. The interpersonal conflicts of the era are part of the
+local lore, but the larger historical turn was technical and economic:
+specialized Lisp hardware and its integrated environment had become valuable
+enough to support companies that had to sell machines, support customers, and
+defend a specialized stack against a changing hardware market.
 
 Symbolics' own 1983 technical summary gave a clean product chronology. It
 traced the project to the mid-1970s MIT AI Lab effort, described CONS and CADR,
@@ -475,12 +469,9 @@ expectations about interactive development, online help, graphical debugging,
 networked workstations, and language-aware tools. The vendor box became
 vulnerable; parts of the experience became normal.
 
-The current evidence does not support a clean numerical business postmortem in
-this chapter. We should not invent revenue figures, sales counts, market share,
-or a single cause of collapse. The anchored story is already strong: the Lisp
-machine was a brilliant integration of hardware, language, tools, and culture,
-but the commercial bet required that integration to remain economically
-decisive.
+The Lisp machine was a brilliant integration of hardware, language, tools, and
+culture, but the commercial bet required that integration to remain
+economically decisive.
 
 That is the handoff to the next chapter. R1/XCON had made expert systems look
 commercially real. Lisp machines made the symbolic-AI workstation look like a
