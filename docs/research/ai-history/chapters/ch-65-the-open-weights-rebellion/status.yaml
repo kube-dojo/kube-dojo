@@ -1,8 +1,8 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 65
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: dual_cross_family_verdict_accepted
 last_updated: 2026-04-28
 green_claims: 12
 yellow_claims: 6
@@ -12,25 +12,25 @@ prose_word_cap_recommendation: 5300
 word_count_range: "4200-5300"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/523#issuecomment-4339403132
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5300
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/523#pullrequestreview-4192773680
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5300
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
-  Built from scrubbed skeleton into an anchored open-weights contract. Core
+  Built from scrubbed skeleton into a dual-cleared prose_ready open-weights contract. Core
   anchors are the Ch58-verified Stable Diffusion release layer, LLaMA, LoRA,
   Alpaca, Vicuna, Llama 2, QLoRA, and Mistral 7B.
 
-  Safe draft range is 4,200-5,300 words pending Claude source review and Gemini
-  capacity audit. Keep "open source" wording narrow, frame Alpaca/Vicuna costs
-  and evaluations as project-reported, and hand benchmark politics to Ch66 and
-  copyright/data labor to Ch68.
+  Safe draft range is 4,200-5,300 words after Claude source review and Gemini
+  gap/capacity audit. Keep "open source" wording narrow, frame Alpaca/Vicuna
+  costs and evaluations as project-reported, and hand benchmark politics to Ch66
+  and copyright/data labor to Ch68.

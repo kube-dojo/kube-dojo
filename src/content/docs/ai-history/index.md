@@ -190,7 +190,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 62 | Multimodal Convergence | prose_ready | no |
 | 63 | Inference Economics | prose_ready | no |
 | 64 | The Edge Compute Bottleneck | prose_ready | no |
-| 65 | The Open Weights Rebellion | capacity_plan_anchored | no |
+| 65 | The Open Weights Rebellion | prose_ready | no |
 | 66 | Benchmark Wars | researching | no |
 | 67 | The Monopoly | researching | no |
 | 68 | Data Labor and the Copyright Reckoning | researching | no |
@@ -205,8 +205,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 19 |
-| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 4 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 20 |
+| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 3 |
 | `researching` with prose merged on legacy contract | 5 |
 | `researching` (no prose yet) | 15 |
 | **Total** | **72** |

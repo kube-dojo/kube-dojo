@@ -16,11 +16,12 @@
   evidence supports it.
 - **Does QLoRA belong here or Ch64?** Here. Ch64 uses quantization for device
   inference; Ch65 uses QLoRA for access/modification economics.
+- **Should Mistral performance be Yellow everywhere?** No. The Apache 2.0
+  release claim is Green, while Mistral performance claims remain Yellow /
+  source-bound first-party or paper-evaluation claims.
 
 ## Remaining Reviewer Focus
 
 - Verify that Stable Diffusion reuse from Ch58 is acceptable as a cross-chapter
   anchor rather than re-fetching all release pages in Ch65.
-- Check whether Mistral performance claims should be marked Yellow everywhere or
-  whether the arXiv paper is enough for Green source-bound paper claims.
 - Confirm the 4,200-5,300 range does not trespass on Ch66/68.
