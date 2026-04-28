@@ -1,1 +1,29 @@
-status: researching
+status: capacity_plan_anchored
+researcher: claude
+research_pass_date: 2026-04-28
+green_claims: 16
+yellow_claims: 1
+red_claims: 0
+prose_capacity_plan_anchored: true
+prose_capacity_plan_total_words: "3700-5200"
+word_count_discipline_label: "4k-7k stretch"
+primary_sources_verified: 9
+secondary_sources_verified: 1
+notes: |
+  Per the new role split (Claude owns Part 6 research, effective 2026-04-28),
+  this contract was built by Claude with all Green claims traced to verified
+  primary or secondary anchors via direct curl + pdftotext + Python text
+  extraction. Anchored sources include:
+    - Banko & Brill 2001 (ACL P01-1005)
+    - Halevy, Norvig, Pereira 2009 (IEEE Intelligent Systems vol.24 no.2)
+    - Resnik 1999 (ACL P99-1068)
+    - Berners-Lee 1989 (w3.org HTMLization)
+    - Brown Corpus Manual rev. July 1979 (Wayback 20080309235836)
+    - Church 2011 (LiLT vol.6 issue 5)
+    - Brants & Franz 2006 (LDC2006T13)
+    - Brants et al. 2007 (ACL D07-1090)
+    - Spärck Jones 2005 (ACL J05-1001)
+  Every Prose Capacity Plan layer in brief.md cites at least one anchored
+  page entry in sources.md. Awaiting cross-family review (Codex anchor
+  verification + Gemini gap analysis) before status promotion to
+  research_contract_approved.
