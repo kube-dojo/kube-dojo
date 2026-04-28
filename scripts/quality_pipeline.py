@@ -590,14 +590,23 @@ def write_one(state: dict[str, Any], args: argparse.Namespace) -> None:
     log = log_path_for(slug, "write")
     t0 = time.time()
     try:
-        cmd = [
-            "codex", "exec",
-            "-m", args.writer,
-            "-c", f'model_reasoning_effort="{args.reasoning}"',
-            prompt,
-        ]
-        with log.open("w", encoding="utf-8") as fh:
-            result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=args.timeout, cwd=str(REPO_ROOT))
+        if args.writer.startswith("gemini"):
+            cmd = [
+                _VENV_PYTHON, DISPATCH, "gemini", "-",
+                "--model", args.writer,
+                "--timeout", str(args.timeout)
+            ]
+            with log.open("w", encoding="utf-8") as fh:
+                result = subprocess.run(cmd, input=prompt, stdout=fh, stderr=subprocess.STDOUT, text=True, timeout=args.timeout, cwd=str(REPO_ROOT))
+        else:
+            cmd = [
+                "codex", "exec",
+                "-m", args.writer,
+                "-c", f'model_reasoning_effort="{args.reasoning}"',
+                prompt,
+            ]
+            with log.open("w", encoding="utf-8") as fh:
+                result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=args.timeout, cwd=str(REPO_ROOT))
     except subprocess.TimeoutExpired:
         _git_checkout(current)
         record_failure(state, f"codex timeout after {args.timeout}s")
