@@ -2,20 +2,20 @@ status: capacity_plan_anchored
 owner: Codex
 part: 9
 chapter: 62
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: awaiting_gemini_recheck_after_capacity_trim
 last_updated: 2026-04-28
 green_claims: 17
 yellow_claims: 3
 red_claims: 0
 guardrail_count: 8
-prose_word_cap_recommendation: 5700
-word_count_range: "4600-5700"
+prose_word_cap_recommendation: 4800
+word_count_range: "3800-4800"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/517#issuecomment-4338913939
   gemini:
     model: null
     date: null
@@ -32,6 +32,6 @@ notes: |
   page / System Card, and Google's Veo announcement. Veo remains Yellow product
   framing, not independent technical evaluation.
 
-  Safe prose range is 4,600-5,700 words. Do not pad by importing image diffusion
-  history from Ch58, inference economics from Ch63, benchmark politics from Ch66,
-  or copyright/data-labor fights from Ch68.
+  Safe prose range is 3,800-4,800 words after Gemini gap audit. Do not pad by
+  importing image diffusion history from Ch58, inference economics from Ch63,
+  benchmark politics from Ch66, or copyright/data-labor fights from Ch68.

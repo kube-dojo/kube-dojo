@@ -48,20 +48,20 @@ interactive.
 
 ## Prose Capacity Plan
 
-Target range: 4,600-5,700 words.
+Target range: 3,800-4,800 words.
 
-- 550-750 words: bridge from scale and agents to media interfaces; define why
+- 450-650 words: bridge from scale and agents to media interfaces; define why
   text-only "LLM" became too narrow.
-- 750-950 words: CLIP and Flamingo as the research bridge from language
+- 600-800 words: CLIP and Flamingo as the research bridge from language
   supervision to interleaved visual-language prompting.
-- 900-1,100 words: GPT-4/GPT-4V visual assistant turn, including image/text
+- 750-950 words: GPT-4/GPT-4V visual assistant turn, including image/text
   prompts, Be My Eyes/Be My AI, and risk surfaces.
-- 850-1,050 words: Gemini and GPT-4o as product-era multimodal convergence:
+- 700-900 words: Gemini and GPT-4o as product-era multimodal convergence:
   joint training claims, audio/vision/text inputs, real-time speech, and safety.
-- 950-1,150 words: Sora/Veo video frontier: spacetime patches, variable
+- 750-950 words: Sora/Veo video frontier: spacetime patches, variable
   duration/resolution/aspect ratio, video editing, 1080p/minute-scale claims,
   safety stack, and explicit simulator limitations.
-- 450-650 words: category-collapse close and handoff to inference economics,
+- 350-550 words: category-collapse close and handoff to inference economics,
   benchmarks, copyright/data labor, and energy/chip constraints.
 
 ## Guardrails

@@ -4,8 +4,8 @@
 
 Contract is `capacity_plan_anchored` as of 2026-04-28. Sources below were
 verified from arXiv/OpenAI PDFs, official OpenAI pages, and official Google
-blog/report pages. Gemini must still gap-audit the scope and word cap before
-prose drafting.
+blog/report pages. Gemini gap-audited the scope and requested a lower
+3,800-4,800 word natural cap to avoid padding from adjacent chapters.
 
 ## Primary Source Spine
 
@@ -60,12 +60,13 @@ prose drafting.
 
 ## Anchor Worklist For Prose
 
-- Use CLIP/Flamingo for 700-900 words of precursor bridge at most.
+- Use CLIP/Flamingo for 600-800 words of precursor bridge at most.
 - Use GPT-4 Section 4.1 and GPT-4V pp.1-10 for the visual assistant scene.
 - Use Gemini p.1/pp.3-4 to define "natively multimodal" safely.
 - Use GPT-4o System Card p.1 and Hello GPT-4o lines 47, 82-84 for audio latency
   and the three-model-pipeline contrast.
 - Use Sora world-simulators lines 33-58 and 118-139 for video architecture and
-  limitations.
+  limitations; keep the Sora/Veo scene around 750-950 words unless a stronger
+  technical Veo anchor is added.
 - Use Sora System Card and Google Veo blog only for deployment/safety/product
   framing.
