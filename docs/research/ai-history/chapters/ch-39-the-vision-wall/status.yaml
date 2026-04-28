@@ -1,1 +1,38 @@
-status: researching
+chapter: ch-39-the-vision-wall
+status: capacity_plan_anchored
+owner: Codex
+issue: 394
+updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity_plan:
+  total_range: 3400-4700
+  layers:
+    - scene: 1
+      topic: A feature has to be designed
+      range: 650-900
+      anchors: [G01, G02, G03]
+    - scene: 2
+      topic: PASCAL VOC as benchmark infrastructure
+      range: 750-1000
+      anchors: [G04, G05, G06, G07, G08, G09, G10, G23, G24, G25, G26, G27, G28, G29]
+    - scene: 3
+      topic: The late-2000s recognition stack
+      range: 550-800
+      anchors: [G01, G02, G03, G11, G12, G15, G16]
+    - scene: 4
+      topic: Dataset bias and the closed-world warning
+      range: 900-1200
+      anchors: [G13, G14, G15, G16, G17, G18, G22]
+    - scene: 5
+      topic: From benchmark discipline to scale pressure
+      range: 550-800
+      anchors: [G08, G19, G20, G21, G23]
+claim_counts:
+  green: 29
+  yellow: 6
+  red: 3
+checks:
+  every_plan_layer_has_sources_anchor: true
+  legacy_prose_used_only_for_scope: true
+  shell_curl_attempted: true
+  shell_curl_blocked_by_dns: true
