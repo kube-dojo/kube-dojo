@@ -1,0 +1,15 @@
+status: researching
+owner: Codex
+part: 9
+chapter: 66
+review_state: not_started
+last_updated: 2026-04-28
+green_claims: 0
+yellow_claims: 0
+red_claims: 0
+guardrail_count: 4
+prose_word_cap_recommendation: null
+notes: |
+  New chapter added by the modern-era coverage pass after Claude/Gemini
+  structural consultation. It reserves evaluation/benchmark politics as a
+  first-class chapter instead of burying them inside Product Shock or Monopoly.

@@ -2,7 +2,7 @@
 
 ## Status Board
 
-This directory contains the operational research files for the definitive 68-chapter AI History Epic.
+This directory contains the operational research files for the definitive 72-chapter AI History Epic.
 
 - **Golden Research (Parts 1-2, Chapters 1-10):** Currently under revision based on cross-family review (downgraded to `reviewing` while we convert to claim-level anchoring and resolve factual disputes).
 - **Part 3 (The Birth of Symbolic AI):** Ch11-14 prose `accepted`; Ch15 dual-cleared `prose_ready` 2026-04-28; Ch16 still researching (now Codex-owned per 2026-04-29 split).
@@ -17,7 +17,9 @@ The team workflow is maintained in `TEAM_WORKFLOW.md`. It defines the gates betw
 ## Structure
 
 *   `source-catalog.md`: Shared bibliography for recurring sources (e.g., Hodges, Gleick, Dyson).
-*   `chapters/`: The 68 chapter skeletons. Each must hit the KubeDojo sourcing standard (claim-level anchors, page/section references, independent confirmation) before unlocking for prose drafting.
+*   `comprehensive-roadmap-72-chapters.md`: Current 72-chapter roadmap.
+*   `modern-coverage-matrix.md`: Routing table for late-era themes added during the modern coverage pass.
+*   `chapters/`: The 72 chapter skeletons. Each must hit the KubeDojo sourcing standard (claim-level anchors, page/section references, independent confirmation) before unlocking for prose drafting.
 
 ## Role Split (effective 2026-04-29 — prose pipeline pivot)
 
@@ -56,6 +58,6 @@ Coordination happens across 9 Part Tracking issues linked to Epic #394. The "Res
 | 6 | [#404](https://github.com/kube-dojo/kube-dojo.github.io/issues/404) | The Rise of Data & Distributed Compute (Ch 32-40) | **Claude** (was Gemini) | **Gemini** → Claude expansion |
 | 7 | [#405](https://github.com/kube-dojo/kube-dojo.github.io/issues/405) | The Deep Learning Revolution & GPU Coup (Ch 41-49) | **Claude** (was Gemini) | **Gemini** → Claude expansion |
 | 8 | [#406](https://github.com/kube-dojo/kube-dojo.github.io/issues/406) | The Transformer, Scale & Open Source (Ch 50-58) | **Codex** | **Codex** |
-| 9 | [#407](https://github.com/kube-dojo/kube-dojo.github.io/issues/407) | The Product Shock & Physical Limits (Ch 59-68) | **Codex** (was Claude — transferred 2026-04-29) | **Codex** |
+| 9 | [#407](https://github.com/kube-dojo/kube-dojo.github.io/issues/407) | The Product Shock & Physical Limits (Ch 59-72) | **Codex** (was Claude — transferred 2026-04-29) | **Codex** |
 
-Note: The 630 changed files in the original PR include automatically generated placeholder directories for the 68 chapters to ensure proper boundaries. These placeholders are intentional and expected in diff reviews.
+Note: The 630 changed files in the original PR included automatically generated placeholder directories for the first 68 chapters to ensure proper boundaries. The modern-era coverage pass later expanded the roadmap to 72 chapters so RAG/tool use, multimodal systems, benchmark politics, and data labor/copyright are not forced into unrelated chapters.
