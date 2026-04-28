@@ -1,9 +1,11 @@
-status: capacity_plan_anchored
+status: prose_review
 owner: Codex
 part: 4
 chapter: 21
-review_state: gemini_and_claude_ready_to_draft_with_cap_fixes_applied
+review_state: needs_cross_family_prose_review
 last_updated: 2026-04-28
+prose_path: src/content/docs/ai-history/ch-21-the-rule-based-fortune.md
+prose_words: 4146
 notes:
   - "Codex expanded the placeholder into an anchored research contract for R1/XCON and the commercial expert-system turn."
   - "Core frame: R1/XCON made expert systems commercially credible because a narrow, structured, high-value manufacturing task fit production rules and sustained maintenance."
@@ -14,4 +16,5 @@ notes:
   - "Guardrail: Gemini may gap-audit capacity/narrative only; source-discipline review should come from Claude under the 2026-04-28 role split."
   - "Claude source-discipline review on PR #450 returned APPROVE after Codex fixed word-budget arithmetic, demoted the Studylib Bachant/McDermott mirror to Yellow, propagated the caveat, and tightened source notes."
   - "Gemini gap/capacity review on PR #450 returned READY_TO_DRAFT_WITH_CAP; Codex applied narrative fixes for XSEL/ad-hoc constraints as a standalone scene and added technician-floor output texture."
-  - "Next transition: prose drafting at 4,000-5,000 words with Bachant/McDermott 1984 used only as Yellow-caveated material unless an authoritative PDF or independent body-text cross-check is added."
+  - "Codex drafted first prose pass at 4,146 words, inside the approved 4,000-5,000 range."
+  - "Bachant/McDermott 1984 is used conservatively for broad maintenance direction only; exact dollar-savings, first-commercial-system, and hard ROI claims remain excluded."

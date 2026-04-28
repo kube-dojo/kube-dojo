@@ -29,7 +29,10 @@
   number before using any dollar claim.
 - Locate an official AAAI-hosted PDF for "R1 Revisited" if possible. Current
   mirror extraction is adequate but should be replaced with a publisher-hosted
-  source if it becomes retrievable.
+  source if it becomes retrievable. Codex rechecked the DBLP-linked AAAI/OJS
+  article page on 2026-04-28; DBLP points to the electronic edition, but the
+  OJS article page reports no readable files and the download endpoint returns
+  empty content.
 - Consider adding one source on the broader expert-system business boom only if
   Ch21 needs more market context. Smith 1984 is enough for the core draft.
 
