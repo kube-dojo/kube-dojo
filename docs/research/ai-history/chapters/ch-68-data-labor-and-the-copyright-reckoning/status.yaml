@@ -1,15 +1,37 @@
-status: researching
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 68
-review_state: not_started
+review_state: dual_cross_family_approved
 last_updated: 2026-04-28
-green_claims: 0
-yellow_claims: 0
+green_claims: 9
+yellow_claims: 11
 red_claims: 0
-guardrail_count: 4
-prose_word_cap_recommendation: null
+guardrail_count: 8
+prose_word_cap_recommendation: 5500
+word_count_range: "4500-5500"
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/529#issuecomment-4339611990
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5500
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/529#issuecomment-4339635161
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5500
+  resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
-  New chapter added by the modern-era coverage pass after Claude/Gemini
-  structural consultation. It separates labor/copyright/data-rights history
-  from the technical data-exhaustion chapter.
+  Built from placeholder into an anchored labor/data-rights/copyright contract.
+  Core anchors are Ouyang/InstructGPT, TIME/Sama reporting, GPT-3/Pile/Common
+  Crawl, LAION/Stable Diffusion model card, Getty/NYT filings, OpenAI responses
+  and crawler/licensing pages, and the 2025 Bartz/Anthropic fair-use order.
+
+  Claude approved source fidelity and Gemini approved gap/capacity at a
+  5,500-word cap. Allegations, company positions, and court holdings must remain
+  lexically separate. Recheck Bartz/Anthropic settlement status before prose if
+  settlement finality appears in the chapter.

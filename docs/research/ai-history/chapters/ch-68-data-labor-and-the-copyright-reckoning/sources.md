@@ -1,29 +1,77 @@
 # Sources: Chapter 68 - Data Labor and the Copyright Reckoning
 
-## Research Status
+## Verification Key
 
-No claims are verified yet. This placeholder reserves labor/copyright/data-rights history as a first-class chapter.
+- Green: claim has direct support from a paper, model card, official statement,
+  court filing/order, or source-specific investigative report.
+- Green/Yellow: claim is usable but must carry source-type caveats such as
+  "the complaint alleges," "OpenAI says," "TIME reported," or "company framing."
+- Yellow: chronology or context support only; do not make it load-bearing.
+- Red: not currently supported; do not draft.
 
-## Candidate Source Families To Verify
+## Primary / Near-Primary Source Spine
 
-- Ouyang/InstructGPT and related RLHF labor sources from Chapter 57 for continuity.
-- Primary reporting and legal filings on Sama/Kenya/content moderation labor.
-- Books3 / The Pile documentation and related primary materials.
-- Common Crawl documentation and dataset-use papers.
-- LAION documentation and Stable Diffusion primary materials.
-- Getty Images v. Stability AI filings and official statements.
-- New York Times v. OpenAI/Microsoft complaint and responses.
-- Publisher/data-licensing announcements where relevant.
+| Source | Use In Chapter | Anchor Notes |
+|---|---|---|
+| Long Ouyang et al., "Training language models to follow instructions with human feedback," arXiv:2203.02155. PDF: https://arxiv.org/pdf/2203.02155 | Research-grade RLHF labor pipeline: demonstrations, rankings, reward model, PPO, about 40 contractors, and representativeness limits. | Green: PDF lines 8-26 summarize demonstrations, rankings, RLHF, and measured results; lines 65-79 say OpenAI hired about 40 contractors, collected demonstrations/comparisons, trained a reward model, used PPO, and aligned to preferences of a specific group rather than all human values. Ch57 has fuller anchors. |
+| Billy Perrigo, "OpenAI Used Kenyan Workers on Less Than $2 Per Hour to Make ChatGPT Less Toxic," TIME, Jan. 18, 2023. https://time.com/6247678/openai-chatgpt-kenya-workers/ | Investigative labor source for Sama/Kenya safety-labeling work and worker-condition caveats. | Green/Yellow: TIME lines 41, 54, 62, 73-74, 80-90, 96-111, and 113-115. Use as reported investigation plus quoted company responses, not as primary OpenAI payroll data. |
+| Tom B. Brown et al., "Language Models are Few-Shot Learners," arXiv:2005.14165. PDF: https://arxiv.org/pdf/2005.14165 | GPT-3 training mixture and Common Crawl/books baseline from prior Part 8 context. | Green via Ch53 contract: Section 2.2/Table 2.2 anchor filtered Common Crawl, WebText2, Books1, Books2, and Wikipedia, with 410B filtered Common Crawl tokens and book datasets. |
+| Common Crawl, "Overview." https://commoncrawl.org/overview | Public web-corpus infrastructure. | Green: lines 23-25 say the corpus contains petabytes of data regularly collected since 2008; lines 220-227 say it contains raw web page data, metadata extracts, and text extracts, stored on AWS public datasets and free to access. |
+| Gao et al., "The Pile: An 825 GiB Dataset of Diverse Text for Language Modeling," arXiv:2101.00027. PDF: https://arxiv.org/pdf/2101.00027 | Open-corpus scene; Books3 as a named component; Common Crawl reliance. | Green: lines 11-13 and 46-47 identify 825 GiB and 22 diverse subsets; lines 32-35 say large language models turned to Common Crawl for most/all data; lines 59-63 list Books3, Project Gutenberg/PG-19, OpenSubtitles, Wikipedia, Enron, and others. |
+| LAION-5B arXiv abstract page, "LAION-5B: An open large-scale dataset for training next generation image-text models." https://arxiv.org/abs/2210.08402 | Image-caption dataset scale and open dataset framing. | Green: line 43 says LAION-5B consists of 5.85 billion CLIP-filtered image-text pairs, including 2.32B English pairs, and discusses replication/fine-tuning of CLIP, GLIDE, and Stable Diffusion. |
+| CompVis Stable Diffusion v1-4 model card. https://huggingface.co/CompVis/stable-diffusion-v1-4 | Stable Diffusion dataset/model-card bridge. | Green: lines 230-233 say the model was trained on LAION-5B/LAION-2B(en) subsets and warn about adult material and cultural bias; lines 240-256 list LAION-2B(en), LAION aesthetics subsets, training steps, and hardware. |
+| Getty Images, "Getty Images Statement," Jan. 17, 2023. https://newsroom.gettyimages.com/en/getty-images/getty-images-statement | Getty's official UK-proceeding framing and licensing-position source. | Green/Yellow: lines 13-17 say Getty commenced High Court proceedings, claims copying/processing of millions of images and metadata without a license, and says Getty licenses content for AI training. Use as Getty's position. |
+| Getty Images (US), Inc. v. Stability AI, Inc., amended complaint, D. Del., Mar. 29, 2023. Justia mirror: https://docs.justia.com/cases/federal/district-courts/delaware/dedce/1:2023cv00135/81407/13 | US image lawsuit allegations: images, captions, metadata, trademarks/watermarks, licensing market. | Green/Yellow: lines 46-63 provide the nature of action and allegations; lines 47-60 allege more than 12 million copied photographs/captions/metadata and direct competition; lines 61-63 allege watermark/trademark confusion. Complaint allegations only. |
+| The New York Times Company v. Microsoft/OpenAI, complaint, S.D.N.Y., Dec. 27, 2023. CourtListener PDF: https://storage.courtlistener.com/recap/gov.uscourts.nysd.612697/gov.uscourts.nysd.612697.1.0.pdf | News-rights flashpoint and publisher-market framing. | Green/Yellow: lines 74-83 allege unlicensed use, fair-use dispute, substitute products, and damages; lines 290-347 describe paywall/archive/API/licensing/search distinction and no GenAI permission. Complaint allegations only. |
+| OpenAI, "OpenAI and journalism," Jan. 8, 2024. https://openai.com/index/openai-and-journalism/ | OpenAI's response: fair use, opt-out, partnerships, regurgitation framing. | Green/Yellow: lines 43-47 summarize OpenAI's four-point position; lines 50-61 discuss publisher partnerships, fair use position, and opt-out; lines 64-75 discuss memorization/regurgitation and NYT dispute. Company framing. |
+| The New York Times Company v. Microsoft/OpenAI, Opinion on motions to dismiss, S.D.N.Y., Apr. 4, 2025. PDF: https://cdn.openai.com/pdf/gov.uscourts.nysd.612697.514.0_1.pdf | Legal-status freshness for NYT/OpenAI: narrowed claims and surviving/dismissed DMCA pieces. | Green: lines 101-129 summarize grants/denials; lines 131-133 state complaint facts are assumed true for Rule 12(b)(6); lines 1548-1554 repeat DMCA dismissal/denial results. Do not turn into merits finding. |
+| Bartz et al. v. Anthropic PBC, Order on Fair Use, N.D. Cal., June 23, 2025. CourtListener/RECAP PDF: https://storage.courtlistener.com/recap/gov.uscourts.cand.434709/gov.uscourts.cand.434709.231.0_4.pdf | Book-corpus court record; Books3/LibGen/PiLiMi and fair-use split. | Green: lines 42-51 frame the issue; lines 147-160 discuss Books3/LibGen/PiLiMi and seven million book copies; lines 1800-1844 say training copies and print-to-digital copies were fair use, while pirated central-library copies were not justified by fair use; lines 1860-1865 grant/deny summary judgment and set trial for pirated copies/damages. OpenAI CDN copy was used as a mirror during initial extraction, but CourtListener/RECAP is the canonical contract anchor. |
+| Authors Alliance, "Bartz v. Anthropic Settlement Hearing Moved to May 14, 2026," Apr. 14, 2026. https://www.authorsalliance.org/2026/04/14/bartz-v-anthropic-settlement-update-new-date-and-time-for-the-fairness-hearing-you-can-join-online-and-unsealed-objections/ | Freshness note for settlement status as of Apr. 28, 2026. | Yellow: use only to say the settlement-finality hearing had been moved to May 14, 2026. Prefer the court order if available before prose. |
+| OpenAI, "Overview of OpenAI Crawlers." https://platform.openai.com/docs/bots | Opt-out/crawler control endpoint. | Green/Yellow: lines 622-631 say OpenAI uses OAI-SearchBot and GPTBot robots.txt tags; webmasters can allow search while disallowing training; GPTBot crawls content that may be used for training foundation models. Company docs; do not imply all companies honor the same protocol. |
+| OpenAI/Axel Springer partnership announcement, Dec. 13, 2023. https://openai.com/index/axel-springer-partnership/ | Licensing/enclosure example. | Green/Yellow: lines 35-40 say the partnership gives ChatGPT summaries/attribution/links and involves Axel Springer content for advancing OpenAI models. Company framing. |
+| OpenAI/Financial Times partnership announcement, Apr. 29, 2024. https://openai.com/index/content-partnership-with-financial-times/ | Licensing/enclosure example. | Green/Yellow: lines 33-40 say the strategic partnership/licensing agreement enhances ChatGPT with attributed FT content, improves model usefulness with FT journalism, and includes transparency/attribution/compensation framing. |
+| OpenAI/Reddit partnership announcement, May 16, 2024. https://openai.com/index/openai-and-reddit-partnership/ | Platform-data API enclosure example. | Green/Yellow: lines 35-45 say OpenAI will access Reddit's Data API for real-time structured content, Reddit will build AI features, OpenAI becomes an ad partner, and Sam Altman's shareholder disclosure. |
+| OpenAI/News Corp partnership announcement, May 22, 2024. https://openai.com/index/news-corp-and-openai-sign-landmark-multi-year-global-partnership/ | Licensing/enclosure example. | Green/Yellow: lines 34-39 say OpenAI has permission to display News Corp content, access current/archive material from named mastheads, and receive journalistic expertise. |
+| Wikipedia pages on AI copyright, Books3, LAION, Stable Diffusion, NYT v. OpenAI, Getty v. Stability. | Source discovery only. | Yellow: useful for finding filings, dates, and case names. Not evidence for prose claims. |
 
-## Required Claim Categories
+## Scene-Level Claim Table
 
-- What labor was performed and by whom, with source-specific boundaries.
-- What datasets were used or alleged, and what source proves the claim.
-- What lawsuits allege versus what courts have decided.
-- How opt-outs/licensing changed data access.
+| Claim | Scene | Primary Anchor | Confirmation | Status | Notes |
+|---|---|---|---|---|---|
+| InstructGPT-style RLHF depended on human demonstrations, rankings, reward modeling, and PPO rather than architecture alone. | Human Filter | Ouyang PDF lines 8-26, 65-79 | Ch57 source contract | Green | Reuse sparingly; Ch57 owns method details. |
+| Ouyang et al. report hiring about 40 contractors to label data, and warn that the system aligned to a specific group of labelers/researchers rather than all human values. | Human Filter | Ouyang PDF lines 65-79 | Ch57 claim table | Green | Good bridge from method to labor. |
+| TIME reported that OpenAI outsourced toxic-content labeling to Sama workers in Kenya, including tens of thousands of snippets beginning in Nov. 2021. | Human Filter | TIME lines 41, 54, 57, 62 | TIME OpenAI/Sama responses lines 73-74, 88-97 | Green/Yellow | Reporting plus company responses; do not overgeneralize. |
+| TIME reported take-home wages around $1.32-$2/hour for the OpenAI project, with Sama disputing some details and giving a higher possible range. | Human Filter | TIME lines 62, 89-94 | TIME company-response lines 93-97 | Green/Yellow | Attribute every wage claim to TIME and include Sama/OpenAI caveats. |
+| GPT-3 used a mixture including filtered Common Crawl, WebText2, Books1, Books2, and Wikipedia, making web/books a normal foundation-model input category. | Scraped Corpus | Ch53 GPT-3 Section 2.2/Table 2.2 anchors | GPT-3 paper | Green | This is historical baseline; do not imply later models used identical mix. |
+| Common Crawl presents itself as petabytes of web data regularly collected since 2008, containing raw web page data, metadata, and text extracts. | Scraped Corpus | Common Crawl lines 23-25, 220-227 | The Pile lines 32-35 | Green | Avoid saying it is a rights-cleared corpus. |
+| The Pile is an 825 GiB English corpus built from 22 subsets and includes Books3 among other components. | Scraped Corpus | The Pile lines 11-13, 46-47, 59-63 | Bartz order lines 147-160 for later Books3 salience | Green | Use Books3 as a named component, not the whole Pile. |
+| LAION-5B consists of 5.85B CLIP-filtered image-text pairs and enabled open image-model research, including Stable Diffusion experiments. | Image Flashpoint | LAION abstract line 43 | Stable Diffusion model card lines 230-256 | Green | Dataset source; not a copyright finding. |
+| Stable Diffusion v1-4 model card says Stable Diffusion v1 was trained on LAION-2B(en) and LAION subsets, with documented safety/bias caveats. | Image Flashpoint | Stable Diffusion model card lines 230-256 | LAION line 43 | Green | Use the model card, not rumor. |
+| Getty officially said it commenced UK proceedings in Jan. 2023 and claimed Stability copied/processed millions of images and metadata without a license. | Image Flashpoint | Getty statement lines 13-17 | Getty complaint lines 46-63 | Green/Yellow | Getty's position. |
+| Getty's US amended complaint alleges more than 12M copied photographs plus captions/metadata, direct competition, and watermark/trademark confusion. | Image Flashpoint | Getty complaint lines 47-63 | Getty statement lines 13-17 | Green/Yellow | Complaint allegations only. |
+| The NYT complaint alleges Microsoft/OpenAI used Times content without permission, disputes fair use, and frames GenAI outputs as substitutes for Times products. | Newspaper/Book Reckoning | NYT complaint lines 74-83 | NYT complaint lines 290-347 | Green/Yellow | Complaint allegations only. |
+| The NYT complaint distinguishes search indexing/licensed use from GenAI use and says The Times had not given GenAI permission. | Newspaper/Book Reckoning | NYT complaint lines 290-347 | OpenAI response lines 50-61 | Green/Yellow | Good "search vs training" scene. |
+| OpenAI responded that training on publicly available internet materials is fair use, that it offers publisher opt-outs, and that regurgitation is a rare bug/misuse issue. | Newspaper/Book Reckoning | OpenAI journalism lines 43-61, 64-75 | OpenAI crawler docs lines 622-631 | Green/Yellow | Company defense; not court finding. |
+| The Apr. 4, 2025 NYT/OpenAI opinion narrowed some claims while assuming complaint facts true at motion-to-dismiss stage. | Newspaper/Book Reckoning | NYT opinion lines 101-133, 1548-1554 | OpenAI current NYT page if needed | Green | Do not call this final merits adjudication. |
+| Bartz/Anthropic order records Books3/LibGen/PiLiMi book-copy facts and draws a split: training copies fair use, pirated central-library copies not justified by fair use. | Newspaper/Book Reckoning | Bartz order lines 42-51, 147-160, 1800-1844, 1860-1865 | Authors Alliance freshness note | Green | This is the strongest legal-status scene; date it June 23, 2025. |
+| As of Apr. 28, 2026, final settlement approval in Bartz/Anthropic remained pending after the hearing was moved to May 14, 2026. | Newspaper/Book Reckoning | Authors Alliance Apr. 14, 2026 update | Need court order before prose if possible | Yellow | Freshness guardrail; avoid if not needed. |
+| OpenAI crawler docs distinguish OAI-SearchBot/search from GPTBot/training and say webmasters can disallow GPTBot for training use. | Enclosure | OpenAI crawler docs lines 622-631 | OpenAI journalism opt-out lines 56-61 | Green/Yellow | Company protocol, not universal law. |
+| OpenAI publisher/platform partnerships in 2023-2024 show content access becoming attributed, licensed, API-mediated, and commercially negotiated. | Enclosure | Axel lines 35-40; FT lines 33-40; News Corp lines 34-39; Reddit lines 35-45 | OpenAI journalism lines 50-55 | Green/Yellow | Synthesis across official company announcements. |
+| The endpoint of the chapter is not "data is exhausted" but "high-quality data becomes controlled, contested, or priced." | Close | Synthesis from crawler/licensing/lawsuit sources | Ch69 boundary | Yellow | Interpretive; keep source-bound. |
 
 ## Conflict Notes
 
-- Allegations are not findings. Label them clearly.
-- Do not infer exact training-set contents unless a primary source supports it.
-- Do not draft until source anchors are extracted.
+- Allegations are not findings. Use "alleges," "claims," "OpenAI says," "Getty
+  says," "the court held," and "TIME reported" with discipline.
+- Do not infer exact training-set contents unless a model card, paper, court
+  order, complaint, or company statement supports that specific claim.
+- Do not claim all scraping is unlawful or all AI training is fair use. The
+  strongest court anchor here is narrow and split by use/acquisition path.
+- Do not imply the Sama/TIME story is identical to Ouyang's Upwork/ScaleAI RLHF
+  contractors. One is a paper-described RLHF pipeline; the other is
+  investigative reporting on a safety-labeling/content-moderation project.
+- Do not quote or narrate graphic worker examples in detail. It is enough to
+  state categories and conditions with care.
+- Do not treat publisher deals as proof that pre-deal training required a
+  license; they prove the market moved toward negotiated access.
+- Wikipedia was checked for source discovery and chronology only.
