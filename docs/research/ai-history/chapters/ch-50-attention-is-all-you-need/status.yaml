@@ -1,1 +1,47 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 8
+chapter: 50
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
+last_updated: 2026-04-28
+green_claims: 15
+yellow_claims: 4
+red_claims: 5
+prose_word_cap_recommendation: 5200
+prose_word_cap: 5200
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/490#issuecomment-4333549894
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 5200
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/490#issuecomment-4333598441
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5200
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online PDFs extracted with
+  curl + pdftotext. Core anchors now come from Vaswani et al. 2017, Bahdanau
+  et al. 2014, and Sutskever et al. 2014.
+
+  Strongest safe prose range: 4,000-5,200 words. The architecture, predecessor
+  attention, recurrent bottleneck, convolutional alternative layer, hardware/
+  training setup, quadratic self-attention tradeoff, and WMT result layers are
+  all anchored. Expansion beyond this should wait for real team oral-history or
+  deployment sources; do not invent Google lab scenes.
+
+  Claude source-fidelity review approved the contract and requested only
+  non-blocking nits. Follow-up commit fixed the English-French BLEU warning,
+  tightened Sutskever's 8-GPU mechanism, and added the convolutional detour plus
+  quadratic self-attention tradeoff.
+
+  Gemini 3.1 Pro model check timed out, so the bridge used gemini-3-flash-preview
+  fallback. Gemini gap/capacity audit returned READY_WITH_CAP at 5,200 words.
+  Drafting may begin, capped at 5,200 words unless real oral-history or deployment
+  sources are added.
