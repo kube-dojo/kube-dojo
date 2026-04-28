@@ -1,1 +1,44 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 8
+chapter: 56
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
+last_updated: 2026-04-28
+green_claims: 9
+yellow_claims: 2
+red_claims: 0
+guardrail_count: 6
+prose_word_cap_recommendation: 5200
+prose_word_cap: 5200
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/501#issuecomment-4335484198
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 5200
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/501#issuecomment-4335486062
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5200
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: OpenAI's
+  March 2019 LP announcement, Microsoft's July 2019 partnership announcement,
+  Microsoft's May 2020 Azure supercomputer feature, and Microsoft Research's
+  February 2020 Turing-NLG/DeepSpeed context.
+
+  Strongest safe prose range: 4,400-5,200 words. The contract supports a full
+  infrastructure chapter if it explains organizational structure, cloud
+  partnership, hardware scale, networking constraints, and distributed training
+  software. It must not invent compute-credit allocation, InfiniBand, exact
+  GPU model, exact cluster cost, data-center location, or private boardroom
+  scenes.
+
+  Claude approved source fidelity after one required correction: the visible
+  Microsoft Research publication date for Turing-NLG is February 13, 2020.
+  Gemini gap/capacity audit returned READY_WITH_CAP at 5,200 words.
