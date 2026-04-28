@@ -17,3 +17,5 @@ notes: |
   Strongest safe prose range: 4,000-4,800 words. The infrastructure evidence is
   strong; the internal pivot narrative is thin. Do not invent company dialogue,
   user anecdotes, or community reaction to reach the top of the book target.
+  The red_claims count reflects explicit guardrail prohibitions, not rows in
+  the scene-level claim table.
