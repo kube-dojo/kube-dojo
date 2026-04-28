@@ -1,15 +1,37 @@
-status: researching
+status: capacity_plan_anchored
 owner: Codex
 part: 9
 chapter: 60
-review_state: not_started
+review_state: awaiting_claude_source_review_and_gemini_gap_audit
 last_updated: 2026-04-28
-green_claims: 0
-yellow_claims: 0
+green_claims: 18
+yellow_claims: 3
 red_claims: 0
-guardrail_count: 4
-prose_word_cap_recommendation: null
+guardrail_count: 10
+prose_word_cap_recommendation: 5600
+word_count_range: "4500-5600"
+verdicts:
+  claude:
+    model: null
+    date: null
+    verdict: null
+    review_url: null
+  gemini:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    review_url: null
+  resolved: null
+  resolved_word_cap: null
+  resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
-  New chapter added by the modern-era coverage pass after Claude/Gemini
-  structural consultation. It reserves RAG/search/tool-use/agent history as a
-  first-class bridge from chatbots to operational systems.
+  Built from the modern-era placeholder into a capacity_plan_anchored contract.
+  Core anchors are RAG (Lewis et al. 2020), WebGPT (OpenAI/Nakano et al.),
+  ReAct (Yao et al.), Toolformer (Schick et al.), OpenAI plugins, OpenAI
+  function calling, LangChain repository snapshots, and AutoGPT v0.1.0.
+
+  Safe prose range is 4,500-5,600 words. Do not pad by importing serving-cost
+  analysis from Ch63, benchmark politics from Ch66, open-weights competition
+  from Ch65, data/copyright labor fights from Ch68, or multimodal/video systems
+  from Ch62. Gemini gap/capacity audit is still required before prose drafting.
