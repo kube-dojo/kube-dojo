@@ -1,1 +1,58 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-33-deep-blue
+part: 6
+researcher: claude
+research_split_effective: 2026-04-28
+contract_built: 2026-04-28
+
+claim_counts:
+  total: 27
+  green: 26
+  yellow: 1
+  red: 0
+  notes: |
+    26 Green claims; 1 pure Yellow (row 20: ChessBase 2015 modern-engine
+    vindication of 36.axb5). 6 of the 26 Green claims have minor Yellow
+    nuances on sub-aspects (rows 14, 17, 22, 24, 25, 26) where one part
+    of the claim is Green-anchored and a secondary sub-aspect is pending
+    further verification. No load-bearing claim depends on a Yellow
+    sub-aspect. Every Prose Capacity Plan layer in brief.md references
+    at least one Green-anchored sources.md entry.
+
+prose_capacity_plan:
+  total_word_range: "3,300-4,900"
+  word_count_label: "4k-7k stretch"
+  layers:
+    - name: "Scene 1 — The Long Approach (1985-1996)"
+      words: "600-900"
+      anchored_to: ["Hsu 1999 IEEE Micro p.70", "Newborn 2003 Chs. 4-6 pp. 55-112", "Greenemeier 2017 SciAm Campbell interview"]
+    - name: "Scene 2 — The Chip and the Cabinet"
+      words: "800-1,200"
+      anchored_to: ["Hsu 1999 IEEE Micro pp. 70-75, 80", "Campbell-Hoane-Hsu AAAI SS-99-07 1999 p.1", "Newborn 2003 pp. 122-123", "Greenemeier 2017 SciAm Campbell interview"]
+    - name: "Scene 3 — Move 44 and the Bug"
+      words: "500-800"
+      anchored_to: ["Newborn 2003 Ch.10 pp. 139-152, esp. p. 150-151"]
+    - name: "Scene 4 — Move 36 and the Panic"
+      words: "800-1,100"
+      anchored_to: ["Newborn 2003 Ch.11 pp. 153-166, esp. pp. 159-160", "Wikipedia game record (cross-reference only)"]
+    - name: "Scene 5 — Game 6 and the Aftermath"
+      words: "600-900"
+      anchored_to: ["Newborn 2003 Ch.13 pp. 187-206", "Hsu 1999 IEEE Micro p.80", "Greenemeier 2017 SciAm Campbell interview", "Newborn 2003 ref [10] McCool Reuters 9/24/1997"]
+
+primary_sources_anchored:
+  - "Hsu (1999) IEEE Micro 19(2): 70-81 — full PDF, page-anchored end-to-end"
+  - "Campbell, Hoane, Hsu (1999) AAAI SS-99-07 pp. 1-5 — full PDF, page-anchored"
+  - "Newborn (2003) Deep Blue: An AI Milestone (Springer) — Internet Archive djvu, page-anchored"
+  - "Greenemeier (2017) Scientific American — direct interview transcript, anchored"
+  - "IBM Research event-site (Wayback 2003 archive) — primary record of the as-marketed system"
+
+primary_sources_pending:
+  - "Hsu (2002) Behind Deep Blue (Princeton) — front matter only; body paywalled"
+  - "Campbell, Hoane, Hsu (2002) Artificial Intelligence 134(1-2): 57-83 — paywalled at ScienceDirect; only slide-deck rendering accessible"
+  - "Bruce Weber NYT 5/13/1997 — substantive content quoted via Newborn 2003 pp.159-160"
+
+review_request:
+  awaiting:
+    - "Codex (anchor verification cross-family review)"
+    - "Gemini (gap analysis cross-family review)"
+  acceptance_criteria: "Both Green per docs/review-protocol.md before status promotes to research_contract_approved"
