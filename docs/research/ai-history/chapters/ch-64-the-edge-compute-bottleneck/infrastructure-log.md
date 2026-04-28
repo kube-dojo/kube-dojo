@@ -25,8 +25,9 @@
 - A11 Neural Engine: up to 600B operations/sec, Apple 2017 claim.
 - Snapdragon 8 Gen 3: up to 10B-parameter on-device generative models and up to
   20 tokens/sec for 7B Llama 2, Qualcomm product-brief claim only.
-- Apple AFM-on-device: ~3B parameters; GQA reduces KV cache; about 3.5 bits per
-  weight after quantization in the paper's deployment discussion.
+- Apple AFM-on-device: ~3B parameters; GQA reduces KV cache; compressible to
+  about 3.5 bits per weight without significant quality loss, with 3.7 bpw used
+  in production in the paper's deployment discussion.
 - LLM-in-a-flash: models up to 2x DRAM size; 4-5x CPU and 20-25x GPU speedups
   versus naive loading in the paper setup.
 - MobileLLM: 125M/350M models; deep/thin architecture, embedding sharing, GQA,

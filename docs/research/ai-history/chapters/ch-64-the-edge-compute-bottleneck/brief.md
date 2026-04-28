@@ -52,19 +52,19 @@ datacenter.
 
 Target range: 4,000-5,000 words.
 
-- 450-650 words: bridge from Ch63 serving economics to edge constraints; define
+- 450-600 words: bridge from Ch63 serving economics to edge constraints; define
   battery, thermal, DRAM, flash, privacy, offline, and latency pressures.
-- 650-850 words: MobileNets and A11 Neural Engine as the pre-generative edge
+- 650-750 words: MobileNets and A11 Neural Engine as the pre-generative edge
   pattern: efficient architectures plus dedicated silicon.
-- 750-950 words: Gemini Nano / Android AICore and Qualcomm Snapdragon as Android
-  edge-AI product and hardware framing.
-- 850-1,050 words: Apple Intelligence / AFM-on-device as a modern edge model:
+- 750-900 words: Gemini Nano / Android AICore, MobileLLM, and Qualcomm
+  Snapdragon as Android edge-AI product and hardware framing.
+- 850-1,000 words: Apple Intelligence / AFM-on-device as a modern edge model:
   ~3B parameters, GQA, pruning/distillation, quantization, LoRA adapters, ANE.
-- 650-850 words: Memory bottleneck scene: LLM in a flash, DRAM vs flash, model
+- 650-800 words: Memory bottleneck scene: LLM in a flash, DRAM vs flash, model
   larger than available memory, windowing/bundling, KV-cache budget.
 - 450-650 words: the cloud fallback: Private Cloud Compute and Pixel Video Boost
   as evidence that edge AI is a routing discipline, not a full cloud replacement.
-- 250-400 words: close and handoff to Ch65/70/72.
+- 250-300 words: close and handoff to Ch65/70/72.
 
 ## Guardrails
 

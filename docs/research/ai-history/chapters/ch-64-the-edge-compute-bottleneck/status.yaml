@@ -1,8 +1,8 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 64
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: dual_cross_family_verdict_accepted
 last_updated: 2026-04-28
 green_claims: 17
 yellow_claims: 2
@@ -12,26 +12,28 @@ prose_word_cap_recommendation: 5000
 word_count_range: "4000-5000"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/521#issuecomment-4339334860
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5000
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/521#issuecomment-4339351953
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5000
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
-  Built from a scrubbed shell into a capacity_plan_anchored contract. Core
+  Built from a scrubbed shell into a dual-cleared prose_ready contract. Core
   anchors are MobileNets, Apple iPhone X/A11 Neural Engine, Qualcomm Snapdragon
   8 Gen 3 product brief, Google Gemini Nano / Android AICore, Apple Intelligence
   / AFM-on-device, LLM-in-a-flash, and MobileLLM.
 
-  Safe draft range is 4,000-5,000 words pending Gemini capacity audit. Keep
+  Safe draft range is 4,000-5,000 words after Claude source review and Gemini
+  gap/capacity review. Keep
   Qualcomm performance claims as Yellow vendor framing. Do not imply all phone
   AI runs locally; Pixel Video Boost and Apple PCC provide the hybrid-routing
-  guardrail.
+  guardrail. Claude's AFM bpw tightening and Gemini's MobileLLM capacity-plan
+  alignment nit were applied before prose_ready promotion.
