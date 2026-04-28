@@ -27,8 +27,9 @@
   prior average scenario coverage 17.9%, improved to 96.0%.
 - GPT-4 report: simulated bar exam top 10%; MMLU 86.4%; contamination checks;
   GSM-8K training-set inclusion disclosure; Evals framework.
-- MT-Bench / Arena: 80 MT-Bench questions; 3K expert votes; 30K conversations;
-  over 80% GPT-4/human agreement; bias/failure caveats.
+- MT-Bench / Arena: 80 MT-Bench questions; over 80% GPT-4/human agreement;
+  bias/failure caveats. Re-verify any exact vote/conversation counts before
+  surfacing them in prose because public Arena figures evolved quickly.
 - SWE-bench: 2,294 tasks from 12 Python repositories; Claude 2 1.96% initial
   solve rate; about 90,000 PRs filtered to benchmark instances.
 

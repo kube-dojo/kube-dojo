@@ -1,8 +1,8 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 66
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: dual_cross_family_verdict_accepted
 last_updated: 2026-04-28
 green_claims: 16
 yellow_claims: 3
@@ -12,25 +12,25 @@ prose_word_cap_recommendation: 5400
 word_count_range: "4300-5400"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/524#issuecomment-4339452573
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5400
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/524#issuecomment-4339449025
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5400
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
-  Built into an anchored benchmark-politics contract. Core anchors are MMLU,
-  BIG-bench, HELM, GPT-4 Technical Report / OpenAI Evals, MT-Bench / Chatbot
-  Arena, SWE-bench, and a Goodhart-law source.
+  Built into a dual-cleared prose_ready benchmark-politics contract. Core
+  anchors are MMLU, BIG-bench, HELM, GPT-4 Technical Report / OpenAI Evals,
+  MT-Bench / Chatbot Arena, SWE-bench, and a Goodhart-law source.
 
-  Safe draft range is 4,300-5,400 words pending Claude source review and Gemini
-  capacity audit. Keep benchmark rankings dated and source-bound, do not treat
-  scores as direct intelligence measures, and avoid unsourced contamination
+  Safe draft range is 4,300-5,400 words after Claude source review and Gemini
+  gap/capacity audit. Keep benchmark rankings dated and source-bound, do not
+  treat scores as direct intelligence measures, and avoid unsourced contamination
   accusations.
