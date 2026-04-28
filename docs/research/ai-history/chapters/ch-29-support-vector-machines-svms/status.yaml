@@ -1,9 +1,10 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 5
 chapter: 29
-review_state: gemini_flash_followup_fixes_applied
-last_updated: 2026-04-27
+review_state: gemini_and_claude_prose_approved
+last_updated: 2026-04-28
+prose_path: src/content/docs/ai-history/ch-29-support-vector-machines.md
 prose_words: 4015
 notes:
   - "Initial placeholder expanded into a claim-level research contract for SVMs."
@@ -17,3 +18,4 @@ notes:
   - "Claude prose review approved and requested two OCR audit nits; 1.1% multiclass wording and image dimensions were tightened."
   - "Gemini Flash follow-up found two remaining meta references; both were removed and draft now stands at 4,015 words."
   - "Guardrail: do not portray SVMs as a deep-learning replacement or as purely theoretical; they were a 1990s infrastructure answer to small/medium data, controlled capacity, and convex training."
+  - "PR #424 merged after Claude approval and Gemini final follow-up APPROVE; Ch29 prose is accepted."

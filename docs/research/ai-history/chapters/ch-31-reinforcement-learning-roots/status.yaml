@@ -1,9 +1,10 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 5
 chapter: 31
-review_state: prose_drafted_awaiting_cross_family_review
-last_updated: 2026-04-27
+review_state: gemini_and_claude_prose_approved_after_fixes
+last_updated: 2026-04-28
+prose_path: src/content/docs/ai-history/ch-31-reinforcement-learning-roots.md
 prose_words: 4026
 notes:
   - "Codex expanded the scrubbed placeholder into a source-anchored research contract for reinforcement-learning roots."
@@ -14,3 +15,4 @@ notes:
   - "Guardrail: Barto/Sutton/Anderson 1983 is visually anchored from a fetched PDF but not cleanly text-extracted; use p.834 for abstract-level claims only unless clean OCR is added."
   - "Guardrail: keep Sutton 1984, SARSA, Sutton/Barto 1998 retrospective framing, and Minsky/SNARC out of this chapter for scope control."
   - "Codex drafted a 4,026-word prose chapter from the approved research contract; Gemini and Claude process-language fixes applied."
+  - "PR #440 merged after Claude APPROVE_WITH_FIXES and Gemini APPROVE_WITH_FIXES; required process-language fixes were applied in commit 7b1a07e4 before merge."
