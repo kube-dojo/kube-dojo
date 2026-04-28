@@ -17,8 +17,8 @@ promise, a theorem, a villain, and a resurrection. It is also wrong in the ways
 that matter most.
 
 The perceptron did not fall because one toy Boolean example defeated the whole
-idea of learning machines. The fall came from a collision between a real
-machine, a real mathematical limitation, and a real institutional shift. Frank
+idea of learning machines. The fall came from a collision between a physical
+machine, a formal mathematical limitation, and an institutional shift. Frank
 Rosenblatt's perceptron program was not empty hype. It was an ambitious attempt
 to model perception as learned association rather than hand-coded symbolic
 description. The Mark I perceptron was not just a diagram. It was a physical
@@ -233,6 +233,10 @@ problem. A learning machine that looks plausible on small local distinctions
 can become infeasible when the relevant property depends on relationships
 spread across the whole input.
 
+Parity is the bridge between the famous shorthand and the larger theorem. XOR
+is the two-input case that later readers remember; the harder historical claim
+is about parity as the input grows and the required order grows with it.
+
 The geometry also mattered because perceptrons were sold partly through their
 parallelism. Many simple units could operate at once. But parallelism is not
 magic if each unit needs access to the whole field or if the useful partial
@@ -272,7 +276,7 @@ limits of a restricted architecture as if they had settled the fate of
 connectionism. That is where the mathematics ended and the politics of
 interpretation began.
 
-## Scaling, Structure, and the Straw Man
+## The Scaling Dilemma
 
 The fairest version of the critique is also the most useful one for later AI.
 A learning system does not become general because it has trainable weights. It
@@ -395,7 +399,7 @@ false but unfashionable. It becomes a path that ambitious researchers avoid
 unless they have unusual persistence or a home in a neighboring field.
 
 Neural-network work did continue. Some ideas survived in psychology,
-neuroscience, signal processing, adaptive control, and pattern recognition.
+neuroscience, and pattern-recognition work adjacent to mainstream AI.
 That survival matters because it prevents another myth: the idea that the field
 went silent until the 1980s. What changed was not the total existence of neural
 research. What changed was its position inside AI's official narrative. It
@@ -422,13 +426,13 @@ Rosenblatt had already solved the problem. They proved that the problem was
 still alive.
 
 Backpropagation would reopen hidden-layer learning by making credit assignment
-through internal units executable. Universal approximation results would later
-show that multilayer networks had serious representational power under stated
-conditions. Reinforcement learning and statistical learning would supply other
-ways to think about adaptation. None of that makes the early perceptron
-controversy a simple story of suppressed truth. The early systems really were
-limited. The mathematical critique really did matter. The funding shift really
-did narrow what AI treated as central.
+through internal units executable. Later mathematical and statistical work
+would give multilayer learning a different kind of legitimacy. Reinforcement
+learning and statistical learning would supply other ways to think about
+adaptation. None of that makes the early perceptron controversy a simple story
+of suppressed truth. The early systems really were limited. The mathematical
+critique really did matter. The funding shift really did narrow what AI treated
+as central.
 
 What changed later was the machinery around the idea. The field gained better
 training procedures, richer datasets, faster processors, and a different

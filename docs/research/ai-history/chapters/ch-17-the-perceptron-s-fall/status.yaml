@@ -5,7 +5,7 @@ chapter: 17
 review_state: needs_cross_family_prose_review
 last_updated: 2026-04-28
 prose_path: src/content/docs/ai-history/ch-17-the-perceptron-s-fall.md
-prose_words: 4327
+prose_words: 4360
 notes:
   - "Codex expanded the scrubbed placeholder into an anchored research contract for the perceptron fall."
   - "Core frame: the chapter must correct the XOR-killed-neural-nets myth by separating Rosenblatt's connectionist program, Minsky/Papert's single-layer/local perceptron results, and the later funding/official-history interpretation."
@@ -16,4 +16,7 @@ notes:
   - "Guardrail: do not claim multilayer networks were proved impossible; Olazaran explicitly limits the strict proof to single-layer nets defined in a particular way."
   - "Guardrail: use XOR only as a parity shorthand, not as the whole story."
   - "Codex drafted first prose pass at 4,327 words, inside the approved 4,000-4,700 range, and kept funding claims cautious under Olazaran/Bottou rather than primary ARPA evidence."
-  - "Next transition: accepted after cross-family prose review and any required revisions."
+  - "Claude source-fidelity review approved PR #464; Codex applied optional nits on continuation domains and forward-looking Part 5 phrasing."
+  - "Gemini narrative review approved PR #464; Codex applied optional prose nits on repetition, section title, and explicit parity framing."
+  - "Current prose markdown is 4,360 words after review nits."
+  - "Next transition: accepted after final PR checks and merge."
