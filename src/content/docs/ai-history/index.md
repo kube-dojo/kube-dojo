@@ -93,13 +93,13 @@ The failure of early neural networks and the rise of hard-coded Expert Systems.
 
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
-| 17 | The Perceptron's Fall | capacity_plan_anchored | no |
-| 18 | The Lighthill Devastation | capacity_plan_anchored | no |
-| 19 | Rules, Experts, and the Knowledge Bottleneck | capacity_plan_anchored | no |
-| 20 | Project MAC | researching | no |
-| 21 | The Rule-Based Fortune | researching | no |
-| 22 | The LISP Machine Bubble | researching | no |
-| 23 | The Japanese Threat | researching | no |
+| 17 | The Perceptron's Fall | accepted | yes |
+| 18 | The Lighthill Devastation | accepted | yes |
+| 19 | Rules, Experts, and the Knowledge Bottleneck | accepted | yes |
+| 20 | Project MAC | prose_review | yes |
+| 21 | The Rule-Based Fortune | capacity_plan_anchored | no |
+| 22 | The LISP Machine Bubble | capacity_plan_anchored | no |
+| 23 | The Japanese Threat | capacity_plan_anchored | no |
 
 ## Part 5 — The Mathematical Resurrection (1980s–1990s)
 
