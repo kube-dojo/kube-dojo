@@ -1,1 +1,36 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 9
+chapter: 67
+review_state: awaiting_claude_source_review_and_gemini_gap_audit
+last_updated: 2026-04-28
+green_claims: 10
+yellow_claims: 7
+red_claims: 0
+guardrail_count: 5
+prose_word_cap_recommendation: 5400
+word_count_range: "4300-5400"
+verdicts:
+  claude:
+    model: null
+    date: null
+    verdict: null
+    review_url: null
+  gemini:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    review_url: null
+  resolved: null
+  resolved_word_cap: null
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Built from scrubbed shell into an anchored platform-concentration contract.
+  Core anchors are NVIDIA FY2024 10-K, Microsoft/OpenAI 2019/2025/2026 company
+  statements, Amazon/Anthropic and Google/Anthropic company statements, FTC 6(b)
+  inquiry/report, and the July 2024 joint US/EU/UK competition statement.
+
+  Safe draft range is 4,300-5,400 words pending Claude source review and Gemini
+  capacity audit. Do not claim a legal monopoly. Date Microsoft/OpenAI
+  exclusivity carefully, especially the April 27, 2026 amendment.
