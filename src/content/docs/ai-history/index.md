@@ -192,7 +192,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 64 | The Edge Compute Bottleneck | prose_ready | no |
 | 65 | The Open Weights Rebellion | prose_ready | no |
 | 66 | Benchmark Wars | prose_ready | no |
-| 67 | The Monopoly | capacity_plan_anchored | no |
+| 67 | The Monopoly | prose_ready | no |
 | 68 | Data Labor and the Copyright Reckoning | researching | no |
 | 69 | The Data Exhaustion Limit | researching | no |
 | 70 | The Energy Grid Collision | researching | no |
@@ -205,8 +205,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 21 |
-| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 4 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 22 |
+| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 3 |
 | `researching` with prose merged on legacy contract | 5 |
 | `researching` (no prose yet) | 13 |
 | **Total** | **72** |

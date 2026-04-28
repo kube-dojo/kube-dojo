@@ -8,6 +8,9 @@ technical expertise, platforms, distribution channels, and partnerships can each
 become gates. The prose should make the reader see a stack of toll booths rather
 than one fortress.
 
+Handoff: Ch67 follows the compute, cloud, distribution, and partnership gates.
+Ch68 picks up data labor, copyright, and data control in depth.
+
 Guardrail: do not use "monopoly" as legal conclusion. The title is narrative
 pressure; the body must say "concentration" and "bottlenecks."
 
