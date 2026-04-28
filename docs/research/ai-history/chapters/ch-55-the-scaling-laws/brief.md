@@ -20,10 +20,10 @@ Current verified evidence supports a 4,500-5,500 word chapter. It can be rich if
 
 - 600-800 words: Bridge from Hugging Face and GPT-3: reusable weights and prompts create appetite for predicting returns to scale.
 - 700-900 words: Sutton's Bitter Lesson as historical/philosophical setup, with examples kept brief.
-- 1,200-1,500 words: Kaplan paper's empirical setup and findings: loss, N/D/C, smooth power laws, weak dependence on architecture hyperparameters within tested limits, sample efficiency.
+- 1,200-1,400 words: Kaplan paper's empirical setup and findings: loss, N/D/C, smooth power laws, weak dependence on architecture hyperparameters within tested limits, sample efficiency.
 - 900-1,100 words: Compute-optimal allocation, early stopping, and why this shifted planning toward large training runs.
-- 700-1,000 words: Caveats and Chinchilla: empirical not theoretical, small-data/hyperparameter caveats, compute formula limitations, later data-token correction.
-- 300-500 words: Transition to Chapter 56's infrastructure build-out.
+- 700-900 words: Caveats and Chinchilla: empirical not theoretical, small-data/hyperparameter caveats, compute formula limitations, later data-token correction.
+- 400 words: Transition to Chapter 56's infrastructure build-out.
 
 Do not invent lab drama, dollar figures, or "we just need to extend the line to AGI" claims. If the prose cannot reach 4,500 words without those moves, cap honestly.
 
