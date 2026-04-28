@@ -1,1 +1,121 @@
-status: researching
+status: capacity_plan_anchored
+prose_word_cap: null
+review_state: claude_research_contract_drafted_2026-04-28;awaiting_dual_cross_family_verdict_pass
+green_claims: 21
+yellow_claims: 8
+red_claims: 0
+verdicts:
+  gemini:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    bridge_msg: null
+  codex:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    bridge_msg: null
+  resolved: null
+  resolved_word_cap: null
+  resolution_rule: most_conservative_verdict_wins
+notes: |
+  Claude built the chapter 10 research contract from scratch on 2026-04-28 per the
+  new Claude-owns-Part-2-research role split (effective 2026-04-28, after Gemini's
+  URL/anchor hallucination self-admission, epic commit 03640e20, Issue #421).
+
+  Supersedes Gemini's pre-split PR #437 — that PR's anchors are not trusted and
+  must be independently verified. Many of Gemini's anchors are fabricated.
+
+  Anchor extraction performed via curl + pdftotext + ocrmypdf on directly verified
+  primary-source PDFs:
+
+   - Turing 1950 Mind paper "Computing Machinery and Intelligence":
+     courses.cs.umbc.edu/471/papers/turing.pdf — `pdftotext` extracted §1
+     imitation-game definition (p. 433), §1 teleprinter passage (p. 433), §1
+     "machine takes part of A" pivot (p. 434), §2 decoupling argument (p. 434),
+     §3-§5 digital-computer reframe (pp. 436-442), §6 opening 10^9 prediction
+     (p. 442), §6 "end of century" companion claim (p. 442), §6.6 Lady Lovelace
+     + §7 supercritical-mind opening (pp. 450-455), §7 child-machine programme
+     (pp. 454-456), §7 evolution analogy (p. 456), §7 chess-vs-sense-organs
+     bifurcation (p. 460), §7 closing line "we can only see a short distance
+     ahead" (p. 460). Note: courses.cs.umbc.edu PDF header reads "Mind 49"
+     which is a transcription error — correct volume is 59 (LIX), confirmed by
+     Saygin 2000 cross-citation.
+
+   - Turing 1948 NPL report "Intelligent Machinery" (in Ince ed. 1992,
+     Mechanical Intelligence vol. 1): weightagnostic.github.io/papers/turing1948.pdf
+     was image-only; processed via `ocrmypdf` (Tesseract 5.5.2) then `pdftotext`.
+     OCR is good but imperfect (Tesseract flagged "lots of diacritics"). NPL
+     inner pagination [1]-[13] preserved alongside Mechanical Intelligence
+     volume pagination [107]-[127]. Anchored: five-objections-and-refutation
+     (NPL [1]-[3]), unorganized A-type machines + cortex (NPL [5]-[10]),
+     paper-vs-screwdriver interference + education by rewards/punishments
+     (NPL [7]-[8]), and **the two-room chess proto-imitation experiment
+     on NPL inner p. [13]** ("c may find it quite difficult to tell which
+     he is playing"). The 1948 chess experiment is the operational shape of
+     the Imitation Game arriving 2 years before the Mind paper.
+
+   - Turing 1947 LMS lecture: vordenker.de/downloads/turing-vorlesung.pdf
+     (seminarTEXT transcription, Eberhard von Goldammer ss 2000). `pdftotext`
+     extracted the 10^10 bit brain-capacity estimate (seminarTEXT p. 6 +
+     pp. 12-13), the "fair play for the machine" / infallibility-incompatible-
+     with-intelligence argument (pp. 13-14), and the chess-as-testbed proposal
+     (p. 14). Standard print citation: Carpenter & Doran 1986, A. M. Turing's
+     ACE Report of 1946 and Other Papers, MIT Press, pp. 106-124. Carpenter-
+     Doran sub-page anchors pending physical-edition access (Q3 in
+     open-questions.md).
+
+   - Saygin et al 2000 "Turing Test: 50 Years Later": crl.ucsd.edu/~saygin/
+     papers/MMTT.pdf. `pdftotext` extracted §2.4 Turing's Predictions on
+     Saygin journal pp. 472-473 with explicit cross-citation
+     `(Turing, 1950, p. 442)` confirming the Mind §6 opening anchor. Section
+     structure of §3-§5 verified at pp. 473-513; specific named-author claims
+     within not yet extracted (Q9 in open-questions.md).
+
+   - Proudfoot 2011 "Anthropomorphism and AI": Crossref API verification only.
+     Citation metadata anchored at the volume/page-range level (DOI
+     10.1016/j.artint.2011.01.006, AI 175 (5-6), pp. 950-957). Article is
+     paywalled; specific page anchors pending (Q2 in open-questions.md).
+
+  Yellow-only sources (not directly verified):
+   - 1952 BBC broadcast "Can Automatic Calculating Machines Be Said To Think?"
+     — multiple fetch attempts on open mirrors (BBC archive, Turing Archive,
+     Internet Archive viewer for The Essential Turing) returned 404 or
+     auth-walled responses. Citation chain to Copeland 2004 Ch 14, pp. 487-506
+     is the standard scholarly anchor. (Q1 in open-questions.md.)
+   - Hodges 1983 Alan Turing: The Enigma — in copyright; not directly
+     verified. The chapter is designed not to load-bear on Hodges.
+   - Copeland ed. 2004 The Essential Turing — used as the standard primary
+     container; editorial pages not directly verified. (Q4 in
+     open-questions.md.)
+   - Jefferson 1949 Lister Oration — DOI 10.1136/bmj.1.4616.1105 is Crossref-
+     resolvable; full text not directly verified. (Q8 in open-questions.md.)
+
+  Counts: 21 Green / 8 Yellow / 0 Red across the Scene-Level Claim Table
+  (24 data rows, of which 5 are mixed-status). Mixed-status rows (Green
+  for primary anchor, Yellow for a sub-claim) are split — counted as
+  1 Green + 1 Yellow each. Layers 1-4 of the Prose
+  Capacity Plan are anchored Green; Layer 5 mixes one Green anchor (Saygin
+  §2.4) with two Yellow anchors (Proudfoot 2011 thesis, 1952 BBC broadcast),
+  honestly named in brief.md and capped at 500-800 words.
+
+  Pre-anchor Prose Capacity estimate: 3,500-5,000 words. Word Count
+  Discipline label: `3k-5k likely`. The chapter cannot honestly reach
+  4k-7k without resolving Q1 (BBC text) + Q2 (Proudfoot pages) and probably
+  also pulling Carpenter-Doran 1986 / Copeland 2004 page-level cross-anchors.
+  Pushing past 5,000 words would require either out-of-scope biography or
+  invented atmospherics — both forbidden by the Boundary Contract.
+
+  Status advances from `researching` to `capacity_plan_anchored`. Eligible
+  for `research_contract_approved` review via the dual cross-family verdict
+  pass (Codex anchor verification + Gemini gap analysis, per the post-
+  2026-04-28 role split's `feedback_dual_review_required.md` and
+  `feedback_gemini_hallucinates_anchors.md` constraints — Gemini reviews for
+  capacity-plan honesty and narrative gaps, never asserts page anchors).
+
+  Drafting CANNOT begin until both reviewers issue READY_TO_DRAFT or
+  READY_TO_DRAFT_WITH_CAP. If Q1 (BBC) stays Yellow at draft time, Layer 5
+  must cap below 600 words and rely on Saygin §3-§5 reception rather than
+  the broadcast for substance.
