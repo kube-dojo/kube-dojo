@@ -434,7 +434,13 @@ def fire_phase(*, agent: str, prompt: str, worktree: Path, task_id: str,
     from agent_runtime.errors import RateLimitedError, AgentTimeoutError
 
     if agent == "gemini":
-        model = "gemini-3.1-pro-preview"
+        # gemini-3.1-pro-preview was unavailable on 2026-04-28 PM (server
+        # hung on both API key and OAuth paths). Override via
+        # KUBEDOJO_GEMINI_DRAFT_MODEL when pro capacity is out — sister
+        # var KUBEDOJO_GEMINI_REVIEW_MODEL exists in dispatch_prose_review.py.
+        import os
+        model = os.environ.get("KUBEDOJO_GEMINI_DRAFT_MODEL",
+                               "gemini-3.1-pro-preview")
         timeout = 2400
         mode = "workspace-write"
     elif agent == "codex":
