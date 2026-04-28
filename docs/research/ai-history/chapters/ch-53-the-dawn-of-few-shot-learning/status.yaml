@@ -1,1 +1,39 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 8
+chapter: 53
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
+last_updated: 2026-04-28
+green_claims: 17
+yellow_claims: 3
+red_claims: 0
+guardrail_count: 6
+prose_word_cap_recommendation: 5500
+prose_word_cap: 5000
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/493#issuecomment-4333781640
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 5000
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/493#issuecomment-4334427280
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5000
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: GPT-2
+  paper PDF, OpenAI Release Strategies and Social Impacts report PDF, GPT-3
+  paper PDF, and GitHub API metadata for openai/gpt-2.
+
+  Strongest safe prose range: 4,500-5,000 words. The contract has enough
+  source depth for GPT-2, staged release, GPT-3 in-context learning, and
+  limitations. Do not stretch to 7,000 without adding a verified public
+  reaction/API/reception source.
+  Guardrail_count records explicit prohibitions; red_claims is reserved for
+  in-scope claims that fail verification.
