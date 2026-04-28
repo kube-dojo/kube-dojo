@@ -97,7 +97,7 @@ The failure of early neural networks and the rise of hard-coded Expert Systems.
 | 18 | The Lighthill Devastation | accepted | yes |
 | 19 | Rules, Experts, and the Knowledge Bottleneck | accepted | yes |
 | 20 | Project MAC | accepted | yes |
-| 21 | The Rule-Based Fortune | prose_review | yes |
+| 21 | The Rule-Based Fortune | accepted | yes |
 | 22 | The LISP Machine Bubble | capacity_plan_anchored | no |
 | 23 | The Japanese Threat | capacity_plan_anchored | no |
 

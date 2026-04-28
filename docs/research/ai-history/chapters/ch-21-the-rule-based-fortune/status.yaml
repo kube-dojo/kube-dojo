@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 4
 chapter: 21
-review_state: needs_cross_family_prose_review
+review_state: accepted
 last_updated: 2026-04-28
 prose_path: src/content/docs/ai-history/ch-21-the-rule-based-fortune.md
 prose_words: 4146
@@ -18,3 +18,4 @@ notes:
   - "Gemini gap/capacity review on PR #450 returned READY_TO_DRAFT_WITH_CAP; Codex applied narrative fixes for XSEL/ad-hoc constraints as a standalone scene and added technician-floor output texture."
   - "Codex drafted first prose pass at 4,146 words, inside the approved 4,000-5,000 range."
   - "Bachant/McDermott 1984 is used conservatively for broad maintenance direction only; exact dollar-savings, first-commercial-system, and hard ROI claims remain excluded."
+  - "Claude source-fidelity review approved; Gemini narrative review approved with no required fixes."
