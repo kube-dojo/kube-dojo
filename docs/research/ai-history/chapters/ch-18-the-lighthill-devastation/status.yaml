@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 4
 chapter: 18
-review_state: needs_cross_family_prose_review
+review_state: accepted
 last_updated: 2026-04-28
 prose_path: src/content/docs/ai-history/ch-18-the-lighthill-devastation.md
 prose_words: 4060
@@ -17,4 +17,4 @@ notes:
   - "Gemini approved on gemini-3-flash-preview after gemini-3.1-pro-preview availability check timed out; Claude approved with fixes, now applied."
   - "Codex drafted first prose pass at 4,065 words, inside the approved 4,000-4,700 range; BBC debate and exact budget claims remain excluded."
   - "Claude source-fidelity review approved PR #484; Codex applied the optional tooling-list tightening and current prose markdown is 4,060 words."
-  - "Next transition: accepted after cross-family prose review and any required revisions."
+  - "Gemini narrative review approved PR #484; Codex applied the optional wording nit on institutional aftermath."

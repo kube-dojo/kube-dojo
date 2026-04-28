@@ -376,9 +376,9 @@ problem was circular, and that circularity made the review dangerous.
 
 The aftermath should be told without melodrama. The Lighthill report did
 produce a major loss of confidence in UK AI. Institutional histories remember
-it for reducing support and chilling academic and funding enthusiasm. That was
-real. It shaped careers, equipment, labels, and the willingness of officials to
-treat AI as a promising independent field.
+it for chilling academic enthusiasm and restricting access to resources. That
+was real. It shaped careers, equipment, labels, and the willingness of
+officials to treat AI as a promising independent field.
 
 But British AI did not vanish. Research continued. The stronger claim is that
 the field became harder to fund as open-ended artificial intelligence and more
