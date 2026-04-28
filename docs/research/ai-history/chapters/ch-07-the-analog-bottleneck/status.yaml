@@ -1,1 +1,39 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-07-the-analog-bottleneck
+researcher: claude
+research_role_split_effective: 2026-04-28
+supersedes_pr: 439
+
+claim_counts:
+  green: 17
+  yellow: 5
+  red: 4
+
+prose_capacity_plan:
+  total_word_range: "3700-5300"
+  word_count_label: "3k-5k likely"
+  every_layer_references_a_sources_md_anchor: true
+
+primary_sources_with_verified_page_anchors:
+  - "Walter 1950 An Imitation of Life, Sci Am 182(5):42-45 — pages 42, 43, 44, 45 directly anchored via Claude OCR + pdftotext on the Texas A&M scan, 2026-04-28"
+  - "Von Neumann 1952 Probabilistic Logics and the Synthesis of Reliable Organisms from Unreliable Components, Caltech lectures — IAS PDF reprint pp. 1, 37, 45-46, 47 directly anchored via Claude pdftotext, 2026-04-28"
+
+secondary_sources_with_verified_page_anchors:
+  - "Holland 2003 Exploration and high adventure: the legacy of Grey Walter, Phil Trans Roy Soc Lond A 361:2085-2121 — pp. 2086, 2087, 2088, 2089, 2090, 2092, 2094, 2095, 2096, 2098, 2099, 2100, 2101, 2102, 2110, 2112, 2113, 2114, 2120 directly anchored via Claude pdftotext, 2026-04-28"
+
+chained_anchors_via_holland_2003:
+  - "Walter 1953 The Living Brain p. 280 (three-conditions argument)"
+  - "Walter 1953 The Living Brain pp. 284-286 ('the model is simply the analogue' passage)"
+  - "Walter 1951 A Machine That Learns p. 62 (CORA whistle-and-touch protocol)"
+  - "Hayward 2001 Sci Context 14(4) p. 616 (Walter as 'maverick')"
+
+deferred:
+  - "Direct page anchors against Walter 1953 The Living Brain (Internet Archive borrow-only)"
+  - "Direct page anchors against the 1956 Automata Studies publication of von Neumann's lectures (chapter cites IAS PDF reprint of the Caltech typescript)"
+  - "Direct page anchors against Walter 1951 (only chained via Holland 2003)"
+  - "Direct page anchors against Hayward 2001 (only chained via Holland 2003)"
+  - "BNI archive primary documents (Walter 1947 letter, 1948 Enchanted Loom, 1960 Notes on Operation, etc.)"
+  - "Boden 2006 Mind as Machine and Edwards 1996 The Closed World page anchors (currently Red)"
+
+closed:
+  - "PR #439 (Gemini 2026-04-27 unverified Green-promotion of Walter 1950 / von Neumann 1952 page anchors). Superseded by this contract per the 2026-04-28 role split (Issue #421, epic commit 03640e20)."
