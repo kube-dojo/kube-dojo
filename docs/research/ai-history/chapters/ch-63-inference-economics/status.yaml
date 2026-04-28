@@ -1,1 +1,36 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 9
+chapter: 63
+review_state: dual_cross_family_verdict_accepted
+last_updated: 2026-04-28
+green_claims: 20
+yellow_claims: 1
+red_claims: 0
+guardrail_count: 6
+prose_word_cap_recommendation: 4500
+word_count_range: "3400-4500"
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/518#issuecomment-4339038245
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 4500
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/518#issuecomment-4339054749
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 4500
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Built from a scrubbed shell into a capacity_plan_anchored inference-serving
+  contract. Core anchors are Orca, FlashAttention, SmoothQuant, FlexGen,
+  vLLM/PagedAttention, speculative decoding/sampling, and DistServe.
+
+  Safe draft range is 3,400-4,500 words after Gemini's first capacity audit.
+  Avoid live API-price claims, unsourced product-cost rumors, benchmark
+  politics, copyright/data-labor disputes, and power-grid/datacenter expansion
+  material.
