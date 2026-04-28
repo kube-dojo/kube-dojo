@@ -3,21 +3,24 @@
 For each PR:
 1. Read brief.md, sources.md, open-questions.md, scene-sketches.md from
    the PR branch (`git show <branch>:<path>`).
-2. Fire Codex anchor-verification (gpt-5.5, reasoning=high) — can use
-   the shell to curl/pdftotext/grep specific page anchors.
-3. Fire Gemini structural gap-audit (lane-disciplined per
+2. Fire the cross-family **anchor verifier** (route on PR branch prefix):
+   - `claude/394-chNN-research` -> Codex (gpt-5.5, reasoning=high)
+   - `codex/394-chNN-research`  -> Claude (claude-opus-4-7)
+   Both have shell access and can curl/pdftotext/grep page anchors.
+3. Fire Gemini structural gap-audit on both (lane-disciplined per
    feedback_gemini_hallucinates_anchors.md — NO URL citations from
    Gemini; structural gaps only).
 4. Post both reviews as PR comments.
 
-Codex and Gemini run on different families, so a Codex queue and a
-Gemini queue can run in parallel. Within a family, dispatches are
-sequential per feedback_codex_dispatch_sequential.md and
+Codex/Claude and Gemini run on different families, so an anchor queue
+and a Gemini queue can run in parallel. Within a family, dispatches
+are sequential per feedback_codex_dispatch_sequential.md and
 reference_gemini_collab.md.
 
 Usage:
     .venv/bin/python scripts/dispatch_research_verdict.py 456 459 460 ...
     .venv/bin/python scripts/dispatch_research_verdict.py --only codex 456
+    .venv/bin/python scripts/dispatch_research_verdict.py --only claude 456
     .venv/bin/python scripts/dispatch_research_verdict.py --only gemini 456
 
 Posts comments via `gh pr comment <pr> --body-file ...`.
@@ -169,6 +172,74 @@ def codex_prompt(*, slug: str, contract: str) -> str:
         """)
 
 
+def claude_anchor_prompt(*, slug: str, contract: str) -> str:
+    return dedent(f"""\
+        # Verdict Pass — Claude Anchor Verification (`{slug}`)
+
+        You are the cross-family Claude reviewer for an AI History
+        chapter research contract. Your lane is **anchor verification**:
+        confirm that primary-source URLs, page numbers, DOIs, and quoted
+        passages actually exist and say what the contract claims.
+
+        ## Background
+
+        Chapter contracts are the gating artifact between research and
+        prose. Per `docs/research/ai-history/TEAM_WORKFLOW.md`, drafting
+        does not unlock until the contract gets `READY_TO_DRAFT` or
+        `READY_TO_DRAFT_WITH_CAP` from a cross-family reviewer.
+
+        Gemini was removed from research duties in April 2026 after URL
+        and page-anchor hallucinations (Issue #421, commit 03640e20).
+        Codex authored the contract you are reviewing, so the
+        cross-family rule routes anchor verification to Claude. You have
+        shell access (curl, pdftotext, pdfgrep, ocrmypdf) and can hit
+        primary sources directly.
+
+        ## Your job
+
+        Review the contract below. For up to **8 of the most
+        load-bearing Green claims** in `sources.md`, attempt to verify:
+        - the URL or DOI resolves
+        - the cited page or section actually contains the quoted text
+          or the claim it's said to support
+        - the bibliographic identifier matches the work cited
+
+        For each claim you check, classify the result:
+        - `ANCHOR_VERIFIED` — fetched and confirmed
+        - `ANCHOR_PARTIAL` — source resolves but page/quote does not match
+        - `ANCHOR_BROKEN` — URL is dead, paywalled, or the quote is wrong
+        - `UNREACHABLE` — paywall / auth / region blocked you
+
+        Don't try to verify all claims; pick the highest-leverage ones.
+        Skip claims already marked Yellow or Red.
+
+        ## Output (Markdown, ≤700 words)
+
+        ```
+        ## Claude Anchor Verification — `{slug}`
+
+        Claims sampled: N
+
+        | Claim (short) | sources.md row | Status | Notes |
+        |---|---|:-:|---|
+        | ... | ... | ANCHOR_VERIFIED | page 47 confirms |
+        ...
+
+        ### Cross-cutting issues
+        - <e.g. JSTOR paywalls block 4/8 anchors; suggest open mirrors>
+        - <e.g. one DOI mismatched the cited author>
+
+        ### Verdict
+        - READY_TO_DRAFT | READY_TO_DRAFT_WITH_CAP | NEEDS_ANCHORS | NEEDS_RESEARCH | SCOPE_DOWN
+        - One sentence rationale.
+        ```
+
+        ## Contract
+
+        {contract}
+        """)
+
+
 def gemini_prompt(*, slug: str, contract: str) -> str:
     return dedent(f"""\
         # Verdict Pass — Gemini Structural Gap Audit (`{slug}`)
@@ -253,6 +324,9 @@ def fire(agent: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         # ~/.codex/config.toml, so we just need model="gpt-5.5".
         model = "gpt-5.5"
         timeout = 1500
+    elif agent == "claude":
+        model = "claude-opus-4-7"
+        timeout = 1500
     elif agent == "gemini":
         model = "gemini-3-flash-preview"
         timeout = 900
@@ -287,31 +361,57 @@ def post_comment(pr_num: int, body: str) -> None:
     print(f"[post] PR #{pr_num} comment posted ({len(body)} chars)")
 
 
+def _anchor_agent_for_branch(branch: str) -> str:
+    """Pick the cross-family anchor verifier from the PR branch prefix.
+
+    Cross-family rule (`docs/review-protocol.md`): the anchor reviewer
+    must be a different model family than the contract author.
+    """
+    if branch.startswith("codex/"):
+        return "claude"
+    if branch.startswith("claude/"):
+        return "codex"
+    # Defensive fallback for unusual branch prefixes (e.g. user-pushed
+    # feature branches). Preserve historical behaviour: Codex anchors.
+    print(f"[warn] unrecognised branch prefix on {branch!r}; "
+          "defaulting anchor verifier to codex", file=sys.stderr)
+    return "codex"
+
+
+def _prompt_for(agent: str, *, slug: str, contract: str) -> str:
+    if agent == "codex":
+        return codex_prompt(slug=slug, contract=contract)
+    if agent == "claude":
+        return claude_anchor_prompt(slug=slug, contract=contract)
+    if agent == "gemini":
+        return gemini_prompt(slug=slug, contract=contract)
+    raise ValueError(agent)
+
+
 def process_one(pr_num: int, *, only: str | None) -> None:
     meta = fetch_pr_meta(pr_num)
     branch = meta["headRefName"]
     slug = slug_from_branch(branch)
-    print(f"[run] PR #{pr_num} branch={branch} slug={slug}")
+    anchor_agent = _anchor_agent_for_branch(branch)
+    print(f"[run] PR #{pr_num} branch={branch} slug={slug} "
+          f"anchor={anchor_agent}")
     contract = gather_contract(branch, slug)
 
-    out = {}
-    threads = []
+    if only is None:
+        agents = [anchor_agent, "gemini"]
+    else:
+        agents = [only]
+
+    out: dict[str, tuple[bool, str]] = {}
 
     def run_one(agent: str):
-        if agent == "codex":
-            ok, body = fire("codex", prompt=codex_prompt(
-                slug=slug, contract=contract), slug=slug)
-        else:
-            ok, body = fire("gemini", prompt=gemini_prompt(
-                slug=slug, contract=contract), slug=slug)
+        ok, body = fire(agent, prompt=_prompt_for(
+            agent, slug=slug, contract=contract), slug=slug)
         out[agent] = (ok, body)
 
-    if only in (None, "codex"):
-        t = threading.Thread(target=run_one, args=("codex",), daemon=True)
-        t.start()
-        threads.append(t)
-    if only in (None, "gemini"):
-        t = threading.Thread(target=run_one, args=("gemini",), daemon=True)
+    threads = []
+    for agent in agents:
+        t = threading.Thread(target=run_one, args=(agent,), daemon=True)
         t.start()
         threads.append(t)
     for t in threads:
@@ -326,8 +426,10 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("prs", type=int, nargs="+",
                    help="PR numbers to verdict-pass")
-    p.add_argument("--only", choices=["codex", "gemini"], default=None,
-                   help="Run only one reviewer family")
+    p.add_argument("--only", choices=["codex", "claude", "gemini"],
+                   default=None,
+                   help="Run only one reviewer family (overrides "
+                        "branch-based anchor routing)")
     args = p.parse_args()
 
     for pr in args.prs:
