@@ -1,1 +1,25 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-40-data-becomes-infrastructure
+issue: 394
+owned_by: Codex
+updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  min_words: 3400
+  max_words: 4700
+claims:
+  green: 23
+  yellow: 7
+  red: 5
+required_files:
+  brief: complete
+  sources: complete
+  timeline: complete
+  people: complete
+  infrastructure_log: complete
+  scene_sketches: complete
+  open_questions: complete
+notes:
+  - Every Prose Capacity Plan layer cites at least one Green source anchor in sources.md.
+  - Shell curl was attempted for public PDFs but DNS resolution failed; browser verification and existing Ch38 anchors were used.
+  - Legacy Gemini prose was used only for scope, not as evidence.
