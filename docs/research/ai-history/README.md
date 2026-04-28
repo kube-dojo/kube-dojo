@@ -6,7 +6,7 @@ This directory contains the operational research files for the definitive 68-cha
 
 - **Golden Research (Parts 1-2, Chapters 1-10):** Currently under revision based on cross-family review (downgraded to `reviewing` while we convert to claim-level anchoring and resolve factual disputes).
 - **Part 3 (The Birth of Symbolic AI):** Ch11-14 dual-cleared `prose_ready` 2026-04-28; Ch15-16 next.
-- **Part 4 (The First Winter):** Ch17-19 at `capacity_plan_anchored`; rest in `researching`.
+- **Part 4 (The First Winter):** Ch17-23 cross-family cleared for capped prose drafting; Ch21 carries a Yellow-caveated Bachant/McDermott mirror-source guardrail.
 - **Part 5 (The Mathematical Resurrection):** Ch24-28 prose `accepted`; Ch29-31 in `prose_review`.
 
 All drafting is paused for any chapter whose contract is not at `prose_ready` or beyond.
