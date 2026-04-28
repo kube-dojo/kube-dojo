@@ -86,7 +86,7 @@ The Dartmouth consensus, early search algorithms, and military funding.
 | 12 | Logic Theorist & GPS | accepted | [yes](./ch-12-logic-theorist-gps/) |
 | 13 | The List Processor | accepted | [yes](./ch-13-the-list-processor/) |
 | 14 | The Perceptron | accepted | [yes](./ch-14-the-perceptron/) |
-| 15 | The Gradient Descent Concept | accepted | no |
+| 15 | The Gradient Descent Concept | accepted | [yes](./ch-15-the-gradient-descent-concept/) |
 | 16 | The Cold War Blank Check | researching | no |
 
 ## Part 4 — The First Winter & The Shift to Knowledge (1970s–1980s)
@@ -97,13 +97,13 @@ The failure of early neural networks and the rise of hard-coded Expert Systems.
 
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
-| 17 | The Perceptron's Fall | accepted | yes |
-| 18 | The Lighthill Devastation | accepted | yes |
-| 19 | Rules, Experts, and the Knowledge Bottleneck | accepted | yes |
-| 20 | Project MAC | accepted | yes |
-| 21 | The Rule-Based Fortune | accepted | yes |
-| 22 | The LISP Machine Bubble | accepted | yes |
-| 23 | The Japanese Threat | accepted | yes |
+| 17 | The Perceptron's Fall | accepted | [yes](./ch-17-the-perceptron-s-fall/) |
+| 18 | The Lighthill Devastation | accepted | [yes](./ch-18-the-lighthill-devastation/) |
+| 19 | Rules, Experts, and the Knowledge Bottleneck | accepted | [yes](./ch-19-rules-experts-and-the-knowledge-bottleneck/) |
+| 20 | Project MAC | accepted | [yes](./ch-20-project-mac/) |
+| 21 | The Rule-Based Fortune | accepted | [yes](./ch-21-the-rule-based-fortune/) |
+| 22 | The LISP Machine Bubble | accepted | [yes](./ch-22-the-lisp-machine-bubble/) |
+| 23 | The Japanese Threat | accepted | [yes](./ch-23-the-japanese-threat/) |
 
 ## Part 5 — The Mathematical Resurrection (1980s–1990s)
 
