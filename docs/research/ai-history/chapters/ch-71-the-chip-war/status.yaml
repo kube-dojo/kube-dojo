@@ -1,1 +1,36 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 9
+chapter: 71
+review_state: awaiting_claude_source_review_and_gemini_gap_audit
+last_updated: 2026-04-29
+green_claims: 10
+yellow_claims: 3
+red_claims: 0
+guardrail_count: 8
+prose_word_cap_recommendation: 6200
+word_count_range: "5200-6200"
+verdicts:
+  claude:
+    model: null
+    date: null
+    verdict: null
+    review_url: null
+  gemini:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    review_url: null
+  resolved: null
+  resolved_word_cap: null
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Built from placeholder into an anchored chip-geopolitics/export-control
+  contract. Core anchors are the 2022 Federal Register BIS rule, 2023/2024 BIS
+  updates, 2025 BIS AI Diffusion rescission/guidance, NVIDIA 10-Q disclosures,
+  ASML annual/press materials, TSMC 2024 annual report, NIST CHIPS fact sheet,
+  and CSET translation of MOFCOM Notice 2024 No. 46.
+
+  Ch67 owns NVIDIA monopoly/software moat; Ch70 owns energy grid; Ch72 owns
+  datacenter megasites and physical buildout.
