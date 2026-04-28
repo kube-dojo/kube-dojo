@@ -1,8 +1,8 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 62
-review_state: awaiting_gemini_recheck_after_capacity_trim
+review_state: dual_cross_family_verdict_accepted
 last_updated: 2026-04-28
 green_claims: 17
 yellow_claims: 3
@@ -17,13 +17,13 @@ verdicts:
     verdict: APPROVE
     review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/517#issuecomment-4338913939
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 4800
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/517#issuecomment-4338952380
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 4800
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Built from the modern-era placeholder into a capacity_plan_anchored contract.
