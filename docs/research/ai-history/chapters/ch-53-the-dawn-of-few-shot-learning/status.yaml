@@ -6,7 +6,8 @@ review_state: awaiting_cross_family_review
 last_updated: 2026-04-28
 green_claims: 17
 yellow_claims: 3
-red_claims: 6
+red_claims: 0
+guardrail_count: 6
 prose_word_cap_recommendation: 5500
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources: GPT-2
@@ -17,3 +18,5 @@ notes: |
   source depth for GPT-2, staged release, GPT-3 in-context learning, and
   limitations. Do not stretch to 7,000 without adding a verified public
   reaction/API/reception source.
+  Guardrail_count records explicit prohibitions; red_claims is reserved for
+  in-scope claims that fail verification.
