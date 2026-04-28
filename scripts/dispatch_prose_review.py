@@ -289,7 +289,14 @@ def fire(reviewer: str, *, prompt: str, slug: str) -> tuple[bool, str]:
         model = "gpt-5.5"
         timeout = 1500
     elif reviewer == "gemini":
-        model = "gemini-3-flash-preview"
+        # gemini-3-flash-preview hit persistent 429 "No capacity available"
+        # on 2026-04-28 PM during the Part 6 prose batch. Pro-preview was
+        # not capacity-constrained on the same auth path, so switch the
+        # review lane to pro (drafting already uses pro). Override via
+        # KUBEDOJO_GEMINI_REVIEW_MODEL if needed.
+        import os
+        model = os.environ.get("KUBEDOJO_GEMINI_REVIEW_MODEL",
+                               "gemini-3.1-pro-preview")
         timeout = 900
     else:
         raise ValueError(reviewer)
