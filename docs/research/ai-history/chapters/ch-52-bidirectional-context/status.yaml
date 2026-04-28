@@ -1,1 +1,43 @@
-status: researching
+status: prose_ready
+owner: Codex
+part: 8
+chapter: 52
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
+last_updated: 2026-04-28
+green_claims: 13
+yellow_claims: 3
+red_claims: 5
+prose_word_cap_recommendation: 5000
+prose_word_cap: 5000
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/492#issuecomment-4333683369
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 5000
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/492#issuecomment-4333694220
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5000
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: Devlin et al.
+  2018 BERT paper, Google Research BERT open-source announcement, and GitHub API
+  metadata for google-research/bert.
+
+  Strongest safe prose range: 4,000-5,000 words. Core mechanics, input
+  representation, static-vs-contextual framing, data, training hardware,
+  fine-tuning economics, benchmark claims, and open-release artifacts are
+  anchored. Expansion above 5,000 words needs independent adoption sources,
+  benchmark papers, or maintainer/user accounts.
+
+  Claude source-fidelity review approved all load-bearing anchors. Gemini
+  gap/capacity audit returned READY_WITH_CAP at 5,000 words and requested
+  stronger use of WordPiece/input representation, static-vs-contextual framing,
+  and the release artifact. Follow-up edits integrated those points while
+  rejecting the unsourced claim that WordPiece solved OOV.
