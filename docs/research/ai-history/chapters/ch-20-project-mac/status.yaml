@@ -1,11 +1,11 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 4
 chapter: 20
-review_state: needs_cross_family_prose_review
+review_state: accepted
 last_updated: 2026-04-28
 prose_path: src/content/docs/ai-history/ch-20-project-mac.md
-prose_words: 4148
+prose_words: 4155
 notes:
   - "Codex expanded the scrubbed placeholder into an anchored research contract for Project MAC."
   - "Gemini requested outside ARPA/IPTO context before a 4,000+ word target; Codex added Norberg/O'Neill and DARPA Project MAC to the core citation bar."
@@ -15,4 +15,5 @@ notes:
   - "Guardrail: do not treat Project MAC as only an AI lab; it was both Machine-Aided Cognition and Multiple-Access Computer systems."
   - "Guardrail: separate CTSS, Multics, and ITS; they represent different infrastructure paths."
   - "Guardrail: leave DEC/XCON commercialization to Ch21 and Lisp-machine commercialization to Ch22."
-  - "Codex drafted first prose pass at 4,148 words, inside the approved 4,000-4,800 range; awaiting Claude source-fidelity review and Gemini narrative review."
+  - "Codex drafted first prose pass at 4,148 words, inside the approved 4,000-4,800 range; final review-adjusted prose is 4,155 words."
+  - "Claude source-fidelity review approved; Gemini narrative review approved with one acronym-density nit now applied."

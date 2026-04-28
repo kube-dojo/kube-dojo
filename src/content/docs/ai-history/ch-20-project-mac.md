@@ -27,12 +27,13 @@ MAC was an experiment in what happened when computing became interactive,
 shared, and available to a community of researchers while they were thinking.
 
 The project did not solve intelligence. It changed the working conditions under
-which intelligence could be attempted. Time-sharing, CTSS, Multics, ITS,
-PDP-6 and PDP-10 machines, MACLISP, MATHLAB, MACSYMA, PLANNER, display
-systems, files, terminals, and early network links turned the computer from an
-occasional calculating device into an intellectual environment. Programs could
-be edited, run, interrupted, inspected, shared, and improved while other people
-were using the same machine. That made a different style of AI practical.
+which intelligence could be attempted. Time-sharing systems like CTSS,
+Multics, and ITS, running on PDP-6 and PDP-10 hardware, provided the
+foundation. When combined with tools like MACLISP, MATHLAB, MACSYMA, and
+PLANNER, they turned the computer from an occasional calculating device into an
+intellectual environment. Programs could be edited, run, interrupted,
+inspected, shared, and improved while other people were using the same machine.
+That made a different style of AI practical.
 
 This chapter is about that machine room. The expert systems of the next chapter
 would depend on a culture in which symbolic programs could grow large, remain
