@@ -10,7 +10,7 @@ This directory contains the operational research files for the definitive 72-cha
 - **Part 4 (The First Winter):** Ch17-23 cross-family cleared for capped prose drafting; Ch21 carries a Yellow-caveated Bachant/McDermott mirror-source guardrail.
 - **Part 5 (The Mathematical Resurrection):** Ch24-31 prose `accepted`.
 - **Part 8 (The Transformer, Scale & Open Source):** Ch50-58 dual-cleared `prose_ready`; Ch58 cap is 5,200 words.
-- **Part 9 (The Product Shock & Physical Limits):** Ch59-Ch61 and Ch70 rebuilt to `capacity_plan_anchored`; Ch62-Ch69 dual-cleared `prose_ready` with 4,800-, 4,500-, 5,000-, 5,300-, 5,400-, 5,400-, 5,500-, and 6,000-word caps. Ch70 is awaiting re-review after adding the Amazon/Talen/FERC collision with a 6,000-word cap.
+- **Part 9 (The Product Shock & Physical Limits):** Ch59-Ch61 rebuilt to `capacity_plan_anchored`; Ch62-Ch70 dual-cleared `prose_ready` with 4,800-, 4,500-, 5,000-, 5,300-, 5,400-, 5,400-, 5,500-, 6,000-, and 6,000-word caps.
 
 All drafting is paused for any chapter whose contract is not at `prose_ready` or beyond.
 

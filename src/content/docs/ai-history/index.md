@@ -195,7 +195,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 67 | The Monopoly | prose_ready | no |
 | 68 | Data Labor and the Copyright Reckoning | prose_ready | no |
 | 69 | The Data Exhaustion Limit | prose_ready | no |
-| 70 | The Energy Grid Collision | capacity_plan_anchored | no |
+| 70 | The Energy Grid Collision | prose_ready | no |
 | 71 | The Chip War | researching | no |
 | 72 | The Infinite Datacenter | researching | no |
 
@@ -205,8 +205,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 30 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 24 |
-| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 4 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 25 |
+| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 3 |
 | `researching` with prose merged on legacy contract | 4 |
 | `researching` (no prose yet) | 10 |
 | **Total** | **72** |
