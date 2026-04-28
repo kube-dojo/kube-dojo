@@ -1,1 +1,19 @@
-status: researching
+status: research_review
+owner: Codex
+part: 8
+chapter: 53
+review_state: awaiting_cross_family_review
+last_updated: 2026-04-28
+green_claims: 17
+yellow_claims: 3
+red_claims: 6
+prose_word_cap_recommendation: 5500
+notes: |
+  Rebuilt the scrubbed/yellow contract from verified online sources: GPT-2
+  paper PDF, OpenAI Release Strategies and Social Impacts report PDF, GPT-3
+  paper PDF, and GitHub API metadata for openai/gpt-2.
+
+  Strongest safe prose range: 4,500-5,500 words. The contract has enough
+  source depth for GPT-2, staged release, GPT-3 in-context learning, and
+  limitations. Do not stretch to 7,000 without adding a verified public
+  reaction/API/reception source.
