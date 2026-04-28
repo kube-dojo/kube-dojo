@@ -1,1 +1,69 @@
-status: researching
+status: capacity_plan_anchored
+green_claims: 17
+yellow_claims: 13
+red_claims: 0
+review_state: claude_research_2026-04-28;cross_family_review_pending
+notes: |
+  Claude research lead per the 2026-04-28 role split (Part 1 chapters: Claude
+  owns research; Gemini does NOT touch sources after the 2026-04-27 hallucination
+  self-admission, epic commit 03640e20, Issue #421).
+
+  All Green claims are anchored to verified primary sources retrieved by Claude
+  via curl + pdftotext on 2026-04-28:
+   - Turing 1936 "On Computable Numbers" full PDF from cs.virginia.edu/~robins:
+     anchors at pp.230 (receipt 28 May 1936, read 12 Nov 1936), 231-233 (a-machine,
+     tape, m-configuration, circular vs. circle-free), 241-242 (universal computing
+     machine §6), 242-246 (detailed table for U §7), 246-248 (diagonal proof and
+     print-symbol generalization §8), 259-262 (Entscheidungsproblem reduction §11),
+     263-265 (appendix dated 28 Aug 1936, Princeton return address). 9 claims.
+   - Church 1936 "An Unsolvable Problem of Elementary Number Theory" full PDF
+     from ics.uci.edu: anchors at p.345 (presentation 19 Apr 1935; publication
+     Apr 1936 in Am. J. Math. 58(2)), 356-358 (§7 effective calculability =
+     Church's thesis), 361 (Theorem XVIII), 363 (Theorem XIX + Principia
+     Mathematica corollary). 3 claims.
+   - Godel 1931 "Uber formal unentscheidbare Satze" Hirzel 2000 translation
+     (homepages with original-page-numbered margins) and Meltzer 1962 translation
+     (homepages.uc.edu) with Braithwaite intro: anchors for original publication
+     coordinates Monatshefte 38 (Leipzig, 1931) pp.173-198, 1930 Vienna Academy
+     announcement, Theorem (Proposition) VI on original p.187 / Meltzer book
+     p.57. 2 claims.
+   - Stanford Encyclopedia "Church-Turing Thesis" (Copeland) and "Turing"
+     (Hodges) verbatim WebFetch attestation 2026-04-28: priority chronology
+     (Church a few months before Turing); the formal-equivalence-vs-philosophical-
+     thesis distinction; Turing's appendix proving lambda-computability
+     equivalence after he learned of Church's work mid-process; Church's 1937
+     JSL review acknowledging Turing's machine-model advantage. 3 claims.
+
+  Total Green: 17. Yellow: 13 (Hodges 1983 page anchors for biographical claims;
+  Davis 2000 lineage page anchors; Hilbert-Ackermann 1928 direct-retrieval;
+  Church 1936b JSL note direct-retrieval; Church 1937 JSL review direct-
+  retrieval; Newman role; Turing's specific Princeton-arrival date; Gemini-
+  hallucination-equivalent risks if any tertiary citation slipped in — none
+  detected). Red: 0 (no claim is currently being treated as load-bearing
+  without at least Yellow attestation).
+
+  Boundary contract: chapter must NOT (1) collapse Church and Turing into
+  "Turing's discovery"; (2) imply Godel 1931 settled the Entscheidungsproblem;
+  (3) anachronize "Turing machine" or "halting problem" inside Turing's voice;
+  (4) read the §6 universal computing machine as "the EDVAC architecture";
+  (5) call 1936 the "founding year of computing" (it is the founding year of
+  computability-as-mathematical-object, not of computing-as-engineering). All
+  five are cross-checked across brief.md, scene-sketches.md, sources.md
+  Conflict Notes, and open-questions.md.
+
+  Prose Capacity Plan range: 3,600-5,200 words. Word Count Discipline label:
+  "4k-7k stretch" if Hodges 1983 + Davis 2000 page anchors land for biographical
+  Princeton thread and Leibniz-to-Turing lineage framing; otherwise "3k-5k
+  likely" from currently-Green primary anchors alone.
+
+  Each of the 5 Prose Capacity Plan layers references at least one verified
+  page-level anchor in sources.md (Turing 1936 §11 p.259-260 for layer 1;
+  Church 1936 §7 pp.356-358 for layer 2; Turing 1936 §§1-8 pp.231-248 for
+  layer 3; Turing 1936 §§6-7 pp.241-246 for layer 4; Turing 1936 appendix
+  pp.263-265 + Stanford Encyclopedia for layer 5). Eligible for
+  research_contract_approved review.
+
+  Supersedes Gemini's prior PR #431 (closed by orchestrator after the 2026-04-28
+  role split). This contract retains scenes Gemini outlined but verifies every
+  page anchor independently. No Gemini-cited URL or page reference has been
+  carried forward without primary re-verification.
