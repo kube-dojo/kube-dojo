@@ -1,1 +1,39 @@
-status: researching
+chapter: ch-16-the-cold-war-blank-check
+status: capacity_plan_anchored
+research_owner: Codex
+issue: 394
+updated: 2026-04-28
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  core_range_words: [3600, 4800]
+  natural_target_words: 4200
+  layers:
+    - scene: 1
+      range_words: [650, 850]
+      anchors: [G01, G03, G04, G05]
+    - scene: 2
+      range_words: [650, 850]
+      anchors: [G07, G08, G09, G10]
+    - scene: 3
+      range_words: [900, 1250]
+      anchors: [G06, G12, G13, G14, G15, G16, G17, G18, G24]
+    - scene: 4
+      range_words: [750, 1000]
+      anchors: [G14, G19, G20, G21, G22]
+    - scene: 5
+      range_words: [650, 850]
+      anchors: [G23, G25, G26, G28]
+claim_counts:
+  green: 28
+  yellow: 6
+  red: 2
+checks:
+  prose_capacity_plan_has_source_anchors: true
+  scenes_match_capacity_layers_1_to_1: true
+  green_claims_have_page_or_section_anchors: true
+  legacy_prose_found: false
+  generated_artifacts_included: false
+notes:
+  - "Cold-start script failed because .venv/bin/python is absent in this worktree; proceeded with repository-file fallback and direct source checks."
+  - "Shell curl could not resolve external hosts under sandbox networking, so online source verification used browser/search extraction and existing repository primary-source anchors."
+  - "The title phrase 'blank check' is treated as a metaphor only; no Green claim treats it as participant wording."
