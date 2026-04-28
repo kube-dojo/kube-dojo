@@ -1,1 +1,36 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 9
+chapter: 61
+review_state: awaiting_claude_source_review_and_gemini_gap_audit
+last_updated: 2026-04-28
+green_claims: 17
+yellow_claims: 1
+red_claims: 0
+guardrail_count: 8
+prose_word_cap_recommendation: 5800
+word_count_range: "4600-5800"
+verdicts:
+  claude:
+    model: null
+    date: null
+    verdict: null
+    review_url: null
+  gemini:
+    model: null
+    date: null
+    verdict: null
+    word_cap: null
+    review_url: null
+  resolved: null
+  resolved_word_cap: null
+  resolution_rule: dual_cross_family_verdict_with_cap
+notes: |
+  Built from a scrubbed skeleton into a capacity_plan_anchored contract. Core
+  anchors are GPipe, Megatron-LM 2019, ZeRO, Megatron-LM 2021, PaLM/Pathways,
+  and Chinchilla. GitHub repository metadata is Yellow context only and must
+  not be used for historical adoption claims.
+
+  Safe prose range is 4,600-5,800 words. Do not pad by importing inference
+  serving economics (Ch63), data exhaustion (Ch69), energy-grid constraints
+  (Ch70), chip geopolitics (Ch71), or datacenter capex (Ch72).

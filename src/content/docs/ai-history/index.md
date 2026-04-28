@@ -186,7 +186,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---:|---|---|---|
 | 59 | The Product Shock | capacity_plan_anchored | no |
 | 60 | The Agent Turn | capacity_plan_anchored | no |
-| 61 | The Physics of Scale | researching | no |
+| 61 | The Physics of Scale | capacity_plan_anchored | no |
 | 62 | Multimodal Convergence | researching | no |
 | 63 | Inference Economics | researching | no |
 | 64 | The Edge Compute Bottleneck | researching | no |
@@ -206,7 +206,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
 | `prose_ready` (contract dual-cleared, awaiting prose draft) | 15 |
-| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 3 |
+| `capacity_plan_anchored` (contract anchored, awaiting verdict) | 4 |
 | `researching` with prose merged on legacy contract | 5 |
-| `researching` (no prose yet) | 20 |
+| `researching` (no prose yet) | 19 |
 | **Total** | **72** |
