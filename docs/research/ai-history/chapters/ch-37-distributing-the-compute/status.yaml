@@ -1,1 +1,116 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-37-distributing-the-compute
+researcher: claude
+research_date: 2026-04-28
+issue: 394
+
+claim_counts:
+  green: 19
+  yellow: 3
+  red: 3
+
+prose_capacity_plan:
+  layers:
+    - id: 1
+      topic: nutch_compute_wall
+      words_low: 700
+      words_high: 900
+      anchors:
+        - bonaci_2015_timeline
+        - vance_2009_nyt
+        - gfs_2003_p1_introduction
+    - id: 2
+      topic: gfs_and_mapreduce_specifications
+      words_low: 1000
+      words_high: 1300
+      anchors:
+        - gfs_2003_p1_abstract
+        - gfs_2003_p2_line_91
+        - gfs_2003_p2_line_148
+        - gfs_2003_p3_line_160
+        - gfs_2003_p3_line_247
+        - mapreduce_2004_p1_abstract
+        - mapreduce_2004_p3_lines_245_260
+        - mapreduce_2004_p4_section_3_3
+        - mapreduce_2004_p5_lines_350_368
+        - mapreduce_2004_p7_lines_466_471
+        - mapreduce_2004_p10_table_1
+    - id: 3
+      topic: open_source_port_ndfs_to_hadoop
+      words_low: 600
+      words_high: 800
+      anchors:
+        - bonaci_2015_timeline
+        - mapreduce_2004_p11_indexing_rewrite
+    - id: 4
+      topic: yellow_elephant_and_yahoo
+      words_low: 800
+      words_high: 1100
+      anchors:
+        - apache_jira_infra_700
+        - vance_2009_nyt
+        - morris_2013_cnbc
+        - apache_release_archive_index
+    - id: 5
+      topic: substrate_inherited_by_ai_era
+      words_low: 600
+      words_high: 900
+      anchors:
+        - mapreduce_2004_p12_section_8
+        - mapreduce_2004_p10_section_6_experience
+        - vance_2009_nyt
+  total_words_low: 3700
+  total_words_high: 5000
+  word_count_label: "3k-5k likely"
+  honest_estimate: |
+    3,700-5,000 words from currently anchored sources.
+    Stretch to 4k-7k requires Tom White Hadoop Definitive Guide foreword (Cutting first-person),
+    Apache Nutch SVN log for exact NDFS/MapReduce-port months, and primary anchor for
+    Yahoo's specific Hadoop investment scale.
+
+primary_sources_verified:
+  - mapreduce_2004_osdi
+  - gfs_2003_sosp
+  - apache_jira_infra_700
+  - vance_2009_nyt
+  - morris_2013_cnbc
+  - apache_release_archive_index
+  - bonaci_2015_medium
+
+primary_sources_deferred:
+  - tom_white_hadoop_definitive_guide_foreword
+  - apache_nutch_svn_2004_2005
+  - apache_lucene_pmc_mailing_list_jan_2006
+  - cutting_acm_queue_interview
+  - cafarella_chm_oral_history
+
+cross_family_review:
+  reviewer_codex: pending
+  reviewer_gemini: pending
+  notes: |
+    Both Codex and Gemini should review per the 2026-04-28 dual-review rule.
+    Specific stress-test asks listed in sources.md "Open Items for Cross-Family Review".
+
+removed_or_downgraded:
+  - source: levy_2011_in_the_plex
+    reason: |
+      Cited by the legacy Gemini-drafted chapter as secondary anchor.
+      Page-level anchors not verified by Claude in this 2026-04-28 pass (paywall).
+      Downgraded from secondary anchor to Red until physical/scan access obtained.
+      Chapter does not require Levy if Vance 2009 + Morris 2013 + Bonaci 2015 cover Layer 4.
+
+scope_boundary_summary: |
+  IN:  GFS (2003), MapReduce (2004), Apache Nutch's compute wall (2002-2003),
+       Cutting/Cafarella's NDFS+MapReduce port (2004-2005),
+       Apache JIRA INFRA-700 split (28 Jan 2006), Yahoo's adoption (2006-2009).
+  OUT: Bigtable, Spanner, Dremel, Mesos, YARN, Spark, Kubernetes
+       (later chapters in Parts 6 and 9); GPUs/CUDA (Part 7);
+       deep-learning algorithms (Part 7); modern data-engineering era;
+       custom silicon (Ch49). Anything Hadoop became after 2009 is
+       a single-paragraph forward pointer at most.
+
+honest_prose_capacity_estimate:
+  current_natural_range_words: "3700-5000"
+  if_archives_unlock: "4500-6500"
+  cap_at: "natural length supported by verified evidence"
+  do_not_pad: true
