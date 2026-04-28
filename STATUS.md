@@ -2,11 +2,23 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-28 late evening — Part 6 research merge dance)
+## Active Work (2026-04-28 late evening — handoff mid-Part-6-prose-batch)
 
-**Branch**: `main` at `abaef81f` (clean, pushed). PRs #457, #471, #472, #473, #474 (Ch15, Ch32-35 research) rebased + squash-merged. Per-chapter `status.yaml` bumped to `prose_ready` with verdict-URL metadata; index.md Part 6 lifecycle column updated; Roll-up counts refreshed (`prose_ready` 7→11, `researching` with legacy prose 11→7). Ch36 (#476) and Ch37 (#475) still need cross-family verdicts — dispatcher is running in background (`/tmp/verdict-475-476.log`).
+**Branch**: `main` at `32c97908` (clean apart from `scripts/local_api.py` user-side dashboard panel edits and an orphan `test_rendering.js`; both pre-existing, leave alone). All 7 Claude-owned research PRs from Part 3 (Ch15) and Part 6 (Ch32-37) are merged and at `prose_ready`. Ch15 prose shipped (PR #506); Ch32 prose is mid-review.
 
-**Earlier this evening**: Part 2 (Ch06-10) and Part 3 (Ch11-14) prose all merged with dual cross-family review fix-passes applied. The only remaining Part 3 prose chapter is **Ch15** (now `prose_ready` post-merge, prose not yet drafted). Ch16 is still at `researching`.
+**In-flight at handoff time**:
+- **PR #508 — Ch32 prose** (`prose/394-ch32` HEAD `84333ef3`): Gemini→Codex draft (4,475 words / cap 5,600) plus a Claude-source-fidelity fix-pass already applied (restored `(e.g., Vicens, Gold)` in Newell quote, added SRI to contractor list).
+  - Claude review POSTED: READY_TO_MERGE (PR #508 first comment).
+  - Gemini review IN PROGRESS as background dispatcher PID `55666`, log `/tmp/review-508-gemini-retry2.log`. Two earlier attempts failed: first hit `AgentTimeoutError` (15-min hard timeout, no progress on flash-preview), retry on the post-fix HEAD hit `RateLimitedError: 429 No capacity available for model gemini-3-flash-preview`. The third attempt is the first one running on the new model — see "Decision: gemini-3.1-pro-preview" below.
+- **Worktrees still active**: `.worktrees/prose-394-ch32` (the live PR #508 source). `.worktrees/claude-394-part3` is a local staging branch from earlier work and can be removed when next session starts.
+
+**Decision shipped this session — `gemini-3-flash-preview` → `gemini-3.1-pro-preview` for prose-quality review**:
+Commit `32c97908` (`fix(dispatch): switch gemini prose-quality review to gemini-3.1-pro-preview`). The flash variant ran out of server capacity on the OAuth path during the Part 6 batch (429 on Ch15 retry, 429 + timeout on Ch32 first call, 429 on Ch32 second call). Pro-preview was unaffected — the drafting lane already used it without issue. `KUBEDOJO_GEMINI_REVIEW_MODEL` env var added as override if flash capacity returns.
+
+**Earlier this session**:
+- Merged 7 research PRs (#457, #471–#476). Ch15 + Ch32-37 all moved from `capacity_plan_anchored` → `prose_ready`. Two roll-up commits: `abaef81f` and `31c0500c`.
+- Ch15 prose pipeline ran clean: Gemini draft → Codex expansion (4,291 words / cap 4,900). Claude review READY_TO_MERGE with two minor nits (`famously bitter` → `dispute`; `first-order Taylor expansion argument` → `first-order argument`) — applied inline. Gemini review READY_TO_MERGE post-fix-pass with one stylistic nit on "factor of 1/17" — left as-is (mathematically correct, not a contract violation). Merged as squash to PR #506 → main `3927adb6`.
+- Pruned 8 stale post-merge worktrees + branches (`codex-402-ch22/23-prose`, `codex-406-ch50-55-research`).
 
 **Policy update — 2026-04-28 PM**: Codex is the writer/researcher for ALL remaining #394 chapters. Claude orchestrates Parts 3, 6, 7 (fires `dispatch_chapter_*.py`, runs reviews, applies fix-passes, merge dance). Codex drives Parts 8 and 9 end-to-end autonomously. Claude does NO drafting and NO primary research. See `project_ai_history_research_split_2026-04-28.md` and `feedback_codex_default_prose_expander.md`. The codex meta-narrative leak pattern (`"the contract"`, `"Yellow"`, `"unsafe"`) is now baked into `STRICT_SOURCE_RULE` in `scripts/dispatch_chapter_prose.py` so every future Codex chapter prevents the leak in-prompt rather than catching it in fix-pass.
 
@@ -26,13 +38,43 @@
 3. **Bash-tool background timeout**: `run_in_background: true` with `timeout: 600000` enforces a 10-minute cap on the bash chain, even though the harness will keep notifying me. Long sequential chains (5× Gemini reviews ≈ 15 min) get truncated. Re-fire as separate background tasks instead.
 4. **Gemini transient 429s on review dispatch**: One ch13 review crashed at the post-tool stage with `RateLimitedError: ... File not found`. A simple re-fire 2 minutes later succeeded — the rate limiter had cleared and the path was fine. Pattern matches the existing `feedback_runner_false_failure_recovery.md` shape: tool-work succeeded out-of-band; runner classification was wrong.
 
-**Open work — order**:
-1. **PR #475 (Ch37) and #476 (Ch36) verdicts** — dispatcher firing now. Once both verdicts land, rebase + squash-merge same as the others, then bump those status.yaml + index.md to `prose_ready` (matching cap from each brief.md Capacity Plan). After that, all of Ch32-37 is contract-clean.
-2. **Ch15 prose** — now `prose_ready` (cap 4,900). Per the 2026-04-29 prose pipeline, this is the Gemini→Codex pipeline (Part 3 is in the "Gemini drafts → Codex expands" lane). Run `dispatch_chapter_prose.py 15 --slug ch-15-the-gradient-descent-concept --cap-words 4900`. Research is now on `main` so the dispatcher will use `main` as research-source ref.
-3. **Ch32-35 prose** — `prose_ready` with caps 5,600 / 4,900 / 5,200 / 4,300. Part 6 prose lane is also Gemini→Codex per the 2026-04-29 pivot. Same dispatcher pattern. Each chapter has legacy prose merged on the old contract — replacement drafts must overwrite, not append.
-4. **Ch16 research** — `status: researching` stub. Per the 2026-04-29 pivot Ch16 is now Codex-owned (transferred from Claude). Don't dispatch from Claude.
-5. **Cleanup** — newly-merged branches eligible for prune (claude-394-ch15/32/33/34/35-research). `git cleanup-merged` per the briefing alert. Worktrees were already removed this session.
-6. **Codex's progress on Parts 4–9** — Codex drives Parts 4, 5, 6, 7, 8, 9 research per the policy. Part 8 has Ch50-55 at `prose_ready` and Ch56-58 still `researching`. Don't dispatch fresh research from Claude there.
+**Open work — order (cold-start function)**:
+
+```bash
+# 0. Resume orientation
+curl -s http://127.0.0.1:8768/api/briefing/session?compact=1
+gh pr view 508 --json state,mergedAt,comments
+ps -fp 55666   # is the Ch32 gemini-pro retry still alive?
+tail -20 /tmp/review-508-gemini-retry2.log
+```
+
+1. **Ch32 finalisation (PR #508)**:
+   - If PID 55666 finished and posted a `prose review gemini` comment with `READY_TO_MERGE`: `gh pr merge 508 --squash --delete-branch`, then `git fetch origin main && git merge --ff-only origin/main`, then `git worktree remove .worktrees/prose-394-ch32` + `git branch -D prose/394-ch32`.
+   - If Gemini said NEEDS FIX, apply inline (same pattern as Ch15/Ch32 fix-passes), commit, push, re-fire the relevant reviewer with `.venv/bin/python scripts/dispatch_prose_review.py 508 --reviewer gemini`.
+   - If PID 55666 is still alive at session start, just wait for it.
+
+2. **Ch33 → Ch34 → Ch35 → Ch36 → Ch37 prose pipeline (sequential)**. Caps 4,900 / 5,200 / 4,300 / 5,000 / 5,000. For each:
+   ```bash
+   .venv/bin/python scripts/dispatch_chapter_prose.py 33 \
+     --slug ch-33-deep-blue \
+     --research-branch main \
+     --cap-words 4900 \
+     --verdict-notes-pr 472
+   # then push branch, gh pr create, dual review (claude + gemini), inline fix-pass, gh pr merge --squash
+   ```
+   Verdict-notes PR numbers per chapter: Ch33→#472, Ch34→#473, Ch35→#474, Ch36→#476, Ch37→#475. Each chapter has legacy prose on `main` — the Gemini phase replaces it (the dispatcher's prompt is explicit about this).
+
+3. **Roll-up after Part 6**: one `docs(ai-history): mark Ch32-37 accepted` commit moving each chapter's `status.yaml` to `accepted` and the `index.md` Part 6 table column to `accepted`. Same pattern as `e3eb6fec` (Ch06-14 mass roll-up).
+
+4. **Part 7 — drive end-to-end (user request 2026-04-28 PM)**. Ch41-49 are all `status: researching` (no contracts). Per the 2026-04-28 PM policy Codex is the research lead for Parts 3, 6, 7 (Claude orchestrates). Plan:
+   - For each Ch in 41..49: `.venv/bin/python scripts/dispatch_chapter_research.py NN --slug ch-NN-... --agent codex` to build the contract on a `codex/394-chNN-research` branch + open PR.
+   - When the contract PR is opened: `.venv/bin/python scripts/dispatch_research_verdict.py PR_NUM` for dual verdict (Codex anchor verification + Gemini structural gap audit). Codex is the author so for Codex-authored research the cross-family pair becomes Claude (anchor verification, since Claude has the same shell tooling) + Gemini (gap audit). **Need to confirm `dispatch_research_verdict.py` has a Codex-conflict-aware mode before running it on Codex-authored research** — read the script and pick `--only` flags accordingly.
+   - Once dual cleared → merge research → mark prose_ready → run `dispatch_chapter_prose.py` (Gemini draft → Codex expand) → dual prose review → merge.
+   - 9 chapters end-to-end is ~12-15 hours of wall time at current dispatcher cadence. Run as overnight chain per `feedback_overnight_autonomous_codex_chain.md`.
+
+5. **Ch16 research** — `status: researching` stub. Per the 2026-04-29 pivot Ch16 is Codex-owned (transferred from Claude). Don't dispatch from Claude. Codex picks this up on his own schedule.
+
+6. **Cleanup** — `.worktrees/claude-394-part3` is empty staging from earlier work and can be removed at session start. `scripts/local_api.py` and `test_rendering.js` are user-side dirty state — leave alone.
 
 ---
 
