@@ -1,0 +1,342 @@
+"""Dispatch cross-family verdict pass on AI History chapter-research PRs (#394).
+
+For each PR:
+1. Read brief.md, sources.md, open-questions.md, scene-sketches.md from
+   the PR branch (`git show <branch>:<path>`).
+2. Fire Codex anchor-verification (gpt-5.5, reasoning=high) — can use
+   the shell to curl/pdftotext/grep specific page anchors.
+3. Fire Gemini structural gap-audit (lane-disciplined per
+   feedback_gemini_hallucinates_anchors.md — NO URL citations from
+   Gemini; structural gaps only).
+4. Post both reviews as PR comments.
+
+Codex and Gemini run on different families, so a Codex queue and a
+Gemini queue can run in parallel. Within a family, dispatches are
+sequential per feedback_codex_dispatch_sequential.md and
+reference_gemini_collab.md.
+
+Usage:
+    .venv/bin/python scripts/dispatch_research_verdict.py 456 459 460 ...
+    .venv/bin/python scripts/dispatch_research_verdict.py --only codex 456
+    .venv/bin/python scripts/dispatch_research_verdict.py --only gemini 456
+
+Posts comments via `gh pr comment <pr> --body-file ...`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import threading
+from pathlib import Path
+from textwrap import dedent
+
+REPO = Path("/Users/krisztiankoos/projects/kubedojo")
+sys.path.insert(0, str(REPO / "scripts"))
+
+
+CONTRACT_FILES = ["brief.md", "sources.md", "open-questions.md",
+                  "scene-sketches.md", "timeline.md", "people.md",
+                  "infrastructure-log.md", "status.yaml"]
+
+
+def slug_from_branch(branch: str) -> str:
+    """`claude/394-ch01-research` → `ch-01-the-laws-of-thought`. We can't
+    derive the slug from the branch alone — fetch the file paths from
+    the PR diff and pull the slug out."""
+    out = subprocess.run(
+        ["gh", "pr", "view", _pr_for_branch(branch), "--json",
+         "files", "--jq", ".files[0].path"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    # path is docs/research/ai-history/chapters/ch-NN-slug/file.md
+    parts = out.split("/")
+    if len(parts) < 5 or parts[3] != "chapters":
+        raise ValueError(f"unexpected path {out!r} on branch {branch!r}")
+    return parts[4]
+
+
+def _pr_for_branch(branch: str) -> str:
+    out = subprocess.run(
+        ["gh", "pr", "list", "--head", branch, "--json", "number",
+         "--jq", ".[0].number"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    if not out:
+        raise ValueError(f"no PR for branch {branch!r}")
+    return out
+
+
+def fetch_pr_meta(pr_num: int) -> dict:
+    out = subprocess.run(
+        ["gh", "pr", "view", str(pr_num), "--json",
+         "headRefName,title,number"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout
+    return json.loads(out)
+
+
+def read_branch_file(branch: str, path: str) -> str:
+    subprocess.run(["git", "fetch", "origin", branch], cwd=REPO,
+                   capture_output=True, check=False)
+    r = subprocess.run(
+        ["git", "show", f"origin/{branch}:{path}"],
+        cwd=REPO, capture_output=True, text=True,
+    )
+    return r.stdout if r.returncode == 0 else ""
+
+
+def gather_contract(branch: str, slug: str) -> str:
+    """Concatenate every contract file with a header so the reviewer sees
+    the whole thing."""
+    chunks = []
+    for fn in CONTRACT_FILES:
+        body = read_branch_file(
+            branch, f"docs/research/ai-history/chapters/{slug}/{fn}",
+        )
+        if not body:
+            chunks.append(f"### {fn}\n\n_(empty or absent)_\n")
+            continue
+        chunks.append(f"### {fn}\n\n```\n{body}\n```\n")
+    return "\n".join(chunks)
+
+
+def codex_prompt(*, slug: str, contract: str) -> str:
+    return dedent(f"""\
+        # Verdict Pass — Codex Anchor Verification (`{slug}`)
+
+        You are the cross-family Codex reviewer for an AI History
+        chapter research contract. Your lane is **anchor verification**:
+        confirm that primary-source URLs, page numbers, DOIs, and quoted
+        passages actually exist and say what the contract claims.
+
+        ## Background
+
+        Chapter contracts are the gating artifact between research and
+        prose. Per `docs/research/ai-history/TEAM_WORKFLOW.md`, drafting
+        does not unlock until the contract gets `READY_TO_DRAFT` or
+        `READY_TO_DRAFT_WITH_CAP` from a cross-family reviewer.
+
+        Gemini was removed from research duties in April 2026 after URL
+        and page-anchor hallucinations (Issue #421, commit 03640e20).
+        That makes anchor verification YOUR specialty — you have shell
+        access (curl, pdftotext, pdfgrep, ocrmypdf) and can hit primary
+        sources directly.
+
+        ## Your job
+
+        Review the contract below. For up to **8 of the most
+        load-bearing Green claims** in `sources.md`, attempt to verify:
+        - the URL or DOI resolves
+        - the cited page or section actually contains the quoted text
+          or the claim it's said to support
+        - the bibliographic identifier matches the work cited
+
+        For each claim you check, classify the result:
+        - `ANCHOR_VERIFIED` — fetched and confirmed
+        - `ANCHOR_PARTIAL` — source resolves but page/quote does not match
+        - `ANCHOR_BROKEN` — URL is dead, paywalled, or the quote is wrong
+        - `UNREACHABLE` — paywall / auth / region blocked you
+
+        Don't try to verify all claims; pick the highest-leverage ones.
+        Skip claims already marked Yellow or Red.
+
+        ## Output (Markdown, ≤700 words)
+
+        ```
+        ## Codex Anchor Verification — `{slug}`
+
+        Claims sampled: N
+
+        | Claim (short) | sources.md row | Status | Notes |
+        |---|---|:-:|---|
+        | ... | ... | ANCHOR_VERIFIED | page 47 confirms |
+        ...
+
+        ### Cross-cutting issues
+        - <e.g. JSTOR paywalls block 4/8 anchors; suggest open mirrors>
+        - <e.g. one DOI mismatched the cited author>
+
+        ### Verdict
+        - READY_TO_DRAFT | READY_TO_DRAFT_WITH_CAP | NEEDS_ANCHORS | NEEDS_RESEARCH | SCOPE_DOWN
+        - One sentence rationale.
+        ```
+
+        ## Contract
+
+        {contract}
+        """)
+
+
+def gemini_prompt(*, slug: str, contract: str) -> str:
+    return dedent(f"""\
+        # Verdict Pass — Gemini Structural Gap Audit (`{slug}`)
+
+        You are the cross-family Gemini reviewer for an AI History
+        chapter research contract. Your lane is **structural gap
+        analysis** — what scenes are thin, what arguments lack
+        scaffolding, where the contract over- or under-claims relative
+        to its sources.
+
+        ## CRITICAL LANE DISCIPLINE — read this first
+
+        **Do not cite URLs, page numbers, or DOIs in your review.**
+        After repeated URL and page-anchor hallucinations (Issue #421,
+        commit 03640e20), Gemini was removed from anchor-verification
+        duty. Codex handles that lane. Your job is structural and
+        narrative — you may quote the contract back to itself, but you
+        may NOT introduce new sources, URLs, or page anchors. If you
+        catch yourself about to write a URL or "page N", STOP and
+        rephrase the gap structurally.
+
+        ## Your job
+
+        Review the contract below. Focus on:
+
+        1. **Scene structure** — Are the 5 scenes coherent and
+           differentiated, or do two of them collapse into one?
+        2. **Prose Capacity Plan layers** — Does each layer have a
+           plausible narrative shape, or are some layers thin
+           padding?
+        3. **Boundary contract** — Does the chapter say clearly what
+           it is NOT? Are forward-references properly sparse?
+        4. **People coverage** — Are the named protagonists actually
+           necessary for the chapter's argument, or are some included
+           for completeness without scenes?
+        5. **Open questions** — Are the named gaps the *right* gaps?
+           Are there obvious holes the contract doesn't acknowledge?
+        6. **Word-count discipline label** — Does the label match what
+           the Prose Capacity Plan can actually carry?
+
+        Avoid commenting on anchor accuracy — that's Codex's job. If
+        you suspect an anchor is wrong, flag it as
+        "Codex-please-verify" without naming a specific URL or page.
+
+        ## Output (Markdown, ≤700 words)
+
+        ```
+        ## Gemini Structural Gap Audit — `{slug}`
+
+        ### Scenes
+        - <gap or strength, no URLs>
+
+        ### Prose Capacity Plan
+        - <layer-by-layer assessment>
+
+        ### Boundary contract
+        - <strength or weakness>
+
+        ### Coverage gaps
+        - <people / scenes / open-questions>
+
+        ### For Codex to verify (no URLs from me)
+        - <the X claim looks load-bearing — Codex please confirm anchor>
+
+        ### Verdict
+        - READY_TO_DRAFT | READY_TO_DRAFT_WITH_CAP | NEEDS_ANCHORS | NEEDS_RESEARCH | SCOPE_DOWN
+        - One sentence rationale (no URLs).
+        ```
+
+        ## Contract
+
+        {contract}
+        """)
+
+
+def fire(agent: str, *, prompt: str, slug: str) -> tuple[bool, str]:
+    from agent_runtime.runner import invoke
+    from agent_runtime.errors import RateLimitedError, AgentTimeoutError
+
+    if agent == "codex":
+        # gpt-5.5 + model_reasoning_effort=high are pinned in
+        # ~/.codex/config.toml, so we just need model="gpt-5.5".
+        model = "gpt-5.5"
+        timeout = 1500
+    elif agent == "gemini":
+        model = "gemini-3-flash-preview"
+        timeout = 900
+    else:
+        raise ValueError(agent)
+
+    try:
+        r = invoke(
+            agent, prompt,
+            mode="read-only",
+            cwd=REPO,
+            model=model,
+            task_id=f"verdict-{slug}-{agent}",
+            entrypoint="consult",
+            hard_timeout=timeout,
+        )
+        return r.ok, (r.response or "")
+    except (RateLimitedError, AgentTimeoutError) as e:
+        return False, f"_dispatch failed_: {type(e).__name__}: {e}"
+    except Exception as e:
+        return False, f"_dispatch crashed_: {type(e).__name__}: {e}"
+
+
+def post_comment(pr_num: int, body: str) -> None:
+    """Post a single PR comment via gh."""
+    p = Path(f"/tmp/verdict-comment-{pr_num}.md")
+    p.write_text(body)
+    subprocess.run(
+        ["gh", "pr", "comment", str(pr_num), "--body-file", str(p)],
+        cwd=REPO, check=True,
+    )
+    print(f"[post] PR #{pr_num} comment posted ({len(body)} chars)")
+
+
+def process_one(pr_num: int, *, only: str | None) -> None:
+    meta = fetch_pr_meta(pr_num)
+    branch = meta["headRefName"]
+    slug = slug_from_branch(branch)
+    print(f"[run] PR #{pr_num} branch={branch} slug={slug}")
+    contract = gather_contract(branch, slug)
+
+    out = {}
+    threads = []
+
+    def run_one(agent: str):
+        if agent == "codex":
+            ok, body = fire("codex", prompt=codex_prompt(
+                slug=slug, contract=contract), slug=slug)
+        else:
+            ok, body = fire("gemini", prompt=gemini_prompt(
+                slug=slug, contract=contract), slug=slug)
+        out[agent] = (ok, body)
+
+    if only in (None, "codex"):
+        t = threading.Thread(target=run_one, args=("codex",), daemon=True)
+        t.start()
+        threads.append(t)
+    if only in (None, "gemini"):
+        t = threading.Thread(target=run_one, args=("gemini",), daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+
+    for agent, (ok, body) in out.items():
+        marker = "OK" if ok else "FAILED"
+        post_comment(pr_num, f"<!-- verdict {agent} -->\n\n_{marker}_\n\n{body}")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("prs", type=int, nargs="+",
+                   help="PR numbers to verdict-pass")
+    p.add_argument("--only", choices=["codex", "gemini"], default=None,
+                   help="Run only one reviewer family")
+    args = p.parse_args()
+
+    for pr in args.prs:
+        try:
+            process_one(pr, only=args.only)
+        except Exception as e:
+            print(f"[err] PR #{pr}: {type(e).__name__}: {e}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

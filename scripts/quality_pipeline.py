@@ -75,8 +75,9 @@ STAGES = [
     "FAILED",
 ]
 
-CODEX_MODEL = "gpt-5.5"
-CODEX_REASONING = "high"
+DEFAULT_WRITER = "gpt-5.5"
+DEFAULT_REASONING = "high"
+DEFAULT_REVIEWER = "{args.reviewer}"
 
 
 # ---- state management ----------------------------------------------------
@@ -231,6 +232,17 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("Failed modules:")
         for s in failed[:20]:
             print(f"  {s['slug']}  — {s.get('failure_reason','?')}")
+
+    if args.verbose:
+        print()
+        print("Active modules in progress:")
+        active = [s for s in states if s["stage"] not in ("COMMITTED", "SKIPPED", "FAILED", "UNAUDITED")]
+        if not active:
+            print("  (none)")
+        for s in active:
+            track = s.get('track', 'unknown')
+            print(f"  {s['slug']:<40} {s['stage']:<15} {track}")
+            
     return 0
 
 
@@ -259,19 +271,21 @@ def audit_one(state: dict[str, Any], timeout: int) -> None:
 
 def run_stage(
     states: list[dict[str, Any]],
-    input_stage: str,
+    input_stages: str | tuple[str, ...],
     fn: Callable[[dict[str, Any]], None],
     workers: int,
     label: str,
     limit: int | None = None,
 ) -> tuple[int, int]:
-    candidates = [s for s in states if s["stage"] == input_stage]
+    if isinstance(input_stages, str):
+        input_stages = (input_stages,)
+    candidates = [s for s in states if s["stage"] in input_stages]
     if limit:
         candidates = candidates[:limit]
     if not candidates:
-        print(f"{label}: no modules in {input_stage}")
+        print(f"{label}: no modules in {input_stages}")
         return 0, 0
-    print(f"{label}: {len(candidates)} module(s) in {input_stage} (workers={workers})")
+    print(f"{label}: {len(candidates)} module(s) in {input_stages} (workers={workers})")
     ok = fail = 0
     with cf.ThreadPoolExecutor(max_workers=workers) as ex:
         futures = {ex.submit(fn, s): s for s in candidates}
@@ -503,7 +517,7 @@ def _git_checkout(ref: str) -> None:
     subprocess.check_call(["git", "-C", str(REPO_ROOT), "checkout", ref])
 
 
-def write_one(state: dict[str, Any], timeout: int) -> None:
+def write_one(state: dict[str, Any], args: argparse.Namespace) -> None:
     """ROUTED → WRITE_DONE. Dispatches Codex; writes output to module file on a branch."""
     slug = state["slug"]
     track = state["track"]
@@ -524,11 +538,8 @@ def write_one(state: dict[str, Any], timeout: int) -> None:
     # Only dispatch if we're on main and clean. Per-module branch.
     branch = f"quality/{slug}"
     current = _git_current_branch()
-    if current != "main":
-        record_failure(state, f"refusing to dispatch while on branch {current!r} (expected main)")
-        return
     if _git_has_uncommitted():
-        record_failure(state, "refusing to dispatch with uncommitted changes in main")
+        record_failure(state, f"refusing to dispatch with uncommitted changes in {current}")
         return
 
     existing_branches = subprocess.check_output(["git", "-C", str(REPO_ROOT), "branch", "--list", branch], text=True).strip()
@@ -546,23 +557,23 @@ def write_one(state: dict[str, Any], timeout: int) -> None:
     try:
         cmd = [
             "codex", "exec",
-            "-m", CODEX_MODEL,
-            "-c", f'model_reasoning_effort="{CODEX_REASONING}"',
+            "-m", args.writer,
+            "-c", f'model_reasoning_effort="{args.reasoning}"',
             prompt,
         ]
         with log.open("w", encoding="utf-8") as fh:
-            result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=timeout, cwd=str(REPO_ROOT))
+            result = subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, timeout=args.timeout, cwd=str(REPO_ROOT))
     except subprocess.TimeoutExpired:
-        _git_checkout("main")
-        record_failure(state, f"codex timeout after {timeout}s")
+        _git_checkout(current)
+        record_failure(state, f"codex timeout after {args.timeout}s")
         return
     except FileNotFoundError:
-        _git_checkout("main")
+        _git_checkout(current)
         record_failure(state, "codex CLI not found on PATH")
         return
     elapsed = time.time() - t0
     if result.returncode != 0:
-        _git_checkout("main")
+        _git_checkout(current)
         record_failure(state, f"codex rc={result.returncode} (see {log})")
         return
 
@@ -570,7 +581,7 @@ def write_one(state: dict[str, Any], timeout: int) -> None:
     raw = log.read_text(encoding="utf-8")
     module_md = _extract_module_markdown(raw)
     if module_md is None:
-        _git_checkout("main")
+        _git_checkout(current)
         record_failure(state, "could not extract module markdown from codex output")
         return
 
@@ -582,7 +593,7 @@ def write_one(state: dict[str, Any], timeout: int) -> None:
         )
     except subprocess.CalledProcessError as e:
         record_failure(state, f"git commit failed: {e}")
-        _git_checkout("main")
+        _git_checkout(current)
         return
 
     diff_size = len(module_md) - len(module_text)
@@ -596,7 +607,7 @@ def write_one(state: dict[str, Any], timeout: int) -> None:
         "log_path": str(log.relative_to(REPO_ROOT)),
     }
     advance(state, "WRITE_DONE")
-    _git_checkout("main")
+    _git_checkout(current)
 
 
 def _extract_module_markdown(raw: str) -> str | None:
@@ -622,7 +633,7 @@ def cmd_write(args: argparse.Namespace) -> int:
     if workers > 1:
         print("WARNING: write stage uses git branches; workers>1 is unsafe (branch contention). Forcing workers=1.", file=sys.stderr)
         workers = 1
-    ok, fail = run_stage(states, "ROUTED", lambda s: write_one(s, args.timeout), workers, "write", args.limit)
+    ok, fail = run_stage(states, ("ROUTED", "REVIEW_CHANGES"), lambda s: write_one(s, args), workers, "write", args.limit)
     print(f"write: ok={ok} fail={fail}")
     return 0 if fail == 0 else 1
 
@@ -711,15 +722,15 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def review_one(state: dict[str, Any], timeout: int) -> None:
+def review_one(state: dict[str, Any], args: argparse.Namespace) -> None:
     """WRITE_DONE → REVIEW_APPROVED or REVIEW_CHANGES. Gemini cross-family."""
     slug = state["slug"]
     prompt = _review_prompt(state)
-    cmd = [_VENV_PYTHON, DISPATCH, "gemini", "-", "--model", "gemini-3.1-pro-preview", "--timeout", str(timeout)]
+    cmd = [_VENV_PYTHON, DISPATCH, "gemini", "-", "--model", "{args.reviewer}", "--timeout", str(timeout)]
     log = log_path_for(slug, "review")
     t0 = time.time()
     try:
-        result = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout + 30)
+        result = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=args.timeout + 30)
     except subprocess.TimeoutExpired:
         record_failure(state, f"review timeout after {timeout + 30}s")
         return
@@ -753,7 +764,7 @@ def review_one(state: dict[str, Any], timeout: int) -> None:
 def cmd_review(args: argparse.Namespace) -> int:
     states = iter_states(set(args.only) if args.only else None)
     workers = min(args.workers, WORKER_CAP)
-    ok, fail = run_stage(states, "WRITE_DONE", lambda s: review_one(s, args.timeout), workers, "review", args.limit)
+    ok, fail = run_stage(states, "WRITE_DONE", lambda s: review_one(s, args), workers, "review", args.limit)
     print(f"review: ok={ok} fail={fail}")
     return 0 if fail == 0 else 1
 
@@ -768,11 +779,8 @@ def commit_one(state: dict[str, Any]) -> None:
         record_failure(state, "no branch recorded; cannot commit")
         return
     current = _git_current_branch()
-    if current != "main":
-        record_failure(state, f"refusing to merge while on branch {current!r}")
-        return
     if _git_has_uncommitted():
-        record_failure(state, "refusing to merge with uncommitted changes in main")
+        record_failure(state, f"refusing to merge with uncommitted changes in {current}")
         return
     try:
         subprocess.check_call(["git", "-C", str(REPO_ROOT), "merge", "--ff-only", branch])
@@ -808,11 +816,20 @@ def cmd_run(args: argparse.Namespace) -> int:
         cmd_audit(a)
         cmd_route(a)
         cmd_write(a)
-        cmd_review(a)
-        cmd_commit(a)
+        if not args.skip_review:
+            cmd_review(a)
+            if not args.skip_commit:
+                cmd_commit(a)
         # Check if anything is still pending.
         states = iter_states(set(args.only) if args.only else None)
-        pending = [s for s in states if s["stage"] in ("UNAUDITED", "AUDITED", "ROUTED", "WRITE_PENDING", "WRITE_DONE", "REVIEW_CHANGES", "REVIEW_APPROVED")]
+        
+        terminal = ["COMMITTED", "SKIPPED", "FAILED"]
+        if args.skip_review:
+            terminal.extend(["WRITE_DONE"])
+        elif args.skip_commit:
+            terminal.extend(["REVIEW_APPROVED"])
+            
+        pending = [s for s in states if s["stage"] not in terminal]
         if not pending:
             print(f"\nAll modules terminal (COMMITTED|SKIPPED|FAILED) after {iterations} cycle(s).")
             break
@@ -842,6 +859,9 @@ def main() -> int:
         p.add_argument("--timeout", type=int, default=default_timeout)
         p.add_argument("--limit", type=int, default=None, help="Process at most N modules")
         p.add_argument("--only", action="append", default=[], help="Restrict to specific slugs (may repeat)")
+        p.add_argument("--writer", type=str, default=DEFAULT_WRITER, help="Model for writing (Codex)")
+        p.add_argument("--reasoning", type=str, default=DEFAULT_REASONING, help="Reasoning effort for writing")
+        p.add_argument("--reviewer", type=str, default=DEFAULT_REVIEWER, help="Model for reviewing (Gemini)")
 
     p_audit = sub.add_parser("audit", help="UNAUDITED → AUDITED")
     _shared(p_audit, default_timeout=300)
@@ -866,6 +886,8 @@ def main() -> int:
     p_run = sub.add_parser("run", help="Cycle through all stages until no progress")
     _shared(p_run, default_timeout=1500)
     p_run.add_argument("--max-cycles", type=int, default=8)
+    p_run.add_argument("--skip-review", action="store_true", help="Stop after writing, skip review & commit")
+    p_run.add_argument("--skip-commit", action="store_true", help="Stop after review, skip commit")
     p_run.set_defaults(func=cmd_run)
 
     args = ap.parse_args()
