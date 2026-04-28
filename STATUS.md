@@ -2,9 +2,11 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-28 late evening — Parts 2 & 3 prose shipped + role split simplified)
+## Active Work (2026-04-28 late evening — Part 6 research merge dance)
 
-**Branch**: `main` clean, pushed. Part 2 (Ch06-10) and Part 3 (Ch11-14) prose all merged with dual cross-family review fix-passes applied. The only remaining Part 3 prose chapter is **Ch15** (verdict cleared on PR #457, prose not yet drafted). Ch16 is still at `researching`.
+**Branch**: `main` at `abaef81f` (clean, pushed). PRs #457, #471, #472, #473, #474 (Ch15, Ch32-35 research) rebased + squash-merged. Per-chapter `status.yaml` bumped to `prose_ready` with verdict-URL metadata; index.md Part 6 lifecycle column updated; Roll-up counts refreshed (`prose_ready` 7→11, `researching` with legacy prose 11→7). Ch36 (#476) and Ch37 (#475) still need cross-family verdicts — dispatcher is running in background (`/tmp/verdict-475-476.log`).
+
+**Earlier this evening**: Part 2 (Ch06-10) and Part 3 (Ch11-14) prose all merged with dual cross-family review fix-passes applied. The only remaining Part 3 prose chapter is **Ch15** (now `prose_ready` post-merge, prose not yet drafted). Ch16 is still at `researching`.
 
 **Policy update — 2026-04-28 PM**: Codex is the writer/researcher for ALL remaining #394 chapters. Claude orchestrates Parts 3, 6, 7 (fires `dispatch_chapter_*.py`, runs reviews, applies fix-passes, merge dance). Codex drives Parts 8 and 9 end-to-end autonomously. Claude does NO drafting and NO primary research. See `project_ai_history_research_split_2026-04-28.md` and `feedback_codex_default_prose_expander.md`. The codex meta-narrative leak pattern (`"the contract"`, `"Yellow"`, `"unsafe"`) is now baked into `STRICT_SOURCE_RULE` in `scripts/dispatch_chapter_prose.py` so every future Codex chapter prevents the leak in-prompt rather than catching it in fix-pass.
 
@@ -25,11 +27,12 @@
 4. **Gemini transient 429s on review dispatch**: One ch13 review crashed at the post-tool stage with `RateLimitedError: ... File not found`. A simple re-fire 2 minutes later succeeded — the rate limiter had cleared and the path was fine. Pattern matches the existing `feedback_runner_false_failure_recovery.md` shape: tool-work succeeded out-of-band; runner classification was wrong.
 
 **Open work — order**:
-1. **Ch15 prose** — verdict cleared (PR #457). `dispatch_chapter_prose.py 15 --slug ch-15-the-gradient-descent-concept --research-branch claude/394-ch15-research --cap-words <from #457>`. Then dual review + fix-pass + merge.
-2. **Ch16 research** — `status: researching` stub. Build contract via `dispatch_chapter_research.py 16 --slug ch-16-the-cold-war-blank-check`.
-3. **Part 6 research PRs (#471–#476)** — Claude's pre-policy-flip Ch32-37 research contracts. Verdicts on file but never merged. Same `git rebase origin/main && push --force-with-lease && gh pr merge` dance that worked on Part 1 and on #470.
-4. **Cleanup** — there are now 6 newly-merged worktrees + branches eligible for prune (codex-394-ch11/12/13/14-prose, prose-394-ch10, claude-394-ch10-research). `git worktree prune` + `git cleanup-merged` (per briefing alert).
-5. **Codex's progress on Parts 4–9** — Codex now drives Parts 4, 5, 6, 7, 8, 9 research per the policy. Part 8 had Ch50-52 at `prose_ready` and Ch53-58 still `researching`. Don't dispatch fresh research from Claude there.
+1. **PR #475 (Ch37) and #476 (Ch36) verdicts** — dispatcher firing now. Once both verdicts land, rebase + squash-merge same as the others, then bump those status.yaml + index.md to `prose_ready` (matching cap from each brief.md Capacity Plan). After that, all of Ch32-37 is contract-clean.
+2. **Ch15 prose** — now `prose_ready` (cap 4,900). Per the 2026-04-29 prose pipeline, this is the Gemini→Codex pipeline (Part 3 is in the "Gemini drafts → Codex expands" lane). Run `dispatch_chapter_prose.py 15 --slug ch-15-the-gradient-descent-concept --cap-words 4900`. Research is now on `main` so the dispatcher will use `main` as research-source ref.
+3. **Ch32-35 prose** — `prose_ready` with caps 5,600 / 4,900 / 5,200 / 4,300. Part 6 prose lane is also Gemini→Codex per the 2026-04-29 pivot. Same dispatcher pattern. Each chapter has legacy prose merged on the old contract — replacement drafts must overwrite, not append.
+4. **Ch16 research** — `status: researching` stub. Per the 2026-04-29 pivot Ch16 is now Codex-owned (transferred from Claude). Don't dispatch from Claude.
+5. **Cleanup** — newly-merged branches eligible for prune (claude-394-ch15/32/33/34/35-research). `git cleanup-merged` per the briefing alert. Worktrees were already removed this session.
+6. **Codex's progress on Parts 4–9** — Codex drives Parts 4, 5, 6, 7, 8, 9 research per the policy. Part 8 has Ch50-55 at `prose_ready` and Ch56-58 still `researching`. Don't dispatch fresh research from Claude there.
 
 ---
 

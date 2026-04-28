@@ -6,7 +6,7 @@ This directory contains the operational research files for the definitive 68-cha
 
 - **Golden Research (Parts 1-2, Chapters 1-10):** Currently under revision based on cross-family review (downgraded to `reviewing` while we convert to claim-level anchoring and resolve factual disputes).
 - **Part 3 (The Birth of Symbolic AI):** Ch11-14 prose `accepted`; Ch15 dual-cleared `prose_ready` 2026-04-28; Ch16 still researching (now Codex-owned per 2026-04-29 split).
-- **Part 6 (The Rise of Data & Distributed Compute):** Ch32-35 dual-cleared `prose_ready` 2026-04-28 (caps 5,600 / 4,900 / 5,200 / 4,300); Ch36-37 contracts merged but verdicts still in flight; Ch38-40 not yet rebuilt.
+- **Part 6 (The Rise of Data & Distributed Compute):** Ch32-37 dual-cleared `prose_ready` 2026-04-28 (caps 5,600 / 4,900 / 5,200 / 4,300 / 5,000 / 5,000); Ch38-40 not yet rebuilt.
 - **Part 4 (The First Winter):** Ch17-23 cross-family cleared for capped prose drafting; Ch21 carries a Yellow-caveated Bachant/McDermott mirror-source guardrail.
 - **Part 5 (The Mathematical Resurrection):** Ch24-31 prose `accepted`.
 

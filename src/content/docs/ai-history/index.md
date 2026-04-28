@@ -133,8 +133,8 @@ The shift to empiricism, enabled by the internet and cluster computing.
 | 33 | Deep Blue | prose_ready (cap 4,900) | [yes](./ch-33-deep-blue/) |
 | 34 | The Accidental Corpus | prose_ready (cap 5,200) | [yes](./ch-34-the-accidental-corpus/) |
 | 35 | Indexing the Mind | prose_ready (cap 4,300) | [yes](./ch-35-indexing-the-mind/) |
-| 36 | The Multicore Wall | researching | [yes](./ch-36-the-multicore-wall/) |
-| 37 | Distributing the Compute | researching | [yes](./ch-37-distributing-the-compute/) |
+| 36 | The Multicore Wall | prose_ready (cap 5,000) | [yes](./ch-36-the-multicore-wall/) |
+| 37 | Distributing the Compute | prose_ready (cap 5,000) | [yes](./ch-37-distributing-the-compute/) |
 | 38 | The Human API | researching | [yes](./ch-38-the-human-api/) |
 | 39 | The Vision Wall | researching | [yes](./ch-39-the-vision-wall/) |
 | 40 | Data Becomes Infrastructure | researching | [yes](./ch-40-data-becomes-infrastructure/) |
@@ -200,8 +200,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 |---|---:|
 | `accepted` (drafted, all reviews cleared) | 29 |
 | `prose_review` (drafted, in review) | 0 |
-| `prose_ready` (contract dual-cleared, awaiting prose draft) | 11 |
+| `prose_ready` (contract dual-cleared, awaiting prose draft) | 13 |
 | `capacity_plan_anchored` (contract anchored, awaiting verdict) | 0 |
-| `researching` with prose merged on legacy contract | 7 |
+| `researching` with prose merged on legacy contract | 5 |
 | `researching` (no prose yet) | 21 |
 | **Total** | **68** |

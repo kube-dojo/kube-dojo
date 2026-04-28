@@ -1,4 +1,20 @@
-status: capacity_plan_anchored
+status: prose_ready
+review_state: gemini_ready_to_draft_with_cap_2026-04-28;codex_ready_to_draft_with_cap_2026-04-28
+last_updated: 2026-04-28
+prose_word_cap: 5000
+verdicts:
+  gemini:
+    model: gemini-3-flash-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/475#issuecomment-4335964342
+  codex:
+    model: gpt-5.5
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/475#issuecomment-4335964624
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5000
 chapter: ch-37-distributing-the-compute
 researcher: claude
 research_date: 2026-04-28

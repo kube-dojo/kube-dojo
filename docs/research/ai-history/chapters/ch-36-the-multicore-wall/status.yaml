@@ -1,4 +1,24 @@
-status: capacity_plan_anchored
+status: prose_ready
+review_state: gemini_ready_to_draft_with_cap_2026-04-28;codex_ready_to_draft_with_cap_2026-04-28
+last_updated: 2026-04-28
+prose_word_cap: 5000
+verdicts:
+  gemini:
+    model: gemini-3-flash-preview
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/476#issuecomment-4336009952
+    note: |
+      First gemini-3-flash-preview attempt 429ed (no capacity); re-fired
+      via `dispatch_research_verdict.py --only gemini 476` and the second
+      attempt cleared. Earlier FAILED comment retained for audit trail.
+  codex:
+    model: gpt-5.5
+    date: 2026-04-28
+    verdict: READY_TO_DRAFT_WITH_CAP
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/476#issuecomment-4335997494
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5000
 # Counts cover the Scene-Level Claim Table in sources.md (19 rows) plus the
 # Primary Sources / Secondary Sources tables and the Open Questions Reds.
 green_claims: 17
