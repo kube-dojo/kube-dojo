@@ -2,7 +2,29 @@
 
 > **Read this first every session. Update before ending.**
 
-## Active Work (2026-04-28 — AI History Part 1 prose shipped)
+## Active Work (2026-04-28 evening — Parts 6/7 research flipped to Codex + smart-router wrapper)
+
+**Branch**: `main` at `76f55f8e` (clean). `feat(dispatch): generalize research dispatcher + add smart-router wrapper (#394)`.
+
+**Why this session pivoted**: Claude burned ~30% of the weekly credit pool on the Ch32-37 research push — unsustainable. User reassigned Parts 6/7 (Ch38–Ch49, 12 chapters) from Claude to Codex and asked for a headless-Claude wrapper that picks haiku/sonnet/opus by task-class so the orchestrator stops burning opus on cheap work.
+
+**Deliverables this session**:
+- **`scripts/dispatch_chapter_research.py` generalized** — now accepts `--agent {claude,codex}`. Branch + worktree paths derive from the agent name; `AGENT_DEFAULTS` holds model + timeout per agent. Codex path uses `gpt-5.5` (reasoning=high comes from `~/.codex/config.toml`).
+- **`scripts/dispatch_smart.py` shipped** — task-class headless-Claude dispatcher. `search`→haiku-4-5, `edit`/`draft`→sonnet-4-6, `architect`→opus-4-7. Each call logged to `logs/smart_dispatch.jsonl`. Smoke-tested: haiku echo round-trip in 10s.
+- **Ch38 dispatched** to Codex in background (`.worktrees/codex-394-ch38-research`) as the smoke-test of the new agent path. ~30-60 min wall time typical.
+- **Memory updated** — `project_ai_history_research_split_2026-04-28.md` now reflects Parts 6/7 → Codex; `reference_dispatch_smart.md` added.
+
+**Pending — when Ch38 returns**:
+- If Ch38 contract is clean, queue Ch39 → Ch40 → Ch41 … Ch49 sequentially (Codex is sequential-only per `feedback_codex_dispatch_sequential.md`). 12 chapters × ~45 min = ~9 hours wall time end-to-end.
+- After each chapter contract lands, open PR + run dual cross-family verdict (Claude + Gemini, NOT Codex on his own work).
+
+**Doc sync still TODO**:
+- `docs/research/ai-history/README.md` ownership table still shows Claude on Parts 6/7 — update on next research-docs touch.
+- `docs/research/ai-history/TEAM_WORKFLOW.md` Roles section likewise.
+
+---
+
+## Prior — 2026-04-28 — AI History Part 1 prose shipped
 
 **Branch**: `main` (clean, pushed). Part 1 prose cohort (Ch01–Ch05) merged to `origin/main`.
 
