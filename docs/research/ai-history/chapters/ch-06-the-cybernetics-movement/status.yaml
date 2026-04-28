@@ -1,1 +1,77 @@
-status: researching
+status: capacity_plan_anchored
+green_claims: 28
+yellow_claims: 7
+red_claims: 0
+researcher: claude
+research_date: 2026-04-28
+research_branch: claude/394-ch06-research
+supersedes: codex/gemini-394-ch06-research-pre-2026-04-28
+notes: |
+  Research contract built from primary sources extracted by Claude
+  via shell `curl` + `pdftotext` 2026-04-28, per the new role split
+  effective 2026-04-28 (Claude owns Part 2 research; Gemini stops
+  asserting page anchors after Issue #421 / commit 03640e20).
+
+  Primary sources extracted in full (Green throughout):
+   - Rosenblueth, Wiener & Bigelow 1943, "Behavior, Purpose and
+     Teleology," *Phil. Sci.* 10(1):18-24 — direct paper text from
+     archive.org item `behavior-purpose-and-teleology-...`.
+   - Wiener 1961 *Cybernetics* (2nd ed., MIT Press) — full PDF from
+     archive.org item `wiener-1938`. Introduction (pp. 1-29) and
+     Preface to 2nd Ed (pp. vii-ix) verified.
+   - Galison 1994, "The Ontology of the Enemy," *Critical Inquiry*
+     21:228-266 — full PDF from Monoskop.
+   - Pias 2003 *Cybernetics: The Macy Conferences 1946–1953 — The
+     Complete Transactions* (Diaphanes, 2016 reprint) — full PDF
+     from public mirror. Editorial introduction (pp. 11-30) and
+     Ashby 1952 ninth-Macy talk (p. 593+) verified.
+   - Ashby 1956 *An Introduction to Cybernetics* — full PDF from
+     PCP/VUB. §5/14 (pp. 83-84) verified for Homeostat principle.
+   - Ashby 1960 *Design for a Brain* 2nd ed. — full PDF from
+     archive.org item `designforbrainor00ashb`. Ch 8 (pp. 99-125+)
+     verified for Homeostat construction and Cannon-priority footnote.
+
+  Yellow claims (7) and reasons:
+   - Wiener 1947 *Atlantic Monthly* "A Scientist Rebels" — Galison
+     paraphrases; *Atlantic* PDF not pulled.
+   - Ashby 1948 *Electronic Engineering* "Design for a Brain" —
+     citation verified via Ashby Digital Archive bibliography
+     (web.archive.org snapshot 2026-04-28); article PDF not pulled.
+     The 1952/1960 *Design for a Brain* book is the better-anchored
+     substitute and is Green.
+   - Ashby 1947 *Mind* paper — bibliographic citation only.
+   - Cybernetics-to-AI dispersal as multi-cause synthesis claim —
+     interpretive close, not a single-source anchor.
+   - Macy in-room debate beats from the Pias 2003 transcripts —
+     transcripts are Green and accessible; specific debate beats
+     not pulled in this anchor pass (Q6 in open-questions.md).
+   - Wiener's pacifism as Wiener-specific vs. Macy-group property —
+     interpretive nuance Heims 1991 would tighten.
+   - Wiener died March 1964 — biographical fact, out of main scope.
+
+  Red claims: 0. The chapter's Scene 5 displacement narrative is
+  honestly framed as multi-cause; no individual Red claim is needed
+  to carry the prose.
+
+  Per `feedback_dual_review_required.md`: this contract requires
+  approval from BOTH Gemini AND Codex before drafting unlocks.
+  Codex anchor verification: tractable — every Green claim cites a
+  specific page in a source-PDF that is publicly extractable.
+  Gemini gap analysis: should focus on Scene 5's cybernetics-to-AI
+  dispersal framing and on whether the Macy meetings' early
+  conferences (1-5, unrecorded) need additional reconstruction
+  before drafting.
+
+  Per `feedback_gemini_hallucinates_anchors.md`: Gemini must NOT
+  assert URLs or page anchors during gap analysis. He may flag
+  scene-thinness or capacity-plan honesty, but anchor verification
+  is Codex's lane.
+
+  Supersedes Gemini-authored PR #426 for this chapter (research
+  duties were taken away from Gemini after the 2026-04-28 URL/anchor
+  hallucination self-admission). Many of Gemini's anchors in #426
+  are fabricated and were not consulted during this anchor pass.
+
+  Drafting branch (when unlocked): claude/394-ch06-prose. Word cap:
+  honest range 3,200-5,000; provisional cap 5,000 unless reviewer
+  feedback changes it.
