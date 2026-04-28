@@ -1,1 +1,17 @@
-status: researching
+status: capacity_plan_anchored
+owner: Codex
+part: 4
+chapter: 23
+review_state: cross_family_ready_to_draft_with_cap
+last_updated: 2026-04-28
+notes:
+  - "Codex expanded the placeholder into an anchored research contract for Japan's FGCS project, ICOT, parallel logic programming, Western threat perception, and mixed evaluation."
+  - "Core frame: FGCS was a coherent national research bet around knowledge information processing, logic programming, and parallel inference; the Western threat narrative amplified it beyond its practical scope."
+  - "Primary anchors include Fuchi 1984/1992, Kinoshita 1984, Furukawa 1987, Kurozumi 1992, ICOT final evaluation material, OTA 1983, and NRC 2005."
+  - "Capacity target: 4,000-5,000 words confirmed; 5,000-5,700 only after DARPA/Alvey/MCC Western-response sources are parsed."
+  - "Guardrail: do not treat 'Japan' as a single actor or endorse the threat rhetoric."
+  - "Guardrail: use Strategic Computing as stimulated/contributed-to reaction, not as solely caused by FGCS."
+  - "Guardrail: Gemini may gap-audit capacity/narrative only; source-discipline review should come from Claude under the 2026-04-28 role split."
+  - "Claude source-discipline review on PR #458 returned READY_TO_DRAFT_WITH_CAP; non-blocking nits applied for TR-228 dating, PSI/KLO co-anchor, and opening perception frame."
+  - "Gemini gap/capacity review on PR #458 returned READY_TO_DRAFT_WITH_CAP; source-safe narrative nits applied for the software-crisis-to-logic bridge, parallel-logic explanation, and Part 5 handoff."
+  - "Next transition: prose drafting at 4,000-5,000 words unless Western-response primary sources unlock a longer chapter."
