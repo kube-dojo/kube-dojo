@@ -18,14 +18,26 @@ The team workflow is maintained in `TEAM_WORKFLOW.md`. It defines the gates betw
 *   `source-catalog.md`: Shared bibliography for recurring sources (e.g., Hodges, Gleick, Dyson).
 *   `chapters/`: The 68 chapter skeletons. Each must hit the KubeDojo sourcing standard (claim-level anchors, page/section references, independent confirmation) before unlocking for prose drafting.
 
-## Role Split (effective 2026-04-28)
+## Role Split (effective 2026-04-29 — prose pipeline pivot)
 
-After Gemini self-admitted to systemic URL/anchor hallucination across his prior research work (epic commit `03640e20`, Issue #421), research duties were taken away from Gemini and redistributed:
+After Gemini self-admitted to systemic URL/anchor hallucination across his prior research work (epic commit `03640e20`, Issue #421), research duties were taken away from Gemini and redistributed. On 2026-04-29 the prose-expansion role moved from Claude opus to Codex (gpt-5.5) on Codex's own recommendation: gpt-5.5 has wider weekly bandwidth, its source-discipline instinct is the strongest of the three families, and the expansion task ("shape, tighten, enforce source discipline") plays to Codex's strengths.
 
-- **Claude — research lead.** Owns the chapter contracts (brief.md, sources.md, scene-sketches.md, timeline.md, people.md, infrastructure-log.md, open-questions.md, status.yaml) for Parts 1, 2, 3, 6, 7, 9. Extracts anchors via `curl` + `pdftotext` + `pdfgrep` directly. Pulls Codex in as a helper for archive-blocked or scanned-PDF cases that need shell tooling Claude doesn't have on the path.
-- **Codex — research lead.** Owns the chapter contracts for Parts 4, 5, 8. Continues to draft prose for Codex-authored chapters and as the prose drafter for Part 3 (Claude expands).
-- **Gemini — gap auditor + prose drafter.** Stops touching sources entirely. Continues to gap-audit every chapter (his strength: detecting narrative gaps, missing scenes, capacity-plan honesty). Drafts first-pass prose for Parts 1, 2, 6, 7 from a Claude-built contract; Claude expands the draft to full depth.
+- **Claude — research lead + source-fidelity reviewer.** Owns the chapter contracts (brief.md, sources.md, scene-sketches.md, timeline.md, people.md, infrastructure-log.md, open-questions.md, status.yaml) for Parts 1, 2, 3, 6, 7, 9. Extracts anchors via `curl` + `pdftotext` + `pdfgrep` directly. Reviews expanded prose for source fidelity (independent fresh session). Prose expansion fallback when Codex bandwidth is exhausted; the same strict-source rule applies (see `TEAM_WORKFLOW.md` § 5b).
+- **Codex — research lead + default prose expander.** Owns the chapter contracts for Parts 4, 5, 8. Default prose expander for Parts 1, 2, 3, 6, 7 after Gemini drafts: takes Gemini's tight ~3k-word first draft, expands to verdict cap, enforces source discipline. Cross-family reviewer for Claude- and Gemini-authored work.
+- **Gemini — gap auditor + first-draft prose writer.** Stops touching sources entirely. Continues to gap-audit every chapter (his strength: detecting narrative gaps, missing scenes, capacity-plan honesty). Drafts first-pass prose for Parts 1, 2, 6, 7 from an approved contract (~3,000 words, anchor-strict, no source additions). Reviews prose quality after Codex expansion when narrative coherence is the chief concern.
 - **Cross-family verdict** rule unchanged: every chapter requires a `READY_TO_DRAFT` or `READY_TO_DRAFT_WITH_CAP` verdict from BOTH cross-family reviewers (one not from the author's family) before drafting unlocks.
+
+### Prose pipeline (Parts 1, 2, 3, 6, 7)
+
+```
+Approved contract → Gemini first draft (~3k) → Codex expansion to cap (default)
+                                                Claude expansion (fallback)
+                                              → Claude source-fidelity review
+                                              → Gemini OR Claude prose-quality review
+                                              → merge
+```
+
+Strict-source rule applies to BOTH expansion paths: use only the provided contract and claim matrix; if evidence is missing for a scene, leave the scene thin rather than filling it.
 
 Why the split: Gemini fabricated URLs and page anchors; Codex's shell tooling extracts real anchors; Claude has the same tooling and integration discipline. Gemini's drafting and gap-audit value remains real — sourcing was the broken seam.
 

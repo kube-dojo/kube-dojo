@@ -11,9 +11,9 @@ Honesty over output is the highest rule. The team should still strive for the in
 - Human editor: sets ambition, accepts scope tradeoffs, resolves taste and book-level direction.
 - Primary researcher: owns the chapter contract and keeps claims tied to evidence.
 - Cross-family reviewer: stress-tests research completeness, source choice, word-count honesty, and prose readiness. The reviewer must not be from the same model family as the primary researcher or prose writer.
-- Claude: research lead for Parts 1, 2, 3, 6, 7, 9. Extracts anchors directly via `curl` + `pdftotext` + `pdfgrep`. Integrates cross-family review feedback. Final-verdict integrator (with same-author conflict-of-interest excluded).
-- Codex: research lead for Parts 4, 5, 8. Helper for archive-blocked / scanned-PDF anchor extraction when Claude is stuck. Prose drafter for Part 3 chapters (Claude expands afterward). Cross-family reviewer for Claude- and Gemini-authored work.
-- Gemini: gap auditor + first-draft prose writer for Parts 1, 2, 6, 7. STOPS touching sources after the 2026-04-28 hallucination self-admission (epic commit `03640e20`, Issue #421). Reviews capacity-plan honesty, narrative gaps, missing scenes — never asserts page anchors or URLs. First-draft prose for Parts 1/2/6/7 is built from a Claude-authored contract; Claude expands after.
+- Claude: research lead for Parts 1, 2, 3, 6, 7, 9. Extracts anchors directly via `curl` + `pdftotext` + `pdfgrep`. **Source-fidelity reviewer of expanded prose.** Final-verdict integrator (with same-author conflict-of-interest excluded). Prose expansion only when Codex bandwidth is unavailable; when Claude does expand, the same strict-source rule applies (see § 5b).
+- Codex: research lead for Parts 4, 5, 8. Helper for archive-blocked / scanned-PDF anchor extraction when Claude is stuck. **Default prose expander for Parts 1, 2, 3, 6, 7** (after Gemini drafts) — Codex is the cheaper compute for the "shape, tighten, enforce source discipline" pass and has the strongest source-discipline instinct. Cross-family reviewer for Claude- and Gemini-authored work.
+- Gemini: gap auditor + first-draft prose writer for Parts 1, 2, 6, 7. STOPS touching sources after the 2026-04-28 hallucination self-admission (epic commit `03640e20`, Issue #421). Reviews capacity-plan honesty, narrative gaps, missing scenes — never asserts page anchors or URLs. First-draft prose is built from an approved contract; the expansion phase (Codex-default, Claude-fallback) finishes the chapter.
 
 Agents should help each other by naming gaps plainly. A useful refusal or downgrade is better than a confident but unsupported expansion.
 
@@ -103,33 +103,73 @@ Ask a cross-family reviewer to review the full contract plus gap analysis. The e
 
 Only `READY_TO_DRAFT` and `READY_TO_DRAFT_WITH_CAP` unlock prose drafting.
 
-### 5. Drafting
+### 5. Drafting (two phases — Gemini draft, then expansion)
 
-Draft only from verified evidence. Use Yellow claims only with explicit caution and never as structural load-bearing claims. Red claims stay out of prose except as clearly labeled open questions.
+Drafting is split into two phases. The first turns the contract into running prose; the second tightens and lengthens that prose to the verdict cap. Both phases obey the same strict-source rule.
 
-If a chapter cannot honestly reach 4,000 words, write the natural chapter length and document why. The target is quality, not padding.
+**Strict source rule (applies to BOTH phases):**
 
-### 6. Prose Review
+> Use only the provided contract and claim matrix. If evidence is missing for a scene, leave the scene thin rather than filling it. Do not add sources, do not introduce new page anchors, do not upgrade Yellow claims, do not invent examples or institutional details, and do not expand beyond the approved Prose Capacity Plan. If you can't anchor a claim, weaken the claim — never invent a source.
 
-Ask a cross-family reviewer to review the drafted chapter for:
+#### 5a. First-draft prose (Gemini, default)
 
-- factual overclaims
-- unsupported scenes
-- missing citations
-- source misuse
-- narrative coherence
-- word-count inflation
+Gemini turns the approved contract (`brief.md` + `sources.md` + `scene-sketches.md`) into a tight ~3,000-word first draft.
+
+Gemini's whitelist:
+- narrative flow and pacing
+- scene ordering
+- making dry source material readable
+- spotting where the chapter feels thin
+
+Gemini's blacklist (the Issue #421 hallucination filter):
+- adding sources or citations not in the contract
+- introducing page anchors or URLs
+- upgrading Yellow claims to Green tone
+- inventing examples, dialogue, or institutional motives
+- expanding beyond the approved capacity plan
+
+A Gemini draft that hits a 429 mid-prose still commits a partial. The expansion phase reads the partial and completes the chapter; rate-limited drafts are not redone from scratch.
+
+#### 5b. Expansion (Codex default, Claude fallback)
+
+Codex (gpt-5.5, reasoning=high) expands the Gemini draft to the verdict cap. Codex is the default expander because:
+
+- gpt-5.5 has wider weekly bandwidth than Claude opus
+- Codex's source-discipline instinct is the strongest of the three families
+- the expansion task is "shape, tighten, enforce source discipline" — Codex's strength
+
+Claude opus is the fallback expander when Codex bandwidth is exhausted or when a chapter has already been Claude-expanded for historical reasons (the Part 1 chapters in flight at the 2026-04-29 pipeline pivot are the documented case).
+
+The expansion budget is for the layers the contract's Prose Capacity Plan named: technical density, infrastructure detail, anchored biographical scenes, conflict notes. Not for generic textbook explanation, repeated summary, modern hindsight, or unanchored deployment scale.
+
+If a chapter cannot honestly reach the cap, write the natural chapter length and document why. The target is quality, not padding.
+
+### 6. Source-Fidelity Review (Claude)
+
+Claude (independent fresh session) reviews the expanded prose for source fidelity:
+
+- factual overclaims vs the contract's anchored claims
+- unsupported scenes / unanchored beats
+- source misuse — anchors that don't match what the prose attributes
+- Yellow/Red discipline (Yellow hedged, Red absent)
+- boundary contract held (no later-chapter forward-references creeping in)
+- whether prose outpaced the research contract
+
+Claude verifies anchors with `curl` / `pdftotext` / `pdfgrep`. Verdict: `READY_TO_MERGE` / `NEEDS_FIX_AND_MERGE` / `NEEDS_REWRITE`.
+
+### 7. Prose-Quality Review (Gemini or Claude — cross-family)
+
+A second reviewer (different family from the prose author and from the source-fidelity reviewer) checks:
+
+- narrative coherence scene-to-scene
+- pacing, sentence variety, paragraph rhythm
+- whether the chapter transitions and part-level arc work
+- word-count inflation vs cap discipline
 - book-level continuity
 
-Do not merge prose on tests alone. Cross-family review remains required.
+Gemini is the natural fit when Codex did the expansion; Claude is the fit when Gemini's drafting work was unusually load-bearing. Either way, the prose-quality reviewer must not be from the family that produced the prose.
 
-### 7. Claude / Cross-Family Review
-
-When Claude is available, ask for an independent-family review before final acceptance. Claude should especially check:
-
-- whether the prose outpaced the research contract
-- whether the story is compelling without fabrication
-- whether chapter transitions and part-level arcs work
+Do not merge prose on tests alone. Both review steps (6 and 7) are required.
 
 ### 8. Human Final Pass
 
