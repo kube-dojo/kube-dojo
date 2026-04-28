@@ -1,14 +1,31 @@
-status: research_review
+status: prose_ready
 owner: Codex
 part: 8
 chapter: 54
-review_state: awaiting_cross_family_review
+review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
 last_updated: 2026-04-28
 green_claims: 6
 yellow_claims: 5
 red_claims: 0
 guardrail_count: 6
 prose_word_cap_recommendation: 4800
+prose_word_cap: 4800
+verdicts:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/494#issuecomment-4333896947
+  gemini:
+    model: gemini-3-flash-preview
+    requested_model: gemini-3.1-pro-preview
+    date: 2026-04-28
+    verdict: READY_WITH_CAP
+    word_cap: 4800
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/494#issuecomment-4334441178
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 4800
+  resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources:
   Transformers EMNLP 2020 PDF, legacy Transformers v4.0.1 docs, GitHub API
