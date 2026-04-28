@@ -7,6 +7,9 @@
   MOFCOM Notice 2024 No. 46; current contract relies on CSET translation.
 - If using market-share claims for HBM, EDA, or foundry concentration, add
   specific primary/industry anchors first. This contract can avoid exact shares.
+- If drafting a concrete smuggling/diversion case, add an enforcement settlement
+  or indictment. Current contract supports diversion as a general BIS guidance
+  theme, not a named narrative episode.
 - If including Huawei Ascend performance or DeepSeek training claims, source
   them independently. The current contract only supports BIS mentioning Huawei
   Ascend chips as a risk in guidance.

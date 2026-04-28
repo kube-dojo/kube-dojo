@@ -20,11 +20,12 @@ alliances.
 - IN SCOPE: 2022 BIS advanced-computing and semiconductor-manufacturing export
   controls; the 2023 updates; the December 2024 package covering HBM,
   semiconductor manufacturing equipment, software tools, and Entity List
-  additions; 2025 AI Diffusion rule/rescission as evidence of policy instability;
-  NVIDIA H20 and product-threshold adaptation; ASML EUV/DUV lithography as a
-  choke point; TSMC advanced-node and CoWoS/Arizona capacity as geographic
-  concentration; CHIPS Act industrial policy; China's gallium/germanium/antimony
-  and graphite counter-controls.
+  additions; U.S.-Netherlands-Japan coordination around semiconductor
+  manufacturing equipment controls; 2025 AI Diffusion rule/rescission as
+  evidence of policy instability; NVIDIA H20 and product-threshold adaptation;
+  ASML EUV/DUV lithography as a choke point; TSMC advanced-node and
+  CoWoS/Arizona capacity as geographic concentration; CHIPS Act industrial
+  policy; China's gallium/germanium/antimony and graphite counter-controls.
 - OUT OF SCOPE: NVIDIA's market power and software moat as the main story
   (Ch67); datacenter construction, land, cooling, and power megacampuses (Ch72);
   one-company investment history; general Taiwan military scenario speculation;
@@ -40,15 +41,18 @@ alliances.
 2. **The 2022 Firewall:** Explain the October 2022 control architecture:
    advanced computing items, supercomputer end use, semiconductor manufacturing
    equipment, Entity List/FDP mechanisms, and U.S.-person support controls. Keep
-   this readable; the point is legal reach, not regulatory trivia.
+   this readable; the point is legal reach, not regulatory trivia. Include the
+   enforcement friction: diversion tactics, shell companies, third-country
+   transshipment, and why a legal firewall becomes a compliance chase.
 3. **The Moving Threshold:** Show why rules had to keep changing. The 2023 update
    "reinforced" the 2022 controls, and NVIDIA's H20 disclosure shows the
    commercial adaptation loop: firms design around thresholds; governments move
    thresholds again.
-4. **The Manufacturing Stack:** Move from chips to machines. ASML's EUV systems
-   are the world's only EUV lithography systems, TSMC concentrates advanced
-   production and packaging capacity, and advanced AI depends on both front-end
-   nodes and back-end packaging/HBM.
+4. **The Manufacturing Stack:** Move from chips to machines. ASML is the
+   semiconductor manufacturing equipment (SME) choke point for EUV/DUV
+   lithography; TSMC is the foundry and advanced-packaging choke point for
+   advanced nodes and CoWoS. Advanced AI depends on both front-end nodes and
+   back-end packaging/HBM.
 5. **Industrial Policy As Re-shoring, Not Instant Independence:** CHIPS funding
    is a response to supply-chain fragility, but a fab is not a laptop factory.
    Use the CHIPS/NIST and TSMC Arizona anchors to show national policy trying to
@@ -69,7 +73,7 @@ alliances.
 
 Target range: 5,200-6,200 words after source verification.
 
-- 550-700 words: bridge from Ch70 and define accelerators as strategic assets.
+- 550-650 words: bridge from Ch70 and define accelerators as strategic assets.
 - 750-900 words: 2022 BIS control architecture in accessible narrative form.
 - 650-800 words: 2023/2024 control updates and the moving-threshold dynamic.
 - 750-900 words: manufacturing stack: ASML EUV/DUV, TSMC advanced nodes,
@@ -78,7 +82,7 @@ Target range: 5,200-6,200 words after source verification.
 - 650-800 words: China counter-levers through materials controls and domestic
   substitution pressure.
 - 650-750 words: AI Diffusion/H20 policy volatility and company adaptation.
-- 550-550 words: synthesis and handoff to Ch72.
+- 550-600 words: synthesis and handoff to Ch72.
 
 ## Guardrails
 

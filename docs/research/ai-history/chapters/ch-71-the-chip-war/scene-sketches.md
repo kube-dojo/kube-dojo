@@ -12,19 +12,23 @@ and surveillance at scale.
 Translate the BIS architecture into plain language: chips, systems, software,
 technology, supercomputer end use, semiconductor manufacturing end use,
 foreign-made items, and U.S.-person support. This is where law reaches through a
-global supply chain.
+global supply chain. Then add the enforcement reality: a firewall creates a
+market for diversion, shell companies, and third-country routing, which is why
+BIS guidance later talks about diversion tactics.
 
 ## Scene 3 - Thresholds That Move
 
-The controls are not one event. BIS revises; companies adapt; BIS revises again.
-NVIDIA's H20 disclosure gives the scene a concrete business consequence without
-turning the chapter into a stock-market story.
+The controls are not one event. BIS revises; the Netherlands and Japan add their
+own SME controls; companies adapt; BIS revises again. NVIDIA's H20 disclosure
+gives the scene a concrete business consequence without turning the chapter into
+a stock-market story.
 
 ## Scene 4 - Machines Behind The Machines
 
 Move from accelerators to the machines and manufacturing stack that create them.
-ASML EUV, DUV immersion, TSMC advanced nodes, CoWoS, HBM, and software tools
-form the deeper choke points.
+ASML belongs in the SME/lithography lane; TSMC belongs in the foundry and
+advanced-packaging lane. EUV, DUV immersion, advanced nodes, CoWoS, HBM, and
+software tools form the deeper choke points.
 
 ## Scene 5 - Rebuilding Capacity At State Speed
 

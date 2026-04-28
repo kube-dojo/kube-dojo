@@ -7,6 +7,10 @@
   begin taking effect, later published at 87 FR 62186.
 - 2023-10-17: BIS releases updates reinforcing the 2022 controls for advanced
   computing semiconductors, SME, and supercomputing items.
+- 2023-09-01: Dutch national export-control rules for advanced semiconductor
+  manufacturing equipment are in force, later expanded in September 2024.
+- 2023-07-23: Japan's METI controls on specified high-performance semiconductor
+  manufacturing equipment take effect according to CSIS translation.
 - 2024-Q4: TSMC says its Arizona first fab entered 4nm volume production.
 - 2024-12-02: BIS announces a package controlling more SME, software tools, HBM,
   red-flag guidance, and 140 Entity List additions.
