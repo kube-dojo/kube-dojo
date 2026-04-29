@@ -6,6 +6,57 @@ sidebar:
   order: 21
 ---
 
+:::tip[In one paragraph]
+R1/XCON, developed at Carnegie Mellon beginning in December 1978 and deployed by Digital Equipment Corporation in January 1980, was the first expert system to become industrial infrastructure. John McDermott's production-rule program configured VAX computer orders — translating customer requests into buildable hardware descriptions — by matching thousands of component facts and constraints rather than searching blindly. Its commercial success validated the expert-system boom; its maintenance story revealed the permanent cost: encoding expertise creates a knowledge base that must be fed, tested, and repaired indefinitely.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| John McDermott | — | CMU researcher; primary architect of R1 and author of the 1982 *Artificial Intelligence* paper documenting its task, rules, and manufacturing deployment. |
+| Judith Bachant | — | DEC Intelligent Systems Technology Group; co-author of the 1984 "R1 Revisited" retrospective anchoring the four-year production and maintenance account. |
+| Barbara Steele | — | Co-author of the 1981 IJCAI paper on ad-hoc constraints; her chapter relevance is the XSEL/R1 extension and customer-specific configuration advice. |
+| Charles L. Forgy | — | Creator of the OPS-family production-system languages (OPS4, OPS5) that provided R1's rule-matching substrate. |
+| Allen Newell | 1927–1992 | Pittsburgh cognitive scientist whose Match method and production-system tradition underpinned R1's recognize-act architecture. |
+| Reid G. Smith | — | Schlumberger researcher and author of the 1984 commercial expert-systems article that framed the engineering discipline R1 instantiated. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1978–1984)</strong></summary>
+
+```mermaid
+timeline
+    title R1/XCON: From CMU Lab to DEC Manufacturing, 1978–1984
+    December 1978 : McDermott begins R1 — short tutoring period, manuals, first implementation focused on central capabilities
+    April 1979 : Initial R1 demo version has about 250 rules
+    October-November 1979 : Formal validation on 50 orders; six experts spend 1–2 hours per order; 12 pieces of errorful knowledge found and fixed
+    January 1980 : DEC manufacturing begins using R1 in regular production; configures almost all VAX-11 systems shipped
+    April-July 1980 : R1 rewritten from OPS4 to OPS5 at CMU; more capable with fewer rules through generalization
+    End of 1980 : About 850 rules; DEC builds organizational capacity around R1
+    March 1981 : R1 extended to configure VAX-11/750 systems
+    1982 : Scope expands to VAX-11/730 and PDP-11/23+; knowledge base reaches about 2000 rules
+    November 1983 : About 3300 rules and 5500 component descriptions; R1 can configure all DEC systems sold in significant volume
+    Fall 1984 : "R1 Revisited" publishes the four-year production account
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Production system** — A rule-based program architecture in which knowledge is stored as individual if/then rules (productions). Each rule specifies a pattern that must match the current program state and an action to take when it matches. R1 used the OPS4 and later OPS5 production-system language.
+- **Working memory** — The production system's dynamic store of the current situation: for R1, the partial configuration in progress, active subtasks, selected components, and facts retrieved so far. Rules fire by pattern-matching against working memory and update it with each action.
+- **Recognize-act cycle** — The basic rhythm of a production system: scan all rules to find those whose conditions match working memory, select one, execute its action, and repeat. R1's intelligence came not from the cycle itself but from encoding enough domain knowledge for the cycle to produce useful configurations.
+- **Expert system** — A program that applies a domain-specific body of knowledge, typically extracted from human specialists, to produce outputs useful within a narrow task. R1 is an expert system because its rules encode the configuration constraints that experienced DEC engineers knew but could not easily state as a formula.
+- **Knowledge engineering** — The discipline of extracting, encoding, testing, and maintaining the knowledge that drives an expert system. The Ch21 development and maintenance narrative is primarily a knowledge-engineering story: experts tutor, inspect output, identify missing cases, and the knowledge base grows accordingly.
+- **Match (OPS5)** — The step in the recognize-act cycle where the interpreter finds all rules whose left-hand-side conditions are satisfied by the current working memory. OPS5's Rete algorithm made this efficient even when the rule base was large, allowing R1 to select locally relevant rules without exhaustive search.
+- **OPS5** — The production-system language (successor to OPS4) that R1 was rewritten into during April–July 1980. Developed at CMU with DARPA and Air Force Avionics Laboratory support; its Rete network made large rule bases feasible for manufacturing-scale use.
+
+</details>
+
 # Chapter 21: The Rule-Based Fortune
 
 The expert-system boom did not begin with a machine that understood the world.
@@ -471,3 +522,8 @@ R1/XCON did not prove that expert systems would solve intelligence. It proved
 something narrower and historically powerful: under the right industrial
 conditions, rules could become fortune-bearing machinery, as long as people
 kept feeding the machinery what it needed to know.
+
+:::note[Why this still matters today]
+The R1/XCON pattern reappears in every era of applied AI. Modern knowledge bases — whether stored as rules, embeddings, or retrieval indexes — still face the same maintenance contract: domain drift erodes accuracy, new products create coverage gaps, and deployment exposes exceptional cases that no training set anticipated. The distinction between a narrow, structured task that can be made operational and a broad domain that resists encoding remains the central engineering judgment in applied AI. R1 proved the distinction is real, not theoretical, and that success in the former does not licence ambition in the latter.
+:::
+
