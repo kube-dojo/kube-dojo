@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 8
 chapter: 55
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_drafted_awaiting_cross_family_review
+last_updated: 2026-04-29
 green_claims: 8
 yellow_claims: 2
 red_claims: 0
@@ -36,3 +36,6 @@ notes: |
   unsourced dollar figures, AGI extrapolation, or internal planning scenes.
   Guardrail_count records explicit prohibitions; red_claims is reserved for
   in-scope claims that fail verification.
+
+  Drafted 2026-04-29 at roughly 4,500 words and opened for cross-family prose
+  review. Keep any review fixes inside the approved evidence boundary.
