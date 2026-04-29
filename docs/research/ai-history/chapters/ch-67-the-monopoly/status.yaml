@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 67
-review_state: dual_cross_family_approved
-last_updated: 2026-04-28
+review_state: prose_accepted_after_cross_family_fixes_2026-04-29
+last_updated: 2026-04-29
 green_claims: 10
 yellow_claims: 7
 red_claims: 0
@@ -25,7 +25,29 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5400
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  status: fixes_applied
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/597#issuecomment-4347746754
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/597#issuecomment-4347725010
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
+  is 4,338 words and covers stacked platform concentration, NVIDIA FY2024 Data
+  Center demand, Microsoft/OpenAI partnership evolution from 2019 through the
+  April 27, 2026 amendment, Amazon/Anthropic, Google/Anthropic, FTC 6(b)/staff-report risk
+  framing, and the July 2024 US/EU/UK competition statement.
+  Cross-family review found strong guardrail/date discipline. Codex applied
+  Claude's Microsoft/OpenAI source-fidelity cuts, Gemini's technical
+  interpolation cut, and added the FTC public-dollar values with the required
+  public-reporting caveat.
+
   Built from scrubbed shell into an anchored platform-concentration contract.
   Core anchors are NVIDIA FY2024 10-K, Microsoft/OpenAI 2019/2025/2026 company
   statements, Amazon/Anthropic and Google/Anthropic company statements, FTC 6(b)
