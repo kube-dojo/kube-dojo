@@ -6,6 +6,55 @@ sidebar:
   order: 22
 ---
 
+:::tip[In one paragraph]
+In the late 1970s, MIT's AI programmers had outgrown time-shared PDP-10s — address limits, swapping, and slow response time were strangling large interactive Lisp systems. The Lisp Machine Group's answer was a personal processor and memory for each programmer, a 24-bit virtual address space, writable microcode, and an environment written almost entirely in Lisp. Commercialized as LMI and Symbolics (culminating in the 3600), the machines were technically coherent; the bubble formed when specialized hardware economics could no longer outrun improving stock workstations and portable Common Lisp.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Thomas F. Knight Jr. | — | MIT AI Lab hardware designer; designed CONS, the first Lisp Machine prototype; co-authored the CADR memo. |
+| Jack Holloway | — | MIT Lisp Machine Group member; co-authored the CADR memo alongside Knight. |
+| David A. Moon | — | MIT Lisp Machine Group member; co-authored the CADR memo and the Lisp Machine Manual; key Symbolics figure. |
+| Daniel Weinreb | — | MIT Lisp Machine Group member; co-authored the Lisp Machine Manual with Moon. |
+| Guy L. Steele Jr. | 1952– | Co-authored the CADR memo; later co-authored "The Evolution of Lisp," the chapter's main historical synthesis. |
+| Richard P. Gabriel | — | Co-authored "The Evolution of Lisp" with Steele; the chapter's key source for commercialization, Common Lisp, and stock-hardware pressure. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1974–1983)</strong></summary>
+
+```mermaid
+timeline
+    title Lisp Machines: from MIT lab to commercial bubble, 1974–1983
+    1974 : MIT AI Lab initiates Lisp Machine project — personal networked computer for Lisp and symbolic software
+    1976 : CONS, the first Lisp Machine prototype designed by Tom Knight, running
+    Early 1977 : CONS gains memory, disk, terminal, keyboard, mouse, display, paging, and PDP-10 file I/O
+    August 1977 : MIT AI Memo 444 published — documents time-sharing problem, CONS status, LUNAR conversion, plan for seven more machines
+    1978 : CADR replaces CONS as the improved Lisp Machine processor
+    May 1979 : MIT AI Memo 528 published — documents CADR processor design with writable microcode, stack support, and virtual memory
+    1980 : Symbolics and LMI both formed from MIT commercialization; both initially make CADR clones
+    1981 : Symbolics introduces LM-2 — CADR repackaged for reliability; ARPA Lisp Community Meeting triggers Common Lisp effort
+    February 1983 : Symbolics publishes 3600 Technical Summary — 36-bit single-user symbolic workstation pitched as fourth-generation Lisp Machine
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Time-sharing** — A mode of computer operation in which a single central machine divides its processor time among many logged-in users in rapid rotation, giving each the illusion of a private machine. Project MAC built interactive AI on time-sharing; by the mid-1970s the shared resource had become too crowded for large Lisp programs.
+- **Tagged architecture** — A design in which each word of memory carries extra "tag" bits recording what kind of object it holds (symbol, integer, list pointer, function, etc.). Hardware and microcode can then act on type information directly, without software inspecting every value. The Lisp Machine used 4 tag bits per 32-bit word.
+- **Writable microcode** — Microprogram memory that can be updated at runtime, unlike the read-only microcode of most commercial processors. Writable microcode let the Lisp Machine's implementation of the Lisp runtime stay close to the processor and be tuned as the system evolved.
+- **Virtual address space** — The range of memory addresses a program can name, independent of how much physical RAM is installed. The PDP-10 had a 256K-word (18-bit) address limit that large Lisp programs were outgrowing; the CADR gave each Lisp Machine a 24-bit virtual space, supporting far larger programs.
+- **Zetalisp** — The Lisp dialect that ran on the MIT Lisp Machines and their commercial successors. A descendant of Maclisp, it added object-oriented programming (Flavors), closures, and operating-system-like facilities, all accessible from the same Lisp environment.
+- **Common Lisp** — A portable Lisp standard assembled from Maclisp, Interlisp, Spice Lisp, and Lisp-machine dialects after ARPA's 1981 community meeting. Its portability across stock hardware weakened the assumption that serious Lisp required a specialized machine.
+
+</details>
+
 # Chapter 22: The Lisp Machine Bubble
 
 The Lisp machine should not be introduced as a joke. It was not an obviously
@@ -67,6 +116,12 @@ The group imagined future intelligent systems that might need many times the
 address space of the PDP-10. The problem was not that Lisp was unsuitable for
 AI. The problem was that the hardware and operating assumptions around it were
 becoming too small.
+
+:::note[The address-space forecast]
+> "Future programs are likely to be quite a bit bigger; intelligent systems with natural language front ends may well be five or ten times the size of a PDP-10 address space."
+
+In 1977, the Lisp Machine Group framed a dedicated 24-bit virtual address space as an engineering answer to this pressure.
+:::
 
 This was a human problem as much as a technical one. The AI style depended on
 incremental change. A programmer edited a function, tested it, inspected the
@@ -483,3 +538,9 @@ knowledge-rich systems, and AI-specific infrastructure could define the future.
 Some of that confidence was justified. Some of it was fragile. The Lisp machine
 shows both truths at once: a machine can be technically brilliant and still
 lose the economic race around it.
+
+:::note[Why this still matters today]
+The Lisp machine's core ideas did not die with the companies. Tagged-word architectures influenced later managed-runtime designs. The all-Lisp development environment — editor, debugger, compiler, and runtime as one inspectable world — is the ancestor of modern integrated REPLs, live-reload development tools, and notebook computing. The bubble itself is a durable economic lesson: a specialized stack is defensible only as long as its integration advantage outpaces general-purpose alternatives. Every wave of AI-specific hardware — from vector processors to tensor processing units — inherits the same race. The Lisp machine lost it first.
+:::
+
+
