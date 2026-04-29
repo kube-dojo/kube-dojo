@@ -166,7 +166,7 @@ Scaling laws, Attention, and the democratization of AI through open weights.
 
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
-| 50 | Attention Is All You Need | accepted | no |
+| 50 | Attention Is All You Need | accepted | [yes](./ch-50-attention-is-all-you-need/) |
 | 51 | The Open Source Distribution Layer | accepted | no |
 | 52 | Bidirectional Context | accepted | no |
 | 53 | The Dawn of Few-Shot Learning | accepted | no |

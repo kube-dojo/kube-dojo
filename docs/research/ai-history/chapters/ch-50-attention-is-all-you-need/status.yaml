@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 8
 chapter: 50
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_dual_cross_family_accepted
+last_updated: 2026-04-29
 green_claims: 15
 yellow_claims: 4
 red_claims: 5
@@ -43,5 +43,15 @@ notes: |
 
   Gemini 3.1 Pro model check timed out, so the bridge used gemini-3-flash-preview
   fallback. Gemini gap/capacity audit returned READY_WITH_CAP at 5,200 words.
+
+  Prose drafted by Codex on 2026-04-29 at approximately 4,000 words, inside the
+  approved 4,000-5,200 word range. Claude source-fidelity review approved the
+  draft at PR #557 after a non-blocking Sutskever wording nit; Gemini prose
+  review approved narrative readiness with minor technical-density nits. All
+  nits were applied before acceptance.
+
+  Prose review URLs:
+  - Claude source fidelity: https://github.com/kube-dojo/kube-dojo.github.io/pull/557#issuecomment-4341086401
+  - Gemini prose quality: https://github.com/kube-dojo/kube-dojo.github.io/pull/557#issuecomment-4341086397
   Drafting may begin, capped at 5,200 words unless real oral-history or deployment
   sources are added.
