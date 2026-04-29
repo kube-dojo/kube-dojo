@@ -5,6 +5,52 @@ sidebar:
   order: 13
 ---
 
+:::tip[In one paragraph]
+LISP did not invent list processing — IPL had already given Logic Theorist and GPS that substrate. What McCarthy's MIT line of work assembled was a different bundle: symbolic expressions as both program data and program notation, recursive functions, `cond`, lambda, automatic storage reclamation, and a working `eval` loop. Between the 1958 memo, the 1960 CACM paper, and the 1962 LISP 1.5 manual, symbolic AI received a portable language that could describe symbolic reasoning in the same medium it manipulated.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| John McCarthy | 1927–2011 | Author of the 1958 MIT AI Memo No. 1, the 1960 CACM paper, and most of the LISP 1.5 manual. Brought the Dartmouth naming agenda into MIT's symbolic-language design. |
+| Steve Russell | — | Early LISP implementer; associated with the realisation that McCarthy's `eval` definition could be hand-compiled into a working interpreter for the IBM 704. |
+| Daniel J. Edwards | — | Early interpreter implementer with Russell; LISP 1.5 manual co-author. |
+| Timothy P. Hart | — | LISP 1.5 manual co-author and compiler contributor. The macro mechanism is most associated with his line of work. |
+| Michael I. Levin | — | LISP 1.5 manual co-author; prepared the manual for publication and authored Appendix B. |
+| Paul W. Abrahams | — | LISP 1.5 manual co-author. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1958–1962)</strong></summary>
+
+```mermaid
+timeline
+    title LISP from memo to manual, 1958–1962
+    September 1958 : MIT AI Project Memo No. 1, "An Algebraic Language for the Manipulation of Symbolic Expressions" : FLPL limits, S-expressions and M-expressions, recursive functions, IBM 704 representation
+    1958–1959 : Russell and Edwards implement the early LISP interpreter on the IBM 704 (per LISP 1.5 manual p. 4)
+    March 1959 : MIT AI Project Memo No. 8, "The LISP Programming System"
+    April 1960 : "Recursive Functions of Symbolic Expressions and Their Computation by Machine, Part I" in Communications of the ACM 3(4)
+    1962 : LISP 1.5 Programmer's Manual published by MIT Press — consolidating language definition, garbage collection, READ/EVAL/PRINT cycle, and macros
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **S-expression** — A symbolic expression written either as an atom (a name like `X`) or as a parenthesised list of symbolic expressions (e.g. `(A B C)` or `(LAMBDA (X) (CAR X))`). The data structure LISP programs read, write, and execute. Identical in form to LISP source code, which is what makes the language self-modifying.
+- **M-expression** — McCarthy's original *intended* external syntax: a more conventional algebraic notation (e.g. `car[x]`) that programmers would write, and that would translate into S-expression data. M-expressions were largely planned but never adopted; users wrote S-expressions directly, and the irony stuck.
+- **`car` / `cdr` / `cons`** — The three basic LISP cell operations. `car` returns the head of a list; `cdr` returns the rest; `cons` builds a new pair from a head and a tail. The names are direct artefacts of the IBM 704's *Contents of Address Register* and *Contents of Decrement Register* opcodes — LISP is machine-derived math, not Platonic discovery.
+- **`eval`** — A function that takes a symbolic expression representing a LISP form and *runs* it, returning the value. Defined in the 1960 CACM paper; first implemented as an IBM 704 interpreter when Russell realised the definition could be hand-compiled. The hinge that turned LISP from notation into a running language.
+- **Lambda / recursive functions** — A way of describing functions anonymously and applying them to data, lifted from Church's lambda calculus. Recursive function definitions are the natural control structure when programs work over symbolic structures of unknown depth.
+- **`cond`** — LISP's primitive conditional: a list of test–result pairs, evaluated left to right until a test succeeds. The first general conditional expression to take both its branches as ordinary symbolic data.
+- **Garbage collection / free-storage list** — The runtime discipline of automatically reclaiming list cells that are no longer referenced. The LISP 1.5 manual lays it out as language infrastructure; garbage collection is what makes symbolic programs feel native rather than hand-managed.
+
+</details>
+
 # Chapter 13: The List Processor
 
 LISP was both theory and tool. McCarthy's 1958 memo was groundwork, not the whole system; what emerged was a staged convergence of notation, machine representation, interpreter, memory discipline, and research habit.
@@ -174,6 +220,10 @@ The language was ready for a more interactive computing culture.
 That shift changes the setting.
 
 The next phase of the story moves from language substrate to institutional substrate. Project MAC and time-sharing would change how programmers encountered machines, making interaction less like submitting isolated jobs and more like living inside a computational environment. That later chapter belongs to the AI-lab and time-sharing world. LISP provided one of the languages ready to inhabit it.
+
+:::note[Why this still matters today]
+Every language that lets a program inspect its own source as data, every macro system that generates code at compile time, every interactive prompt that compiles each typed form before responding, descends from McCarthy's 1958–1962 line. The historiographic point is sharper than the credit: LISP did not invent list processing — IPL did that. What LISP unified was *notation, data, and execution* in one substrate, then made the substrate teachable through a manual. The cost LISP exposed and made portable — that interactive symbolic systems need automatic storage reclamation, anonymous functions, and a programmable conditional — is the cost every modern dynamic language pays in some form.
+:::
 
 ## Sources
 
