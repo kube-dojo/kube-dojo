@@ -101,7 +101,23 @@ pre { border-radius: var(--kube-radius) !important; }
   background: white;
   overflow-x: auto;
 }
-.kd-mermaid__mount svg { display: block; max-width: none; height: auto; margin: 0 auto; }
+.kd-mermaid__mount svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.kd-mermaid-host[data-mermaid-state='ready'] {
+  cursor: zoom-in;
+  outline-offset: 4px;
+}
+.kd-mermaid-host[data-mermaid-state='ready']::before {
+  content: 'Click to enlarge';
+  display: block;
+  font-size: 0.75rem;
+  color: var(--g500);
+  text-align: right;
+  padding: 0 0.5rem 0.25rem;
+  letter-spacing: 0.02em;
+}
+:root[data-theme='dark'] .kd-mermaid-host[data-mermaid-state='ready']::before {
+  color: var(--g400);
+}
 .kd-mermaid-host[data-mermaid-state='loading']::after {
   content: 'Rendering diagram...';
   display: flex;
@@ -126,6 +142,44 @@ pre { border-radius: var(--kube-radius) !important; }
   border-color: var(--g700);
   background: linear-gradient(135deg, var(--g800), var(--g900));
   color: var(--g300);
+}
+
+/* Click-to-enlarge modal */
+.kd-mermaid-modal {
+  position: fixed; inset: 0; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 2rem;
+}
+.kd-mermaid-modal[data-state='open'] { display: flex; }
+body[data-kd-modal-open='true'] { overflow: hidden; }
+.kd-mermaid-modal__close {
+  position: absolute; top: 1.25rem; right: 1.25rem;
+  width: 2.75rem; height: 2.75rem;
+  border-radius: 50%; border: none;
+  background: white; color: black;
+  font-size: 1.75rem; line-height: 1; font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.kd-mermaid-modal__close:hover { background: var(--g100); }
+.kd-mermaid-modal__close:focus-visible {
+  outline: 3px solid var(--kube-blue); outline-offset: 2px;
+}
+.kd-mermaid-modal__content {
+  max-width: 95vw; max-height: 90vh;
+  background: white;
+  border-radius: var(--kube-radius);
+  padding: 1.5rem;
+  overflow: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.kd-mermaid-modal__content svg {
+  display: block; max-width: none !important;
+}
+:root[data-theme='dark'] .kd-mermaid-modal__content {
+  background: var(--g900);
 }
 
 /* ===== QUIZ / DETAILS-SUMMARY — card style ===== */

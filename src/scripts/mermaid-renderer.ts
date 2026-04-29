@@ -76,10 +76,6 @@ async function renderHost(host: HTMLElement): Promise<void> {
     securityLevel: 'loose',
     theme: currentTheme() === 'light' ? 'default' : 'dark',
     themeVariables: { fontSize: '18px' },
-    // Timelines are the widest diagram type and were rendering near-illegibly
-    // when shrunk to fit the prose column. Render at natural width and let the
-    // mount's overflow-x: auto handle horizontal scroll for long timelines.
-    timeline: { useMaxWidth: false },
   });
 
   const renderId = `kd-mermaid-${++state.renderCount}`;
@@ -88,11 +84,110 @@ async function renderHost(host: HTMLElement): Promise<void> {
     mount.innerHTML = svg;
     bindFunctions?.(mount);
     host.dataset.mermaidState = 'ready';
+    attachZoomHandler(host);
   } catch (error) {
     host.dataset.mermaidState = 'error';
     console.error('Mermaid render failed:', error);
   }
 }
+
+// ===== Click-to-enlarge modal =====
+//
+// Inline SVGs are constrained to fit the prose column for clean reading
+// flow. Clicking a diagram opens a fullscreen modal where the SVG renders
+// at its natural size (with both-axis scrolling if needed), so the user
+// can read every event/label without horizontal-scrolling inside the
+// column.
+
+let modalEl: HTMLDivElement | null = null;
+let modalContentEl: HTMLDivElement | null = null;
+let lastFocusedEl: HTMLElement | null = null;
+
+function ensureModal(): HTMLDivElement {
+  if (modalEl) return modalEl;
+  modalEl = document.createElement('div');
+  modalEl.className = 'kd-mermaid-modal';
+  modalEl.dataset.state = 'closed';
+  modalEl.setAttribute('role', 'dialog');
+  modalEl.setAttribute('aria-modal', 'true');
+  modalEl.setAttribute('aria-label', 'Diagram, full size');
+  modalEl.innerHTML =
+    '<button class="kd-mermaid-modal__close" type="button" aria-label="Close diagram (Escape)">&times;</button>' +
+    '<div class="kd-mermaid-modal__content"></div>';
+  modalContentEl = modalEl.querySelector('.kd-mermaid-modal__content');
+
+  const closeBtn = modalEl.querySelector<HTMLButtonElement>('.kd-mermaid-modal__close');
+  closeBtn?.addEventListener('click', closeModal);
+  modalEl.addEventListener('click', (event) => {
+    if (event.target === modalEl) closeModal();
+  });
+
+  document.body.appendChild(modalEl);
+  return modalEl;
+}
+
+function openModal(svg: SVGElement): void {
+  ensureModal();
+  if (!modalEl || !modalContentEl) return;
+
+  const clone = svg.cloneNode(true) as SVGElement;
+  // Strip Mermaid's inline max-width and any width/height attrs the inline
+  // copy carried, then size the clone to its viewBox so the modal renders
+  // it at natural pixel size (otherwise an SVG with only a viewBox collapses
+  // to 0×0 inside a flex container that has no intrinsic width).
+  clone.removeAttribute('style');
+  clone.removeAttribute('width');
+  clone.removeAttribute('height');
+  const viewBox = clone.getAttribute('viewBox');
+  if (viewBox) {
+    const parts = viewBox.split(/\s+/).map(Number);
+    if (parts.length === 4 && parts.every((n) => Number.isFinite(n))) {
+      const [, , vw, vh] = parts;
+      clone.setAttribute('width', String(Math.round(vw)));
+      clone.setAttribute('height', String(Math.round(vh)));
+    }
+  }
+
+  modalContentEl.replaceChildren(clone);
+  lastFocusedEl = document.activeElement as HTMLElement | null;
+  modalEl.dataset.state = 'open';
+  document.body.dataset.kdModalOpen = 'true';
+
+  const closeBtn = modalEl.querySelector<HTMLButtonElement>('.kd-mermaid-modal__close');
+  closeBtn?.focus();
+}
+
+function closeModal(): void {
+  if (!modalEl) return;
+  modalEl.dataset.state = 'closed';
+  delete document.body.dataset.kdModalOpen;
+  if (modalContentEl) modalContentEl.replaceChildren();
+  if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
+    lastFocusedEl.focus();
+  }
+  lastFocusedEl = null;
+}
+
+function attachZoomHandler(host: HTMLElement): void {
+  if (host.dataset.kdMermaidZoomable === 'true') return;
+  host.dataset.kdMermaidZoomable = 'true';
+  host.tabIndex = 0;
+  host.setAttribute('role', 'button');
+  host.setAttribute('aria-label', 'Open diagram full size');
+
+  const trigger = (event: Event) => {
+    const svg = host.querySelector<SVGElement>('svg');
+    if (!svg || host.dataset.mermaidState !== 'ready') return;
+    event.preventDefault();
+    openModal(svg);
+  };
+
+  host.addEventListener('click', trigger);
+  host.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') trigger(event);
+  });
+}
+
 
 async function refresh(root: ParentNode = document): Promise<void> {
   document.documentElement.classList.add('js-mermaid');
@@ -129,6 +224,10 @@ if (window.__kdMermaid?.refresh) {
   }
 
   document.addEventListener('astro:page-load', runRefresh);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modalEl?.dataset.state === 'open') closeModal();
+  });
 
   const themeObserver = new MutationObserver(() => {
     const theme = currentTheme();
