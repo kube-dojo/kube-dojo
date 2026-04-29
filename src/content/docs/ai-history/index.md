@@ -141,7 +141,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 60 | [The Agent Turn](./ch-60-the-agent-turn/) |
 | 61 | [The Physics of Scale](./ch-61-the-physics-of-scale/) |
 | 62 | [Multimodal Convergence](./ch-62-multimodal-convergence/) |
-| 63 | Inference Economics *(coming soon)* |
+| 63 | [Inference Economics](./ch-63-inference-economics/) |
 | 64 | The Edge Compute Bottleneck *(coming soon)* |
 | 65 | The Open Weights Rebellion *(coming soon)* |
 | 66 | Benchmark Wars *(coming soon)* |
@@ -154,4 +154,4 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 ---
 
-62 of 72 chapters published. New chapters land regularly.
+63 of 72 chapters published. New chapters land regularly.
