@@ -1,9 +1,9 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 60
-review_state: gemini_gap_changes_addressed_awaiting_recheck
-last_updated: 2026-04-28
+review_state: dual_cross_family_verdict_accepted
+last_updated: 2026-04-29
 green_claims: 21
 yellow_claims: 3
 red_claims: 0
@@ -12,18 +12,18 @@ prose_word_cap_recommendation: 5800
 word_count_range: "4800-5800"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/540#issuecomment-4340046304
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5800
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/540#issuecomment-4340046310
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5800
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Built from the modern-era placeholder into a capacity_plan_anchored contract.
@@ -36,4 +36,4 @@ notes: |
   analysis from Ch63, benchmark politics from Ch66, open-weights competition
   from Ch65, data/copyright labor fights from Ch68, or multimodal/video systems
   from Ch62. Gemini's first gap audit requested a Chain-of-Thought bridge; the
-  fix is applied and awaiting recheck before prose drafting.
+  fix was approved in PR #540; prose drafting is unlocked at the 5,800-word cap.

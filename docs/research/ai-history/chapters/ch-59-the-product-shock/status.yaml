@@ -1,9 +1,9 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 59
-review_state: gemini_gap_ready_with_minor_source_addition_awaiting_recheck
-last_updated: 2026-04-28
+review_state: dual_cross_family_verdict_accepted
+last_updated: 2026-04-29
 green_claims: 14
 yellow_claims: 4
 red_claims: 0
@@ -12,18 +12,18 @@ prose_word_cap_recommendation: 5700
 word_count_range: "4200-5700"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/540#issuecomment-4340046304
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5700
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/540#issuecomment-4340046310
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5700
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Built from an empty/scrubbed skeleton into a capacity_plan_anchored contract.
@@ -31,7 +31,8 @@ notes: |
   API, GPT-4), official Microsoft and Google product/partnership posts, Stack
   Overflow policy, Chalkbeat NYC schools reporting, Reuters/UBS adoption
   syndication, a Threads caveat source, and the GPT-4 System Card adversarial
-  prompting/jailbreak guardrail added after Gemini's gap audit.
+  prompting/jailbreak guardrail added after Gemini's gap audit and approved in
+  PR #540.
 
   The central guardrail is temporal honesty: ChatGPT may be described as the
   fastest-growing consumer application according to the February 2023 Reuters/UBS

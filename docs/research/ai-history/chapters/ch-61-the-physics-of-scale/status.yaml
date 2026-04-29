@@ -1,9 +1,9 @@
-status: capacity_plan_anchored
+status: prose_ready
 owner: Codex
 part: 9
 chapter: 61
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
-last_updated: 2026-04-28
+review_state: dual_cross_family_verdict_accepted
+last_updated: 2026-04-29
 green_claims: 17
 yellow_claims: 1
 red_claims: 0
@@ -12,18 +12,18 @@ prose_word_cap_recommendation: 5800
 word_count_range: "4600-5800"
 verdicts:
   claude:
-    model: null
-    date: null
-    verdict: null
-    review_url: null
+    model: claude-opus-4-7
+    date: 2026-04-28
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/511#issuecomment-4337271323
   gemini:
-    model: null
-    date: null
-    verdict: null
-    word_cap: null
-    review_url: null
-  resolved: null
-  resolved_word_cap: null
+    model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: READY_TO_DRAFT_WITH_CAP
+    word_cap: 5800
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/540#issuecomment-4340046310
+  resolved: READY_TO_DRAFT_WITH_CAP
+  resolved_word_cap: 5800
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Built from a scrubbed skeleton into a capacity_plan_anchored contract. Core
@@ -33,4 +33,5 @@ notes: |
 
   Safe prose range is 4,600-5,800 words. Do not pad by importing inference
   serving economics (Ch63), data exhaustion (Ch69), energy-grid constraints
-  (Ch70), chip geopolitics (Ch71), or datacenter capex (Ch72).
+  (Ch70), chip geopolitics (Ch71), or datacenter capex (Ch72). Source recheck
+  and Gemini gap/capacity approval are complete; prose drafting is unlocked.
