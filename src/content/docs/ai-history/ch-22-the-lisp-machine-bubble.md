@@ -117,6 +117,12 @@ address space of the PDP-10. The problem was not that Lisp was unsuitable for
 AI. The problem was that the hardware and operating assumptions around it were
 becoming too small.
 
+:::note[The address-space forecast]
+> "Future programs are likely to be quite a bit bigger; intelligent systems with natural language front ends may well be five or ten times the size of a PDP-10 address space."
+
+In 1977, the Lisp Machine Group framed a dedicated 24-bit virtual address space as an engineering answer to this pressure.
+:::
+
 This was a human problem as much as a technical one. The AI style depended on
 incremental change. A programmer edited a function, tested it, inspected the
 data structure, changed another function, asked the debugger a question, and
@@ -536,4 +542,5 @@ lose the economic race around it.
 :::note[Why this still matters today]
 The Lisp machine's core ideas did not die with the companies. Tagged-word architectures influenced later managed-runtime designs. The all-Lisp development environment — editor, debugger, compiler, and runtime as one inspectable world — is the ancestor of modern integrated REPLs, live-reload development tools, and notebook computing. The bubble itself is a durable economic lesson: a specialized stack is defensible only as long as its integration advantage outpaces general-purpose alternatives. Every wave of AI-specific hardware — from vector processors to tensor processing units — inherits the same race. The Lisp machine lost it first.
 :::
+
 
