@@ -6,6 +6,51 @@ sidebar:
   order: 26
 ---
 
+:::tip[In one paragraph]
+Bayesian networks gave AI a disciplined infrastructure for reasoning under uncertainty. Judea Pearl's 1986 belief-network paper showed how directed acyclic graphs could store expert knowledge as conditional probability tables and propagate evidence locally through singly connected networks. Pearl's 1988 book and independent work by Lauritzen and Spiegelhalter placed probability — not symbolic rules alone — at the centre of expert-system reasoning. The price: exact inference in general networks is NP-hard.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Judea Pearl | 1936– | Computer scientist at UCLA; developed belief-network propagation (1986) and authored *Probabilistic Reasoning in Intelligent Systems* (1988), establishing probabilistic graphs as a core AI framework. |
+| Steffen L. Lauritzen | — | Statistician; co-author of the 1988 local-computation paper on graphical probabilistic structures and their application to expert systems. |
+| David J. Spiegelhalter | 1953– | Statistician; co-author with Lauritzen (1988); helped broaden the graphical-model framework beyond Pearl's AI context. |
+| Gregory F. Cooper | — | AI researcher; proved in 1990 that probabilistic inference in general Bayesian belief networks is NP-hard, setting the computational bounds for the field. |
+| Eugene Charniak | 1946– | AI researcher; wrote the 1991 *AI Magazine* tutorial "Bayesian Networks without Tears," making the framework accessible to a broad audience. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1980s–1991)</strong></summary>
+
+```mermaid
+timeline
+    title Bayesian Networks, 1980s–1991
+    1970s-early 1980s : Rule-based expert systems grow, using informal certainty factors and quasi-probabilistic schemes (MYCIN, PROSPECTOR, CASNET, INTERNIST) to handle uncertainty
+    1986 : Pearl publishes "Fusion, propagation, and structuring in belief networks" — establishes DAG belief networks and local propagation in singly connected networks
+    1988 : Pearl publishes Probabilistic Reasoning in Intelligent Systems — book-length framework for probabilistic reasoning and belief updating by network propagation
+    1988 : Lauritzen and Spiegelhalter publish local computations with probabilities on graphical structures — expert-system context, MUNIN, and probabilistic exactness argument
+    1990 : Cooper proves probabilistic inference in general Bayesian belief networks is NP-hard, requiring special-case and approximation algorithms
+    1991 : Charniak publishes "Bayesian Networks without Tears" — accessible tutorial anchoring the framework in the AI community
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Directed acyclic graph (DAG)** — A network of nodes connected by arrows where no path loops back to its starting point. In a Bayesian network, each arrow means "this node can directly influence that one."
+- **Conditional probability table (CPT)** — A small table attached to each node listing the probability of each state that node can be in, given every combination of its parents' states. The tables together define the model's joint distribution.
+- **Belief propagation** — Pearl's algorithm for updating probability estimates across a network when new evidence arrives. In singly connected networks, messages pass locally through the graph rather than requiring a global recalculation.
+- **Singly connected network** — A Bayesian network in which there is at most one undirected path between any two nodes. This structure allows efficient local message passing; multiply connected networks require more expensive inference methods.
+- **Conditional independence** — Two variables are conditionally independent given a third when knowing the third makes the first two irrelevant to each other. Bayesian networks encode these assumptions in graph structure, compressing what would otherwise be an enormous joint probability table.
+- **NP-hard inference** — Cooper's 1990 result: for general (multiply connected) Bayesian networks, computing exact probabilities is at least as hard as the hardest problems in NP. Practical systems need restricted topologies or approximation algorithms.
+
+</details>
+
 # Chapter 26: Bayesian Networks
 
 Expert systems made knowledge explicit, but they did not make knowledge clean.
@@ -442,6 +487,10 @@ back toward neural networks, where the problem was not probabilistic belief but
 how to constrain a powerful model class into an architecture that could exploit
 the structure of images.
 
+:::note[Why this still matters today]
+Bayesian networks are the direct ancestor of modern probabilistic graphical models used in robotics, medical diagnosis, and sensor fusion. The conditional-independence assumptions that made 1980s networks tractable reappear in today's variational autoencoders and diffusion models. Pearl's insistence that probability must be executable — not merely philosophically correct — prefigured the probabilistic programming movement (Stan, Pyro, NumPyro). And his later causal-inference work, which extends directly from these 1986–1988 foundations, now shapes how AI researchers think about intervention and counterfactual reasoning in everything from clinical trials to policy evaluation.
+:::
+
 ## Sources
 
 ### Primary
@@ -484,3 +533,4 @@ the structure of images.
 > uncertainty, tutorial definitions, and computational limits are carried by
 > Lauritzen/Spiegelhalter, Charniak, and Cooper, where page anchors are
 > available in the research contract.
+
