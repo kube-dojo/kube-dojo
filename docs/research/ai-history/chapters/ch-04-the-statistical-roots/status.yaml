@@ -33,3 +33,18 @@ needs_review_from:
   - gemini_gap_analysis
 supersedes:
   - "PR #435 (Gemini-authored research, withdrawn 2026-04-28 per role-split commit 03640e20)"
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

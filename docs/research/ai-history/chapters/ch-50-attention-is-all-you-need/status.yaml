@@ -55,3 +55,18 @@ notes: |
   - Gemini prose quality: https://github.com/kube-dojo/kube-dojo.github.io/pull/557#issuecomment-4341086397
   Drafting may begin, capped at 5,200 words unless real oral-history or deployment
   sources are added.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

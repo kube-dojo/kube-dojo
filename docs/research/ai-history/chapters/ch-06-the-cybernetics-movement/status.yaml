@@ -75,3 +75,18 @@ notes: |
   Drafting branch (when unlocked): claude/394-ch06-prose. Word cap:
   honest range 3,200-5,000; provisional cap 5,000 unless reviewer
   feedback changes it.
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

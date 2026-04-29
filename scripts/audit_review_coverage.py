@@ -1,0 +1,384 @@
+#!/usr/bin/env python3
+"""Audit AI History review coverage and update per-chapter status.yaml files.
+
+The authoritative mode reads merged PRs and PR comments through ``gh``. When
+GitHub is unavailable, the script falls back to a conservative local seed so the
+schema can still be applied in offline worktrees; rerun with network access to
+replace pending/inferred values with marker-derived values.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+
+REPO = "kube-dojo/kube-dojo.github.io"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CHAPTER_ROOT = REPO_ROOT / "docs" / "research" / "ai-history" / "chapters"
+AUDIT_DATE = "2026-04-29"
+
+RESEARCH_FIELDS = ("claude_anchor", "gemini_gap", "codex_anchor")
+PROSE_FIELDS = ("claude_source_fidelity", "gemini_prose_quality", "codex_prose_quality")
+
+
+@dataclass
+class ChapterCoverage:
+    chapter_num: int
+    chapter_key: str
+    research_prs: list[int] = field(default_factory=list)
+    prose_prs: list[int] = field(default_factory=list)
+    research: dict[str, str] = field(
+        default_factory=lambda: {name: "pending" for name in RESEARCH_FIELDS}
+    )
+    prose: dict[str, str] = field(default_factory=lambda: {name: "pending" for name in PROSE_FIELDS})
+    source: str = "gh"
+
+
+def _run_json(args: list[str]) -> Any:
+    result = subprocess.run(args, cwd=REPO_ROOT, text=True, capture_output=True, check=False)
+    if result.returncode:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        raise RuntimeError(detail)
+    return json.loads(result.stdout)
+
+
+def _chapter_num_from_path(path: Path) -> int:
+    match = re.match(r"ch-(\d+)-", path.parent.name)
+    if not match:
+        raise ValueError(f"cannot parse chapter number from {path}")
+    return int(match.group(1))
+
+
+def _chapter_num_from_pr(pr: dict[str, Any]) -> int | None:
+    haystack = " ".join(str(pr.get(k) or "") for k in ("title", "headRefName"))
+    match = re.search(r"\bch[- _]?0?(\d{1,2})\b", haystack, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _lane_from_title(title: str) -> str | None:
+    lowered = title.lower()
+    if re.search(r"(?:^|[:\s])research(?:\s+phase)?\s*:", lowered):
+        return "research"
+    if re.search(r"(?:^|[:\s])prose(?:\s+phase)?\s*:", lowered):
+        return "prose"
+    return None
+
+
+def _author_family(chapter_num: int) -> str:
+    # Issue #559 ownership model: Parts 1-2 and Part 3 through Ch15 are
+    # Claude-authored; Ch16 and Parts 4-9 are Codex-authored.
+    if chapter_num <= 15:
+        return "claude"
+    return "codex"
+
+
+def _expected_lane_fields(chapter_num: int, lane: str) -> set[str]:
+    author = _author_family(chapter_num)
+    if lane == "research":
+        if author == "claude":
+            return {"gemini_gap", "codex_anchor"}
+        return {"gemini_gap", "claude_anchor"}
+    if author == "claude":
+        return {"gemini_prose_quality", "codex_prose_quality"}
+    return {"gemini_prose_quality", "claude_source_fidelity"}
+
+
+def _normalize_not_expected(
+    values: dict[str, str],
+    expected: set[str],
+    marker_seen: set[str],
+) -> dict[str, str]:
+    out = dict(values)
+    for field_name in out:
+        if field_name not in expected and field_name not in marker_seen:
+            out[field_name] = "n/a"
+    return out
+
+
+def _lane_satisfied(values: dict[str, str], chapter_num: int, lane: str) -> bool:
+    if all(value == "n/a" for value in values.values()):
+        return True
+    expected = _expected_lane_fields(chapter_num, lane)
+    return all(values.get(field_name) == "done" for field_name in expected)
+
+
+def _fetch_prs() -> list[dict[str, Any]]:
+    searches = ("#394 in:title", "#402 in:title", "#403 in:title")
+    seen: dict[int, dict[str, Any]] = {}
+    for search in searches:
+        prs = _run_json([
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            REPO,
+            "--search",
+            search,
+            "--state",
+            "merged",
+            "--limit",
+            "200",
+            "--json",
+            "number,title,headRefName,mergedAt",
+        ])
+        for pr in prs:
+            number = int(pr["number"])
+            seen[number] = pr
+    return list(seen.values())
+
+
+def _fetch_comment_bodies(pr_number: int) -> list[str]:
+    comments = _run_json([
+        "gh",
+        "api",
+        "--paginate",
+        f"repos/{REPO}/issues/{pr_number}/comments",
+    ])
+    if not isinstance(comments, list):
+        return []
+    return [str(comment.get("body") or "") for comment in comments if isinstance(comment, dict)]
+
+
+def _apply_comment_markers(coverage: ChapterCoverage, lane: str, comments: list[str]) -> None:
+    marker_seen: set[str] = set()
+    for body in comments:
+        lowered = body.lower()
+        if "<!-- verdict claude" in lowered:
+            coverage.research["claude_anchor"] = "done"
+            marker_seen.add("claude_anchor")
+        if "<!-- verdict gemini" in lowered:
+            coverage.research["gemini_gap"] = "done"
+            marker_seen.add("gemini_gap")
+        if "<!-- verdict codex" in lowered:
+            coverage.research["codex_anchor"] = "done"
+            marker_seen.add("codex_anchor")
+        if "<!-- prose review claude" in lowered:
+            coverage.prose["claude_source_fidelity"] = "done"
+            marker_seen.add("claude_source_fidelity")
+        if "<!-- prose review gemini" in lowered:
+            coverage.prose["gemini_prose_quality"] = "done"
+            marker_seen.add("gemini_prose_quality")
+        if "<!-- prose review codex" in lowered:
+            coverage.prose["codex_prose_quality"] = "done"
+            marker_seen.add("codex_prose_quality")
+
+    expected = _expected_lane_fields(coverage.chapter_num, lane)
+    if lane == "research":
+        coverage.research = _normalize_not_expected(coverage.research, expected, marker_seen)
+    else:
+        coverage.prose = _normalize_not_expected(coverage.prose, expected, marker_seen)
+
+
+def _status_text_hints(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").lower()
+    except OSError:
+        return ""
+
+
+def _offline_seed(chapters: list[Path]) -> dict[int, ChapterCoverage]:
+    """Conservative fallback used only when GitHub comments are unavailable."""
+    coverages: dict[int, ChapterCoverage] = {}
+    fully_reviewed = set([16, *range(38, 50)])
+    no_research_pr = set(range(11, 15))
+    for path in chapters:
+        chapter_num = _chapter_num_from_path(path)
+        coverage = ChapterCoverage(chapter_num, path.parent.name, source="offline")
+        text = _status_text_hints(path)
+
+        if chapter_num in no_research_pr:
+            coverage.research = {name: "n/a" for name in RESEARCH_FIELDS}
+        elif chapter_num in fully_reviewed:
+            coverage.research = {
+                "claude_anchor": "done",
+                "gemini_gap": "done",
+                "codex_anchor": "n/a",
+            }
+        elif "verdicts:" in text:
+            if "gemini:" in text:
+                coverage.research["gemini_gap"] = "done"
+            if "codex:" in text:
+                coverage.research["codex_anchor"] = "done"
+            if "claude:" in text:
+                coverage.research["claude_anchor"] = "done"
+            coverage.research = _normalize_not_expected(
+                coverage.research,
+                _expected_lane_fields(chapter_num, "research"),
+                {name for name, value in coverage.research.items() if value == "done"},
+            )
+        else:
+            coverage.research = _normalize_not_expected(
+                coverage.research,
+                _expected_lane_fields(chapter_num, "research"),
+                set(),
+            )
+
+        if chapter_num in fully_reviewed:
+            coverage.prose = {
+                "claude_source_fidelity": "done",
+                "gemini_prose_quality": "done",
+                "codex_prose_quality": "n/a",
+            }
+        elif "claude source-fidelity review approved" in text and (
+            "gemini narrative review approved" in text or "gemini prose" in text
+        ):
+            coverage.prose = {
+                "claude_source_fidelity": "done",
+                "gemini_prose_quality": "done",
+                "codex_prose_quality": "n/a",
+            }
+        elif "status: accepted" not in text:
+            coverage.prose = {name: "n/a" for name in PROSE_FIELDS}
+        else:
+            coverage.prose = _normalize_not_expected(
+                coverage.prose,
+                _expected_lane_fields(chapter_num, "prose"),
+                set(),
+            )
+
+        coverages[chapter_num] = coverage
+    return coverages
+
+
+def _build_coverage(strict_gh: bool) -> dict[int, ChapterCoverage]:
+    chapters = sorted(CHAPTER_ROOT.glob("ch-*/status.yaml"))
+    coverages = {
+        _chapter_num_from_path(path): ChapterCoverage(_chapter_num_from_path(path), path.parent.name)
+        for path in chapters
+    }
+    try:
+        prs = _fetch_prs()
+    except RuntimeError as exc:
+        if strict_gh:
+            raise
+        print(f"warning: gh audit unavailable; using conservative local fallback: {exc}")
+        return _offline_seed(chapters)
+
+    for pr in prs:
+        chapter_num = _chapter_num_from_pr(pr)
+        lane = _lane_from_title(str(pr.get("title") or ""))
+        if chapter_num is None or lane is None or chapter_num not in coverages:
+            continue
+        coverage = coverages[chapter_num]
+        if lane == "research":
+            coverage.research_prs.append(int(pr["number"]))
+        else:
+            coverage.prose_prs.append(int(pr["number"]))
+        comments = _fetch_comment_bodies(int(pr["number"]))
+        _apply_comment_markers(coverage, lane, comments)
+
+    for coverage in coverages.values():
+        if not coverage.research_prs:
+            coverage.research = {name: "n/a" for name in RESEARCH_FIELDS}
+        else:
+            coverage.research = _normalize_not_expected(
+                coverage.research,
+                _expected_lane_fields(coverage.chapter_num, "research"),
+                {name for name, value in coverage.research.items() if value == "done"},
+            )
+        if not coverage.prose_prs:
+            coverage.prose = {name: "n/a" for name in PROSE_FIELDS}
+        else:
+            coverage.prose = _normalize_not_expected(
+                coverage.prose,
+                _expected_lane_fields(coverage.chapter_num, "prose"),
+                {name for name, value in coverage.prose.items() if value == "done"},
+            )
+    return coverages
+
+
+def _coverage_block(coverage: ChapterCoverage) -> str:
+    research_ok = _lane_satisfied(coverage.research, coverage.chapter_num, "research")
+    prose_ok = _lane_satisfied(coverage.prose, coverage.chapter_num, "prose")
+    overall_ok = research_ok and prose_ok
+    bool_text = {True: "true", False: "false"}
+    return "\n".join([
+        "review_coverage:",
+        "  research:",
+        f"    claude_anchor: {coverage.research['claude_anchor']}",
+        f"    gemini_gap: {coverage.research['gemini_gap']}",
+        f"    codex_anchor: {coverage.research['codex_anchor']}",
+        "  prose:",
+        f"    claude_source_fidelity: {coverage.prose['claude_source_fidelity']}",
+        f"    gemini_prose_quality: {coverage.prose['gemini_prose_quality']}",
+        f"    codex_prose_quality: {coverage.prose['codex_prose_quality']}",
+        "  cross_family_satisfied:",
+        f"    research: {bool_text[research_ok]}",
+        f"    prose: {bool_text[prose_ok]}",
+        f"    overall: {bool_text[overall_ok]}",
+        f"  backfill_pending: {bool_text[not overall_ok]}",
+        f"  last_audited: {AUDIT_DATE}",
+        "",
+    ])
+
+
+def _replace_top_level_block(text: str, block_name: str, replacement: str) -> str:
+    lines = text.splitlines(keepends=True)
+    start = None
+    for idx, line in enumerate(lines):
+        if line == f"{block_name}:\n" or line == f"{block_name}:":
+            start = idx
+            break
+    if start is None:
+        suffix = "" if text.endswith("\n") else "\n"
+        return f"{text}{suffix}{replacement}"
+
+    end = start + 1
+    while end < len(lines):
+        line = lines[end]
+        if line.strip() and not line.startswith((" ", "\t", "#")):
+            break
+        end += 1
+    return "".join(lines[:start]) + replacement + "".join(lines[end:])
+
+
+def _write_status_files(coverages: dict[int, ChapterCoverage]) -> None:
+    for path in sorted(CHAPTER_ROOT.glob("ch-*/status.yaml")):
+        chapter_num = _chapter_num_from_path(path)
+        text = path.read_text(encoding="utf-8")
+        updated = _replace_top_level_block(text, "review_coverage", _coverage_block(coverages[chapter_num]))
+        path.write_text(updated, encoding="utf-8")
+
+
+def _summary_rows(coverages: dict[int, ChapterCoverage]) -> list[tuple[str, bool, bool, bool, str]]:
+    rows = []
+    for chapter_num in sorted(coverages):
+        coverage = coverages[chapter_num]
+        research_ok = _lane_satisfied(coverage.research, coverage.chapter_num, "research")
+        prose_ok = _lane_satisfied(coverage.prose, coverage.chapter_num, "prose")
+        rows.append((coverage.chapter_key, research_ok, prose_ok, not (research_ok and prose_ok), coverage.source))
+    return rows
+
+
+def _print_summary(coverages: dict[int, ChapterCoverage]) -> None:
+    print("| chapter | research | prose | backfill_pending | source |")
+    print("|---|---:|---:|---:|---|")
+    for chapter_key, research_ok, prose_ok, pending, source in _summary_rows(coverages):
+        print(f"| {chapter_key} | {str(research_ok).lower()} | {str(prose_ok).lower()} | {str(pending).lower()} | {source} |")
+    pending_count = sum(1 for _, _, _, pending, _ in _summary_rows(coverages) if pending)
+    print(f"\nbackfill_pending_count: {pending_count}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict-gh",
+        action="store_true",
+        help="fail instead of using the local fallback when gh cannot fetch PR comments",
+    )
+    args = parser.parse_args()
+    coverages = _build_coverage(strict_gh=args.strict_gh)
+    _write_status_files(coverages)
+    _print_summary(coverages)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

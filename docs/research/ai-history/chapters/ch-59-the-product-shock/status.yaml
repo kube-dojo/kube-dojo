@@ -41,3 +41,18 @@ notes: |
   Safe prose range is 4,200-5,700 words. Do not pad by importing plugins/RAG/tool
   use (Ch60), benchmark politics (Ch66), open weights (Ch65), copyright/data
   labor (Ch68), or inference-serving details (Ch63).
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

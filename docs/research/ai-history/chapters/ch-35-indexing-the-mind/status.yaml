@@ -98,3 +98,18 @@ notes: |
   Status advances to capacity_plan_anchored. research_contract_approved
   requires both Codex and Gemini Green; prose_ready additionally requires
   cross-family verdict pass per the chapter lifecycle.
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: done
+    codex_anchor: done
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

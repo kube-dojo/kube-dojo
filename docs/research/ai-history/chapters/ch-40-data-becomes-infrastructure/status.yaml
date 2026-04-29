@@ -23,3 +23,18 @@ notes:
   - Every Prose Capacity Plan layer cites at least one Green source anchor in sources.md.
   - Shell curl was attempted for public PDFs but DNS resolution failed; browser verification and existing Ch38 anchors were used.
   - Legacy Gemini prose was used only for scope, not as evidence.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

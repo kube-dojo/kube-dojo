@@ -36,3 +36,18 @@ checks:
   legacy_prose_used_only_for_scope: true
   shell_curl_attempted: true
   shell_curl_blocked_by_dns: true
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

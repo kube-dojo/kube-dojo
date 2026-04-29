@@ -18,3 +18,18 @@ notes:
   - "Gemini gap/capacity review on PR #458 returned READY_TO_DRAFT_WITH_CAP; source-safe narrative nits applied for the software-crisis-to-logic bridge, parallel-logic explanation, and Part 5 handoff."
   - "Codex drafted first prose pass at 4,068 words, inside the approved 4,000-5,000 range without unverified Western-response budget or sole-causation claims."
   - "Claude source-fidelity review approved PR #489; Gemini narrative review approved with no required fixes."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

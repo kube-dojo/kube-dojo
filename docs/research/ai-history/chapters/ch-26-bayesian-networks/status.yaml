@@ -15,3 +15,18 @@ notes:
   - "Gemini prose-readiness review cleared drafting with cap; proceed with Pearl access caveat and lean on Lauritzen/Spiegelhalter, Cooper, and Charniak anchors."
   - "First public prose draft was 4016 words, using the contract's safe 4k path: expert-system contrast, DAG/CPT explanation, Pearl propagation, local-structure maintenance costs, Cooper complexity limits, and a bounded causal/learning bridge."
   - "Gemini and Claude prose reviews approved PR #417; review nits were applied, including tense consistency and a sharper Ch27 handoff. Current prose markdown is 4049 words."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: pending
+    gemini_prose_quality: pending
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: false
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

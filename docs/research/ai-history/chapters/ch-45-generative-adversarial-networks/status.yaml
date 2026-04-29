@@ -36,3 +36,18 @@ validation_notes:
   - "All five Prose Capacity Plan layers cite at least one anchored sources.md Green entry."
   - "Remote curl failed in this sandbox due DNS resolution; anchors were verified through the browser tool and recorded by page/section."
   - "Book-only research contract; no executable code or published Astro content changed."
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

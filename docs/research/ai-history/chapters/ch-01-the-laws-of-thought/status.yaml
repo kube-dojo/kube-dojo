@@ -136,3 +136,18 @@ cross_family_review_requested:
       - "Is the Mary Everest Boole 'preservation legend → folk history' move defensible on present evidence?"
       - "Is the Jevons reframing (modern Boolean algebra descends from Jevons-Peirce-Schröder, not from Boole 1854 unmodified) defensible without Grattan-Guinness 2000?"
       - "STRICT: do not assert any URL or page anchor. Audit prose-capacity honesty and gaps only."
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

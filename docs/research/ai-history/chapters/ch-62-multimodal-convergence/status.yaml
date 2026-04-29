@@ -35,3 +35,18 @@ notes: |
   Safe prose range is 3,800-4,800 words after Gemini gap audit. Do not pad by
   importing image diffusion history from Ch58, inference economics from Ch63,
   benchmark politics from Ch66, or copyright/data-labor fights from Ch68.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

@@ -19,3 +19,18 @@ notes:
   - "Codex drafted first prose pass at 4,146 words, inside the approved 4,000-5,000 range."
   - "Bachant/McDermott 1984 is used conservatively for broad maintenance direction only; exact dollar-savings, first-commercial-system, and hard ROI claims remain excluded."
   - "Claude source-fidelity review approved; Gemini narrative review approved with no required fixes."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

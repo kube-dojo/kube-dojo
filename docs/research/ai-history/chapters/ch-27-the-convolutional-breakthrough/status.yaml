@@ -15,3 +15,18 @@ notes:
   - "Gemini prose-readiness review cleared drafting with cap; mirrored LeCun 1989 anchors are acceptable if bibliography keeps official DOI/MIT authority."
   - "Codex drafted 4020-word golden-format prose with separate Fukushima, USPS/Buffalo, MNIST, and 1998 check-pipeline lanes."
   - "Gemini and Claude approved with no must-fix findings; Codex applied Claude polish on Buffalo totals, 1989 error/rejection figures, and mail-workflow wording."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: pending
+    gemini_prose_quality: pending
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: false
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

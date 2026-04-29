@@ -37,3 +37,18 @@ deferred:
 
 closed:
   - "PR #439 (Gemini 2026-04-27 unverified Green-promotion of Walter 1950 / von Neumann 1952 page anchors). Superseded by this contract per the 2026-04-28 role split (Issue #421, epic commit 03640e20)."
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

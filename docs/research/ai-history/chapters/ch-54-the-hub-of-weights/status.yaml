@@ -37,3 +37,18 @@ notes: |
   user anecdotes, or community reaction to reach the top of the book target.
   Guardrail_count records explicit prohibitions; red_claims is reserved for
   in-scope claims that fail verification.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

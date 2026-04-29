@@ -38,3 +38,18 @@ notes:
   - "Shell curl could not resolve external hosts under sandbox networking, so online source verification used browser/search extraction and existing repository primary-source anchors."
   - "The title phrase 'blank check' is treated as a metaphor only; no Green claim treats it as participant wording."
   - "2026-04-28 anchor-verification fix-pass: G26 (GAO B-167034) downgraded Green->Yellow after Claude verifier flagged that the family of B-167034 decisions spans 1970-1976 and the date/title/decision-number could not be confirmed; Scene 5 anchor list updated accordingly. S02/G03 anchor pinning corrected (Section 5 covers prereqs across 5.1-5.5, not 5.2 alone). S08 (Stanford CS-TR-74-409) flagged for re-pull from archive.org before any 'two-thirds of 128 members' line lands."
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

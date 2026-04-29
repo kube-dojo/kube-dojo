@@ -108,3 +108,18 @@ notes: |
   capacity-plan honesty and narrative gaps (without asserting page anchors,
   per `feedback_gemini_hallucinates_anchors.md`). Status advances to
   `research_contract_approved` only when both reviewers approve.
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: done
+    codex_anchor: done
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

@@ -20,3 +20,18 @@ notes:
   - "Gemini narrative review approved PR #464; Codex applied optional prose nits on repetition, section title, and explicit parity framing."
   - "Current prose markdown is 4,360 words after review nits."
   - "PR #464 passed GitHub checks and merged; Ch17 prose is accepted."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

@@ -119,3 +119,18 @@ notes: |
   READY_TO_DRAFT_WITH_CAP. If Q1 (BBC) stays Yellow at draft time, Layer 5
   must cap below 600 words and rely on Saygin §3-§5 reception rather than
   the broadcast for substance.
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: done
+    codex_anchor: done
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

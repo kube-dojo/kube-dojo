@@ -19,3 +19,18 @@ notes:
   - "Gemini Flash follow-up found two remaining meta references; both were removed and draft now stands at 4,015 words."
   - "Guardrail: do not portray SVMs as a deep-learning replacement or as purely theoretical; they were a 1990s infrastructure answer to small/medium data, controlled capacity, and convex training."
   - "PR #424 merged after Claude approval and Gemini final follow-up APPROVE; Ch29 prose is accepted."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: pending
+    gemini_prose_quality: pending
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: false
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

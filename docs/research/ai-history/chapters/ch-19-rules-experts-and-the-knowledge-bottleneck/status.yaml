@@ -18,3 +18,18 @@ notes:
   - "Guardrail: leave XCON/DEC commercialization to Ch21."
   - "Codex drafted first prose pass at 4,012 words, inside the approved 4,000-4,800 range; final source-safe revision is 4,006 words."
   - "Claude source-fidelity review approved; Gemini narrative review approved; clinical deployment and XCON business-story guardrails remain intact."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

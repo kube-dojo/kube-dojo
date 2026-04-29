@@ -56,3 +56,18 @@ review_gates_required_before_acceptance:
   - "Codex anchor verification (cross-family reviewer for Claude-authored research per docs/review-protocol.md)"
   - "Gemini gap analysis (per dual-review-required gate)"
   - "Status remains capacity_plan_anchored until both reviewers Green per TEAM_WORKFLOW.md"
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: done
+    codex_anchor: done
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

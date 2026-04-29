@@ -43,3 +43,18 @@ notes: |
   code-policy, or named-maintainer sources. Follow-up edits reduced the cap,
   reframed TensorFlow/PyTorch as contrasting distribution philosophies, and made
   Papers with Code a later maturation layer.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

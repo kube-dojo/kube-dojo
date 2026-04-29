@@ -61,3 +61,18 @@ notes: |
 
   Status advances from capacity_plan_anchored to prose_ready. Drafting may
   begin on a claude/394-ch11-prose branch off main, capped at 5,100 words.
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: n/a
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

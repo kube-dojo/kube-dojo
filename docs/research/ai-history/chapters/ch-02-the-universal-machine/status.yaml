@@ -67,3 +67,18 @@ notes: |
   role split). This contract retains scenes Gemini outlined but verifies every
   page anchor independently. No Gemini-cited URL or page reference has been
   carried forward without primary re-verification.
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

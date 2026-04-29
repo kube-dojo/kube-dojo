@@ -39,3 +39,18 @@ notes:
   - Shell curl was attempted but DNS resolution is blocked in this sandbox; anchors were verified via accessible web/PDF extraction.
   - All Prose Capacity Plan layers reference Green claim IDs in sources.md.
   - No generated artifacts should be included.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

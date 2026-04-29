@@ -19,3 +19,18 @@ required_checks:
 notes:
   - Shell curl was attempted first per task instructions, but DNS/network access was unavailable in this environment.
   - Page anchors were verified from open PDFs through available document extraction.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

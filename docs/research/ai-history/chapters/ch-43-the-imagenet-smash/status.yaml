@@ -37,3 +37,18 @@ notes:
   - "Do not draft bedroom/heat/noise scene unless Y01 is anchored."
   - "Use 15.3% only with extra Fall 2011 data caveat; use 16.4% for supplied-data SuperVision run."
   - "Ch40 owns ImageNet construction; Ch42 owns CUDA."
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

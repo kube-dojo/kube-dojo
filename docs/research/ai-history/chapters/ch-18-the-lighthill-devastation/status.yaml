@@ -18,3 +18,18 @@ notes:
   - "Codex drafted first prose pass at 4,065 words, inside the approved 4,000-4,700 range; BBC debate and exact budget claims remain excluded."
   - "Claude source-fidelity review approved PR #484; Codex applied the optional tooling-list tightening and current prose markdown is 4,060 words."
   - "Gemini narrative review approved PR #484; Codex applied the optional wording nit on institutional aftermath."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: done
+    gemini_prose_quality: done
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

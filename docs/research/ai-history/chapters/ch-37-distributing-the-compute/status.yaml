@@ -130,3 +130,18 @@ honest_prose_capacity_estimate:
   if_archives_unlock: "4500-6500"
   cap_at: "natural length supported by verified evidence"
   do_not_pad: true
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: done
+    codex_anchor: done
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

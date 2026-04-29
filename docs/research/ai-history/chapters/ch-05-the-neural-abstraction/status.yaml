@@ -59,3 +59,18 @@ next_steps:
   - "Cross-family review: Codex (anchor verification) and Gemini (gap analysis, no URL/anchor assertions per 2026-04-28 role split)"
   - "Optional anchor upgrade before drafting unlocks: fetch Aizawa-Schlatter 2008 metadata + open-access route"
   - "Library access required for Smalheiser 2000 / McCorduck 1979 / Conway-Siegelman 2005 page anchors (would lift Pitts-biography Yellow rows)"
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

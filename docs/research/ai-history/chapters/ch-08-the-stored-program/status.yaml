@@ -35,3 +35,18 @@ review_requested:
 notes:
   - Supersedes the legacy Gemini-drafted Ch8 stub (commit 2026-04-28). The Gemini PR #427 should NOT be merged; this contract replaces it.
   - The legacy prose at src/content/docs/ai-history/ch-08-the-stored-program.md was inspected for scene scope only; every claim was re-verified independently. Do not migrate the legacy bibliography entries without cross-checking against this contract's sources.md.
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: pending
+    codex_anchor: pending
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: true
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

@@ -35,3 +35,18 @@ notes: |
   5,400-word cap. Do not claim a legal monopoly. Date Microsoft/OpenAI
   exclusivity carefully, especially the April 27, 2026 amendment. Ch68 owns
   data labor, copyright, and data control in depth.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

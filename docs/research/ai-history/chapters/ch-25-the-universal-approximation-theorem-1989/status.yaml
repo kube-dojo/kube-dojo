@@ -16,3 +16,18 @@ notes:
   - "Gemini prose-readiness review cleared drafting with cap; do not block on Hornik/Pinkus/Kolmogorov/Ch17 unless trying to expand beyond the verified core."
   - "First public prose draft is 4131 words after review-nit follow-up, expanded through the evidence-layer capacity plan rather than generic theorem exposition."
   - "Gemini and Claude prose reviews approved PR #415; review nits were applied and build revalidated."
+review_coverage:
+  research:
+    claude_anchor: pending
+    gemini_gap: pending
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: pending
+    gemini_prose_quality: pending
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: false
+    prose: false
+    overall: false
+  backfill_pending: true
+  last_audited: 2026-04-29

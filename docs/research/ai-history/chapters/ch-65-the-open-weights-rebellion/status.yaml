@@ -34,3 +34,18 @@ notes: |
   gap/capacity audit. Keep "open source" wording narrow, frame Alpaca/Vicuna
   costs and evaluations as project-reported, and hand benchmark politics to Ch66
   and copyright/data labor to Ch68.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

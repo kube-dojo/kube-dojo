@@ -37,3 +37,18 @@ notes: |
   from Ch65, data/copyright labor fights from Ch68, or multimodal/video systems
   from Ch62. Gemini's first gap audit requested a Chain-of-Thought bridge; the
   fix was approved in PR #540; prose drafting is unlocked at the 5,800-word cap.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

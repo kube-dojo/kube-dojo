@@ -6043,6 +6043,19 @@ def _git_hygiene_signals(
     return out
 
 
+def _count_review_backfill_pending(repo_root: Path) -> dict[str, Any]:
+    chapters_root = repo_root / "docs" / "research" / "ai-history" / "chapters"
+    pending: list[str] = []
+    for status_path in sorted(chapters_root.glob("ch-*/status.yaml")):
+        try:
+            text = status_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if re.search(r"(?m)^  backfill_pending: true$", text):
+            pending.append(status_path.parent.name)
+    return {"count": len(pending), "chapters": pending[:5]}
+
+
 def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     """Compact control-plane snapshot for agent orientation.
 
@@ -6056,6 +6069,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
     services = build_runtime_services_status(repo_root)
     commits = _recent_commits(repo_root, limit=5)
     pipeline = _pipeline_summary_safe(repo_root)
+    review_backfill = _count_review_backfill_pending(repo_root)
 
     alerts: list[str] = []
     if services.get("stale", 0):
@@ -6257,6 +6271,14 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
                 endpoint="/api/pipeline/v2/stuck",
             )
 
+    if review_backfill["count"]:
+        _add_row(
+            "next",
+            f"{review_backfill['count']} AI History chapter(s) need review backfill",
+            reason="ai_history_review_backfill",
+            endpoint="docs/research/ai-history/REVIEW_COVERAGE.md",
+        )
+
     actions_active = [r["label"] for r in action_rows if r["bucket"] == "active"]
     actions_blocked = [r["label"] for r in action_rows if r["bucket"] == "blocked"]
     actions_next = [r["label"] for r in action_rows if r["bucket"] == "next"]
@@ -6295,6 +6317,7 @@ def build_session_briefing(repo_root: Path) -> dict[str, Any]:
         "blockers": status_md.get("blockers", []),
         "alerts": alerts,
         "critical_quality": critical_quality,
+        "review_backfill": review_backfill,
         "actions": {
             # ``active`` — currently owned / in flight (read-only).
             # ``blocked`` — needs human or re-enqueue.

@@ -35,3 +35,18 @@ notes: |
   5,500-word cap. Allegations, company positions, and court holdings must remain
   lexically separate. Recheck Bartz/Anthropic settlement status before prose if
   settlement finality appears in the chapter.
+review_coverage:
+  research:
+    claude_anchor: done
+    gemini_gap: done
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29

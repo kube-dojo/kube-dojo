@@ -67,3 +67,18 @@ notes: |
   begin on a codex/394-ch12-prose branch off main, capped at 4,500 words.
   This contract has cleared dual cross-family review (Codex authored +
   Gemini gap-audited + Claude integrated + dual verdict pass).
+review_coverage:
+  research:
+    claude_anchor: n/a
+    gemini_gap: n/a
+    codex_anchor: n/a
+  prose:
+    claude_source_fidelity: n/a
+    gemini_prose_quality: n/a
+    codex_prose_quality: n/a
+  cross_family_satisfied:
+    research: true
+    prose: true
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-04-29
