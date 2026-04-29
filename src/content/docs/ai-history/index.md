@@ -129,7 +129,7 @@ Scaling laws, attention, and the democratization of AI through open weights.
 | 55 | [The Scaling Laws](./ch-55-the-scaling-laws/) |
 | 56 | [The Megacluster](./ch-56-the-megacluster/) |
 | 57 | [The Alignment Problem](./ch-57-the-alignment-problem/) |
-| 58 | The Math of Noise *(coming soon)* |
+| 58 | [The Math of Noise](./ch-58-the-math-of-noise/) |
 
 ## Part 9 — The Product Shock & Physical Limits (2022–Present)
 

@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 8
 chapter: 58
-review_state: dual_cross_family_verdict_accepted
-last_updated: 2026-04-28
+review_state: prose_drafted_awaiting_cross_family_review
+last_updated: 2026-04-29
 green_claims: 16
 yellow_claims: 3
 red_claims: 0
@@ -49,3 +49,8 @@ notes: |
   Safe prose range is 4,000-5,200 words after Gemini gap/capacity audit. Do not pad
   with Midjourney internals, copyright/labor analysis, or open-weights politics;
   those belong to later chapters.
+
+  Drafted 2026-04-29 at 4,000 words and opened for cross-family prose review.
+  Keep review fixes inside the approved evidence boundary: no Midjourney
+  internals, no universal diffusion-over-GAN claim, no literal entropy-reversal
+  claim, and no full copyright/labor/open-weights analysis in this chapter.
