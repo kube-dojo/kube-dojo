@@ -189,6 +189,10 @@ world. Sigmoidal units are not every possible activation. "There exists" is not
 symbolic reasoning. Uniform approximation is a particular mathematical demand,
 not a general certificate of intelligence.
 
+:::tip[Plain reading]
+Read this as the theorem's guardrail list. "Universal" here means: for continuous targets on bounded domains, with sigmoidal units, some finite network can get uniformly close. It does not mean arbitrary tasks, exact symbolic reasoning, easy training, or a small network.
+:::
+
 These conditions are why the theorem is powerful without being magic. It tells
 us that a certain kind of network can, in principle, build complicated
 input-output relationships by combining many simple nonlinear responses. Each
