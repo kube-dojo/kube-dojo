@@ -1,1 +1,56 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-42-cuda
+issue: 394
+branch: codex/394-ch42-research
+claim_counts:
+  green: 20
+  yellow: 6
+  red: 3
+word_count_discipline: 3k-5k likely
+prose_capacity_range:
+  min: 3800
+  max: 5300
+prose_capacity_layers:
+  - scene: 1
+    range: 650-900
+    anchors:
+      - sources.md G1
+      - sources.md G16
+      - sources.md G17
+  - scene: 2
+    range: 700-950
+    anchors:
+      - sources.md G2
+      - sources.md G3
+      - sources.md G4
+      - sources.md G14
+  - scene: 3
+    range: 850-1150
+    anchors:
+      - sources.md G5
+      - sources.md G6
+      - sources.md G7
+      - sources.md G8
+      - sources.md G9
+      - sources.md G16
+      - sources.md G19
+  - scene: 4
+    range: 900-1250
+    anchors:
+      - sources.md G10
+      - sources.md G11
+      - sources.md G12
+      - sources.md G13
+      - sources.md G14
+  - scene: 5
+    range: 700-1050
+    anchors:
+      - sources.md G15
+      - sources.md G16
+      - sources.md G18
+      - sources.md G19
+      - sources.md G20
+checks:
+  prose_capacity_plan_layers_have_sources_md_anchors: true
+  shell_curl_available_for_external_fetches: false
+  generated_artifacts_included: false
