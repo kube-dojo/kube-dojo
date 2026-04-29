@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 9
 chapter: 65
-review_state: prose_drafted_pending_cross_family_review
+review_state: prose_accepted_claude_approved_2026-04-29
 last_updated: 2026-04-29
 green_claims: 12
 yellow_claims: 6
@@ -25,6 +25,18 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5300
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/587#issuecomment-4346313444
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMIT
+    error_message_id: 4
 notes: |
   Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
   is 4,296 words and stays inside open-weights politics: Stable Diffusion as
@@ -32,6 +44,11 @@ notes: |
   community fine-tuning with caveats, Llama 2 commercial release, Mistral 7B
   Apache 2.0 release, and the open weights/open source/open data/open governance
   distinction.
+  Claude approved the prose/source review on PR #587. Codex applied Claude's
+  optional precision nits for Stable Diffusion date, LoRA reduction numbers, and
+  the Llama 2 to Mistral transition. Gemini prose review was requested with
+  gemini-3.1-pro-preview and fallback to gemini-3-flash-preview, but the
+  fallback was rate limited by the Gemini CLI.
 
   Built from scrubbed skeleton into a dual-cleared prose_ready open-weights contract. Core
   anchors are the Ch58-verified Stable Diffusion release layer, LLaMA, LoRA,
