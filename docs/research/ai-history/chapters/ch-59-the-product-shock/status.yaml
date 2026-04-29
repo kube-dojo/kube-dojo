@@ -2,9 +2,9 @@ status: capacity_plan_anchored
 owner: Codex
 part: 9
 chapter: 59
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: gemini_gap_ready_with_minor_source_addition_awaiting_recheck
 last_updated: 2026-04-28
-green_claims: 13
+green_claims: 14
 yellow_claims: 4
 red_claims: 0
 guardrail_count: 6
@@ -30,7 +30,8 @@ notes: |
   Core anchors are official OpenAI product pages (ChatGPT, Plus, GPT-3.5 Turbo
   API, GPT-4), official Microsoft and Google product/partnership posts, Stack
   Overflow policy, Chalkbeat NYC schools reporting, Reuters/UBS adoption
-  syndication, and a Threads caveat source.
+  syndication, a Threads caveat source, and the GPT-4 System Card adversarial
+  prompting/jailbreak guardrail added after Gemini's gap audit.
 
   The central guardrail is temporal honesty: ChatGPT may be described as the
   fastest-growing consumer application according to the February 2023 Reuters/UBS

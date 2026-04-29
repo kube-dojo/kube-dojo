@@ -2,6 +2,7 @@
 
 - **2020-05:** Lewis et al. release "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks" on arXiv, combining parametric seq2seq generation with non-parametric retrieval over a dense Wikipedia index.
 - **2021-12:** OpenAI publishes WebGPT, framing browser-assisted question answering and source citation as a path toward factuality while warning that cited answers can still fail.
+- **2022-01 / 2022 NeurIPS:** Wei et al. release "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models," defining chain-of-thought prompting as intermediate natural-language reasoning steps that improve complex reasoning in sufficiently large language models.
 - **2022-10:** ReAct appears on arXiv, making interleaved reasoning/action/observation loops explicit across QA, fact verification, and interactive tasks.
 - **2022-10:** LangChain's GitHub repository is created; an October 25 README commit frames it around composability, combining LLMs with computation/knowledge, and examples such as self-ask-with-search and LLM Math.
 - **2022-11:** LlamaIndex's GitHub repository is created, part of the same developer move toward data/document infrastructure around LLMs.

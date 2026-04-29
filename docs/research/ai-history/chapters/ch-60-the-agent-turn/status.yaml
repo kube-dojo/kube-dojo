@@ -2,14 +2,14 @@ status: capacity_plan_anchored
 owner: Codex
 part: 9
 chapter: 60
-review_state: awaiting_claude_source_review_and_gemini_gap_audit
+review_state: gemini_gap_changes_addressed_awaiting_recheck
 last_updated: 2026-04-28
-green_claims: 18
+green_claims: 21
 yellow_claims: 3
 red_claims: 0
-guardrail_count: 10
-prose_word_cap_recommendation: 5600
-word_count_range: "4500-5600"
+guardrail_count: 11
+prose_word_cap_recommendation: 5800
+word_count_range: "4800-5800"
 verdicts:
   claude:
     model: null
@@ -28,10 +28,12 @@ verdicts:
 notes: |
   Built from the modern-era placeholder into a capacity_plan_anchored contract.
   Core anchors are RAG (Lewis et al. 2020), WebGPT (OpenAI/Nakano et al.),
-  ReAct (Yao et al.), Toolformer (Schick et al.), OpenAI plugins, OpenAI
-  function calling, LangChain repository snapshots, and AutoGPT v0.1.0.
+  Chain-of-Thought prompting (Wei et al.), ReAct (Yao et al.), Toolformer
+  (Schick et al.), OpenAI plugins, OpenAI function calling, LangChain
+  repository snapshots, and AutoGPT v0.1.0.
 
-  Safe prose range is 4,500-5,600 words. Do not pad by importing serving-cost
+  Safe prose range is 4,800-5,800 words. Do not pad by importing serving-cost
   analysis from Ch63, benchmark politics from Ch66, open-weights competition
   from Ch65, data/copyright labor fights from Ch68, or multimodal/video systems
-  from Ch62. Gemini gap/capacity audit is still required before prose drafting.
+  from Ch62. Gemini's first gap audit requested a Chain-of-Thought bridge; the
+  fix is applied and awaiting recheck before prose drafting.

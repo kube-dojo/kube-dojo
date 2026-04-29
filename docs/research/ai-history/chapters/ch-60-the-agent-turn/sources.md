@@ -4,8 +4,9 @@
 
 Contract is `capacity_plan_anchored` as of 2026-04-28. Sources below were
 verified directly through arXiv PDFs, OpenAI official pages, GitHub API metadata,
-and raw GitHub repository snapshots. Gemini must still gap-audit the scope and
-word cap before prose drafting.
+and raw GitHub repository snapshots. Gemini requested an explicit Chain-of-
+Thought bridge in the gap audit; this pass adds the Wei et al. paper and keeps
+the rest of the contract boundaries intact.
 
 ## Primary Source Spine
 
@@ -13,6 +14,7 @@ word cap before prose drafting.
 |---|---|---|
 | Patrick Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks," arXiv:2005.11401 / NeurIPS 2020. PDF: https://arxiv.org/pdf/2005.11401 | RAG as parametric plus non-parametric memory; dense Wikipedia index; retriever/generator architecture. | Green: PDF downloaded 2026-04-28. Abstract/page 1 defines RAG as combining a seq2seq parametric memory with a dense vector index of Wikipedia. Section 2/page 3 defines RAG-Sequence and RAG-Token; Section 4/page 5 notes the Wikipedia dump/index setup. |
 | Reiichiro Nakano et al., "WebGPT: Browser-assisted question-answering with human feedback," arXiv:2112.09332. PDF: https://arxiv.org/pdf/2112.09332. OpenAI page: https://openai.com/index/webgpt/ | Search-assisted answering, references, browser action space, human-feedback evaluation, and reliability caveats. | Green: PDF downloaded and OpenAI page opened through browser-rendered source 2026-04-28. PDF abstract/page 1 says the model searches/navigates the web and collects references; Section 2/page 3 defines browser actions. OpenAI page intro/Evaluating factual accuracy/Risks sections discuss search commands, source citation, evaluation difficulty, basic errors, and web-access risks. |
+| Jason Wei et al., "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models," arXiv:2201.11903 / NeurIPS 2022. PDF: https://arxiv.org/pdf/2201.11903 | Reasoning bridge between chat/few-shot prompting and ReAct-style agent loops. | Green: PDF downloaded 2026-04-28. Abstract/page 1 defines chain of thought as a series of intermediate reasoning steps that improves complex reasoning in sufficiently large language models. Section 2/page 2 defines chain of thought as intermediate natural-language reasoning steps leading to a final output and lists decomposition, interpretability/debugging, task breadth, and few-shot elicitation as attractive properties. |
 | Shunyu Yao et al., "ReAct: Synergizing Reasoning and Acting in Language Models," arXiv:2210.03629. PDF: https://arxiv.org/pdf/2210.03629 | Interleaved reasoning/action loops and environment observations; Wikipedia API, ALFWorld, and WebShop tasks. | Green: PDF downloaded 2026-04-28. Abstract/page 1 says ReAct generates reasoning traces and task-specific actions in an interleaved manner, interacts with a Wikipedia API, and evaluates on HotpotQA, FEVER, ALFWorld, and WebShop. Section 1/page 3 describes reasoning to act and acting to reason. |
 | Timo Schick et al., "Toolformer: Language Models Can Teach Themselves to Use Tools," arXiv:2302.04761. PDF: https://arxiv.org/pdf/2302.04761 | Tool-use learning via API calls; calculator, Q&A, search, translation, and calendar tools. | Green: PDF downloaded 2026-04-28. Abstract/page 1 says Toolformer learns when and how to call APIs using only a few demonstrations per API and includes calculator, Q&A, search, translation, and calendar tools. Section 2/page 2 defines sample, execute, filter, and interleave API-call steps. |
 | OpenAI, "ChatGPT plugins," March 23, 2023. URL: https://openai.com/index/chatgpt-plugins/ | Productization of tools: browser, code interpreter, retrieval plugin, third-party services, and safety risks. | Green: official OpenAI page opened through browser-rendered source 2026-04-28. Overview and Safety sections frame plugins as tools for up-to-date information, computation, third-party services, and actions, and discuss prompt injection, harmful/unintended actions, safeguards, and evals. Note: `curl` returns an SPA shell, so cite page title/date/sections rather than brittle live line numbers. |
@@ -33,6 +35,9 @@ word cap before prose drafting.
 | WebGPT required reference collection to make human evaluation of factual accuracy easier. | Search Before Answering | WebGPT PDF p.1 | OpenAI WebGPT page, Evaluating factual accuracy section | Green | Good bridge from retrieval to evaluation. |
 | WebGPT's best model was preferred over human demonstrations 56% of the time on ELI5 in the paper's setup. | Search Before Answering | WebGPT PDF p.1 | OpenAI WebGPT page, ELI5 results section | Green | Keep benchmark context narrow; do not generalize to all QA. |
 | OpenAI itself warned that cited answers can still make basic errors or use unreliable sources. | Search Before Answering | OpenAI WebGPT page, TruthfulQA/Evaluating factual accuracy/Risks sections | Paper discussion | Green | Essential honesty guardrail. |
+| Chain-of-thought prompting framed reasoning as a series of intermediate steps that can improve complex reasoning in sufficiently large language models. | Reasoning Before Acting | Wei et al. p.1 abstract | Section 2 p.2 | Green | This is the missing cognitive bridge before ReAct; avoid overstating it as reliable planning. |
+| Wei et al. defined a chain of thought as intermediate natural-language reasoning steps leading to the final output. | Reasoning Before Acting | Wei et al. Section 2 p.2 | Figure 1 examples | Green | Useful for explaining what "reasoning trace" means historically. |
+| The Chain-of-Thought paper framed decomposition and debugging visibility as benefits, while leaving internal computation only partially characterized. | Reasoning Before Acting | Wei et al. Section 2 p.2 | Paper caveat in property list | Green | Use this to avoid saying the text is transparent access to the model's mind. |
 | ReAct interleaved reasoning traces and task-specific actions. | Tools As Hands | ReAct PDF p.1 abstract | Section 1 p.3 | Green | Use as conceptual hinge: reason, act, observe. |
 | ReAct interacted with a Wikipedia API for QA/fact-verification tasks. | Tools As Hands | ReAct PDF p.1 abstract | Section 1 p.3 | Green | Keep API simple; do not call it a full browser. |
 | ReAct was evaluated on HotpotQA, FEVER, ALFWorld, and WebShop. | Tools As Hands | ReAct PDF p.1 abstract | Section 1 p.3 | Green | Do not invent exact scores unless added later. |
@@ -51,6 +56,9 @@ word cap before prose drafting.
 - Do not cite secondary hype articles as primary evidence for capability.
 - Do not treat "agent" as a single stable technical definition across papers,
   platforms, and open-source frameworks.
+- Do not treat chain-of-thought text as transparent access to hidden model
+  computation; the Wei et al. paper itself frames it as an interpretable window
+  while leaving full characterization open.
 - Do not claim RAG solves hallucination. WebGPT and plugins both show that
   external channels add new failure modes: source quality, citation quality,
   prompt injection, permissions, and action safety.
@@ -63,6 +71,7 @@ word cap before prose drafting.
 
 - Use RAG p.1 abstract and Section 2 for the retrieval-memory explanation.
 - Use WebGPT PDF and official page sections for source-citation benefits and risks.
+- Use Wei et al. p.1/p.2 for the chain-of-thought bridge into ReAct.
 - Use ReAct p.1/p.3 for interleaved reasoning/action, not for mature autonomy.
 - Use Toolformer p.1/p.2 for API-call learning.
 - Use OpenAI plugins and function-calling official page sections for product
