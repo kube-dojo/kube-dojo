@@ -5,6 +5,53 @@ sidebar:
   order: 14
 ---
 
+:::tip[In one paragraph]
+Frank Rosenblatt's Perceptron program at the Cornell Aeronautical Laboratory (1958–1962) was a cybernetic research project, not a failed AI system. A 1958 *Psychological Review* paper, IBM 704 simulations, and the Mark I electromechanical machine pursued *learning* — supervised error correction over a random association layer — as engineering practice. The chapter separates three things later commentators tend to collapse: the convergence theorem (mathematics), the Mark I (analog hardware), and the *New York Times* press rhetoric of a machine that would walk, talk, see, and write.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Frank Rosenblatt | 1928–1971 | Psychologist at the Cornell Aeronautical Laboratory in Buffalo; author of the 1958 *Psychological Review* paper and *Principles of Neurodynamics* (1961). Designed the perceptron's S/A/R architecture and the supervised error-correction reinforcement rule. |
+| Charles Wightman | — | Cornell Aeronautical Laboratory engineer; principal Mark I builder. *Principles of Neurodynamics* p. ix records that he and Francis Martin carried out the engineering work on the machine. |
+| Francis Martin | — | Cornell Aeronautical Laboratory engineer; co-built Mark I with Wightman. |
+| John C. Hay | — | Cornell Aeronautical Laboratory experimentalist; ran the experimental programme on Mark I. Co-author with Albert E. Murray of the 1960 *Mark I Perceptron Operators' Manual* (Project PARA). |
+| H. D. Block | — | Perceptron-theory contributor; author of "The Perceptron: A Model for Brain Functioning. I" in *Reviews of Modern Physics* 34(1), January 1962 — the chapter's anchor for independent mathematical legitimacy. |
+| Albert B. J. Novikoff | — | Mathematician who published a tightened convergence proof for the perceptron in 1962, under cleaner separability assumptions. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1957–1962)</strong></summary>
+
+```mermaid
+timeline
+    title The Cornell Perceptron Program, 1957–1962
+    July 1957 : Buffalo perceptron program enters ONR support under Contract Nonr-2381(00) (per Principles of Neurodynamics, p. ix)
+    1958 : Rosenblatt publishes "The Perceptron" in Psychological Review : Mark I built at Cornell Aeronautical Laboratory, Buffalo
+    July 8 1958 : New York Times prints "New Navy Device Learns by Doing" — press rhetoric of a machine that will walk, talk, see, and write
+    24–27 November 1958 : HMSO Mechanisation of Thought Processes symposium at NPL Teddington : Rosenblatt's "Two Theorems of Statistical Separability," Selfridge's "Pandemonium," and McCarthy's "Programs with Common Sense" share one proceedings volume
+    1960 : Hay & Murray Mark I Operators' Manual (February) : Rosenblatt's "Perceptron Simulation Experiments" in Proceedings of the IRE (March) : Navy photo release describing Mark I letter-recognition (June 24)
+    1961–1962 : Principles of Neurodynamics CAL report (March 1961) : Block 1962 Reviews of Modern Physics exposition : Novikoff 1962 tightened convergence proof
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Perceptron** — Rosenblatt's class of adaptive networks that learn to classify sensory inputs. The Mark I was the headline electromechanical instance; the term also covers the idealised mathematical model and the IBM 704 simulations.
+- **S/A/R units** — The three layers of Rosenblatt's perceptron architecture: *sensory* units (input from a retina-like array), *association* units (random fixed connections from sensory to association), and *response* units whose weights are adjusted by reinforcement.
+- **Reinforcement / supervised error correction** — Rosenblatt's learning rule: when the perceptron's response is wrong, adjust the weights of association-to-response connections in the direction that would have produced the correct response. Repeat until correct.
+- **Convergence theorem** — Rosenblatt's mathematical claim (tightened by Novikoff 1962) that, when a solution exists under the stated separability conditions, the perceptron learning procedure converges on it in a finite number of steps.
+- **Linear separability** — The condition under which the convergence theorem applies: two classes in the input space are *linearly separable* if some hyperplane divides them. The boundary case beyond which a single-layer perceptron cannot learn — and the precise object of Minsky and Papert's 1969 critique (Ch17).
+- **Mark I Perceptron** — The electromechanical instantiation built at Cornell Aeronautical Laboratory in 1958. Sensory input via a photocell array; analog weights stored in motor-driven potentiometers; response read out from a panel. Hardware, not software simulation.
+- **ADALINE / MADALINE** — Bernard Widrow and Marcian Hoff's contemporary Stanford analog-hardware learning systems (1960). The parallel cybernetic-hardware programme that puts Mark I into broader 1960 context.
+
+</details>
+
 # Chapter 14: The Perceptron
 
 The perceptron was not born as a punch line. In its own moment, from 1958 through the early 1960s, it was a serious research program about learning, perception, and adaptive organization. It had mathematics. It had simulations. It had a physical machine. It also had press coverage so extravagant that later readers learned to remember the hype before they learned the work.
@@ -148,6 +195,10 @@ The later fate of the story also had a human asymmetry. Rosenblatt died in a sai
 So the chapter should close before the fall. In 1958-1962, the perceptron was not a failed AI system. It was a serious cybernetic research program with a bounded theorem, a team-built analog machine, and an overexcited public reception. Its limits were real. Its achievement was real too.
 
 That balance is the handoff. Chapter 15 can reinterpret the learning rule in modern mathematical terms. Chapter 16 can widen the lens to defense funding. Chapter 17 can return to the later controversy without making it the origin story. The perceptron deserves to be met first as its builders and critics first encountered it: not as a solved future, and not as a debunked mistake, but as a working, bounded, contested path for making machines learn.
+
+:::note[Why this still matters today]
+Every modern neural network — every deep model with backpropagated weight updates, every linear classifier trained by gradient descent — descends from the perceptron's basic architectural move: random fixed input transformations, *learnable* output weights, and an adjust-on-error rule. The convergence theorem still holds for the linearly separable case it covered. What changed was hardware (digital throughput far past analog potentiometers), depth (layers and non-linearities far past Mark I's single decision layer), and the reframe of weight adjustment as *gradient descent on a loss function* — the topic of the next chapter. The chapter's discipline matters: the perceptron's limits were real and well-known to Rosenblatt by 1961; the 1969 verdict came from somewhere else.
+:::
 
 ## Sources
 
