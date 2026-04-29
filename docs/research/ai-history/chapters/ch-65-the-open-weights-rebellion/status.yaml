@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 9
 chapter: 65
-review_state: dual_cross_family_verdict_accepted
-last_updated: 2026-04-28
+review_state: prose_drafted_pending_cross_family_review
+last_updated: 2026-04-29
 green_claims: 12
 yellow_claims: 6
 red_claims: 0
@@ -26,6 +26,13 @@ verdicts:
   resolved_word_cap: 5300
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
+  is 4,275 words and stays inside open-weights politics: Stable Diffusion as
+  precedent, LLaMA portability, LoRA/QLoRA adapter access, Alpaca/Vicuna
+  community fine-tuning with caveats, Llama 2 commercial release, Mistral 7B
+  Apache 2.0 release, and the open weights/open source/open data/open governance
+  distinction.
+
   Built from scrubbed skeleton into a dual-cleared prose_ready open-weights contract. Core
   anchors are the Ch58-verified Stable Diffusion release layer, LLaMA, LoRA,
   Alpaca, Vicuna, Llama 2, QLoRA, and Mistral 7B.
