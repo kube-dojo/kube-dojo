@@ -11,9 +11,9 @@
 - **Prose Caution:** "Fastest" is historical and estimated, not a current record.
 
 ## Scene 3: Fluent Wrongness Hits Institutions
-- **Action:** Stack Overflow and NYC schools react because ChatGPT produces polished text at a volume humans cannot easily inspect.
-- **Evidence Anchor:** Stack Overflow Meta policy; Chalkbeat NYC report; OpenAI limitations section.
-- **Prose Caution:** This is not a generic school-cheating rant. It is about moderation, expertise, and institutional throughput.
+- **Action:** Stack Overflow and NYC schools react because ChatGPT produces polished text at a volume humans cannot easily inspect, while public adversarial prompting exposes that refusal behavior is something users can probe.
+- **Evidence Anchor:** Stack Overflow Meta policy; Chalkbeat NYC report; OpenAI limitations section; GPT-4 System Card jailbreak/adversarial-prompt discussion.
+- **Prose Caution:** This is not a generic school-cheating rant or a jailbreak subchapter. It is about moderation, expertise, institutional throughput, and the public discovery that safety behavior is adversarially testable.
 
 ## Scene 4: Search Becomes a Chat Product
 - **Action:** Microsoft and Google move from research announcements to product positioning: Azure/OpenAI partnership, Bing/Edge chat, Bard, and AI Search.
