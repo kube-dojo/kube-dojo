@@ -277,6 +277,94 @@ def codex_prose_quality_prompt(*, slug: str, pr_num: int,
         """)
 
 
+def gemini_prose_quality_prompt(*, slug: str, pr_num: int,
+                                 prose_path: str, prose: str,
+                                 research_branch: str,
+                                 contract: str) -> str:
+    return dedent(f"""\
+        # Gemini Prose Review — `{slug}` (PR #{pr_num})
+
+        You are the cross-family Gemini reviewer on a Codex- or
+        Claude-expanded prose chapter. Your lane is **contract-
+        traceability sampling + readability + boundary discipline** —
+        does the prose stay inside the approved contract, does it read
+        well, does it stay inside the chapter's scope.
+
+        **Lane closure (Issue #421):** Do NOT verify primary-source
+        URLs or page anchors yourself. Gemini's anchor-fetching lane
+        was closed on 2026-04-27 after a hallucinated-anchors audit.
+        If a prose claim's correctness requires URL/page-number
+        confirmation, flag it as `NEEDS_CODEX_OR_CLAUDE_VERIFY` and
+        leave the verification to the Codex or Claude reviewer pass.
+
+        ## The strict-source rule
+
+        Per TEAM_WORKFLOW.md § 5b–7, the expander was instructed to
+        use ONLY the approved contract — no source additions, no new
+        page anchors, no Yellow→Green upgrades. Flag any prose claim
+        that cannot be located in the staged contract files.
+
+        ## Your job
+
+        Sample 5 high-leverage prose claims. For each, locate the
+        matching contract row (brief / sources / scene-sketches /
+        timeline / people / infrastructure-log) and mark:
+        - **TRACED** — claim is supported by an identifiable contract row
+        - **GAP** — claim is not in the contract (likely fabrication)
+        - **NEEDS_CODEX_OR_CLAUDE_VERIFY** — claim needs URL or
+          page-anchor check that is out of your lane
+
+        Then scan the prose for:
+        - internal inconsistencies (dates / names / numbers that
+          disagree across the chapter)
+        - anachronisms or backward-projection of later concepts
+        - over-staged scene description (motive claims without
+          source row)
+        - over-tight hedges (Yellow flattened to Green)
+        - over-loose hedges (Green over-hedged into vagueness)
+        - boundary creep (claims belonging to a different chapter)
+        - structural / readability issues (paragraph length,
+          transitions, signpost density, opening hook quality)
+
+        ## Output (Markdown, ≤700 words)
+
+        ```
+        ## Gemini Prose Review — {slug}
+
+        ### Sampled contract traces
+        | Claim | Status | Contract row |
+        |---|:-:|---|
+        | ... | TRACED | sources.md row 3 |
+        | ... | GAP | not in contract |
+        | ... | NEEDS_CODEX_OR_CLAUDE_VERIFY | needs primary-source check |
+
+        ### Issues found
+        - `<path>:<line>`: <issue>; remedy: <hedge / cite / cut>
+
+        ### Strengths
+        - <what the expander got right>
+
+        ### Verdict
+        - READY_TO_MERGE | NEEDS_FIX_AND_MERGE | NEEDS_REWRITE
+        - One sentence rationale.
+        ```
+
+        ## Prose under review
+
+        File: `{prose_path}`
+
+        ```
+        {prose}
+        ```
+
+        ## Approved research contract
+
+        Branch: `{research_branch}`
+
+        {contract}
+        """)
+
+
 def fire(reviewer: str, *, prompt: str, slug: str) -> tuple[bool, str]:
     from agent_runtime.runner import invoke
     from agent_runtime.errors import RateLimitedError, AgentTimeoutError
@@ -374,7 +462,7 @@ def main() -> int:
         header = "<!-- prose review codex (cross-family, prose-quality) -->"
     else:
         # Gemini
-        prompt = codex_prose_quality_prompt(
+        prompt = gemini_prose_quality_prompt(
             slug=slug, pr_num=args.pr_num,
             prose_path=prose_path, prose=prose,
             research_branch=research_branch, contract=contract,
