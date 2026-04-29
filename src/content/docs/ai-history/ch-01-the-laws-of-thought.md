@@ -5,6 +5,71 @@ sidebar:
   order: 1
 ---
 
+:::tip[In one paragraph]
+In 1854, the self-taught Lincoln mathematician George Boole published *An Investigation of the Laws of Thought*, arguing that reasoning itself obeys mathematical laws. From three operations, two values (Nothing and Universe), and a single second-degree equation $x^2 = x$, he built a calculus of classes and propositions on paper. His addition was strictly disjoint; ten years later, William Stanley Jevons would redefine it as inclusive union, and modern Boolean algebra would begin.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| George Boole | 1815–1864 | Self-taught Lincoln mathematician; chair of mathematics at Queen's College, Cork (1849); author of *An Investigation of the Laws of Thought* (1854). |
+| Mary Everest Boole | 1832–1916 | Boole's wife (married 1855); after his death, librarian at Queen's College, London; mathematics educator; inventor of "curve stitching." |
+| Augustus De Morgan | 1806–1871 | London mathematician; near-contemporary witness to Boole's work, recorded as writing that Boole had "got hold of the true connection of algebra and logic." |
+| Duncan F. Gregory | 1813–1844 | Founding editor of the *Cambridge Mathematical Journal*; helped Boole bring his early mathematical work into print. |
+| John Ryall | — | Vice-President and Professor of Greek at Queen's College, Cork; dedicatee of *Laws of Thought*; Mary Everest's uncle on her mother's side. |
+| William Stanley Jevons | 1835–1882 | British logician who, in 1864, redefined `+` as inclusive disjunction, abandoned Boole's framework, and built what scholars call the first version of modern Boolean algebra. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1815–1864)</strong></summary>
+
+```mermaid
+timeline
+    title Boole's Life and the Road to Laws of Thought
+    1815 : Born November 2 in Lincoln, England
+    1827 : Age 12 — Horace translation published locally
+    1835 : Age 20 — opens his own school in Lincoln
+    1844 : Trans. R.S.L. memoir on a general method in analysis : Royal Medal awarded
+    1847 : The Mathematical Analysis of Logic published
+    1849 : Appointed chair of mathematics at Queen's College, Cork
+    1853 : Signs preface to Laws of Thought (Nov 30, 5 Grenville-place, Cork)
+    1854 : An Investigation of the Laws of Thought published (Walton & Maberly, London)
+    1855 : Marries Mary Everest
+    1857 : Elected Fellow of the Royal Society
+    1864 : Late November — walks through heavy rain, lectures in wet clothes : December 8 — dies of pneumonia at Ballintemple, Co. Cork, age 49
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Algebra of logic** — A system in which logical reasoning is performed by symbol manipulation, the way arithmetic algebra performs numerical reasoning. Boole's 1854 book is the founding text.
+- **Class** — In Boole's vocabulary, the collection of objects that a name picks out. "Men" is a class; "white things" is a class; "white sheep" is the class of objects that belong to both.
+- **Calculus (Boole's sense)** — Not differential calculus. Boole uses the word in its older meaning: a system of symbolic computation, a method for getting from premises to conclusions by mechanical manipulation of signs.
+- **Universe of discourse** — The class containing every object in the domain under discussion. Boole assigned the symbol $1$ to it, and $0$ to its opposite, the empty class ("Nothing").
+- **Law of duality / idempotent law** — Boole's name for the equation $x^2 = x$: intersecting any class with itself returns the class unchanged. The modern name "idempotent law" was given by the Harvard mathematician Benjamin Peirce in 1870.
+- **Strict-disjoint addition** — In Boole's 1854 system, $x + y$ was defined only for classes with no shared member. For overlapping classes he wrote $x + y(1 - x)$ as a separate workaround. Jevons later replaced the partial $+$ with an inclusive one (under which $x + x = x$), and modern Boolean algebra followed.
+
+</details>
+
+<details>
+<summary><strong>The math, on demand</strong></summary>
+
+The whole of Boole's symbolic system in *Laws of Thought* runs on a short list of equations.
+
+- **Law of duality (the fundamental equation):** $x^2 = x$. Intersecting any class with itself yields the class unchanged. Boole identified this as the algebraic form of Aristotle's principle of contradiction.
+- **Complement (logical NOT):** $1 - x$. Subtraction from the universal class produces the class of everything not in $x$.
+- **Contradiction:** $x(1 - x) = 0$. Equivalent to $x^2 = x$ by expansion. No object belongs both to a class and to its complement.
+- **Strict-disjoint sum:** $x + y$ — defined only when $x$ and $y$ share no member. Equation (3) of Chapter II §11.
+- **Inclusive-OR workaround:** $x + y(1 - x)$ — Boole's own construction (Chapter IV §§7-8) for the case where the two classes overlap: $x$, plus the part of $y$ that does not already lie inside $x$.
+- **Jevons's 1864 reformulation:** $x + x = x$. Achievable only by redefining $+$ as inclusive disjunction. Boole rejected the move in correspondence; Jevons abandoned Boole's framework and built the first version of modern Boolean algebra on the new definition.
+
+</details>
+
 George Boole was born on November 2, 1815, in the small cathedral city of Lincoln, Lincolnshire, England. His father was a tradesman of very limited means whose true and serious avocations were the pursuit of mathematics and the construction of optical instruments. In a household where formal academic pathways were financially out of reach, the elder Boole instructed his son in elementary mathematics and the use of optical devices. A friendly Lincoln bookseller helped the boy with Latin grammar, but beyond these initial foundations, the younger Boole was entirely self-taught. At the age of twelve, his metrical translation of an ode of Horace was published by his proud father in a local Lincoln journal, an achievement that prompted a neighbouring schoolmaster to write in and publicly deny that a translation of such quality could have been produced by one so young.
 
 Between the ages of sixteen and twenty, Boole worked as an assistant teacher, first at Doncaster in Yorkshire and then at Waddington near Lincoln. He devoted his sparse leisure hours to the study of modern languages and patristic literature, teaching himself Greek, German, and French. At the age of twenty, in order to support his ageing parents, he opened his own school in Lincoln. Amidst the daily demands of school-teaching, Boole's intellectual focus shifted firmly back to mathematics. Working alone in the original French, he began to study Pierre-Simon Laplace's *Mécanique céleste* and Joseph-Louis Lagrange's *Mécanique analytique*. Out of the meticulous notes he took while working through Lagrange, his first mathematical memoir began to take shape.
@@ -54,3 +119,7 @@ Mary Everest Boole is sometimes described in retrospectives as the keeper of her
 Her contemporaries were sometimes hostile to the work she did do. Macfarlane in 1916 dismissed one of her books as "a paradoxical book of the false kind." The chapter takes the documented version of her life from the *MacTutor* biographical record and refuses the more sentimental framing. The distinction matters because this is the AI-history book's first chapter, and the standard of evidence the book will hold to in later chapters is the standard set here. Her own legacy is real, and is in mathematics education. It is simply not in the preservation of Boole's logic, and the chapter says so plainly.
 
 George Boole left behind a calculus of classes and propositions, etched entirely in paper and ink. He framed the project, in the opening paragraph of *Laws of Thought*, as the investigation of "the fundamental laws of those operations of the mind by which reasoning is performed" — a science of the mind, on a par with (and arguably superior to) the contemporary science of probability. At no point in the book did he propose the construction of physical machinery to execute his equations; the text contains no diagrams of circuits, no proposed apparatus, no anticipation of an engine. The work that Jevons, Charles Sanders Peirce, and Schröder did with the calculus in the half-century after Boole's death was logical, not engineering — a continuous mathematical activity, not a dormancy. The bridge from this algebra to a physical apparatus that performs reasoning by passing electrical current through wires belongs to a later chapter; it requires its own evidence and a different cast. The chapter ends, as Boole's book ends, on a calculus.
+
+:::note[Why this still matters today]
+Boole gave the world a calculus of classes and propositions, written entirely with paper and ink. He proposed no machinery; he made no engineering predictions. Yet every digital circuit you have ever used resolves into AND, OR, and NOT — three operations Boole formalised in 1854. Every search query, every conditional in every program, every database filter executes a chain of Boolean evaluations. The path from this page to silicon takes another half-century of mathematical work and a fresh engineering insight; the chapters that follow trace it. What matters here is that the algebra was already on paper.
+:::
