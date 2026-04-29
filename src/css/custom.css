@@ -101,7 +101,7 @@ pre { border-radius: var(--kube-radius) !important; }
   background: white;
   overflow-x: auto;
 }
-.kd-mermaid__mount svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.kd-mermaid__mount svg { display: block; max-width: none; height: auto; margin: 0 auto; }
 .kd-mermaid-host[data-mermaid-state='loading']::after {
   content: 'Rendering diagram...';
   display: flex;

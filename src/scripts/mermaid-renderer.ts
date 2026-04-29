@@ -75,6 +75,11 @@ async function renderHost(host: HTMLElement): Promise<void> {
     // existing labels using <br>, <b>, and <i> render correctly.
     securityLevel: 'loose',
     theme: currentTheme() === 'light' ? 'default' : 'dark',
+    themeVariables: { fontSize: '18px' },
+    // Timelines are the widest diagram type and were rendering near-illegibly
+    // when shrunk to fit the prose column. Render at natural width and let the
+    // mount's overflow-x: auto handle horizontal scroll for long timelines.
+    timeline: { useMaxWidth: false },
   });
 
   const renderId = `kd-mermaid-${++state.renderCount}`;
