@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-29 (morning) | Ch01 reader-aid prototype (Tier 1+2+3) + math rendering fix + 6 sub-issues for rollout | [`docs/session-state/2026-04-29-reader-aids-ch01-prototype.md`](./docs/session-state/2026-04-29-reader-aids-ch01-prototype.md) | **Closed** — Ch01 prototype on `main` (PR #566); Codex's autonomous chain quietly closed Part 8 in parallel |
+| 2026-04-29 (afternoon) | Part 1 reader-aids rollout — Ch02–Ch06 shipped (5 PRs); Ch07–Ch09 pending; PR-hygiene gotchas memorised | [`docs/session-state/2026-04-29-part1-reader-aids-rollout.md`](./docs/session-state/2026-04-29-part1-reader-aids-rollout.md) | **Open** — PRs #577, #579, #581, #582, #583 awaiting review/merge; Codex Part 9 chain past Ch61 |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-29 (morning) | Ch01 reader-aid prototype (Tier 1+2+3) + math rendering fix + 6 sub-issues for rollout | [`docs/session-state/2026-04-29-reader-aids-ch01-prototype.md`](./docs/session-state/2026-04-29-reader-aids-ch01-prototype.md) |
 | 2026-04-29 (overnight) | Parts 3/6/7 shipped (13 chapters) + STATUS.md index migration + STEP 0 routing | [`docs/session-state/2026-04-29-parts-3-6-7-shipped.md`](./docs/session-state/2026-04-29-parts-3-6-7-shipped.md) |
 | 2026-04-28 night | Parts 3/6/7 finish queue setup (Ch16 + Ch38-40 + Ch41-49 plan) | [`docs/session-state/2026-04-28-night-handoff-2.md`](./docs/session-state/2026-04-28-night-handoff-2.md) |
 | 2026-04-28 night | Part 6 fully closed (Ch32-37 + roll-up) | archive § "2026-04-28 night — Part 6 fully closed" |
@@ -47,8 +48,9 @@
 
 These are state items that span individual sessions. Prune entries as threads close.
 
-- **#394 AI History — 58 of 72 chapters shipped (2026-04-29 morning).** Parts 1-8 fully closed. Part 8 (Ch50-58) shipped autonomously by Codex during the reader-aid session. Only Part 9 (Ch59-72, 14 chapters) remains.
-- **Codex Part 9 chain still in flight** — `codex resume 019dcbc8-...`. Don't disturb. Latest commits visible via `git log --oneline | head`.
+- **#394 AI History — 61 of 72 chapters shipped (2026-04-29 afternoon).** Parts 1-8 fully closed. Codex's Part 9 chain shipped Ch59-61 during the reader-aid rollout session. Only Ch62-72 (11 chapters) remain in the prose track.
+- **Codex Part 9 chain still in flight** — past Ch61. Don't disturb.
+- **Part 1 reader-aids rollout in flight (5 of 8 PRs open).** Ch02 #577, Ch03 #582 (replaces #578), Ch04 #579, Ch05 #581 (replaces #580), Ch06 #583. Ch07–Ch09 pending. Tier 3 calibration to date: Ch01 2/5; Ch02 0/4; Ch03 1/3; Ch04 0/3; Ch05 0/3; Ch06 0/3 — refusal is the right default when prose carries inline plain-reading.
 - **Reader-aid layout pattern frozen** — Tier 1 + 2 + 3, non-invasive on bit-identical prose. Canonical doc: `docs/research/ai-history/READER_AIDS.md`. Ch01 prototype on `main` as `49e8e299` (PR #566). Tier 3 coeditor: Claude proposes / Codex reviews adversarially / Gemini for tie-breaks (Issue #564, memory `feedback_tier3_coeditor_pattern.md`).
 - **Math rendering live** — `remark-math` + `rehype-katex` + KaTeX CSS in `astro.config.mjs` (commit `8c93d8db`). `$inline$` and `$$display$$` LaTeX both render. Fixes inline math across the entire AI history book retroactively.
 - **STEP 0 routing shipped** (`scripts/dispatch_research_verdict.py`): branch-prefix routing puts Claude on anchor verification for `codex/394-...` research PRs and Codex for `claude/394-...` PRs.
@@ -56,7 +58,8 @@ These are state items that span individual sessions. Prune entries as threads cl
 - **Codex `mode="danger"` rule** for end-to-end dispatches that include `git push` + `gh pr create` (memory `feedback_codex_danger_for_git_gh.md`). Workspace-write silently fails on `.git/worktrees/.../index.lock` and `api.github.com`.
 - **PR #558 (Ch51) and PR #565 (Ch52)** — both stale, content already on main. Close or rebase the index.md changes before next prose chain ships.
 - **PR #567 (review-coverage schema)** — open, ready to review. After merge, re-run `scripts/audit_review_coverage.py` with live `gh` access (initial audit ran in offline-fallback mode, count of 30 backfill_pending may revise downward).
-- **User-side dirty files to leave alone**: `scripts/local_api.py` (dashboard panel WIP), `test_rendering.js` (orphan).
+- **User-side dirty files to leave alone**: `test_rendering.js` (orphan). The `scripts/local_api.py` dashboard panel WIP from prior session is now stashed (`git stash list` shows `WIP: book progress + module distribution dashboard panels (paused for Part 1 reader-aid rollout)`); pop after Part 1 ships.
+- **PR-hygiene gotchas memorised this session** (memory `feedback_verify_aids_after_branch.md`): (1) `git checkout -b` on a chapter file lacking a trailing newline silently drops working-tree edits — defensive habit `printf '\n' >> ch-XX-*.md` before any branch op + `git show --stat HEAD` after every commit; (2) PRs branched from main while Codex's Part 9 chain advances can pick up unrelated chapter commits in their diff — recreate from current main + cherry-pick.
 
 ## End-of-session ritual
 
