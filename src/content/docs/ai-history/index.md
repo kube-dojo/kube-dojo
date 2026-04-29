@@ -166,7 +166,7 @@ Scaling laws, Attention, and the democratization of AI through open weights.
 
 | Ch | Title | Lifecycle | Drafted |
 |---:|---|---|---|
-| 50 | Attention Is All You Need | accepted | no |
+| 50 | Attention Is All You Need | prose_review | [yes](./ch-50-attention-is-all-you-need/) |
 | 51 | The Open Source Distribution Layer | accepted | no |
 | 52 | Bidirectional Context | accepted | no |
 | 53 | The Dawn of Few-Shot Learning | accepted | no |
@@ -203,8 +203,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 | Stage | Count |
 |---|---:|
-| `accepted` (drafted, all reviews cleared) | 30 |
-| `prose_review` (drafted, in review) | 0 |
+| `accepted` (drafted, all reviews cleared) | 29 |
+| `prose_review` (drafted, in review) | 1 |
 | `prose_ready` (contract dual-cleared, awaiting prose draft) | 30 |
 | `capacity_plan_anchored` (contract anchored, awaiting verdict) | 0 |
 | `researching` with prose merged on legacy contract | 4 |
