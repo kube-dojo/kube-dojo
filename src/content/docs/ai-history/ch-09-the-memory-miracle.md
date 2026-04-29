@@ -81,6 +81,8 @@ Faced with these options, builders often chose the Williams tube for its faster 
 
 Delay lines and Williams tubes therefore failed in opposite ways. The delay line remembered by making time into a loop: the bit existed as an acoustic event circulating through mercury, and the machine waited for the event to return. The Williams tube gave faster random access, but only by accepting a storage surface that was continually slipping away from the machine. Between them lay the central engineering dilemma of the late 1940s. A useful computer needed memory that was both addressable and durable. The available devices tended to offer one virtue by sacrificing the other.
 
+## Project Whirlwind's Memory Crisis
+
 The fragility of electrostatic and delay-line memory was a frustrating constraint for scientific computation, but it was an existential threat for engineers attempting to build real-time control systems. This distinction between batch processing and continuous control defined the crisis that enveloped Project Whirlwind at the Massachusetts Institute of Technology, fundamentally changing the trajectory of computer memory.
 
 Project Whirlwind began in late 1944 under the sponsorship of the US Navy Special Devices Center. The original objective was to build an analog aircraft stability and control analyzer. According to Forrester's 1994 oral history, the team pursued an analog approach through 1945, but concluded it "was not going to be satisfactory." In roughly 1946, through conversations with Perry Crawford of the Special Devices Center—who actively kept people focused on the possibilities of digital computers—the project shifted to a serial digital architecture.
@@ -100,6 +102,8 @@ The available memory technologies offered no guarantees. Forrester recalled the 
 The Boston-to-Buffalo idea is best read not as comic relief but as an engineering measurement. If one could not buy a satisfactory memory device, perhaps one could rent a communication path and use propagation delay as storage. The proposal stretched the logic of the mercury delay line across geography: send the bit away, wait for it to come back, and treat the round trip as a memory interval. It was a poor answer, but it located the problem exactly. The machine needed a physical phenomenon that could hold a binary distinction long enough, and cleanly enough, for computation to proceed.
 
 While Whirlwind I became operational in 1951, utilizing Williams-tube storage, the memory remained a severe bottleneck. To fulfill its mandate, the engineering team had to find a completely different physical substrate.
+
+## The Three-Dimensional Idea
 
 The search for a robust memory led to the three-dimensional coincident-current magnetic core memory. While it eventually became the industrial standard, the architecture began as a logical structure in search of a viable material.
 
@@ -121,6 +125,8 @@ On May 11, 1951, Forrester filed US Patent 2,736,880 for a "Multicoordinate Digi
 
 The patent did not issue until February 28, 1956. The delay matters for the narrative because the invention did not pass cleanly from one mind to one patent to one industry. By the time Forrester's application became an issued patent, other claims to magnetic memory had already been filed, published, or absorbed into corporate strategy. The core-memory story is therefore not a priority race with a simple finish line. It is a convergence of mechanisms, materials, patents, and production channels.
 
+## The Patent War
+
 The popular narrative often frames Forrester as the sole inventor of magnetic-core memory, but the historical record reveals a landscape of parallel invention. In the critical window between 1949 and 1953, three distinct paths toward magnetic-core memory were being pursued simultaneously.
 
 At RCA Laboratories in Camden, New Jersey, Jan A. Rajchman had already established himself as a pioneer in memory technology. Between 1946 and 1947, he developed the Selectron tube, an electrostatic-storage tube capable of holding 256 bits that saw use in the JOHNNIAC computer at RAND. Following this, Rajchman began pursuing a coincident-current magnetic-core path in parallel with Forrester. Shaping his prototype ferrite cores using a converted aspirin-tablet press, Rajchman developed RCA's matrix memory technology. This parallel track culminated in October 1953 with the publication of "A Myriabit Magnetic-Core Matrix Memory" in the *Proceedings of the IRE*, whose title used "myriabit" to describe the 10,000-bit matrix.
@@ -132,6 +138,8 @@ Simultaneously, crucial work was underway at the Harvard Computation Laboratory.
 Wang's claim cut at a different but equally practical part of the problem. A magnetic state could represent a bit, but a usable random-access memory also needed a reliable cycle for sensing and restoring that state. The patent language about residual flux density was not decorative physics. It specified how strongly the material should remember after the applied pulse ended. In a memory technology, remanence was the point: the device had to retain a distinction without continuous power or mechanical motion.
 
 These parallel developments generated overlapping claims. The priority dispute appears not to have been resolved by a definitive judicial ruling in a patent court, but rather by the force of commercial licensing. A major commercial resolution came in 1956 when, according to widespread historical accounts, IBM purchased Wang's patent for approximately $500,000. That transaction absorbed Wang's foundational claims into IBM's portfolio and helped settle the patent war commercially.
+
+## Commercialization
 
 The industrial dominance of Forrester's variant of magnetic-core memory did not arise from technical primacy alone. Instead, it was the result of MIT's institutional pipeline. The technology matured within a military-funded ecosystem that provided an urgent use case, deep resources, and a direct path to massive industrial production.
 
