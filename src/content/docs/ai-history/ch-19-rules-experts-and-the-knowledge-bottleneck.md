@@ -6,6 +6,58 @@ sidebar:
   order: 19
 ---
 
+:::tip[In one paragraph]
+After general methods collapsed in the first AI winter, the Stanford Heuristic Programming Project offered a narrower bargain: encode expert knowledge explicitly. MYCIN, an infectious-disease consultation system built by Shortliffe and Buchanan from the early 1970s, separated a rule-based knowledge base from an inference engine, used certainty factors for inexact reasoning, and explained its conclusions. It performed seriously in a blinded evaluation — and exposed the structural price: getting expertise into rules was slow, iterative, and never finally done.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Edward H. Shortliffe | — | Principal MYCIN developer; central source for the consultation system, certainty factors, and medical-AI framing. |
+| Bruce G. Buchanan | — | Stanford AI researcher and MYCIN coeditor; bridged DENDRAL, rule systems, and knowledge engineering. |
+| Edward A. Feigenbaum | — | Stanford Heuristic Programming Project leader; named knowledge engineering as an emerging practice. |
+| Randall Davis | — | Developer of TEIRESIAS; demonstrated that explanation was prerequisite to interactive knowledge transfer. |
+| William van Melle | — | MYCIN/EMYCIN system builder; key source for architecture and shell generalization. |
+| Victor L. Yu | — | Lead author on the JAMA blinded evaluation of MYCIN's antimicrobial advice. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1965–1984)</strong></summary>
+
+```mermaid
+timeline
+    title MYCIN and the Expert-System Bargain, 1965–1984
+    1965 : Stanford Heuristic Programming Project work begins around DENDRAL
+    Early 1970s : MYCIN grows from Stanford discussions about antimicrobial therapy into an interactive consultation system
+    1973 : MYCIN grant goals describe consultation, interactive explanation, and acquisition of judgmental therapeutic rules
+    1975 : Shortliffe and Buchanan publish the certainty-factor model for inexact medical reasoning
+    1976 : Shortliffe completes Computer-Based Medical Consultations: MYCIN
+    1977 : Feigenbaum's IJCAI paper names knowledge engineering as an emerging practice
+    1977–1979 : TEIRESIAS work develops WHY/HOW explanation and interactive transfer of expertise
+    1978 : The MYCIN infectious-disease knowledge base is laid to rest
+    1979 : JAMA evaluation compares MYCIN's antimicrobial advice with human prescribers in a blinded meningitis study
+    1981 : EMYCIN described as a shell for building rule-based consultation systems
+    1984 : Buchanan and Shortliffe publish the full Rule-Based Expert Systems retrospective
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Expert system** — A program designed to provide solutions at the level of a domain specialist, with knowledge it can explain and update. MYCIN's authors defined this in terms of expert-level solutions, understandability, and the ability to accommodate new knowledge easily.
+- **Knowledge base / inference engine split** — MYCIN separated medical rules (the knowledge base) from the reasoning machinery (the inference engine). This meant expertise could be inspected and changed without rewriting the whole program.
+- **Production rule** — An IF/THEN statement encoding a fragment of expert judgment: given certain conditions, draw a conclusion or take an action. Rules are the modular building blocks of the MYCIN knowledge base.
+- **Certainty factor** — A numerical measure attached to facts and conclusions, representing degree of belief on a scale from −1 (definite disconfirmation) to 1 (definite confirmation). The scheme was a practical approximation, not a full probability theory, for cases where clean statistical data were unavailable.
+- **Backward chaining** — A goal-directed inference strategy: start with what you want to establish, then ask which rules and evidence would support it. MYCIN used backward chaining so the consultation asked only for facts its current reasoning actually needed.
+- **Knowledge engineering** — Feigenbaum's term for the craft of acquiring expert knowledge, representing it in a formal system, and building a program that can use it. The knowledge engineer stands between domain specialist and software.
+- **TEIRESIAS** — Randall Davis's tool for interactive knowledge transfer. It let an expert inspect the program's reasoning path, identify where it went wrong, and teach it a better rule — making explanation a prerequisite for maintenance.
+
+</details>
+
 # Chapter 19: Rules, Experts, and the Knowledge Bottleneck
 
 The first winter did not end the desire to build intelligent programs. It
@@ -69,6 +121,12 @@ represented it, and built a system that could use it. That made AI look more
 practical after the winter's skepticism. It also made the labor visible. If the
 knowledge was the source of power, then the acquisition of knowledge became the
 central problem.
+
+:::note[Feigenbaum's maxim]
+> "Our agents must be knowledge-rich, even if they are methods-poor."
+
+Feigenbaum made this the expert-system era's organizing maxim in 1977: power would come from specialist knowledge, while reusable inference methods stayed secondary.
+:::
 
 This was a different answer from both early symbolic optimism and later
 statistical learning. The program was not expected to discover all structure
@@ -441,3 +499,9 @@ rules were expensive to obtain, difficult to validate, and never finally done.
 MYCIN showed both sides before the commercial boom began: a narrow rule-based
 system could be genuinely impressive, and the labor behind that impressiveness
 could not be wished away.
+
+:::note[Why this still matters today]
+The MYCIN architecture's core tension — separable knowledge and inference, modular rules, explanation as engineering — anticipates questions every production AI system faces today. Modern rule engines, decision-service platforms, and clinical decision-support tools still separate a knowledge store from an execution layer. The knowledge bottleneck MYCIN named — that encoded expertise must be acquired, validated, maintained, and kept current — remains the price of any system that claims to reason. The gap between a strong evaluation result and a deployed clinical product, which MYCIN revealed in 1979, is still the central challenge in translating AI research into institutional practice.
+:::
+
+
