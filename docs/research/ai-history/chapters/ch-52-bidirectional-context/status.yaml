@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 8
 chapter: 52
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_accepted_claude_approved_2026-04-29
+last_updated: 2026-04-29
 green_claims: 13
 yellow_claims: 3
 red_claims: 5
@@ -25,6 +25,17 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5000
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/565#issuecomment-4341272116
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMITED
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources: Devlin et al.
   2018 BERT paper, Google Research BERT open-source announcement, and GitHub API
@@ -41,3 +52,9 @@ notes: |
   stronger use of WordPiece/input representation, static-vs-contextual framing,
   and the release artifact. Follow-up edits integrated those points while
   rejecting the unsourced claim that WordPiece solved OOV.
+
+  Prose drafted by Codex on 2026-04-29 at 4,001 words, inside the approved
+  4,000-5,000 word range and below the 5,000-word cap. Claude approved the
+  prose/source review on PR #565 with no must-fix findings. Gemini review was
+  requested with gemini-3.1-pro-preview and fallback to gemini-3-flash-preview,
+  but the bridge hit Gemini rate limits.
