@@ -140,6 +140,12 @@ Rosenblatt's experiments were restricted, and the restrictions are part of the s
 
 The difference is important because later histories often reverse the order. They begin from the eventual limits of elementary perceptrons and then read those limits backward into 1958 as if Rosenblatt had promised a finished artificial mind. The source record does not require that story. *Principles of Neurodynamics* includes discussions of discrimination, error correction, detection, and generalization. It also discusses limits in organized environments and the difficulty elementary perceptrons face with richer figural organization.
 
+:::note[Rosenblatt's own framing]
+> "A perceptron is first and foremost a brain model, not an invention for pattern recognition."
+
+Rosenblatt's preface makes the anti-hype argument in his own voice: neurodynamic theory first, engineering application second.
+:::
+
 Those limits were not external accusations pasted onto a triumphant press release. They were internal to the program's theory. Rosenblatt wanted to know what kinds of environments a perceptron could handle, what counted as a solution, how correction changed later behavior, and how far generalization could go. A bounded learning machine can be scientifically important even when it is not a general intelligence.
 
 This is also where the word "recognition" needs care. In the Navy release context, recognition could mean identifying restricted letter patterns after training. In ordinary language, recognition can imply open-world visual understanding. Those are not the same claim. The perceptron program worked in the first sense. The chapter must not silently slide into the second.
