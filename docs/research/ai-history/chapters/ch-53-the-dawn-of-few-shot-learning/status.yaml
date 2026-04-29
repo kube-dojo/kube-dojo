@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 8
 chapter: 53
-review_state: prose_drafted_awaiting_cross_family_review
+review_state: prose_accepted_claude_approved_2026-04-29
 last_updated: 2026-04-29
 green_claims: 17
 yellow_claims: 3
@@ -26,6 +26,17 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5000
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/568#issuecomment-4341394931
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMITED
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources: GPT-2
   paper PDF, OpenAI Release Strategies and Social Impacts report PDF, GPT-3
@@ -38,6 +49,8 @@ notes: |
   Guardrail_count records explicit prohibitions; red_claims is reserved for
   in-scope claims that fail verification.
 
-  Prose drafted by Codex on 2026-04-29 at 4,500 words, inside the approved
-  4,500-5,000 word range and below the 5,000-word cap. Awaiting cross-family
-  prose/source review before acceptance.
+  Prose drafted by Codex on 2026-04-29 at 4,505 words after applying Claude's
+  optional hedge nits, inside the approved 4,500-5,000 word range and below the
+  5,000-word cap. Claude approved the prose/source review on PR #568 with no
+  must-fix findings. Gemini review was requested with gemini-3.1-pro-preview
+  and fallback to gemini-3-flash-preview, but the bridge hit Gemini rate limits.
