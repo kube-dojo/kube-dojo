@@ -6,6 +6,66 @@ sidebar:
   order: 24
 ---
 
+:::tip[In one paragraph]
+The chain rule that powers every modern neural network did not appear in 1986. Paul Werbos described backward derivative propagation for trainable systems in his 1974 thesis, and reverse-mode automatic differentiation had its own earlier lineage. What Rumelhart, Hinton, and Williams did in 1986 was make the method convincing: they demonstrated that hidden layers could learn useful internal representations through repeated error-driven weight updates, reopening the path multilayer learning needed after the perceptron era.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| David E. Rumelhart | — | Cognitive scientist and PDP co-leader; framed backpropagation as the key to training hidden-unit internal representations. |
+| Geoffrey E. Hinton | — | Neural-network researcher; co-author of the 1986 Nature and PDP backpropagation papers; helped make representation learning the central claim. |
+| Ronald J. Williams | — | Co-author of the 1986 Nature and PDP papers; essential to the algorithmic error-propagation presentation. |
+| Paul J. Werbos | — | Harvard PhD student whose 1974 thesis described backward derivative propagation for adaptive systems, predating the PDP revival. |
+| Seppo Linnainmaa | — | Automatic-differentiation researcher whose 1976 work on reverse accumulation of rounding-error derivatives anchors the separate mathematical lineage. |
+| James L. McClelland | — | PDP co-editor and connectionist collaborator; context figure for why 1986 landed as a cognitive-science movement, not only an optimization result. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1969–1989)</strong></summary>
+
+```mermaid
+timeline
+    title The Math That Waited for the Machine, 1969–1989
+    1969 : Minsky and Papert's Perceptrons crystallizes limits of single-layer networks and makes hidden-unit training the central unresolved problem
+    1974 : Paul Werbos submits Beyond Regression, describing ordered derivatives and backward derivative calculation for adaptive prediction systems
+    1976 : Linnainmaa publishes reverse accumulation of rounding-error derivatives in BIT Numerical Mathematics
+    1985 : Rumelhart, Hinton, and Williams circulate Learning internal representations by error propagation through the UCSD/PDP research context
+    1986 : PDP chapter on internal representations by error propagation published with generalized delta rule and symmetry/encoder demonstrations
+    1986 : Nature publishes Learning representations by back-propagating errors, putting the result before a broad scientific audience
+    1989 : Francis Crick publishes a contemporary Nature critique cautioning against over-reading artificial neural networks as brain models
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Hidden layer** — A layer of units inside a neural network that sits between the raw input and the final output. Because hidden units receive no direct teacher signal, training them requires a method for assigning credit or blame for the final error.
+- **Backpropagation** — The algorithm that runs the chain rule backward through a layered network: compute the forward pass, measure the output error, then propagate error sensitivities layer by layer back to every weight.
+- **Chain rule** — A calculus rule for differentiating a composed function: if $z$ depends on $y$ and $y$ depends on $x$, then $\frac{dz}{dx} = \frac{dz}{dy} \cdot \frac{dy}{dx}$. Backpropagation applies this recursively across every layer.
+- **Reverse-mode automatic differentiation** — A computational strategy that sweeps backward through a recorded graph of arithmetic operations to find how a scalar output depends on every input, reusing intermediate values from the forward pass.
+- **Generalized delta rule** — The weight-update formula derived in the 1986 PDP chapter: each weight changes in proportion to the error sensitivity that backpropagation assigns to it, times the activation that arrived at that weight during the forward pass.
+- **Internal representation** — The encoding a hidden layer develops through training. Instead of a programmer prescribing which features the hidden units should detect, the learning rule shapes them through repeated error correction.
+- **Credit assignment** — The problem of deciding which weights in a layered network should be held responsible for a final output error, and by how much — the core obstacle that backpropagation solved for hidden layers.
+
+</details>
+
+<details>
+<summary><strong>The math, on demand</strong></summary>
+
+- **Chain rule (single composition):** $\frac{dz}{dx} = \frac{dz}{dy} \cdot \frac{dy}{dx}$ — the calculus identity that lets backpropagation multiply local sensitivities layer by layer without re-deriving each weight from scratch.
+- **Reverse-mode sweep (Linnainmaa / Werbos lineage):** for a composed function $f = f_n \circ \cdots \circ f_1$, the adjoint (sensitivity) at each intermediate node is $\bar{x}_i = \bar{x}_{i+1} \cdot f'_i(x_i)$ — computed in one backward pass reusing the cached forward values.
+- **Generalized delta rule (output unit):** $\Delta w_{ji} = \varepsilon \, \delta_j \, a_i$ — weight update is learning rate $\varepsilon$ times the error signal $\delta_j$ times the incoming activation $a_i$ from the forward pass.
+- **Hidden-unit error signal:** $\delta_j = a_j (1 - a_j) \sum_k \delta_k w_{kj}$ — the hidden unit's signal is its own activation derivative times the weighted sum of downstream error signals, implementing the backward chain rule recursively.
+- **Logistic activation:** $a_j = \frac{1}{1 + e^{-\text{net}_j}}$ — the nonlinear function the 1986 PDP chapter uses; its derivative is $a_j(1 - a_j)$, which appears directly in the hidden-unit error signal above.
+- **Memory cost of reverse mode:** storing all forward-pass activations to reuse during the backward pass costs $O(n)$ memory in the number of intermediate operations — the checkpointing tradeoff Griewank's history identifies as the signature infrastructure constraint of the method.
+
+</details>
+
 # Chapter 24: The Math That Waited for the Machine
 
 Backpropagation is often told as a sudden rediscovery of neural networks: the
@@ -426,6 +486,10 @@ That is the reason backpropagation became one of the central infrastructures of
 modern AI. It was not a magic spark. It was a disciplined way to make the chain
 rule do industrial work.
 
+:::note[Why this still matters today]
+Every training run in modern deep learning descends from the 1986 infrastructure story: forward computation, loss, backward sensitivities, weight updates, repeat. Autodiff libraries — PyTorch's autograd, JAX's grad transforms — are direct industrializations of reverse-mode automatic differentiation. The hidden-unit credit-assignment solution backpropagation provided is still the default mechanism in transformers, convolutional networks, and diffusion models alike. The compute scale changed by many orders of magnitude; the algorithmic shape did not.
+:::
+
 ## Sources
 
 ### Primary
@@ -461,3 +525,4 @@ rule do industrial work.
 > account separates older reverse-mode derivative work, Werbos's trainable
 > systems thesis, and the 1986 PDP demonstration instead of collapsing them into
 > one origin myth.
+
