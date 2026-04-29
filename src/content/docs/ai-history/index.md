@@ -126,7 +126,7 @@ Scaling laws, attention, and the democratization of AI through open weights.
 | 52 | [Bidirectional Context](./ch-52-bidirectional-context/) |
 | 53 | [The Dawn of Few-Shot Learning](./ch-53-the-dawn-of-few-shot-learning/) |
 | 54 | [The Hub of Weights](./ch-54-the-hub-of-weights/) |
-| 55 | The Scaling Laws *(coming soon)* |
+| 55 | [The Scaling Laws](./ch-55-the-scaling-laws/) |
 | 56 | The Megacluster *(coming soon)* |
 | 57 | The Alignment Problem *(coming soon)* |
 | 58 | The Math of Noise *(coming soon)* |
@@ -154,4 +154,4 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 ---
 
-54 of 72 chapters published. New chapters land regularly.
+55 of 72 chapters published. New chapters land regularly.
