@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-29 (afternoon) | Part 1 reader-aids rollout — Ch02–Ch06 shipped (5 PRs); Ch07–Ch09 pending; PR-hygiene gotchas memorised | [`docs/session-state/2026-04-29-part1-reader-aids-rollout.md`](./docs/session-state/2026-04-29-part1-reader-aids-rollout.md) | **Open** — PRs #577, #579, #581, #582, #583 awaiting review/merge; Codex Part 9 chain past Ch61 |
+| 2026-04-29 (evening) | Part 1 reader-aids PR-complete — Ch07/Ch08/Ch09 shipped (3 PRs); all 8 Part 1 PRs open | [`docs/session-state/2026-04-29-part1-reader-aids-complete.md`](./docs/session-state/2026-04-29-part1-reader-aids-complete.md) | **Open** — PRs #577, #579, #581, #582, #583, #588, #591, #592 awaiting review/merge; Codex Part 9 chain past Ch65 |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-29 (afternoon) | Part 1 reader-aids rollout — Ch02–Ch06 shipped (5 PRs); PR-hygiene gotchas memorised | [`docs/session-state/2026-04-29-part1-reader-aids-rollout.md`](./docs/session-state/2026-04-29-part1-reader-aids-rollout.md) |
 | 2026-04-29 (morning) | Ch01 reader-aid prototype (Tier 1+2+3) + math rendering fix + 6 sub-issues for rollout | [`docs/session-state/2026-04-29-reader-aids-ch01-prototype.md`](./docs/session-state/2026-04-29-reader-aids-ch01-prototype.md) |
 | 2026-04-29 (overnight) | Parts 3/6/7 shipped (13 chapters) + STATUS.md index migration + STEP 0 routing | [`docs/session-state/2026-04-29-parts-3-6-7-shipped.md`](./docs/session-state/2026-04-29-parts-3-6-7-shipped.md) |
 | 2026-04-28 night | Parts 3/6/7 finish queue setup (Ch16 + Ch38-40 + Ch41-49 plan) | [`docs/session-state/2026-04-28-night-handoff-2.md`](./docs/session-state/2026-04-28-night-handoff-2.md) |
@@ -48,9 +49,9 @@
 
 These are state items that span individual sessions. Prune entries as threads close.
 
-- **#394 AI History — 61 of 72 chapters shipped (2026-04-29 afternoon).** Parts 1-8 fully closed. Codex's Part 9 chain shipped Ch59-61 during the reader-aid rollout session. Only Ch62-72 (11 chapters) remain in the prose track.
-- **Codex Part 9 chain still in flight** — past Ch61. Don't disturb.
-- **Part 1 reader-aids rollout in flight (5 of 8 PRs open).** Ch02 #577, Ch03 #582 (replaces #578), Ch04 #579, Ch05 #581 (replaces #580), Ch06 #583. Ch07–Ch09 pending. Tier 3 calibration to date: Ch01 2/5; Ch02 0/4; Ch03 1/3; Ch04 0/3; Ch05 0/3; Ch06 0/3 — refusal is the right default when prose carries inline plain-reading.
+- **#394 AI History — 65 of 72 chapters shipped (2026-04-29 evening).** Parts 1-8 fully closed. Codex's Part 9 chain shipped Ch62-65 during the evening reader-aid session (Ch59-61 landed earlier in the day). Only Ch66-72 (7 chapters) remain in the prose track.
+- **Codex Part 9 chain still in flight** — past Ch65. Don't disturb.
+- **Part 1 reader-aids rollout PR-complete (8 of 8 PRs open, awaiting review/merge).** Ch02 #577, Ch03 #582 (replaces #578), Ch04 #579, Ch05 #581 (replaces #580), Ch06 #583, Ch07 #588, Ch08 #591, Ch09 #592. Tier 3 final calibration: Ch01 2/5; Ch02 0/4; Ch03 1/3; Ch04 0/3; Ch05 0/3; Ch06 0/3; Ch07 0/3; Ch08 0/3; Ch09 0/3. Refusal is the right default when prose carries inline plain-reading; Tier 3 lands cleanly on ~1 in 8 candidates.
 - **Reader-aid layout pattern frozen** — Tier 1 + 2 + 3, non-invasive on bit-identical prose. Canonical doc: `docs/research/ai-history/READER_AIDS.md`. Ch01 prototype on `main` as `49e8e299` (PR #566). Tier 3 coeditor: Claude proposes / Codex reviews adversarially / Gemini for tie-breaks (Issue #564, memory `feedback_tier3_coeditor_pattern.md`).
 - **Math rendering live** — `remark-math` + `rehype-katex` + KaTeX CSS in `astro.config.mjs` (commit `8c93d8db`). `$inline$` and `$$display$$` LaTeX both render. Fixes inline math across the entire AI history book retroactively.
 - **STEP 0 routing shipped** (`scripts/dispatch_research_verdict.py`): branch-prefix routing puts Claude on anchor verification for `codex/394-...` research PRs and Codex for `claude/394-...` PRs.
@@ -123,9 +124,9 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 
 ## TODO
 
-- [ ] AI history #394: Part 9 (Ch59-72, 14 chapters) — Codex autonomous chain in flight
+- [ ] AI history #394: Part 9 (Ch66-72, 7 chapters remain) — Codex autonomous chain past Ch65
 - [ ] AI history #559: cross-family review backfill on Ch01-31 (28 chapters, 30 marked backfill_pending per offline audit)
-- [ ] AI history #562: Tier 1 reader-aid rollout to Ch02-72 (template frozen via Ch01 prototype)
+- [ ] AI history #562: Tier 1 reader-aid rollout — Part 1 PR-complete (8 PRs awaiting merge); Part 2 (Ch10-17) is next, then Parts 3-9
 - [ ] AI history #563: Tier 2 math + architecture sidebars on ~15 target chapters
 - [ ] AI history #564: Tier 3 selective passes (Claude proposes / Codex reviews) after Tier 1/2 settle
 - [ ] PR #567 review + merge → then re-run audit_review_coverage.py with live gh
