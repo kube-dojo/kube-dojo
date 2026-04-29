@@ -5,6 +5,62 @@ sidebar:
   order: 3
 ---
 
+:::tip[In one paragraph]
+In August 1937, Claude Shannon signed a master's thesis at MIT that gave switching-circuit design an axiomatic foundation: eight postulates, perfect-induction proofs, and an explicit identification of relay algebra with George Boole's calculus of propositions. Akira Nakashima at NEC had reached the same insight in Tokyo two years earlier; Hannsi Piesch and Plechl-Duschek would arrive at related ideas in German-speaking Europe. Shannon's distinctive contribution was axiomatic completeness — circuit design became a deductive discipline, not a uniquely Shannon-only insight.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Claude Shannon | 1916–2001 | Research assistant in MIT EE (1936–1937); signed "A Symbolic Analysis of Relay and Switching Circuits" on August 10, 1937; published it in *Trans. AIEE* in December 1938. The chapter's primary protagonist; contribution is the axiomatic completeness of the calculus. |
+| Vannevar Bush | 1890–1974 | MIT Vice-President and Dean of Engineering; architect of the 1931 mechanical Differential Analyzer and (with Caldwell) of the relay-controlled Rockefeller successor whose setup problem motivated Shannon's thesis. Recipient of the March 17, 1936 Rockefeller grant. |
+| Akira Nakashima | 1908–1970 | Engineer at Nippon Electric Company (NEC), Tokyo; published "The theory of relay circuit engineering" in *Nichiden Geppo* (1934-1935) and the September 1935 invited talk later printed as "Synthesis theory of relay networks" — the parallel discovery, two years ahead of Shannon's thesis. Recognised the identity with Boole's algebra in August 1938. |
+| Masao Hanzawa | — | Engineer at NEC's exchange-engineering team; co-author with Nakashima from 1936 onward, including the 1940 papers that first explicitly cite Boole and Schröder. |
+| Frank L. Hitchcock | 1875–1957 | Professor of mathematics at MIT; Shannon's *formal* thesis supervisor — distinct from Bush, who was Shannon's research-program supervisor and MIT employer. |
+| Samuel H. Caldwell | 1904–1960 | Bush's MIT colleague and deputy on the Rockefeller Differential Analyzer project; took on day-to-day responsibility for the new analyzer as Bush's vice-presidential duties accumulated; thanked in Shannon's 1938 byline footnote. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1931–1953)</strong></summary>
+
+```mermaid
+timeline
+    title From the Differential Analyzer to a Deductive Discipline
+    1931 : Bush's Differential Analyzer completed at MIT
+    1934 : Nov — Nakashima's Nichiden Geppo serial begins (NEC, Tokyo)
+    1935 : Early — Nakashima delivers a three-hour invited talk on switching theory at the Telegraph and Telephone Society of Japan
+    1936 : March — Rockefeller Foundation grants MIT $85,000 over three years for the relay-controlled analyzer
+         : May — English summary of Nakashima's switching-algebra papers in Nippon Electrical Communication Engineering
+         : Shannon arrives at MIT as research assistant in EE
+    1937 : August 10 — Shannon signs his master's thesis at MIT
+         : August — Nakashima publishes Algebraic expressions relative to simple partial paths
+    1938 : March 1 — Shannon submits the manuscript to AIEE
+         : June 20-24 — Shannon presents at the AIEE summer convention, Washington, D.C.
+         : August — Nakashima recognises his switching algebra equals Boole's
+         : December — Shannon's paper published in Trans. AIEE 57 pp. 713-723
+    1939 : Piesch publishes Begriff der allgemeinen Schaltungstechnik (Berlin)
+    1940 : Nakashima and Hanzawa explicitly cite Boole and Schröder for the first time
+    1949 : Shannon's BSTJ synthesis paper cites Nakashima's work
+    1953 : Church reviews Nakashima and Hanzawa in the Journal of Symbolic Logic
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Hindrance** — Shannon's term for the algebraic value assigned to a two-terminal switching circuit. `0` denotes the hindrance of a *closed* circuit (current flows; "no hindrance"); `1` denotes the hindrance of an *open* circuit (no current flows). The inverse of the modern Boolean convention where `1` is "true / closed."
+- **Series-parallel circuit** — In Shannon's calculus, `X + Y` represents the *series* connection of two two-terminal circuits and `X · Y` (often written `XY`) represents the *parallel* connection. Any expression in `+`, `·`, and negation describes a series-parallel network, and vice versa.
+- **Postulate** — A foundational axiom the calculus asserts rather than proves. Shannon's thesis lists eight postulates, arranged in dual pairs `1a/1b` through `4a/4b`, that fix how `+`, `·`, `0`, and `1` interact.
+- **Perfect induction** — Shannon's name for proof by case-exhaustion. Because every variable takes only two values, every theorem can be verified by computing both sides for each finite combination of inputs.
+- **Make / break contact** — The two physical kinds of relay contact. A *make* contact is normally open and closes when the relay is energised; a *break* contact is normally closed and opens. Shannon defined negation `X'` as "the hindrance of the break contacts of the same relay whose make contacts have hindrance `X`" — turning logical NOT into a physically realisable operation.
+- **Calculus of propositions** — Boole's 1854 algebra of logical propositions, where `+` is OR-on-truth and `·` is AND-on-truth. Shannon's thesis identifies his switching algebra with this calculus under the inversion induced by the hindrance convention; Table I of the 1938 paper makes the analogue explicit row by row.
+
+</details>
+
 In 1931, Vannevar Bush's Differential Analyzer was completed at the Massachusetts Institute of Technology. It was a mechanical machine, consisting of a long table-like framework crisscrossed by interconnectible shafts, with a series of drawing boards along one side and six disc integrators along the other. The machine cost approximately $25,000 to construct. The disc integrator was, as historian Larry Owens observed, "the heart of the analyzer and the means by which it performed the operation of integration"—a variable-friction gear whose geometry forced the constituent shafts to turn in accordance with a specified relationship.
 
 The 1931 machine occupied a modest footprint by the standards of large industrial equipment, but it embodied a dense relationship between mechanical motion and mathematical operation. Each of the six disc integrators performed one integration; chains of gear shafts carried the resulting shaft rotations to the drawing-board pens, which traced the analyzer's solution curves on paper. To solve a fresh differential equation, an operator routed gear couplings between the integrators, the drawing-board outputs, and the bus shafts that ran the length of the table, in effect "wiring" the analyzer for that one problem. Reconfiguration was hand work, not the throwing of a switch.
@@ -49,6 +105,10 @@ Instead, Shannon wrote, "any expression formed with the operations of addition, 
 
 He provided a worked example to prove this methodology. The original hindrance function, drawn as Figure 5 in the thesis, was `Xab = W + W'(X+Y) + (X+Z)(S+W'+Z)(Z'+Y+S'V)`—a circuit with thirteen element-occurrences distributed across six distinct relays (`W`, `X`, `Y`, `Z`, `S`, `V`). Through repeated application of theorem 17b—a rewriting rule that absorbed nested expressions of a single variable—and the distributive law, the function reduced to `Xab = W + X + Y + ZS'V`. The simplified form was Figure 6: a circuit with five element-occurrences across the same six distinct relays. "Note the large reduction in the number of elements," Shannon remarked. The popular shorthand that the reduction was "from five relays to three"—repeated in many later popularizations—does not match the primary source. The number of relays did not change; the number of contacts and switch-blade elements dropped from thirteen to five.
 
+:::tip[Plain reading]
+Theorem 17b is the absorption law: in Shannon's algebra, $X + XY = X$, meaning that a variable already present in a branch absorbs a product that includes the same variable. Used with the distributive law $X(Y+Z) = XY + XZ$, it lets the 13-contact expression collapse by equality-preserving rewrites until only `W + X + Y + ZS'V` remains.
+:::
+
 The pedagogical move embedded in the worked example deserves a name. The example showed an engineer how to take an arbitrary requirement, express it in algebraic form, and reduce that form to its minimum number of contacts before any physical hardware was constructed. The savings were not theoretical. In a telephone-routing frame, every contact removed by simplification was a real piece of metal that would not have to be installed or maintained. Shannon's algebra moved the cost of design from the physical bench to the mathematician's notebook, where it was paid in symbols rather than in soldering and copper.
 
 He demonstrated even further reductions in his Section V *Selective Circuit* example, where a relay `A` was required to operate when any one, any three, or all four of the relays `w`, `x`, `y`, `z` were operated. Starting with an initial series-parallel form of 20 elements—a sum of seven product terms enumerating each operating combination—Shannon recognized the requirement as a *symmetric function* of its four arguments and rewrote it as `A = S₄(1, 3, 4)`, the function that selected the cases of weight one, three, or four. The symmetric-function form required 15 elements. He then noticed that the *complement* function, `A' = S₄(0, 2)`, was simpler still, and constructed `A` as the dual network of the realization of `A'`—a transformation that exchanged series with parallel and break-contacts with make-contacts. The dual-network form required 14 elements, which Shannon noted was "probably the most economical circuit of any sort" for the given requirement.
@@ -62,3 +122,7 @@ The formulation of switching-circuit algebra was an idea occurring across multip
 The 1938 *Trans. AIEE* paper was an engineering-trade publication, not an academic-mathematics one. Its later reach is best stated more cautiously than the usual origin story allows. By 1949 Shannon was publishing in the *Bell System Technical Journal* on the synthesis of two-terminal switching circuits and citing Nakashima's work; in 1953 Alonso Church's review brought Nakashima and Hanzawa's papers into the symbolic-logic literature. Across those later acknowledgments, the framework appears less as a single-origin event than as a deductive language for circuit design that gradually became part of the foundation of digital logic.
 
 The thesis deserves its reputation, but only with careful framing. It was not the moment the digital computer was invented; that conjunction came later, through the wartime work of Atanasoff and Berry, the ENIAC team at the Moore School, the Colossus engineers at Bletchley Park, and the post-war stored-program designs of von Neumann and his collaborators. It was not the moment Boolean algebra entered engineering practice everywhere; Nakashima had begun that move in Japan in 1934 and 1935, Piesch and Plechl-Duschek would do it in German-speaking Europe in 1939 and 1946, and the underlying mathematical apparatus had been waiting in Boole's *Laws of Thought* since 1854. It was not even a uniquely Shannon-only insight; the documented record points to multiple independent paths into the same axiomatic territory. What it *was* was the moment one careful master's thesis fixed the postulates, the proofs, the negation, the calculus-of-propositions identification, and the simplification methodology in a single deductive system, and tied that system explicitly to the work of George Boole. Circuit design, after August 1937, could be carried out as a deductive discipline. That, not the invention of the computer, is the contribution of Shannon's thesis worth preserving.
+
+:::note[Why this still matters today]
+Every digital chip in production today — every CPU, GPU, microcontroller, FPGA — is, at its lowest combinational layer, a series-parallel network of two-state elements designed by exactly the deductive discipline Shannon's thesis named. Modern hardware-description languages describe Boolean functions; logic-synthesis tools simplify them into minimal gate-level networks; place-and-route tools lay them out in silicon. Each step is a continuation of the Figure 5 → Figure 6 simplification — algebra performed before any physical hardware is built, savings paid in symbols rather than copper. The chapter's quieter lesson — that the same insight reached Tokyo two years earlier, and Berlin and Vienna shortly after — is the historiographical correction that survives.
+:::
