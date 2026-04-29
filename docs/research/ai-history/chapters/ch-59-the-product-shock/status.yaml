@@ -1,8 +1,8 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 59
-review_state: dual_cross_family_verdict_accepted
+review_state: prose_accepted_claude_approved_2026-04-29
 last_updated: 2026-04-29
 green_claims: 14
 yellow_claims: 4
@@ -25,7 +25,27 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5700
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/574#issuecomment-4344919339
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMITED
+    error_message_id: 3144
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Draft stays
+  inside the product/interface shock: ChatGPT research preview, adoption
+  caveats, institutional moderation/education reaction, Plus/API/Search race,
+  and GPT-4 aftershock. Ch60 retains RAG/plugins/tool use/agents.
+  Claude approved the prose/source review on PR #574. Gemini prose review was
+  requested with gemini-3.1-pro-preview and fallback to gemini-3-flash-preview,
+  but the bridge hit Gemini rate limits. Published draft is 4,338 words.
+
   Built from an empty/scrubbed skeleton into a capacity_plan_anchored contract.
   Core anchors are official OpenAI product pages (ChatGPT, Plus, GPT-3.5 Turbo
   API, GPT-4), official Microsoft and Google product/partnership posts, Stack
