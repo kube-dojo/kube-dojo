@@ -144,7 +144,7 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 63 | [Inference Economics](./ch-63-inference-economics/) |
 | 64 | [The Edge Compute Bottleneck](./ch-64-the-edge-compute-bottleneck/) |
 | 65 | [The Open Weights Rebellion](./ch-65-the-open-weights-rebellion/) |
-| 66 | Benchmark Wars *(coming soon)* |
+| 66 | [Benchmark Wars](./ch-66-benchmark-wars/) |
 | 67 | The Monopoly *(coming soon)* |
 | 68 | Data Labor and the Copyright Reckoning *(coming soon)* |
 | 69 | The Data Exhaustion Limit *(coming soon)* |
@@ -154,4 +154,4 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 ---
 
-65 of 72 chapters published. New chapters land regularly.
+66 of 72 chapters published. New chapters land regularly.
