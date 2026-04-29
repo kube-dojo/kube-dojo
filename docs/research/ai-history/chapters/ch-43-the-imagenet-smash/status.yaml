@@ -1,1 +1,39 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-43-the-imagenet-smash
+issue: 394
+owner: Codex
+last_updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  min_words: 3700
+  max_words: 5150
+  layers:
+    - scene: 1
+      range: "650-900"
+      anchors: [G01, G02, G03, G04]
+    - scene: 2
+      range: "700-1000"
+      anchors: [G05, G06, G07, G08, G09]
+    - scene: 3
+      range: "900-1200"
+      anchors: [G10, G11, G12, G13, G14]
+    - scene: 4
+      range: "800-1100"
+      anchors: [G15, G16, G17, G18, G23, G24]
+    - scene: 5
+      range: "650-950"
+      anchors: [G19, G20, G21, G22]
+claim_counts:
+  green: 24
+  yellow: 7
+  red: 5
+verification:
+  capacity_plan_layers_anchor_to_sources: true
+  shell_curl_attempted: true
+  shell_curl_result: "failed_dns_resolution_in_sandbox"
+  browser_extraction_used_for_public_pdfs_pages: true
+  legacy_prose_trusted: false
+notes:
+  - "Do not draft bedroom/heat/noise scene unless Y01 is anchored."
+  - "Use 15.3% only with extra Fall 2011 data caveat; use 16.4% for supplied-data SuperVision run."
+  - "Ch40 owns ImageNet construction; Ch42 owns CUDA."
