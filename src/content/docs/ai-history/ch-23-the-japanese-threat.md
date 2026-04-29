@@ -448,6 +448,12 @@ most pattern-recognition topics were removed from the practical project goals.
 The actual program centered on the infrastructure for parallel inference and
 knowledge information processing.
 
+:::note[The project director's correction]
+> "When this project started, an exaggerated image of the project was engendered, which seems to persist even now."
+
+Fuchi's 1992 correction matters because it came from ICOT's director, not from a foreign critic trying to dismiss the project after the fact.
+:::
+
 This retrospective correction is unusually valuable because it came from inside
 the project. Fuchi was not simply a foreign critic dismissing FGCS after the
 fact. He was distinguishing the sensational image from the research program
@@ -547,4 +553,5 @@ future of AI for a plan announced at a conference.
 :::note[Why this still matters today]
 Every decade produces a version of the FGCS story: a government-backed AI initiative, a credible technical bet, and a threat narrative larger than the project. Today's practitioners encounter the same pattern in national AI strategies, large-model race coverage, and claims that one architecture will make existing software irrelevant. The FGCS legacy offers two calibration points: research programs can produce real technical output — languages, machines, trained people — without delivering the industrial revolution observers feared; and software tied to proprietary hardware spreads less easily than software portable to commodity platforms. Both lessons remain live.
 :::
+
 
