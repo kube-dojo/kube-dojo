@@ -5,6 +5,52 @@ sidebar:
   order: 12
 ---
 
+:::tip[In one paragraph]
+Allen Newell, Herbert Simon, and J. C. Shaw built two different symbol machines. Logic Theorist (1956) searched for proofs in the sentential calculus of *Principia Mathematica* using heuristics rather than blind enumeration. GPS (1959) tried to lift that success into a reusable architecture — objects, operators, differences, goals, means-ends analysis. The chapter's hinge: turning problem solving into inspectable symbol manipulation, then discovering how much infrastructure and task knowledge a "general" architecture still required.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Allen Newell | 1927–1992 | Co-designer of LT and GPS at RAND. Brought non-numerical computing, organizational simulation, and symbolic-processing ambitions into the collaboration. |
+| Herbert A. Simon | 1916–2001 | Co-designer at Carnegie Tech. Organizational theorist and cognitive scientist; later 1978 Nobel laureate in economics — out of scope here. |
+| J. C. "Cliff" Shaw | — | RAND programmer; central to making LT and GPS programmable rather than only conceptual specifications. Author of the IPL programming languages on which LT and GPS ran. |
+| Oliver Selfridge | 1926–2008 | MIT/Lincoln Lab researcher whose mid-November 1954 RAND talk Newell later credited with making arbitrary information processing, symbolic processing, and adaptive processing clear to him. |
+| Alfred N. Whitehead & Bertrand Russell | 1861–1947 / 1872–1970 | Authors of *Principia Mathematica* (1910–1913). The sentential calculus from Chapter 2 was LT's task domain — its theorems the program's targets. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1954–1961)</strong></summary>
+
+```mermaid
+timeline
+    title From Logic Theorist to GPS, 1954–1961
+    November 1954 : Oliver Selfridge's RAND talk; Newell's turn toward symbolic processing (per Newell's 1991 oral history)
+    Late 1955 – early 1956 : Newell and Simon hand-simulate Logic Theorist before computer realization
+    June – September 1956 : RAND P-868 dated 15 June; "The Logic Theory Machine" presented at the IRE Information Theory Symposium 10 September, then published in IRE Transactions on Information Theory IT-2(3)
+    February 1957 : "Empirical Explorations of the Logic Theory Machine" and "Programming the Logic Theory Machine" at the Western Joint Computer Conference
+    1959 : RAND P-1584 "Report on a General Problem-Solving Program"; presented at the International Conference on Information Processing, Paris (June)
+    1961 : "GPS, A Program that Simulates Human Thought" in Lernende Automaten — the simulation framing of GPS
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Logic Theorist (LT)** — Newell, Shaw, and Simon's 1956 program that searched for proofs of theorems in the sentential calculus of *Principia Mathematica*, using a small set of heuristics rather than exhaustive enumeration.
+- **GPS (General Problem Solver)** — Newell, Shaw, and Simon's 1959 successor: a problem-solving architecture in which any task is recast as objects, operators, differences (between current and goal states), and a tree of goals and subgoals.
+- **Means-ends analysis** — GPS's signature heuristic. Compute the difference between the current state and the goal; choose an operator that *reduces* that specific kind of difference; recurse on whatever new subgoals the chosen operator opens up.
+- **Sentential calculus / propositional logic** — The logical system of *Principia Mathematica* Chapter 2 — propositions combined by AND, OR, NOT, IMPLIES — the formal domain LT searched.
+- **IPL (Information Processing Language)** — Shaw's family of list-processing languages (IPL-I through IPL-V, 1956–1960). LT and GPS ran on IPL. The languages were designed for symbolic, not numerical, computation.
+- **JOHNNIAC** — RAND's copy of the IAS computer, built 1952–1953. The hardware on which Shaw eventually ran LT.
+- **Performance vs. simulation** — The chapter's organising distinction. A *performance* program is judged by whether it solves the problem; a *simulation* program is judged by whether the *trace* of its work resembles a human's. LT was performance-oriented; GPS shifted toward simulation.
+
+</details>
+
 Before artificial intelligence had settled into a discipline, Allen Newell, Herbert Simon, and J. C. Shaw built two different kinds of symbol machines. The first, the Logic Theorist, was a performance program: it tried to find proofs in a real formal domain. The second, GPS, was a simulation program: it tried to make a machine's problem solving resemble the structure of human problem solving. The temptation is to blend them into one origin myth, as if theorem proving at Dartmouth simply grew into a general theory of mind. The more accurate story is more interesting. Logic Theorist showed that heuristic symbol manipulation could work. GPS showed that turning that success into a general account of thinking required a different architecture, a different psychology, and far more infrastructure than the name "General Problem Solver" suggests.
 
 ## Paper Before Machine
@@ -130,6 +176,10 @@ The honest version is richer. In the mid-1950s, a research team built a program 
 Keeping those achievements separate also keeps the chronology humane. The field did not leap from a summer workshop to a machine mind. It learned how much had to be built before symbolic reasoning could run at all: representations, memories, languages, heuristics, task encodings, and methods for comparing program traces with human behavior. That lesson would shape the next decade as much as the early successes did.
 
 The next chapter follows the infrastructure that made this style of work portable. LT and GPS depended on list structures, symbolic memories, and languages able to manipulate expressions rather than just numbers. McCarthy's answer would be LISP: not merely another programming language, but a way of making symbolic computation feel native.
+
+:::note[Why this still matters today]
+Every problem-solving program that decomposes a goal into subgoals and chooses operators by how much they reduce a specific kind of difference traces back to means-ends analysis. So does the practice of treating a hard task as objects + operators + differences before reaching for a learning algorithm. The deeper lesson is the one GPS exposed by failing: a "general" architecture is only as general as the task representations someone hand-builds for it. Modern systems hide that work behind training data and learned representations rather than hand-coded operator tables, but the dependency on representation has not gone away — it has only been moved.
+:::
 
 ## Sources
 
