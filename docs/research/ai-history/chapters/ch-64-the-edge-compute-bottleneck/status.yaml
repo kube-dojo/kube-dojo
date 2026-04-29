@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 9
 chapter: 64
-review_state: dual_cross_family_verdict_accepted
-last_updated: 2026-04-28
+review_state: prose_drafted_pending_cross_family_review
+last_updated: 2026-04-29
 green_claims: 17
 yellow_claims: 2
 red_claims: 0
@@ -26,6 +26,12 @@ verdicts:
   resolved_word_cap: 5000
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
+  is 4,048 words and stays inside edge compute constraints: MobileNets and A11
+  Neural Engine precursors, Gemini Nano/AICore and Qualcomm vendor framing,
+  Apple AFM-on-device and Private Cloud Compute routing, LLM-in-a-flash memory
+  hierarchy, MobileLLM small-model design, and Pixel Video Boost cloud fallback.
+
   Built from a scrubbed shell into a dual-cleared prose_ready contract. Core
   anchors are MobileNets, Apple iPhone X/A11 Neural Engine, Qualcomm Snapdragon
   8 Gen 3 product brief, Google Gemini Nano / Android AICore, Apple Intelligence
