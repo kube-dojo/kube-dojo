@@ -6,6 +6,58 @@ sidebar:
   order: 23
 ---
 
+:::tip[In one paragraph]
+In 1982, Japan's Ministry of International Trade and Industry launched the Fifth Generation Computer Systems project, creating ICOT to pursue knowledge information processing on logic-programming languages and highly parallel inference machines. The Western reaction was larger than the project: observers read a coherent national research bet as a strategic threat that might leapfrog existing software and hardware advantages. FGCS built real machines, languages, and researchers, but did not deliver the popular AI revolution — a recurring caution about mistaking a research hypothesis for an industrial forecast.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Kazuhiro Fuchi | — | ICOT Research Center director; articulated the original predicate-logic/kernel-language philosophy in his 1984 keynote and distinguished the project's actual goals from its exaggerated public image in his 1992 retrospective. |
+| H. Kinoshita | — | Director-General of MITI's Machinery and Information Industries Bureau; framed FGCS within Japan's software crisis and the ambition for an advanced information society in his 1984 keynote. |
+| Koichi Furukawa | — | ICOT researcher and author of TR-228 (1986/1987); supplied the mid-project technical frame — knowledge information processing above logic programming above highly parallel architecture and VLSI. |
+| Takashi Kurozumi | — | ICOT author of the 1992 ten-year overview; documented the 1979–1981 preliminary study, 1982 launch, staged R&D, PSI/PIM hardware progression, and budget. |
+| H. Gallaire | — | External evaluator at the 1992 FGCS evaluation workshop; offered the balanced outside verdict: limited real-world application use, but strong technical work in parallel OS, hardware, and logic programming. |
+| T. Moto-oka | — | Conference and project figure; edited the 1982 FGCS proceedings that announced the project to international audiences. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1979–1995)</strong></summary>
+
+```mermaid
+timeline
+    title Japan's Fifth Generation Computer Systems Project, 1979–1995
+    1979 : Fifth Generation Computer Research Committee and subcommittee established : Preliminary study stage begins
+    October 1981 : FGCS'81 conference announces committee results to international researchers : Fuchi later says this generated a sensational, exaggerated worldwide image
+    1982 : MITI launches the FGCS national project : ICOT created as the core research institute
+    1982–1984 : Initial stage — R&D on basic fifth-generation technologies : Prolog on DEC machines as the working environment
+    1984 : FGCS'84 conference — Fuchi restates original philosophy; Kinoshita frames software-crisis rationale
+    1985–1988 : Intermediate stage — small and medium subsystems : ESP on PSI/SIMPOS as the main environment
+    1988 : Multi-PSI and PIMOS demonstrated at FGCS'88
+    1989–1992 : Final stage — KL1, Multi-PSI/PIM, PIMOS prototype system : Stage extended to four years for evaluation
+    1992 : FGCS'92 marks project end; free disclosure of ICOT software announced : Evaluation workshop collects international assessments
+    April 1993 : Two-year FGCS Follow-on Project begins : KLIC ports KL1 to Unix-based sequential and parallel machines
+    1994–1995 : ICOT Free Software distributed; ICOT closes March 1995
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Fifth Generation Computer Systems (FGCS)** — Japan's 1982–1992 national research project aimed at building computers organized around knowledge information processing, logic programming, and highly parallel architectures. The "fifth generation" implied a new epoch beyond mainframes, minicomputers, and microprocessors.
+- **Knowledge information processing** — FGCS's term for computing that works with facts, rules, relations, and inference rather than only numerical or administrative data. Distinguished from ordinary data processing by its concern with meaning and relationships.
+- **Logic programming** — A programming style in which programs are expressed as logical relations and inference rules rather than step-by-step procedures. In the FGCS stack, logic programming served as the bridge between knowledge-level applications and parallel hardware. Prolog is the canonical logic-programming language.
+- **ICOT (Institute for New Generation Computer Technology)** — The central research institute created in 1982 to pursue the FGCS project. Distinct from MITI (the policy sponsor) and from Japanese computer manufacturers (who participated but had their own interests).
+- **PSI / PIM (Personal Sequential Inference / Parallel Inference Machine)** — The FGCS hardware sequence. PSI gave researchers a workstation environment in the intermediate stage; PIM prototypes targeted parallel inference in the final stage.
+- **KL1 (Kernel Language 1)** — The integrating logic-programming language for the FGCS final stage. All application and system software, including operating systems, was intended to be written in KL1. Derived from GHC (Guarded Horn Clauses), itself a concurrent/parallel logic-programming language.
+- **KLIC** — A compiler developed in the FGCS follow-on project that translated KL1 into C for Unix-based sequential and parallel machines, enabling FGCS software to escape its special-hardware dependency.
+
+</details>
+
 # Chapter 23: The Japanese Threat
 
 The "Japanese threat" was a Western story about Japan, not a verdict this book
@@ -396,6 +448,12 @@ most pattern-recognition topics were removed from the practical project goals.
 The actual program centered on the infrastructure for parallel inference and
 knowledge information processing.
 
+:::note[The project director's correction]
+> "When this project started, an exaggerated image of the project was engendered, which seems to persist even now."
+
+Fuchi's 1992 correction matters because it came from ICOT's director, not from a foreign critic trying to dismiss the project after the fact.
+:::
+
 This retrospective correction is unusually valuable because it came from inside
 the project. Fuchi was not simply a foreign critic dismissing FGCS after the
 fact. He was distinguishing the sensational image from the research program
@@ -491,3 +549,9 @@ myth. It was an ambitious national research program that made sense in its
 moment, frightened competitors beyond its actual scope, and left behind a mixed
 legacy: real research, no revolution, and a lasting warning about mistaking the
 future of AI for a plan announced at a conference.
+
+:::note[Why this still matters today]
+Every decade produces a version of the FGCS story: a government-backed AI initiative, a credible technical bet, and a threat narrative larger than the project. Today's practitioners encounter the same pattern in national AI strategies, large-model race coverage, and claims that one architecture will make existing software irrelevant. The FGCS legacy offers two calibration points: research programs can produce real technical output — languages, machines, trained people — without delivering the industrial revolution observers feared; and software tied to proprietary hardware spreads less easily than software portable to commodity platforms. Both lessons remain live.
+:::
+
+
