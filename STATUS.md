@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-28 night | Parts 3/6/7 finish queue (#394 AI History) | [`docs/session-state/2026-04-28-night-handoff-2.md`](./docs/session-state/2026-04-28-night-handoff-2.md) | Open — Ch16 + Ch38-40 + Ch41-49 still to ship |
+| 2026-04-29 (overnight) | Parts 3/6/7 shipped (13 chapters) + STATUS.md index migration + STEP 0 routing | [`docs/session-state/2026-04-29-parts-3-6-7-shipped.md`](./docs/session-state/2026-04-29-parts-3-6-7-shipped.md) | **Closed** — all three user-directed parts fully on `main` |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-28 night | Parts 3/6/7 finish queue setup (Ch16 + Ch38-40 + Ch41-49 plan) | [`docs/session-state/2026-04-28-night-handoff-2.md`](./docs/session-state/2026-04-28-night-handoff-2.md) |
 | 2026-04-28 night | Part 6 fully closed (Ch32-37 + roll-up) | archive § "2026-04-28 night — Part 6 fully closed" |
 | 2026-04-28 evening | Smart-router wrapper shipped; Claude resumes Parts 2/3 | archive § "2026-04-28 evening — smart-router wrapper" |
 | 2026-04-28 | AI History Part 1 prose shipped | archive § "2026-04-28 — AI History Part 1 prose shipped" |
@@ -45,10 +46,10 @@
 
 These are state items that span individual sessions. Prune entries as threads close.
 
-- **#394 AI History — Codex owns prose, Claude orchestrates Parts 3/6/7, Codex drives Parts 8/9 autonomously.** Source-fidelity rule (`STRICT_SOURCE_RULE` baked into `dispatch_chapter_prose.py`) applies to both lanes.
-- **STEP 0 precondition** for the next Codex-authored research verdict pass: `scripts/dispatch_research_verdict.py` only has Codex+Gemini reviewers. For Codex-authored research the default = Codex reviewing itself. Need a Claude anchor-verification reviewer + auto-routing on PR branch prefix. ~30-60 min. Required before Ch16 / Ch38-40 / Ch41-49 verdict passes ship. Detail in the latest handoff.
-- **`gemini-3.1-pro-preview` capacity flap (2026-04-28 PM)** — hung on both API key and OAuth/subscription paths. Smoke before any Gemini batch. Fall back to flash via `KUBEDOJO_GEMINI_DRAFT_MODEL=gemini-3-flash-preview KUBEDOJO_GEMINI_REVIEW_MODEL=gemini-3-flash-preview`. Drop the env vars when pro returns.
-- **Codex Part 9 chain in flight** — `.worktrees/codex-407-ch63-research` is Codex's autonomous chain. Don't disturb; verify `gh pr list --search 'is:open #394 ch6'` and worktree state before assuming it's stuck.
+- **#394 AI History — Parts 3/6/7 shipped 2026-04-29.** All Claude-orchestrated chapters now on `main` (Ch16, Ch38-49). Codex's autonomous chain continues to drive Part 9 (anchored Ch63-72 over the same 7-hour window). Part 8 (Ch50-58) is Codex-autonomous and unstarted at session end.
+- **STEP 0 routing shipped** (`scripts/dispatch_research_verdict.py`): branch-prefix routing puts Claude on anchor verification for `codex/394-...` research PRs and Codex for `claude/394-...` PRs. Live-tested on 12 verdict passes (#519, #525, #528, #532, #536, #539, #543, #545, #547, #549, #551, #553, #555). All routed correctly.
+- **`gemini-3.1-pro-preview` capacity flap intermittent under combined load.** When Codex's autonomous chain + Claude's chain both run, pro-preview can return 429 "No capacity available" mid-session. Fix: `KUBEDOJO_GEMINI_REVIEW_MODEL=gemini-3-flash-preview` env override on the dispatch_prose_review call. Used routinely 2026-04-29 03:50 onward; flash-preview performs equivalently for prose-quality reviews.
+- **Codex Part 9 chain still in flight** — `codex resume 019dcbc8-...`. Don't disturb. Latest anchor commit visible via `gh pr list --search 'is:open #394 ch7'` or `git log --oneline | grep "anchor ch"`.
 - **Stale worktrees safe to clean later** (not blocking): `codex-344`, `gemini-394-ch01-research`, `gemini-394-ch06-research`, `gemini-394-ch08-research`. Origin branches as safety net first.
 - **User-side dirty files to leave alone**: `scripts/local_api.py` (dashboard panel WIP), `test_rendering.js` (orphan).
 - **Cosmetic backlog (not blocking)**: `dispatch_prose_review.py:368-381` reuses `codex_prose_quality_prompt` for the Gemini reviewer — header reads "Codex Prose Review", prompt instructs reviewer to use shell tools Gemini doesn't have. Extract a `gemini_prose_quality_prompt`.
