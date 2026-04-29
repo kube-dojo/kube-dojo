@@ -129,6 +129,12 @@ used by another. A file could become a shared artifact. Documentation could sit
 near the system it explained. The machine could remember a working culture, not
 just execute isolated jobs.
 
+:::note[Fano's community claim]
+> "A time-sharing system can quickly become a major community resource, somewhat analogous to a library, and its evolution and growth depend on the inherent capabilities of the system as well as on the interests and goals of the members of the community."
+
+Fano's 1967 point was social: system design steers what a research community can become.
+:::
+
 For AI, that mattered deeply. Symbolic programs were rarely one-shot
 calculations. They evolved through inspection. A researcher changed a rule,
 tested a small case, watched the failure, printed an internal structure, asked
@@ -522,4 +528,5 @@ research imagination.
 :::note[Why this still matters today]
 Every cloud IDE, shared notebook, collaborative coding environment, and hosted AI inference endpoint descends, culturally and technically, from the computer-utility idea Project MAC demonstrated. Interactive computing is now so ordinary that its infrastructure is invisible — but software that can be edited, run, debugged, and shared in real time still depends on the same habit: the machine responds to human thought, not the reverse. The hunger Project MAC revealed — memory, responsiveness, specialized languages, network protocols — is the same appetite that drove cloud computing, GPU clusters, and large-model serving infrastructure. The machine room is still part of the history of ideas.
 :::
+
 
