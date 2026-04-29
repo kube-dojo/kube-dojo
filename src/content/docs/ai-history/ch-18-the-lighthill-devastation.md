@@ -6,6 +6,55 @@ sidebar:
   order: 18
 ---
 
+:::tip[In one paragraph]
+In 1972 the UK Science Research Council asked Cambridge mathematician Sir James Lighthill to survey artificial intelligence. His report separated the field into application automation (A), computer-based brain studies (C), and a disputed bridge category (B) covering general-purpose AI. His argument — that category B had failed to escape combinatorial explosion and deserved no independent funding — triggered a decade-long loss of confidence in British AI. Researchers continued, but under colder labels; the field returned in the 1980s only by rebranding itself as Intelligent Knowledge-Based Systems under the Alvey Programme.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Sir James Lighthill | 1924–1998 | Cambridge applied mathematician; commissioned outsider who wrote the 1972 survey that divided AI into categories A, B, and C. |
+| N. S. Sutherland | 1927–1998 | Sussex experimental psychologist; argued that Lighthill's category B should be understood as basic science, not a vague bridge activity. |
+| Donald Michie | 1923–2007 | Edinburgh machine intelligence leader; challenged the classification, demanded US consultation, and made the infrastructure argument for importing DEC System 10 machines. |
+| R. M. Needham | 1931–2003 | Cambridge computer scientist; partially agreed with Lighthill's conclusions, adding balance to the rebuttal. |
+| H. C. Longuet-Higgins | 1923–2004 | Edinburgh theoretical psychologist; responded to the report, providing a middle voice between Sutherland and Michie. |
+| Terry Winograd | 1946– | Author of SHRDLU; cited by Lighthill as a remarkable table-top-world achievement that nonetheless illustrated the limits of narrow domain constraint. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1947–1982)</strong></summary>
+
+```mermaid
+timeline
+    title The Lighthill Report and the UK AI Winter, 1947–1982
+    1947 : Turing's "Intelligent Machinery" — the notional starting point Lighthill used for AI's twenty-five-year history
+    1966 : ALPAC report on machine translation becomes part of Lighthill's evidence base for disappointed expectations
+    1972 : SRC commissions Sir James Lighthill for an independent outsider survey of AI
+    July 1972 : Lighthill completes "Artificial Intelligence: A General Survey"
+    August 1972 : Sutherland writes a response defending category B as Basic AI research
+    1973 : SRC publishes the paper symposium — Lighthill's report plus responses from Sutherland, Needham, Longuet-Higgins, and Michie
+    June 1973 : BBC broadcasts the Lighthill Controversy debate at the Royal Institution with Lighthill, Michie, Gregory, and McCarthy
+    1970s : UK AI continues under tighter application framing; Chilton overview reports a loss of confidence lasting almost a decade
+    September 1982 : Research Area Review Meeting on Intelligent Knowledge-Based Systems — the next major UK AI-related effort
+    1980s : IKBS becomes part of the Alvey Programme, reframing AI under an industrially legible policy label
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **ABC classification** — Lighthill's three-part map of AI: Category A (Advanced Automation, work tied to real application domains), Category C (computer-based study of the central nervous system), and Category B (the disputed bridge activity — general-purpose AI including search, language, and robotics). The classification made B the hardest to justify to funders.
+- **Combinatorial explosion** — The problem that arises when a program's search space grows faster than any feasible computation can handle. As a problem widens (more words, more pieces, more states), the number of possibilities multiplies exponentially. Lighthill used this as his central technical argument against general AI.
+- **Universe of discourse** — The bounded world a program operates within. A chess game or a table-top of blocks is a universe of discourse. Lighthill's point was that AI programs worked only when their universe was carefully fenced, and that extending the fence to real-world scope remained unsolved.
+- **Science Research Council (SRC)** — The UK government body responsible for funding academic science in the early 1970s. Its decision to commission Lighthill's review, and the policy weight it gave to the report, made the review consequential beyond its page count.
+- **IKBS / Alvey** — Intelligent Knowledge-Based Systems; the label UK science policy adopted in the early 1980s when it returned to AI-related funding. The Alvey Programme framed AI in more industrial and application-linked terms, deliberately avoiding the open-ended ambitions Lighthill had criticised. IKBS is the evidence that AI survived the winter by changing its promises.
+
+</details>
+
 # Chapter 18: The Lighthill Devastation
 
 The Lighthill report is often remembered as a death sentence. In the compressed
@@ -197,6 +246,12 @@ relations in a table-top world was impressive. But for Lighthill it also showed
 the boundary. The table-top world was a carefully delimited universe. Its
 objects, relations, and possible actions were under control. The achievement
 did not dissolve the problem of wider language and wider common sense.
+
+:::note[Lighthill's scaling objection]
+> Extension of the methods used to a much wider universe of discourse would be opposed violently by the combinatorial explosion.
+
+This is not a hardware complaint; it is Lighthill turning Winograd's success into evidence that fenced domains could not yet carry general AI.
+:::
 
 That example is important because it prevents an easy pro-AI answer. The best
 response to Lighthill could not be, "But look, the program works." He was
@@ -440,3 +495,9 @@ The expert-system era made a virtue of boundedness: pick a domain, encode
 specialist knowledge, and stop promising a universal machine. In that sense,
 the devastation was also a lesson. AI could survive the winter, but only by
 learning to make smaller promises with better machinery behind them.
+
+:::note[Why this still matters today]
+Every modern AI funding cycle inherits the Lighthill structure. Funders still ask whether a system works only inside a bounded domain or whether it generalises — the combinatorial explosion argument recurs each time a language model meets an edge case it was not trained on. Research programmes still survive by anchoring claims to applications rather than general intelligence; the rebranding from "AI" to "machine learning" to "foundation models" each time optimism overshoots results repeats the IKBS move. Knowing that this cycle is structural, not new, helps practitioners calibrate expectations and distinguish genuine capability advances from re-labelled promises.
+:::
+
+
