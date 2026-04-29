@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 8
 chapter: 56
-review_state: prose_drafted_awaiting_cross_family_review
+review_state: prose_accepted_dual_cross_family_review
 last_updated: 2026-04-29
 green_claims: 9
 yellow_claims: 2
@@ -48,3 +48,6 @@ notes: |
   cash/credit allocation, GPU model, interconnect technology, data-center
   location, cluster cost, GPT-3 training attribution, or private negotiation
   scenes without additional verified sources.
+
+  Accepted 2026-04-29 after Claude and Gemini cross-family prose approval.
+  Published draft is 4,400 words.

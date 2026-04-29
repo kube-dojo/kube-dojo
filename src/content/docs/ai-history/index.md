@@ -154,4 +154,4 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 ---
 
-55 of 72 chapters published. New chapters land regularly.
+56 of 72 chapters published. New chapters land regularly.
