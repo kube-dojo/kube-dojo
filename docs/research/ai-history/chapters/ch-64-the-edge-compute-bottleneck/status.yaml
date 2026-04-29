@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 64
-review_state: dual_cross_family_verdict_accepted
-last_updated: 2026-04-28
+review_state: prose_accepted_claude_approved_2026-04-29
+last_updated: 2026-04-29
 green_claims: 17
 yellow_claims: 2
 red_claims: 0
@@ -25,7 +25,29 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5000
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/586#issuecomment-4346193046
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMIT
+    error_message_id: 4
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
+  is 4,048 words and stays inside edge compute constraints: MobileNets and A11
+  Neural Engine precursors, Gemini Nano/AICore and Qualcomm vendor framing,
+  Apple AFM-on-device and Private Cloud Compute routing, LLM-in-a-flash memory
+  hierarchy, MobileLLM small-model design, and Pixel Video Boost cloud fallback.
+  Claude approved the prose/source review on PR #586. Codex applied Claude's
+  optional Qualcomm terminology nit. Gemini prose review was requested with
+  gemini-3.1-pro-preview and fallback to gemini-3-flash-preview, but the
+  fallback was rate limited by the Gemini CLI.
+
   Built from a scrubbed shell into a dual-cleared prose_ready contract. Core
   anchors are MobileNets, Apple iPhone X/A11 Neural Engine, Qualcomm Snapdragon
   8 Gen 3 product brief, Google Gemini Nano / Android AICore, Apple Intelligence
