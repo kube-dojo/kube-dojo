@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 68
-review_state: dual_cross_family_approved
-last_updated: 2026-04-28
+review_state: prose_accepted_after_cross_family_fixes_2026-04-29
+last_updated: 2026-04-29
 green_claims: 9
 yellow_claims: 11
 red_claims: 0
@@ -25,7 +25,30 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5500
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  status: fixes_applied
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/598#issuecomment-4347906685
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/598#issuecomment-4347897055
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft is
+  4,500 words and covers RLHF/human-feedback labor,
+  TIME/Sama reporting with caveats, Common Crawl/GPT-3/The Pile/Books3,
+  LAION/Stable Diffusion/Getty,
+  NYT/OpenAI and Bartz/Anthropic court-status distinctions, crawler controls,
+  publisher/platform licensing, and the enclosure handoff to Ch69.
+  Cross-family prose review asked
+  Codex to remove the branch-time UK Getty 2025 freshness paragraph because it
+  was not in the pre-approved mainline contract; Codex cut it and kept the
+  Getty scene anchored to the 2023 statement and complaint.
+
   Built from placeholder into an anchored labor/data-rights/copyright contract.
   Core anchors are Ouyang/InstructGPT, TIME/Sama reporting, GPT-3/Pile/Common
   Crawl, LAION/Stable Diffusion model card, Getty/NYT filings, OpenAI responses
