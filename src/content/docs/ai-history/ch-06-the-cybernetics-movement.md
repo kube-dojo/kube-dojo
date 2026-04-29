@@ -5,6 +5,65 @@ sidebar:
   order: 6
 ---
 
+:::tip[In one paragraph]
+Between 1940 and 1953 a parallel research program took shape — built on physical feedback machines, interdisciplinary lab meetings, and a vocabulary of steering and homeostasis rather than logic. Cybernetics had its own failed weapons program (Wiener's anti-aircraft predictor), founding paper (Rosenblueth, Wiener, and Bigelow 1943), institutional venue (the Macy Conferences at the Beekman Hotel), and canonical machine (Ashby's Homeostat). By 1953 it had dispersed — information theory absorbed the symbolic side, control engineering the analog, neurophysiology kept the McCulloch-Pitts substrate, and the "thinking machine" question went to Dartmouth in 1956.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Norbert Wiener | 1894–1964 | Professor of Mathematics, MIT. Anti-aircraft predictor work (1940–1943); co-author of the 1943 paper; coined "cybernetics" from Greek *kybernētēs* in summer 1947; published *Cybernetics* in 1948. Withdrew from classified weapons work after Hiroshima. |
+| Julian Bigelow | 1913–2003 | MIT-trained electrical engineer; hired by Wiener in January 1941 for the AA-predictor circuits. Designed the deliberately-sluggish "pilot" control stick that mimicked human reaction lag in the 1941 light-spot tracking apparatus. Co-author of the 1943 paper. |
+| Arturo Rosenblueth | 1900–1970 | Cardiologist and physiologist; with Wiener at the Harvard Medical School discussion group until 1944. Diagnosed "purpose tremor" as the cerebellar-feedback condition that became the bridge between the AA-predictor work and the 1943 redefinition of teleology. Co-author of "Behavior, Purpose and Teleology." |
+| Warren McCulloch | 1898–1969 | Neurophysiologist; chairman and intellectual moderator of the Macy Conferences from 1946. Architect of the strict disciplinary-parity attendance policy. Cross-link to Ch5 for the 1943 Pitts-McCulloch logical calculus. |
+| W. Ross Ashby | 1903–1972 | Director of Research, Barnwood House Hospital, Gloucester. Designed the Homeostat (first published 1948 in *Electronic Engineering*; formalised in the 1952 *Design for a Brain* book). Presented "Homeostasis" at the ninth Macy Conference (1952). Refused to call his machine "intelligent" — only "ultrastable." |
+| Gregory Bateson | 1904–1980 | Anthropologist; co-organiser of the second Macy meeting on "Teleological Mechanisms in Society" (20 September 1946). Coined the closing line: "I think that cybernetics is the biggest bite out of the fruit of the Tree of Knowledge that mankind has taken in the last 2000 years." |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1940–1961)</strong></summary>
+
+```mermaid
+timeline
+    title From the anti-aircraft predictor to the Macy dispersal
+    1940 : Sept 20 — Wiener writes to Vannevar Bush proposing the AA-predictor work
+         : Nov — first differential-analyzer simulations at MIT
+    1941 : Jan — Wiener hires Julian Bigelow ($2,325 first-year budget)
+         : Summer — light-spot tracking apparatus built
+    1942 : July 1 — Stibitz visits the lab, calls the predictor "uncanny"
+         : NY Macy meeting on central inhibition; Rosenblueth disseminates Wiener-Bigelow ideas
+    1943 : Jan — Rosenblueth, Wiener, Bigelow publish Behavior, Purpose and Teleology in Philosophy of Science
+         : early — AA-predictor's Camp Davis hits-comparison defeat against Bode's simpler methods
+    1945 : Oct 16 — Wiener's letter to de Santillana, the post-Hiroshima conscience break
+    1946 : March 8–9 — first Macy conference on circular causality at the Beekman Hotel, NY
+         : Sept 20 — second Macy meeting (Bateson co-organiser)
+    1947 : Summer — Wiener coins "cybernetics" from Greek kybernētēs
+    1948 : Wiener publishes Cybernetics: Or Control and Communication in the Animal and the Machine
+         : Dec — Ashby's first published Homeostat description in Electronic Engineering
+    1949 : Sixth Macy conference — first stenographically recorded; series renames to "Cybernetics"
+    1952 : Ashby's Design for a Brain published; ninth Macy "Homeostasis" presentation
+    1953 : Apr 22–24 — tenth and final Macy conference
+    1956 : Dartmouth Summer Research Project on Artificial Intelligence (forward-pointer to Ch11)
+    1961 : Wiener publishes the 2nd edition Preface — feedback "well established" in engineering and biology
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Cybernetics** — Wiener's 1947 coinage from Greek *kybernētēs* ("steersman") for the interdisciplinary study of control and communication in animals and machines. The term named the field; the field had been forming since 1942 under earlier labels ("circular causal mechanisms," "feedback").
+- **Negative feedback** — A control loop in which a system measures the difference between its current state and a target state, and uses that error signal to drive its next action so as to *reduce* the error. The thermostat is the textbook example. Cybernetics elevated negative feedback from a control-engineering term to the operational definition of *purpose*.
+- **Teleology (cybernetic sense)** — In the Rosenblueth-Wiener-Bigelow 1943 paper, "teleological behavior" is recast in strictly mechanical terms: behaviour controlled by negative feedback. A torpedo with a target-seeker is teleological by this definition; metaphysical readings of teleology as a future-cause-acting-on-the-present are dropped.
+- **Macy Conferences** — A series of ten closed interdisciplinary meetings (1946–1953), sponsored by the Josiah Macy, Jr. Foundation, organised by Frank Fremont-Smith and chaired by McCulloch. Approximately 20 attendees per meeting under a strict disciplinary-parity policy. The first five had no stenographic record; conferences 6–10 (1949–1953) were transcribed by Heinz von Foerster.
+- **Servo-mechanism** — The control-engineering term for a feedback-driven system that drives an output to match a target input — gun aimers, autopilots, factory positioners. The 1943 paper deliberately equated "servo-mechanism" with cybernetic teleology.
+- **Homeostat** — Ashby's 1948 electromechanical demonstration of an *ultrastable* system: four units with pivoted magnets, water-trough electrodes, triode outputs, and 25-position stepping switches that searched 781,250 configurations until the magnets returned to centre. Demonstrated equilibrium-finding, not symbol manipulation. Ashby refused the adjective "homeostatic" — that priority belonged to Cannon's 1932 coinage.
+
+</details>
+
 On September 20, 1940, as the German Luftwaffe waged an aerial campaign against Britain that had escalated significantly after "The Day of the Eagle" in August, mathematician Norbert Wiener wrote to Vannevar Bush. Seeking a role in the unfolding war effort, Wiener offered to find some "corner of activity" in which he might be of use during the emergency. His specific proposal focused on anti-aircraft fire control. The challenge of shooting down a maneuvering airplane was fundamentally a problem of extrapolation: the anti-aircraft gun needed to fire not at where the plane was, but at where it would be when the shell arrived.
 
 By November 1940, Wiener was testing his theoretical models for this anti-aircraft predictor on Bush's mechanical differential analyzer at the Massachusetts Institute of Technology, simulating straight-line, doubled slope, parabolic, and semicircle-integral trajectory types. Realizing he needed engineering expertise to translate his statistical theories into functional hardware, Wiener hired Julian Bigelow, an MIT-trained electrical engineer, in January 1941. The project was funded by the National Defense Research Committee's Section D-2, directed by Warren Weaver. The scale of the endeavor was decidedly modest; its first-year budget was just $2,325, with $1,200 allocated for circuit building and approximately $450 for three man-months of time on the differential analyzer. Compared to the massive federal expenditures that would soon pour into the Radiation Laboratory and the Manhattan Project, the anti-aircraft predictor was an infinitesimal operation.
@@ -23,6 +82,8 @@ Wiener recommended halting further research on the predictor until after the war
 
 The conflict in the record is important. Stibitz's July 1942 diary captured a real engineering effect; the device could look astonishing when the laboratory target moved smoothly enough for the statistical apparatus to get ahead of it. The Camp Davis comparison captured a different truth: against actual tracking data, the sophisticated statistical predictor did not justify itself over Bode's simpler geometric extrapolators. Cybernetics would grow out of both facts at once. Its first machine was neither a triumph nor an embarrassment to be forgotten. It was an engineering near-miss whose conceptual yield exceeded its weapons yield.
 
+## Behavior, Purpose, Teleology
+
 While the anti-aircraft predictor failed as a military weapon, it succeeded as a conceptual crucible. The engineering framework that Wiener and Bigelow had built to model a pilot evading anti-aircraft fire treated the human operator not as a conscious entity making free choices, but as a component attempting to minimize the error between a target and a current position. The pilot under flak operated "like a servo-mechanism, attempting to overcome the intrinsic lag due to the dynamics of his plane."
 
 To formalize this insight, Wiener and Bigelow sought out Arturo Rosenblueth, a cardiologist and physiologist then working with Wiener in a Harvard Medical School discussion group. They presented Rosenblueth with a specific clinical question: was there any known pathological condition in which a patient, attempting to perform a voluntary action such as picking up a glass of water, overshoots the mark and falls into an uncontrollable oscillation? Rosenblueth answered immediately. The condition was known as "purpose tremor," and it was characteristically associated with cerebellar injury. To Wiener and Bigelow, the implication was clear: the neurologically impaired patient behaved exactly like a mechanical feedback system suffering from insufficient damping.
@@ -36,6 +97,8 @@ The paper's most radical philosophical maneuver was its redefinition of teleolog
 Prediction sharpened the claim. A non-predictive feedback system could correct only against the present error between its current state and its goal. A predictive feedback system could act on the future position implied by the target's motion. That was exactly the wartime problem Wiener and Bigelow had just failed to solve well enough for anti-aircraft fire control. The 1943 paper preserved the intellectual structure of that failure while stripping away the classified weapon. The moving aircraft became a general case of pursuit; the operator's lag became a general problem of error correction; the predictor became one member in a family of purposive mechanisms.
 
 To illustrate how biological systems relied on these same principles, they deployed the cerebellar-disease analogy that had sparked their collaboration: "If he is asked to carry a glass of water from a table to his mouth, however, the hand carrying the glass will execute a series of oscillatory motions of increasing amplitude as the glass approaches his mouth, so that the water will spill and the purpose will not be fulfilled." Consequently, the authors "venture to suggest that the main function of the cerebellum is the control of the feed-back nervous mechanisms involved in purposeful motor activity." Purpose was no longer an unobservable mental state; it was a measurable property of an error-correcting mechanical loop.
+
+## The Macy Conferences
 
 The vocabulary of feedback, error correction, and circular causality quickly found institutional momentum. In 1942, Rosenblueth disseminated the early Wiener-Bigelow ideas at a New York meeting on central inhibition sponsored by the Josiah Macy, Jr. Foundation, an event attended by the neurophysiologist Warren S. McCulloch. By late winter of 1943-1944, Wiener and the mathematician John von Neumann convened a joint meeting in Princeton that brought together engineers, physiologists, and mathematicians. McCulloch and Lorente de Nó represented the physiologists, Herman Goldstine attended as a computing-machine designer, while von Neumann, Walter Pitts, and Wiener represented mathematics. At the conclusion of the Princeton gathering, it had become clear to all that there was a substantial common basis of ideas, and that some attempt should be made to achieve a common vocabulary.
 
@@ -59,6 +122,8 @@ Over their lifespan, ten Macy conferences on cybernetics were held between 1946 
 
 That asymmetry matters for the historian. The meetings that made the institutional break from wartime predictor work into an interdisciplinary movement are precisely the meetings whose spoken exchanges are least recoverable. The richly quotable Macy record belongs mostly to the period after the name had stabilized and after von Foerster began producing edited transactions. For the first five conferences, the surviving evidence is thinner: agendas, correspondence, participant lists, and later recollections. The chapter therefore has to resist making the early room sound more documented than it is. The institution was real; the transcript surface is uneven.
 
+## The Homeostat
+
 While the Macy meetings provided the theoretical and social infrastructure, the cybernetics movement also required physical demonstration. If the anti-aircraft predictor was the movement's foundational engineering artifact, its canonical machine was the Homeostat, designed by W. Ross Ashby, the Director of Research at Barnwood House Hospital in Gloucester, England. Ashby's bibliography places a first published description in a December 1948 paper in *Electronic Engineering*, but the verified construction account for this chapter comes from his 1952 book *Design for a Brain* (heavily revised in its 1960 second edition) and his 1956 *An Introduction to Cybernetics*.
 
 Ashby's aim was not to build a machine that reasoned in propositions. He wanted a physical display of an ultrastable system: a system that could survive disturbance by finding a new configuration in which its essential variables returned within limits. The Homeostat was therefore not a model of symbol manipulation. It was a model of adaptive equilibrium. Its drama lay in watching a physical system search its own couplings until its needles settled.
@@ -79,6 +144,8 @@ The Homeostat also highlighted the inherent limitations of the cybernetic analog
 
 This is the strongest sense in which cybernetics was a parallel program to symbolic AI rather than its prehistory. Cybernetic machines made purpose visible as controlled error, stability, pursuit, and adaptation. They did not yet provide a medium in which the same machine could be instructed to perform a radically different intellectual task. A digital stored-program computer could, at least in principle, separate the machine from the program. The Homeostat could not. Its intelligence, if one wanted to use that dangerous word, was inseparable from its magnets, relays, troughs, electrodes, and stepping switches.
 
+## The Aftermath
+
 The dispersal had more than one cause, and the record does not support a single clean explanation. The analog substrate mattered: the predictor and the Homeostat were powerful examples but poor templates for a general reprogrammable research program. The Macy format mattered: a closed interdisciplinary conversation could generate vocabulary and friendships without producing a shared technical medium. Wiener's own moral break with classified weapons work also mattered, but it has to be kept attached to Wiener rather than generalized to every Macy participant.
 
 The specter of nuclear weaponry had profoundly altered Wiener's perspective. On October 16, 1945, merely two months after the bombings of Hiroshima and Nagasaki, Wiener wrote to philosopher Giorgio de Santillana: "Ever since the atomic bomb fell I have been recovering from an acute attack of conscience as one of the scientists who has been doing war work and who has seen his war work as part of a larger body which is being used in a way of which I do not approve... I have seriously considered the possibility of giving up my scientific productive effort because I know no way to publish without letting my inventions go to the wrong hands."
@@ -88,3 +155,8 @@ Two days later, on October 18, Wiener drafted a letter to MIT President Karl T. 
 The Macy Conferences held their tenth and final meeting on April 22-24, 1953, and the series ended without a formal dissolution. By the time Wiener penned the Preface to the second edition of *Cybernetics* in 1961, the landscape had irrevocably shifted. He observed that "the role of feed-back both in engineering design and in biology has come to be well established. The role of information and the technique of measuring and transmitting information constitute a whole discipline for the engineer, for the physiologist, for the psychologist, and for the sociologist." The early, foundational models had been surpassed; "the simple linear feedbacks... now are seen to be far less simple and far less linear than they appeared at first view."
 
 The cybernetics movement had not failed; rather, it had successfully distributed its insights into its constituent disciplines. Information theory absorbed the symbolic and stochastic dimensions of communication; control engineering inherited the analog feedback mechanisms, leading to servomechanisms and process control; neurophysiology retained the McCulloch-Pitts logical substrate; and psychiatry and anthropology integrated the concepts of social feedback. That dispersal left no single cybernetic institution with ownership of the whole synthesis. It also left the "thinking machine" question available for a different coalition to claim. In 1956, the Dartmouth Summer Research Project would gather that question under a new name, artificial intelligence, and under a different technical expectation: that intelligence could be pursued through digital symbolic computation rather than through analog machines whose bodies were their programs.
+
+:::note[Why this still matters today]
+The vocabulary of feedback, control, and homeostasis is so embedded in modern engineering and biology that it has stopped looking like a contribution at all. Thermostats, autopilots, PID controllers, robotic arms, error-correcting codes, training-loop telemetry, and the closed-loop reward signal of reinforcement learning are all heirs of the 1943 paper's redefinition of purpose as negative-feedback-controlled behaviour. Cybernetics' analog-substrate limitation is also visible in the modern split: anything that needs to be reprogrammable for radically different tasks runs on stored-program digital hardware; anything that needs continuous, fast, low-latency control of physical state still uses dedicated feedback loops with their structure built into the substrate.
+:::
+
