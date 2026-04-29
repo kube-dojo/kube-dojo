@@ -116,6 +116,12 @@ What makes the 1960 WESCON paper a decisive conceptual node in the history of ma
 
 They did not invent the gradient method, but they were the first to explicitly frame a learning rule for an analog hardware classifier as a gradient method on a continuous loss surface. The paper described common gradient methods as procedures that search a surface for stationary points by changing independent variables in proportion to measured partial derivatives. It also connected those procedures to geometric decay on second-degree surfaces. Widrow and Hoff recognized that the mean-square error surface for their adaptive neuron was precisely such a parabolic, quadratic function of the gain adjustments. Within that analysis, the descent rule had a calculable terminus rather than a merely heuristic appeal. Their chosen search method was the "method of steepest descent," with vector changes made in the "direction of the gradient."
 
+:::note[Widrow-Hoff name the method]
+> "The method of searching that has proven most useful is the method of steepest descent. Vector adjustment changes are made in the direction of the gradient."
+
+Not later reconstruction. The 1960 paper names the search method in its own optimization vocabulary on the page (`WidrowHoff60`, p. 99).
+:::
+
 The WESCON paper quantified the dynamics of this descent. The physical Adaline update rule reduced the error by a fixed fraction on each step. In their four-by-four input case, the per-pattern step shrank the error magnitude by a factor of exactly 1/17. Widrow and Hoff mathematically derived the time constant for this learning process; with a specific proportionality constant, the time constant $\tau$ equaled $n+1$ patterns. For the Adaline's sixteen input lines plus its level control, the hardware exhibited a measurable time constant of roughly 17 patterns, giving the physical machine predictable, exponential convergence dynamics.
 
 That number is historically useful because it keeps the Adaline from dissolving into abstraction. The learning rule was not only a theorem about least mean squares. It had a pace. A single pattern would not instantaneously set the correct gains, but repeated presentations would drive the corresponding error downward at a predictable rate. For one pattern at a time, Widrow and Hoff could speak in the engineering language of time constants, the same language used to describe filters and feedback systems. The method of steepest descent had become part of an adaptive circuit's temporal behavior.
