@@ -6,75 +6,48 @@ sidebar:
   label: "What's New"
 ---
 
-## April 29, 2026 — AI History Book: Part 1 is Reader-Ready
+## April 29, 2026 — AI History Book: Part 1 Released
 
-The first nine chapters of the [AI History book](/ai-history/) are polished and ready to read end-to-end. Part 1 covers the mathematical foundations of AI from the 1840s through the early 1950s — Boole's algebra of thought, Turing's universal machine, Shannon's bridge from logic to circuits, Markov's statistical chains, McCulloch and Pitts on neural calculus, the cybernetics movement, Walter's electronic tortoises, von Neumann's stored program, and the magnetic-core memory that made it all run.
+The first nine chapters of the [AI History book](/ai-history/) are ready to read. Part 1 covers AI's mathematical foundations, 1840s–1950s: Boole, Turing, Shannon, Markov, McCulloch–Pitts, the cybernetics movement, Walter's electronic tortoises, von Neumann's stored program, and magnetic-core memory.
 
-### What's new for readers
-
-- **One-paragraph summaries** open every chapter, so you can decide in 30 seconds whether to dive in.
-- **Cast of characters, timeline, and plain-words glossary** are tucked inside each chapter — collapsed by default, one click to expand. Useful for keeping six engineers and three institutions straight on a long flight.
-- **"Why this still matters today"** closes each chapter, connecting the historical material to working modern systems.
-- **Math sidebars** on the chapters that need them (Boole's algebra, Markov's letter counts), so the equations are there if you want them and out of the way if you don't.
-- **Section navigation** in the right sidebar of every chapter — jump straight to the scene you want.
+Every chapter opens with a one-paragraph summary, a cast of characters, a timeline, and a glossary; closes with a "Why this still matters today" note; and exposes its named scenes in the right-side navigation. Math-heavy chapters get a foldout sidebar with the equations laid out.
 
 [Start with Chapter 1 →](/ai-history/ch-01-the-laws-of-thought/)
 
 ---
 
-## April 28, 2026 — AI History Part 1 Prose Shipped
+## April 26, 2026 — Quality Rewrite + Route Design
 
-### Part 1 (Ch 1–5) Merged Under the Anchored-Contract Pipeline
-The first five chapters of the AI History book — *The Laws of Thought*, *The Universal Machine*, *The Physical Bridge*, *The Statistical Roots*, and *The Neural Abstraction* — are now live (PRs #477, #479, #480, #481, #483). All five passed two cross-family review gates: a Codex prose-quality review and an independent Claude source-fidelity review against the approved research contract. Surgical hedges and cuts were applied where prose drifted beyond the contract's anchored claims (most notably striking unsourced biographical color and meta-references to "the contract" that had leaked from the research apparatus into finished prose).
+### Module quality rewrite underway
+Roughly 130 modules have been rewritten to a stricter pedagogical bar, with more in progress. Each module is reviewed against the published quality rubric before going live.
 
-### Prose Pipeline Pivot — Codex as Default Expander
-The chapter-prose pipeline pivoted from Claude-default to Codex-default expansion (gpt-5.5, reasoning=high). Codex now expands Gemini's first drafts to verdict cap; Claude opus serves as the source-fidelity reviewer in an independent fresh session. The strict-source rule — no source additions, no new page anchors, no Yellow→Green upgrades — applies to both expansion paths.
+### Hub pages rewritten as route guides
+- **Platform Engineering** opens with three persona routes: SRE, DevEx Builder, Platform Architect.
+- **Kubernetes Certifications** opens with three personas: Operator, Developer, Security Specialist — replacing the alphabetical default that pointed most learners at the wrong starting point.
+- **Bridge pages** added for moving between tracks: K8s ↔ On-Premises, K8s ↔ Platform Engineering, AI/ML ↔ AI Platform Engineering.
+- **Section health** is now visible on each section's index — see which sections are actively improving and which are stable.
 
-### Cross-Family Prose Review Dispatcher
-A new `scripts/dispatch_prose_review.py` packages source-fidelity (Claude) and prose-quality (Codex / Gemini) reviews against the chapter's research contract, mirroring the existing `dispatch_research_verdict.py` pattern.
-
----
-
-## April 26, 2026 — Site-wide Quality Rewrite + Route Design + AI History Book Planning
-
-### Site-wide Module Quality Rewrite Underway
-- A 384-module rewrite batch (issue #388) is grinding through the curriculum, lifting modules to a stricter pedagogical bar
-- ~130 modules already shipped at the new bar with cross-family review or deferred-review approval
-- Auto-approved modules carry a `qa_pending` banner until a real cross-family reviewer signs off; rewritten modules briefly carry a `revision_pending` banner that clears on completion
-- Full lifecycle is tracked operator-side via the local API briefing — public lifecycle visibility is on the roadmap (#391)
-
-### Section Health Surfaced on Index Pages
-Section index pages now surface in-flight rework counts via a new `SectionHealthSummary` component (#390). Learners can see at a glance which sections are actively improving and which are stable. Hub pages roll up child counts.
-
-### Curriculum Route Design Tightened
-Hub pages were rewritten as **route guides** instead of catalogs (#246):
-- The Platform Engineering hub now opens with three persona routes (SRE, DevEx Builder, Platform Architect) instead of an alphabetical section dump
-- Platform Foundations and Platform Disciplines mirror the same persona-keyed shape with enriched per-section "best for" / "pair with" guidance
-- The Kubernetes Certifications hub now leads with three personas (Operator, Developer, Security Specialist) instead of an alphabetical KCNA → KCSA → CKAD → CKA → CKS default that suggested the wrong starting point for most learners
-- The Platform hub gained a "Common Entry Mistakes" callout that the earlier rewrite had dropped
-- New bridge pages help learners cross between tracks: K8s → On-Prem, K8s → Platform Engineering, AI/ML → AI Platform Engineering, AI/ML → Private AI Infrastructure (also part of #246)
-
-### AI History Book — 68-Chapter Expansion & First Drafts
-The AI History Book epic (#394) has been expanded into a definitive 68-chapter roadmap, intertwining infrastructural milestones with critical mathematical breakthroughs (from Boole and Markov to Backpropagation and PageRank). The rigorous KubeDojo sourcing standard (claim-level matrices, primary/secondary confirmation) has been applied to Parts 1, 2, and 6. The first 10 chapters (Parts 1 and 2)—covering from George Boole's algebra to Turing's Imitation Game—as well as the entirety of Part 6 (Chapters 32-40, focusing on the Rise of Data and Distributed Compute) have been drafted as the "Golden Standard" for the book's narrative tone.
-
-### Internal Reliability Improvements
-- Atomic-drain pattern documented for the quality pipeline — the deferred-review queue and the rewrite batch race when run concurrently, so they now alternate
-- A reproducible silent-crash bug in the deferred-review drain script was identified and filed (#396)
-- Cross-family review caught real quality bugs in route-design changes that build-clean alone missed (security-cert ordering inversion, redundant section bloat, relative-link drift) — reinforced the "do not skip cross-family review even on small content changes" rule
+### AI History Book scoped
+The AI History book is scoped at 72 chapters covering the math, hardware, funding, and people behind each era of AI. First drafts are landing chapter by chapter.
 
 ---
 
-## April 16, 2026 — ZTT, AI/ML, Cert Prep, and Curriculum Routing
+## April 17, 2026 — New AI Track
 
-### Zero to Terminal Hardened
-- `Zero to Terminal` theory converged to the stricter review bar
-- early labs were audited and tightened instead of left as implicit backlog
-- Ukrainian sync for ZTT was brought under the new translation-v2 control flow
+A new top-level **AI** track for AI literacy and practical working habits — a beginner-friendly entry point separate from the existing **AI/ML Engineering** advanced builder path.
 
-### AI/ML Learner Path Expanded
-The AI/ML track now has a clear local-first path instead of jumping straight into large-scale infrastructure.
+Initial sections: AI Foundations, AI-Native Work. Modules cover what AI is, what LLMs are, prompting, verification, privacy, and using AI for learning, writing, research, and coding.
 
-New learner-facing modules include:
+---
+
+## April 16, 2026 — ZTT, AI/ML Path, Certification Prep
+
+### Zero to Terminal hardened
+Theory and early labs tightened. Ukrainian translation kept in sync.
+
+### AI/ML local-first path
+Ten new modules so a learner with one home GPU can build a working RAG system or fine-tune a model without renting a cluster:
+
 - Home AI Workstation Fundamentals
 - Reproducible Python, CUDA, and ROCm Environments
 - Notebooks, Scripts, and Project Layouts
@@ -86,130 +59,63 @@ New learner-facing modules include:
 - Local Inference Stack for Learners
 - Home AI Operations and Cost Model
 
-### Certification Prep Gaps Closed
-Dedicated exam-prep modules were added for:
-- `LFCS`
-- `CNPE`
-- `CNPA`
-- `CGOA`
+### Certification prep gaps closed
+New exam-prep modules for LFCS, CNPE, CNPA, and CGOA.
 
-This work also removed a lot of quiet `partial coverage elsewhere` debt from the learner experience.
-
-### Route Guidance Improved
-Major hub pages were refreshed so learners can move between tracks more intentionally:
-- homepage
-- Kubernetes certifications
-- Cloud
-- Platform Engineering
-- On-Premises
-- AI/ML Engineering
-
-### Internal Delivery Infrastructure Improved
-- v2 review / patch routing was hardened and aligned to the actual contract
-- translation-v2 now handles Ukrainian sync with queue-style control
-- the local monitor/API shows more deterministic queue state instead of only summary counts
+### Hub pages refreshed
+Homepage, Kubernetes certifications, Cloud, Platform Engineering, On-Premises, and AI/ML Engineering hubs rewritten for clearer cross-track navigation.
 
 ---
 
-## April 17, 2026 — New Top-Level AI Track
+## March 28, 2026 — Theme Overhaul + New Modules
 
-### AI Is Now a First-Class Learner Track
+### New design
+Custom homepage, K-themed topbar, smart sidebar that follows your current track, breadcrumbs on every module, complexity/time chips, dark/light mode. Mark-Complete button with an exportable progress dashboard.
 
-A new top-level `AI` track now exists for learners who need AI literacy and practical AI working habits before advanced AI/ML engineering.
+### Linux Deep Dive promoted to its own track
+37 modules, moved out from under Fundamentals into a top-level Linux track.
 
-Initial sections:
-- `AI Foundations`
-- `AI-Native Work`
-
-This track is intentionally separate from `AI/ML Engineering`:
-- `AI` is the accessible front door
-- `AI/ML Engineering` remains the advanced builder path
-
-### Why This Matters
-
-The repo already had strong AI/ML engineering depth, but it was missing a true beginner-friendly AI literacy path.
-
-The new track fills that gap with modules for:
-- what AI is
-- what LLMs are
-- prompting basics
-- verification
-- privacy, safety, and trust
-- using AI for learning, writing, research, and coding
-- AI-native work habits, assistants, agents, and workflow design
-
----
-
-## March 28, 2026 — Theme Overhaul + New Tracks
-
-### Custom Design System
-Complete visual redesign with K8s-themed design:
-- **Custom homepage** with hero, terminal decoration, track cards, stats, learning path
-- **Custom topbar** with K logo, 7 nav pills (Home, Fundamentals, Linux, Cloud, Certifications, Platform, On-Premises)
-- **Smart sidebar** — shows current track's subsections, collapsible navigation, monospace module numbers
-- **Breadcrumbs** on every module page
-- **Meta chips** — colored complexity (Quick/Medium/Advanced) and time badges
-- **Content enhancement** — War Story cards, Did You Know cards, quiz styling (all automatic, no .md changes needed)
-- **Progress tracking** — Mark Complete button, sidebar checkmarks, [progress dashboard](/changelog/) with export/import
-- **Dark/light mode** with proper support across all pages
-
-### Networking Discipline — 5 NEW modules
+### Networking discipline — 5 new modules
 CNI Architecture & Selection, Network Policy Design, Service Mesh Strategy, Ingress & Gateway API, Multi-Cluster Networking.
 
-### Platform Leadership Discipline — 5 NEW modules
+### Platform Leadership discipline — 5 new modules
 Building Platform Teams, Developer Experience Strategy, Platform as Product, Adoption & Migration, Scaling Platform Organizations.
 
 ### Supply Chain Defense Guide — 4 new sections
-Transitive dependency auditing, registry quarantine defense, AI/LLM gateway security, credential rotation verification.
+Transitive dependency auditing, registry quarantine, AI/LLM gateway security, credential rotation verification.
 
-### Sidebar Labels Fixed
-32 index.md files updated — no more raw directory names (e.g. `part0-environment` → "Part 0: Environment Setup").
-
-### Linux Deep Dive — Top-Level Track
-Linux moved from a Fundamentals subsection to its own top-level track (37 modules).
-
-### All Certification Learning Paths in Sidebar
-PCA, ICA, CCA, CGOA, CBA, OTCA, KCA, CAPA, CNPE, CNPA, LFCS, FinOps — all 12 learning paths now accessible from the sidebar.
+### All 12 certification learning paths in the sidebar
+PCA, ICA, CCA, CGOA, CBA, OTCA, KCA, CAPA, CNPE, CNPA, LFCS, FinOps.
 
 ---
 
-## March 26, 2026 — Starlight Migration + On-Premises Track
+## March 26, 2026 — Site Migration + On-Premises Kubernetes
 
-### Starlight Migration (from MkDocs)
-- Migrated 648 English + 115 Ukrainian files to Astro/Starlight
-- Fixed 5,323 broken links, dot-stripping in slugs, sidebar labels
-- Build: ~1,400 pages in ~30s (down from 2+ minutes on MkDocs)
-- Deployed via GitHub Pages with Node.js 22
+### Faster, cleaner site
+Site migrated to Starlight (Astro). Build is now seconds for the whole site instead of minutes; broken links cleaned up across the move.
 
-### On-Premises Kubernetes — 30 NEW modules
+### On-Premises Kubernetes — 30 new modules
 Complete bare-metal K8s track:
-- Planning & Economics (4) — server sizing, NUMA, cluster topology, TCO
-- Bare Metal Provisioning (4) — PXE, Talos/Flatcar, Sidero/Metal3
-- Networking (4) — spine-leaf, BGP, MetalLB/kube-vip, DNS/certs
-- Storage (3) — Ceph/Rook, local storage
-- Multi-Cluster (3) — private cloud, shared control planes, CAPI
-- Security (4) — air-gapped, HSM/TPM, AD/LDAP/OIDC, compliance
-- Operations (5) — upgrades, firmware, auto-remediation, observability
-- Resilience (3) — multi-site DR, hybrid connectivity, cloud repatriation
 
-### Infrastructure
-- `scripts/dispatch.py` replaces ai_agent_bridge (1,800+ → 230 lines)
-- Skills consolidated (12 → 4)
-- GitHub Actions pinned to commit SHA, Dependabot enabled
+- **Planning & Economics** (4) — server sizing, NUMA, cluster topology, TCO
+- **Bare Metal Provisioning** (4) — PXE, Talos/Flatcar, Sidero/Metal3
+- **Networking** (4) — spine-leaf, BGP, MetalLB/kube-vip, DNS/certs
+- **Storage** (3) — Ceph/Rook, local storage
+- **Multi-Cluster** (3) — private cloud, shared control planes, CAPI
+- **Security** (4) — air-gapped, HSM/TPM, AD/LDAP/OIDC, compliance
+- **Operations** (5) — upgrades, firmware, auto-remediation, observability
+- **Resilience** (3) — multi-site DR, hybrid connectivity, cloud repatriation
 
 ---
 
-## March 2026 — Ecosystem Update + 21 Certifications
+## March 2026 — Ecosystem Update
 
-The original March update — 60+ new modules, quality review, expanded certification coverage.
-
-### Highlights
 - **Zero to Terminal** — 10 modules for absolute beginners
-- **Ukrainian Translation** — 115 pages translated
-- **KCNA Update** — AI/ML, WebAssembly, Green Computing modules
-- **21 Certification Tracks** — every CNCF certification covered
+- **Ukrainian translation** — 115 pages (Prerequisites, CKA, CKAD)
+- **KCNA update** — AI/ML, WebAssembly, Green Computing modules
+- **21 certification tracks** — every CNCF certification covered
 - **Kubernetes 1.35** — all content aligned
-- **Platform Engineering Toolkit** — 15 new modules (FinOps, Kyverno, Chaos Engineering, Operators, CAPI, vCluster, Rook/Ceph, GPU Scheduling, etc.)
+- **Platform Engineering Toolkit** — 15 new modules (FinOps, Kyverno, Chaos Engineering, Operators, CAPI, vCluster, Rook/Ceph, GPU Scheduling)
 
 ---
 
@@ -219,7 +125,7 @@ KubeDojo launched with 311 modules covering CKA, CKAD, CKS, KCNA, KCSA, Platform
 
 ---
 
-### By the Numbers (Current)
+### By the Numbers
 
 | Metric | Count |
 |--------|-------|
@@ -227,4 +133,3 @@ KubeDojo launched with 311 modules covering CKA, CKAD, CKS, KCNA, KCSA, Platform
 | Tracks | 7 (Fundamentals, Linux, Cloud, Certifications, Platform, On-Premises, AI/ML) |
 | Certification paths | 18+ |
 | Ukrainian translations | 300+ pages |
-| Build time | ~30s for ~1,700 pages |
