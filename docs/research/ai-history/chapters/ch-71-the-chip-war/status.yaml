@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 71
-review_state: dual_cross_family_approved
-last_updated: 2026-04-29
+review_state: prose_accepted_after_cross_family_fixes_2026-04-30
+last_updated: 2026-04-30
 green_claims: 10
 yellow_claims: 4
 red_claims: 0
@@ -25,7 +25,29 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 6200
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  status: fixes_applied
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-30
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/608#issuecomment-4348248111
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-30
+    verdict: READY_TO_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/608#issuecomment-4348231939
 notes: |
+  Drafted by Codex on 2026-04-30 from the dual-cleared contract. Current draft
+  is 5,201 words and covers the 2022 BIS control architecture,
+  2023/2024 updates, NVIDIA H20/product-threshold adaptation, ASML EUV/DUV
+  lithography controls, allied Dutch/Japanese SME measures, TSMC advanced-node
+  and CoWoS/Arizona capacity, CHIPS Act industrial policy, China MOFCOM
+  materials counter-controls, AI Diffusion rescission/guidance, and the handoff
+  to Ch72. Gemini returned READY_TO_MERGE. Claude requested cutting the
+  branch-only model-weights phrasing and softening "tiering" to a broader
+  control-regime frame; both fixes were applied before merge.
+
   Built from placeholder into an anchored chip-geopolitics/export-control
   contract. Core anchors are the 2022 Federal Register BIS rule, 2023/2024 BIS
   updates, 2025 BIS AI Diffusion rescission/guidance, NVIDIA 10-Q disclosures,
