@@ -5,6 +5,58 @@ sidebar:
   order: 5
 ---
 
+:::tip[In one paragraph]
+In 1943, Warren McCulloch and Walter Pitts published "A Logical Calculus of the Ideas Immanent in Nervous Activity" in the *Bulletin of Mathematical Biophysics*. They did not invent the mathematical study of neurons — Nicolas Rashevsky's biophysics community already existed at Chicago — but they replaced its continuous differential equations with the propositional logic of Carnap and Russell-Whitehead. That shift named the right level of abstraction. Two and a half years later, "A Logical Calculus" became the only journal citation in von Neumann's *First Draft of a Report on the EDVAC*.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Warren McCulloch | 1898–1969 | Neurophysiologist; in 1943 affiliated jointly with the Department of Psychiatry at the Illinois Neuropsychiatric Institute and the University of Chicago. Co-author of "A Logical Calculus of the Ideas Immanent in Nervous Activity" (1943). |
+| Walter Pitts | 1923–1969 | Self-educated logician; co-author of the 1943 paper at age 19–20; subsequently a "special student" at MIT under Wiener. The Lettvin-oral-history scenes (Detroit library, Russell letter, Chicago run-away) are reconstructions, not documentary facts. |
+| Jerome Lettvin | 1920–2011 | University of Chicago medical student in the early 1940s; introduced Pitts to McCulloch and is the source for nearly every popular Pitts-biography scene (recorded in *Talking Nets*, 2000). Co-author of the 1959 frog's-eye paper. |
+| Nicolas Rashevsky | 1899–1972 | Mathematical biophysicist at the University of Chicago; founder and editor of the *Bulletin of Mathematical Biophysics* — the journal that published the 1943 paper. The institutional context the chapter must keep in view. |
+| Donald Hebb | 1904–1985 | Canadian psychologist at McGill; *The Organization of Behavior* (1949) places his work alongside the Rashevsky-Pitts-McCulloch line and gives the "neurophysiological postulate" at p. 62 — a *biological* hypothesis about synaptic strengthening, not an algorithm. |
+| John von Neumann | 1903–1957 | Cited "A Logical Calculus" in §4.2 of his June 1945 *First Draft of a Report on the EDVAC* — the only journal citation in the entire report. The route by which the 1943 paper's vocabulary entered stored-program computer architecture. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1923–1969)</strong></summary>
+
+```mermaid
+timeline
+    title From Pitts's Detroit library to von Neumann's EDVAC report
+    1923 : Walter Pitts born in Detroit, Michigan
+    1925 : Russell and Whitehead's Principia Mathematica second edition appears
+    1935 : Lettvin's oral history — the 12-year-old Pitts hides in a Detroit public library, encounters Principia, and writes to Russell
+    1938 : Carnap publishes The Logical Syntax of Language (New York)
+    1942 : Pitts moves into McCulloch's Hinsdale household; the collaboration begins
+    1943 : McCulloch and Pitts publish A Logical Calculus of the Ideas Immanent in Nervous Activity (Bull. Math. Biophysics 5)
+         : Fall — Wiener invites Pitts to MIT as a special student
+    1945 : June 30 — von Neumann's First Draft of a Report on the EDVAC cites only A Logical Calculus
+    1949 : Hebb publishes The Organization of Behavior; the neurophysiological postulate at p. 62
+    1956 : Kleene's Representation of Events in Nerve Nets and Finite Automata recasts the 1943 calculus as finite-automata theory
+    1959 : Lettvin, Maturana, McCulloch, Pitts — What the Frog's Eye Tells the Frog's Brain (forward-pointer)
+    1969 : May — Walter Pitts dies; McCulloch dies four months later
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **All-or-none neuron** — Idealisation of the biological neuron in which firing is binary: at any time step the neuron either fires (output 1) or does not (output 0). One of the five physical assumptions on p. 118 of the 1943 paper.
+- **Threshold-logic gate** — A unit that fires when the (weighted) sum of its excitatory inputs reaches a fixed threshold and no inhibitory input is active. McCulloch and Pitts realised AND at threshold 2, OR at threshold 1, and NOT via an inhibitory connection.
+- **Net without circles** — A McCulloch-Pitts network with no feedback loops — equivalent in expressive power to propositional logic. The combinational core of the 1943 calculus.
+- **Net with circles** — A McCulloch-Pitts network containing feedback loops, in which a neuron's firing now can depend on its (or another neuron's) firing one or more time steps ago. Carries bounded memory and expresses recursive predicates; later legible as a *finite automaton* in Kleene's 1956 vocabulary.
+- **Theorem 7** — The 1943 paper's formal accommodation of plasticity: "Alterable synapses can be replaced by circles" (original p. 124). A net whose connections change over time can be re-expressed as a fixed net with extra circular pathways gating signal flow. The theorem absorbs learning; it does *not* supply a learning algorithm.
+- **Hebbian postulate** — Hebb's 1949 hypothesis (*Organization of Behavior* p. 62) that repeated co-firing between two neurons strengthens the synapse between them. A *biological* hypothesis about where plasticity might live in nervous tissue, not a weight-update rule. The textbook-compressed "Hebb's rule" was assigned the name later.
+
+</details>
+
 In the history of computation, the transition from continuous physical processes to discrete logical operations is often treated as an inevitable progression. But in the early 1940s, the application of mathematics to the nervous system was overwhelmingly dominated by differential equations and biophysics. The intellectual leap that treated an idealized neuron's firing as a proposition, and a network of neurons as a propositional calculus, required a profound change in mathematical language. That change was formalized in a 1943 paper by Warren McCulloch and Walter Pitts, titled "A Logical Calculus of the Ideas Immanent in Nervous Activity." It was not the first mathematical model of neurons, nor did it offer a functional learning algorithm that could be trained on data. Instead, it was an act of naming the right level of abstraction, providing a formal bridge that connected the biology of the brain to the symbolic logic of early computer science.
 
 To understand how this abstraction came to be, we must look at the unlikely collaboration that produced it. The popular history of Walter Pitts's life is often rendered in dramatic, almost mythological terms. Much of what is commonly repeated about his early years traces through the oral history of his friend and colleague Jerome Lettvin, recorded decades later and preserved in subsequent biographical accounts—and these events are best read as Lettvin's oral-history reconstructions, not as settled documentary facts. In the version Lettvin remembered, Pitts was born in Detroit in 1923. He is said to have sought refuge from neighborhood bullies by hiding in a public library in 1935. According to this reconstruction, the twelve-year-old Pitts encountered Bertrand Russell and Alfred North Whitehead's monumental *Principia Mathematica*. He reportedly read its extensive volumes over three days, identified errors in its formidable logic, and wrote a letter directly to Russell. Russell reportedly replied, acknowledging the corrections and inviting the young prodigy to study at Cambridge—an invitation the twelve-year-old boy could not accept.
@@ -72,3 +124,7 @@ The paper's influence on computer architecture was rapid and direct. When John v
 By the end of the 1950s the same group's 1959 *Frog's-Eye* paper, by Pitts with Lettvin, McCulloch, and Maturana, would point past a strictly logical reading of the 1943 calculus — a thread later chapters will pick up.
 
 The 1943 paper did not provide a working blueprint for how brains learn, nor did it offer an algorithm that could be trained to recognize patterns. What Warren McCulloch and Walter Pitts achieved was something more foundational. By replacing the differential equations of biophysics with the discrete symbols of propositional logic, they named the right level of abstraction. They proved that the seemingly ineffable operations of the mind could be mapped, mathematically and rigorously, onto a network of binary switches. In doing so, they created the theoretical language that would allow the study of the brain and the engineering of the computer to speak to one another for the rest of the century.
+
+:::note[Why this still matters today]
+Every artificial neural network in production today inherits the McCulloch-Pitts abstraction: a unit whose output is a thresholded combination of weighted inputs. The vocabulary — "neuron," "weight," "threshold," "activation" — is the 1943 paper's lexicon, even where modern training procedures have left the strict logic-circuit reading behind. The Section 1 / Theorem 7 absorption of plasticity into fixed-with-loops nets prefigures the way modern recurrent networks carry state in cyclic structure. The chapter's quieter point — that 1943 named a level of abstraction without supplying a learning algorithm, and that the algorithm waited for Rosenblatt's perceptron in the late 1950s — preserves a historical sequence the textbook compression often blurs.
+:::
