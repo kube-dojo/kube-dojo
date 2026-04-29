@@ -1,1 +1,31 @@
-status: researching
+chapter: ch-49-the-custom-silicon
+status: capacity_plan_anchored
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  total_range: "3500-4900"
+  layers:
+    - scene: 1
+      topic: "2013 capacity trigger and inference/training split"
+      range: "600-850"
+      anchors: ["sources.md C2", "sources.md C3", "sources.md C4", "sources.md C5", "sources.md C6"]
+    - scene: 2
+      topic: "deployment artifact: custom ASIC in existing datacenters"
+      range: "650-900"
+      anchors: ["sources.md C7", "sources.md C8", "sources.md C13", "sources.md C22", "sources.md C23", "sources.md C24", "sources.md C25"]
+    - scene: 3
+      topic: "systolic architecture explanation"
+      range: "800-1050"
+      anchors: ["sources.md C3", "sources.md C9", "sources.md C10", "sources.md C11", "sources.md C12", "sources.md C13", "sources.md C20"]
+    - scene: 4
+      topic: "benchmark as economics"
+      range: "800-1100"
+      anchors: ["sources.md C14", "sources.md C15", "sources.md C16", "sources.md C17", "sources.md C18", "sources.md C19", "sources.md C20", "sources.md C21"]
+    - scene: 5
+      topic: "platform handoff and honest close"
+      range: "650-1000"
+      anchors: ["sources.md C26", "sources.md C27", "sources.md C28", "sources.md C29", "sources.md C30"]
+claim_counts:
+  green: 30
+  yellow: 5
+  red: 2
+last_updated: 2026-04-29
