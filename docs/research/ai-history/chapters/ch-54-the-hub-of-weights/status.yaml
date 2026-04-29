@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 8
 chapter: 54
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_drafted_awaiting_cross_family_review
+last_updated: 2026-04-29
 green_claims: 6
 yellow_claims: 5
 red_claims: 0
@@ -37,3 +37,7 @@ notes: |
   user anecdotes, or community reaction to reach the top of the book target.
   Guardrail_count records explicit prohibitions; red_claims is reserved for
   in-scope claims that fail verification.
+
+  Prose drafted by Codex on 2026-04-29 at 4,001 words, inside the approved
+  4,000-4,800 word range and below the 4,800-word cap. Awaiting cross-family
+  prose/source review before acceptance.

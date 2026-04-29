@@ -125,7 +125,7 @@ Scaling laws, attention, and the democratization of AI through open weights.
 | 51 | [The Open Source Distribution Layer](./ch-51-the-open-source-distribution-layer/) |
 | 52 | [Bidirectional Context](./ch-52-bidirectional-context/) |
 | 53 | The Dawn of Few-Shot Learning *(coming soon)* |
-| 54 | The Hub of Weights *(coming soon)* |
+| 54 | [The Hub of Weights](./ch-54-the-hub-of-weights/) |
 | 55 | The Scaling Laws *(coming soon)* |
 | 56 | The Megacluster *(coming soon)* |
 | 57 | The Alignment Problem *(coming soon)* |
