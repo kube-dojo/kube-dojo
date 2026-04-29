@@ -1,1 +1,38 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-45-generative-adversarial-networks
+issue: 394
+part: 7
+research_owner: Codex
+updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  total_range_words: "3650-5100"
+  layers:
+    - scene: 1
+      topic: The Montreal Spark
+      range_words: "500-750"
+      anchored_claims: [G1, G2, G3]
+    - scene: 2
+      topic: The Game on One Page
+      range_words: "850-1150"
+      anchored_claims: [G4, G5, G6, G7]
+    - scene: 3
+      topic: Why This Was Different
+      range_words: "650-900"
+      anchored_claims: [G8, G9, G10, G11, G12]
+    - scene: 4
+      topic: The First Images and the Instability Tax
+      range_words: "750-1050"
+      anchored_claims: [G13, G14, G15, G16, G17]
+    - scene: 5
+      topic: From DCGAN to StyleGAN Faces
+      range_words: "900-1250"
+      anchored_claims: [G18, G19, G20, G21, G22, G23, G24, G25]
+claim_counts:
+  green: 25
+  yellow: 5
+  red: 3
+validation_notes:
+  - "All five Prose Capacity Plan layers cite at least one anchored sources.md Green entry."
+  - "Remote curl failed in this sandbox due DNS resolution; anchors were verified through the browser tool and recorded by page/section."
+  - "Book-only research contract; no executable code or published Astro content changed."
