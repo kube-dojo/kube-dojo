@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 9
 chapter: 60
-review_state: prose_drafted_pending_cross_family_review
+review_state: prose_accepted_claude_approved_2026-04-29
 last_updated: 2026-04-29
 green_claims: 21
 yellow_claims: 3
@@ -25,11 +25,27 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 5800
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/575#issuecomment-4345121964
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_TIMEOUT
+    error_message_id: 3148
 notes: |
   Drafted by Codex on 2026-04-29 from the dual-cleared contract. Draft stays
   inside the architectural bridge from chat to operational loops: RAG, WebGPT,
   chain-of-thought, ReAct, Toolformer, plugins, function calling, LangChain /
   LlamaIndex context, and AutoGPT as a visible but brittle agent demo.
+  Claude approved the prose/source review on PR #575. Gemini prose review was
+  requested with gemini-3.1-pro-preview and fallback to gemini-3-flash-preview,
+  but the fallback exceeded the bridge 1800s hard timeout. Published draft is
+  4,953 words.
 
   Built from the modern-era placeholder into a capacity_plan_anchored contract.
   Core anchors are RAG (Lewis et al. 2020), WebGPT (OpenAI/Nakano et al.),
