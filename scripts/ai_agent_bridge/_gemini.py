@@ -9,6 +9,7 @@ usage logging uniformly across agents.
 """
 
 import atexit
+import os
 import subprocess
 import sys
 import time
@@ -54,6 +55,46 @@ try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
     GEMINI_WRITER_MODEL = _PARENT_ENV.get("KUBEDOJO_WRITER_MODEL", "gemini-3.1-pro-preview")
+
+
+_SWITCH_TO_SUBSCRIPTION = object()
+
+
+def _force_gemini_subscription() -> bool:
+    return os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1"
+
+
+def _gemini_api_key_present() -> bool:
+    return bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+
+
+def _gemini_rate_limited_text(text: str) -> bool:
+    return (
+        "exhausted your capacity" in text
+        or "429" in text
+        or "quota" in text.lower()
+        or "RESOURCE_EXHAUSTED" in text
+        or "usage limit reached" in text.lower()
+    )
+
+
+def _should_switch_to_subscription(text: str, use_subscription_auth: bool) -> bool:
+    """Return True when an API-key quota hit should retry through OAuth.
+
+    Durable auth rule: Gemini bridge calls use API-key auth first. Only when
+    that path hits quota/rate-limit do we strip GEMINI_API_KEY/GOOGLE_API_KEY
+    for the retry, which makes the Gemini CLI fall through to OAuth creds.
+    """
+    if use_subscription_auth or _force_gemini_subscription():
+        return False
+    return _gemini_api_key_present() and _gemini_rate_limited_text(text)
+
+
+def _should_switch_after_rate_limit_exception(use_subscription_auth: bool) -> bool:
+    """Runtime RateLimitedError is authoritative even when stderr is noisy."""
+    if use_subscription_auth or _force_gemini_subscription():
+        return False
+    return _gemini_api_key_present()
 
 
 def converse_gemini(content: str, task_id: str, model: str = GEMINI_WRITER_MODEL,
@@ -299,11 +340,20 @@ def _run_gemini_sync(msg: dict, message_id: int, model: str, prompt: str,
     base_delay = 30
     _response_sent = False
 
+    use_subscription_auth = _force_gemini_subscription()
+
     try:
         for attempt in range(max_retries):
             result = _run_gemini_attempt(msg, message_id, model, prompt, timeout_val,
                                          stdout_only, output_path, skip_github, attempt,
-                                         max_retries, base_delay)
+                                         max_retries, base_delay, use_subscription_auth)
+            if result is _SWITCH_TO_SUBSCRIPTION:
+                use_subscription_auth = True
+                print(
+                    "\n🔁 Gemini API-key quota exhausted — retrying via OAuth/subscription.",
+                    flush=True,
+                )
+                continue
             if result is None:
                 continue  # Retry (rate limited)
             if result is False:
@@ -319,7 +369,8 @@ def _run_gemini_sync(msg: dict, message_id: int, model: str, prompt: str,
 
 
 def _run_gemini_attempt(msg, message_id, model, prompt, timeout_val, stdout_only,
-                        output_path, skip_github, attempt, max_retries, base_delay):
+                        output_path, skip_github, attempt, max_retries, base_delay,
+                        use_subscription_auth=False):
     """Run a single Gemini CLI attempt via agent_runtime.
 
     Returns None to retry, False to stop, or (response, sent).
@@ -332,6 +383,8 @@ def _run_gemini_attempt(msg, message_id, model, prompt, timeout_val, stdout_only
     prompt_preview = prompt[:200].replace('\n', ' ')
     print(f"  [gemini] attempt {attempt+1}/{max_retries}, model={model}, "
           f"prompt={len(prompt)} chars: {prompt_preview}...", flush=True)
+    if use_subscription_auth:
+        print("  [gemini] auth=oauth/subscription (API keys stripped)", flush=True)
 
     pre_snapshot = None
     if output_path:
@@ -351,9 +404,13 @@ def _run_gemini_attempt(msg, message_id, model, prompt, timeout_val, stdout_only
             session_id=None,  # Gemini CLI has no --resume; bridge multi-turn
                               # is handled via conversation context injection
                               # in the prompt builder, not CLI-level resume.
-            tool_config=None,
+            tool_config=(
+                {"use_subscription_auth": True}
+                if use_subscription_auth else None
+            ),
             entrypoint="bridge",
             hard_timeout=max(timeout_val or 1800, 300),
+            skip_headroom_check=use_subscription_auth,
             # 600s matches dispatch.py. Gemini block-buffers stdout when
             # not a TTY and can stay silent 5+ min during reasoning; the
             # mtime poller on ~/.gemini/tmp/<project>/{logs.json, chats/}
@@ -363,6 +420,8 @@ def _run_gemini_attempt(msg, message_id, model, prompt, timeout_val, stdout_only
             stall_timeout=min(600, timeout_val or 600),
         )
     except RateLimitedError as exc:
+        if _should_switch_after_rate_limit_exception(use_subscription_auth):
+            return _SWITCH_TO_SUBSCRIPTION
         # Rate-limited: treat as retryable per legacy behavior
         print(f"\n⏳ Gemini rate limited: {exc}")
         retry_result = _handle_gemini_error(str(exc), model, attempt, max_retries, base_delay)
@@ -383,6 +442,8 @@ def _run_gemini_attempt(msg, message_id, model, prompt, timeout_val, stdout_only
         # Runtime returned a structured failure. Decide retry vs stop based
         # on stderr signal (legacy _handle_gemini_error).
         stderr_text = result.stderr_excerpt or ""
+        if _should_switch_to_subscription(stderr_text, use_subscription_auth):
+            return _SWITCH_TO_SUBSCRIPTION
         retry_result = _handle_gemini_error(stderr_text, model, attempt, max_retries, base_delay)
         if retry_result == "retry":
             return None
@@ -427,7 +488,7 @@ def _handle_gemini_error(stderr, model, attempt, max_retries, base_delay):
         print("💡 To switch accounts: run 'gemini auth login'")
         return "stop"
 
-    if "exhausted your capacity" in stderr or "429" in stderr or "quota" in stderr.lower():
+    if _gemini_rate_limited_text(stderr):
         delay = base_delay * (2 ** attempt)
         if attempt < max_retries - 1:
             print(f"\n⏳ Rate limited (attempt {attempt + 1}/{max_retries}). Waiting {delay}s...")

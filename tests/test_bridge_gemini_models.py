@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+from agent_runtime.adapters.gemini import GeminiAdapter
+from agent_runtime.errors import RateLimitedError
+from agent_runtime.result import Result
 from ai_agent_bridge import _cli, _gemini
 
 
@@ -154,3 +157,196 @@ def test_launch_gemini_background_uses_configured_python(monkeypatch, tmp_path):
     )
 
     assert captured["cmd"][0] == "custom-python"
+
+
+def test_gemini_adapter_strips_api_keys_for_subscription_auth(tmp_path):
+    plan = GeminiAdapter().build_invocation(
+        prompt="hello",
+        mode="workspace-write",
+        cwd=tmp_path,
+        model="gemini-test",
+        task_id="task-1",
+        session_id=None,
+        tool_config={"use_subscription_auth": True},
+    )
+
+    assert plan.env_overrides["GEMINI_API_KEY"] is None
+    assert plan.env_overrides["GOOGLE_API_KEY"] is None
+
+
+def test_bridge_switches_from_api_key_to_oauth_on_quota(monkeypatch, tmp_path):
+    calls: list[bool] = []
+
+    def fake_runtime_invoke(*_args, **kwargs):
+        calls.append(kwargs["tool_config"] == {"use_subscription_auth": True})
+        if len(calls) == 1:
+            raise RateLimitedError("gemini", "gemini-test", "quota exceeded")
+        return Result(
+            ok=True,
+            agent="gemini",
+            model="gemini-test",
+            mode="workspace-write",
+            response="OAuth response",
+            stderr_excerpt=None,
+            duration_s=0.1,
+            session_id=None,
+            rate_limited=False,
+            stalled=False,
+            returncode=0,
+            usage_record={},
+        )
+
+    monkeypatch.setenv("GEMINI_API_KEY", "api-key")
+    monkeypatch.delenv("KUBEDOJO_GEMINI_SUBSCRIPTION", raising=False)
+    monkeypatch.setattr(_gemini, "runtime_invoke", fake_runtime_invoke)
+    monkeypatch.setattr(_gemini, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_gemini, "_is_task_locked", lambda *_args: False)
+    monkeypatch.setattr(_gemini, "_write_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_remove_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_route_gemini_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "acknowledge", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_send_gemini_error", lambda *_args, **_kwargs: None)
+
+    response = _gemini._run_gemini_sync(
+        {"task_id": "task-1"},
+        123,
+        "gemini-test",
+        "prompt",
+        no_timeout=False,
+        stdout_only=True,
+        output_path=None,
+        allow_write=False,
+        skip_github=True,
+    )
+
+    assert response == "OAuth response"
+    assert calls == [False, True]
+
+
+def test_bridge_switches_to_oauth_when_rate_limit_reason_is_noisy(monkeypatch, tmp_path):
+    calls: list[bool] = []
+
+    def fake_runtime_invoke(*_args, **kwargs):
+        calls.append(kwargs["tool_config"] == {"use_subscription_auth": True})
+        if len(calls) == 1:
+            raise RateLimitedError(
+                "gemini",
+                "gemini-test",
+                "Warning: Basic terminal detected. Visual rendering limited.",
+            )
+        return Result(
+            ok=True,
+            agent="gemini",
+            model="gemini-test",
+            mode="workspace-write",
+            response="OAuth response after noisy rate limit",
+            stderr_excerpt=None,
+            duration_s=0.1,
+            session_id=None,
+            rate_limited=False,
+            stalled=False,
+            returncode=0,
+            usage_record={},
+        )
+
+    monkeypatch.setenv("GEMINI_API_KEY", "api-key")
+    monkeypatch.delenv("KUBEDOJO_GEMINI_SUBSCRIPTION", raising=False)
+    monkeypatch.setattr(_gemini, "runtime_invoke", fake_runtime_invoke)
+    monkeypatch.setattr(_gemini, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_gemini, "_is_task_locked", lambda *_args: False)
+    monkeypatch.setattr(_gemini, "_write_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_remove_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_route_gemini_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "acknowledge", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_send_gemini_error", lambda *_args, **_kwargs: None)
+
+    response = _gemini._run_gemini_sync(
+        {"task_id": "task-1"},
+        123,
+        "gemini-test",
+        "prompt",
+        no_timeout=False,
+        stdout_only=True,
+        output_path=None,
+        allow_write=False,
+        skip_github=True,
+    )
+
+    assert response == "OAuth response after noisy rate limit"
+    assert calls == [False, True]
+
+
+def test_bridge_force_subscription_skips_api_key(monkeypatch, tmp_path):
+    calls: list[dict | None] = []
+
+    def fake_runtime_invoke(*_args, **kwargs):
+        calls.append(kwargs["tool_config"])
+        return Result(
+            ok=True,
+            agent="gemini",
+            model="gemini-test",
+            mode="workspace-write",
+            response="forced OAuth response",
+            stderr_excerpt=None,
+            duration_s=0.1,
+            session_id=None,
+            rate_limited=False,
+            stalled=False,
+            returncode=0,
+            usage_record={},
+        )
+
+    monkeypatch.setenv("GEMINI_API_KEY", "api-key")
+    monkeypatch.setenv("KUBEDOJO_GEMINI_SUBSCRIPTION", "1")
+    monkeypatch.setattr(_gemini, "runtime_invoke", fake_runtime_invoke)
+    monkeypatch.setattr(_gemini, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_gemini, "_is_task_locked", lambda *_args: False)
+    monkeypatch.setattr(_gemini, "_write_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_remove_pid_file", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_route_gemini_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "acknowledge", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(_gemini, "_send_gemini_error", lambda *_args, **_kwargs: None)
+
+    response = _gemini._run_gemini_sync(
+        {"task_id": "task-1"},
+        123,
+        "gemini-test",
+        "prompt",
+        no_timeout=False,
+        stdout_only=True,
+        output_path=None,
+        allow_write=False,
+        skip_github=True,
+    )
+
+    assert response == "forced OAuth response"
+    assert calls == [{"use_subscription_auth": True}]
+
+
+def test_model_check_falls_back_to_oauth_on_api_quota(monkeypatch):
+    from ai_agent_bridge import _model
+
+    envs: list[dict[str, str]] = []
+
+    def fake_run(*_args, **kwargs):
+        envs.append(kwargs["env"])
+        if len(envs) == 1:
+            return SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="RESOURCE_EXHAUSTED quota exceeded",
+            )
+        return SimpleNamespace(returncode=0, stdout="MODEL_OK", stderr="")
+
+    monkeypatch.setattr(_model, "_PARENT_ENV", {"GEMINI_API_KEY": "api-key"})
+    monkeypatch.setattr(_model.subprocess, "run", fake_run)
+    monkeypatch.delenv("KUBEDOJO_GEMINI_SUBSCRIPTION", raising=False)
+    _model._MODEL_CACHE.clear()
+
+    try:
+        assert _model.check_model("gemini-test")
+    finally:
+        _model._MODEL_CACHE.clear()
+
+    assert envs[0]["GEMINI_API_KEY"] == "api-key"
+    assert "GEMINI_API_KEY" not in envs[1]

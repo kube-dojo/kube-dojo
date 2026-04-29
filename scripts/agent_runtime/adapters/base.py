@@ -53,11 +53,11 @@ class InvocationPlan:
             if any. Adapters that use ``codex exec -o <file>`` or
             ``gemini --output-path <file>`` populate this; the runner reads
             it on completion. None if output goes to stdout.
-        env_overrides: Env vars to add to the subprocess environment.
-            Merged onto ``os.environ`` fresh per invocation — NEVER
-            ``os.environ.update()``. Adapters should only set values that
-            are specific to this call (e.g. Gemini auth tokens). Values set
-            here leak nowhere else.
+        env_overrides: Env vars to add to or remove from the subprocess
+            environment. Merged onto ``os.environ`` fresh per invocation —
+            NEVER ``os.environ.update()``. Set a value to ``None`` to remove
+            that variable for this child only (e.g. strip Gemini API keys so
+            the CLI falls through to OAuth). Values set here leak nowhere else.
         liveness_paths: Files whose mtime indicates the agent is alive.
             Used by the runner's stall detector as a fallback when stdout
             is buffered/redirected. Can be empty; if so, only stdout
@@ -67,7 +67,7 @@ class InvocationPlan:
     cwd: Path
     stdin_payload: str = ""
     output_file: Path | None = None
-    env_overrides: dict[str, str] = field(default_factory=dict)
+    env_overrides: dict[str, str | None] = field(default_factory=dict)
     liveness_paths: tuple[Path, ...] = ()
 
 

@@ -13,7 +13,8 @@ Flow (see docs/design/agent-runtime.md § 4.2 for the full spec):
     4. Enforce resume policy: delegate/dispatch entrypoints may not pass
        session_id for agents with resume_policy="bridge_only".
     5. Check has_headroom(agent, model) — raise RateLimitedError pre-call
-       if we're known rate-limited.
+       if we're known rate-limited, unless the caller explicitly skips that
+       check for a distinct quota path (e.g. Gemini API key -> OAuth retry).
     6. Adapter builds the InvocationPlan.
     7. Spawn subprocess via Popen with watchdog (stall detection).
     8. Poll should_kill() every second; on return or kill, stop watchdog.
@@ -233,6 +234,7 @@ def invoke(
     entrypoint: str = "runtime",
     hard_timeout: int = 3600,
     stall_timeout: int = 180,  # accepted but ignored; see docstring
+    skip_headroom_check: bool = False,
 ) -> Result:
     """Single entry point for all agent CLI invocations.
 
@@ -265,6 +267,10 @@ def invoke(
             successful long-running calls were killed as false-positive
             stalls. See watchdog.py::should_kill() docstring for the
             full incident chain. hard_timeout is the only safety net now.
+        skip_headroom_check: Skip the pre-call rate-limit cache. Use only when
+            the caller has deliberately switched to a different quota/auth path
+            from the cached failure, such as Gemini API-key quota exhaustion
+            falling back to OAuth/subscription credentials.
 
     Returns:
         Result with ok, response, timing, session_id, and the full usage
@@ -302,7 +308,10 @@ def invoke(
 
     # ---------- 5. Pre-call rate-limit check ----------
     effective_model = model or adapter.default_model
-    ok, reason = has_headroom(agent_name, effective_model)
+    ok, reason = (True, "") if skip_headroom_check else has_headroom(
+        agent_name,
+        effective_model,
+    )
     if not ok:
         # Record the short-circuit for observability — the caller didn't
         # burn a quota slot, but we still want the usage log to show it.
@@ -340,8 +349,15 @@ def invoke(
 
     # Merge env overrides onto a snapshot of os.environ. We do NOT mutate
     # os.environ itself — this keeps the parent process clean and prevents
-    # leakage to other adapters running concurrently.
-    env = {**os.environ, **plan.env_overrides}
+    # leakage to other adapters running concurrently. ``None`` means "remove
+    # this variable for the child", used by Gemini OAuth fallback to strip API
+    # keys without touching the parent shell.
+    env = os.environ.copy()
+    for key, value in plan.env_overrides.items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
 
     # ---------- 7–9. Run the subprocess with watchdog ----------
     start_time = time.monotonic()

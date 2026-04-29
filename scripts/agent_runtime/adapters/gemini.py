@@ -120,7 +120,16 @@ class GeminiAdapter:
             cmd.append("--approval-mode=yolo")
 
         # MCP tool restriction via tool_config.
+        env_overrides: dict[str, str | None] = {}
         if tool_config:
+            # API-key auth is the default. When the bridge detects API-key
+            # quota exhaustion, it retries with this flag so the child process
+            # sees no Gemini API keys and the CLI falls through to OAuth creds
+            # in ~/.gemini/oauth_creds.json.
+            if tool_config.get("use_subscription_auth"):
+                env_overrides["GEMINI_API_KEY"] = None
+                env_overrides["GOOGLE_API_KEY"] = None
+
             mcp_server_names = tool_config.get("mcp_server_names")
             if mcp_server_names:
                 if isinstance(mcp_server_names, (list, tuple)):
@@ -141,7 +150,7 @@ class GeminiAdapter:
             cwd=cwd,
             stdin_payload=prompt,
             output_file=None,  # Gemini writes to stdout only.
-            env_overrides={},
+            env_overrides=env_overrides,
             liveness_paths=(),  # stdout streamer is not actually sufficient —
             # see liveness_signal_paths() docstring — but we compute the
             # real paths lazily there because they depend on cwd.

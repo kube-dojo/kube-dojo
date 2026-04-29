@@ -1,9 +1,36 @@
 """Model availability checking."""
 
+import os
 import subprocess
 from pathlib import Path
 
 from ._config import _MODEL_CACHE, _MODEL_CACHE_TTL, _PARENT_ENV, GEMINI_CLI
+
+
+def _force_gemini_subscription() -> bool:
+    return os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1"
+
+
+def _subscription_env() -> dict[str, str]:
+    env = _PARENT_ENV.copy()
+    env.pop("GEMINI_API_KEY", None)
+    env.pop("GOOGLE_API_KEY", None)
+    return env
+
+
+def _has_gemini_api_key(env: dict[str, str]) -> bool:
+    return bool(env.get("GEMINI_API_KEY") or env.get("GOOGLE_API_KEY"))
+
+
+def _model_check_quota_exhausted(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        "exhausted" in lowered
+        or "429" in text
+        or "quota" in lowered
+        or "resource_exhausted" in lowered
+        or "usage limit reached" in lowered
+    )
 
 
 def check_model(model: str, timeout: int = 15, force: bool = False) -> bool:
@@ -23,16 +50,37 @@ def check_model(model: str, timeout: int = 15, force: bool = False) -> bool:
             print(f"🔍 Model '{model}': {status} (cached {int(age)}s ago)")
             return available
 
+    env = _subscription_env() if _force_gemini_subscription() else _PARENT_ENV
     try:
         result = subprocess.run(
             [GEMINI_CLI, "-m", model, "-p", "Reply with exactly: MODEL_OK"],
             capture_output=True, text=True, timeout=timeout,
             cwd=str(Path(__file__).parent.parent.parent),
-            env=_PARENT_ENV,
+            env=env,
         )
         if result.returncode == 0 and "MODEL_OK" in result.stdout:
             _MODEL_CACHE[model] = (True, _time.time())
             return True
+        combined = f"{result.stdout}\n{result.stderr}"
+        if (
+            not _force_gemini_subscription()
+            and _has_gemini_api_key(env)
+            and _model_check_quota_exhausted(combined)
+        ):
+            print(
+                f"⚠️  Model '{model}' API-key quota exhausted; "
+                "checking OAuth/subscription path."
+            )
+            oauth_result = subprocess.run(
+                [GEMINI_CLI, "-m", model, "-p", "Reply with exactly: MODEL_OK"],
+                capture_output=True, text=True, timeout=timeout,
+                cwd=str(Path(__file__).parent.parent.parent),
+                env=_subscription_env(),
+            )
+            if oauth_result.returncode == 0 and "MODEL_OK" in oauth_result.stdout:
+                _MODEL_CACHE[model] = (True, _time.time())
+                return True
+            result = oauth_result
         _handle_model_check_failure(result, model, _time)
         _MODEL_CACHE[model] = (False, _time.time())
         return False
