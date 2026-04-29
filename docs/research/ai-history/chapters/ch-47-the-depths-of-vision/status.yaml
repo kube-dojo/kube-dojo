@@ -1,1 +1,22 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-47-the-depths-of-vision
+issue: 394
+owner: Codex
+updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  min_words: 3850
+  max_words: 5300
+claims:
+  green: 26
+  yellow: 3
+  red: 3
+prose_capacity_plan:
+  anchored: true
+  layers: 5
+  every_layer_has_scene: true
+  every_layer_has_sources_anchor: true
+notes:
+  - "All Prose Capacity Plan layers cite scene-sketches.md scenes and specific sources.md Green row anchors."
+  - "Local curl was blocked by DNS resolution failure; anchors were verified through browser-backed PDF/HTML extraction."
+  - "Do not draft human-level, lab-drama, or exact ResNet hardware claims without new anchors."
