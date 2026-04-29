@@ -27,7 +27,7 @@ Chapter 64 explained why local and edge deployment made smaller, compressed, spe
 
 The first public shock was visual.
 
-Stable Diffusion showed that a capable generative model could leave the API and enter public hands. Its 2022 release placed model weights, code, a model card, license terms, consumer-GPU feasibility claims, training-data notes, and limitations into view. Chapter 58 owns the diffusion mathematics and image-generation story. Here, Stable Diffusion matters as a precedent: a powerful generative model became something people could download, run, modify, and wrap into tools.
+Stable Diffusion showed that a capable generative model could leave the API and enter public hands. Its August 22, 2022 public release placed model weights, code, a model card, license terms, consumer-GPU feasibility claims, training-data notes, and limitations into view. Chapter 58 owns the diffusion mathematics and image-generation story. Here, Stable Diffusion matters as a precedent: a powerful generative model became something people could download, run, modify, and wrap into tools.
 
 That public usability is what made it a precedent rather than only a release note. People could test the model directly, not just read a paper or call a hosted endpoint. The model entered workshops, laptops, Discord servers, notebooks, and prototype products.
 
@@ -63,7 +63,7 @@ That porousness is why LLaMA became a base layer in the public imagination. The 
 
 The community reaction was fast because the technical pathway was already waiting: adapters.
 
-LoRA had shown how to make fine-tuning less like retraining an entire giant model. Hu and collaborators described freezing pretrained weights and injecting trainable low-rank matrices. The base model stays mostly fixed. The adaptation lives in small modules. The paper reported dramatic reductions in trainable parameters and GPU memory, and even a GPT-3 175B example where a cited configuration reduced VRAM and checkpoint size substantially.
+LoRA had shown how to make fine-tuning less like retraining an entire giant model. Hu and collaborators described freezing pretrained weights and injecting trainable low-rank matrices. The base model stays mostly fixed. The adaptation lives in small modules. The paper reported up to a 10,000x reduction in trainable parameters and a 3x reduction in GPU memory, and even a GPT-3 175B example where a cited configuration reduced VRAM and checkpoint size substantially.
 
 The key idea is simple enough: do not modify every weight if the task can be learned through a low-rank update. Train a small set of adapter parameters instead. That makes adaptation cheaper, faster, easier to distribute, and easier to combine with a shared base model. A base model can become a platform. Adapters become portable behavior.
 
@@ -123,7 +123,7 @@ Those terms became part of product architecture. A license can determine whether
 
 The release package also became a trust signal. Llama 2's license, acceptable-use policy, code examples, and responsible-use guidance were not incidental paperwork. They were part of the argument that wider access could be managed. The model was not just a file. It was a release program. That became one of the ways large companies tried to distinguish their open-weight strategy from uncontrolled circulation.
 
-Mistral 7B sharpened the point. Mistral announced a 7.3B model released under Apache 2.0 and framed as usable without restrictions. Its paper reported that Mistral 7B outperformed the best open 13B model, used grouped-query attention and sliding-window attention, and released models under Apache 2.0. The performance claims should remain source-bound to Mistral's evaluation. The license shift is the historical center.
+Mistral 7B sharpened the point by moving from commercially usable access toward a simpler permissive-license story. Mistral announced a 7.3B model released under Apache 2.0 and framed as usable without restrictions. Its paper reported that Mistral 7B outperformed the best open 13B model, used grouped-query attention and sliding-window attention, and released models under Apache 2.0. The performance claims should remain source-bound to Mistral's evaluation. The license shift is the historical center.
 
 Apache 2.0 made Mistral feel different from gated or limited releases. It was not merely "available." It was permissively licensed. Developers could build commercial products without navigating the same restrictions as research-only or non-commercial descendants. The announcement culture, including direct downloads and a more hacker-friendly release style, made the model part of an infrastructure movement as much as a paper result.
 

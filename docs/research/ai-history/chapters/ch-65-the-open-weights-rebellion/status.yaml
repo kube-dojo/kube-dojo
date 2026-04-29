@@ -27,7 +27,7 @@ verdicts:
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
-  is 4,275 words and stays inside open-weights politics: Stable Diffusion as
+  is 4,296 words and stays inside open-weights politics: Stable Diffusion as
   precedent, LLaMA portability, LoRA/QLoRA adapter access, Alpaca/Vicuna
   community fine-tuning with caveats, Llama 2 commercial release, Mistral 7B
   Apache 2.0 release, and the open weights/open source/open data/open governance
