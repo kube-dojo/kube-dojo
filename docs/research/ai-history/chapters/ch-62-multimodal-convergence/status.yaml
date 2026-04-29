@@ -27,7 +27,7 @@ verdicts:
   resolution_rule: dual_cross_family_verdict_with_cap
 notes: |
   Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
-  is 3,815 words and stays inside multimodal convergence: CLIP/Flamingo
+  is 3,821 words and stays inside multimodal convergence: CLIP/Flamingo
   precursors, GPT-4/GPT-4V visual assistant framing, Gemini's source-bound
   native multimodality claim, GPT-4o audio/vision/text interface, and Sora/Veo
   video frontier with limitations.
