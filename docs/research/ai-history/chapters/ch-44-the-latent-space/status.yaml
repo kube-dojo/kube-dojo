@@ -1,1 +1,21 @@
-status: researching
+status: capacity_plan_anchored
+chapter: ch-44-the-latent-space
+issue: 394
+owner: Codex
+updated: 2026-04-29
+word_count_discipline: 3k-5k likely
+prose_capacity:
+  min_words: 3600
+  max_words: 4950
+  anchored: true
+claim_counts:
+  green: 28
+  yellow: 4
+  red: 3
+required_checks:
+  capacity_plan_layers_reference_sources: true
+  capacity_plan_layers_reference_scene_sketches: true
+  scratch_files_removed: true
+notes:
+  - Shell curl was attempted first per task instructions, but DNS/network access was unavailable in this environment.
+  - Page anchors were verified from open PDFs through available document extraction.
