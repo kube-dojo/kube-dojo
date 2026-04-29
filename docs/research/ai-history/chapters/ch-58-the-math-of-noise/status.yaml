@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 8
 chapter: 58
-review_state: prose_drafted_awaiting_cross_family_review
+review_state: prose_accepted_dual_cross_family_review
 last_updated: 2026-04-29
 green_claims: 16
 yellow_claims: 3
@@ -54,3 +54,6 @@ notes: |
   Keep review fixes inside the approved evidence boundary: no Midjourney
   internals, no universal diffusion-over-GAN claim, no literal entropy-reversal
   claim, and no full copyright/labor/open-weights analysis in this chapter.
+
+  Accepted 2026-04-29 after Claude and Gemini cross-family prose approval.
+  Published draft is 4,000 words.
