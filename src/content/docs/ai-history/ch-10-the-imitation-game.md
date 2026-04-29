@@ -5,6 +5,51 @@ sidebar:
   order: 10
 ---
 
+:::tip[In one paragraph]
+Between 1947 and 1952, Alan Turing replaced the unanswerable question "Can machines think?" with an empirical protocol: a typed parlour game routed through a teleprinter, in which an interrogator decides whether the hidden party is human or machine. Turing did not found AI as a research field — that came in 1956. He set the empirical goalpost. Later commentators rebranded the Imitation Game as the "Turing Test" and stripped its original gender-disambiguation structure.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Alan Turing | 1912–1954 | Author of the 1947 LMS lecture, the 1948 NPL report *Intelligent Machinery*, and the 1950 *Mind* paper "Computing Machinery and Intelligence." Reader in Mathematics at the University of Manchester from 1948. |
+| Max H. A. Newman | 1897–1984 | Fielden Professor of Mathematics at Manchester; head of Turing's department; built the Manchester Royal Society Computing Laboratory after the war. Participant in the January 1952 BBC broadcast. |
+| Sir Geoffrey Jefferson | 1886–1961 | Professor of Neurosurgery at Manchester. His 1949 Lister Oration "The Mind of Mechanical Man" attacked machine-intelligence claims on biological grounds; in the 1952 broadcast he carried the same objection forward against Turing. |
+| R. B. Braithwaite | 1900–1990 | Knightbridge Professor of Moral Philosophy at Cambridge; the philosophy-of-mind voice in the 1952 broadcast. |
+| Ada Lovelace | 1815–1852 | Author of the 1842 *Sketch of the Analytical Engine*. Cited by name in *Mind* §6.6 ("Lady Lovelace's Objection"): the Analytical Engine "has no pretensions to originate anything." |
+| Helen Keller | 1880–1968 | Cited by Turing in *Mind* §7 to argue that education does not require conventional sensory channels — communication in both directions suffices. Used to defend the child-machine programme. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1947–1952)</strong></summary>
+
+```mermaid
+timeline
+    title Turing's Imitation-Game Pivot, 1947–1952
+    20 February 1947 : Lecture to the London Mathematical Society on the ACE : "Fair play for the machine"; brain-memory estimate of 10¹⁰ binary digits; intelligence as learning from experience
+    1948 : NPL report Intelligent Machinery (unpublished until 1968) : Unorganized A-type machines; cortex-as-unorganized-machine analogy; education by rewards and punishments; two-room chess proto-imitation experiment
+    October 1950 : "Computing Machinery and Intelligence" published in Mind 59 (236), pp. 433–460 : Imitation Game definition; teleprinter as ideal interface; nine objections including Lady Lovelace; 10⁹-bit / 70% / five-minute / end-of-century prediction; child-machine programme
+    10 January 1952 : BBC Third Programme records "Can Automatic Calculating Machines Be Said To Think?" : Four-way conversation: Turing, Newman, Jefferson, Braithwaite. Broadcast 14 January.
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Imitation Game** — Turing's 1950 protocol for testing machine intelligence: a typed exchange in which an interrogator, hidden from the other parties, tries to identify which of two unseen respondents is the human and which is the machine. Turing's term; the rebrand to "Turing Test" came later.
+- **Teleprinter** — A 1950s electromechanical device that sent typed text over a wire to another teleprinter. Turing called it "the ideal arrangement" for the game because it strips away voice, face, body, and any other non-linguistic evidence the interrogator might use.
+- **Discrete-state machine** — In Turing's 1950 framing, a system whose future behaviour is determined by its current state and input, moving through a finite (if enormous) space of configurations. The class to which Turing argues a digital computer belongs.
+- **Universality argument** — Turing's claim that a single discrete-state machine, given adequate storage, speed, and the right programme, can imitate any other discrete-state machine. The argumentative bridge from the parlour game to actual digital hardware.
+- **Unorganized machine** — Turing's 1948 term for a discrete-state random network of simple logical units (A-type machines used NAND-like elements). Its initial state is deliberately unformed; he proposed the human infant cortex as a biological analogue.
+- **Paper interference vs. screwdriver interference** — Turing's 1948 distinction between modifying a machine by physically rewiring it (screwdriver) and by communicating instructions to it (paper). Education, he argued, is largely paper interference.
+- **Child machine** — Turing's 1950 proposal for how to build the imitation player without sixty workers spending fifty years hand-coding it: programme an infant mind rather than an adult one, and educate it through rewards and punishments.
+
+</details>
+
 The historical importance of Alan Turing's 1950 paper in *Mind* is not its prediction of a machine fooling an interrogator by the year 2000. It is an epistemic move. Between 1947 and 1952, Turing dismantled the definitional debate over the word "intelligence" and replaced it with a behavioural protocol. By routing interaction through a teleprinter and stripping away the physical body, Turing established an empirical baseline against which machine intelligence could be tested.
 
 That is a narrower claim than the one later mythology often makes for the paper. Turing did not found a research field called artificial intelligence in 1950, and he did not offer a working demonstration. He supplied a protocol, a set of constraints, and a way of refusing an argument about essences. The field's name, institutions, funding channels, and public programmes would come later. Here, the load-bearing move is the replacement of "Can machines think?" with a situation in which an interrogator has to decide.
@@ -112,3 +157,7 @@ During this half-century, the "Imitation Game" underwent a gradual rebrand. The 
 Whether this abstraction was faithful to Turing's intent remains disputed. Diane Proudfoot has argued that subsequent commentary stripped out the gender-disambiguation structure upon which Turing built the test. In that reading, the "abstracted" Turing Test, where the interrogator merely tries to distinguish human from machine, is a different test from what Turing proposed. Other commentators have treated the gender axis as a vestigial feature that was meant to be abstracted away. The responsible historical point is not to settle that disagreement here, but to keep the original structure visible.
 
 Regardless of whether the gender structure was load-bearing, Turing's core epistemic move survived. By substituting an empirical, teleprinter-bound imitation game for the unanswerable question of whether machines can think, Turing set an operational baseline. The rest of the field would repeatedly argue about whether the baseline was sufficient, fair, too behavioural, too linguistic, too anthropomorphic, or too easy to game. But those arguments took place on the ground Turing had cleared: do not begin with a definition of thinking; begin with a test of what a machine can make a competent interrogator believe.
+
+:::note[Why this still matters today]
+Every benchmark that asks whether a model can hold a conversation indistinguishable from a person's descends from Turing's move. So does every "AI evaluation" panel that compares a model's typed output against a human's, every chatbot transcript a tester scores, every adversarial probe designed to catch a machine in a tell. The framing is so naturalised that it is easy to forget it had to be invented — and that the invention was an act of refusal: refusal of the definitional debate over the word "thinking," in favour of an empirical protocol. The arguments about whether the protocol is sufficient have not stopped; they take place on the ground Turing cleared.
+:::
