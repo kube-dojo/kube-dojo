@@ -124,7 +124,7 @@ Scaling laws, attention, and the democratization of AI through open weights.
 | 50 | [Attention Is All You Need](./ch-50-attention-is-all-you-need/) |
 | 51 | [The Open Source Distribution Layer](./ch-51-the-open-source-distribution-layer/) |
 | 52 | [Bidirectional Context](./ch-52-bidirectional-context/) |
-| 53 | The Dawn of Few-Shot Learning *(coming soon)* |
+| 53 | [The Dawn of Few-Shot Learning](./ch-53-the-dawn-of-few-shot-learning/) |
 | 54 | The Hub of Weights *(coming soon)* |
 | 55 | The Scaling Laws *(coming soon)* |
 | 56 | The Megacluster *(coming soon)* |
@@ -154,4 +154,4 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 
 ---
 
-52 of 72 chapters published. New chapters land regularly.
+53 of 72 chapters published. New chapters land regularly.
