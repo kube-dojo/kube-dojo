@@ -1,0 +1,78 @@
+# kube-dojo.github.io — crawler policy
+# All crawlers welcome by default, including AI/LLM crawlers
+# (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, Applebot,
+# CCBot, Amazonbot, Meta-ExternalAgent, etc.).
+#
+# robots.txt is advisory; non-compliant crawlers may ignore it.
+
+User-agent: *
+Allow: /
+
+# Chinese search crawlers — disallowed.
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: Baiduspider-image
+Disallow: /
+
+User-agent: Baiduspider-video
+Disallow: /
+
+User-agent: Baiduspider-news
+Disallow: /
+
+User-agent: Baiduspider-favo
+Disallow: /
+
+User-agent: Baiduspider-cpro
+Disallow: /
+
+User-agent: Baiduspider-ads
+Disallow: /
+
+User-agent: Sogou web spider
+Disallow: /
+
+User-agent: Sogou inst spider
+Disallow: /
+
+User-agent: Sogou Pic Spider
+Disallow: /
+
+User-agent: Sogou Orion spider
+Disallow: /
+
+User-agent: Sogou News Spider
+Disallow: /
+
+User-agent: Sogou blog
+Disallow: /
+
+User-agent: Sogou spider2
+Disallow: /
+
+User-agent: Sogou-Test-Spider
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: YisouSpider
+Disallow: /
+
+User-agent: 360Spider
+Disallow: /
+
+User-agent: 360Spider-Image
+Disallow: /
+
+User-agent: 360Spider-Video
+Disallow: /
+
+User-agent: HaoSouSpider
+Disallow: /
+
+User-agent: YoudaoBot
+Disallow: /
+
+Sitemap: https://kube-dojo.github.io/sitemap-index.xml
