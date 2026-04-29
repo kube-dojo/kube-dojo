@@ -6,6 +6,52 @@ sidebar:
   order: 17
 ---
 
+:::tip[In one paragraph]
+The perceptron's fall was not one theorem killing neural networks. Frank Rosenblatt's Mark I — a real electromechanical machine backed by the Office of Naval Research — learned simple patterns from examples. Minsky and Papert's 1969 *Perceptrons* proved that local, single-layer systems could not compute global predicates such as connectedness. The winter effect came from how that precise result was absorbed by a field whose funding and authority had already shifted toward symbolic AI.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Frank Rosenblatt | — | Cornell Aeronautical Laboratory psychologist; originator of perceptron theory and director of the ONR/RADC-funded Mark I program. |
+| Marvin Minsky | — | MIT AI leader; co-author of *Perceptrons* (1969). Earlier neural-net researcher who argued that learning machines need prior structure. |
+| Seymour Papert | — | Co-author of *Perceptrons*; later explicitly addressed whether he and Minsky had tried to "kill connectionism." |
+| Marvin Denicoff | — | ONR program officer; quoted by Olazaran on the funding scale gap between ONR support for Rosenblatt and ARPA's larger backing of symbolic AI. |
+| Mikel Olazaran | — | Historian and sociologist whose 1996 *Social Studies of Science* analysis separates the technical proof from the "official history" built around it. |
+| Leon Bottou | — | Author of the 2017 MIT Press foreword to *Perceptrons*; provides the key framing that neural-net research became unfashionable and that revival came only with PDP/backprop. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1956–1969)</strong></summary>
+
+```mermaid
+timeline
+    title The Perceptron's Fall, 1956–1969
+    1956 : Rosenblatt begins the perceptron research program at Cornell Aeronautical Laboratory
+    1958 : Rosenblatt publishes "The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain" in Psychological Review
+    June 1960 : Mark I perceptron publicly demonstrated at Cornell Aeronautical Laboratory : ONR-funded with RADC assistance; reported to recognise 26 letters after ~40 exposures each
+    1961 : Rosenblatt publishes Principles of Neurodynamics, expanding the program beyond the original 1958 article
+    Mid-1960s : Minsky and Papert's analysis circulates in draft form
+    1969 : MIT Press publishes Minsky and Papert's Perceptrons — proves connectedness is not conjunctively local of any order; multilayer pessimism expressed as conjecture
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Perceptron** — A computing element that applies weights to features of its input, sums them, and outputs a yes/no decision above a threshold. Rosenblatt's machine adjusted those weights by correcting its own errors during training.
+- **Predicate** — A function that returns true or false about its input. Minsky and Papert asked which predicates a perceptron can compute given that its parts each see only a limited portion of the input field.
+- **Connectedness** — The topological property of a figure whose marked pixels form a single unbroken region. A global predicate: no fixed-size local test can always answer it correctly as the image grows.
+- **Order (of a perceptron)** — Minsky and Papert's measure of how many input pixels a single partial predicate may examine simultaneously. Higher order means larger and more expensive local tests; the required order grows with problem size for parity and connectedness.
+- **Locality/diameter-limited** — A perceptron whose partial predicates each look only at a bounded neighborhood of the input field. Minsky and Papert's proofs apply specifically to this constrained architecture, not to all possible multilayer systems.
+- **Prior structure** — The representational bias built into a learning system before training begins — the choice of what features to look at, how they combine, and what the architecture can represent. Minsky and Papert's core argument: without appropriate prior structure, even a trainable system scales badly.
+
+</details>
+
 # Chapter 17: The Perceptron's Fall
 
 The standard story is too sharp. A neural network learned to recognize
@@ -465,3 +511,8 @@ their own language.
 
 The theorem did not close the door. It marked the threshold. For a generation,
 most of AI chose not to walk through it.
+
+:::note[Why this still matters today]
+Every modern deep-learning system still answers the question Minsky and Papert posed: what prior structure makes learning tractable? Convolutional layers encode spatial locality and translation invariance. Attention mechanisms build a different structure for sequence context. Scaling laws depend on the relationship between data, parameters, and compute. The specific architecture of the perceptron lost, but the argument from the perceptron controversy — that trainable weights alone do not guarantee useful generalization — remains the working assumption behind every architecture choice in contemporary machine learning.
+:::
+
