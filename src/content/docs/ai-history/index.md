@@ -148,10 +148,10 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 67 | [The Monopoly](./ch-67-the-monopoly/) |
 | 68 | [Data Labor and the Copyright Reckoning](./ch-68-data-labor-and-the-copyright-reckoning/) |
 | 69 | [The Data Exhaustion Limit](./ch-69-the-data-exhaustion-limit/) |
-| 70 | The Energy Grid Collision *(coming soon)* |
+| 70 | [The Energy Grid Collision](./ch-70-the-energy-grid-collision/) |
 | 71 | The Chip War *(coming soon)* |
 | 72 | The Infinite Datacenter *(coming soon)* |
 
 ---
 
-69 of 72 chapters published. New chapters land regularly.
+70 of 72 chapters published. New chapters land regularly.

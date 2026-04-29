@@ -1,8 +1,8 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 9
 chapter: 70
-review_state: dual_cross_family_approved
+review_state: prose_accepted_after_cross_family_fixes_2026-04-29
 last_updated: 2026-04-29
 green_claims: 12
 yellow_claims: 4
@@ -25,7 +25,29 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 6000
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  status: fixes_applied
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/607#issuecomment-4348095651
+  gemini:
+    model: gemini-3.1-pro-preview
+    date: 2026-04-29
+    verdict: NEEDS_FIX_AND_MERGE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/607#issuecomment-4348087714
 notes: |
+  Drafted by Codex on 2026-04-29 from the dual-cleared contract. Current draft
+  is 5,000 words and covers the physical data-center load,
+  IEA global/local demand framing, EPRI frontier-training power scenarios,
+  DOE/LBNL U.S. data-center share framing, grid timing mismatch,
+  the Susquehanna/FERC co-located-load dispute, physical vs contractual
+  supply mix, Microsoft/Constellation, Google/Kairos, Meta/Constellation,
+  and flexible load as partial mitigation. Cross-family prose review asked Codex
+  to remove an unanchored sub-regional hub list; Codex generalized the paragraph
+  back to the approved U.S./China/Europe and local-concentration framing.
+
   Built from placeholder into an anchored electricity/grid contract. Core
   anchors are IEA Energy and AI demand/supply pages, EPRI Scaling Intelligence,
   DOE/LBNL U.S. data-center share framing, FERC/Talen Susquehanna co-located
