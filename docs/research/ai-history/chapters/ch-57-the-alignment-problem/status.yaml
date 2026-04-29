@@ -1,9 +1,9 @@
-status: prose_ready
+status: prose_review
 owner: Codex
 part: 8
 chapter: 57
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_drafted_awaiting_cross_family_review
+last_updated: 2026-04-29
 green_claims: 15
 yellow_claims: 1
 red_claims: 0
@@ -40,3 +40,9 @@ notes: |
   Claude source-fidelity review approved all 15 Green claims and confirmed the
   single Yellow claim is correctly interpretive. Gemini gap/capacity audit
   returned READY_WITH_CAP at 5,800 words using gemini-3.1-pro-preview.
+
+  Drafted 2026-04-29 at 4,800 words and opened for cross-family prose review.
+  Keep review fixes inside the approved evidence boundary: no claim that RLHF
+  solved alignment, no invented unsafe prompts or labeler conversations, no
+  universal-safety claims, and no collapse of labeler preferences into all
+  human values.
