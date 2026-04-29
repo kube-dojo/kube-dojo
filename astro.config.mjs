@@ -1,11 +1,17 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 
 export default defineConfig({
   site: 'https://kube-dojo.github.io',
   trailingSlash: 'always',
   compressHTML: true,
+  markdown: {
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex],
+  },
   vite: {
     build: {
       rollupOptions: {
@@ -62,7 +68,7 @@ export default defineConfig({
         root: { label: 'English', lang: 'en' },
         uk: { label: 'Українська', lang: 'uk' },
       },
-      customCss: ['./src/css/custom.css'],
+      customCss: ['./src/css/custom.css', 'katex/dist/katex.min.css'],
       sidebar: [
 
         // ── 1. Foundations: beginner entry points ──
