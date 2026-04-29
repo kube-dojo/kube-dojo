@@ -1,0 +1,5 @@
+## Element 1 — Pull-quote
+Verdict: REJECT
+Reason: I fetched the cited Green Bahl/Jelinek/Mercer 1983 PDF from the URL recorded in `sources.md`, extracted it with `pdftotext`, and grepped for the proposed sentence and its distinctive phrases (`Speech recognition did not become easy`, `probability could replace hand confidence`, and `numeric uncertainty`). None appear in the primary source. The source's actual abstract begins, "Speech recognition is formulated as a problem of maximum likelihood decoding," so the proposal is not verified source verbatim. Independently, the proposed callout would be inserted immediately after the paragraph whose closing sentence is exactly the proposed quote, creating the adjacent-repetition failure that Tier 3 pull-quotes are supposed to refuse. A revised source quote would be source-valid, but it would not fix the local reader-aid problem: the target paragraph already performs the thesis work in plain prose, and Tier 3 should not add a redundant note here.
+
+VERDICT: ch30 0 approved / 0 revised / 1 rejected
