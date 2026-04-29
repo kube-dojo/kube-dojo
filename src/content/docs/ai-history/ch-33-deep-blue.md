@@ -5,6 +5,56 @@ sidebar:
   order: 33
 ---
 
+:::tip[In one paragraph]
+In May 1997, Feng-hsiung Hsu's chess-specific ASIC — twelve years in the making — powered Deep Blue to a 3.5-2.5 match victory over world champion Garry Kasparov, the first such defeat under classical tournament conditions. The win came from 480 custom chess chips searching 100-200 million positions per second, not from machine learning or general intelligence. Deep Blue was an engineering triumph over one game and an architectural dead end: its silicon chess knowledge could not be reused for any other domain.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Feng-hsiung Hsu | 1959– | Chip designer; originator of the ChipTest → Deep Thought → Deep Blue ASIC lineage; chip architect for both Deep Blue I (1996) and Deep Blue II (1997). |
+| Murray Campbell | — | AI lead; CMU classmate of Hsu's; joined IBM in late 1989; primary post-match spokesperson and retrospective source. |
+| A. Joseph Hoane Jr. | — | Search-software lead; co-author on all major Deep Blue papers; conducted the overnight bug-fix after Game 1. |
+| Joel Benjamin | — | US Chess Champion; IBM grandmaster consultant from late 1996; curated the opening book and stress-tested Deep Blue's evaluation function. |
+| Garry Kasparov | 1963– | Reigning Classical World Chess Champion 1985-2000; opponent in the 1996 Philadelphia match (won 4-2) and the 1997 New York rematch (lost 2.5-3.5). |
+| Monty Newborn | — | McGill computer-science professor; ICCA organizer; chronicler of the rematch in *Deep Blue: An Artificial Intelligence Milestone* (2003). |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1985–1997)</strong></summary>
+
+```mermaid
+timeline
+    title Deep Blue: From ChipTest to the 1997 Rematch
+    1985 : Feng-hsiung Hsu begins VLSI chess-move-generator doctoral work at CMU
+    1986-1987 : ChipTest — wins 1987 North American Computer Chess Championship
+    1988 : Deep Thought team wins second Fredkin Intermediate Prize (2650+ rating over 25 games)
+    1989 : Hsu and Campbell join IBM Research; project renamed Deep Blue
+    1992-1995 : Deep Thought II prototype — 24 chess engines; bridge to the final system
+    February 1996 : First Kasparov-Deep Blue match, Philadelphia — Game 1 first computer win in regulation; Kasparov wins match 4-2
+    1996-1997 : New chess chip designed; Joel Benjamin hired as grandmaster consultant
+    April 1997 : 1997 system operational (Apr 1); code frozen (Apr 15); trucked to Manhattan (Apr 26-28)
+    May 3-11 1997 : Rematch at Equitable Center, NYC — Game 1 (bug, Kasparov wins); Game 2 (panic-time 36.axb5, Deep Blue wins); Games 3-5 drawn; Game 6 miniature (Deep Blue 3.5-2.5)
+    September 1997 : IBM retires Deep Blue from chess competition
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **ASIC (application-specific integrated circuit)** — A chip designed to do exactly one job rather than general computation. Deep Blue's chess chips were ASICs: their move generator, evaluation function, and search logic were burned into silicon for chess only and could not be reprogrammed for any other task.
+- **Alpha-beta search** — A pruning procedure that makes tree search tractable by discarding branches that cannot affect the final result once a better option is known. Deep Blue's hardware implemented a minimum-window variant; the software layer handled the top plies with selective extensions and null-move pruning.
+- **Ply** — One move by one player. A twelve-ply search looks six full move-pairs ahead. Deep Blue's non-extended search reached roughly twelve plies; forcing lines could be extended to about forty plies.
+- **Panic time** — Deep Blue's search-control rule for when its evaluation of a candidate move dropped sharply as search depth increased. The program triggered extra wall-clock time to deepen the search before committing, producing the six-minute deliberation behind Game 2's 36.axb5.
+- **Evaluation function** — The scoring formula that assigns a numerical value to a chess position. Deep Blue's evaluation function included hundreds of features (material, king safety, pawn structure, mobility, etc.) with weights adjustable from software — tuned by Joel Benjamin in the months before the rematch.
+- **Grandmaster-level performance** — Defined operationally in the Fredkin Prize framework as sustaining an Elo rating above 2500 across a statistically meaningful game set. Deep Blue's 1997 performance rating was approximately 2875 — higher than Kasparov's ~2815 over the six-game sample.
+
+</details>
+
 The victory of Deep Blue over Garry Kasparov in May 1997 is often remembered as the moment artificial intelligence "arrived," a symbolic passing of the torch from human intuition to machine logic. The public version of the story was larger than the machine itself: the reigning world chess champion had fallen, and chess had long served as a proxy for disciplined thought. But to the engineers who built Deep Blue, the 3.5-2.5 match win was something narrower, more technical, and far more concrete. It was the culmination of a twelve-year triumph in single-purpose hardware design. Deep Blue did not "learn" to play chess in any modern sense of machine learning, nor did it possess a general representation of intelligence that could be applied to any other domain. It was a chess machine built from chess circuits: application-specific integrated circuits (ASICs) that embedded move generation, evaluation, and search control into silicon. Its strength was not a breakthrough in cognitive science, but the scaling of alpha-beta search through custom hardware, careful engineering, and grandmaster-tuned chess knowledge.
 
 The arc of Deep Blue began in 1985 at Carnegie Mellon University. Feng-hsiung Hsu, a doctoral student from Taiwan, began work on a custom VLSI chip designed for a singular, repetitive task: generating chess moves quickly enough that a program could search far beyond what ordinary processors could manage. His later thesis, *Large-Scale Parallelization of Alpha-Beta Search*, named the subject plainly. This was not a thesis about how a machine might acquire concepts, generalize from experience, or represent human intelligence. It was an architectural study of how to make a known search procedure run at extreme speed.
@@ -70,3 +120,7 @@ The team dispersed into the less theatrical aftermath of a completed engineering
 That ending is essential to the meaning of Deep Blue. The machine was a triumph of hardware mastery, but it was also an architectural dead end. Its move generator was a silicon chessboard. Its repetition detector, evaluation function, and search control were built around chess and only chess. Its grandmaster knowledge entered through human-selected features, adjustable weights, and opening preparation. It could not transfer that knowledge to another game. It could not play tic-tac-toe unless someone built a different system for that purpose. It could not read, speak, reason about a story, or learn a new domain from examples.
 
 Deep Blue proved that a specific, high-dimensional game could be conquered by massive parallel search, specialized silicon, and enough expert tuning. It also proved how misleading the word "intelligence" can become when a system is judged only by the prestige of the task it defeats. In 1997 the machine looked, for one week in Manhattan, like a general prophecy. Under the hood it was more exact and more limited: an engineering victory for an old search algorithm, scaled to the limits of 1990s hardware and aimed at a single board of sixty-four squares. The later revolution in machine intelligence would arrive by a different route, through learning systems whose representations were not etched as chess circuitry. Deep Blue belongs to the history of artificial intelligence not because it showed that machines had begun to think like people, but because it showed how far they could go without doing so.
+
+:::note[Why this still matters today]
+Deep Blue settled an empirical question that had shadowed computer science for decades: brute-force search, combined with domain-specialized hardware and expert-tuned evaluation, can defeat the best human practitioners in a high-dimensional combinatorial game. That result established the ceiling for one class of approach and cleared the ground for the next. Every game-playing and search-driven system since has had to decide whether to follow the specialized-silicon path or replace hand-designed evaluation with learned representations. The clean failure of Deep Blue to generalize — it could not play tic-tac-toe on its own hardware — made the case for the alternative direction as forcefully as the victory made the case for the approach it used.
+:::
