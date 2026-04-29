@@ -2,7 +2,7 @@ status: accepted
 owner: Codex
 part: 8
 chapter: 57
-review_state: prose_accepted_claude_approved_2026-04-29
+review_state: prose_accepted_dual_cross_family_review
 last_updated: 2026-04-29
 green_claims: 15
 yellow_claims: 1
@@ -36,8 +36,8 @@ prose_review:
     requested_model: gemini-3.1-pro-preview
     fallback_model: gemini-3-flash-preview
     date: 2026-04-29
-    verdict: UNAVAILABLE_RATE_LIMITED
-    error_message_id: 3136
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/issues/406#issuecomment-4347233607
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources: Ouyang et
   al. 2022 InstructGPT, OpenAI's January 2022 instruction-following blog,
@@ -61,6 +61,7 @@ notes: |
 
   Accepted 2026-04-29 after Claude requested one meta-diction fix, Codex
   addressed it in commit 17ed4f25, and Claude approved the final branch.
-  Gemini prose review was requested with gemini-3.1-pro-preview and fallback
-  to gemini-3-flash-preview, but the bridge hit Gemini rate limits. Published
-  draft is 4,804 words.
+  Gemini prose review was rerun after the bridge API-key-to-OAuth fallback fix;
+  it approved the chapter and noted that the RLHF pipeline, contractor counts,
+  dataset sizes, and alignment-value nuance remain inside the verified
+  contract. Published draft is 4,804 words.
