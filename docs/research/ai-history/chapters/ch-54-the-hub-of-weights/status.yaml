@@ -1,9 +1,9 @@
-status: prose_ready
+status: accepted
 owner: Codex
 part: 8
 chapter: 54
-review_state: claude_source_approved_2026-04-28;gemini_gap_ready_with_cap_2026-04-28
-last_updated: 2026-04-28
+review_state: prose_accepted_claude_approved_2026-04-29
+last_updated: 2026-04-29
 green_claims: 6
 yellow_claims: 5
 red_claims: 0
@@ -26,6 +26,18 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 4800
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/569#issuecomment-4341474882
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/569#issuecomment-4341480727
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources:
   Transformers EMNLP 2020 PDF, legacy Transformers v4.0.1 docs, GitHub API
@@ -37,3 +49,11 @@ notes: |
   user anecdotes, or community reaction to reach the top of the book target.
   Guardrail_count records explicit prohibitions; red_claims is reserved for
   in-scope claims that fail verification.
+
+  Prose drafted by Codex on 2026-04-29 and accepted at 4,029 words, inside the
+  approved 4,000-4,800 word range and below the 4,800-word cap. Claude first
+  requested removal of reader-facing meta diction and one unanchored contributor
+  count; Codex removed both, applied the final wording nit, and Claude approved
+  the recheck on PR #569. Gemini review was requested with
+  gemini-3.1-pro-preview, fell back to gemini-3-flash-preview, and also
+  returned APPROVE.
