@@ -1,8 +1,8 @@
-status: prose_review
+status: accepted
 owner: Codex
 part: 8
 chapter: 51
-review_state: prose_drafted_awaiting_cross_family_review
+review_state: prose_accepted_claude_approved_2026-04-29
 last_updated: 2026-04-29
 green_claims: 8
 yellow_claims: 4
@@ -25,6 +25,17 @@ verdicts:
   resolved: READY_TO_DRAFT_WITH_CAP
   resolved_word_cap: 4000
   resolution_rule: dual_cross_family_verdict_with_cap
+prose_review:
+  claude:
+    model: claude-opus-4-7
+    date: 2026-04-29
+    verdict: APPROVE
+    review_url: https://github.com/kube-dojo/kube-dojo.github.io/pull/558#issuecomment-4341212380
+  gemini:
+    requested_model: gemini-3.1-pro-preview
+    fallback_model: gemini-3-flash-preview
+    date: 2026-04-29
+    verdict: UNAVAILABLE_RATE_LIMITED
 notes: |
   Rebuilt the scrubbed/yellow contract from verified online sources: arXiv About,
   arXiv category taxonomy, arXiv monthly-submissions CSV, arXiv Annual Report
@@ -44,5 +55,10 @@ notes: |
   reframed TensorFlow/PyTorch as contrasting distribution philosophies, and made
   Papers with Code a later maturation layer.
 
-  Prose drafted by Codex on 2026-04-29 at approximately 4,000 words, inside the
-  approved capped target. Awaiting cross-family prose review before acceptance.
+  Prose drafted by Codex on 2026-04-29 at 3,964 words after removing
+  reader-facing meta-language flagged in Claude's first prose review. Claude
+  rechecked source fidelity and prose voice, approved the chapter, and agreed
+  that padding back to 4,000 words after the cleanup would be worse than landing
+  the 36-word undershoot. Gemini prose review was requested with
+  gemini-3.1-pro-preview and fallback to gemini-3-flash-preview, but the bridge
+  hit Gemini rate limits.
