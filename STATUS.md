@@ -129,6 +129,7 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 - [ ] AI history #394: Part 9 (Ch66-72, 7 chapters remain) — Codex autonomous chain past Ch65
 - [ ] AI history #559: cross-family review backfill on Ch01-31 (28 chapters, 30 marked backfill_pending per offline audit)
 - [ ] AI history #562: Tier 1 reader-aid rollout — Part 1 RELEASED on main (Ch01-Ch09 with section headers + reader aids); Part 2 (Ch10-17) is next, then Parts 3-9
+- [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC. Same flow optional for Bing Webmaster Tools.
 - [ ] AI history #563: Tier 2 math + architecture sidebars on ~15 target chapters
 - [ ] AI history #564: Tier 3 selective passes (Claude proposes / Codex reviews) after Tier 1/2 settle
 - [ ] PR #567 review + merge → then re-run audit_review_coverage.py with live gh
