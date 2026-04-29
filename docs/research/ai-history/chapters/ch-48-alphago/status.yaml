@@ -1,1 +1,70 @@
-status: researching
+chapter: ch-48-alphago
+status: capacity_plan_anchored
+owner: Codex
+issue: 394
+research_role_split:
+  part: 7
+  owner: Codex
+  effective: 2026-04-28
+claim_counts:
+  green: 28
+  yellow: 5
+  red: 3
+word_count_discipline:
+  label: 4k-7k stretch
+  planned_range_words: 3750-5250
+  likely_natural_range_words: 4200-4700
+prose_capacity_plan:
+  anchored: true
+  layers:
+    - scene: 1
+      range_words: 650-900
+      anchors:
+        - sources.md G1
+        - sources.md G2
+        - sources.md G3
+        - sources.md G10
+        - sources.md G11
+    - scene: 2
+      range_words: 950-1300
+      anchors:
+        - sources.md G4
+        - sources.md G5
+        - sources.md G6
+        - sources.md G7
+        - sources.md G8
+        - sources.md G9
+        - sources.md G25
+    - scene: 3
+      range_words: 600-850
+      anchors:
+        - sources.md G6
+        - sources.md G12
+        - sources.md G13
+        - sources.md G14
+        - sources.md G23
+        - sources.md G24
+    - scene: 4
+      range_words: 900-1250
+      anchors:
+        - sources.md G15
+        - sources.md G16
+        - sources.md G17
+        - sources.md G18
+        - sources.md G26
+        - sources.md G27
+        - sources.md G28
+    - scene: 5
+      range_words: 650-950
+      anchors:
+        - sources.md G19
+        - sources.md G20
+        - sources.md G21
+        - sources.md G22
+open_yellow_red_highlights:
+  - exact Lee Sedol live-match hardware remains Yellow
+  - server location/live network path remains Yellow
+  - Lee Sedol exact world-title count remains Yellow
+  - audience-size claims remain Yellow
+  - no consciousness/psychological-intuition claim for Move 37
+last_updated: 2026-04-29
