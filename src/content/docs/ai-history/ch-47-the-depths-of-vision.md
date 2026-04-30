@@ -5,7 +5,69 @@ sidebar:
   order: 47
 ---
 
+:::tip[In one paragraph]
+In 2015, He, Zhang, Ren, and Sun at Microsoft Research discovered that adding layers to a neural network could worsen training error — not from vanishing gradients but because the optimizer failed to find even an identity mapping. Their fix was a shortcut connection carrying the input around a stack of learned layers, letting the stack correct the residual. The 152-layer ResNet won ILSVRC 2015 with 3.57 percent top-5 error; residual connections became a default grammar for deep learning.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Kaiming He | — | First author of the ResNet paper at Microsoft Research |
+| Xiangyu Zhang | — | Co-author of the ResNet paper at Microsoft Research |
+| Shaoqing Ren | — | Co-author of the ResNet paper at Microsoft Research |
+| Jian Sun | — | Co-author of the ResNet paper at Microsoft Research |
+| Alex Krizhevsky | — | First author of the 2012 AlexNet paper; anchors the chapter's starting point |
+| Karen Simonyan | — | Co-author of the VGG paper that pushed ImageNet CNNs to 16–19 weight layers |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2012–2016)</strong></summary>
+
+```mermaid
+timeline
+    title The Depths of Vision
+    2012 : Krizhevsky, Sutskever, and Hinton publish AlexNet — five convolutional and three fully connected layers, two GTX 580 GPUs, five to six days of training
+    September 2014 : Simonyan and Zisserman release the VGG paper — ImageNet depth pushed to 16–19 weight layers with 3x3 filters
+    2014 : GoogLeNet and VGG make "very deep" ImageNet models the state of the art, with leading architectures at roughly 16 to 30 layers
+    February–July 2015 : Batch Normalization appears at ICML 2015, addressing gradient instability and enabling tens-layer networks to begin converging
+    December 10 2015 : He, Zhang, Ren, and Sun post ResNet to arXiv — residual learning with identity shortcuts, up to 152 layers, 3.57% ensemble ImageNet error
+    ILSVRC / COCO 2015 : ResNet team wins first place in ImageNet classification, detection, localization, COCO detection, and COCO segmentation
+    June 2016 : ResNet paper published at CVPR 2016, pp. 770–778
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Optimization degradation** — The phenomenon where adding more layers to a neural network makes training error *worse*, not better. This is distinct from overfitting, which reduces training error while worsening test error. Optimization degradation means the optimizer itself is failing.
+
+**Residual mapping** — Instead of asking a stack of layers to learn the target function H(x) directly, residual learning reformulates the task as learning F(x) = H(x) − x, the difference between the desired output and the input. The original mapping is then recovered as F(x) + x.
+
+**Shortcut connection** — A path in the neural network's computational graph that carries the input directly around one or more learned layers and adds it to their output. In ResNet, the default shortcut is a parameter-free identity function.
+
+**Bottleneck block** — A residual block design used for networks of 50 layers and deeper. It uses three layers (1×1, 3×3, 1×1 convolutions) instead of two, first reducing dimensions, then expanding them, reducing arithmetic cost while preserving depth.
+
+**FLOP (floating-point operation)** — A single arithmetic step a processor performs. FLOP counts measure how much computation a model requires per forward pass; the 152-layer ResNet used 11.3 billion FLOPs, fewer than VGG-19's 19.6 billion.
+
+**Projection shortcut** — A shortcut connection that applies a learned linear transformation to the input before addition, used when the input and output of a residual block have different dimensions. The ResNet paper showed identity shortcuts were sufficient to resolve degradation; projection provides only marginal gains.
+
+**ILSVRC (ImageNet Large Scale Visual Recognition Challenge)** — The annual competition on the ImageNet dataset that benchmarked visual recognition systems from 2010 through 2017. Winning results from this challenge drove major architectural advances in convolutional neural networks.
+
+</details>
+
 In 2012, visual recognition was transformed by the realization that scale, both in model capacity and computational power, could unlock performance previously thought unattainable. Alex Krizhevsky, Ilya Sutskever, and Geoffrey Hinton introduced an architecture for the ImageNet Large Scale Visual Recognition Challenge that firmly established deep convolutional neural networks as the dominant approach. Their model, often referred to as AlexNet, was large for its era. It consisted of five convolutional layers followed by three fully connected layers, containing roughly sixty million parameters and 650,000 neurons. Training such a network required specialized infrastructure. The team utilized two NVIDIA GTX 580 GPUs, each with three gigabytes of memory, and ran the training process for five to six days. The resulting performance on ImageNet demonstrated that a deep architecture, given enough data and parallel compute, could achieve breakthrough accuracy.
+
+:::note
+> "All of our experiments suggest that our results can be improved simply by waiting for faster GPUs and bigger datasets to become available."
+>
+> — Krizhevsky et al. 2012, p.1
+
+AlexNet's own forward bet on scale, which Ch47 complicates: depth itself, not just data and compute, becomes the constraint.
+:::
 
 The lesson was not simply that neural networks had become fashionable again. AlexNet made the machinery of scale visible. A contest built around more than a million natural images had become a proving ground for learned feature hierarchies, and the winning system depended on both algorithmic decisions and the practical ability to keep a large convolutional model moving through data. Its split across two GPUs was not an incidental footnote; it showed that the architecture was already pressing against memory and throughput limits. The five convolutional layers extracted increasingly abstract visual patterns, while the fully connected layers turned those patterns into ImageNet class decisions. The system's success made a once-risky proposition feel empirical: if the data and compute were available, deeper learned vision systems could outperform hand-engineered recognition pipelines.
 
@@ -94,3 +156,7 @@ However, the authors were careful to identify the limits of their approach, ensu
 Yet, this optimization success did not translate into a generalization victory. The 1202-layer model produced a test error of 7.93 percent, which was worse than the performance of a shallower 110-layer residual model. The authors straightforwardly attributed this drop in test performance to overfitting, noting that the 1202-layer network was likely unnecessarily large for the CIFAR-10 dataset. This was the clean inverse of the earlier degradation problem. In the plain networks, more layers could not even reduce training error properly. In the 1202-layer residual network, training error nearly vanished, but test performance worsened. Residual learning had solved one failure mode while exposing another.
 
 This boundary defined the true legacy of the paper. Residual connections did not make arbitrary depth automatically useful for generalization, nor did they guarantee that more layers would always improve performance on unseen data. Instead, they separated the problem of optimization from the problem of capacity. Identity shortcuts made very deep networks trainable by changing what the stacked layers had to learn. Once that obstacle moved, the remaining questions became the familiar ones of data, regularization, computational cost, and whether additional capacity actually served the task. ResNet transformed extreme depth from a brittle aspiration into an engineering choice, turning shortcut connections from a local design option into a default grammar for deep learning.
+
+:::note[Why this still matters today]
+Residual connections are now a structural default across deep learning. Every major vision backbone, the transformer architectures powering large language models, and the diffusion networks behind image generation all carry skip connections that descend directly from the ResNet shortcut. The bottleneck block's principle — reduce dimensions, operate, restore — reappears in transformer feed-forward layers and efficient convolutional networks alike. The conceptual split ResNet introduced between optimization tractability and capacity remains the frame practitioners use when deciding whether a deeper or wider model is the right answer for a given task and dataset.
+:::
