@@ -1,8 +1,8 @@
 ---
 title: "XGBoost & Gradient Boosting"
-slug: ai-ml-engineering/classical-ml/module-1.2-xgboost-gradient-boosting
+slug: ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting
 sidebar:
-  order: 1103
+  order: 6
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours
@@ -1668,7 +1668,7 @@ python task6_anomaly.py
 ## Next Steps
 You have now fully bridged gradient boosting architectures with complex temporal data sequencing workflows. 
 
-**Up Next:** [Module 1.3: Time Series Forecasting](/ai-ml-engineering/classical-ml/module-1.3-time-series-forecasting/) — Apply tree-based models to sequential business problems, understand deep leakage in temporal datasets, and learn exactly when boosted ensembles empirically outperform more complex neural network approaches.
+**Up Next:** [Module 1.12: Time Series Forecasting](/ai-ml-engineering/machine-learning/module-1.12-time-series-forecasting/) — Apply tree-based models to sequential business problems, understand deep leakage in temporal datasets, and learn exactly when boosted ensembles empirically outperform more complex neural network approaches.
 
 ## Sources
 

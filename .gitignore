@@ -42,7 +42,7 @@ site/
 credentials.json
 service-account.json
 kubeconfig
-node_modules/
+node_modules
 dist/
 .astro/
 build-log.txt

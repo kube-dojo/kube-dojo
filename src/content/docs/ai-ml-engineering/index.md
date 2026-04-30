@@ -9,7 +9,7 @@ sidebar:
 
 ## Overview
 
-A complete curriculum for engineers building AI and ML systems in production. Covers everything from AI-native development with Claude Code, through generative AI and RAG, to deep learning, classical ML, MLOps, and AI infrastructure on Kubernetes.
+A complete curriculum for engineers building AI and ML systems in production. Covers everything from AI-native development with Claude Code, through generative AI and RAG, to deep learning, machine learning, reinforcement learning, MLOps, and AI infrastructure on Kubernetes.
 
 This track is for engineers who need to understand AI/ML deeply enough to build, deploy, and operate it — not just call APIs.
 
@@ -84,7 +84,8 @@ The track is organized as one main spine with several valid learner routes.
 | 7 | [Advanced GenAI & Safety](advanced-genai/) | Fine-tuning, RLHF, diffusion, alignment, red teaming, evaluation |
 | 8 | [Multimodal AI](multimodal-ai/) | Speech, vision, video, native multimodal models |
 | 9 | [Deep Learning Foundations](deep-learning/) | PyTorch, neural networks, CNNs, transformers, backprop |
-| 10 | [Classical ML](classical-ml/) | Tabular ML, time-series, AutoML, feature stores |
+| 10 | [Machine Learning](machine-learning/) | Tabular ML practitioner essentials: sklearn API, regression, evaluation, feature engineering, trees, boosting, clustering, anomaly detection, dimensionality reduction, HPO, time series — plus Tier-2 imbalance, interpretability, recommenders, conformal prediction, fairness, causal inference |
+| 11 | [Reinforcement Learning](reinforcement-learning/) | RL practitioner foundations (PPO/DQN/SAC, SB3, Gymnasium) and offline RL / imitation learning |
 | A | [History of AI/ML](history/) | Historical context (appendix) |
 
 ## Recommended Default Route

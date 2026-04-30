@@ -6,6 +6,18 @@ sidebar:
   label: "What's New"
 ---
 
+## May 1, 2026 — Machine Learning Track Restructured (Phase 0)
+
+The AI/ML Engineering track's `classical-ml/` section has been restructured and renamed to [Machine Learning](/ai-ml-engineering/machine-learning/), and a new peer section [Reinforcement Learning](/ai-ml-engineering/reinforcement-learning/) has been scaffolded. Old URLs redirect to their new homes; nothing existing 404s.
+
+This is Phase 0 of the ML curriculum expansion tracked in [issue #677](https://github.com/kube-dojo/kube-dojo.github.io/issues/677). Phase 1 onward will fill the new section with Tier-1 modules on regression, evaluation, feature engineering, trees, k-NN/SVM, clustering, anomaly detection, dimensionality reduction, and hyperparameter optimization, plus a Tier-1 reinforcement-learning practitioner foundation.
+
+Phase 0 ships:
+
+- The Tier-1 spine (twelve slots in `machine-learning/`, two slots in `reinforcement-learning/`) with the existing XGBoost and Time Series Forecasting modules renumbered to 1.6 and 1.12 to make room.
+- A from-scratch rewrite of [Module 1.1 — Scikit-learn API & Pipelines](/ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines/), refocused away from the broad algorithm survey and onto the workflow contract that makes every later module honest: estimator API, leakage-safe `Pipeline` and `ColumnTransformer`, cross-validation splitter discipline, custom transformers via `BaseEstimator`, and the hyperparameter-search interface.
+- Two new quality gates under `scripts/quality/`: a citation HTTP verifier (every URL in a module's Sources section must resolve to a 200 on the same host) and a python-block syntax checker. Every Phase 1+ module passes both before merge.
+
 ## April 29, 2026 — AI History Book: Part 1 Released
 
 The first nine chapters of the [AI History book](/ai-history/) are ready to read. Part 1 covers AI's mathematical foundations, 1840s–1950s: Boole, Turing, Shannon, Markov, McCulloch–Pitts, the cybernetics movement, Walter's electronic tortoises, von Neumann's stored program, and magnetic-core memory.

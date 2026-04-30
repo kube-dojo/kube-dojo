@@ -1,6 +1,6 @@
 {
-  "module_key": "ai-ml-engineering/classical-ml/module-1.2-xgboost-gradient-boosting",
-  "module_path": "src/content/docs/ai-ml-engineering/classical-ml/module-1.2-xgboost-gradient-boosting.md",
+  "module_key": "ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting",
+  "module_path": "src/content/docs/ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting.md",
   "research_run_id": "2026-04-22T00:58:07+00:00-codex-gpt-5.3-codex-spark",
   "schema_version": 3,
   "section_pool_ref": null,

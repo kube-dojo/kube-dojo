@@ -8,6 +8,17 @@ export default defineConfig({
   site: 'https://kube-dojo.github.io',
   trailingSlash: 'always',
   compressHTML: true,
+  redirects: {
+    // ML curriculum reorganization (#677): classical-ml/ -> machine-learning/
+    '/ai-ml-engineering/classical-ml/': '/ai-ml-engineering/machine-learning/',
+    '/ai-ml-engineering/classical-ml/index/': '/ai-ml-engineering/machine-learning/',
+    '/ai-ml-engineering/classical-ml/module-1.1-scikit-learn-classical-ml/':
+      '/ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines/',
+    '/ai-ml-engineering/classical-ml/module-1.2-xgboost-gradient-boosting/':
+      '/ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting/',
+    '/ai-ml-engineering/classical-ml/module-1.3-time-series-forecasting/':
+      '/ai-ml-engineering/machine-learning/module-1.12-time-series-forecasting/',
+  },
   markdown: {
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeKatex],
@@ -362,7 +373,8 @@ export default defineConfig({
             { label: 'Advanced GenAI & Safety', autogenerate: { directory: 'ai-ml-engineering/advanced-genai' }, collapsed: true },
             { label: 'Multimodal AI', autogenerate: { directory: 'ai-ml-engineering/multimodal-ai' }, collapsed: true },
             { label: 'Deep Learning Foundations', autogenerate: { directory: 'ai-ml-engineering/deep-learning' }, collapsed: true },
-            { label: 'Classical ML', autogenerate: { directory: 'ai-ml-engineering/classical-ml' }, collapsed: true },
+            { label: 'Machine Learning', autogenerate: { directory: 'ai-ml-engineering/machine-learning' }, collapsed: true },
+            { label: 'Reinforcement Learning', autogenerate: { directory: 'ai-ml-engineering/reinforcement-learning' }, collapsed: true },
             { label: 'Bridges to Other Tracks', autogenerate: { directory: 'ai-ml-engineering/bridges' }, collapsed: true },
             { label: 'Appendix A: History of AI/ML', autogenerate: { directory: 'ai-ml-engineering/history' }, collapsed: true },
           ],
