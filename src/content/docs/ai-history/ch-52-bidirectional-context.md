@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-BERT, published October 2018 by Devlin, Chang, Lee, and Toutanova at Google AI, took the Transformer encoder, pre-trained it with masked language modeling and next-sentence prediction on 3.3 billion words of BooksCorpus and Wikipedia, and released the trained weights. BERTBASE (110M parameters) and BERTLARGE (340M) trained for four days on Cloud TPU Pods. Fine-tuning the released checkpoint reached state-of-the-art on 11 NLP tasks. The reusable artifact stopped being an algorithm and became a set of trained parameters.
+BERT, published in October 2018 by Devlin, Chang, Lee, and Toutanova at Google AI, turned the Transformer encoder into a reusable bidirectional checkpoint. It used masked-token pre-training and sentence-pair training on large unlabeled text, then released weights that could be fine-tuned across many NLP tasks. The reusable artifact stopped being an algorithm and became a set of trained parameters.
 :::
 
 <details>
@@ -32,7 +32,7 @@ timeline
     Oct 11 2018 : BERT paper appears on arXiv (1810.04805)
     Oct 25 2018 : google-research/bert GitHub repository created
     2018 : Google Research blog announces open-source release of BERT code + pre-trained models
-    2018 : BERTBASE and BERTLARGE report state-of-the-art on 11 NLP tasks (GLUE, SQuAD, SWAG)
+    2018 : BERT reports broad benchmark gains across language-understanding tasks
 ```
 
 </details>
@@ -46,9 +46,9 @@ timeline
 
 **Bidirectional context** — The condition where every layer of the model can condition on both left- and right-side tokens when computing each position's representation. Distinct from ELMo's late concatenation of two independently trained directions: BERT fuses both directions through every layer of the encoder.
 
-**Masked language modeling (MLM)** — BERT's pre-training objective: pick 15% of WordPiece positions, replace 80% with `[MASK]`, 10% with a random token, and 10% unchanged, then ask the model to predict the original token at the selected positions. The 80/10/10 schedule reduces pre-training/fine-tuning mismatch (real fine-tuning inputs do not contain `[MASK]`).
+**Masked language modeling (MLM)** — BERT's pre-training objective: hide or perturb selected WordPiece positions, then ask the model to predict the original tokens from both left and right context. It turns ordinary text into a self-supervised training signal for the encoder.
 
-**Next sentence prediction (NSP)** — BERT's second pre-training objective. Given two spans, the model predicts whether span B is the actual follow-on to span A in the source corpus. Tied to downstream tasks involving sentence-pair reasoning. Later work questioned NSP's necessity, but BERT's 2018 ablations treat it as a useful component.
+**Next sentence prediction (NSP)** — BERT's second pre-training objective for teaching the model to reason over paired text spans. Later work questioned NSP's necessity, but BERT's 2018 ablations treat it as a useful component.
 
 **WordPiece tokenization** — A subword tokenization scheme; BERT uses a 30,000-token WordPiece vocabulary. Subword units handle rare and morphologically complex words by composition, avoiding both character-level shortness and word-level vocabulary explosions.
 

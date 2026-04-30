@@ -15,10 +15,10 @@ Modern AI did not spread through papers alone. By the late 2010s a distribution 
 | Name | Lifespan | Role |
 |---|---|---|
 | Paul Ginsparg | — | Cornell physicist; founded arXiv in 1991 as a curated, no-fee, moderated preprint server |
-| Google TensorFlow team | — | Institutional actor; 2015-11-09 open-source announcement framed working code as a faster medium for exchanging ML ideas than papers alone |
-| PyTorch maintainers (Meta/Facebook AI) | — | Institutional actor; 2018-05-02 PyTorch 1.0 announcement positioned the framework as a research-to-production bridge |
+| Google TensorFlow team | — | Institutional actor; opened a major corporate ML framework to public use in 2015 |
+| PyTorch maintainers (Meta/Facebook AI) | — | Institutional actor; made dynamic deep-learning workflows central to research and deployment |
 | Hugging Face | — | Institutional actor; created the `huggingface/transformers` GitHub repository on 2018-10-29 (detailed model-hub treatment belongs to Chapter 54) |
-| Papers with Code team | — | Partner with arXiv; the 2021 Annual Report described a code/dataset integration that expanded from AI/ML categories to all arXiv |
+| Papers with Code team | — | Partner with arXiv; helped make paper, code, dataset, and benchmark links easier to discover together |
 | Open-source ML maintainers and users | — | Collective infrastructure community: contributors, package maintainers, tutorial authors, and reproducibility auditors who kept the layer running |
 
 </details>
@@ -31,13 +31,13 @@ timeline
     title Chapter 51 — The Open Source Distribution Layer
     1991 : arXiv is founded by Paul Ginsparg — moderated, no-fee, not peer-reviewed
     2012 : arXiv monthly-submissions CSV totals 84,603 submissions for the year
-    Nov 2015 : tensorflow/tensorflow GitHub repository created (Nov 7); Google announces TensorFlow as open source (Nov 9) and frames working code as faster than papers
+    Nov 2015 : tensorflow/tensorflow GitHub repository created (Nov 7); Google announces TensorFlow as open source (Nov 9)
     Aug 2016 : pytorch/pytorch GitHub repository created
     2017 : arXiv monthly-submissions CSV totals 123,523 submissions — Transformer paper appears on arXiv this year
-    May 2018 : Meta/Facebook announces PyTorch 1.0 as an open-source AI framework bridging research and production
+    May 2018 : Meta/Facebook announces PyTorch 1.0 as an open-source AI framework
     Oct 2018 : huggingface/transformers GitHub repository created (Chapter 54 treats the model hub in detail)
     2020 : arXiv monthly-submissions CSV totals 178,329 submissions for the year
-    2021 : arXiv Annual Report — Papers with Code integration expanded from AI/ML to all arXiv; 70,000+ papers with code links, 60,000+ with dataset links
+    2021 : arXiv Annual Report describes expanded Papers with Code integration and added dataset links
 ```
 
 </details>
@@ -51,11 +51,11 @@ timeline
 
 **Repository (GitHub)** — A public Git project hosting source code, tests, issue tracker, pull requests, releases, and commit history. A research artifact's repository often supplies implementation choices the paper compresses (tensor shapes, training loops, masking conventions, dependency versions).
 
-**Open-source framework** — A publicly licensed software toolkit through which models can be expressed, trained, and deployed. TensorFlow (2015) and PyTorch (2016/2018) are the dominant ML examples; their framings ("exchange ideas through code", "research-to-production") differ even though the licenses overlap.
+**Open-source framework** — A publicly licensed software toolkit through which models can be expressed, trained, and deployed. TensorFlow and PyTorch are the dominant ML examples in this chapter, with different design cultures around graph execution, eager experimentation, and deployment.
 
-**Paper-to-code index** — A discovery layer that links a paper to its implementations and datasets so a reader does not have to search project pages manually. Papers with Code is the canonical example; arXiv's 2021 Annual Report describes the integration expanding from AI/ML to all arXiv.
+**Paper-to-code index** — A discovery layer that links a paper to its implementations and datasets so a reader does not have to search project pages manually. Papers with Code is the canonical example.
 
-**Reproducibility** — The ability of an independent reader to obtain the paper's reported results from the published artifacts. *Code availability is not the same as reproducibility*: a 2019 study of 1,700+ AI-paper repositories documented abandonment, inactivity, and missing dependency or data information.
+**Reproducibility** — The ability of an independent reader to obtain the paper's reported results from the published artifacts. Code availability helps, but it does not by itself guarantee maintained dependencies, complete data instructions, or enough implementation detail to recover the result.
 
 **Distribution layer (vs. library)** — A library helps an individual write code; a distribution layer changes what the field expects to exist around an idea. The chapter's narrow claim is that arXiv + GitHub + frameworks + paper-to-code indexes together form a distribution layer, not just a collection of tools.
 

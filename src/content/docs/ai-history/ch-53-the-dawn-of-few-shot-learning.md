@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In February 2019 OpenAI's GPT-2 paper showed that a 1.5-billion-parameter Transformer language model trained on WebText could perform NLP tasks zero-shot — without per-task gradient updates. In May 2020 GPT-3 (175 billion parameters, 300 billion training tokens) made the prompt itself the task specification: examples sat inside a 2048-token context, weights stayed frozen. The reusable artifact stopped being a fine-tuned checkpoint and became a frozen model conditioned by text. Few-shot learning was the new interface.
+In February 2019 OpenAI's GPT-2 paper showed that a large Transformer language model trained on WebText could perform some NLP tasks zero-shot. In May 2020 GPT-3 made the prompt itself the task specification: examples sat inside the input context and the weights stayed frozen. The reusable artifact stopped being a fine-tuned checkpoint and became a model conditioned by text. Few-shot learning was the new interface.
 :::
 
 <details>
@@ -30,10 +30,7 @@ In February 2019 OpenAI's GPT-2 paper showed that a 1.5-billion-parameter Transf
 timeline
     title Chapter 53 — The Dawn of Few-Shot Learning
     2018 : OpenAI's first GPT establishes Transformer LM pre-training as a reusable NLP base
-    Feb 2019 : GPT-2 paper published — 1.5B-parameter model + WebText held back; 124M model released
-    May 2019 : 355M GPT-2 model released along with output datasets from all four sizes
-    Aug 2019 : 774M GPT-2 model released; first version of release-strategy / social-impact report
-    Nov 2019 : 1.5B GPT-2 model released; report and repository updated
+    Feb-Nov 2019 : OpenAI stages GPT-2 model releases and updates its release-strategy / social-impact report
     May 2020 : GPT-3 paper published — 175B parameters, 300B training tokens, 2048-token context, evaluated zero-/one-/few-shot without gradient updates
 ```
 
@@ -44,7 +41,7 @@ timeline
 
 **Autoregressive language model** — A model that generates a sequence one token at a time, each token conditioned on all previous tokens. GPT-style models use the Transformer's decoder side with causal masking; the next-token-prediction objective is what links GPT-2's web-scale pre-training to GPT-3's prompt interface.
 
-**Zero-shot / one-shot / few-shot evaluation** — Three levels of in-context conditioning. *Zero-shot:* the model receives only a task description in natural language, no demonstrations. *One-shot:* one example. *Few-shot:* several examples up to what fits in the context window. None involve gradient updates.
+**Zero-shot / one-shot / few-shot evaluation** — Three levels of in-context conditioning. *Zero-shot:* the model receives only a task description in natural language, no demonstrations. *One-shot:* one example. *Few-shot:* several examples up to what fits in the context window. The prompt, rather than a separate training run, supplies the task setup.
 
 **In-context learning** — The behavioural pattern where task performance is conditioned by examples placed inside the input prompt rather than by parameter updates. GPT-3 popularised the term while remaining careful: the paper does not claim the model learns a *new* task during the forward pass; it may be recognising patterns from pre-training.
 
@@ -52,9 +49,9 @@ timeline
 
 **Context window** — The maximum number of tokens the model can attend over at once. GPT-2: 1024 tokens. GPT-3: 2048 tokens. Both small by 2026 standards, but already large enough to hold instructions, several demonstrations, and a query for many benchmark tasks.
 
-**WebText** — The corpus OpenAI assembled for GPT-2 from outbound Reddit links with ≥3 karma, deduplicated and cleaned to about 8M documents (~40 GB). Wikipedia was deliberately excluded to reduce evaluation overlap. The dataset shows how upstream platform behaviour (Reddit upvoting) became part of the AI training pipeline.
+**WebText** — The corpus OpenAI assembled for GPT-2 from web pages selected through Reddit-linked URLs, then deduplicated and cleaned. The dataset shows how upstream platform behaviour became part of the AI training pipeline.
 
-**Staged release** — OpenAI's GPT-2 release pattern: paper + smallest model first (Feb 2019), then 355M (May), 774M (Aug), 1.5B (Nov), each accompanied by misuse-risk analysis. Made model-weight release a public-governance question, not just a research artifact decision.
+**Staged release** — OpenAI's GPT-2 release pattern: smaller public artifacts first, larger model weights later, each accompanied by misuse-risk analysis. Made model-weight release a public-governance question, not just a research artifact decision.
 
 </details>
 
