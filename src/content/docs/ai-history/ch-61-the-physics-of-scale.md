@@ -5,6 +5,61 @@ sidebar:
   order: 61
 ---
 
+:::tip[In one paragraph]
+The post-GPT era scaled because engineers learned to split one training run across thousands of accelerators. GPipe (2019) introduced micro-batch pipeline parallelism with a bubble tax. Megatron-LM 2019 added intra-layer tensor parallelism on 512 GPUs. ZeRO partitioned optimizer states, gradients, and parameters. Megatron-LM 2021 composed PTD-P across 3072 GPUs at 502 petaFLOP/s; PaLM (2022) trained 540B on 6144 TPU v4 chips. Chinchilla (2022) corrected the slogan: parameter count alone is the wrong axis of scale.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Yanping Huang et al. | — | GPipe authors (Google); micro-batch pipeline parallelism, rematerialization, ~6B-parameter Transformer demo |
+| Mohammad Shoeybi et al. | — | Megatron-LM 2019 authors (NVIDIA); intra-layer tensor model parallelism, 8.3B Transformer on 512 GPUs |
+| Samyam Rajbhandari, Jeff Rasley, Olatunji Ruwase, Yuxiong He | — | ZeRO authors (Microsoft); optimizer-state, gradient, and parameter partitioning |
+| Narayanan et al. | — | Megatron-LM 2021 authors (NVIDIA + collaborators); PTD-P composition, 1T-parameter iteration on 3072 GPUs |
+| Aakanksha Chowdhery et al. | — | PaLM/Pathways authors (Google); 540B dense Transformer on 6144 TPU v4 chips, 46.2% MFU |
+| Jordan Hoffmann et al. | — | Chinchilla authors (DeepMind); compute-optimal training argument — scale parameters and tokens together |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2019–2022)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 61 — The Physics of Scale
+    2019-03 : NVIDIA Megatron-LM repository created — ongoing research training Transformer models at scale
+    2019-07 : GPipe (arXiv v5) — micro-batch pipeline parallelism, rematerialization, large AmoebaNet/Transformer demos
+    2019-10 / 2020-03 : Megatron-LM paper — intra-layer tensor model parallelism, 8.3B Transformer on 512 GPUs
+    2019-10 / 2020-05 : ZeRO paper — optimizer-state, gradient, and parameter partitioning for memory-efficient training
+    2020-01 : DeepSpeed repository created — open-source ZeRO implementation context
+    2021-04 : Megatron-LM GPU-cluster paper — PTD-P composition, 1T-parameter iteration at 502 petaFLOP/s on 3072 GPUs
+    2022-03 : Chinchilla paper — compute-optimal training scales parameters and tokens together
+    2022-04 / 2022-10 : PaLM paper — 540B dense Transformer on 6144 TPU v4 chips via Pathways
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Data parallelism** — Each worker holds a full copy of the model and processes a different slice of the batch; gradients are synchronized across workers. Compute-efficient but memory-wasteful at frontier scale because every worker replicates parameters, gradients, and optimizer states.
+
+**Pipeline parallelism** — Different consecutive groups of layers live on different accelerators; activations flow forward through partitions and gradients flow back. GPipe's contribution was micro-batching: slice the mini-batch into micro-batches so multiple stages can work simultaneously, like an assembly line.
+
+**Tensor (intra-layer) parallelism** — Multiple GPUs cooperate inside the same layer; each owns a slice of a matrix multiplication, and partial results are stitched together with all-reduce communication. Megatron-LM 2019 placed those all-reduces around MLP and self-attention matrix products so each GPU stayed compute-bound.
+
+**Pipeline bubble** — Idle time at the start (later stages waiting for work) and end (earlier stages done while later stages drain) of a pipeline schedule. GPipe amortized the bubble by increasing the micro-batch count, but the tax never fully disappears.
+
+**ZeRO (Zero Redundancy Optimizer)** — Microsoft's three-stage scheme that partitions optimizer states (stage 1), then gradients (stage 2), then parameters (stage 3) across data-parallel workers — eliminating memory redundancy at the cost of additional gather/communicate operations.
+
+**PTD-P** — Megatron-LM 2021 shorthand for composing **P**ipeline, **T**ensor, and **D**ata parallelism. The system maps each parallelism dimension onto cluster topology: tensor parallelism inside high-bandwidth servers, pipeline across servers, data parallelism across model replicas.
+
+**Model FLOPs utilization (MFU)** — The fraction of a cluster's theoretical peak FLOPs actually spent on useful model computation, after subtracting communication, idle time, input stalls, and inefficient kernels. PaLM reported 46.2% MFU for the 540B model — high by frontier-training standards.
+
+</details>
+
 The agent turn made language models operational. Retrieval, search, tools, and loops turned the chat window into a system that could look, call, observe, and try again. But before those systems could be served to millions of users, the frontier models had to be trained. That training problem was not solved by wanting bigger models. It was solved by forcing a single optimization run to live across many accelerators without collapsing under memory, communication, idle time, and synchronization.
 
 Scale sounds abstract until the model does not fit.
@@ -129,6 +184,12 @@ Then Chinchilla complicated the slogan "bigger is better."
 
 Hoffmann and collaborators argued that many large language models were undertrained for their compute budget. Their compute-optimal analysis suggested that model size and training tokens should scale together. Chinchilla used the same compute budget as Gopher but with 70 billion parameters and about 1.4 trillion training tokens. The point was not that smaller is always better. It was that parameter count alone is a bad definition of scale.
 
+:::note
+> We find that current large language models are significantly undertrained, a consequence of the recent focus on scaling language models whilst keeping the amount of training data constant.
+
+Chinchilla shifted the scale question from parameter count alone to compute allocation: how many parameters, how many tokens, and under what fixed training budget. (Hoffmann et al. 2022, arXiv:2203.15556, abstract.)
+:::
+
 This was a correction to the culture of giant numbers. A 500B parameter model sounds larger than a 70B parameter model. But if the 500B model is trained on too few tokens for the available compute, it may be a poor allocation. Scale has a budget. Spend too much of it on parameters and too little on data, and the model is undertrained. Spend it differently, and a smaller model can be stronger for the same compute.
 
 Chinchilla also made "training compute" feel less like an infinite ladder and more like a budget allocation problem. Given a fixed amount of compute, how should it be spent? More parameters require more computation per token. More tokens require more passes through data. The optimum is not obvious from parameter count alone. The paper's central historical effect was to discipline the field's intuition: do not worship size without asking how much data and compute the model received.
@@ -141,4 +202,9 @@ The post-GPT era therefore scaled through layers of constraint. GPipe showed how
 
 The physics of scale was not glamorous from the outside. Users saw a smarter model. Researchers saw a benchmark table. Product teams saw a release. Underneath, the run survived because engineers found a way to fit, split, synchronize, and keep the accelerators busy. That is why training scale is infrastructure history. The intelligence people experienced at the surface depended on a long list of physical compromises below it.
 
+:::note[Why this still matters today]
+Every modern frontier-model release is the visible tip of a parallelism plan beneath it. When practitioners see a "100B-parameter" or "trillion-parameter" announcement, the engineering work behind that number is still the four moves this chapter named: split the layers (pipeline), split the matrix multiplications inside a layer (tensor), shard the optimizer state and gradients (ZeRO/FSDP), and replicate across data slices. PyTorch's FSDP, DeepSpeed's ZeRO stages, and Megatron-style tensor parallelism are direct descendants. Chinchilla's compute-optimal correction also still bites: token budgets are now part of every serious training plan, not an afterthought.
+:::
+
 The next bottlenecks would move again. Once giant models could be trained, they had to be served cheaply and quickly. Tool-using agents would multiply calls. Long context would grow memory pressure. Millions of users would turn training miracles into inference bills. But that is the next chapter's economics. This chapter's lesson is simpler: modern AI did not scale by ignoring physics. It scaled by learning where to cut the model so physics would let the run continue.
+
