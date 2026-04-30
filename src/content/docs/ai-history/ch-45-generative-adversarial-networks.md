@@ -5,6 +5,61 @@ sidebar:
   order: 45
 ---
 
+:::tip[In one paragraph]
+In 2014, Ian Goodfellow and seven collaborators at the Université de Montréal reframed image generation as a two-player game. A generator transforms random noise into synthetic samples; a discriminator tries to expose them as fake. Backpropagation trains both simultaneously, bypassing Markov chains and variational approximations. DCGAN stabilized the architecture in 2016; NVIDIA's Progressive GAN and StyleGAN extended it to photorealistic 1024×1024 faces by 2019. The price was a new problem: finding a Nash equilibrium instead of minimizing a simple loss.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Ian Goodfellow | — | First author of the 2014 GAN paper; origin-story protagonist of the Montreal bar-night narrative. |
+| Yoshua Bengio | — | CIFAR Senior Fellow and co-author; head of the Montreal lab that produced the paper. |
+| Jurgen Schmidhuber | — | Author of predictability minimization (1992), named by the 2014 paper as the most relevant prior work with competing neural networks. |
+| Alec Radford | — | Lead author of DCGAN; introduced convolutional architecture constraints that stabilized adversarial training in most settings. |
+| Soumith Chintala | — | DCGAN co-author at Facebook AI Research; the DCGAN paper thanks NVIDIA for a Titan-X GPU used in the work. |
+| Tero Karras | — | Lead author on Progressive GAN (2018) and StyleGAN (2019) at NVIDIA Research; drove the 1024×1024 photorealistic face-generation arc. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1992–2019)</strong></summary>
+
+```mermaid
+timeline
+    title Generative Adversarial Networks
+    1992 : Schmidhuber publishes predictability minimization — opposing neural forces as the most relevant GAN precursor
+    2014 : GAN concept reported to emerge at Les 3 Brasseurs, Montreal
+         : Goodfellow et al. publish "Generative Adversarial Nets" at NeurIPS — generator/discriminator minimax game
+         : First experiments on MNIST, Toronto Face Database, and CIFAR-10 using Theano and Pylearn2
+    2016 : Radford, Metz, and Chintala release DCGAN — convolutional constraints stabilize training; latent-vector arithmetic demonstrated
+         : Goodfellow presents NeurIPS 2016 GAN tutorial
+    2018 : Karras, Aila, Laine, and Lehtinen publish Progressive GAN — progressive resolution growth to 1024x1024 CelebA-HQ images
+    2019 : Karras, Laine, and Aila publish StyleGAN at CVPR — style/noise separation and FFHQ photorealistic faces
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Generator** — The half of a GAN that produces synthetic samples. It starts with a random noise vector and transforms it through a neural network into an output (such as an image) that matches the shape of the training data. It never sees real examples directly; its only training signal comes from how well it fools the discriminator.
+
+**Discriminator** — The half of a GAN that classifies inputs as real or fake. It receives a mixture of genuine training examples and generator outputs, and it outputs a probability. Its gradients flow back to the generator, making the discriminator the mechanism through which the generator learns.
+
+**Minimax game** — The mathematical structure of GAN training. The discriminator maximizes its ability to tell real from fake; the generator minimizes the same objective. The two networks play against each other in every update round rather than optimizing toward a shared target.
+
+**Mode collapse** — A training failure in which the generator learns to produce only a narrow subset of plausible outputs (a single digit, for example, rather than all ten) because those few examples reliably fool the current discriminator. The 2014 paper called an extreme version the "Helvetica scenario."
+
+**Nash equilibrium** — The theoretical endpoint of the minimax game, reached when neither player can improve by changing strategy unilaterally. In the GAN formulation, this occurs when the generator distribution matches the training data distribution and the discriminator can do no better than guessing. Reaching this point with finite networks and stochastic gradients is not guaranteed.
+
+**Latent vector** — The random noise vector fed into the generator as input. DCGAN demonstrated that arithmetic operations on latent vectors (addition, subtraction) produce semantically interpretable changes in the generated output, suggesting the generator organizes visual factors in a structured internal space.
+
+**Implicit density model** — A generative model that can produce samples without explicitly writing down or normalizing the probability distribution it represents. GANs are implicit density models: sampling is a forward pass through the generator, and no likelihood calculation is required at generation time.
+
+</details>
+
 In the history of deep learning, certain breakthroughs emerge not from the discovery of a new architecture, but from the reframing of a foundational problem. By 2014, the challenge of generative modeling—teaching a neural network to produce novel data that resembled its training set—had forced researchers to confront some of the most computationally punishing mathematics in the field. The hinge of modern generative modeling occurred when the burden of image generation was transferred away from explicit probability estimation and placed onto the mechanics of a competitive, two-player game. Generative adversarial networks mattered because they allowed a system to learn by arguing with itself: a generator attempted to produce samples that looked like the data, while a discriminator learned to reject those samples. The historical significance is not that this architecture instantly solved unsupervised learning or made machines imaginative. The hinge is much narrower and stronger: in 2014, researchers introduced a backpropagation-friendly adversarial objective that bypassed heavy variational machinery while accepting a new, volatile problem—the training of a Nash equilibrium. From that trade emerged a clear historical arc: a late-night idea in Montreal, a compact mathematical formulation, brittle early samples of handwritten digits, the convolutional stabilization of the architecture, and an eventual progression toward the photorealistic synthetic faces that made generative imagery culturally legible.
 
 ### The Montreal Spark
@@ -92,3 +147,7 @@ StyleGAN's architectural change gave researchers a more precise handle on what t
 The StyleGAN infrastructure stack sat at the demanding edge of deep learning engineering at the time. The official implementation required TensorFlow 1.10 or higher and necessitated high-end NVIDIA GPUs with at least 11 gigabytes of DRAM. Like its predecessor, it recommended the 8-GPU DGX-1 for training, while providing researchers with pre-trained network files containing the 1024x1024 FFHQ weights to evaluate the model's quality and disentanglement metrics. The README also exposed the surrounding evaluation machinery: Inception-v3, VGG-16 and LPIPS-style perceptual distances, and attribute classifiers all appeared in the system used to judge quality and disentanglement. The visible output was a face; the research artifact was an entire stack of datasets, trained networks, metrics, GPU memory budgets, and serialized model files.
 
 This arc should not be mistaken for the whole future of generative media. Later chapters will have to handle diffusion models and the broader public politics of synthetic images. The narrower historical point is already large enough. By moving the burden of generative modeling away from approximate inference and onto the demanding physics of a Nash equilibrium, the adversarial framework forced the field to pair mathematical elegance with hardware scale and architectural discipline. From the 2014 minimax game to DCGAN's convolutional constraints, Progressive GAN's resolution curriculum, and StyleGAN's layerwise control, researchers transformed deep generative modeling from a brittle experimental proposal into an engine capable of rendering a synthetic world.
+
+:::note[Why this still matters today]
+The adversarial training pattern established in 2014 remains a live design choice in modern deep learning. GANs continue to power image synthesis, video generation, and data augmentation pipelines where diffusion models are too slow for real-time use. The discriminator's learned loss function — the idea that a separate network can supply the training signal for a generator — now appears in perceptual loss functions, learned reward models, and the RLHF pipelines used to align large language models. The Nash-equilibrium instability problem GAN researchers spent a decade managing is the same class of problem practitioners face today when balancing competing objectives in multi-objective training.
+:::
