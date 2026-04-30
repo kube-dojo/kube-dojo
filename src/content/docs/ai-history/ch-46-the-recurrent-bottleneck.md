@@ -5,6 +5,55 @@ sidebar:
   order: 46
 ---
 
+:::tip[In one paragraph]
+Recurrent neural networks promised to learn from sequences of any length, but gradient descent failed across long gaps: error signals vanished or exploded during backpropagation through time. In 1997, Hochreiter and Schmidhuber introduced Long Short-Term Memory, a gated architecture whose constant error carousel kept gradients stable across thousands of steps. LSTM powered speech recognition and machine translation at scale, yet its inherently sequential computation prevented parallelisation within a single sequence — the bottleneck Vaswani et al. named explicitly in 2017.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Sepp Hochreiter | — | Co-author of the 1997 LSTM paper; his 1991 diploma thesis is the origin of the vanishing/exploding-gradient analysis. |
+| Jurgen Schmidhuber | — | Co-author of the 1997 LSTM paper and the 2000 forget-gate paper; IDSIA affiliation in the primary source. |
+| Yoshua Bengio | — | Co-author of the 1994 paper that independently formalized the difficulty of learning long-term dependencies with gradient descent. |
+| Ilya Sutskever, Oriol Vinyals, and Quoc V. Le | — | Authors of the 2014 sequence-to-sequence LSTM paper; provide the chapter's infrastructure detail: deep LSTMs, 8 GPUs, ten-day training. |
+| Felix A. Gers and Fred Cummins | — | Co-authors with Schmidhuber on the 2000 paper that introduced the adaptive forget gate for continual LSTM streams. |
+| Ashish Vaswani et al. | — | Authors of "Attention Is All You Need" (2017); named the sequential parallelisation constraint of recurrent models that concludes this chapter's arc. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1991–2017)</strong></summary>
+
+```mermaid
+timeline
+    title From Vanishing Gradients to the Recurrent Bottleneck
+    1991 : Hochreiter diploma thesis — vanishing and exploding gradients in recurrent networks analysed
+    1994 : Bengio, Simard, and Frasconi — gradient learning difficulty grows with dependency duration
+    1997 : Hochreiter and Schmidhuber — Long Short-Term Memory introduced in Neural Computation
+    2000 : Gers, Schmidhuber, and Cummins — adaptive forget gate for continual LSTM streams
+    2013 : Graves, Mohamed, and Hinton — deep LSTM RNNs achieve best-known TIMIT phoneme error rate
+    2014 : Sutskever, Vinyals, and Le — sequence-to-sequence learning with multilayer LSTMs on WMT'14
+    2016 : Wu et al. — Google Neural Machine Translation: 8-encoder, 8-decoder LSTM with model parallelism
+    2017 : Vaswani et al. — Attention Is All You Need names the sequential computation bottleneck
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Backpropagation through time (BPTT)** — The standard method for training recurrent networks: the network is conceptually unrolled across every time step, then ordinary backpropagation is applied to the resulting deep structure. Error signals must travel backward through every step, which creates the vanishing- and exploding-gradient problem at long distances.
+- **Vanishing gradient** — When error signals shrink toward zero as they travel backward through many time steps, the network can no longer assign credit to inputs far in the past. Training may appear stable while the model silently ignores distant dependencies.
+- **Constant error carousel (CEC)** — The self-connected, linear memory-cell path at the centre of an LSTM unit. Its self-connection weight is fixed at 1.0, so the gradient passing through it is multiplied by 1 at each step, neither shrinking nor exploding over long sequences.
+- **Gate (LSTM)** — A multiplicative mechanism that controls whether information can enter a memory cell, leave it, or be discarded. The input gate controls writing, the output gate controls reading, and the forget gate (added in 2000) controls selective erasure of stored content.
+- **Sequence-to-sequence learning** — A framework in which one recurrent network encodes a variable-length input into a fixed-size vector, and a second recurrent network decodes that vector into a variable-length output. Used in the 2014 Sutskever et al. paper for English-French machine translation.
+- **Model parallelism** — Splitting a single neural network across multiple hardware devices (e.g. one LSTM layer per GPU) so the model fits and runs, as opposed to data parallelism, which runs copies of the same model on different batches. The 2014 seq2seq paper and 2016 GNMT system both relied on model parallelism to handle deep recurrent stacks.
+- **Sequential operations** — Computations that must be performed in order because each depends on the previous result. Vaswani et al. 2017 quantified recurrent layers as requiring O(n) sequential operations for a sequence of length n, versus O(1) for self-attention — the architectural signature of the recurrent bottleneck.
+
+</details>
+
 The promise of the recurrent neural network was one of natural, intuitive alignment with the shape of time. Unlike a standard feedforward model, which required the engineer to chop the continuous world into rigid, fixed-width windows, a recurrent architecture was designed to simply observe a sequence as it unfolded. By maintaining a hidden state that updated with each successive input, the network could theoretically carry information forward across an input of changing length. It promised to map streams such as audio waveforms or strings of text into continuous internal representations, carrying the context of earlier observations into later predictions.
 
 This theoretical elegance, however, almost immediately collided with a profound physical and mathematical obstacle during the training phase. When a neural network learns, it relies on gradient descent to assign credit or blame to its internal parameters for the final output. The network must determine how a slight change in any given weight would affect the overall error. In a recurrent architecture, the standard method for calculating these gradients is backpropagation through time, a process that effectively unfolds the network across the sequence's positions. 
@@ -90,3 +139,7 @@ Vaswani and his colleagues quantified this constraint structurally. In their com
 The hardware contrast made the point concrete on its own. The Transformer paper reported a base model trained for 100,000 steps, or about 12 hours, on one machine with eight NVIDIA P100 GPUs. Its larger model trained for 300,000 steps, or about 3.5 days, on the same kind of machine. Those numbers belong mainly to the Transformer architecture story. Here they serve a narrower purpose: they show why escaping the recurrent time axis changed what an 8-GPU machine could do.
 
 The Transformer architecture would go on to replace commonly used recurrent encoder-decoder layers with multi-headed self-attention, training significantly faster for translation tasks and altering the trajectory of deep learning. But this transition was not a rejection of the LSTM's achievements. The Long Short-Term Memory network was a precise architectural solution to a severe mathematical crisis. It gave recurrent networks a protected memory path, made long-range credit assignment practical enough to power major speech and translation systems, and forced the field to confront the next constraint. The recurrent bottleneck was not a failure of the LSTM. It was the final physical limit of computing time one step at a time.
+
+:::note[Why this still matters today]
+The tension between memory capacity and training signal that LSTM resolved is not historical curiosity. Modern sequence models still use gating logic — the forget and input gates appear in GRU variants embedded in audio pipelines, on-device speech recognisers, and time-series anomaly detectors where Transformer attention is too expensive. The bottleneck LSTM exposed — sequential computation preventing intra-sequence parallelism — drove the hardware and architecture decisions that produced the Transformer, large language models, and today's GPU cluster economics. Every choice about context length, batching strategy, and inference latency in a production language system is a downstream consequence of the parallelisation constraint named in this chapter.
+:::
