@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 2013 a single projection forced Google's hardware decision: three minutes of daily voice search per user would require doubling the company's entire datacenter capacity under conventional CPUs. The answer was the Tensor Processing Unit — a custom ASIC for 8-bit matrix arithmetic, built and deployed in fifteen months, running in production a year before its 2016 announcement. TPU v1 delivered 15–30x the speed and 30–80x the performance-per-watt of contemporary CPUs and GPUs across Google's six dominant inference workloads.
+In 2013 a voice-search projection forced Google's hardware decision: neural-network inference threatened to become a datacenter-capacity problem under conventional CPUs. The answer was the Tensor Processing Unit — a custom ASIC for production inference, built and deployed quickly enough to run in production before its 2016 announcement. TPU v1 turned neural-network arithmetic into an order-of-magnitude infrastructure efficiency gain.
 :::
 
 <details>
@@ -30,7 +30,7 @@ In 2013 a single projection forced Google's hardware decision: three minutes of 
 timeline
     title Chapter 49 — The Custom Silicon
     2006 : Google discusses GPU / FPGA / ASIC options for datacenter acceleration — idea not yet compelling
-    2013 : Voice-search projection reveals doubling-datacenter problem — high-priority custom ASIC project begins
+    2013 : Voice-search projection reveals neural-network inference capacity problem — high-priority custom ASIC project begins
     2015 : TPU v1 deployed in Google datacenters for neural-network inference
     March 2016 : TPU provides inference for AlphaGo during Lee Sedol matches
     May 2016 : Google publicly announces the Tensor Processing Unit — already running more than a year
@@ -47,13 +47,13 @@ timeline
 
 **ASIC (Application-Specific Integrated Circuit)** — A chip designed to do one specific job rather than general computation. TPU v1 is an ASIC for neural-network inference; unlike a CPU or GPU it cannot easily be repurposed for unrelated work.
 
-**Systolic array** — A grid of arithmetic units where data flows through in coordinated waves, each cell performing a multiply-add as values pass through, rather than each cell fetching its own data from a central store. The name comes from the rhythmic pumping motion, like a heartbeat.
+**Systolic array** — A grid of arithmetic units arranged so values move through neighboring cells while repeated multiply-add work happens locally.
 
-**Quantization** — Compressing a trained model's weights from 32-bit floating-point numbers down to narrower integers (often 8-bit). Inference tolerates this loss of precision; the payoff is that 8-bit arithmetic units are far smaller and cheaper in power than 32-bit ones.
+**Quantization** — Compressing a trained model's weights from high-precision numbers into narrower integer formats that inference can often tolerate.
 
 **Inference** — Using an already-trained neural network to answer a question (classify an image, translate a sentence, rank a search result). Contrasts with training, which adjusts the weights. TPU v1 was built solely for inference.
 
-**Performance-per-watt** — A datacenter's practical measure of efficiency: how much useful computation fits within a fixed power and cooling budget. TPU v1's 30–80x advantage over contemporaries meant the same inference load required far less electricity and heat.
+**Performance-per-watt** — A datacenter's practical measure of efficiency: how much useful computation fits within a fixed power and cooling budget.
 
 **PCIe coprocessor** — A chip that plugs into a server's PCI Express slot, augmenting but not replacing the host CPU. TPU v1 used this form factor so it could enter Google's existing rack infrastructure without rebuilding it.
 

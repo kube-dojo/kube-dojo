@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In June 2017, Vaswani and seven Google co-authors proposed the Transformer: an encoder-decoder architecture that replaced the recurrent time-step dependency of LSTMs with stacked self-attention, feed-forward layers, residual paths, layer normalization, and positional encodings. Trained on one machine with 8 P100 GPUs, it reached 28.4 BLEU on WMT 2014 English-German translation. Attention was not new — Bahdanau et al. had introduced it in 2014 — but the Transformer made it the layer operation, freeing sequence models to scale on matrix-friendly hardware.
+In June 2017, Vaswani and seven Google co-authors proposed the Transformer: an encoder-decoder architecture that replaced recurrent sequence steps with attention-centered layers. Attention was not new — Bahdanau et al. had introduced it in 2014 — but the Transformer made it the main way sequence positions exchanged information, freeing sequence models to scale on matrix-friendly hardware.
 :::
 
 <details>
@@ -32,7 +32,7 @@ timeline
     2014 : Sutskever, Vinyals, Le publish seq2seq LSTM — multilayer LSTM encodes input into a fixed-dimensional vector; second LSTM decodes the target
     2014 : Bahdanau, Cho, Bengio introduce neural machine translation with learned soft alignment — recurrent encoder-decoder with attention
     June 2017 : Vaswani et al. submit "Attention Is All You Need" to arXiv (1706.03762) — proposes the Transformer architecture
-    December 2017 : Paper appears at NeurIPS 2017 — reported machine-translation experiments use one machine with 8 NVIDIA P100 GPUs
+    December 2017 : Paper appears at NeurIPS 2017 — attention-only sequence transduction enters the main conference record
 ```
 
 </details>
@@ -40,17 +40,17 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**Sequence transduction** — A learning task where an input sequence (a sentence, a phoneme stream) maps to an output sequence (a translation, a transcription). Translation is the canonical example. The Transformer paper places itself inside this older problem class rather than claiming a wholly new task.
+**Sequence transduction** — A learning task where an input sequence maps to an output sequence, such as a sentence becoming a translation.
 
-**Recurrent neural network (RNN) / LSTM** — A model that processes a sequence one position at a time, carrying a hidden state forward across positions. The Long Short-Term Memory variant added gates that helped the state survive across longer sequences. The chapter's core complaint is not that LSTMs failed but that their per-position dependency limited how much of a layer's work could run in parallel.
+**Recurrent neural network (RNN) / LSTM** — A model that processes a sequence one position at a time while carrying state forward across positions.
 
-**Attention (Bahdanau-style)** — A mechanism that lets a decoder consult the encoder's per-position annotations as it produces each output token, retrieving relevant source-side information instead of relying on one compressed vector. Predates the Transformer and runs inside a recurrent encoder-decoder.
+**Attention (Bahdanau-style)** — A pre-Transformer mechanism that lets a decoder consult source-side positions while producing output.
 
-**Self-attention** — Attention applied within a single sequence: every position attends to every other position in the same layer. The Transformer's distinctive substitution — self-attention replaces the recurrent step as the way representations flow across positions.
+**Self-attention** — Attention applied within a single sequence so positions can exchange information directly inside a layer.
 
-**Multi-head attention** — Running several scaled dot-product attention operations in parallel with different learned projections, then concatenating the outputs. Lets the model attend to information from different representation subspaces in the same layer.
+**Multi-head attention** — Running several attention operations in parallel so the model can learn multiple relational views of the same sequence.
 
-**Positional encoding** — A signal added to the input embeddings to mark each token's position in the sequence. Because the Transformer removed recurrence and convolution, it needed an explicit order signal. The 2017 paper used sinusoidal encodings and reported similar results from learned positional embeddings.
+**Positional encoding** — An added signal that marks token order when a model no longer receives order from recurrence.
 
 **Autoregressive decoding (with masking)** — At generation time the decoder still produces one token at a time, conditioning on earlier outputs. During training, masking blocks each position from attending to later target positions so many positions can be processed in parallel without leaking the future.
 
@@ -61,13 +61,11 @@ timeline
 
 - **Scaled dot-product attention.** $\text{Attention}(Q, K, V) = \text{softmax}\!\left(\dfrac{Q K^{\top}}{\sqrt{d_k}}\right) V$ — queries $Q$, keys $K$, and values $V$ are matrices of projected token representations. The dot products score every query against every key, the softmax turns the scores into weights, and the weighted sum over values is the layer output. The $\sqrt{d_k}$ scaling keeps softmax gradients trainable as the key dimension grows. Source: Vaswani et al. 2017 §3.2.1.
 
-- **Multi-head attention.** $\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h)\, W^{O}$, with each $\text{head}_i = \text{Attention}(Q W_i^{Q}, K W_i^{K}, V W_i^{V})$ — the model learns $h$ sets of projections, runs $h$ attention operations in parallel, and recombines them. The paper uses $h = 8$ in the base model so each head sees a slice of dimension $d_k = d_v = d_{model} / h = 64$. Source: Vaswani et al. 2017 §3.2.2.
+- **Multi-head attention.** $\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h)\, W^{O}$, with each $\text{head}_i = \text{Attention}(Q W_i^{Q}, K W_i^{K}, V W_i^{V})$ — the model learns several projection sets, runs attention in parallel, and recombines the results. Base model: $h = 8$, $d_k = d_v = 64$. Source: Vaswani et al. 2017 §3.2.2.
 
 - **Sinusoidal positional encoding.** $PE_{(pos, 2i)} = \sin\!\left(pos / 10000^{2i / d_{model}}\right)$ and $PE_{(pos, 2i+1)} = \cos\!\left(pos / 10000^{2i / d_{model}}\right)$ — each dimension is a sinusoid of geometrically growing wavelength. The motivation given in the paper is that the relative offset between two positions can be expressed as a linear function of the encodings, which the model may exploit to learn relative-position behaviour. Source: Vaswani et al. 2017 §3.5.
 
-- **Per-layer complexity comparison (Table 1).** Self-attention runs in $O(n^2 \cdot d)$ per layer with $O(1)$ sequential operations and a maximum path length of $O(1)$ between any two positions; recurrent layers are $O(n \cdot d^2)$ per layer with $O(n)$ sequential operations and $O(n)$ path length; convolutional layers are $O(k \cdot n \cdot d^2)$ with $O(1)$ sequential operations but $O(\log_k n)$ or $O(n / k)$ path length depending on dilation. The Transformer trades quadratic sequence cost for short paths and short critical compute chains. Source: Vaswani et al. 2017 §4 / Table 1.
-
-- **The trade, in one inequality.** For sequence length $n$ and representation dimension $d$, self-attention is cheaper than a recurrent layer when $n < d$ — i.e. the regime of typical 2017 translation. As $n$ grows, the $n^2$ term dominates and the trade flips, which is why long-context attention later became its own engineering subfield. Source: Vaswani et al. 2017 §4 (sentence-length caveat and "restricted self-attention" remark).
+- **The key trade.** Self-attention makes distant positions directly reachable inside a layer, but it compares positions against one another, so long sequences later became their own engineering problem. Table 1 lists recurrent layers at $O(n \cdot d^2)$ with $O(n)$ sequential operations, and convolutional layers at $O(k \cdot n \cdot d^2)$ with shorter critical chains than recurrence. Source: Vaswani et al. 2017 §4 / Table 1.
 
 </details>
 

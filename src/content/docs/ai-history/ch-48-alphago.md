@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In March 2016, Google DeepMind's AlphaGo defeated Lee Sedol — the best Go player of the prior decade — four games to one in Seoul, arriving roughly a decade before experts had predicted. The system won not by brute force but by combining convolutional policy and value networks trained on expert games and self-play with Monte Carlo tree search. The result corrected a persistent myth: crossing a hard AI threshold required learning to guide search, not a choice between them.
+In March 2016, Google DeepMind's AlphaGo defeated Lee Sedol — the best Go player of the prior decade — in Seoul, arriving roughly a decade before experts had predicted. The system won not by brute force but by combining learned judgment with Monte Carlo tree search. The result corrected a persistent myth: crossing a hard AI threshold required learning to guide search, not a choice between them.
 :::
 
 <details>
@@ -17,8 +17,8 @@ In March 2016, Google DeepMind's AlphaGo defeated Lee Sedol — the best Go play
 | David Silver | — | Lead AlphaGo researcher and co-corresponding author of the *Nature* paper |
 | Demis Hassabis | — | DeepMind CEO and co-founder; co-corresponding author; wrote the official Google announcements |
 | Aja Huang | — | AlphaGo co-author; placed AlphaGo's moves on the physical board during the Lee Sedol match |
-| Lee Sedol | — | Korean 9-dan professional; Google's designated opponent; won Game 4 but lost the match 4-1 |
-| Fan Hui | — | Reigning three-time European Go champion; lost to AlphaGo 5-0 in a closed-door October 2015 match — the first professional full-board defeat |
+| Lee Sedol | — | Korean 9-dan professional; Google's designated opponent in the public Seoul match |
+| Fan Hui | — | Reigning three-time European Go champion; AlphaGo's closed-door professional full-board threshold opponent |
 | Michael Redmond | — | 9-dan professional commentator for the English-language match broadcast |
 
 </details>
@@ -30,9 +30,9 @@ In March 2016, Google DeepMind's AlphaGo defeated Lee Sedol — the best Go play
 timeline
     title AlphaGo — key dates
     1997 : IBM Deep Blue defeats Kasparov at chess — Go remains unsolved
-    2015 : AlphaGo defeats Fan Hui 5-0 in closed-door match at DeepMind (first professional full-board victory)
+    2015 : AlphaGo defeats Fan Hui in a closed-door match at DeepMind
     2016 : Nature paper published — policy networks, value network, MCTS architecture detailed (January 28)
-    2016 : Lee Sedol match — Seoul, five games (March 9–15); AlphaGo wins 4-1; Move 37 becomes defining moment
+    2016 : Lee Sedol match — Seoul, five games (March 9–15); AlphaGo wins the public series
 ```
 
 </details>
@@ -40,11 +40,11 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**Monte Carlo tree search (MCTS)** — A search method that evaluates positions by simulating many possible continuations and concentrating exploration where earlier simulations looked promising, rather than exhaustively checking every legal move.
+**Monte Carlo tree search (MCTS)** — A search method that samples possible futures and spends more attention on lines that look promising.
 
-**Policy network** — A neural network trained to estimate which moves are worth exploring; it reduces the breadth of the search by ranking candidates rather than treating all legal moves equally.
+**Policy network** — A neural network trained to estimate which moves are worth considering from a given board position.
 
-**Value network** — A neural network trained to estimate, from any board position, which player is more likely to win, without needing to play the game to its conclusion. It replaces deep search with a fast learned judgment.
+**Value network** — A neural network trained to estimate which player is more likely to win from a given board position.
 
 **Self-play reinforcement learning** — Training in which a system plays games against itself, updating its parameters based on wins and losses rather than imitation of human examples.
 
