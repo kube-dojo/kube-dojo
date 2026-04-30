@@ -5,6 +5,62 @@ sidebar:
   order: 51
 ---
 
+:::tip[In one paragraph]
+Modern AI did not spread through papers alone. By the late 2010s a distribution layer had formed: arXiv (1991, Paul Ginsparg) for preprints, GitHub for public repositories (TensorFlow 2015, PyTorch 2016, Hugging Face Transformers 2018), TensorFlow and PyTorch as open-source frameworks, and Papers with Code as a paper-to-code-to-dataset index. None of these levelled the field; they compressed the cycle from idea to inspectable implementation, making the Transformer easy to reimplement, teach, and adapt.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Paul Ginsparg | — | Cornell physicist; founded arXiv in 1991 as a curated, no-fee, moderated preprint server |
+| Google TensorFlow team | — | Institutional actor; 2015-11-09 open-source announcement framed working code as a faster medium for exchanging ML ideas than papers alone |
+| PyTorch maintainers (Meta/Facebook AI) | — | Institutional actor; 2018-05-02 PyTorch 1.0 announcement positioned the framework as a research-to-production bridge |
+| Hugging Face | — | Institutional actor; created the `huggingface/transformers` GitHub repository on 2018-10-29 (detailed model-hub treatment belongs to Chapter 54) |
+| Papers with Code team | — | Partner with arXiv; the 2021 Annual Report described a code/dataset integration that expanded from AI/ML categories to all arXiv |
+| Open-source ML maintainers and users | — | Collective infrastructure community: contributors, package maintainers, tutorial authors, and reproducibility auditors who kept the layer running |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1991–2021)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 51 — The Open Source Distribution Layer
+    1991 : arXiv is founded by Paul Ginsparg — moderated, no-fee, not peer-reviewed
+    2012 : arXiv monthly-submissions CSV totals 84,603 submissions for the year
+    Nov 2015 : tensorflow/tensorflow GitHub repository created (Nov 7); Google announces TensorFlow as open source (Nov 9) and frames working code as faster than papers
+    Aug 2016 : pytorch/pytorch GitHub repository created
+    2017 : arXiv monthly-submissions CSV totals 123,523 submissions — Transformer paper appears on arXiv this year
+    May 2018 : Meta/Facebook announces PyTorch 1.0 as an open-source AI framework bridging research and production
+    Oct 2018 : huggingface/transformers GitHub repository created (Chapter 54 treats the model hub in detail)
+    2020 : arXiv monthly-submissions CSV totals 178,329 submissions for the year
+    2021 : arXiv Annual Report — Papers with Code integration expanded from AI/ML to all arXiv; 70,000+ papers with code links, 60,000+ with dataset links
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Preprint** — A draft research paper made publicly available before formal peer review and journal/conference acceptance. Preprints accelerate circulation but do not certify validity; the same artifact may be revised, corrected, or superseded.
+
+**arXiv** — The 1991 preprint server founded by Paul Ginsparg. Curated and *moderated* (submissions are filtered for relevance and basic legitimacy) but explicitly **not** peer-reviewed. Its category taxonomy includes `cs.LG` (Machine Learning) and `stat.ML` (Machine Learning from the statistics side).
+
+**Repository (GitHub)** — A public Git project hosting source code, tests, issue tracker, pull requests, releases, and commit history. A research artifact's repository often supplies implementation choices the paper compresses (tensor shapes, training loops, masking conventions, dependency versions).
+
+**Open-source framework** — A publicly licensed software toolkit through which models can be expressed, trained, and deployed. TensorFlow (2015) and PyTorch (2016/2018) are the dominant ML examples; their framings ("exchange ideas through code", "research-to-production") differ even though the licenses overlap.
+
+**Paper-to-code index** — A discovery layer that links a paper to its implementations and datasets so a reader does not have to search project pages manually. Papers with Code is the canonical example; arXiv's 2021 Annual Report describes the integration expanding from AI/ML to all arXiv.
+
+**Reproducibility** — The ability of an independent reader to obtain the paper's reported results from the published artifacts. *Code availability is not the same as reproducibility*: a 2019 study of 1,700+ AI-paper repositories documented abandonment, inactivity, and missing dependency or data information.
+
+**Distribution layer (vs. library)** — A library helps an individual write code; a distribution layer changes what the field expects to exist around an idea. The chapter's narrow claim is that arXiv + GitHub + frameworks + paper-to-code indexes together form a distribution layer, not just a collection of tools.
+
+</details>
+
 The Transformer did not spread through architecture alone. A paper can describe an idea, but an ecosystem needs routes: places to read the paper, places to inspect code, places to compare implementations, and places to find the artifacts that make replication possible. By the late 2010s, artificial intelligence had acquired a distribution layer. It was not a single platform and it was not owned by one lab. It was a mesh of research servers, repositories, frameworks, and indexes that changed the rhythm of machine-learning work.
 
 This layer did not make the field equal. It did not erase the advantage of large companies with private data, accelerator budgets, full-time researchers, and production infrastructure. It did not make every result reproducible. It did something narrower and still consequential: it lowered the friction between an idea appearing and other people being able to inspect, clone, teach, modify, and extend it. The default tempo shifted from waiting for polished publication to reading preprints, opening repositories, and testing code.
@@ -30,6 +86,12 @@ But papers alone were not enough. A modern neural architecture is not fully comm
 This was especially true for deep learning because the gap between concept and result could be wide. A paper might say that a model used attention, residual connections, dropout, a certain optimizer, or a particular data preprocessing pipeline. But the difference between a working reproduction and a failed run often lived in details that the paper compressed. The code layer gave readers access to some of those details. It did not guarantee success, but it made the tacit engineering less invisible.
 
 Google's 2015 TensorFlow announcement made that argument explicitly. The company open-sourced TensorFlow and framed working code as a faster way for the machine-learning community to exchange ideas than research papers alone. That phrase is historically important because it captures a shift in medium. A framework was not just a tool for internal engineering. It was a public channel through which ideas could move.
+
+:::note
+> We hope this will let the machine learning community—everyone from academic researchers, to engineers, to hobbyists—exchange ideas much more quickly, through working code rather than just research papers.
+
+Google framed TensorFlow as public infrastructure by naming researchers, engineers, and hobbyists as the audience for code-mediated exchange. — *Google Blog, "TensorFlow: smarter machine learning, for everyone," 2015-11-09.*
+:::
 
 TensorFlow's framing reflected Google's position. The announcement presented TensorFlow as a machine-learning system used inside Google and made available so others could build with it. That did not turn Google's private data or production infrastructure into public goods. It did, however, release a general framework around which tutorials, examples, experiments, and production paths could gather. It made the code layer part of the field's shared vocabulary.
 
@@ -106,3 +168,7 @@ This is also why Chapter 51 sits before BERT rather than after it. BERT's releas
 The honest conclusion is not that open source won against closed labs. It is that modern AI became harder to understand without the open surfaces around it. The decisive models were still often trained by well-funded organizations. But the ideas, code patterns, framework abstractions, and reproduction attempts increasingly traveled in public. That public layer let the Transformer era compound. It let a paper become a repository, a repository become a tutorial, a tutorial become a baseline, and a baseline become the starting point for the next chapter.
 
 That is the chapter's narrow claim. The distribution layer did not create equal power. It created shared handles on unequal power, and those handles were enough to make the next wave move faster, more visibly, and with many more people watching the machinery turn in public, learning from it, teaching it, auditing it, and sometimes bending it into new tools, baselines, and shared habits.
+
+:::note[Why this still matters today]
+Every modern AI practitioner still moves through this layer daily. A new method appears as an arXiv preprint; the reference implementation lands in a GitHub repository; PyTorch (or JAX, or TensorFlow) supplies the abstractions; and Papers with Code, Hugging Face, and dataset indexes make the artifacts navigable. The same caveats apply: code availability is not reproducibility, framework popularity is not technical superiority, and openness layers vary across paper, code, weights, data, and compute. Reading a 2026 model release means reading the same surfaces — preprint, repo, framework integration, dataset card — that the late-2010s ecosystem invented around the Transformer.
+:::
