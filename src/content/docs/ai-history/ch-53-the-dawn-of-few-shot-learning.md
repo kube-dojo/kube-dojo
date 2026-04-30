@@ -110,6 +110,12 @@ It also foreshadowed a split inside the meaning of "open." A paper could be open
 
 GPT-3 moved the technical center from zero-shot transfer to in-context learning. The paper, "Language Models are Few-Shot Learners," described a 175B-parameter autoregressive language model evaluated without gradient updates or fine-tuning. Tasks and demonstrations were specified as text. The model received a prompt, processed it in a forward pass, and produced a continuation. The weights stayed fixed.
 
+:::note
+> Here we show that scaling up language models greatly improves task-agnostic, few-shot performance, sometimes even reaching competitiveness with prior state-of-the-art fine-tuning approaches.
+
+The qualifier "sometimes" matters: the abstract presents scale as the engine of few-shot gains while preserving the paper's mixed-results caveat. — *Brown et al. 2020, "Language Models are Few-Shot Learners," abstract, p. 1.*
+:::
+
 That is the key interface change. In an ordinary supervised setup, examples live in a dataset and learning happens through parameter updates. In GPT-3's few-shot setting, examples live in the context window and influence the output through attention during inference. The paper calls this in-context learning, while remaining careful about what is being learned. It does not prove that the model learns a new task from scratch inside the prompt. It may recognize patterns related to tasks it saw during training. The safe historical claim is that task performance could be conditioned by text examples without a weight update.
 
 The definitions are simple but easy to blur. In zero-shot evaluation, the model receives a natural-language description or prompt but no demonstrations. In one-shot evaluation, it receives one example. In few-shot evaluation, it receives several examples, up to what fits in the context. The examples are not a training set in the gradient-descent sense. They are part of the input. A sentiment prompt might show a few reviews and labels, then present a new review and ask for the label. A translation prompt might show a few sentence pairs, then a new source sentence. The model continues the pattern.
