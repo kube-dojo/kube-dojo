@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-R1/XCON, developed at Carnegie Mellon beginning in December 1978 and deployed by Digital Equipment Corporation in January 1980, was the first expert system to become industrial infrastructure. John McDermott's production-rule program configured VAX computer orders — translating customer requests into buildable hardware descriptions — by matching thousands of component facts and constraints rather than searching blindly. Its commercial success validated the expert-system boom; its maintenance story revealed the permanent cost: encoding expertise creates a knowledge base that must be fed, tested, and repaired indefinitely.
+R1/XCON, developed at Carnegie Mellon and deployed by Digital Equipment Corporation around 1980, was the first expert system to become industrial infrastructure. John McDermott's production-rule program configured VAX computer orders — translating customer requests into buildable hardware descriptions — by matching thousands of component facts and constraints rather than searching blindly. Its commercial success validated the expert-system boom; its maintenance story revealed the permanent cost: encoding expertise creates a knowledge base that must be fed, tested, and repaired indefinitely.
 :::
 
 <details>
@@ -18,7 +18,7 @@ R1/XCON, developed at Carnegie Mellon beginning in December 1978 and deployed by
 | John McDermott | — | CMU researcher; primary architect of R1 and author of the 1982 *Artificial Intelligence* paper documenting its task, rules, and manufacturing deployment. |
 | Judith Bachant | — | DEC Intelligent Systems Technology Group; co-author of the 1984 "R1 Revisited" retrospective anchoring the four-year production and maintenance account. |
 | Barbara Steele | — | Co-author of the 1981 IJCAI paper on ad-hoc constraints; her chapter relevance is the XSEL/R1 extension and customer-specific configuration advice. |
-| Charles L. Forgy | — | Creator of the OPS-family production-system languages (OPS4, OPS5) that provided R1's rule-matching substrate. |
+| Charles L. Forgy | — | Creator of the OPS-family production-system languages that provided R1's rule-matching substrate. |
 | Allen Newell | 1927–1992 | Pittsburgh cognitive scientist whose Match method and production-system tradition underpinned R1's recognize-act architecture. |
 | Reid G. Smith | — | Schlumberger researcher and author of the 1984 commercial expert-systems article that framed the engineering discipline R1 instantiated. |
 
@@ -31,14 +31,14 @@ R1/XCON, developed at Carnegie Mellon beginning in December 1978 and deployed by
 timeline
     title R1/XCON: From CMU Lab to DEC Manufacturing, 1978–1984
     December 1978 : McDermott begins R1 — short tutoring period, manuals, first implementation focused on central capabilities
-    April 1979 : Initial R1 demo version has about 250 rules
-    October-November 1979 : Formal validation on 50 orders; six experts spend 1–2 hours per order; 12 pieces of errorful knowledge found and fixed
+    April 1979 : Initial R1 demo version handles central capabilities
+    October-November 1979 : Formal validation testing prepares R1 for manufacturing integration
     January 1980 : DEC manufacturing begins using R1 in regular production; configures almost all VAX-11 systems shipped
-    April-July 1980 : R1 rewritten from OPS4 to OPS5 at CMU; more capable with fewer rules through generalization
-    End of 1980 : About 850 rules; DEC builds organizational capacity around R1
+    April-July 1980 : R1 rewritten at CMU into a more capable production-system implementation
+    End of 1980 : DEC builds organizational capacity around R1
     March 1981 : R1 extended to configure VAX-11/750 systems
-    1982 : Scope expands to VAX-11/730 and PDP-11/23+; knowledge base reaches about 2000 rules
-    November 1983 : About 3300 rules and 5500 component descriptions; R1 can configure all DEC systems sold in significant volume
+    1982 : Scope expands to VAX-11/730 and PDP-11/23+
+    November 1983 : R1 can configure all DEC systems sold in significant volume
     Fall 1984 : "R1 Revisited" publishes the four-year production account
 ```
 
@@ -47,13 +47,13 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-- **Production system** — A rule-based program architecture in which knowledge is stored as individual if/then rules (productions). Each rule specifies a pattern that must match the current program state and an action to take when it matches. R1 used the OPS4 and later OPS5 production-system language.
+- **Production system** — A rule-based program architecture in which knowledge is stored as individual if/then rules (productions). Each rule specifies a pattern that must match the current program state and an action to take when it matches.
 - **Working memory** — The production system's dynamic store of the current situation: for R1, the partial configuration in progress, active subtasks, selected components, and facts retrieved so far. Rules fire by pattern-matching against working memory and update it with each action.
 - **Recognize-act cycle** — The basic rhythm of a production system: scan all rules to find those whose conditions match working memory, select one, execute its action, and repeat. R1's intelligence came not from the cycle itself but from encoding enough domain knowledge for the cycle to produce useful configurations.
 - **Expert system** — A program that applies a domain-specific body of knowledge, typically extracted from human specialists, to produce outputs useful within a narrow task. R1 is an expert system because its rules encode the configuration constraints that experienced DEC engineers knew but could not easily state as a formula.
 - **Knowledge engineering** — The discipline of extracting, encoding, testing, and maintaining the knowledge that drives an expert system. The Ch21 development and maintenance narrative is primarily a knowledge-engineering story: experts tutor, inspect output, identify missing cases, and the knowledge base grows accordingly.
-- **Match (OPS5)** — The step in the recognize-act cycle where the interpreter finds all rules whose left-hand-side conditions are satisfied by the current working memory. OPS5's Rete algorithm made this efficient even when the rule base was large, allowing R1 to select locally relevant rules without exhaustive search.
-- **OPS5** — The production-system language (successor to OPS4) that R1 was rewritten into during April–July 1980. Developed at CMU with DARPA and Air Force Avionics Laboratory support; its Rete network made large rule bases feasible for manufacturing-scale use.
+- **Match** — The step in the recognize-act cycle where the interpreter finds rules whose left-hand-side conditions are satisfied by the current working memory.
+- **OPS5** — The production-system language R1 used for its manufacturing-scale implementation.
 
 </details>
 
@@ -234,6 +234,13 @@ domain structure to decide what to do next when enough information was
 available. The system worked because the domain had enough local regularity for
 rules to recognize meaningful situations.
 
+The implementation history made that practical issue concrete. R1 began in the
+OPS production-system family and was rewritten from OPS4 into OPS5 at CMU during
+April-July 1980. OPS5's Rete matching network mattered because the interpreter
+had to find relevant rules efficiently as the rule base grew. Without that
+matching machinery, the recognize-act rhythm would have been an elegant
+description of a system too expensive to run at manufacturing scale.
+
 That distinction separates R1 from both brute-force search and magical
 expertise. The program did not enumerate every possible VAX system and score
 them. It used rules to recognize the next relevant configuration situation. If
@@ -374,11 +381,12 @@ story. The 1982 paper shows how R1 worked and how it entered manufacturing.
 The later account shows what happened after production use made the system
 important.
 
-By the early 1980s, the R1 organization had grown. The knowledge base had
-expanded from hundreds of rules to thousands. Component descriptions multiplied.
-The system handled more product families and more orders. DEC built a group
-around knowledge-based systems, and R1 remained a continuing maintenance
-project rather than a finished artifact.
+By the early 1980s, the R1 organization had grown. The knowledge base moved from
+about 250 rules in the April 1979 demonstration to about 850 by the end of 1980,
+roughly 2000 in 1982, and about 3300 rules plus 5500 component descriptions by
+November 1983. The system handled more product families and more orders. DEC
+built a group around knowledge-based systems, and R1 remained a continuing
+maintenance project rather than a finished artifact.
 
 The four-year account described a system that had become both more capable and
 more dependent on its support organization. It reported growth in rules,
@@ -526,4 +534,3 @@ kept feeding the machinery what it needed to know.
 :::note[Why this still matters today]
 The R1/XCON pattern reappears in every era of applied AI. Modern knowledge bases — whether stored as rules, embeddings, or retrieval indexes — still face the same maintenance contract: domain drift erodes accuracy, new products create coverage gaps, and deployment exposes exceptional cases that no training set anticipated. The distinction between a narrow, structured task that can be made operational and a broad domain that resists encoding remains the central engineering judgment in applied AI. R1 proved the distinction is real, not theoretical, and that success in the former does not licence ambition in the latter.
 :::
-

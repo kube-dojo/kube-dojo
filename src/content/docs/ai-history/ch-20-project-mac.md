@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Founded at MIT on July 1, 1963, under ARPA/ONR backing, Project MAC was not merely an AI laboratory — its name carried two meanings: Multiple-Access Computer and Machine-Aided Cognition. By building CTSS, then Multics and ITS, and equipping them with MACLISP, MATHLAB/MACSYMA, and PLANNER, the project turned computing from a batch chore into an interactive research environment. It did not solve intelligence; it changed the working conditions under which intelligence could be attempted.
+Founded at MIT on July 1, 1963, under ARPA/ONR backing, Project MAC was not merely an AI laboratory. By building CTSS, then Multics and ITS, and equipping them with MACLISP, MATHLAB/MACSYMA, and PLANNER, the project turned computing from a batch chore into an interactive research environment. It did not solve intelligence; it changed the working conditions under which intelligence could be attempted.
 :::
 
 <details>
@@ -17,7 +17,7 @@ Founded at MIT on July 1, 1963, under ARPA/ONR backing, Project MAC was not mere
 |---|---|---|
 | Robert M. Fano | 1917–2016 | Founding Project MAC director; primary voice for the computer-utility vision and the "project, not laboratory" institutional model. |
 | Fernando J. Corbato | 1926–2019 | Led CTSS and Multics; the systems half of Project MAC and the principal architect of practical time-sharing at MIT. |
-| J. C. R. Licklider | 1915–1990 | ARPA/IPTO director who backed the $3-million Project MAC contract; later served as Project MAC director himself. |
+| J. C. R. Licklider | 1915–1990 | ARPA/IPTO director who backed Project MAC's early contract; later served as Project MAC director himself. |
 | Edward Fredkin | 1934–2023 | Project MAC director in the early 1970s reorganization phase; oversaw the shift toward automatic programming. |
 | Marvin Minsky | 1927–2016 | AI group leader within Project MAC; connected the shared infrastructure to vision, robotics, and symbolic AI. |
 | Carl Hewitt | 1944– | Creator of PLANNER; key figure for automatic-programming and knowledge-based programming work in Project MAC. |
@@ -31,7 +31,7 @@ Founded at MIT on July 1, 1963, under ARPA/ONR backing, Project MAC was not mere
 timeline
     title Project MAC: from CTSS roots to reorganization, 1960–1973
     1960-1961 : CTSS begins at MIT Computation Center and is demonstrated — predates Project MAC
-    Spring 1963 : Project MAC organized under ONR acting for ARPA : DARPA approves $3-million contract
+    Spring 1963 : Project MAC organized under ONR acting for ARPA : DARPA approves a major contract
     July 1 1963 : MIT MAC50 gives this as Project MAC's official founding date
     Fall 1963 : Substantially improved CTSS installation at Project MAC per Fano's 1967 account
     1964-1965 : IBM 7094 CTSS service continues : Multics launched as second-generation system with Bell Labs and GE
@@ -48,12 +48,12 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Time-sharing** — A method of running a computer so that many users interact with it simultaneously, each seeing the machine as if they had it to themselves. Instead of waiting for a batch job to complete, a user types a command and sees the result in seconds. The key shift: the machine adapts to human thought-rhythm rather than the reverse.
-- **CTSS (Compatible Time-Sharing System)** — The IBM 7094 operating system that gave Project MAC its practical foundation. It supported roughly 30 simultaneous users, persistent files, shared commands, passwords, and online manuals — the core conventions of interactive computing culture.
-- **Multics** — Project MAC's second-generation time-sharing system, built jointly with Bell Labs and General Electric on the GE 645. Aimed at dependable utility-scale service: security, hierarchical storage, many concurrent users, and long-term operation.
-- **ITS (Incompatible Timesharing System)** — The AI group's PDP-6/PDP-10 environment. Deliberately different from Multics, optimized for high-interaction AI work: real-time device control, display interaction, and maximum researcher access to the machine's internals.
+- **CTSS (Compatible Time-Sharing System)** — The IBM 7094 operating system that gave Project MAC its first practical time-sharing foundation.
+- **Multics** — Project MAC's second-generation time-sharing system, built jointly with Bell Labs and General Electric on the GE 645.
+- **ITS (Incompatible Timesharing System)** — The AI group's PDP-6/PDP-10 time-sharing environment within Project MAC.
 - **MACLISP** — The AI group's primary programming language and environment, built around Lisp. Came with editing, debugging, display packages, and arithmetic support — making it possible to develop and inspect symbolic programs while they ran.
 - **MACSYMA** — An interactive system for symbolic algebraic manipulation, evolved from MATHLAB. It encoded mathematical knowledge so the computer could carry out symbolic transformations, not just numerical calculations. One of the clearest early examples of knowledge built into a program.
-- **Computer utility** — Fano's and Licklider's framing for time-sharing as a social resource, like electricity or the telephone: available when needed, shared across a community, woven into everyday intellectual work rather than reserved for occasional batch jobs.
+- **Computer utility** — Fano's and Licklider's framing for time-sharing as shared infrastructure woven into everyday intellectual work rather than reserved for occasional batch jobs.
 
 </details>
 
@@ -188,7 +188,7 @@ to be technically possible, and it had to be intellectually useful.
 
 ARPA's role also needs to stay visible. Project MAC was organized under ONR
 acting for ARPA, and Licklider was closely involved in the proposal and review.
-Norberg and O'Neill describe a $3-million contract endorsed with striking
+Norberg and O'Neill describe a three-million-dollar contract endorsed with striking
 speed. That number should not be treated as a mere budget curiosity. It shows
 that time-sharing was becoming a national research bet. The agency wanted more
 than a campus service. It wanted an R&D enterprise that could develop
@@ -528,5 +528,4 @@ research imagination.
 :::note[Why this still matters today]
 Every cloud IDE, shared notebook, collaborative coding environment, and hosted AI inference endpoint descends, culturally and technically, from the computer-utility idea Project MAC demonstrated. Interactive computing is now so ordinary that its infrastructure is invisible — but software that can be edited, run, debugged, and shared in real time still depends on the same habit: the machine responds to human thought, not the reverse. The hunger Project MAC revealed — memory, responsiveness, specialized languages, network protocols — is the same appetite that drove cloud computing, GPU clusters, and large-model serving infrastructure. The machine room is still part of the history of ideas.
 :::
-
 
