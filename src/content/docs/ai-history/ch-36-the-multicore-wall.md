@@ -5,6 +5,58 @@ sidebar:
   order: 36
 ---
 
+:::tip[In one paragraph]
+For thirty years, software ran faster on new hardware for free — a promise powered by Dennard scaling. That promise ended on May 7, 2004, when Intel cancelled the Tejas Pentium 4 and Jayhawk Xeon and pulled its dual-core roadmap forward by twelve to eighteen months. Herb Sutter named the consequence in December 2004: the single-thread free lunch was over. The Berkeley View report of 2006 named the cause: Power Wall plus Memory Wall plus ILP Wall equalled Brick Wall.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Robert N. Dennard | 1932–2024 | IBM engineer who laid down the transistor-scaling recipe in the early 1970s; its breakdown is the chapter's founding event. |
+| Shekhar Borkar | — | Intel engineer who warned in a July/August 1999 *IEEE Micro* paper that continued technology scaling would push CPU power density past manageable limits. |
+| Kunle Olukotun | — | Stanford architecture researcher who argued at ASPLOS 1996, eight years before Intel acted, that transistor budgets should be spent on multiple smaller cores. |
+| Herb Sutter | — | Software architect at Microsoft and ISO C++ committee chair; author of "The Free Lunch Is Over" (December 2004 / *Dr. Dobb's Journal* March 2005), the canonical software-industry account of the pivot. |
+| Ashlee Vance | — | *The Register* journalist who anchored the Tejas/Jayhawk cancellation in real time on May 7, 2004. |
+| Krste Asanović and David A. Patterson | — | Lead authors of the December 2006 *View from Berkeley* report that formalized the post-2004 regime as "Power Wall + Memory Wall + ILP Wall = Brick Wall." |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1970s–2006)</strong></summary>
+
+```mermaid
+timeline
+    title The Multicore Wall — from Dennard's Recipe to the Brick Wall
+    1970s : Robert N. Dennard lays down IBM transistor-scaling recipe — shrink 30% per generation, keep electric field constant, double density
+    1996 : Olukotun et al. present "The Case for a Single-Chip Multiprocessor" at ASPLOS — architectural alternative on record
+    1999 : Borkar warns in IEEE Micro 19(4) that frequency scaling is pushing power density past manageable limits
+    2000 : Intel introduces NetBurst architecture — deep pipeline designed to keep clock speed climbing
+    2001 : Intel chips reach 2 GHz : IBM ships dual-core POWER4 server processor
+    2003 : Intel clock-speed growth visibly flattens; Sutter would later mark this as where the wall appeared
+    2004 Jan : AnandTech reports Tejas engineering samples at 2.8 GHz — consuming ~150 W
+    2004 May 7 : Intel confirms cancellation of Tejas and Jayhawk; dual-core schedule pulled 12–18 months forward
+    2004 Dec : Herb Sutter posts "The Free Lunch Is Over" — later published in Dr. Dobb's Journal March 2005
+    2005 : Intel ships Pentium D and AMD ships Athlon 64 X2 — first mainstream x86 dual-core desktop chips : Sun ships Niagara 8-core server processor
+    2006 Dec 18 : Berkeley View report names the regime — Power Wall + Memory Wall + ILP Wall = Brick Wall
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Dennard scaling** — The 1970s IBM recipe by which each transistor generation was 30% smaller, 40% faster, and consumed proportionally less power. For three decades it delivered the "free lunch." It stopped paying its full bill around 2003 when voltage could no longer fall cleanly without leakage growing.
+- **Power Wall** — The limit reached when a chip contains more transistors than it can afford to turn on at full speed without exceeding its heat and power budget. One of the three walls the Berkeley View report identified in 2006.
+- **ILP Wall (Instruction-Level Parallelism Wall)** — The limit at which architects run out of independent instructions inside a single sequential program to execute simultaneously. More transistors can no longer improve single-thread speed because there is not enough hidden parallelism left to exploit.
+- **Memory Wall** — The growing gap between how fast a processor can execute instructions and how fast it can fetch data from main memory. The Berkeley report noted a DRAM access could take ~200 clock cycles while a floating-point multiply took only four.
+- **Brick Wall** — The Berkeley View 2006 term for the combined effect of the Power Wall, Memory Wall, and ILP Wall — the reason the old strategy of faster single-core clocks had no remaining escape route.
+- **Multicore** — A processor die that contains two or more independent execution cores. Where one fast core had previously delivered performance growth, multiple cores offered a way to use additional transistors without violating the power budget.
+- **Concurrency revolution** — Herb Sutter's term for the software-industry consequence of multicore: programs that were not written to do more than one thing at a time would no longer automatically benefit from newer hardware.
+
+</details>
+
 For nearly thirty years, the relationship between a software developer and a microprocessor was defined by a simple, implicit promise: if the developer wrote a single-threaded program today, it would run faster on the hardware of tomorrow without the developer needing to change a single line of code. This "free performance lunch," as it would later be called, was powered by a predictable and highly successful cycle of semiconductor engineering. Every eighteen to twenty-four months, a new generation of transistors would arrive that were roughly 30% smaller, 40% faster, and consumed proportionally less power. The recipe, known as Dennard scaling, had been laid down by IBM’s Robert N. Dennard in the early 1970s: shrink transistor dimensions by about 30% per generation, keep the electric field constant, double density, and gain speed while lowering voltage. For decades that combination made higher operating frequency seem like the natural output of better manufacturing. In the marketing of the late 1990s and early 2000s, the resulting single number—the gigahertz (GHz)—became the primary measure of a computer’s worth and the main axis of competition.
 
 In this era, the "Gigahertz Religion" dominated the industry. When Intel introduced its NetBurst microarchitecture in 2000 with the Pentium 4, the design was a physical manifestation of this faith. NetBurst was built around an exceptionally deep execution pipeline, so that operating frequencies could keep climbing higher than previous mainstream designs could sustain. By breaking instructions into smaller, simpler stages, Intel could pump the clock faster, even if the work done per clock cycle was sometimes less than that of its competitors. The marketing was exceptionally effective; consumers and technical buyers alike learned to read CPU performance off the GHz number printed on the box. In August 2001, Intel reached the landmark 2 GHz milestone. By late 2004, speeds had reached 3.4 GHz, and Intel was still publicly associated with a Pentium 4 line that seemed to be moving toward 4 GHz and beyond.
@@ -88,3 +140,7 @@ None of this was driven by neural networks. The workloads named in the Berkeley 
 This was the final state of the Multicore Wall. By 2006, the software industry had spent its first eighteen months adjusting to the fact that the old rules no longer applied. Developers were learning to think in parallel, not because it was inherently easier—it was, in fact, significantly harder—but because it was the only way to tap into the power of new hardware.
 
 This cultural and technical shift created one of the preconditions for the next decade of AI compute scaling. When researchers later sought to train massive neural networks, they did not find a world still organized around one ever-faster scalar processor. They found an industry that had already been forced to build parallel software, parallel libraries, and operating systems that treated concurrency as ordinary. The software world had spent years learning to coordinate two, four, and eight cores. When the time came to coordinate thousands of cores on a GPU, the conceptual ground had already been cleared. The Multicore Wall did not cause the deep learning revolution, but it ensured that when that revolution arrived, it would find an industry that had already learned how to think in parallel.
+
+:::note[Why this still matters today]
+Every modern laptop, phone, and cloud server is a parallel computer by default — a direct consequence of the 2004 pivot. The Power Wall has not been repealed: chip designers still budget cores and frequency against a fixed thermal envelope, and the energy-per-operation constraint drives every cloud pricing model. Concurrent programming concepts — threads, locks, race conditions, task parallelism — entered the standard software curriculum because of the multicore transition. When the deep-learning era later demanded parallel hardware at massive scale, it found an industry that had already spent a decade building the compilers, runtimes, and mental models parallelism requires.
+:::
