@@ -120,6 +120,14 @@ The name "smash" can sound emotional, but the historical event was a measurement
 
 The aftermath should be kept bounded, because the strongest evidence is about the benchmark field. Russakovsky and her co-authors later called ILSVRC2012 a turning point for large-scale object recognition, the moment when large-scale deep neural networks entered the scene. That does not mean every part of visual recognition changed at once, or that hand-engineered features vanished from every application. It means that in the ILSVRC arena, the incentives shifted quickly and visibly. The next teams did not have to accept a manifesto. They had to respond to a score.
 
+:::note
+> "On the plus side, of course, the major breakthroughs in object recognition accuracy (Section 5) and the analysis of the strength and weaknesses of current algorithms as a function of object class properties (Section 6.3) would never have been possible on a smaller scale."
+>
+> — Russakovsky et al. 2015, p.32
+
+The organizers' own retrospective conclusion: scale was required, not merely rewarded.
+:::
+
 The response showed up in the following competitions. The ILSVRC organizers reported that the vast majority of 2013 entries used deep convolutional neural networks, and that almost all 2014 teams used CNNs as the basis for their submissions. This was the measured methodological pivot the 2012 result earned. Feature engineering did not disappear from history, and later systems would add their own architectural changes, training tricks, and infrastructure improvements. But the benchmark's center of gravity had moved. A team entering ILSVRC after SuperVision had to explain why it was not using the kind of learned representation that had just opened such a large gap.
 
 The named winners in the next two years make the movement concrete without turning this chapter into a later architecture history. In 2013, the classification winner was Clarifai, associated with Matthew Zeiler, and it belonged to the wave of deep CNN systems that followed SuperVision. In 2014, the winning entries would introduce still other architecture choices. Those later systems are separate stories, but their appearance inside the same benchmark shows how quickly the SuperVision result changed the competitive question. The issue was no longer whether a large CNN could survive ImageNet-scale evaluation. It was how to build a better one.
