@@ -6,6 +6,68 @@ sidebar:
   order: 25
 ---
 
+:::tip[In one paragraph]
+In 1989, George Cybenko proved that finite sums of sigmoidal units can uniformly approximate any continuous function on the unit hypercube. The same year, Hornik, Stinchcombe, and White showed multilayer feedforward networks are universal approximators, and Funahashi gave a parallel continuous-mapping result. The 1989 cluster did not make neural networks easy to train; it ended a representational doubt left by the perceptron backlash, giving researchers mathematical permission to keep building hidden-layer systems.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| George Cybenko | — | Author of the 1989 sigmoidal-superposition theorem; proved finite sums of sigmoidal units are dense in continuous functions on compact domains. |
+| Kurt Hornik | — | Co-author of the 1989 "Multilayer feedforward networks are universal approximators" paper in *Neural Networks*. |
+| Maxwell Stinchcombe | — | Co-author of Hornik/Stinchcombe/White 1989; contributed the multi-author framing of universal approximation for feedforward networks. |
+| Halbert White | — | Co-author of Hornik/Stinchcombe/White 1989; brought econometric and statistical-learning context to the universal-approximation result. |
+| Ken-ichi Funahashi | — | Author of the 1989 continuous-mapping approximation result; showed three-layer networks can approximate continuous mappings. |
+| A. N. Kolmogorov | 1903–1987 | Soviet mathematician whose 1957 theorem on superpositions of one-variable functions forms the mathematical prehistory of 1989 neural-network approximation results. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1957–1989)</strong></summary>
+
+```mermaid
+timeline
+    title The Road to Universal Approximation, 1957–1989
+    1957 : Kolmogorov publishes a theorem showing continuous multivariable functions can be represented by superpositions of one-variable functions
+    1969 : Minsky and Papert's Perceptrons sharpens attention on representational limits of single-layer perceptrons
+    1986 : Backpropagation revival shows multilayer networks can be trained — creating a practical reason to care about approximation capacity
+    1988 : Cybenko submits and revises work on sigmoidal superpositions
+    1989 : Funahashi publishes a continuous-mapping approximation result in Neural Networks
+    1989 : Hornik, Stinchcombe, and White publish "Multilayer feedforward networks are universal approximators" in Neural Networks
+    December 1989 : Cybenko's "Approximation by superpositions of a sigmoidal function" appears in Mathematics of Control, Signals, and Systems
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Feedforward network** — A neural network in which information flows in one direction only: from inputs, through one or more hidden layers, to the output. No cycles, no feedback loops.
+- **Universal approximator** — A model family is a universal approximator if, for any continuous target function on a compact domain and any desired error tolerance, some member of the family can come within that tolerance. The phrase describes representational richness, not training ease.
+- **Uniform approximation** — A guarantee that a network can get close to a target function everywhere on the domain simultaneously, not just on average or at scattered points. Cybenko's theorem is phrased in terms of uniform approximation.
+- **Sigmoidal function** — A smooth, bounded, S-shaped activation function that is nondecreasing and approaches distinct limits as its input goes to positive and negative infinity. The logistic function is the canonical example.
+- **Compact domain** — A closed and bounded region, such as the unit hypercube $[0,1]^n$. Compactness is a key assumption in classical universal-approximation theorems; it rules out unbounded or open domains.
+- **Density** — In approximation theory, a family of functions is dense in a larger class if every function in that class can be approximated arbitrarily closely by some member of the family. Density is what the theorem proves; it is not the same as saying a specific network exists that is ready to use.
+- **Existence result** — A mathematical statement that guarantees some object with a desired property exists, without providing a method to find or construct it. Universal approximation is an existence result: it promises a suitable network is in the family, not that training will locate it.
+
+</details>
+
+<details>
+<summary><strong>The math, on demand</strong></summary>
+
+The 1989 results established that multilayer networks with nonlinear activations could approximate continuous functions arbitrarily well. Here are the key mathematical claims.
+
+- **Cybenko 1989 — core theorem (Theorem 1):** Let $\sigma$ be a continuous sigmoidal function. Then finite sums of the form $\sum_{j=1}^{N} \alpha_j \sigma(\mathbf{w}_j^\top \mathbf{x} + \theta_j)$ are dense in $C(I_n)$, the space of continuous functions on the unit hypercube $I_n = [0,1]^n$. In words: for any continuous target $f$ and any $\varepsilon > 0$, there exists a one-hidden-layer sigmoidal network that approximates $f$ to within $\varepsilon$ uniformly on $I_n$.
+- **Cybenko 1989 — discriminatory functions (Theorem 2):** A sigmoidal function $\sigma$ is discriminatory: if $\int \sigma(\mathbf{w}^\top \mathbf{x} + \theta) \, d\mu(\mathbf{x}) = 0$ for all $\mathbf{w}, \theta$ implies $\mu = 0$, then finite sums of $\sigma$-units are dense in $C(I_n)$. This is the technical engine that makes Theorem 1 possible.
+- **Hornik, Stinchcombe, and White 1989:** Any nonconstant, bounded, and continuous activation function makes a standard multilayer feedforward network a universal approximator of measurable functions (in a suitable $L^p$ sense). The result generalises beyond the sigmoidal special case.
+- **Funahashi 1989 — Theorem 1:** For any continuous mapping $f : K \to \mathbb{R}^m$ on a compact set $K \subset \mathbb{R}^n$ and any $\varepsilon > 0$, there exists a three-layer neural network (input, one hidden layer, output) that approximates $f$ to within $\varepsilon$ uniformly on $K$.
+- **Barron 1993 — approximation rate:** For functions whose Fourier transform satisfies a first-moment bound $C_f = \int |\omega| |\hat{f}(\omega)| \, d\omega < \infty$, a one-hidden-layer sigmoidal network with $n$ units achieves integrated squared error bounded by $O(C_f^2 / n)$. This is an efficiency result: it says how fast approximation error can fall as units are added, and shows that some well-behaved functions are approximated efficiently — but it does not remove the computational cost of training.
+- **Key separations the math enforces:** (1) $\exists$ a network that approximates $\not\Rightarrow$ gradient descent finds it; (2) approximation on compact domain $\not\Rightarrow$ generalisation from finite samples; (3) "finite" network $\not\Rightarrow$ computationally affordable network.
+
+</details>
+
 # Chapter 25: The Universal Approximation Theorem
 
 The Universal Approximation Theorem is one of the most useful ways to say
@@ -126,6 +188,10 @@ world. Sigmoidal units are not every possible activation. "There exists" is not
 "we know how to find." "Finite" is not "small." Approximation is not exact
 symbolic reasoning. Uniform approximation is a particular mathematical demand,
 not a general certificate of intelligence.
+
+:::tip[Plain reading]
+Read this as the theorem's guardrail list. "Universal" here means: for continuous targets on bounded domains, with sigmoidal units, some finite network can get uniformly close. It does not mean arbitrary tasks, exact symbolic reasoning, easy training, or a small network.
+:::
 
 These conditions are why the theorem is powerful without being magic. It tells
 us that a certain kind of network can, in principle, build complicated
@@ -445,6 +511,10 @@ was narrowed into an architecture built for images and characters.
 The Universal Approximation Theorem did not solve AI. It changed what kind of
 unsolved problem AI had.
 
+:::note[Why this still matters today]
+Every modern deep-learning framework rests, at some level, on the assurance the 1989 cluster provided: nonlinear multilayer networks are not representationally impoverished. Transformers, diffusion models, and large language models inherit that assurance. But they also confirm the theorem's honest limits — none of them work because of the existence proof alone. They work because architecture encodes inductive bias, because optimisation has improved, because data is abundant, and because compute has scaled. Universal approximation is still the floor; the building above it is everything the theorem declined to specify.
+:::
+
 ## Sources
 
 ### Primary
@@ -484,3 +554,4 @@ unsolved problem AI had.
 > as proof that neural networks can learn any task. The sources support a
 > careful capacity claim under assumptions; they do not support a blanket story
 > about training, generalization, or practical deployment.
+
