@@ -1,8 +1,8 @@
 ---
 title: "XGBoost & Gradient Boosting"
-slug: ai-ml-engineering/classical-ml/module-1.2-xgboost-gradient-boosting
+slug: ai-ml-engineering/machine-learning/module-1.6-xgboost-gradient-boosting
 sidebar:
-  order: 1103
+  order: 6
 ---
 
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6 Hours

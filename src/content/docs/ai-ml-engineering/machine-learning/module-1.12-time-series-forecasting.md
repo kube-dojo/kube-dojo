@@ -1,8 +1,8 @@
 ---
 title: "Time Series Forecasting"
-slug: ai-ml-engineering/classical-ml/module-1.3-time-series-forecasting
+slug: ai-ml-engineering/machine-learning/module-1.12-time-series-forecasting
 sidebar:
-  order: 1104
+  order: 12
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 6-8
 ## The Intern Who Beat the Team

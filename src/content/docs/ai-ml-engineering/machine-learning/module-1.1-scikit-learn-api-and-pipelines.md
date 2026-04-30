@@ -1,8 +1,8 @@
 ---
-title: "Scikit-learn & Classical ML"
-slug: ai-ml-engineering/classical-ml/module-1.1-scikit-learn-classical-ml
+title: "Scikit-learn API & Pipelines"
+slug: ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines
 sidebar:
-  order: 1102
+  order: 1
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
 **Prerequisites**: Module 25 (Python for ML), Module 26 (Neural Networks basics)
