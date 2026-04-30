@@ -5,6 +5,59 @@ sidebar:
   order: 53
 ---
 
+:::tip[In one paragraph]
+In February 2019 OpenAI's GPT-2 paper showed that a 1.5-billion-parameter Transformer language model trained on WebText could perform NLP tasks zero-shot — without per-task gradient updates. In May 2020 GPT-3 (175 billion parameters, 300 billion training tokens) made the prompt itself the task specification: examples sat inside a 2048-token context, weights stayed frozen. The reusable artifact stopped being a fine-tuned checkpoint and became a frozen model conditioned by text. Few-shot learning was the new interface.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Alec Radford | — | Lead author of the GPT-2 paper "Language Models are Unsupervised Multitask Learners"; co-author of GPT-3 |
+| Tom B. Brown | — | Lead author of the GPT-3 paper "Language Models are Few-Shot Learners" |
+| Ilya Sutskever | 1986– | OpenAI co-founder; co-author of both GPT-2 and GPT-3 |
+| Dario Amodei | — | OpenAI research; co-author of both GPT-2 and GPT-3; later co-founder of Anthropic |
+| Miles Brundage | — | Co-author of OpenAI's GPT-2 staged-release and social-impact report |
+| Irene Solaiman | — | Co-author of OpenAI's GPT-2 staged-release and social-impact report |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2018–May 2020)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 53 — The Dawn of Few-Shot Learning
+    2018 : OpenAI's first GPT establishes Transformer LM pre-training as a reusable NLP base
+    Feb 2019 : GPT-2 paper published — 1.5B-parameter model + WebText held back; 124M model released
+    May 2019 : 355M GPT-2 model released along with output datasets from all four sizes
+    Aug 2019 : 774M GPT-2 model released; first version of release-strategy / social-impact report
+    Nov 2019 : 1.5B GPT-2 model released; report and repository updated
+    May 2020 : GPT-3 paper published — 175B parameters, 300B training tokens, 2048-token context, evaluated zero-/one-/few-shot without gradient updates
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Autoregressive language model** — A model that generates a sequence one token at a time, each token conditioned on all previous tokens. GPT-style models use the Transformer's decoder side with causal masking; the next-token-prediction objective is what links GPT-2's web-scale pre-training to GPT-3's prompt interface.
+
+**Zero-shot / one-shot / few-shot evaluation** — Three levels of in-context conditioning. *Zero-shot:* the model receives only a task description in natural language, no demonstrations. *One-shot:* one example. *Few-shot:* several examples up to what fits in the context window. None involve gradient updates.
+
+**In-context learning** — The behavioural pattern where task performance is conditioned by examples placed inside the input prompt rather than by parameter updates. GPT-3 popularised the term while remaining careful: the paper does not claim the model learns a *new* task during the forward pass; it may be recognising patterns from pre-training.
+
+**Prompt** — The text prefix supplied to a language model to elicit a particular continuation. Holds instructions, demonstrations, and the query that the model is meant to answer. Once the prompt becomes the control surface, prompt design replaces architecture choice as the per-task work.
+
+**Context window** — The maximum number of tokens the model can attend over at once. GPT-2: 1024 tokens. GPT-3: 2048 tokens. Both small by 2026 standards, but already large enough to hold instructions, several demonstrations, and a query for many benchmark tasks.
+
+**WebText** — The corpus OpenAI assembled for GPT-2 from outbound Reddit links with ≥3 karma, deduplicated and cleaned to about 8M documents (~40 GB). Wikipedia was deliberately excluded to reduce evaluation overlap. The dataset shows how upstream platform behaviour (Reddit upvoting) became part of the AI training pipeline.
+
+**Staged release** — OpenAI's GPT-2 release pattern: paper + smallest model first (Feb 2019), then 355M (May), 774M (Aug), 1.5B (Nov), each accompanied by misuse-risk analysis. Made model-weight release a public-governance question, not just a research artifact decision.
+
+</details>
+
 BERT made the pre-trained checkpoint feel like infrastructure. A team could begin with a representation already shaped by billions of words, add a task-specific output layer, and fine-tune for question answering, entailment, classification, or another supervised benchmark. That was a major break from building every language system from scratch. But it still left a familiar bottleneck in place: for each new task, the system usually needed labeled examples, a training run, and a task-specific adaptation step.
 
 The next turn asked whether even that adaptation step could move into text. Instead of changing the model weights for a new task, what if the task could be described inside the input? What if examples could sit in the prompt rather than in a separate fine-tuning dataset? What if a model trained only to predict the next token could use the surrounding context as a temporary specification of what to do?
@@ -56,6 +109,12 @@ The answers were not settled by GPT-2. The staged release produced a precedent, 
 It also foreshadowed a split inside the meaning of "open." A paper could be open while the largest weights were delayed. Outputs could be shared while training data remained unavailable. A repository could exist while the full system was not immediately released. These distinctions became central in the next era. The public would often talk about whether a model was open or closed, but the practical reality had many layers: code, weights, training data, evaluation data, serving interface, and permission to use the model commercially.
 
 GPT-3 moved the technical center from zero-shot transfer to in-context learning. The paper, "Language Models are Few-Shot Learners," described a 175B-parameter autoregressive language model evaluated without gradient updates or fine-tuning. Tasks and demonstrations were specified as text. The model received a prompt, processed it in a forward pass, and produced a continuation. The weights stayed fixed.
+
+:::note
+> Here we show that scaling up language models greatly improves task-agnostic, few-shot performance, sometimes even reaching competitiveness with prior state-of-the-art fine-tuning approaches.
+
+The qualifier "sometimes" matters: the abstract presents scale as the engine of few-shot gains while preserving the paper's mixed-results caveat. — *Brown et al. 2020, "Language Models are Few-Shot Learners," abstract, p. 1.*
+:::
 
 That is the key interface change. In an ordinary supervised setup, examples live in a dataset and learning happens through parameter updates. In GPT-3's few-shot setting, examples live in the context window and influence the output through attention during inference. The paper calls this in-context learning, while remaining careful about what is being learned. It does not prove that the model learns a new task from scratch inside the prompt. It may recognize patterns related to tasks it saw during training. The safe historical claim is that task performance could be conditioned by text examples without a weight update.
 
@@ -110,3 +169,7 @@ That is the bridge from research result to industrial strategy. If scale improve
 The honest ending is neither dismissal nor triumph. GPT-2 showed that web-scale next-token prediction could produce surprising zero-shot behavior while remaining unreliable and risky to release without thought. GPT-3 showed that, at much larger scale, task demonstrations could live inside the prompt and influence behavior without gradient updates. Together they moved language models toward a new interface: not a classifier trained for one task, not only a fine-tuned encoder checkpoint, but a general text continuation engine that could be steered by examples.
 
 That engine was still unstable, ungrounded, biased, and easy to overread. It did not prove human reasoning. It did not make fine-tuning obsolete. It did not solve factuality or long-form coherence. But it made one fact hard to ignore: a large enough language model could treat the context window as a temporary task specification. Once that became visible, the path to prompt engineering, model APIs, instruction tuning, agents, benchmark politics, and product shock was open. The model had not learned to understand the world. It had learned enough from text that text itself became the interface.
+
+:::note[Why this still matters today]
+Every modern chat assistant — ChatGPT, Claude, Gemini, Llama — inherits GPT-3's interface. The model is a frozen text-continuation engine; the user steers it through prompts, demonstrations, system messages, and tool definitions placed in the context window. *Prompt engineering* as a skill exists because the GPT-3 paper made the prompt the control surface. Zero-shot/few-shot evaluation is the standard benchmark protocol. The staged-release vs. full-release debate the GPT-2 report opened still divides the field — open-weights releases (Llama, Mistral, DeepSeek) on one side, API-only frontier models on the other.
+:::
