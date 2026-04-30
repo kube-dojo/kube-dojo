@@ -87,6 +87,12 @@ This was especially true for deep learning because the gap between concept and r
 
 Google's 2015 TensorFlow announcement made that argument explicitly. The company open-sourced TensorFlow and framed working code as a faster way for the machine-learning community to exchange ideas than research papers alone. That phrase is historically important because it captures a shift in medium. A framework was not just a tool for internal engineering. It was a public channel through which ideas could move.
 
+:::note
+> We hope this will let the machine learning community—everyone from academic researchers, to engineers, to hobbyists—exchange ideas much more quickly, through working code rather than just research papers.
+
+Google framed TensorFlow as public infrastructure by naming researchers, engineers, and hobbyists as the audience for code-mediated exchange. — *Google Blog, "TensorFlow: smarter machine learning, for everyone," 2015-11-09.*
+:::
+
 TensorFlow's framing reflected Google's position. The announcement presented TensorFlow as a machine-learning system used inside Google and made available so others could build with it. That did not turn Google's private data or production infrastructure into public goods. It did, however, release a general framework around which tutorials, examples, experiments, and production paths could gather. It made the code layer part of the field's shared vocabulary.
 
 The "for everyone" framing should be read with care. TensorFlow did not give everyone Google's data, products, or TPU roadmap. It gave the community an open-source system and a set of abstractions. That was still a major act of distribution. It meant that a model could be described not only as a diagram or equation, but as a computational graph, an API call, an example script, or a reproducible notebook. The form in which an idea circulated changed the kinds of people who could engage with it.
