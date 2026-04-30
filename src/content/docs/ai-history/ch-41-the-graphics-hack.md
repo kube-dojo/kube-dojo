@@ -100,6 +100,14 @@ Recognizing the hardware's potential was one thing; actually programming it to p
 
 In 2004, Kyoung-Su Oh and Keechul Jung provided a critical demonstration of how this translation could work. They showed that the inner-product operations within the layers of a multilayer perceptron could be mathematically represented as matrix operations. This was the vital conceptual bridge: neural networks relied on matrix operations, and while graphics cards did not have native commands for manipulating abstract matrices, they were exceptionally fast at the kind of linear algebra required to manipulate 3D geometry and screen space.
 
+:::note
+> "Moreover, many inner-product operations can be replaced with a matrix multiplication, which is more appropriate for GPU implementation."
+>
+> — Oh and Jung 2004, p.1312
+
+The engineering judgment that made the GPGPU-for-ML literature legible, in the authors' own words.
+:::
+
 A multilayer perceptron layer can be understood, in simplified form, as a bank of weighted sums. Each output unit combines many input values with many learned weights; the layer then passes those sums onward through the network. Oh and Jung's useful move was not to suggest that neural learning and image rendering were identical. It was narrower: many of those inner products could be organized as matrix multiplication, and matrix multiplication could be arranged so that a graphics card would perform the repetitive arithmetic. In that mapping, the row of a weight matrix and the column of an input or intermediate matrix became the operands for one output element. The familiar neural-network operation was made to look like the sort of regular grid computation the GPU could execute efficiently.
 
 To execute this matrix multiplication on an ATI Radeon 9700 Pro, Oh and Jung had to orchestrate an elaborate disguise. They implemented the computation by instructing the graphics API to render a full-screen rectangle. The matrices containing the neural network's data and weights were encoded not as standard arrays, but as image textures applied to that rectangle. They then authored a custom pixel shader that, instead of calculating color gradients, performed the inner product of the texture's rows and columns to compute the output elements of the matrix. 
