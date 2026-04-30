@@ -123,6 +123,12 @@ In its 2009 iteration, the researchers reported that ImageNet already contained 
 
 The 2009 paper also had to make a methodological argument. ImageNet was large, but scale alone would not have made it useful. It was organized by a semantic hierarchy, populated with full-resolution images, and built through a repeatable collection-and-verification process. Those qualities made it different from a web crawl left in its raw form. They also made it different from a narrow benchmark whose categories had been selected mainly because they were convenient for a particular competition. The paper's underlying proposition was that a dataset could be both very large and carefully structured.
 
+:::note[Primary-source signal]
+> "We hope that the scale, accuracy, diversity and hierarchical structure of ImageNet can offer unparalleled opportunities to researchers in the computer vision community and beyond."
+
+Deng et al. made ImageNet's promise in opportunity-language *before* the later deep-learning story; this is ambition, not hindsight. Source: Deng et al., *ImageNet: A Large-Scale Hierarchical Image Database*, CVPR 2009, p.248 abstract.
+:::
+
 The primary mechanism for this integration became the ImageNet Large Scale Visual Recognition Challenge (ILSVRC). As detailed in a later retrospective paper authored by Olga Russakovsky alongside Hao Su, Jonathan Krause, and other contributors, ILSVRC began in 2010 as an annual fixture in the computer vision community. It formalized the dataset's role by combining a public data release with an annual competition and an associated workshop, creating a standardized arena where researchers could pit their algorithms against a common, universally recognized standard. 
 
 The inception of ILSVRC forced the entire field to confront a massive scale jump. The contrast with the preceding era of evaluation was stark. Scaling from the widely used PASCAL VOC 2010 benchmark to ILSVRC 2010 meant transitioning from a challenge involving 20 classes and 19,737 images to an expansive arena encompassing 1,000 classes and 1,461,406 images. This expansion of scope made traditional, small-group annotation difficult to sustain and made the crowdsourced, MTurk-driven verification pipeline central to the benchmark's feasibility.
