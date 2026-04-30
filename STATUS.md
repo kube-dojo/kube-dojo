@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-30 (night-3) | Part 6 reader-aids (Ch32–Ch40) PR-complete — 9 PRs open; inline-sequential single-Agent-dispatch pattern validated at 9-chapter scale; first orchestrator-override of a Codex Tier 3 verdict (Ch38) | [`docs/session-state/2026-04-30-part6-reader-aids-prs.md`](./docs/session-state/2026-04-30-part6-reader-aids-prs.md) | **PRs #618–#626 open** — 6/27 Tier 3 candidates landed (~22%, vs. Part 5's 12.5%); 5 chapters Codex-revived 1 element; Ch38 orchestrator override on adj-rep + anchor grounds |
+| 2026-04-30 (night-4) | Part 7 reader-aids (Ch41–Ch49) RELEASED + 26-PR merge sweep + lifecycle bookkeeping migration — Parts 1–7 fully on main (49 chapters); arch-sketch form-lock confirmed (LR for sequential, TD for hierarchies) | [`docs/session-state/2026-04-30-part7-reader-aids-shipped.md`](./docs/session-state/2026-04-30-part7-reader-aids-shipped.md) | **All Part 5/6/7 PRs merged** — 4/18 Part 7 Tier 3 candidates landed (~22%); Codex revived 3, revised 2; lifecycle fields (`prose_state` + `reader_aids`) on all 72 chapter status.yaml |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-30 (night-3) | Part 6 reader-aids (Ch32–Ch40) PR-complete — 9 PRs open; inline-sequential single-Agent-dispatch pattern validated at 9-chapter scale; first orchestrator-override of a Codex Tier 3 verdict (Ch38) | [`docs/session-state/2026-04-30-part6-reader-aids-prs.md`](./docs/session-state/2026-04-30-part6-reader-aids-prs.md) |
 | 2026-04-30 (night-2) | Part 5 reader-aids (Ch24–Ch31) PR-complete — 8 PRs open; Agent worktree fan-out retired after 5/8 race incident; Tier 3 ran sequential | [`docs/session-state/2026-04-30-part5-reader-aids-prs.md`](./docs/session-state/2026-04-30-part5-reader-aids-prs.md) |
 | 2026-04-30 | Part 4 reader-aids (Ch17–Ch23) RELEASED — 7 PRs #600–#606 merged via squash; parallel headless-Claude + parallel Codex Tier 3 dispatch | [`docs/session-state/2026-04-30-part4-reader-aids-prs.md`](./docs/session-state/2026-04-30-part4-reader-aids-prs.md) |
 | 2026-04-29 (night-2) | Parts 2 & 3 reader-aids RELEASED — Ch10 closes Part 2; Ch11–Ch16 close Part 3; Mermaid click-to-enlarge modal shipped | [`docs/session-state/2026-04-29-parts-2-3-closed.md`](./docs/session-state/2026-04-29-parts-2-3-closed.md) |
@@ -54,10 +55,14 @@
 
 These are state items that span individual sessions. Prune entries as threads close.
 
-- **#394 AI History — 65 of 72 chapters shipped (2026-04-29 evening).** Parts 1-8 fully closed. Codex's Part 9 chain shipped Ch62-65 during the evening reader-aid session (Ch59-61 landed earlier in the day). Only Ch66-72 (7 chapters) remain in the prose track.
-- **Codex Part 9 chain still in flight** — past Ch65. Don't disturb.
-- **Parts 1–4 RELEASED on main (2026-04-30); Parts 5 + 6 PR-complete, awaiting merge (2026-04-30 night-2 + night-3).** Ch01–Ch23 carry Tier 1 + selective Tier 2 math + 1-of-N Tier 3 pull-quotes per chapter. **Part 5 PRs #609–#616 open against main**: Ch24/25/27/29 carry Tier 2 math sidebars; Ch24/25/27 land 1 REVISED Tier 3 plain-reading aside each; Ch26/28/29/30/31 land 0 Tier 3 elements. **Part 6 PRs #618–#626 open against main**: 6 of 27 Tier 3 candidates landed (~22%) — Ch33 (Newborn 2003), Ch35 (GFS 2003 + PageRank eigenvector aside), Ch37 (MapReduce abstract), Ch39 (Torralba & Efros), Ch40 (Deng et al. 2009). Ch38 had a Codex REVIVE → **orchestrator override → SKIP** on reader-experience adj-rep + line-level-anchor grounds (first override of the rollout, documented in-tree at `ch-38-the-human-api/tier3-orchestrator-override.md`).
-- **Inline-sequential single-Agent-dispatch pattern (no `isolation=worktree`) validated at 9-chapter scale (Part 6).** Pre-create per-chapter worktree → dispatch one headless sonnet Agent (no isolation flag) with explicit `cd <worktree>` discipline → codex Tier 3 review → apply verdicts inline → push + PR → next chapter. Zero worktree GC races. ~9 min per chapter. Pattern documented in the Part 6 handoff for re-use on Parts 7+.
+- **#394 AI History — all 72 chapters of prose are on main.** Codex's autonomous Part 9 chain shipped through Ch72 (verified by file existence and word counts ≥4k each). The "Ch66–72 remain" line that lived here for the past few sessions was stale; corrected 2026-04-30 night-4.
+- **Parts 1–7 reader-aids RELEASED on main (Ch01–Ch49 — 49 chapters).** All 26 reader-aid PRs (Parts 5/6/7) merged in one sweep 2026-04-30 night-4 after the user flagged the queue piling up. Each chapter carries Tier 1 (TL;DR + cast + timeline + glossary + Why-still-matters) plus selective Tier 2 (math sidebars on Ch01/04/15/24/25/27/29/44; architecture sketches on Ch41/42/49) plus selective Tier 3 (~20% landing rate, all Codex-reviewed cross-family).
+- **Parts 8 & 9 reader-aids pending (Ch50–Ch72 — 23 chapters).** Tier 2 needed: Ch50 (math + arch), Ch52 (arch), Ch55 (math), Ch58 (math + arch). The other 18 chapters are Tier-1-only.
+- **Architecture-sketch form-lock confirmed: `flowchart LR` for sequential dataflow, `flowchart TD` only when topology is genuinely hierarchical.** Three data points: Ch41 LR-lock, Ch42 LR→TD-deviation (CUDA grid → block → thread is hierarchical), Ch49 LR-reuse (TPU systolic array is linear). For Ch50/Ch52/Ch58, default to LR with explicit deviation justification only.
+- **Lifecycle fields added to all 72 chapter status.yaml** (commit `ab801bf7`, addressing Codex bookkeeping note forwarded by user). New top-level fields: `prose_state` (`research_only | published_on_main`), `reader_aids` (`none | pr_open | landed`), `lifecycle_updated`. Existing `status` field untouched (keeps research-phase semantics). Per-chapter agents now flip `reader_aids` directly in their reader-aid commit.
+- **Merge-as-you-go discipline reset.** Per-Part PR accumulation became debt at 24 open PRs. Going forward: squash-merge each reader-aid PR immediately after Codex Tier 3 review, do not let the queue accumulate.
+- **Verbatim COMPLETE sentence rule for codex revives.** When codex revives an Element 9 pull-quote, the review must include the COMPLETE verbatim sentence in `>`-blockquote form, not a fragment. Ch43 Russakovsky revive needed a follow-up dispatch to extract the full sentence.
+- **Inline-sequential single-Agent-dispatch pattern (no `isolation=worktree`) validated through 9 + 9 + 9 = 27 chapters (Parts 6/7).** Pre-create per-chapter worktree → dispatch one headless sonnet Agent (no isolation flag) with explicit `cd <worktree>` discipline → codex Tier 3 review → apply verdicts inline → push + PR → squash-merge → next chapter. Zero worktree GC races across the full sweep. ~9–15 min per chapter (Tier 2 chapters longer).
 - **Agent worktree fan-out is RETIRED for chapter batches.** 5 of 8 agents missed their worktrees on Part 5 despite `touch .worktree-sentinel` mitigation (vs. 1 of 7 on Part 4). The race is unfixable from the prompt side; `Agent(isolation="worktree")` for parallel chapter work commits to primary main instead of the worktree branch. Future Part 6+ batches must be **inline / sequential** in the orchestrator. Recovery procedure documented at memory `reference_agent_worktree_recovery.md` (cherry-pick + reset).
 - **Codex parallel `codex exec` still works** under `--dangerously-bypass-approvals-and-sandbox` direct invocation (6 in parallel Part 4 = ~5 min). The fan-out retirement is specific to `Agent(isolation="worktree")`, not all parallelism. Part 5 ran codex sequentially anyway (~16 min for 8) under the no-fan-out instruction; either pattern is acceptable for codex-only review batches.
 - **Tier 1 dispatch prompt must require Green primary source for Tier 3 pull-quotes.** Every Part 5 author proposal cited "Chapter XX prose" as source, which fails Tier 3 source-discipline. Add to next dispatch prompt: "for the pull-quote, cite a Green primary source and confirm verbatim before proposing."
@@ -133,16 +138,15 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 | #179 | Improve Lowest-Quality Labs | Open (blocked on Phase 3 lab audit) |
 | #199 | AI/ML Engineering track migration + modernization | Open (Phase 4b done; Phase 7 cross-link + Phase 8 UK translate remain) |
 | #200 | AI/ML local per-section module numbering (filename rename) | Open (delegated to Codex in worktree) |
-| #394 | AI History book — 68-chapter prose lift | Open (Parts 1/2/4/5/6/8/9 closed; Parts 3/6-tail/7 in flight per Latest handoff) |
+| #394 | AI History book — 72-chapter prose lift | All prose on main (Ch01–Ch72); reader-aids #562 RELEASED for Parts 1–7 (Ch01–Ch49); reader-aids #562 pending for Parts 8–9 (Ch50–Ch72) |
 
 ## TODO
 
-- [ ] AI history #394: Part 9 (Ch66-72, 7 chapters remain) — Codex autonomous chain past Ch65
 - [ ] AI history #559: cross-family review backfill on Ch01-31 (28 chapters, 30 marked backfill_pending per offline audit)
-- [ ] AI history #562: Tier 1 reader-aid rollout — Parts 1–4 RELEASED on main (Ch01–Ch23); **Part 5 (Ch24–Ch31) PR-complete (#609–#616, awaiting merge)**; **Part 6 (Ch32–Ch40) PR-complete (#618–#626, awaiting merge)**; **Part 7 (Ch41–Ch49) is next — introduces first Tier 2 architecture-sketch chapters (Ch41 GPGPU, Ch42 CUDA, Ch49) plus next Tier 2 math chapter (Ch44 Word2Vec)**. Lock the architecture-sketch form in Ch41 before drafting Ch42/49+. INLINE / SEQUENTIAL only, no Agent fan-out.
+- [ ] AI history #562: Tier 1 reader-aid rollout — **Parts 1–7 RELEASED on main (Ch01–Ch49); Parts 8–9 (Ch50–Ch72, 23 chapters) remain.** INLINE / SEQUENTIAL with merge-as-you-go (squash each PR immediately after Codex review).
 - [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC. Same flow optional for Bing Webmaster Tools.
-- [ ] AI history #563: Tier 2 math + architecture sidebars on remaining target chapters (Ch24, Ch25, Ch27, Ch29, Ch41, Ch42, Ch44, Ch49, Ch50, Ch52, Ch55, Ch58 — Ch01/Ch04/Ch15 done)
-- [ ] AI history #564: Tier 3 selective passes — pattern proven on Ch01–Ch16 (1-pull-quote-per-chapter cap; cross-family Codex review with source-PDF verification)
+- [ ] AI history #563: Tier 2 math + architecture sidebars on remaining target chapters: **Ch50 (math + arch), Ch52 (arch), Ch55 (math), Ch58 (math + arch)** — done: Ch01/Ch04/Ch15/Ch24/Ch25/Ch27/Ch29/Ch41/Ch42/Ch44/Ch49.
+- [ ] AI history #564: Tier 3 selective passes — pattern proven on Ch01–Ch49; ~20% landing rate; all Codex cross-family-reviewed.
 - [ ] PR #567 review + merge → then re-run audit_review_coverage.py with live gh
 - [ ] PR #558 + PR #565 stale-prose cleanup (content already on main)
 - [ ] AI/ML Engineering #199 remaining: Phase 7 cross-link (run), Phase 8 UK translate (skipped for now)
