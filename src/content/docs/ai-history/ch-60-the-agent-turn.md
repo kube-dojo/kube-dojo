@@ -5,6 +5,59 @@ sidebar:
   order: 60
 ---
 
+:::tip[In one paragraph]
+After ChatGPT, the architectural problem shifted from making models talk to letting them act. RAG gave models external memory; WebGPT taught them to search and cite; chain-of-thought made reasoning a visible scratchpad; ReAct and Toolformer fused reasoning with tool calls; OpenAI's plugins and function calling productized the interface; LangChain and AutoGPT made agent loops legible to developers. Early agents were brittle, not autonomous workers — but the center of AI applications moved from a single chat reply to model-plus-retriever-plus-tools systems.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Patrick Lewis et al. | — | Lead authors of the 2020 RAG paper (parametric + non-parametric memory). |
+| Reiichiro Nakano et al. | — | WebGPT authors (browser-assisted QA with citations and human feedback). |
+| Jason Wei et al. | — | Chain-of-Thought prompting authors (intermediate reasoning steps in large LMs). |
+| Shunyu Yao et al. | — | ReAct authors (interleaved reasoning, action, and observation loops). |
+| Timo Schick et al. | — | Toolformer authors (self-supervised tool-use via API calls). |
+| OpenAI / Significant Gravitas | — | ChatGPT plugins, function calling; AutoGPT v0.1.0 as the visible 2023 agent demo. |
+
+</details>
+
+<details>
+<summary><strong>Timeline</strong></summary>
+
+```mermaid
+timeline
+    title The Agent Turn (2020–2023)
+    2020-05 : Lewis et al. release RAG
+    2021-12 : OpenAI publishes WebGPT
+    2022-01 : Wei et al. release Chain-of-Thought Prompting
+    2022-10 : ReAct on arXiv
+            : LangChain repo created
+    2022-11 : LlamaIndex repo created
+    2023-02 : Toolformer on arXiv
+    2023-03 : AutoGPT repo created
+            : OpenAI announces ChatGPT plugins
+    2023-04 : AutoGPT v0.1.0 README published
+    2023-06 : OpenAI announces function calling
+    2023-07 : LangChain v0.0.1 tag (chains/data-augmented/agents taxonomy)
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Parametric memory** — what the model "knows" because it is baked into the weights from training. Hard to inspect, expensive to update.
+- **Non-parametric memory** — knowledge stored outside the model in documents, indexes, or vector stores. Can be swapped or refreshed without retraining.
+- **Retrieval-augmented generation (RAG)** — a pattern where the model answers using passages fetched from an external store at query time, not just from its weights.
+- **Chain-of-thought** — prompting the model to write intermediate reasoning steps before its final answer; a scratchpad pattern, not a window into the model's actual computation.
+- **ReAct loop** — interleaving thought, action, and observation: the model reasons, calls a tool, reads what came back, then reasons again.
+- **Function calling** — a structured interface where the developer describes functions and the model emits JSON arguments; the surrounding software, not the model, decides whether to execute.
+- **Prompt injection** — instructions hidden inside untrusted text (a webpage, document, or tool output) that try to hijack a tool-using model.
+
+</details>
+
 ChatGPT made the model feel like a conversational partner. That was enough to shock the public, but it also exposed the weakness of the closed chat window. A model could answer fluently, but fluency did not give it current facts, private documents, a calculator, a database connection, a browser, or permission to take an action in the world. The assistant could talk as if it knew, but much of what users wanted required something outside the weights.
 
 That is the hinge from product shock to agent turn.
@@ -81,6 +134,12 @@ Shunyu Yao and collaborators described ReAct as interleaving reasoning traces an
 
 The loop is easy to understand because it resembles ordinary problem solving. If you do not know something, search. If the search result is incomplete, refine. If a tool returns a value, use it. If an action fails, observe the failure and adjust. ReAct turned that structure into a prompting pattern for language models. The model's text was no longer only the final product. Part of the text selected an action. The environment returned an observation. The next model call incorporated that observation.
 
+:::note
+> For the tasks where reasoning is of primary importance (Figure 1(1)), we alternate the generation of thoughts and actions so that the task-solving trajectory consists of multiple thought-action-observation steps.
+
+This is the loop claim in its narrow form: ReAct made action part of the trajectory, not just a postscript to reasoning.
+:::
+
 This was the agent turn in miniature. The model became part of a control loop.
 
 But the loop also multiplied failure modes. A bad thought can choose the wrong action. A wrong action can fetch misleading evidence. A misleading observation can anchor the next step. The model can over-trust a tool result, ignore it, or continue a bad plan. In a closed chat window, the main failure is bad text. In a tool loop, bad text can become bad action. That is why early agent research and product work always carried a safety shadow.
@@ -145,4 +204,9 @@ The deeper lesson is that agency is not a single feature. It is a system propert
 
 This is why the early agent turn should be written with discipline. It was historically important, but not because autonomous AI workers suddenly arrived in 2023. They did not. It was important because the architecture of AI applications changed. The center moved from a single model answering in a chat window toward model-centered systems: retrieval pipelines, search actions, reasoning traces, tool calls, plugin permissions, function schemas, orchestration frameworks, and loops.
 
+:::note[Why this still matters today]
+The architecture this chapter describes is what every modern AI application is made of. When a chatbot answers from your company's docs, that is RAG. When a coding assistant runs a search before replying, that is the WebGPT instinct. When a model thinks step by step before deciding what to do, that is chain-of-thought. When an assistant calls a calculator, schedules a meeting, or queries a database, that is ReAct/Toolformer with a productized function-calling interface. The same chapter also seeded today's hard problems: retrieval quality, source trust, prompt injection, permissions, audit trails, runaway loops, and the cost of every extra tool call. Today's "agentic" systems are still building on this 2020–2023 foundation.
+:::
+
 The public had met the assistant in Chapter 59. In Chapter 60, builders tried to give that assistant memory and hands. The result was powerful, unstable, and unfinished. It pointed toward the next constraint: once models act through tools, the cost of every token, every retrieval, every function call, and every retry starts to matter. The agent turn made language models operational. It also made their limits operational.
+
