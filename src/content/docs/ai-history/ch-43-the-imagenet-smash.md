@@ -5,6 +5,63 @@ sidebar:
   order: 43
 ---
 
+:::tip[In one paragraph]
+In 2012, Alex Krizhevsky, Ilya Sutskever, and Geoffrey Hinton entered the ImageNet Large Scale Visual Recognition Challenge under the name SuperVision and posted 15.3% top-5 error against the runner-up's 26.2% — a gap too large to explain away. The result did not invent neural networks or GPU computing; it turned scale into public, benchmarked proof that learned visual features could beat hand-built feature-engineering pipelines on their own contest.
+:::
+
+<details>
+<summary>Cast of characters</summary>
+
+| Name | Lifespan | Role |
+|------|----------|------|
+| Alex Krizhevsky | — | University of Toronto researcher, first author of the AlexNet paper, SuperVision team member |
+| Ilya Sutskever | — | University of Toronto co-author and SuperVision team member |
+| Geoffrey E. Hinton | 1947 – | University of Toronto co-author; long-running neural-network advocate; ACM Turing Award laureate |
+| Li Fei-Fei (Fei-Fei Li) | — | Co-creator of ImageNet; ILSVRC organizer; benchmark infrastructure actor in this chapter |
+| Jia Deng | — | First author of the 2009 ImageNet paper; co-author of the ILSVRC retrospective |
+| Olga Russakovsky | — | Lead author of the 2015 ILSVRC retrospective; primary benchmark historian for 2012–2014 adoption |
+
+</details>
+
+<details>
+<summary>Timeline</summary>
+
+```mermaid
+timeline
+  2009 : ImageNet paper published at CVPR by Deng, Li Fei-Fei et al.
+  2010 : ILSVRC launches as annual benchmark with public dataset and workshop
+       : First ILSVRC winner uses SIFT / Fisher-vector feature pipelines
+  2011 : ILSVRC classification winner (XRCE) uses high-dimensional signatures and one-vs-all SVMs
+  2012 : ILSVRC2012 development kit and training data released (June)
+       : Submission deadline (September 30)
+       : Preliminary results released to participants (October 8)
+       : ILSVRC2012 workshop at ECCV (October 12)
+       : Full results released — SuperVision 15.3 % top-5 error vs ISI 26.2 % (October 13)
+       : Krizhevsky et al. publish AlexNet paper at NIPS 2012
+  2013 : Vast majority of ILSVRC entries use deep convolutional neural networks
+  2014 : Almost all ILSVRC teams use CNNs as the basis for their submissions
+  2015 : Russakovsky et al. publish ILSVRC retrospective — classification error fell from 16.4 % to 6.7 % (2012–2014)
+```
+
+</details>
+
+<details>
+<summary>Plain-words glossary</summary>
+
+**ILSVRC (ImageNet Large Scale Visual Recognition Challenge):** An annual public benchmark started in 2010. Teams receive labeled training images, tune against validation images, and submit predictions for hidden test images scored by a central evaluation server. The shared rules make results comparable across groups.
+
+**Top-5 error:** The fraction of test images for which the correct label is absent from the model's five highest-scoring guesses. A model may return up to five candidate labels; the prediction is wrong only if none of them match. Used by ILSVRC because many natural photographs are genuinely ambiguous.
+
+**Convolutional neural network (CNN):** A network that applies learned filters sliding across local image regions rather than connecting every pixel to every unit independently. Early layers detect local patterns; deeper layers combine those into more abstract features. AlexNet used five convolutional layers followed by three fully connected layers.
+
+**ReLU (Rectified Linear Unit):** A nonlinearity that returns zero for negative inputs and grows linearly for positive ones. Avoids the slow learning seen in earlier saturating units; the AlexNet paper reported ReLU networks trained several times faster, which mattered when training already took five to six days.
+
+**Dropout:** A regularization method that randomly sets each neuron's output to zero with some probability during training. Prevents the network from relying on fragile patterns among particular units, helping a large model generalize rather than memorize the training set.
+
+**Fisher vector:** A compact encoding that summarizes how a collection of local image descriptors deviates from a statistical model. Together with SIFT and LBP descriptors, Fisher vectors defined the competitive feature-engineering regime that AlexNet defeated in ILSVRC2012.
+
+</details>
+
 The story of the 2012 breakthrough in computer vision does not begin with the sudden invention of a new algorithmic trick, nor does it begin in a vacuum of solitary genius. It begins with the deliberate construction of a public arena. Before any deep convolutional neural network could make a decisive case for itself, the ImageNet Large Scale Visual Recognition Challenge, widely known as ILSVRC, had to turn the sprawling ImageNet database into an unforgiving yearly contest. Initiated in 2010, ILSVRC was a piece of shared scientific infrastructure: a standard dataset, hidden test labels, a central evaluation procedure, and an annual workshop where progress could be compared in public. This structure mattered. The 2012 Toronto result became persuasive not because its authors declared a revolution, but because the scoreboard had already been built, maintained, and accepted by a field that was not organized around neural networks.
 
 That was the first hidden condition of the ImageNet smash. A model could no longer be evaluated only on a small private collection of images, a hand-selected demo, or a narrow set of categories. Teams received training data, tuned their systems against validation images, and submitted predictions for test images whose labels were withheld. The evaluation server then turned those submissions into comparable numbers. ILSVRC also made the calendar part of the experiment. There was a release of development materials, a submission deadline, preliminary results, final results, and a workshop held with the PASCAL VOC workshop at ECCV 2012. By the time the Toronto team entered, the challenge already had the shape of a public ritual. It could absorb a surprising result because the result appeared inside a procedure others had agreed to use.
@@ -72,3 +129,7 @@ The measured progress from 2012 to 2014 reinforced the point. With the dataset u
 Years later, the ACM's Turing Award retrospective would describe Hinton's 2012 work with Krizhevsky and Sutskever as improving convolutional neural networks with ReLUs and dropout regularization and almost halving the object-recognition error rate in ImageNet. That retrospective recognition captures the broader meaning of the result, but the narrower lesson is more exact. AlexNet did not make deep learning real by magic, by rhetoric, or by one clever trick. It made scale into public evidence. The dataset was large enough to reward learned representations, the contest was disciplined enough to make the comparison credible, the GPUs were capable enough to train the model in days, and the architecture was large enough to absorb the data.
 
 The University of Toronto entry did not invent convolutional neural networks, and it did not erase the decades of computer vision research that preceded it. It showed that, under ILSVRC's public rules, a large deep CNN trained on massive labeled data with commodity GPU parallelism could decisively beat the strongest submitted feature-engineering pipelines. That was enough. The benchmark did what a good benchmark is supposed to do: it turned a research bet into a number other researchers had to answer.
+
+:::note[Why this still matters today]
+The 2012 ILSVRC result established a template that shapes how scale arguments are still made: combine a large labeled dataset, a benchmark with hidden test labels, and sufficient compute — then let the numbers answer the dispute. Practitioners building or evaluating perception systems today inherit this logic every time they track performance on held-out evaluation sets rather than self-reported demos. The two-GPU hardware constraint and the five-to-six-day training run are also a reminder that architectural decisions and infrastructure limits are not separate concerns: what fits in memory and trains in tolerable time determines what gets tested.
+:::
