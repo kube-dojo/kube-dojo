@@ -5,6 +5,61 @@ sidebar:
   order: 65
 ---
 
+:::tip[In one paragraph]
+Open weights changed deployment power without resolving open source, open data, or open governance. Stable Diffusion (August 2022) was the public precedent. LLaMA (February 2023) made a 7B–65B family portable for research; LoRA and QLoRA cut adaptation cost so Alpaca and Vicuna could wrap LLaMA in instruction behavior under non-commercial limits. Llama 2 (July 2023) opened commercial use; Mistral 7B (September 2023) shipped under Apache 2.0. The rebellion was a license-and-access ladder, not a single category.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Robin Rombach / CompVis / Stability AI / RunwayML | — | Carried the Stable Diffusion public-release precedent (Aug 2022) into the language-model era; in this chapter the access layer, not the diffusion math (Ch58 owns that) |
+| Hugo Touvron and Meta AI LLaMA teams | — | Lead authors on LLaMA (research-community release) and Llama 2 (general-public research/commercial release); the chapter's central institutional actor |
+| Edward J. Hu et al. | — | LoRA authors (June 2021); freezing pretrained weights and training low-rank adapters made fine-tuning modular and cheap |
+| Tim Dettmers and QLoRA collaborators | — | QLoRA authors (May 2023); 4-bit quantization plus LoRA pushed 65B fine-tuning onto a single 48GB GPU |
+| Stanford CRFM Alpaca team / LMSYS Vicuna team | — | Early academic and community instruction-tuned descendants of LLaMA (March 2023) under explicit non-commercial and evaluation caveats |
+| Mistral AI team | — | Permissive-release counterpoint via Mistral 7B (Sept 2023) under Apache 2.0 |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2021–2023)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 65 — The Open Weights Rebellion
+    Jun 2021 : LoRA published — freeze pretrained weights, train low-rank matrices, large reductions in trainable parameters and GPU memory
+    Aug 2022 : Stability AI public release of Stable Diffusion — weights, code, model card, license, consumer-GPU framing
+    Feb 2023 : Meta publishes LLaMA — 7B–65B family, public-data framing, released to the research community
+    Mar 2023 : Stanford Alpaca — LLaMA 7B fine-tuned on 52K text-davinci-003 demonstrations, academic-only and non-commercial
+    Mar 2023 : LMSYS Vicuna-13B — LLaMA-derived chatbot trained on ShareGPT, project-reported ~$300 cost, non-scientific GPT-4 evaluation
+    May 2023 : QLoRA — 4-bit quantization plus LoRA, 65B fine-tuning on a single 48GB GPU
+    Jul 2023 : Meta publishes Llama 2 — 7B/13B/70B pretrained and chat models for research and commercial use under license and AUP
+    Sep 2023 : Mistral AI announces Mistral 7B under Apache 2.0 — permissive license, no usage restrictions in license terms
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Open weights** — The trained numerical parameters of a model are made available to download. Execution freedom: another party can run, fine-tune, quantize, host, inspect, or fork the model. Distinct from open source, open data, and open governance, which the chapter treats as separate layers a release can be strong or weak on.
+
+**Open source** — Code is released under a license that allows inspection, modification, and redistribution. A model can be open-weight without being open-source if its training code, pipeline, or data preparation are not also released under such a license.
+
+**LoRA (Low-Rank Adaptation)** — A fine-tuning method (Hu et al., 2021) that freezes the original pretrained weights and trains small low-rank matrices alongside them. The base model stays fixed; the adaptation lives in a small module. The paper reports up to 10,000x fewer trainable parameters and 3x less GPU memory than full fine-tuning for a cited GPT-3 configuration.
+
+**QLoRA** — A 2023 extension by Dettmers et al. that backpropagates through a frozen 4-bit quantized model into LoRA adapters. Uses NF4 quantization, double quantization, and paged optimizers to fine-tune a 65B model on a single 48GB GPU, where naive fine-tuning would require more than 780GB.
+
+**Adapter** — A small set of additional trainable parameters layered onto a frozen base model (LoRA matrices are one example). Adapters become portable behavioral modifications: a few-MB file rather than a many-GB model copy, which is why the open-weight ecosystem began trading in adapters as distribution objects.
+
+**Instruction tuning** — Fine-tuning a base language model on prompt/response pairs so it follows instructions in a chat-assistant style. Alpaca generated those pairs from text-davinci-003 outputs; Vicuna used user-shared ShareGPT conversations. Non-commercial restrictions on both sets of inputs constrained the resulting models' allowable downstream uses.
+
+**Permissive license** — A software license such as Apache 2.0 or MIT that allows commercial use, modification, and redistribution with minimal conditions (typically attribution and patent-grant terms). Mistral 7B's Apache 2.0 release contrasts sharply with LLaMA 1's research-only access and Llama 2's commercial-with-AUP license.
+
+</details>
+
 "Open" became one of the most important and most confusing words in the AI product era.
 
 It could mean open weights: the trained numerical parameters are available to download. It could mean open source: code is released under a license that allows inspection, modification, and redistribution. It could mean open data: the training set is available or at least specified enough to reproduce. It could mean open governance: decisions about releases, safety, and development are made in public or through a community process. These are not the same thing.
@@ -66,6 +121,12 @@ The community reaction was fast because the technical pathway was already waitin
 LoRA had shown how to make fine-tuning less like retraining an entire giant model. Hu and collaborators described freezing pretrained weights and injecting trainable low-rank matrices. The base model stays mostly fixed. The adaptation lives in small modules. The paper reported up to a 10,000x reduction in trainable parameters and a 3x reduction in GPU memory, and even a GPT-3 175B example where a cited configuration reduced VRAM and checkpoint size substantially.
 
 The key idea is simple enough: do not modify every weight if the task can be learned through a low-rank update. Train a small set of adapter parameters instead. That makes adaptation cheaper, faster, easier to distribute, and easier to combine with a shared base model. A base model can become a platform. Adapters become portable behavior.
+
+:::note
+> A pre-trained model can be shared and used to build many small LoRA modules for different tasks.
+
+This is the platform turn: one shared base, many distributable behaviors.
+:::
 
 Adapters also changed collaboration. If every fine-tune required distributing a full copy of the model, derivatives would be heavy and expensive. If the useful change can be packaged as a small adapter, communities can share behavior more easily. A medical vocabulary adapter, a programming assistant adapter, a stylistic adapter, or a tool-use adapter becomes a modular artifact. The base model remains common; the adaptations proliferate.
 
@@ -150,3 +211,8 @@ But open weights did make AI less containable. They turned models into artifacts
 By the end of 2023, the closed-lab API was no longer the only imagined future. There was another path: base weights released under varying terms, adapters trained cheaply, models quantized for smaller hardware, communities evaluating and arguing in public, and companies building products on top. The open-weights rebellion did not settle who should control AI. It made the fight impossible to avoid.
 
 That is why "rebellion" is the right word even though the story includes large companies. The rebellion was not only hobbyists against labs. It was a shift in the default assumption about where model capability could live. Once capable weights circulated, control became negotiated through licenses, tooling, hosting, regulation, norms, and downstream ecosystems. The model was no longer only a service. It was a thing people could possess.
+
+:::note[Why this still matters today]
+Every "is this model open?" argument a practitioner walks into still runs on the four-layer ladder this chapter installs: open weights, open source, open data, open governance. A release can be strong on one and weak on another, and the layer that matters most depends on what is being built. A regulated deployment may need permissive licensing and AUP clarity above all else. A reproducibility audit needs data and training code, not just downloadable weights. A safety review cares about governance and update channels. Every model card, license argument, fine-tune disclosure, and "open-source AI" definition fight from the OSI's OSAID process onward is contesting the same gaps Stable Diffusion, LLaMA, Alpaca, Vicuna, Llama 2, and Mistral 7B made unavoidable in 2022–2023.
+:::
+
