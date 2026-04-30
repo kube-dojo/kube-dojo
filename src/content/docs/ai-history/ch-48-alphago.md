@@ -5,6 +5,57 @@ sidebar:
   order: 48
 ---
 
+:::tip[In one paragraph]
+In March 2016, Google DeepMind's AlphaGo defeated Lee Sedol — the best Go player of the prior decade — four games to one in Seoul, arriving roughly a decade before experts had predicted. The system won not by brute force but by combining convolutional policy and value networks trained on expert games and self-play with Monte Carlo tree search. The result corrected a persistent myth: crossing a hard AI threshold required learning to guide search, not a choice between them.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| David Silver | — | Lead AlphaGo researcher and co-corresponding author of the *Nature* paper |
+| Demis Hassabis | — | DeepMind CEO and co-founder; co-corresponding author; wrote the official Google announcements |
+| Aja Huang | — | AlphaGo co-author; placed AlphaGo's moves on the physical board during the Lee Sedol match |
+| Lee Sedol | — | Korean 9-dan professional; Google's designated opponent; won Game 4 but lost the match 4-1 |
+| Fan Hui | — | Reigning three-time European Go champion; lost to AlphaGo 5-0 in a closed-door October 2015 match — the first professional full-board defeat |
+| Michael Redmond | — | 9-dan professional commentator for the English-language match broadcast |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1997–2016)</strong></summary>
+
+```mermaid
+timeline
+    title AlphaGo — key dates
+    1997 : IBM Deep Blue defeats Kasparov at chess — Go remains unsolved
+    2015 : AlphaGo defeats Fan Hui 5-0 in closed-door match at DeepMind (first professional full-board victory)
+    2016 : Nature paper published — policy networks, value network, MCTS architecture detailed (January 28)
+    2016 : Lee Sedol match — Seoul, five games (March 9–15); AlphaGo wins 4-1; Move 37 becomes defining moment
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Monte Carlo tree search (MCTS)** — A search method that evaluates positions by simulating many possible continuations and concentrating exploration where earlier simulations looked promising, rather than exhaustively checking every legal move.
+
+**Policy network** — A neural network trained to estimate which moves are worth exploring; it reduces the breadth of the search by ranking candidates rather than treating all legal moves equally.
+
+**Value network** — A neural network trained to estimate, from any board position, which player is more likely to win, without needing to play the game to its conclusion. It replaces deep search with a fast learned judgment.
+
+**Self-play reinforcement learning** — Training in which a system plays games against itself, updating its parameters based on wins and losses rather than imitation of human examples.
+
+**Komi** — A fixed points bonus given to the second player in Go to compensate for the first-move advantage; the Lee Sedol match used 7.5-point komi under Chinese rules.
+
+**Elo rating** — A numerical measure of relative playing strength, used here to compare AlphaGo configurations against each other and against human players.
+
+**Byoyomi** — A Japanese overtime system used in Go tournaments; once a player's main time expires, each remaining move must be completed within a fixed period (60 seconds in the Lee Sedol match).
+
+</details>
+
 # The Board That Broke Brute Force
 
 The game of Go presents an apparent simplicity that belies one of the most formidable computational challenges in the history of artificial intelligence. Played on a board of nineteen intersecting horizontal and vertical lines, the game requires two players to take turns placing black and white stones to surround and capture territory. That premise is so elementary that the rules can be learned in minutes. Yet for decades, the 19-by-19 grid remained a frontier where the methods that had conquered other classic games consistently broke down. 
@@ -100,3 +151,7 @@ The match concluded on March 15 with Game 5, a marathon 280-move contest that Al
 AlphaGo's victory stood as a towering public milestone, arriving roughly a decade earlier than many had predicted. Its historical meaning was precise. It demonstrated that the combination of deep neural networks, self-play reinforcement learning, value estimation, and tree search could cross a boundary that had long resisted computation. It did not show that Go had been solved. It did not show that a neural system had acquired humanlike intuition. It did not establish a direct causal chain from one Seoul match to every later development in artificial intelligence. The more durable lesson was narrower and stronger: when learning changed the evaluation function and search changed where computation was spent, a machine could uncover strategies in a domain that had seemed to require human feel.
 
 That narrower lesson pointed directly to the next research question. AlphaGo had begun with expert human games from KGS, then improved through self-play. If expert data could seed the system, could a later system remove that seed and still become stronger through self-play alone? That question belongs to the next stage of the story. For AlphaGo itself, the decisive achievement was already clear by March 15, 2016: a hybrid of learned policy, learned value, large-scale computation, and Monte Carlo tree search had crossed the professional Go threshold in public, one stone at a time. (See Chapter 49).
+
+:::note[Why this still matters today]
+The AlphaGo architecture established that combining learned evaluation with classical search outperforms either technique alone — a pattern that recurs across modern systems. Policy networks that rank candidates before a search runs underpin today's game-playing, planning, and code-generation agents. Value networks that short-circuit full rollouts appear in contemporary model-based reinforcement learning. Self-play, used to push AlphaGo beyond human imitation, drives training regimes in robotics and strategic reasoning today. The 2016 result demonstrated that crossing a domain threshold requires not a single breakthrough but an engineered combination of representation, learning, and search.
+:::
