@@ -139,17 +139,31 @@ def check_url(url: str) -> CitationCheck:
             error=f"request failed: {exc}",
         )
 
-    final_host = urlparse(resp.url).hostname or ""
+    final_parsed = urlparse(resp.url)
+    final_host = final_parsed.hostname or ""
+    final_path = (final_parsed.path or "/").rstrip("/") or "/"
+    original_parsed = urlparse(url)
+    original_path = (original_parsed.path or "/").rstrip("/") or "/"
     cross_host = (
         final_host != original_host
         and not final_host.endswith("." + original_host)
         and not original_host.endswith("." + final_host)
+    )
+    same_host_homepage_redirect = (
+        not cross_host
+        and original_path not in ("/", "")
+        and final_path in ("/", "")
+        and original_path != final_path
     )
     error: str | None = None
     if resp.status_code != 200:
         error = f"non-200 status: {resp.status_code}"
     elif cross_host:
         error = f"cross-host redirect: {original_host} -> {final_host}"
+    elif same_host_homepage_redirect:
+        error = (
+            f"same-host redirect to root/homepage: {original_path} -> {final_path}"
+        )
 
     return CitationCheck(
         file="",
@@ -181,7 +195,18 @@ def check_file(path: Path) -> list[CitationCheck]:
         ]
     urls = extract_urls(section)
     if not urls:
-        return []
+        return [
+            CitationCheck(
+                file=str(path),
+                url="",
+                status=None,
+                final_url=None,
+                final_host=None,
+                original_host="",
+                ok=False,
+                error="`## Sources` section is empty",
+            )
+        ]
     out: list[CitationCheck] = []
     for url in urls:
         result = check_url(url)

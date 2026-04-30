@@ -1,6 +1,6 @@
 {
-  "module_key": "ai-ml-engineering/classical-ml/module-1.1-scikit-learn-classical-ml",
-  "module_path": "src/content/docs/ai-ml-engineering/classical-ml/module-1.1-scikit-learn-classical-ml.md",
+  "module_key": "ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines",
+  "module_path": "src/content/docs/ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines.md",
   "research_run_id": "2026-04-22T00:43:00+00:00-codex-gpt-5.3-codex-spark",
   "schema_version": 3,
   "section_pool_ref": null,

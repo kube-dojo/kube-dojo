@@ -28,7 +28,8 @@ PHASES=(
   "ai-ml-engineering/advanced-genai"
   "ai-ml-engineering/multimodal-ai"
   "ai-ml-engineering/deep-learning"
-  "ai-ml-engineering/classical-ml"
+  "ai-ml-engineering/machine-learning"
+  "ai-ml-engineering/reinforcement-learning"
   "ai-ml-engineering/history"
 )
 

@@ -23,13 +23,13 @@ These outcomes are about the *workflow that wraps every algorithm*. The algorith
 
 ## Why This Module Matters
 
-In late 2018, a mid-size lender deployed a credit-risk model that had passed every offline benchmark with a strikingly clean ROC curve. Within a quarter, expected default rates were missing the model's predictions by a wide margin in production. Postmortem traced the failure to a single line of code in their preprocessing notebook: the team had standardized features using `StandardScaler.fit_transform` over the *entire* dataset before splitting into train and test. The scaler had peeked at the test rows. The test scores were hallucinations.
+The most expensive failure mode in applied machine learning is also the most preventable. A model trains, scores cleanly on a held-out split, and then collapses in production. The cause is rarely the algorithm. More often it is a *leak* — a preprocessing statistic that quietly peeked at test rows, an encoder that learned the target distribution before the split, a hyperparameter search that optimized against the same data used to evaluate it.
 
-The fix was not a smarter algorithm. It was a `Pipeline`.
+The fix is not a smarter algorithm. It is a `Pipeline`.
 
-This is the most common failure mode in applied machine learning, and the most preventable. Every production-grade scikit-learn workflow funnels every transformer and every estimator through a single `Pipeline` object, calls `fit` only on training data, and lets the cross-validation splitters do the splitting. The "API" you are about to learn is the discipline that makes that workflow automatic instead of accidental.
+The scikit-learn user guide treats data leakage as a first-class workflow concern. The [cross-validation guide](https://scikit-learn.org/stable/modules/cross_validation.html) prescribes that every transformer and every estimator funnel through a single object that fits only on training rows, and that cross-validation splitters do the splitting. The [Pipeline and composite estimators guide](https://scikit-learn.org/stable/modules/compose.html) makes the same case from the composition side: a `Pipeline` is the unit of leakage-safety, not a convenience wrapper.
 
-The same lesson reappears in subtler forms: target encoding leaking into validation, oversampling applied before splitting, hyperparameter search optimizing against a single held-out split until it overfits, and custom feature-engineering scripts that fit statistics on the wrong rows. None of these are algorithm bugs. They are workflow bugs, and the scikit-learn API design exists to prevent them.
+The "API" you are about to learn is the discipline that makes that workflow automatic instead of accidental. The same lesson reappears in subtler forms: target encoding statistics leaking into validation, oversampling applied before splitting, custom feature-engineering scripts that fit statistics on the wrong rows. None of these are algorithm bugs. They are workflow bugs, and the scikit-learn API design exists to prevent them.
 
 The official scikit-learn documentation [user guide](https://scikit-learn.org/stable/user_guide.html) and [developer guide](https://scikit-learn.org/stable/developers/develop.html) codify this discipline as a contract. The rest of this module teaches that contract well enough that you can read any sklearn code and predict its data flow at a glance.
 
@@ -47,7 +47,7 @@ Every learnable object in scikit-learn — every model, every preprocessor — i
 | `score(X, y)` | data + targets | scalar score | predictors (default metric per estimator type) |
 | `partial_fit(X, y=None)` | a chunk of data | self (incremental) | online-capable estimators |
 
-A *classifier* or *regressor* implements `fit` + `predict` + `score`. A *transformer* implements `fit` + `transform`. An estimator that does both — like `PCA`, which can also predict reconstructions — implements all of them. Some estimators add `predict_proba`, `decision_function`, or `inverse_transform`; those are optional but well-documented when present.
+A *classifier* or *regressor* implements `fit` + `predict` + `score`. A *transformer* implements `fit` + `transform`. Some estimators legitimately implement both roles — `KMeans`, for example, exposes `transform` (returning each row's distance to every cluster center) and `predict` (returning the closest cluster index). `PCA`, on the other hand, is purely a transformer; it provides `fit`, `transform`, and `inverse_transform` for reconstruction, but no `predict`. Some estimators add `predict_proba`, `decision_function`, or `inverse_transform`; those are optional and well-documented when present.
 
 The key invariant is that **fitted state lives on the estimator**, in attributes whose names end in a trailing underscore. After calling `fit` on `LinearRegression`, you can read `coef_`, `intercept_`, and `n_features_in_`. Before `fit`, those attributes do not exist. This convention is enforced by the developer guide and is the fastest way to tell at a glance whether you are looking at a hyperparameter (no underscore, set in `__init__`) or a learned parameter (trailing underscore, set in `fit`).
 

@@ -66,36 +66,53 @@ def check_block_syntax(body: str) -> str | None:
     return None
 
 
-def extract_top_level_imports(body: str) -> list[str]:
-    """Return the set of top-level module names this block imports.
+def extract_imports(body: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Return (top_level_modules, [(submodule, symbol), ...]) the block imports.
 
-    Only top-level packages are returned (``sklearn`` rather than
-    ``sklearn.linear_model``) — that is sufficient to verify the block
-    references real packages without spinning up the full sub-tree.
+    Top-level packages catch fictional package names. The submodule-symbol
+    pairs catch fictional API symbols inside real packages — e.g. blocking
+    ``from sklearn.linear_model import TotallyFakeEstimator`` even though
+    ``sklearn`` itself imports cleanly.
     """
     try:
         tree = ast.parse(body)
     except SyntaxError:
-        return []
-    seen: dict[str, None] = {}
+        return [], []
+    top_level: dict[str, None] = {}
+    members: list[tuple[str, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                seen.setdefault(alias.name.split(".")[0], None)
+                top_level.setdefault(alias.name.split(".")[0], None)
         elif isinstance(node, ast.ImportFrom):
             if node.module:
-                seen.setdefault(node.module.split(".")[0], None)
-    return list(seen)
+                top_level.setdefault(node.module.split(".")[0], None)
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    members.append((node.module, alias.name))
+    return list(top_level), members
 
 
-def try_imports(modules: list[str]) -> list[str]:
-    """Return the names that failed to import."""
+def try_imports(
+    modules: list[str], members: list[tuple[str, str]]
+) -> list[str]:
+    """Return the names that failed to import or resolve."""
     failed: list[str] = []
+    resolved: dict[str, object] = {}
     for name in modules:
         try:
-            importlib.import_module(name)
+            resolved[name] = importlib.import_module(name)
         except Exception:  # noqa: BLE001 — we report whatever broke
             failed.append(name)
+    for submodule, symbol in members:
+        try:
+            mod = importlib.import_module(submodule)
+        except Exception:  # noqa: BLE001
+            failed.append(f"{submodule} (for {symbol})")
+            continue
+        if not hasattr(mod, symbol):
+            failed.append(f"{submodule}.{symbol}")
     return failed
 
 
@@ -109,8 +126,8 @@ def check_file(path: Path, imports_only: bool) -> list[BlockCheck]:
         err = check_block_syntax(body)
         failed_imports: list[str] = []
         if err is None and imports_only:
-            mods = extract_top_level_imports(body)
-            failed_imports = try_imports(mods)
+            mods, members = extract_imports(body)
+            failed_imports = try_imports(mods, members)
             if failed_imports:
                 err = f"failed imports: {', '.join(failed_imports)}"
         out.append(
