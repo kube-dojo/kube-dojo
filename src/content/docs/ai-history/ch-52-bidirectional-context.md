@@ -5,6 +5,79 @@ sidebar:
   order: 52
 ---
 
+:::tip[In one paragraph]
+BERT, published October 2018 by Devlin, Chang, Lee, and Toutanova at Google AI, took the Transformer encoder, pre-trained it with masked language modeling and next-sentence prediction on 3.3 billion words of BooksCorpus and Wikipedia, and released the trained weights. BERTBASE (110M parameters) and BERTLARGE (340M) trained for four days on Cloud TPU Pods. Fine-tuning the released checkpoint reached state-of-the-art on 11 NLP tasks. The reusable artifact stopped being an algorithm and became a set of trained parameters.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Jacob Devlin | — | BERT co-author; co-author of the Google Research open-source announcement |
+| Ming-Wei Chang | — | BERT co-author; co-author of the Google Research open-source announcement |
+| Kenton Lee | — | BERT co-author |
+| Kristina Toutanova | — | BERT co-author |
+| Matthew Peters / ELMo team | — | Prior contextual-representation line named in the BERT paper context; combined independently trained left-to-right and right-to-left LMs |
+| Howard & Ruder / ULMFiT | — | Fine-tuning precedent named in the BERT paper and Google blog context |
+
+</details>
+
+<details>
+<summary><strong>Timeline (October 2018)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 52 — Bidirectional Context
+    Oct 11 2018 : BERT paper appears on arXiv (1810.04805)
+    Oct 25 2018 : google-research/bert GitHub repository created
+    2018 : Google Research blog announces open-source release of BERT code + pre-trained models
+    2018 : BERTBASE and BERTLARGE report state-of-the-art on 11 NLP tasks (GLUE, SQuAD, SWAG)
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Pre-training / fine-tuning** — A two-stage workflow. *Pre-training* runs an expensive learning pass on a large unlabeled corpus to produce a general-purpose representation (the *checkpoint*). *Fine-tuning* takes that checkpoint, attaches a small task-specific output head, and updates parameters on supervised data for the target task. BERT's practical claim was that pre-training cost amortizes across many fine-tuning tasks.
+
+**Checkpoint** — A serialized snapshot of all model parameters at a point in training. Once released, downstream users can load it, attach task heads, and continue training without redoing pre-training. The BERT release made checkpoints first-class research artifacts alongside papers and code.
+
+**Bidirectional context** — The condition where every layer of the model can condition on both left- and right-side tokens when computing each position's representation. Distinct from ELMo's late concatenation of two independently trained directions: BERT fuses both directions through every layer of the encoder.
+
+**Masked language modeling (MLM)** — BERT's pre-training objective: pick 15% of WordPiece positions, replace 80% with `[MASK]`, 10% with a random token, and 10% unchanged, then ask the model to predict the original token at the selected positions. The 80/10/10 schedule reduces pre-training/fine-tuning mismatch (real fine-tuning inputs do not contain `[MASK]`).
+
+**Next sentence prediction (NSP)** — BERT's second pre-training objective. Given two spans, the model predicts whether span B is the actual follow-on to span A in the source corpus. Tied to downstream tasks involving sentence-pair reasoning. Later work questioned NSP's necessity, but BERT's 2018 ablations treat it as a useful component.
+
+**WordPiece tokenization** — A subword tokenization scheme; BERT uses a 30,000-token WordPiece vocabulary. Subword units handle rare and morphologically complex words by composition, avoiding both character-level shortness and word-level vocabulary explosions.
+
+**`[CLS]` / `[SEP]` tokens** — Special input markers. `[CLS]` opens every input; its final hidden state acts as an aggregate sentence/sequence representation for classification heads. `[SEP]` separates sentence A from sentence B in pair inputs and signals end-of-input. Combined with segment embeddings, they let one encoder serve many task formats.
+
+</details>
+
+<details>
+<summary><strong>Architecture sketch</strong></summary>
+
+```mermaid
+flowchart LR
+    %% Form: flowchart LR — default form-lock per Ch41/Ch49.
+    %% BERT is the Ch50 Transformer encoder stack with three summed input streams
+    %% (token + segment + position embeddings) and multiple output heads. The
+    %% dataflow input → embed → encoder → heads is a left-to-right pipeline.
+    %% No nested memory hierarchy here — Ch42's TD-deviation does not apply.
+    IN["Input: [CLS] sent A [SEP] sent B [SEP]\nWordPiece tokens, vocab = 30k"] --> EMB["Sum of three embeddings:\ntoken + segment + position"]
+    EMB --> ENC["Encoder stack — same as Ch50 Transformer\nBASE: 12 layers · 768 hidden · 12 heads · 110M params\nLARGE: 24 layers · 1024 hidden · 16 heads · 340M params"]
+    ENC --> H["Per-position hidden states\n(plus [CLS] aggregate state)"]
+    H --> MLM["Pre-training head: MLM\nrecover original WordPieces at the 15% selected positions"]
+    H --> NSP["Pre-training head: NSP\npredict B-follows-A from [CLS] state"]
+    H --> FT["Fine-tuning head: task-specific\nclassification / span / token-tag\nsmall output layer, few epochs, ~30 min on 1 Cloud TPU"]
+```
+
+The expensive pre-training run produces the encoder weights once; downstream users replace only the right-most head and run cheap fine-tuning. The mask on MLM (selecting 15% of WordPiece positions, with the 80/10/10 substitution schedule) is what lets every encoder layer condition on both left- and right-side tokens without leaking the target into the input.
+
+</details>
+
 The previous chapter ended with code becoming an instrument of distribution. TensorFlow, PyTorch, GitHub repositories, papers, notebooks, and benchmark implementations made deep learning easier to copy, inspect, and extend. But code alone was not yet the most valuable artifact. A framework can describe how to build a model; a trained checkpoint already contains the costly work of learning from data. In natural language processing, BERT made that distinction unavoidable.
 
 BERT did not arrive as a claim that machines had achieved human comprehension. Its title used the phrase "language understanding," but the historical claim is narrower and more important. BERT showed that a Transformer encoder could be pre-trained on large unlabeled text as a deep bidirectional representation, then fine-tuned across many language tasks with only small task-specific changes. The reusable object was no longer just an algorithm. It was a set of learned weights.
@@ -106,3 +179,7 @@ The dependency was still bounded. BERT did not contain retrieval systems, tool u
 The honest significance of BERT is that it made pre-trained language representations operational. The paper gave the field a concrete recipe: Transformer encoder, masked language modeling, next sentence prediction, large unlabeled corpora, expensive pre-training, comparatively cheap fine-tuning, and strong reported results across many NLP tasks. The release gave that recipe an artifact: code and weights that others could run.
 
 In 2018, that was enough to change the default. NLP no longer looked like a collection of separate task architectures waiting to be hand-built one at a time. It increasingly looked like a stack: a costly general pre-training phase underneath, a light adaptation phase above, and benchmarks arranged to measure how well the shared representation transferred. BERT did not end the story of language models. It made the next chapter possible by proving that a trained Transformer checkpoint could become infrastructure.
+
+:::note[Why this still matters today]
+The pre-training/fine-tuning split BERT made operational still organizes most of modern NLP. Encoder-only descendants (RoBERTa, DeBERTa, ModernBERT, sentence transformers) power semantic search, retrieval-augmented generation, embeddings APIs, content moderation, and classification at every cloud provider. Generative chat moved to decoder-only models, but the *checkpoint-as-infrastructure* idea — pay once for pre-training, amortize across many downstream uses — is now the universal default. Reading a 2026 model card is reading the BERT framing: corpus, parameter count, hardware, downstream-evaluation table, released weights, fine-tuning recipe.
+:::
