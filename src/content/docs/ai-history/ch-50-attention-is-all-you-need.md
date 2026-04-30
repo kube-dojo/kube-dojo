@@ -177,6 +177,12 @@ The author list also matters, but only within the evidence. The paper names Ashi
 
 The phrase "Attention Is All You Need" was rhetorically brilliant because it sounded like a manifesto. But the paper's actual claim was narrower. To the authors' knowledge, it was the first transduction model relying entirely on self-attention to compute representations of input and output without using sequence-aligned recurrent networks or convolution. That is a precise architectural claim, not a universal theory of intelligence. It did not say attention would solve all reasoning, memory, grounding, or alignment problems. It did not yet contain BERT, GPT-2, model hubs, scaling laws, RLHF, or diffusion.
 
+:::note
+> We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.
+
+This abstract sentence is the paper's own mission statement before the later tables and experiments make the engineering case: remove recurrence and convolution, then prove the attention-only stack can compete on translation. — *Vaswani et al. 2017, abstract, p. 1.*
+:::
+
 The title also hid how much scaffolding remained. The model still needed embeddings, residual paths, normalization, feed-forward blocks, masking, training schedules, regularization, and benchmark discipline. "Attention" became the symbol because it was the distinctive substitution, but the working system was a complete architecture. That matters because later imitators did not scale an isolated formula. They scaled a recipe: blocks, dimensions, heads, depth, data, optimization, and hardware.
 
 Still, the title captured the break. Attention had moved from an auxiliary mechanism inside recurrent translation systems to the organizing principle of the model. Once that happened, every later system in this part could build on a different computational substrate. BERT would use the architecture to pretrain bidirectional representations. GPT-style models would use the decoder side for next-token prediction and few-shot behavior. Open-source frameworks and model hubs would distribute implementations and checkpoints. Scaling-law work would treat model size, data, and compute as variables to be optimized around architectures that could absorb huge training runs.
