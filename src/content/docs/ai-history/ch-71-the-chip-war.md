@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 2022 the United States began treating advanced AI accelerators as instruments of geopolitical power. BIS's October 7, 2022 controls linked advanced computing ICs, supercomputers, AI, military modernization, WMD design, and surveillance, then expanded across 2023 and December 2024 to cover HBM, manufacturing equipment, and software tools. ASML, TSMC, the Netherlands, and Japan became part of the rulebook. CHIPS funded slow re-shoring; China answered with materials controls. Frontier AI capability became a negotiated property of supply chains and law.
+In 2022 the United States began treating advanced AI accelerators as instruments of geopolitical power. BIS's October 7, 2022 controls linked advanced computing ICs, supercomputers, AI, military modernization, WMD design, and surveillance, then expanded across 2023 and 2024 from chips into the manufacturing stack. ASML, TSMC, the Netherlands, and Japan became part of the rulebook. CHIPS funded slow re-shoring; China answered with materials controls. Frontier AI capability became a negotiated property of supply chains and law.
 :::
 
 <details>
@@ -16,7 +16,7 @@ In 2022 the United States began treating advanced AI accelerators as instruments
 |---|---|---|
 | Gina Raimondo (BIS / U.S. Commerce) | — | Public face of the 2023/2024 export-control announcements |
 | Alan Estevez / Thea Rozman Kendler / Jeffery Kessler (BIS) | — | BIS leadership voices through the 2025 policy pivot |
-| Jensen Huang (NVIDIA) | — | Company-side witness to product-threshold adaptation through H20 |
+| Jensen Huang (NVIDIA) | — | Company-side witness to product-threshold adaptation |
 | C.C. Wei (TSMC) | — | Annual-report voice for advanced-node and CoWoS packaging capacity |
 | ASML management / investor relations | — | Institutional witness for EUV/DUV and export-control exposure |
 | MOFCOM / China's Bureau of Industrial Security | — | Counterparty in the December 2024 materials-control notice |
@@ -50,15 +50,15 @@ timeline
 
 **Export controls** — A government's legal authority to restrict the shipment of items, technology, software, services, and U.S.-person support across borders. BIS's October 2022 rule used controls to link advanced computing ICs, supercomputers, and AI applications to national-security rationale.
 
-**Foreign direct product (FDP) rule** — A jurisdictional reach that brings items made outside the United States under U.S. export controls when they are direct products of certain U.S. technology or software. The 2022 BIS package used FDP and Entity List footnotes to extend reach across a globally distributed semiconductor industry.
+**Foreign direct product (FDP) rule** — A jurisdictional hook that can bring items made outside the United States under U.S. export controls when they are direct products of certain U.S. technology or software.
 
-**Semiconductor manufacturing equipment (SME)** — The machines that produce advanced chips: lithography systems, deposition tools, etch tools, metrology, and process-control equipment. The December 2024 BIS package added controls on additional SME types and software tools used in chip manufacturing.
+**Semiconductor manufacturing equipment (SME)** — The machines that produce advanced chips: lithography systems, deposition tools, etch tools, metrology, and process-control equipment.
 
-**EUV / DUV lithography** — Two patterning technologies used to print circuit features onto wafers. EUV uses 13.5 nanometer light and prints the smallest, highest-density features at advanced nodes. ASML is the world's only manufacturer of EUV systems; DUV immersion remains important and entered the December 2024 control conversation.
+**EUV / DUV lithography** — Two patterning technologies used to print circuit features onto wafers. EUV uses 13.5 nanometer light for the smallest, highest-density features at advanced nodes; DUV immersion remains important across mature and advanced process flows.
 
-**High-bandwidth memory (HBM)** — Stacked memory packaged close to an accelerator to feed it data fast enough for AI training and inference at scale. The December 2024 BIS package added HBM controls because raw arithmetic units cannot be used efficiently without enough memory bandwidth.
+**High-bandwidth memory (HBM)** — Stacked memory packaged close to an accelerator to feed it data fast enough for AI training and inference at scale.
 
-**Advanced packaging / CoWoS** — The back-end manufacturing step that integrates compute dies, memory, and substrates into a single accelerator package. TSMC's CoWoS capacity sat alongside its 3nm and 2nm wafer capacity as a strategic bottleneck for frontier AI chips.
+**Advanced packaging / CoWoS** — The back-end manufacturing step that integrates compute dies, memory, and substrates into a single accelerator package.
 
 **Entity List** — A BIS-published list of foreign persons and organizations that require licenses for items subject to U.S. export controls. The December 2024 package added 140 entities and modified 14 more, often with FDP footnotes that extend reach.
 
@@ -249,4 +249,3 @@ Every frontier model launch you read about in the late 2020s sits inside this st
 At the beginning of AI history, intelligence looked like a theorem, a neuron, a program, or a search tree.
 
 By the 2020s, it also looked like an export license.
-
