@@ -15,7 +15,7 @@ LISP did not invent list processing — IPL had already given Logic Theorist and
 | Name | Lifespan | Role |
 |---|---|---|
 | John McCarthy | 1927–2011 | Author of the 1958 MIT AI Memo No. 1, the 1960 CACM paper, and most of the LISP 1.5 manual. Brought the Dartmouth naming agenda into MIT's symbolic-language design. |
-| Steve Russell | — | Early LISP implementer; associated with the realisation that McCarthy's `eval` definition could be hand-compiled into a working interpreter for the IBM 704. |
+| Steve Russell | — | Early LISP implementer credited, with Daniel Edwards, in the LISP 1.5 manual's interpreter lineage. |
 | Daniel J. Edwards | — | Early interpreter implementer with Russell; LISP 1.5 manual co-author. |
 | Timothy P. Hart | — | LISP 1.5 manual co-author and compiler contributor. The macro mechanism is most associated with his line of work. |
 | Michael I. Levin | — | LISP 1.5 manual co-author; prepared the manual for publication and authored Appendix B. |
@@ -43,8 +43,8 @@ timeline
 
 - **S-expression** — A symbolic expression written either as an atom (a name like `X`) or as a parenthesised list of symbolic expressions (e.g. `(A B C)` or `(LAMBDA (X) (CAR X))`). The data structure LISP programs read, write, and execute. Identical in form to LISP source code, which is what makes the language self-modifying.
 - **M-expression** — McCarthy's original *intended* external syntax: a more conventional algebraic notation (e.g. `car[x]`) that programmers would write, and that would translate into S-expression data. M-expressions were largely planned but never adopted; users wrote S-expressions directly, and the irony stuck.
-- **`car` / `cdr` / `cons`** — The three basic LISP cell operations. `car` returns the head of a list; `cdr` returns the rest; `cons` builds a new pair from a head and a tail. The names are direct artefacts of the IBM 704's *Contents of Address Register* and *Contents of Decrement Register* opcodes — LISP is machine-derived math, not Platonic discovery.
-- **`eval`** — A function that takes a symbolic expression representing a LISP form and *runs* it, returning the value. Defined in the 1960 CACM paper; first implemented as an IBM 704 interpreter when Russell realised the definition could be hand-compiled. The hinge that turned LISP from notation into a running language.
+- **`car` / `cdr` / `cons`** — The three basic LISP cell operations. `car` returns the head of a list; `cdr` returns the rest; `cons` builds a new pair from a head and a tail. The names preserve the IBM 704 machinery beneath the mathematical notation.
+- **`eval`** — A function that takes a symbolic expression representing a LISP form and *runs* it, returning the value. The hinge that turned LISP from notation into a running language.
 - **Lambda / recursive functions** — A way of describing functions anonymously and applying them to data, lifted from Church's lambda calculus. Recursive function definitions are the natural control structure when programs work over symbolic structures of unknown depth.
 - **`cond`** — LISP's primitive conditional: a list of test–result pairs, evaluated left to right until a test succeeds. The first general conditional expression to take both its branches as ordinary symbolic data.
 - **Garbage collection / free-storage list** — The runtime discipline of automatically reclaiming list cells that are no longer referenced. The LISP 1.5 manual lays it out as language infrastructure; garbage collection is what makes symbolic programs feel native rather than hand-managed.
@@ -97,7 +97,7 @@ This made lists a good fit for expressions that were naturally nested. A predica
 
 For AI, this was a powerful shift. Logical formulas, plans, theorem fragments, property records, and program forms could all be represented as nested symbolic structures. The shape of the data no longer had to be hidden inside ad hoc arrays or procedural conventions. The shape could be the thing the program inspected.
 
-The same structure also kept LISP from being pure abstraction. Its lists were mathematical enough to support recursive definitions, but concrete enough to live in fixed-size machine words. The tool-vs-theory tension begins here. If one looks only at the definitions, LISP seems like a clean theory of symbolic functions. If one looks only at the cells, registers, and free-storage lists, it seems like a memory management technique for symbolic programs. Historically, it was both at once.
+The same structure also kept LISP from being pure abstraction. Its lists were mathematical enough to support recursive definitions, but concrete enough to live in fixed-size machine words. If one looks only at the definitions, LISP seems like a clean theory of symbolic functions. If one looks only at the cells, registers, and free-storage lists, it seems like a memory management technique for symbolic programs. Historically, it was both at once.
 
 That duality explains why LISP became more than a notation. Symbolic AI needed to create temporary expressions constantly: candidate proofs, transformed formulas, partial plans, lists of differences, lists of properties, and newly constructed program fragments. `cons`, `car`, and `cdr` made those structures cheap to express. They also made their machine cost visible. Every symbolic expression had to occupy cells; every cell had to be allocated; every allocation had to be reclaimed or the machine would fill with abandoned structure.
 
@@ -127,7 +127,7 @@ The practical gravity came from feedback. If the system printed an S-expression,
 
 This is where Steve Russell's presence belongs, though without turning the story into folklore. Russell came out of a hands-on MIT programming culture, later famous for work on *Spacewar!* on the PDP-1. The strongest available source is not biography but the LISP 1.5 manual, which credits Russell and Daniel Edwards with programming the interpreter. That credit is enough to keep the implementation collective. McCarthy supplied the formal language design; Russell, Edwards, Hart, Levin, Minsky, and others helped turn the design into an environment programmers could use.
 
-That collective shape matters for the Tool-vs-Theory reading. A theory can be attributed through papers and formal definitions. A tool accumulates through use, implementation, compiler work, manual writing, and decisions made under machine constraints. LISP's notation story sits exactly at that crossing point. The formal design distinguished M-expressions from S-expressions; the tool culture found that the machine's own symbolic form was good enough, and often better, for the work at hand.
+That collective shape matters because a theory can be attributed through papers and formal definitions, while a tool accumulates through use, implementation, compiler work, manual writing, and decisions made under machine constraints. LISP's notation story sits exactly at that crossing point. The formal design distinguished M-expressions from S-expressions; the tool culture found that the machine's own symbolic form was good enough, and often better, for the work at hand.
 
 It was contingent, not fated.
 
@@ -138,7 +138,7 @@ The most compact way to see LISP's theory side is to follow `eval`.
 :::note[McCarthy on the 1960 formalism]
 > "We believe this formalism has advantages both as a programming language and as a vehicle for developing a theory of computation."
 
-The chapter's Tool-vs-Theory thesis in McCarthy's own published voice. The CACM paper does not present the language as one or the other; it claims the formalism does both jobs.
+McCarthy's own published voice refuses to separate the formalism from its programming use.
 :::
 
 McCarthy's 1958 memo and 1960 CACM paper built the language around recursive functions of symbolic expressions. Lambda notation gave a way to define functions. `cond` gave a way to branch on tests. Elementary operations such as `atom`, `eq`, `car`, `cdr`, and `cons` gave a base vocabulary. Recursive definitions then made it possible to state a procedure by cases: if the expression is empty, stop; if it is an atom, treat it one way; otherwise take the first part, process the rest, and combine the results.
@@ -179,7 +179,7 @@ Mark-and-sweep matched the way list structure worked. The system could begin fro
 
 That integration mattered historically. A symbolic AI program could be written as if list cells were a renewable medium. The programmer still had to understand structure, sharing, and mutation, but the system took responsibility for finding unreachable cells and returning them to free storage. In a language whose basic act was `cons`, that responsibility was not optional.
 
-Garbage collection also sharpens the tool-vs-theory axis. A mathematical account of recursive symbolic functions can ignore the question of where abandoned intermediate expressions go. A working AI system cannot. The moment the elegant notation runs on the IBM 704, the machine has to forget. It has to distinguish live structure from dead structure and make memory reusable.
+Garbage collection makes the same dual character concrete. A mathematical account of recursive symbolic functions can ignore the question of where abandoned intermediate expressions go. A working AI system cannot. The moment the elegant notation runs on the IBM 704, the machine has to forget. It has to distinguish live structure from dead structure and make memory reusable.
 
 The free-storage list gave that forgetting an operational form. Cells not currently in use were not an abstract pool; they were organized so that `cons` could obtain them. Reclamation returned dead cells to that same supply. The programmer could still write in terms of symbolic structure, but the runtime kept a material economy underneath: cells borrowed, linked, traversed, marked, swept, and reused.
 
@@ -217,7 +217,7 @@ The honest chronology is more interesting than the trophy version. FLPL marks th
 
 That bundle made symbolic AI portable in a new way. A researcher could describe symbolic reasoning in the same medium the program manipulated. The language's theory and its tool environment reinforced each other. LISP was mathematical enough to make symbolic functions legible and mechanical enough to make them runnable.
 
-That is the Tool-vs-Theory conclusion. LISP was not only a beautiful theory that happened to get implemented. It was not only a handy tool that later acquired theoretical prestige. Its power came from the overlap. The recursive theory made the tool coherent; the tool made the theory usable in everyday symbolic programming.
+LISP was not only a beautiful theory that happened to get implemented. It was not only a handy tool that later acquired theoretical prestige. Its power came from the overlap. The recursive theory made the tool coherent; the tool made the theory usable in everyday symbolic programming.
 
 That overlap also made the next institutional step possible.
 
@@ -228,7 +228,7 @@ That shift changes the setting.
 The next phase of the story moves from language substrate to institutional substrate. Project MAC and time-sharing would change how programmers encountered machines, making interaction less like submitting isolated jobs and more like living inside a computational environment. That later chapter belongs to the AI-lab and time-sharing world. LISP provided one of the languages ready to inhabit it.
 
 :::note[Why this still matters today]
-Every language that lets a program inspect its own source as data, every macro system that generates code at compile time, every interactive prompt that compiles each typed form before responding, descends from McCarthy's 1958–1962 line. The historiographic point is sharper than the credit: LISP did not invent list processing — IPL did that. What LISP unified was *notation, data, and execution* in one substrate, then made the substrate teachable through a manual. The cost LISP exposed and made portable — that interactive symbolic systems need automatic storage reclamation, anonymous functions, and a programmable conditional — is the cost every modern dynamic language pays in some form.
+Every language that lets a program inspect its own source as data, every macro system that generates code at compile time, every interactive prompt that compiles each typed form before responding, descends from McCarthy's 1958–1962 line. The enduring lesson is not priority over list processing; it is the way `eval` made notation, data, and execution share one substrate, then made that substrate teachable through a manual. The cost LISP exposed and made portable — that interactive symbolic systems need automatic storage reclamation, anonymous functions, and a programmable conditional — is the cost every modern dynamic language pays in some form.
 :::
 
 ## Sources

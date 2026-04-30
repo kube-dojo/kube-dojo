@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Gradient descent did not arrive in machine learning fully formed. It accumulated across 123 years from four loose pieces: Cauchy's 1847 sketch (no convergence proof, never followed up), Robbins and Monro's 1951 root-finding-under-noise framework, Widrow and Hoff's 1960 IRE WESCON paper that *explicitly* named "the method of steepest descent" on a parabolic loss surface and built it into the lunch-pail Adaline, and Linnainmaa's 1970 master's thesis on rounding errors that gave the first reverse-mode chain-rule machinery for arbitrary computational graphs.
+Gradient descent did not arrive in machine learning fully formed. It accumulated across 123 years from astronomy, mathematical statistics, analog learning hardware, and numerical analysis. The chapter's job is to keep those lineages separate long enough to see why modern machine learning later needed all of them.
 :::
 
 <details>
@@ -56,11 +56,9 @@ timeline
 The four nodes can be stated compactly. None of these formulae appears in only one of the chapter's sources; together they show what each scene contributed.
 
 - **Cauchy's 1847 step.** For $u = f(x, y, z, \dots)$ with partial derivatives $X, Y, Z, \dots$ at the current point and a small positive $\theta$, Cauchy proposed increments $\alpha = -\theta X,\ \beta = -\theta Y,\ \gamma = -\theta Z,\ \dots$ — the first published descent rule.
-- **Cauchy's two variants on the same page.** The line-search variant minimises $\Theta = f(x - \theta X,\ y - \theta Y,\ z - \theta Z,\ \dots)$ along the descent direction; the steepest-descent-proper variant fixes $\theta$ by the univariate stationarity condition $\Theta'_\theta = 0$.
 - **Cauchy's least-squares extension.** A system of equations $u = 0,\ v = 0,\ w = 0,\ \dots$ becomes the single non-negative target $u^2 + v^2 + w^2 + \dots$, attacked by the same iteration.
 - **Robbins–Monro step-size conditions.** Later expositions write the convergence-in-probability requirement as $\sum c_n = \infty$ and $\sum c_n^2 < \infty$ — large enough that the procedure does not freeze, small enough that noise washes out.
 - **Widrow–Hoff LMS rule (1960).** With $a_1, \dots, a_n$ the adjustable gains, the rule changes each gain in proportion to the *gradient of the mean square error* with respect to that gain — the parabolic surface in gain-space the chapter pivots on.
-- **Widrow–Hoff time constant.** For the 4×4-input Adaline, the per-pattern step shrinks the error magnitude by a factor of $1/17$; the one-pattern-at-a-time time constant is $\tau = n + 1 = 17$ patterns. Steepest descent acquires a measurable physical pace.
 
 </details>
 
@@ -167,5 +165,5 @@ Each step removed a different obstacle. Cauchy answered the local-direction ques
 None of these four milestones were intended as a comprehensive algorithm for training artificial neural networks. The realization that Linnainmaa's reverse-mode chain rule could be applied specifically to neural networks to train multiple layers of representations was first published by Paul Werbos in 1981, several years before the technique was widely popularized. That later chain, running from reverse-mode automatic differentiation into neural-network backpropagation, belongs to Chapter 24. Here, the story stops at the hinge: by 1970, the pieces existed, but they had not yet been assembled into the familiar training algorithm for multilayer networks.
 
 :::note[Why this still matters today]
-Every gradient-descent step in every modern training run — every SGD update, every Adam moment, every backpropagated weight change in every neural network — descends from these four nodes. The chapter's discipline matters: Cauchy gave the iteration; Robbins and Monro gave it convergence under noise; Widrow and Hoff gave the *first explicit gradient-method framing* on physical analog hardware; Linnainmaa gave the *machinery* to compute the gradient through any computational graph. None of the four claimed to have invented "neural network training." The unity belongs to the later mathematical reconstruction, not to a single historical project unfolding with one destination in mind.
+Every gradient-descent step in every modern training run — every SGD update, every Adam moment, every backpropagated weight change in every neural network — depends on a long separation between local descent, noisy approximation, hardware learning, and reverse-mode differentiation. None of the researchers in this chapter claimed to have invented "neural network training." The point is precisely that modern training looks unified only after later mathematics and software made these older pieces interoperable.
 :::

@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Frank Rosenblatt's Perceptron program at the Cornell Aeronautical Laboratory (1958–1962) was a cybernetic research project, not a failed AI system. A 1958 *Psychological Review* paper, IBM 704 simulations, and the Mark I electromechanical machine pursued *learning* — supervised error correction over a random association layer — as engineering practice. The chapter separates three things later commentators tend to collapse: the convergence theorem (mathematics), the Mark I (analog hardware), and the *New York Times* press rhetoric of a machine that would walk, talk, see, and write.
+Frank Rosenblatt's Perceptron program at the Cornell Aeronautical Laboratory (1958–1962) was a cybernetic research project, not a failed AI system. A 1958 *Psychological Review* paper, IBM 704 simulations, and the Mark I electromechanical machine pursued *learning* — supervised error correction over a random association layer — as engineering practice. The later myth came from collapsing a bounded theorem, a real analog machine, and extravagant press rhetoric into one story.
 :::
 
 <details>
@@ -15,9 +15,9 @@ Frank Rosenblatt's Perceptron program at the Cornell Aeronautical Laboratory (19
 | Name | Lifespan | Role |
 |---|---|---|
 | Frank Rosenblatt | 1928–1971 | Psychologist at the Cornell Aeronautical Laboratory in Buffalo; author of the 1958 *Psychological Review* paper and *Principles of Neurodynamics* (1961). Designed the perceptron's S/A/R architecture and the supervised error-correction reinforcement rule. |
-| Charles Wightman | — | Cornell Aeronautical Laboratory engineer; principal Mark I builder. *Principles of Neurodynamics* p. ix records that he and Francis Martin carried out the engineering work on the machine. |
-| Francis Martin | — | Cornell Aeronautical Laboratory engineer; co-built Mark I with Wightman. |
-| John C. Hay | — | Cornell Aeronautical Laboratory experimentalist; ran the experimental programme on Mark I. Co-author with Albert E. Murray of the 1960 *Mark I Perceptron Operators' Manual* (Project PARA). |
+| Charles Wightman | — | Cornell Aeronautical Laboratory engineer associated with the Mark I's construction. |
+| Francis Martin | — | Cornell Aeronautical Laboratory engineer in the Mark I implementation team. |
+| John C. Hay | — | Cornell Aeronautical Laboratory experimentalist and co-author, with Albert E. Murray, of the 1960 *Mark I Perceptron Operators' Manual* (Project PARA). |
 | H. D. Block | — | Perceptron-theory contributor; author of "The Perceptron: A Model for Brain Functioning. I" in *Reviews of Modern Physics* 34(1), January 1962 — the chapter's anchor for independent mathematical legitimacy. |
 | Albert B. J. Novikoff | — | Mathematician who published a tightened convergence proof for the perceptron in 1962, under cleaner separability assumptions. |
 
@@ -31,7 +31,7 @@ timeline
     title The Cornell Perceptron Program, 1957–1962
     July 1957 : Buffalo perceptron program enters ONR support under Contract Nonr-2381(00) (per Principles of Neurodynamics, p. ix)
     1958 : Rosenblatt publishes "The Perceptron" in Psychological Review : Mark I built at Cornell Aeronautical Laboratory, Buffalo
-    July 8 1958 : New York Times prints "New Navy Device Learns by Doing" — press rhetoric of a machine that will walk, talk, see, and write
+    July 8 1958 : New York Times prints "New Navy Device Learns by Doing" — public hype outruns the bounded laboratory claims
     24–27 November 1958 : HMSO Mechanisation of Thought Processes symposium at NPL Teddington : Rosenblatt's "Two Theorems of Statistical Separability," Selfridge's "Pandemonium," and McCarthy's "Programs with Common Sense" share one proceedings volume
     1960 : Hay & Murray Mark I Operators' Manual (February) : Rosenblatt's "Perceptron Simulation Experiments" in Proceedings of the IRE (March) : Navy photo release describing Mark I letter-recognition (June 24)
     1961–1962 : Principles of Neurodynamics CAL report (March 1961) : Block 1962 Reviews of Modern Physics exposition : Novikoff 1962 tightened convergence proof
@@ -130,7 +130,7 @@ In *Principles of Neurodynamics*, the convergence material appears inside a larg
 
 This is why importing the 1969 controversy backward does damage. The later critique matters, and Chapter 17 will take it up, but it should not be used to make the original theorem seem naive. Rosenblatt's result did not secretly claim to solve every recognition problem. It claimed convergence for a learning procedure when a solution was available under the relevant assumptions. The limits that later became famous are limits of that claim, not proof that the claim was empty.
 
-The safest way to teach the theorem is to keep the three layers visible. The mathematics says that a correction procedure can reach a solution under the right separability conditions. The hardware gives one physical way to stage restricted pattern-recognition experiments. The press makes a different kind of claim about future machines. Only the first two belong to the technical program. The third belongs to reception.
+The safest way to teach the theorem is to keep the claims separated. The mathematics says that a correction procedure can reach a solution under the right separability conditions. The hardware gives one physical way to stage restricted pattern-recognition experiments. The press makes a different kind of claim about future machines. Only the first two belong to the technical program. The third belongs to reception.
 
 Chapter 15 will later reinterpret perceptron learning in a more modern optimization language, as kin to gradient descent on a linear classifier. That is a useful bridge, but it is not the vocabulary of this chapter's historical actors. Here the period language is reinforcement, solutions, separability, and convergence. The modern reinterpretation should clarify Rosenblatt's result, not overwrite it.
 
@@ -194,7 +194,7 @@ The press layer is real, but it is not the same as the technical layer. The July
 
 Rosenblatt's own later preface is the safer guide. In *Principles of Neurodynamics*, he complained that popular press treatment had contributed to controversy and emphasized that the perceptron program was first a theory of brain mechanisms, not simply the invention of artificial-intelligence devices. That distinction does not make him modest in ambition. It makes the ambition more precise.
 
-The three-layer separation is the reader's protection against myth. The mathematics supports convergence under separability conditions. The hardware supports restricted learning experiments in an electromechanical system. The press imagined a much larger future. All three belong to the history, but only the first two belong to the demonstrated technical achievement.
+That separation is the reader's protection against myth. The mathematics supports convergence under separability conditions. The hardware supports restricted learning experiments in an electromechanical system. The press imagined a much larger future. All three belong to the history, but only the first two belong to the demonstrated technical achievement.
 
 The later fate of the story also had a human asymmetry. Rosenblatt died in a sailing accident in 1971, after the publication of Minsky and Papert's *Perceptrons* and before the late-1970s and 1980s connectionist revival could fully rewrite the public memory. That fact should not be turned into melodrama, and it does not decide the mathematics. It helps explain why the counter-narrative was muted. The program's most visible defender was no longer available to argue its historical meaning through the next cycle of debate.
 
