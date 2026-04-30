@@ -5,6 +5,61 @@ sidebar:
   order: 67
 ---
 
+:::tip[In one paragraph]
+AI's late-era "monopoly" was not one firm but a stack of bottlenecks: NVIDIA accelerators, hyperscaler clouds, frontier-lab partnerships, IP licenses, enterprise distribution, and compliance. Microsoft/OpenAI (2019) set the template — exclusive cloud, preferred commercialization — replicated by Amazon/Anthropic and Google/Anthropic. The FTC opened a 6(b) inquiry (January 2024) and US/EU/UK regulators (July 2024) named key-input concentration. The April 27, 2026 Microsoft/OpenAI amendment shows exclusivity mutating, not vanishing. Platform power changed shape, not substance.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| NVIDIA | — | Data Center revenue reached $47.5B in fiscal 2024, up 217%; large cloud providers represented more than half of Q4 FY2024 Data Center revenue, and about 40% of FY2024 Data Center revenue was estimated for AI inference (FY2024 10-K). The accelerator supplier whose chips became the upstream bottleneck. |
+| Microsoft / OpenAI | — | July 22, 2019 announcement: $1B investment, Azure AI supercomputing, Microsoft as exclusive cloud provider and preferred commercialization partner. Terms revised October 2025, clarified February 2026, and amended April 27, 2026. The original cloud-partnership template. |
+| Amazon / Anthropic | — | September 2023 strategic collaboration with AWS as primary cloud provider and Amazon investment; November 22, 2024 deepening with an additional $4B investment, AWS as primary training partner, and Trainium use. Replication of the hyperscaler-frontier-lab template with custom silicon. |
+| Google Cloud / Anthropic | — | February 3, 2023 partnership: Anthropic selected Google Cloud as cloud provider, used GPU and TPU clusters to train, scale, and deploy systems. Third instance of the template. |
+| FTC | — | January 25, 2024: 6(b) inquiry into Alphabet, Amazon, Anthropic, Microsoft, and OpenAI; January 2025 staff report on Microsoft-OpenAI, Amazon-Anthropic, and Alphabet-Anthropic partnerships. Regulator that named the pattern. |
+| US/EU/UK competition authorities | — | July 23, 2024 joint statement on competition in generative AI: warned about restriction of key inputs, existing market power extending into AI, and partnerships/investments that could steer market outcomes. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2019–April 2026)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 67 — The Monopoly
+    2019-07-22 : OpenAI announces Microsoft's $1B investment, Azure supercomputing, and Microsoft as exclusive cloud provider and preferred commercialization partner
+    2023-02-03 : Anthropic announces Google Cloud partnership for GPU/TPU training, scaling, and deployment
+    2023-09 : Amazon and Anthropic announce strategic collaboration — AWS as primary cloud provider plus Amazon investment
+    2024-01-25 : FTC launches 6(b) inquiry into generative-AI investments and partnerships (Alphabet, Amazon, Anthropic, Microsoft, OpenAI)
+    2024-07-23 : US/EU/UK competition authorities publish joint statement on competition in generative AI foundation models
+    2024-11-22 : Amazon announces deeper Anthropic collaboration — additional $4B investment, AWS as primary training partner, Trainium use
+    2025-01 : FTC staff report describes Microsoft-OpenAI, Amazon-Anthropic, and Alphabet-Anthropic as the study's largest cloud/AI-developer partnerships
+    2025-10-28 : Microsoft revises OpenAI agreement — exclusive IP rights / Azure API exclusivity preserved with some third-party flexibility
+    2026-02-27 : Microsoft/OpenAI joint statement clarifies Azure exclusivity for stateless OpenAI APIs and first-party products
+    2026-04-27 : OpenAI/Microsoft amendment — Microsoft remains primary cloud partner, OpenAI can serve products across any cloud, license becomes non-exclusive
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Stack concentration / platform power** — Market influence that arises not from owning a single product, but from controlling several layers a competitor must use: chips, cloud capacity, model APIs, IP licenses, distribution channels, and compliance posture. The chapter uses "concentration," "bottleneck," and "platform power" rather than "monopoly" because the latter is a legal verdict the cited sources do not deliver.
+
+**6(b) inquiry** — A non-enforcement information-gathering study under Section 6(b) of the FTC Act. The FTC issues orders compelling firms to provide information for an industry-wide market study. The January 2024 6(b) inquiry into Alphabet, Amazon, Anthropic, Microsoft, and OpenAI sought information about key inputs and competitive impact of cloud/AI-developer partnerships, not a finding of wrongdoing.
+
+**Exclusive cloud provider** — In the OpenAI 2019 announcement, the term meant Microsoft would be OpenAI's sole cloud-infrastructure host. By the October 2025 Microsoft statement and the April 27, 2026 amendment, exclusivity had become granular: "Azure API exclusivity" for stateless OpenAI APIs, "primary cloud partner" rather than "exclusive," first-ship-on-Azure rather than only-on-Azure. The chapter dates each phrasing rather than treating "exclusive" as timeless.
+
+**AWS Trainium** — Amazon's custom AI training accelerator. Per Amazon's November 22, 2024 announcement, Anthropic named AWS its primary training partner and would use Trainium to train and deploy its largest foundation models. Custom-silicon usage matters because it deepens technical lock-in beyond renting generic compute.
+
+**Stateless API** — In the Microsoft/OpenAI February 2026 framing, "stateless" describes API calls that do not retain server-side context across requests. Azure's exclusivity for "stateless OpenAI APIs" became a load-bearing technical scope: it specifies a precise boundary of what runs only on Azure rather than committing to total cloud exclusivity.
+
+**Vertical control / horizontal rivalry** — Horizontal competition is firms competing at the same layer (model labs vs. model labs). Vertical control is one firm shaping outcomes at the layers above and below it (e.g., a cloud provider influencing which model labs can scale because it controls compute and distribution). The July 2024 joint statement warned about both, with vertical/incumbent-extension risk being the chapter's central concern.
+
+</details>
+
 The monopoly was not one company.
 
 That is the first thing to get right. Late-era AI did not organize itself around a single cartoon gatekeeper with one switch. It organized itself around a stack of gates. One firm might control the most desirable accelerators. Another might control the cloud where the models run. Another might own enterprise distribution. Another might hold the model weights, the API, the safety layer, the customer relationship, the developer platform, or the contract that decides where a product ships first.
@@ -127,6 +182,12 @@ That last point matters. Platform power is often contractual and infrastructural
 
 The joint US/EU/UK competition statement in July 2024 gave the concern a broader vocabulary. It warned that firms might restrict access to key inputs, extend existing market power into AI markets, or use partnerships and investments in ways that could coopt competitive threats or steer market outcomes. It identified specialized chips, compute, data, and technical expertise as critical ingredients. It also pointed to distribution channels and incumbent platforms.
 
+:::note
+> For example, platforms may have substantial market power at multiple levels related to the AI stack.
+
+That sentence matters because it makes "platform power" vertical and layered, not a finding that one firm is a legal monopoly. — *FTC/DOJ/European Commission/CMA, "Joint Statement on Competition in Generative AI Foundation Models and AI Products," July 23, 2024.*
+:::
+
 That language was careful. It did not declare a final violation. It described risks, incentives, and areas of attention. The caution is part of the point. Regulators were mapping a market that was forming faster than traditional antitrust categories could comfortably explain.
 
 The statement also made clear that the concern was not only horizontal rivalry among model labs. It was vertical control over inputs and routes. A firm with cloud infrastructure might not need to own every model if it controls enough of the capacity those models require. A firm with a dominant consumer or enterprise surface might not need the best model if it can distribute a good model more efficiently. A firm with specialized chips might not decide product features, but it can shape who gets to build at all.
@@ -166,3 +227,8 @@ So the monopoly was not one gate. It was the alignment of many gates.
 That alignment sets up the next fights. Ch68 turns to data labor, copyright, and provenance: who supplied the examples and who has the right to use them. Ch70 and Ch72 turn to energy and datacenters: what it physically costs to run the stack. Ch71 turns to chip geopolitics and export controls: who can obtain the accelerators in the first place.
 
 Benchmarks made capability visible. Platforms turned capability into markets. The next question was who paid the hidden costs of the data and infrastructure underneath.
+
+:::note[Why this still matters today]
+Today's AI procurement still routes through the stack this chapter names. When you choose a model, you also choose an accelerator family (often NVIDIA), a cloud (Azure, AWS, or Google), a billing/identity/compliance posture, and a partnership channel into enterprise software. The Microsoft/OpenAI, Amazon/Anthropic, and Google/Anthropic relationships continue to shape which model ships first inside which cloud marketplace. Open-weight models partially route around API exclusivity, but frontier training and hyperscale serving still concentrate around a handful of firms. Reading any current "AI strategy" announcement — cloud expansion, exclusive distribution, custom-silicon investment — is reading another revision of the stack this chapter mapped.
+:::
+
