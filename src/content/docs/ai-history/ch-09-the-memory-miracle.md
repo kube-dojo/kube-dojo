@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1947, Manchester's Williams tube held a bit for 0.2 seconds and demanded constant refresh; mercury delay lines stored data by sending shock-waves down a column of mercury. MIT's Project Whirlwind needed memory that did not forget. Jay Forrester's 1947 three-dimensional coincident-current concept used neon glow tubes that drifted with temperature. In 1949 he switched to magnetic materials with rectangular hysteresis. Three parallel inventors — Forrester at MIT, Jan Rajchman at RCA, An Wang at Harvard — converged on magnetic-core memory between 1949 and 1953. SAGE turned MIT's variant into the IBM 704's industrial standard.
+In 1947, Manchester's Williams tube showed how fragile stored-program memory could be, while mercury delay lines stored data by sending shock-waves down a column of mercury. MIT's Project Whirlwind needed memory that did not forget. Jay Forrester's three-dimensional coincident-current concept first used neon glow tubes that drifted with temperature, then shifted to magnetic materials with rectangular hysteresis. Three parallel inventors — Forrester at MIT, Jan Rajchman at RCA, An Wang at Harvard — converged on magnetic-core memory between 1949 and 1953. SAGE turned MIT's variant into the IBM 704's industrial standard.
 :::
 
 <details>
@@ -17,7 +17,7 @@ In 1947, Manchester's Williams tube held a bit for 0.2 seconds and demanded cons
 | Jay W. Forrester | 1918–2016 | Director, MIT Digital Computer Laboratory (1946–1951); led Project Whirlwind and the SAGE memory effort; conceived the 3D coincident-current store in 1947 and switched to magnetic materials in 1949. |
 | Frederic C. Williams | 1911–1977 | Professor of Electrical Engineering, University of Manchester; co-author of the September 1948 *Nature* Letter that announced a working stored-program experimental machine using the Williams-tube electrostatic CRT memory. |
 | Tom Kilburn | 1921–2001 | Manchester researcher under Williams; author of the December 1, 1947 internal report "A Storage System for Use with Binary Digital Computing Machines" — the chapter's primary anchor for Williams-tube operating limits. |
-| Jan A. Rajchman | 1911–1989 | RCA Laboratories (Camden NJ); developed the Selectron tube (1946–1947); pursued ferrite-core matrix memory in parallel with Forrester; coined "myriabit" in his October 1953 *Proc. IRE* paper. |
+| Jan A. Rajchman | 1911–1989 | RCA Laboratories (Camden NJ); developed the Selectron tube (1946–1947); pursued ferrite-core matrix memory in parallel with Forrester. |
 | An Wang | 1920–1990 | Research fellow at Harvard's Computation Laboratory under Howard Aiken; filed US Patent 2,708,722 ("Pulse Transfer Controlling Device") on October 21, 1949, eighteen months before Forrester's filing. |
 | Kenneth H. "Ken" Olsen | 1926–2011 | MIT research assistant under Norman Taylor; co-builder of the Memory Test Computer that validated coincident-current core memory at scale before transplanting it into Whirlwind. |
 
@@ -43,7 +43,7 @@ timeline
     Oct 1953 : Rajchman publishes 'A Myriabit Magnetic-Core Matrix Memory' in Proc. IRE 41(10)
     1954 : IBM 704 announced — first IBM mainframe with magnetic-core memory standard
     May 17 1955 : Wang's patent 2,708,722 issues
-    1956 : IBM purchases Wang's patent for approximately $500,000 ; Forrester's patent 2,736,880 issues on Feb 28
+    1956 : IBM purchases Wang's patent for approximately 500,000 dollars ; Forrester's patent 2,736,880 issues on Feb 28
 ```
 
 </details>
@@ -51,7 +51,7 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-- **Williams tube** — An electrostatic memory that stored binary digits as a charge pattern on the inner phosphor screen of a commercial cathode-ray tube. Fast random access but volatile: the 1947 Kilburn report specified short-term retention "of the order of 0.2 seconds" and a refresh frequency greater than 5 cycles per second.
+- **Williams tube** — An electrostatic memory that stored binary digits as a charge pattern on the inner phosphor screen of a commercial cathode-ray tube. Fast random access but volatile, requiring constant refresh.
 - **Mercury delay line** — A serial memory in which a bit travelled as an acoustic shock-wave down a roughly one-metre tube of mercury, was sensed at the far end, and was reinjected to keep the bit alive. Robust but slow; access time was set by waiting for a specific bit to emerge from the tube.
 - **Rectangular hysteresis loop** — A magnetic material's response curve in which magnetisation snaps cleanly between two saturation states with a sharp threshold between them. The "rectangular" shape — almost no intermediate response — is what made coincident-current selection trustworthy.
 - **Coincident-current selection** — The addressing trick at the heart of magnetic-core memory: each coordinate line carries only half the current needed to switch a core, so only the core at the intersection of two activated lines flips. Half-selected cores along the same row or column remain unchanged.
@@ -109,7 +109,7 @@ The search for a robust memory led to the three-dimensional coincident-current m
 
 In his oral history, Forrester recalled that in about 1947 he began thinking about the geometry of storage: "if we had one-dimensional storage and two-dimensional storage, what's the possibility of a three-dimensional storage." He arrived at a logical structure that satisfied the requirements, but the initial physical implementation relied on neon glow-discharge tubes.
 
-The appeal of the geometry was selectivity. A one-dimensional store required a long line or a serial stream. A two-dimensional matrix allowed one coordinate to select a row and another to select a column. A three-dimensional arrangement promised a still better scaling relation: more stored bits without a separate wire for every bit. Forrester's later patent would express that advantage compactly as "3 ∛number of cores" input leads for a three-dimensional array. The phrase is mathematically terse, but the engineering point is direct. If the memory grew by volume while the wiring grew by edge length, memory could scale without drowning the machine in connections.
+The appeal of the geometry was selectivity. A one-dimensional store required a long line or a serial stream. A two-dimensional matrix allowed one coordinate to select a row and another to select a column. A three-dimensional arrangement promised a still better scaling relation: more stored bits without a separate wire for every bit. If the memory grew by volume while the wiring grew by edge length, memory could scale without drowning the machine in connections.
 
 The 1947 glow-tube concept already incorporated the key mechanism that would define magnetic core memory: coincident-current selection. As Forrester described it, "You could activate a wire say in the 'x' axis and another one crossing in the 'y' axis and only the glow tube at the intersection would have enough voltage on it to break down and begin to discharge." The team conducted tests on individual units, but the physical reality of the glow tubes proved insurmountable. Their "characteristics … change with temperature and age," Forrester recalled. This drift made them unsuitable for reliable long-term discrimination, so the team "didn't really pursue it."
 
@@ -137,7 +137,7 @@ Simultaneously, crucial work was underway at the Harvard Computation Laboratory.
 
 Wang's claim cut at a different but equally practical part of the problem. A magnetic state could represent a bit, but a usable random-access memory also needed a reliable cycle for sensing and restoring that state. The patent language about residual flux density was not decorative physics. It specified how strongly the material should remember after the applied pulse ended. In a memory technology, remanence was the point: the device had to retain a distinction without continuous power or mechanical motion.
 
-These parallel developments generated overlapping claims. The priority dispute appears not to have been resolved by a definitive judicial ruling in a patent court, but rather by the force of commercial licensing. A major commercial resolution came in 1956 when, according to widespread historical accounts, IBM purchased Wang's patent for approximately $500,000. That transaction absorbed Wang's foundational claims into IBM's portfolio and helped settle the patent war commercially.
+These parallel developments generated overlapping claims. The priority dispute appears not to have been resolved by a definitive judicial ruling in a patent court, but rather by the force of commercial licensing. A major commercial resolution came in 1956 when, according to widespread historical accounts, IBM purchased Wang's patent for approximately 500,000 dollars. That transaction absorbed Wang's foundational claims into IBM's portfolio and helped settle the patent war commercially.
 
 ## Commercialization
 
@@ -170,8 +170,7 @@ This military investment quickly produced commercial dividends. Secondary accoun
 The timing of this commercialization arc was critical. By the time researchers gathered for the Dartmouth Summer Research Project on Artificial Intelligence in the summer of 1956, the von Neumann architecture's most glaring physical vulnerability had been substantially resolved. The symbolic-AI agenda inherited a memory infrastructure that was fast, non-volatile, and scaling industrially. That did not make computers cheap, small, or easy to program. It did change the question. For the large institutional machines that symbolic AI initially used, hardware memory was no longer the primary load-bearing constraint; the next bottleneck would be the software itself (see Chapter 11).
 
 :::note[Why this still matters today]
-The chapter's two engineering ideas still organise modern computing. *Coincident-current selection* — addressing a single bit by the agreement of two coordinates that each carry only half the activation force — is the direct ancestor of every memory cell that distinguishes "selected" from "half-selected" by analog margin. DRAM sense amplifiers, flash memory's threshold-voltage cells, and content-addressable lookups in network routers all descend from the same threshold-and-coincidence trick. *Parallel invention with commercial resolution* — the Forrester / Rajchman / Wang convergence settled by IBM's $500,000 patent purchase rather than a court ruling — is also still with us: most modern hardware patent disputes resolve through licensing rather than litigation, for the same institutional reasons that drove SAGE-era memory.
+The chapter's two engineering ideas still organise modern computing. *Coincident-current selection* — addressing a single bit by the agreement of two coordinates that each carry only half the activation force — is the direct ancestor of every memory cell that distinguishes "selected" from "half-selected" by analog margin. DRAM sense amplifiers, flash memory's threshold-voltage cells, and content-addressable lookups in network routers all descend from the same threshold-and-coincidence trick. *Parallel invention with commercial resolution* — the Forrester / Rajchman / Wang convergence settled by IBM's 500,000-dollar patent purchase rather than a court ruling — is also still with us: most modern hardware patent disputes resolve through licensing rather than litigation, for the same institutional reasons that drove SAGE-era memory.
 :::
 
 [^1]: Multiple secondary sources credit An Wang and Way-Dong Woo at the Harvard Computation Laboratory with the 1949 magnetic-core invention. However, US Patent 2,708,722 names only An Wang as the inventor of record on its face-sheet. The co-inventorship remains a matter of historical dispute.
-

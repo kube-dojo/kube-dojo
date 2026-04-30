@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-On June 30, 1945, John von Neumann's *First Draft of a Report on the EDVAC* — a 100-page mimeographed typescript bearing only his name — proposed dividing a digital computing system into five logical organs and storing instructions in writable memory alongside data. A year later, Burks, Goldstine, and von Neumann's IAS *Preliminary Discussion* (June 28, 1946) sharpened the rule. The *First Draft*'s mailed circulation invalidated Eckert and Mauchly's patent claim. The phrase "stored program" itself was not coined until May 1949, in an internal IBM report by Nathaniel Rochester.
+On June 30, 1945, John von Neumann's *First Draft of a Report on the EDVAC* — a 100-page mimeographed typescript bearing only his name — proposed dividing a digital computing system into five logical organs and storing instructions in writable memory alongside data. A year later, Burks, Goldstine, and von Neumann's IAS *Preliminary Discussion* (June 28, 1946) sharpened the rule. The *First Draft*'s mailed circulation invalidated Eckert and Mauchly's patent claim. The phrase "stored program" itself arrived later, in an internal IBM report.
 :::
 
 <details>
@@ -16,7 +16,7 @@ On June 30, 1945, John von Neumann's *First Draft of a Report on the EDVAC* — 
 |---|---|---|
 | John von Neumann | 1903–1957 | IAS mathematician; Moore School EDVAC consultant from summer 1944; sole signatory of the *First Draft* (June 30, 1945); co-author of the IAS *Preliminary Discussion* (1946). |
 | J. Presper Eckert Jr. | 1919–1995 | Chief electrical engineer of the Moore School ENIAC project; co-developer with Mauchly of the EDVAC successor concept; resigned March 1946 over patent assignment; gave the 1977 OH 13 oral history. |
-| John Mauchly | 1907–1980 | Physics professor at Ursinus College; proposed ENIAC in his August 1942 Moore School memorandum; co-developer of EDVAC with Eckert; mentioned exactly once in the *First Draft* body. |
+| John Mauchly | 1907–1980 | Physics professor at Ursinus College; proposed ENIAC in his August 1942 Moore School memorandum; co-developer of EDVAC with Eckert. |
 | Herman H. Goldstine | 1913–2004 | Army Ordnance liaison at the Moore School; mailed copies of the *First Draft* in summer 1945; co-author of the IAS *Preliminary Discussion*. |
 | Jean Jennings Bartik | 1924–2011 | One of the original six ENIAC programmers; led the four-programmer team that retrofitted ENIAC's function tables to hold a 60-instruction order code in 1948. |
 | Nathaniel Rochester | 1919–2001 | IBM Poughkeepsie engineer; author of the May 17, 1949 internal report "A Calculator Using Electrostatic Storage and a Stored Program" — the earliest located written use of the phrase. |
@@ -50,9 +50,9 @@ timeline
 - **ENIAC** — The Electronic Numerical Integrator and Computer, completed at the Moore School of Electrical Engineering at the University of Pennsylvania in 1945. Programmed by physically rearranging cables and switches until the 1948 retrofit gave it a 60-instruction order code held in its function tables.
 - **EDVAC** — The Electronic Discrete Variable Automatic Computer, the proposed successor to the ENIAC and the subject of the *First Draft*. The architecture survived the document; the actual EDVAC was completed only in 1951.
 - **Stored program** — The arrangement in which a machine's instructions are held in writable electronic memory alongside its data, so that a new program can be loaded by writing it into memory rather than by rewiring the machine. The phrase itself was not used in any 1940s publication before May 1949.
-- **Modern code paradigm** — Haigh, Priestley, and Rope's term for the execution of writable instructions held in main memory. One of three distinct ideas they extract from the catch-all label "stored-program concept"; the others are the von Neumann architecture paradigm and the EDVAC hardware paradigm.
+- **Modern code paradigm** — Haigh, Priestley, and Rope's term for the execution of writable instructions held in main memory, distinct from the other ideas later compressed into the catch-all label "stored-program concept."
 - **Von Neumann architecture** — The decomposition of a computing machine into specialized logical "organs": a central arithmetical part (CA), a central control (CC), a memory (M), and input/output (I, O). Stated tentatively in the *First Draft* and crisply in the 1946 IAS report.
-- **Order code** — The set of numerical codes that a machine treats as instructions. The 1948 ENIAC retrofit used a 60-order code held in its function tables; later machines used much larger and more flexible instruction sets.
+- **Order code** — The set of numerical codes that a machine treats as instructions. Early retrofits used small numerical order codes; later machines used much larger and more flexible instruction sets.
 
 </details>
 
@@ -141,4 +141,3 @@ Ultimately, the *First Draft* did not invent the digital computer out of whole c
 :::note[Why this still matters today]
 Two ideas in this chapter still shape every working computer. The decomposition into specialized organs — arithmetic, control, memory, input, output — survives, in only mildly modified form, as the layout of every CPU and microcontroller built since. And the unified-memory rule — that instructions and data live in the same writable store — is what makes ordinary software loadable, updatable, and patchable in place. The phrase "stored program" feels invisible now precisely because the alternative, programming a machine by rewiring it, has receded so far that few practitioners ever see it. The credit dispute is also still with us: every modern argument about whose work counts as "the design" of a system, when many hands shape it, descends from the same patent-vs-publication tension the *First Draft* exposed.
 :::
-

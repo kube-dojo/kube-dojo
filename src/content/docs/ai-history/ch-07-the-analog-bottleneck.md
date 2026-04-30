@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Between 1948 and 1949, the neurophysiologist W. Grey Walter built two electronic tortoises — Elmer and Elsie — at the Burden Neurological Institute in Bristol. With two miniature radio tubes, one photocell, one touch contact, and two motors, they explored, sought light, avoided obstacles, and self-recharged. Walter's *Machina speculatrix* proved life-like behaviour did not require a brain. But behaviour was the wiring; revising it meant rebuilding the circuit. In January 1952, von Neumann's Caltech lectures quantified the scaling wall — a multiplexing factor of N ≈ 14,000 to make a 2,500-tube machine reliable enough to run for 8 hours.
+Between 1948 and 1949, the neurophysiologist W. Grey Walter built two electronic tortoises — Elmer and Elsie — at the Burden Neurological Institute in Bristol. With a tiny set of sensors, tubes, motors, and contacts, they explored, sought light, avoided obstacles, and self-recharged. Walter's *Machina speculatrix* proved life-like behaviour did not require a brain, but behaviour was the wiring; revising it meant rebuilding the circuit. In January 1952, von Neumann's Caltech lectures quantified the scaling wall for reliable machines built from unreliable parts.
 :::
 
 <details>
@@ -49,9 +49,9 @@ timeline
 - **Photoelectric cell (photocell)** — A device whose electrical output varies with the light falling on it. The tortoise's "eye" was a single photocell shrouded so that it saw only what lay directly in front of the front drive wheel; voltage from the photocell controlled the first stage of the two-tube amplifier.
 - **Multivibrator** — A two-stage electronic oscillator that flips back and forth between two states. In the tortoise, the obstacle-avoidance circuit converted the ordinary two-stage amplifier into a multivibrator whenever the shell-mounted contact closed; relays RL1 and RL2 then oscillated, producing the characteristic butt–withdraw–sidestep pattern.
 - **Tropism (positive / negative)** — Walter's term for orientation toward (positive) or away from (negative) a stimulus. The tortoise exhibited a positive tropism toward moderate light and a negative tropism away from intense light, with the threshold built into the amplifier's saturation behaviour.
-- **Multiplexing (von Neumann sense)** — A reliability technique in which each computational line is replaced by a bundle of N parallel lines, the true state determined by majority vote among them. Von Neumann's January 1952 Caltech lectures showed that N grows quickly with target reliability — for a 2,500-tube machine running 8 hours, N ≈ 14,000.
-- **Mean free path (between errors)** — Borrowed from physics, where it means the average distance a particle travels between collisions. Von Neumann used the phrase for the average time a computing machine runs before a system-crashing error; his worked example asked for an 8-hour mean free path.
-- **Hardware-as-program** — The arrangement in which a machine's behaviour is fixed by the physical layout of its components: to revise the behaviour, you open the shell and rewire. Elmer and Elsie were the canonical case; the architectural escape route — separating *what* a machine does from *how* its parts are wired — is the subject of Chapter 8.
+- **Multiplexing (von Neumann sense)** — A reliability technique in which each computational line is replaced by a bundle of parallel lines, the true state determined by majority vote among them. Von Neumann's January 1952 Caltech lectures showed that the bundle size grows quickly with target reliability.
+- **Mean free path (between errors)** — Borrowed from physics, where it means the average distance a particle travels between collisions. Von Neumann used the phrase for the average time a computing machine runs before a system-crashing error.
+- **Hardware-as-program** — The arrangement in which a machine's behaviour is fixed by the physical layout of its components. Elmer and Elsie were the canonical case; the architectural escape route — separating *what* a machine does from *how* its parts are wired — is the subject of Chapter 8.
 
 </details>
 
@@ -139,7 +139,7 @@ Instead, von Neumann had mapped the scaling wall. The challenge of building high
 
 The two stories should not be forced into a direct line of influence. The anchored record here contains no evidence that Walter and von Neumann corresponded about the tortoises, or that either man read the other's work at the relevant moment. Their connection is structural. Walter showed how much behaviour could be obtained from a tiny hardwired organism in a real environment. Von Neumann showed how punishing it would be to build a large reliable organism by multiplying unreliable components. Put together, they make the analog bottleneck more precise: small hardwired machines could surprise observers, but reliability and revisability did not scale by simply adding more physical parts.
 
-## The Bridge, Not the Funeral
+## What Came Next
 
 Yet, the realization of this bottleneck did not result in a sudden funeral for Walter's cybernetic work. Walter himself never portrayed the tortoises as a defeated methodology, and Holland's account follows the line forward through CORA, *Machina docilis*, and later IRMA work rather than stopping at Elmer and Elsie (Holland 2003, pp. 2110–2114). In fact, even as the original scrap-built tortoises were struggling to maintain their physical integrity, Walter was already looking beyond them. In the final, forward-looking paragraph of his May 1950 *Scientific American* article, he announced his next conceptual leap.
 
@@ -156,4 +156,3 @@ Ultimately, Walter's electronic tortoises were an essential bridge in the histor
 :::note[Why this still matters today]
 Two of this chapter's themes still shape working systems. *Hardware-as-program* — behaviour fixed by wiring — is still how custom silicon and FPGAs work; the answer Walter could not yet reach, separating logic from physical layout, is now the default in everything from microcontrollers running firmware to GPUs running tensor kernels. *Reliability from unreliable parts* — von Neumann's framing of error as essential rather than incidental — is the design principle of every modern distributed system, from RAID arrays and blockchain consensus to Kubernetes leader election. Walter's tortoises also anticipated a quieter idea: that goal-directed behaviour can come from a small number of well-chosen feedback loops, not from a central controller.
 :::
-
