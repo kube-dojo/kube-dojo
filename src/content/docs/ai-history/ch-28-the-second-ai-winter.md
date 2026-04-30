@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The second AI winter arrived not because AI ideas were proven wrong, but because organizations discovered what it cost to keep them running. Expert systems such as XCON encoded real domain expertise but demanded relentless rule maintenance. The knowledge-acquisition bottleneck made building them slow and expensive. DARPA's Jack Schwartz cut budgets when AI failed to scale. Symbolics lost its hardware moat to cheaper workstations. By 1993, Strategic Computing had been quietly renamed High Performance Computing.
+The second AI winter arrived not because AI ideas were proven wrong, but because organizations discovered what it cost to keep them running. Expert systems encoded real domain expertise but demanded relentless maintenance. Knowledge acquisition made building them slow and expensive. DARPA funding priorities shifted as demonstrations struggled to scale. Specialized AI hardware lost its moat to cheaper workstations. The winter was an infrastructure correction, not a simple intellectual collapse.
 :::
 
 <details>
@@ -15,8 +15,8 @@ The second AI winter arrived not because AI ideas were proven wrong, but because
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Bernd Neumann | — | Author of the 1988 XCON case study documenting 6,200+ rules, annual rule churn, and the rule-order control problem. |
-| Jack Schwartz | — | DARPA ISTO director whose scaling skepticism drove AI and expert-system budget cuts from 1987 onward. |
+| Bernd Neumann | — | Author of the 1988 XCON case study documenting the maintenance problem inside large configuration expert systems. |
+| Jack Schwartz | — | DARPA ISTO director who oversaw the late-1980s budget shift away from AI and expert-system expansion. |
 | John McDermott | — | CMU researcher associated with XCON/R1 and later defense expert-system technology-transfer work. |
 | Gerald L. Atkinson | — | Author of the IAAI-90 account of automated knowledge-acquisition tools for defense technology transfer. |
 | Tohru Moto-oka | — | Late professor credited with initiating Japan's Fifth Generation Computer Systems project in 1982. |
@@ -33,12 +33,12 @@ timeline
     1982 : Japan's Fifth Generation Computer Systems project begins, targeting knowledge-processing computers for the 1990s
     1983 : DARPA launches Strategic Computing partly in response to FGCS competitive pressure
     Mid-1980s : Expert systems spread through industry and defense; knowledge acquisition remains the limiting step
-    1986–1988 : DARPA expert-system funding rises from $3.6M to $5.2M under Amarel
-    1987 : Schwartz review turns skeptical of AI scaling; AI and robotics budgets begin to fall
-    May 1988 : Symbolics lays off 225 of 640 workers nationwide; $24.8M nine-month loss signals hardware market correction
-    1989–1990 : DARPA expert-system funding cut to $3M; AI and robotics budgets fall below $31M
+    1986–1988 : DARPA expert-system funding rises from 3.6 million dollars to 5.2 million dollars under Amarel
+    1987 : DARPA review turns skeptical of AI scaling; AI and robotics budgets begin to fall
+    May 1988 : Symbolics layoffs signal a hardware market correction
+    1989–1990 : DARPA expert-system funding cut to 3 million dollars; AI and robotics budgets fall below 31 million dollars
     1992 : FGCS'92 presents final ten-year results as research prototypes, not commercial products
-    1993 : Strategic Computing vanishes as a DARPA budget line and is transmuted into High Performance Computing
+    1993 : Strategic Computing vanishes as a DARPA budget line amid a broader reallocation
 ```
 
 </details>
@@ -49,9 +49,9 @@ timeline
 - **Expert system** — A software program that encodes human specialist knowledge as explicit if-then rules and uses an inference engine to apply those rules to new cases. Unlike a database, it can draw conclusions, not just retrieve stored facts.
 - **Knowledge acquisition** — The process of extracting informal expertise from human specialists and translating it into machine-readable rules. A persistent bottleneck because tacit professional judgement is difficult to verbalize.
 - **Knowledge-acquisition bottleneck** — The practical limit on how fast expert systems could be built and maintained, caused by the mismatch between the AI technologist's "how" knowledge and the domain expert's "what" knowledge.
-- **Rule maintenance** — The ongoing work of updating, correcting, and reorganizing the rules inside an expert system as the underlying domain changes. At XCON scale (6,200+ rules), this was effectively continuous software engineering.
+- **Rule maintenance** — The ongoing work of updating, correcting, and reorganizing the rules inside an expert system as the underlying domain changes.
 - **Lisp machine** — A workstation built specifically to run Lisp efficiently, optimized for AI software of the 1970s–1980s. Lost its economic advantage once commodity Unix workstations (Sun, Apollo) became fast enough for most AI tasks.
-- **Strategic Computing** — DARPA's 1983–1993 program to connect microelectronics, computer architecture, AI software, and military applications into a path toward machine intelligence; wound down into High Performance Computing by 1993.
+- **Strategic Computing** — DARPA's 1983–1993 program to connect microelectronics, computer architecture, AI software, and military applications into a path toward machine intelligence.
 - **Fifth Generation Computer Systems (FGCS)** — Japan's 1982–1992 national research program, coordinated by MITI, to build knowledge-processing computers using logic programming and parallel inference hardware (KL1/PIM). Its international announcement raised U.S. competitive alarm and helped sell Strategic Computing.
 
 </details>
@@ -264,9 +264,10 @@ scale. New ideas could not be forced into existence by a crash program.
 
 That judgement mattered because it turned optimism into budget pressure. In
 1987, the combined basic and Strategic Computing budgets for AI and robotics
-programs in ISTO were about $47 million. By 1989, Schwartz's budget in those
-areas was under $31 million. Expert systems were cut as well: funding rose to
-$5.2 million in 1988, then fell to $3 million by 1990.
+programs in ISTO were about 47 million dollars. By 1989, Schwartz's budget in
+those areas was under 31 million dollars. Expert systems were cut as well:
+funding rose to 5.2 million dollars in 1988, then fell to 3 million dollars by
+1990.
 
 The cuts were not evenly anti-AI. That nuance is important. Schwartz increased
 support for speech work that was making progress with standard benchmark
@@ -383,10 +384,10 @@ like a necessary foundation for serious AI work.
 The economics changed as workstations improved. A concrete business signal
 appeared at Symbolics in 1988. The Los Angeles Times reported that Symbolics
 laid off 225 of its 640 workers nationwide, including 90 workers at its
-Chatsworth plant. The company expected the layoffs to save $15 million a year.
+Chatsworth plant. The company expected the layoffs to save 15 million dollars a year.
 It had once employed more than 1,000 people; after the cuts it had slightly
-more than 400. The same article reported a $4.9 million quarterly loss and a
-$24.8 million nine-month loss on $65.2 million in revenue. It also identified
+more than 400. The same article reported a 4.9 million dollar quarterly loss and
+a 24.8 million dollar nine-month loss on 65.2 million dollars in revenue. It also identified
 competition from less expensive workstations by Sun Microsystems and Apollo
 Computer.
 
@@ -531,4 +532,3 @@ whose knowledge can scale with the infrastructure around them.
 :::note[Why this still matters today]
 Every AI deployment cycle still hits the same constraints the second winter exposed. Large language models require ongoing prompt engineering, fine-tuning, and guardrail maintenance — a distributed form of the knowledge-acquisition bottleneck. Specialized AI accelerators (TPUs, custom inference chips) face the same commodity-hardware threat that ended Lisp machines: general GPUs keep improving. DARPA's shift from Strategic Computing to benchmarks and measurable transition goals now appears in every enterprise AI evaluation: demos are not deployments. The winter's core lesson — that brittle hand-coded knowledge cannot scale without the infrastructure to build, update, and finance it — is the same lesson driving investment in retrieval, fine-tuning, and data pipelines today.
 :::
-
