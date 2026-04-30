@@ -5,6 +5,77 @@ sidebar:
   order: 42
 ---
 
+:::tip[In one paragraph]
+Before 2006, harnessing GPU arithmetic for non-graphics work required disguising computations as pixel-shader tricks. CUDA ended that era. By marrying Ian Buck's C-like programming model to NVIDIA's G80 unified architecture — with its 128 stream processors, shared on-chip memory, and a grid/block/thread execution hierarchy — NVIDIA converted GPGPU from a research curiosity into a stable, vendor-supported infrastructure platform. The GPU did not stop rendering; it became a parallel compute engine that scientists could program without first becoming graphics specialists.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Ian Buck | — | Stanford PhD researcher, Brook development lead; joined NVIDIA to start CUDA (date conflict: NVIDIA bio says 2004, Buck said 2005). |
+| Pat Hanrahan | — | Stanford graphics professor and Buck's co-author on the 2003 data-parallel computation report and the 2004 Brook SIGGRAPH paper. |
+| John Nickolls | — | NVIDIA director of architecture for GPU computing; co-author of the 2008 ACM Queue CUDA article documenting the programming model. |
+| Michael Garland | — | NVIDIA researcher; co-author of the 2008 ACM Queue CUDA article. |
+| Kevin Skadron | — | University of Virginia professor, on sabbatical with NVIDIA Research; co-author of the 2008 ACM Queue CUDA article. |
+| Jensen Huang | — | NVIDIA CEO; later reporting describes him marketing programmable GPUs to the supercomputing community in 2006. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1999–2008)</strong></summary>
+
+```mermaid
+timeline
+    title CUDA — Key Events
+    1999 : NVIDIA introduces GeForce; GPU branding established
+    2003 : Buck and Hanrahan publish Stanford tech report arguing that a correct abstraction over graphics hardware is necessary; Brook named as implementation
+    2004 : Buck et al. publish "Brook for GPUs" at SIGGRAPH — stream kernels, C extension, compiler/runtime abstraction
+    2004/2005 : Buck moves from Stanford to NVIDIA; CUDA project begins (date conflict in sources)
+    2006 : Summer 2002–2006 G80 hardware design arc culminates; GeForce 8800 GTX launches with 128 unified stream processors
+    2006 : CUDA announced during GeForce 8800 launch week (trade coverage: November 8, 13, 16)
+    2007 : CUDA released to developers; CUDA Programming Guide 1.1 cited in later technical writing
+    2008 : Nickolls, Buck, Garland, Skadron publish "Scalable Parallel Programming with CUDA" in ACM Queue; tens of thousands of developers reported
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Kernel (CUDA)** — A C-like function written once by the programmer but executed simultaneously by thousands of GPU threads. The programmer writes the logic for one thread; CUDA launches it across the entire grid.
+- **Grid / thread block / thread** — The three-level hierarchy CUDA uses to organize parallel work. A kernel launch specifies a grid of blocks; each block contains a set of cooperating threads; threads inside a block can share data and synchronize with barriers. Blocks are independent of one another, which lets the hardware schedule them freely.
+- **SIMT (Single-Instruction, Multiple-Thread)** — CUDA's execution model: the hardware issues the same instruction to many threads at once, each operating on its own data. It differs from classical SIMD in that individual threads can take divergent code paths, at a performance cost.
+- **Shared memory** — A small, fast, on-chip memory space available to all threads within a block. On Tesla-architecture GPUs it maps to low-latency SRAM, making it a software-managed cache that threads can use to cooperate without hitting the slower board DRAM.
+- **Host / device split** — CUDA's term for the CPU-side ("host") and GPU-side ("device") memory spaces. Data must be explicitly copied between them; this transfer cost shapes how CUDA programs are designed, encouraging programmers to keep large computations on the GPU side rather than shuttling results back and forth.
+
+</details>
+
+<details>
+<summary><strong>Architecture sketch</strong></summary>
+
+```mermaid
+flowchart TD
+    %% Form: flowchart TD — REVISED from the Ch41 LR default after Codex Tier 3 review.
+    %% CUDA's grid → block → thread is a nested execution hierarchy with memory scopes
+    %% attached at each level, not a linear data-flow pipeline. TD makes the hierarchy
+    %% legible; LR flattened the threads out of view and put memory at the end as if
+    %% it were a final stage rather than a per-level scope.
+    H["Host (CPU)\nallocates device memory\nlaunches kernel"]
+    H -->|"kernel launch\n(grid + block dims)"| G["Grid\nmany independent\nthread blocks"]
+    G --> B["Thread block\nthreads cooperate via\nshared memory + barriers"]
+    B --> T["Threads\n32-thread warps\nSIMT execution on SMs"]
+    G -.->|"global memory"| GM["Device DRAM\n(per-grid, host-visible)"]
+    B -.->|"shared memory"| SH["On-chip cache\n(per-block)"]
+    T -.->|"registers"| RG["Per-thread"]
+    H <--> GM
+```
+
+The diagram makes visible why the same CUDA program runs faster on a chip with more streaming multiprocessors: blocks are independent, so the hardware schedules them across however many SMs the chip provides. The memory hierarchy attaches at the level that owns each scope (registers per thread, shared memory per block, global DRAM per grid) — the price the abstraction pays to preserve that portability across chips.
+
+</details>
+
 In the early years of the new millennium, the commodity graphics processing unit remained a powerful but deeply awkward machine. The foundational architecture of a programmable graphics processor was explicitly engineered to push pixels to a screen, processing textures, shading surfaces, and rendering complex visual scenes at high frame rates. Yet, the sheer, raw computational horsepower of these specialized cards had steadily begun to tempt scientists and computer science researchers. This growing community was increasingly looking to graphics hardware for the kind of demanding numerical work that had previously been the exclusive domain of central processing units. The central problem, however, was that the gap between what the graphics hardware could theoretically compute and what a software programmer could practically express was immense. If commodity GPUs were ever to break out of their rendering constraints and become broadly useful processing resources, the abstraction bridging the programmer and the silicon had to be correct.
 
 At Stanford University, researchers Ian Buck and Pat Hanrahan observed this escalating tension within the computing field. Their early analysis noted that while researchers were actively attempting to run CPU-style workloads on graphics hardware, the available software surface was rigid and unyielding. The programming models of the era exposed only the specific language of rendering: shaders, textures, graphics application programming interfaces, and rigid graphics-pipeline constraints. A developer who wanted to run a mathematical simulation had to artificially trick the GPU, contorting pure numerical work into a format that the rendering pipeline could understand. Programmers were forced to conceptualize their algorithms in terms of vertices and pixels, rather than utilizing standard computational data structures and loops. The act of mapping a standard mathematical problem onto texture memory and pixel shaders was a complex, counter-intuitive puzzle that deterred widespread adoption.
@@ -72,3 +143,7 @@ Despite this early technical traction, the initial launch was an uncertain push 
 In 2006, CUDA was not designed, marketed, or perceived as an artificial intelligence product. Its immediate targets were high-performance computing, data analysis, product design, and technical simulation. It would take years before a different research community recognized the profound implications of massively parallel, mathematically capable hardware. The importance of CUDA at this point was therefore infrastructural rather than prophetic. It made the GPU programmable through a stable vendor stack, attached that stack to shipping hardware, and gave scientists and engineers a way to write parallel code without first becoming graphics specialists.
 
 CUDA did not invent the concept of general-purpose GPU computing, but it changed the durability of the abstraction layer. By marrying a C-like programming model to a unified hardware architecture, NVIDIA created a vendor-controlled platform that made parallel computation more accessible, stable, and commercially durable. The graphics processor did not stop being a graphics processor, and CUDA did not remove the hard work of parallel programming. It did something narrower and more consequential: it turned GPU computing from a specialist practice into an infrastructure path that other programmers could plausibly follow. In doing so, it established the computational conditions that would, years later, make the next era of technology possible.
+
+:::note[Why this still matters today]
+CUDA's grid/block/thread abstraction is the foundation every modern deep-learning framework targets when it compiles to NVIDIA hardware. PyTorch, TensorFlow, and JAX do not write raw assembly for streaming multiprocessors; they emit CUDA kernels or call cuBLAS and cuDNN — libraries that themselves rely on the same host/device, shared-memory, and barrier-synchronization primitives described in the 2008 ACM Queue article. The proprietary vendor-platform boundary CUDA drew in 2006 is also why ROCm, SYCL, and OpenCL still compete for relevance: every alternative must answer the same abstraction problem CUDA already solved, against an installed base of developers and tools CUDA accumulated first.
+:::
