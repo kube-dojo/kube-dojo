@@ -5,6 +5,60 @@ sidebar:
   order: 34
 ---
 
+:::tip[In one paragraph]
+In March 1989, Tim Berners-Lee wrote a CERN memo to solve a physics-lab information problem — and inadvertently created the largest language corpus in history. By the early 2000s, researchers from Philip Resnik to Michele Banko and Eric Brill had shown that simple models trained on web-scale data outperformed sophisticated models trained on curated collections. The field's centre of gravity shifted from building better learners to acquiring more evidence.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Tim Berners-Lee | — | CERN physicist who authored "Information Management: A Proposal" in March 1989; named the system "World Wide Web" while writing the code in 1990. |
+| Henry Kučera | — | Brown University co-compiler (with W. Nelson Francis) of the Brown Corpus, the one-million-word benchmark that defined "large" in NLP for three decades. |
+| W. Nelson Francis | — | Brown University co-compiler of the Brown Corpus; co-author of the 1967 analytic volume and the 1979 Manual revision. |
+| Philip Resnik | — | University of Maryland linguist; built STRAND (1999), the first system to mine the open Web for parallel bilingual text with measured precision and recall. |
+| Michele Banko / Eric Brill | — | Microsoft Research co-authors of the 2001 ACL paper showing log-linear learning curves to one billion words; demonstrated that the worst learner on a billion words beats the best learner on a million. |
+| Kenneth Church | — | Johns Hopkins computational linguist; key figure in the 1990s empirical revival; authored "A Pendulum Swung Too Far" (2011) warning that data-driven success had marginalised rationalist methods. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1961–2011)</strong></summary>
+
+```mermaid
+timeline
+    title The Accidental Corpus — from Brown to the Web
+    1961 : Source publication year for all 500 Brown Corpus samples
+    1967 : Kučera & Francis publish Computational Analysis of Present-Day American English
+    1979 : Brown Corpus Manual revised and amplified by Francis & Kučera
+    1980 : Berners-Lee writes Enquire at CERN — personal hypertext precursor
+    1989 : March — Berners-Lee drafts Information Management: A Proposal at CERN : System internally called "Mesh"; AI never mentioned
+    1990 : Berners-Lee implements the system; renames "Mesh" to "World Wide Web"
+    1993 : SIGDAT founded; first Workshop on Very Large Corpora held
+    1999 : Resnik publishes STRAND — 2,491 English-French pairs mined from the Web at 100% precision
+    2001 : Banko & Brill ACL paper — log-linear learning curves to one billion words
+    2006 : Google releases Web 1T 5-Gram corpus via LDC — 1.024 trillion tokens
+    2007 : Brants et al. describe distributed LM infrastructure at 2 trillion tokens; introduce Stupid Backoff
+    2009 : Halevy, Norvig, and Pereira publish The Unreasonable Effectiveness of Data
+    2011 : Church publishes A Pendulum Swung Too Far
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Brown Corpus** — A 1,014,312-word collection of edited American English assembled at Brown University from texts published in 1961. Divided into 500 samples across fifteen genre categories, it was the standard NLP benchmark for three decades — "large" by the standards of the era, but the size of a few thick novels.
+- **Empirical revival** — The shift in computational linguistics, already underway by the late 1980s and institutionalised with SIGDAT in 1993, toward statistical and data-driven methods after a period dominated by symbolic AI and generative grammar. The Web amplified the swing; it did not start it.
+- **STRAND** — Philip Resnik's 1999 pipeline for finding parallel bilingual text on the Web without human curators. It used a commercial search index (AltaVista) to find candidate pages, matched them by HTML structure, then filtered by character-level language statistics — producing usable translation pairs at measured precision and recall.
+- **Confusion-set disambiguation** — The task of choosing the correct word from a set of look-alikes (e.g., *then* vs. *than*, *to* vs. *two* vs. *too*). Banko and Brill chose it because ordinary text already carries the "right answer," allowing training data to be generated automatically at any scale.
+- **Log-linear learning curve** — A pattern where each ten-fold increase in training data produces a roughly equal gain in accuracy. Banko and Brill's 2001 result showed this curve held out to one billion words with no sign of flattening — no asymptote in sight at the sizes the field then used.
+- **Stupid Backoff** — A simplified n-gram smoothing technique introduced by Brants et al. (2007) for Google's trillion-token language models. Instead of computing fully normalised probability distributions when a long context is rare, it falls back to a shorter context with a fixed penalty — cheap enough to work at distributed scale, and close enough in quality to elaborate alternatives once data is plentiful.
+- **Web 1T 5-Gram corpus** — The frequency table of English word sequences up to five words long, derived from approximately one trillion tokens of public Web text, released by Google through the Linguistic Data Consortium in September 2006. Exactly one million times larger than the Brown Corpus.
+
+</details>
+
 The decisive shift in natural language processing during the 1990s and early 2000s was not, at its core, a revolution of algorithms. The statistical techniques that would eventually dominate the field—probabilistic models, n-grams, and empirical inference—were already well-understood in principle. Many had been part of the disciplinary toolkit since the 1950s, only to fall out of fashion during the ascendancy of symbolic AI and generative grammar. By the late 1980s, an empirical revival was already underway, but it faced a binding physical constraint: a scarcity of training data so severe that researchers measured progress in thousands of words rather than billions.
 
 What changed was the emergence of a digitized, public, planet-scale corpus that no linguist had budgeted, indexed, or curated. In March 1989, Tim Berners-Lee wrote an internal proposal at CERN for a distributed hypertext system to manage information about particle accelerators and experiments. His document did not mention artificial intelligence, training data, or machine learning. Yet, over the subsequent fifteen years, the World Wide Web became an accidental laboratory. Researchers discovered that this unintended collection of human language reset the constant on the data side of the machine-learning trade-off so dramatically that simple models trained on web-scale data routinely outperformed sophisticated models trained on curated, hand-labeled datasets. This realization reorganised the field’s research priorities, shifting the centre of gravity from the refinement of learners to the acquisition of data.
@@ -112,3 +166,7 @@ This was not a complaint from outside the empirical movement. Church placed hims
 The accidental corpus had reset the constant on the data side of the equation, but it had not resolved the underlying philosophical tensions of the field. It had made simple models extraordinarily powerful, but it had also moved the centre of gravity toward industry players who possessed the massive compute and infrastructure—like Google’s distributed-LM clusters—required to process trillions of tokens.
 
 The era of the accidental corpus ended not with a final victory for empiricism, but with a recognition of its costs. The field had learned to follow the data, and in doing so, it had discovered a world where "more" was indeed "different." The bottleneck was no longer the million words of the Brown Corpus; it was now the infrastructure required to harness the trillions of words that humanity had, quite by accident, left behind on the Web. The next challenge would not be finding the data, but building the machinery to make sense of it—a challenge that would soon lead to the rise of MapReduce and the massive data-centers of the late 2000s.
+
+:::note[Why this still matters today]
+Every large-scale language system trained today inherits the logic this chapter documents: human-authored text harvested from the Web remains the dominant pre-training substrate. The insight that web-scale data reshuffles the ranking of learners is now built into how research benchmarks are designed and how models are compared. The institutional asymmetry Church noticed in 2011 — data-rich organisations outrunning annotation-dependent academic labs — has only deepened. And the unsupervised-learning caveat Banko and Brill embedded in their 2001 paper continues to surface whenever data volume alone fails to close the gap on tasks that require structured understanding.
+:::
