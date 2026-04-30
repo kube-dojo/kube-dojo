@@ -120,9 +120,13 @@ As George Santayana wrote: *"Those who cannot remember the past are condemned to
 
 The journey you're about to take spans more than eight decades—from handwritten calculations in the 1940s to chatbots that can write code and generate art. Along the way, you'll meet brilliant minds who dared to dream of thinking machines, stubborn visionaries who kept working when everyone said neural networks were dead, and entrepreneurs who turned academic research into products used by billions. This isn't just history—it's the foundation for understanding where AI is going next.
 
+> **Want the full story?** This module is the 30-minute on-ramp. KubeDojo's [**History of AI book**](/ai-history/) covers each milestone below across 72 chapters with primary sources, dated timelines, math sidebars, and cross-family-reviewed pull-quotes. Each Part below carries a *Go deeper* aside pointing to the relevant chapters.
+
 ---
 
 ## Part 1: The Pre-Dawn (1943-1955)
+
+> **Go deeper:** [Ch02 the universal machine (Turing)](/ai-history/ch-02-the-universal-machine/) · [Ch03 the physical bridge (Shannon)](/ai-history/ch-03-the-physical-bridge/) · [Ch05 the neural abstraction (McCulloch-Pitts)](/ai-history/ch-05-the-neural-abstraction/) · [Ch10 the imitation game](/ai-history/ch-10-the-imitation-game/)
 
 ### The First Artificial Neuron (1943)
 
@@ -206,6 +210,8 @@ Turing went further and actually wrote a chess program by hand—**before comput
 
 ## Part 2: The Birth of AI (1956)
 
+> **Go deeper:** [Ch11 the summer AI named itself (Dartmouth)](/ai-history/ch-11-the-summer-ai-named-itself/) · [Ch12 Logic Theorist & GPS](/ai-history/ch-12-logic-theorist-gps/) · [Ch13 the list processor (LISP)](/ai-history/ch-13-the-list-processor/)
+
 ### The Dartmouth Conference
 
 In the summer of 1956, a small group of researchers gathered at Dartmouth College for a two-month workshop. The proposal, written by **John McCarthy**, **Marvin Minsky**, **Nathaniel Rochester**, and **Claude Shannon**, coined the term "Artificial Intelligence":
@@ -250,6 +256,8 @@ McCarthy chose "Artificial Intelligence" partly to **distinguish the field from 
 ---
 
 ## Part 3: The Golden Age (1956-1969)
+
+> **Go deeper:** [Ch14 the Perceptron](/ai-history/ch-14-the-perceptron/) · [Ch15 the gradient descent concept](/ai-history/ch-15-the-gradient-descent-concept/) · [Ch16 the Cold War blank check](/ai-history/ch-16-the-cold-war-blank-check/)
 
 ### The Perceptron (1957)
 
@@ -366,6 +374,8 @@ Why were they so wrong? They underestimated:
 
 ## Part 4: The First AI Winter (1969-1980)
 
+> **Go deeper:** [Ch17 the Perceptron's fall](/ai-history/ch-17-the-perceptron-s-fall/) · [Ch18 the Lighthill devastation](/ai-history/ch-18-the-lighthill-devastation/) · [Ch19 rules, experts, and the knowledge bottleneck](/ai-history/ch-19-rules-experts-and-the-knowledge-bottleneck/)
+
 Think of AI Winters like ice ages for technology—long periods where progress slows to a crawl, funding evaporates, and researchers either abandon the field or rebrand their work to survive. Just as ice ages were caused by specific triggers (orbital changes, volcanic eruptions), AI Winters had specific causes: overpromising, underfunding, and crushing critiques that made the entire field seem hopeless. Understanding these winters is crucial because the conditions that caused them—hype cycles followed by disappointment—can happen again.
 
 ### The Perceptrons Bombshell (1969)
@@ -452,6 +462,8 @@ Success: Performed as well as human experts
 
 ## Part 5: The Expert Systems Boom (1980-1987)
 
+> **Go deeper:** [Ch21 the rule-based fortune (XCON)](/ai-history/ch-21-the-rule-based-fortune/) · [Ch22 the LISP machine bubble](/ai-history/ch-22-the-lisp-machine-bubble/) · [Ch23 the Japanese threat](/ai-history/ch-23-the-japanese-threat/)
+
 ### Expert Systems Go Commercial
 
 In the early 1980s, AI came roaring back—but in a different form. **Expert systems** promised to capture human expertise and package it in software:
@@ -522,6 +534,8 @@ These machines had specialized hardware for running Lisp efficiently, with featu
 
 ## Part 6: The Second AI Winter (1987-1993)
 
+> **Go deeper:** [Ch28 the second AI winter](/ai-history/ch-28-the-second-ai-winter/)
+
 ### The Collapse
 
 The expert systems boom collapsed even faster than it had grown:
@@ -591,6 +605,8 @@ This solved the problem Minsky and Papert had identified—but it would take dec
 ---
 
 ## Part 7: The Machine Learning Renaissance (1990s-2000s)
+
+> **Go deeper:** [Ch24 the math that waited (backprop)](/ai-history/ch-24-the-math-that-waited-for-the-machine/) · [Ch29 support vector machines](/ai-history/ch-29-support-vector-machines/) · [Ch33 Deep Blue](/ai-history/ch-33-deep-blue/) · [Ch34 the accidental corpus](/ai-history/ch-34-the-accidental-corpus/) · [Ch37 distributing the compute (Hadoop)](/ai-history/ch-37-distributing-the-compute/) · [Ch40 data becomes infrastructure (ImageNet)](/ai-history/ch-40-data-becomes-infrastructure/)
 
 ### The Quiet Revolution
 
@@ -717,6 +733,8 @@ SVMs had solid theoretical foundations (from Vapnik's statistical learning theor
 
 ## Part 8: The Deep Learning Revolution (2006-2012)
 
+> **Go deeper:** [Ch41 the graphics hack (GPGPU)](/ai-history/ch-41-the-graphics-hack/) · [Ch42 CUDA](/ai-history/ch-42-cuda/) · [Ch43 the ImageNet smash (AlexNet)](/ai-history/ch-43-the-imagenet-smash/)
+
 Think of the deep learning revolution like the Wright Brothers' first flight—a moment when decades of failed attempts suddenly gave way to success, and everything that seemed impossible became merely difficult. The neural networks that had been written off as "dead ends" in the 1990s turned out to be just waiting for enough data and compute to reach their potential. Once those conditions were met, progress accelerated at a pace that shocked even the true believers.
 
 ### Hinton's Breakthrough (2006)
@@ -796,6 +814,8 @@ All three had to reach critical mass together.
 ---
 
 ## Part 9: The Modern Era (2012-Present)
+
+> **Go deeper:** [Ch44 the latent space (Word2Vec)](/ai-history/ch-44-the-latent-space/) · [Ch50 Attention Is All You Need](/ai-history/ch-50-attention-is-all-you-need/) · [Ch52 bidirectional context (BERT)](/ai-history/ch-52-bidirectional-context/) · [Ch53 few-shot learning (GPT-2/3)](/ai-history/ch-53-the-dawn-of-few-shot-learning/) · [Ch55 the scaling laws](/ai-history/ch-55-the-scaling-laws/) · [Ch57 the alignment problem (RLHF)](/ai-history/ch-57-the-alignment-problem/) · [Ch59 the product shock (ChatGPT)](/ai-history/ch-59-the-product-shock/)
 
 ### The Deep Learning Tsunami (2012-2017)
 
@@ -1051,6 +1071,8 @@ Hinton, LeCun, and Bengio won the **2018 Turing Award** (the "Nobel Prize of Com
 
 ## Part 11: The AI Winters—Lessons Learned
 
+> **Go deeper:** [Ch17 the Perceptron's fall](/ai-history/ch-17-the-perceptron-s-fall/) · [Ch18 the Lighthill devastation](/ai-history/ch-18-the-lighthill-devastation/) · [Ch28 the second AI winter](/ai-history/ch-28-the-second-ai-winter/)
+
 ### What Caused the Winters?
 
 ```
@@ -1100,6 +1122,8 @@ HYPE → OVERPROMISING → UNDERDELIVERING → BACKLASH → WINTER
 ---
 
 ## Part 12: The Bitter Lesson
+
+> **Go deeper:** [Ch55 the scaling laws](/ai-history/ch-55-the-scaling-laws/) — covers Sutton's Bitter Lesson with the verbatim quote and the Kaplan equations that grounded it.
 
 ### Richard Sutton's Insight (2019)
 
