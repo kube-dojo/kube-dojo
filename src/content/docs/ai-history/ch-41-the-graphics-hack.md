@@ -5,6 +5,69 @@ sidebar:
   order: 41
 ---
 
+:::tip[In one paragraph]
+Between 2004 and 2005, researchers Kyoung-Su Oh, Keechul Jung, Dave Steinkraus, Ian Buck, and Patrice Y. Simard proved that consumer graphics cards could accelerate neural-network training — not because GPUs were designed for machine learning, but because matrix operations could be disguised as pixel-shader rendering. The hack delivered real speedups (up to 20-fold for Oh and Jung; 3.3x for Steinkraus et al.) while also making clear that the graphics API was the wrong long-term abstraction.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Dave Steinkraus | — | Co-author of the 2005 ICDAR paper applying DirectX 9 shaders to machine-learning primitives; reported a 3.3x speedup on a GeForce 6800 Ultra. |
+| Ian Buck | — | Co-author of both Steinkraus et al. 2005 and Brook for GPUs (2004); appeared in both the ML-GPU and stream-abstraction lines of the chapter. |
+| Patrice Y. Simard | — | Co-author of Steinkraus et al. 2005; the paper's handwriting-recognition setting supplied the CPU-bottleneck and speedup anchors. |
+| Kyoung-Su Oh | — | Co-author of Oh and Jung 2004; mapped MLP inner products to matrix multiplication on an ATI Radeon 9700 Pro and reported up to a 20-fold speedup. |
+| Keechul Jung | — | Co-author of Oh and Jung 2004; same neural-network GPU implementation and speedup evidence. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2004–2007)</strong></summary>
+
+```mermaid
+timeline
+    title The Graphics Hack — Key Events
+    2004 : Oh and Jung publish "GPU implementation of neural networks" — MLP as matrix multiplication on ATI Radeon 9700 Pro
+    2004 : Buck et al. publish "Brook for GPUs" — stream kernels as an abstraction over graphics hardware
+    2005 : Steinkraus, Buck, and Simard publish "Using GPUs for Machine Learning Algorithms" at ICDAR — DirectX 9 shaders, 3.3x speedup
+    2007 : Owens et al. publish GPGPU survey in Computer Graphics Forum — retrospective synthesis of general computation on graphics hardware
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Pixel shader** — A small program that the graphics hardware runs once for every pixel generated in a scene. Because millions of pixels are processed independently and simultaneously, the chip runs many copies of the shader in parallel. Researchers exploited this to run the same numerical operation over many data elements at once.
+- **GPGPU (General-Purpose computing on Graphics Processing Units)** — Using a graphics card to perform computations that have nothing to do with rendering images. In the shader era, this required disguising the computation as graphics operations; later, dedicated APIs like CUDA removed the disguise.
+- **Texture** — In graphics, a 2-D image applied to a surface to give it color or detail. In the GPGPU hack, textures were repurposed as flat numerical arrays: a matrix of weights or input data packed into the color channels of an image the GPU could read at high speed.
+- **Stream kernel (Brook's framing)** — Brook's abstraction for a computation applied identically across an ordered collection of data elements (a "stream"). The term recast the GPU's pixel-shader invocations as a general-purpose parallel loop, hiding the graphics vocabulary beneath a more mathematical one.
+- **AGP bus** — The Accelerated Graphics Port, the physical link between a PC's CPU and its graphics card in this era. Its bandwidth was asymmetric: fast in the CPU-to-GPU direction (sending textures and geometry) and much slower reading back from the GPU. This asymmetry forced researchers to keep weights and intermediate results on the card throughout training.
+- **Multilayer perceptron (MLP)** — A class of neural network organized into layers, where each unit in a layer computes a weighted sum of the previous layer's outputs. Oh and Jung showed that these weighted sums can be organized as matrix multiplication, which is the mathematical bridge that made GPU acceleration possible for their workload.
+
+</details>
+
+<details>
+<summary><strong>Architecture sketch</strong></summary>
+
+```mermaid
+flowchart LR
+    %% Form: flowchart LR — the GPGPU data flow is a left-to-right pipeline: inputs enter as
+    %% textures, pass through fixed graphics stages, and numerical results emerge as rendered pixel
+    %% values. flowchart LR reflects this directionality more naturally than TD (which implies
+    %% hierarchy) or sequenceDiagram (which adds a time-axis that obscures the structural point).
+    A["Input data\n(weights & activations\nencoded as textures)"] --> B["Vertex shader\n(maps texture coordinates\nto geometry)"]
+    B --> C["Rasteriser\n(generates per-pixel\ninvocations)"]
+    C --> D["Pixel shader\n(computes inner product\nper output element)"]
+    D --> E["Render target\n(frame buffer stores\nnumerical results)"]
+    E --> F["Read-back\n(results retrieved\nfrom GPU memory)"]
+```
+
+The diagram shows how matrix arithmetic travels through a graphics pipeline designed for image rendering. Input data enters disguised as textures; the rasteriser uses a full-screen rectangle to trigger one pixel-shader invocation per output element; the shader performs the numerical work; and the frame buffer stores results that can be read back as computed values rather than pixels.
+
+</details>
+
 ## The CPU Ceiling
 
 In the early 2000s, the ambition to build more capable machine-learning systems collided with a hard physical limit. The algorithms for training neural networks were well understood, but the processors tasked with executing them were not designed for the sheer volume of arithmetic required. As Dave Steinkraus, Ian Buck, and Patrice Y. Simard detailed in their 2005 work on handwriting recognition, the time required to train a model had become a major bottleneck for the field. In their specific setting, pushing for better accuracy naturally demanded more training data and larger, more complex models. Yet, expanding the dataset or the network size directly compounded the training time. They described neural-network training as a weeks-long problem in that workload, with some cases stretching beyond three weeks.
@@ -86,3 +149,7 @@ The era of the graphics hack served as a critical proof of concept. It demonstra
 Yet, this period also proved that the software abstraction was entirely insufficient for the future of the field. Researchers had demonstrated that neural networks could be trained on a GPU, but they had to fight the architecture at every step to do so. Brook's effort to compile stream programs into shader code stood as a vital abstraction bridge, proving that it was conceptually possible to hide the graphics plumbing from the programmer. Brook presented the GPU as a stream processor, arguing forcefully that the immense power of the hardware needed to be exposed through a more general programming system rather than raw graphics APIs. The hardware had been validated; the next essential step was dismantling the graphics disguise entirely.
 
 That is the historical hinge. The early GPU machine-learning papers did not show that graphics hardware by itself would create the next era of artificial intelligence, and they did not eliminate the need for better algorithms, larger datasets, or cleaner software. They showed something narrower and durable: the economics of consumer graphics had produced a parallel numerical engine that machine-learning researchers could already use, provided they were willing to speak in the strange dialect of textures and shaders. The proof was powerful precisely because the method was so uncomfortable. Once the performance was visible, the discomfort became impossible to ignore.
+
+:::note[Why this still matters today]
+The graphics hack established the principle that commodity parallel hardware — hardware built for a completely different market — can be repurposed for machine-learning arithmetic at a fraction of the cost of custom accelerators. That principle now shapes every layer of modern AI infrastructure: the practice of mapping tensor operations onto hardware pipelines, the economic logic of riding game-console manufacturing curves, and the design tension between general-purpose programmability and hardware efficiency. Every time a training framework selects a device kernel, it is resolving the same abstraction problem Brook first made visible in 2004.
+:::
