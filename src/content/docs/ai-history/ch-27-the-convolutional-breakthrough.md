@@ -6,6 +6,65 @@ sidebar:
   order: 27
 ---
 
+:::tip[In one paragraph]
+In 1989, Yann LeCun and Bell Labs colleagues trained a backpropagation network to read handwritten zip codes from U.S. mail — but only by constraining the architecture. Local receptive fields, shared weights, and subsampling encoded what a fully connected network would have to rediscover: nearby pixels matter together, and useful detectors should apply across positions. The 1998 LeNet-5 paper extended that insight into a full document-recognition pipeline reading millions of bank checks. Neural networks became practical when architecture stopped pretending all inputs were shapeless vectors.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Kunihiko Fukushima | — | NHK researcher; originator of the neocognitron (1980), the hierarchical, shift-tolerant visual-recognition model that forms the architectural prehistory of convolutional networks. |
+| Yann LeCun | — | Bell Labs researcher; lead author on the 1989 zip-code recognizer and the 1998 LeNet-5 / document-recognition synthesis. |
+| Bernhard Boser | — | Bell Labs co-author on the 1989 and 1990 handwritten zip-code and digit recognition papers. |
+| Lawrence D. Jackel | — | Bell Labs co-author on the 1989 and 1990 papers; neural-network researcher in the Bell Labs environment. |
+| Leon Bottou | — | Co-author of the 1998 "Gradient-Based Learning Applied to Document Recognition" synthesis paper. |
+| Yoshua Bengio | — | Co-author of the 1998 synthesis paper and later deep-learning retrospective; role in 1998 should not be read through later fame. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1980–1998)</strong></summary>
+
+```mermaid
+timeline
+    title The Convolutional Breakthrough, 1980–1998
+    1980 : Fukushima publishes the neocognitron — hierarchical, shift-tolerant visual recognition using S-cells and C-cells
+    1986 : Backpropagation revival makes supervised training of multilayer networks salient again
+    1989 : LeCun et al. publish "Backpropagation Applied to Handwritten Zip Code Recognition" — USPS Buffalo digits, 7,291/2,007 train/test, local receptive fields, shared weights
+    1990 : LeCun et al. NIPS account corroborates architecture and DSP throughput on AT&T DSP-32C hardware
+    1998 : LeCun, Bottou, Bengio, Haffner publish LeNet-5 and document-recognition synthesis — MNIST assembled, bank-check pipeline reading millions of checks per day
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Local receptive field** — Each detector in a convolutional layer looks at only a small patch of the input image, not the whole picture at once. This means the network learns what small shapes look like before combining them into larger evidence.
+- **Shared weights (weight sharing)** — The same set of learned parameters (filter) is applied at every position across the image. A single edge detector trained on one part of the image automatically works in other parts, reducing the total number of independent parameters the network must learn.
+- **Subsampling / pooling** — After feature detection, the spatial map is reduced in resolution, so small shifts in where a feature appears have less effect on downstream layers. The 1989 paper called this undersampling; later literature uses pooling.
+- **Feature map** — The output of applying one filter (one shared-weight detector) across all positions in the image — a new image whose pixel values record how strongly each location matched that filter.
+- **Parameter reduction** — Because weights are shared across positions, a convolutional network needs far fewer independent parameters than a fully connected network of comparable visual reach. In 1989, the zip-code recognizer used 9,760 independent parameters.
+- **Neocognitron** — Fukushima's 1980 hierarchical neural-network model for visual recognition. It used S-cells (feature-selective) and C-cells (position-tolerant) in a cascade, achieving shift tolerance without backpropagation-style supervised training.
+
+</details>
+
+<details>
+<summary><strong>The math, on demand</strong></summary>
+
+The key mathematical ideas behind the 1989 zip-code network and LeNet-5.
+
+- **Discrete convolution (one feature map):** For a filter $w$ of size $k \times k$ applied to input $x$, the output at position $(i,j)$ is $y_{ij} = \sum_{m=0}^{k-1}\sum_{n=0}^{k-1} w_{mn} \cdot x_{i+m,\, j+n}$. The same $w$ is used at every $(i,j)$: this is the weight-sharing claim in one equation.
+- **Weight-sharing parameter count:** A fully connected layer mapping an $H \times W$ input to an $H' \times W'$ output needs $H \cdot W \cdot H' \cdot W'$ parameters. A single $k \times k$ convolutional filter needs only $k^2$ regardless of image size — the 1989 paper's 9,760 figure reflects this compression.
+- **Subsampling (average pooling):** $s_{ij} = \frac{1}{p^2}\sum_{m=0}^{p-1}\sum_{n=0}^{p-1} y_{i \cdot p + m,\, j \cdot p + n}$. Reducing spatial resolution by factor $p$ makes the representation less sensitive to exact feature position.
+- **Gradient flow through a convolutional layer:** Backpropagation still applies — the chain rule gives $\frac{\partial L}{\partial w_{mn}} = \sum_{i,j} \frac{\partial L}{\partial y_{ij}} \cdot x_{i+m,\,j+n}$. Crucially, the gradient with respect to $w$ is a sum over all positions, so every patch in the image contributes to learning the same filter. This is why examples in one part of the image help train behavior everywhere.
+- **Translation tolerance from shared weights:** If the same filter $w$ fires on a stroke at position $(i,j)$, shifting the stroke to $(i+\delta, j)$ produces the same filter response at position $(i+\delta, j)$ — the feature map shifts, but the learned response does not change. Subsampling then absorbs small $\delta$, giving the architecture its tolerance to slight position variation.
+- **LeNet-5 compute context (1998):** The 1998 paper notes that LeNet-5 required about $10^8$ multiplications per classification pass — feasible on late-1990s workstations but not on 1989 hardware. This is why the mature architecture waited for stronger machines; architectural constraint reduced cost but did not abolish it.
+
+</details>
+
 # Chapter 27: The Convolutional Breakthrough
 
 A handwritten digit is not just a list of numbers. It is a shape. Nearby
@@ -103,6 +162,10 @@ degrees of freedom differently. Instead of learning an unrelated detector for
 every location, it learns a smaller number of detectors that can be reused
 across the image. The architecture reduces the number of independent choices
 the optimizer has to make.
+
+:::tip[Plain reading]
+Expressiveness is what a model could represent; learnability is whether the available data can pin down the right settings. A fully connected network spends separate knobs at many locations, while a convolutional network reuses the same detector across the image. That reuse gives each learned parameter more evidence to learn from.
+:::
 
 That reduction also changes the meaning of data. If one learned edge detector
 can apply across positions, then examples in one part of the image help train
@@ -429,6 +492,10 @@ computer vision still relied on the conviction that architecture should
 respect image structure. Chapter 27 is where that conviction becomes a
 practical historical object.
 
+:::note[Why this still matters today]
+Every modern vision model — from ResNet to Vision Transformers — inherits the LeNet discipline: architecture should encode what the domain tells you about structure. Shared-weight convolution is still the default feature extractor for images, video, and spatially structured sensor data. The parameter-reduction logic that made 1989 hardware viable now scales to billions of parameters on GPUs. The pipeline insight — data normalization, learned representation, rejection thresholds, downstream integration — describes every production vision system deployed today. LeNet did not become a museum piece. It became the template.
+:::
+
 ## Sources
 
 ### Primary
@@ -475,3 +542,4 @@ practical historical object.
 > Fukushima, the 1989/1990 Bell Labs digit recognizers, later MNIST context,
 > and the 1998 LeNet-5 document pipeline are kept in separate chronological
 > lanes.
+
