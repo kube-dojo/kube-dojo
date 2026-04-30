@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In May 1997, Feng-hsiung Hsu's chess-specific ASIC — twelve years in the making — powered Deep Blue to a 3.5-2.5 match victory over world champion Garry Kasparov, the first such defeat under classical tournament conditions. The win came from 480 custom chess chips searching 100-200 million positions per second, not from machine learning or general intelligence. Deep Blue was an engineering triumph over one game and an architectural dead end: its silicon chess knowledge could not be reused for any other domain.
+In May 1997, Feng-hsiung Hsu's chess-specific hardware lineage culminated in Deep Blue's 3.5-2.5 match victory over world champion Garry Kasparov, the first such defeat under classical tournament conditions. The win came from custom chips, search engineering, and grandmaster-tuned evaluation, not from modern machine learning or general intelligence.
 :::
 
 <details>
@@ -16,7 +16,7 @@ In May 1997, Feng-hsiung Hsu's chess-specific ASIC — twelve years in the makin
 |---|---|---|
 | Feng-hsiung Hsu | 1959– | Chip designer; originator of the ChipTest → Deep Thought → Deep Blue ASIC lineage; chip architect for both Deep Blue I (1996) and Deep Blue II (1997). |
 | Murray Campbell | — | AI lead; CMU classmate of Hsu's; joined IBM in late 1989; primary post-match spokesperson and retrospective source. |
-| A. Joseph Hoane Jr. | — | Search-software lead; co-author on all major Deep Blue papers; conducted the overnight bug-fix after Game 1. |
+| A. Joseph Hoane Jr. | — | Search-software lead; co-author on all major Deep Blue papers; central to the match-time software work. |
 | Joel Benjamin | — | US Chess Champion; IBM grandmaster consultant from late 1996; curated the opening book and stress-tested Deep Blue's evaluation function. |
 | Garry Kasparov | 1963– | Reigning Classical World Chess Champion 1985-2000; opponent in the 1996 Philadelphia match (won 4-2) and the 1997 New York rematch (lost 2.5-3.5). |
 | Monty Newborn | — | McGill computer-science professor; ICCA organizer; chronicler of the rematch in *Deep Blue: An Artificial Intelligence Milestone* (2003). |
@@ -37,7 +37,7 @@ timeline
     February 1996 : First Kasparov-Deep Blue match, Philadelphia — Game 1 first computer win in regulation; Kasparov wins match 4-2
     1996-1997 : New chess chip designed; Joel Benjamin hired as grandmaster consultant
     April 1997 : 1997 system operational (Apr 1); code frozen (Apr 15); trucked to Manhattan (Apr 26-28)
-    May 3-11 1997 : Rematch at Equitable Center, NYC — Game 1 (bug, Kasparov wins); Game 2 (panic-time 36.axb5, Deep Blue wins); Games 3-5 drawn; Game 6 miniature (Deep Blue 3.5-2.5)
+    May 3-11 1997 : Rematch at Equitable Center, NYC — Kasparov wins Game 1; Deep Blue wins Games 2 and 6; Games 3-5 drawn
     September 1997 : IBM retires Deep Blue from chess competition
 ```
 
@@ -46,10 +46,10 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-- **ASIC (application-specific integrated circuit)** — A chip designed to do exactly one job rather than general computation. Deep Blue's chess chips were ASICs: their move generator, evaluation function, and search logic were burned into silicon for chess only and could not be reprogrammed for any other task.
+- **ASIC (application-specific integrated circuit)** — A chip designed to do one specialized job rather than general computation.
 - **Alpha-beta search** — A pruning procedure that makes tree search tractable by discarding branches that cannot affect the final result once a better option is known. Deep Blue's hardware implemented a minimum-window variant; the software layer handled the top plies with selective extensions and null-move pruning.
 - **Ply** — One move by one player. A twelve-ply search looks six full move-pairs ahead. Deep Blue's non-extended search reached roughly twelve plies; forcing lines could be extended to about forty plies.
-- **Panic time** — Deep Blue's search-control rule for when its evaluation of a candidate move dropped sharply as search depth increased. The program triggered extra wall-clock time to deepen the search before committing, producing the six-minute deliberation behind Game 2's 36.axb5.
+- **Panic time** — Deep Blue's search-control rule for spending extra time when a candidate move looked worse at greater depth.
 - **Evaluation function** — The scoring formula that assigns a numerical value to a chess position. Deep Blue's evaluation function included hundreds of features (material, king safety, pawn structure, mobility, etc.) with weights adjustable from software — tuned by Joel Benjamin in the months before the rematch.
 - **Grandmaster-level performance** — Defined operationally in the Fredkin Prize framework as sustaining an Elo rating above 2500 across a statistically meaningful game set. Deep Blue's 1997 performance rating was approximately 2875 — higher than Kasparov's ~2815 over the six-game sample.
 

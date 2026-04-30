@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In March 1989, Tim Berners-Lee wrote a CERN memo to solve a physics-lab information problem — and inadvertently created the largest language corpus in history. By the early 2000s, researchers from Philip Resnik to Michele Banko and Eric Brill had shown that simple models trained on web-scale data outperformed sophisticated models trained on curated collections. The field's centre of gravity shifted from building better learners to acquiring more evidence.
+In March 1989, Tim Berners-Lee wrote a CERN memo to solve a physics-lab information problem — and inadvertently created the largest language corpus in history. By the early 2000s, web-scale text had begun to change what natural language researchers could measure, train, and compare. The field's centre of gravity shifted from building better learners to acquiring more evidence.
 :::
 
 <details>
@@ -17,8 +17,8 @@ In March 1989, Tim Berners-Lee wrote a CERN memo to solve a physics-lab informat
 | Tim Berners-Lee | — | CERN physicist who authored "Information Management: A Proposal" in March 1989; named the system "World Wide Web" while writing the code in 1990. |
 | Henry Kučera | — | Brown University co-compiler (with W. Nelson Francis) of the Brown Corpus, the one-million-word benchmark that defined "large" in NLP for three decades. |
 | W. Nelson Francis | — | Brown University co-compiler of the Brown Corpus; co-author of the 1967 analytic volume and the 1979 Manual revision. |
-| Philip Resnik | — | University of Maryland linguist; built STRAND (1999), the first system to mine the open Web for parallel bilingual text with measured precision and recall. |
-| Michele Banko / Eric Brill | — | Microsoft Research co-authors of the 2001 ACL paper showing log-linear learning curves to one billion words; demonstrated that the worst learner on a billion words beats the best learner on a million. |
+| Philip Resnik | — | University of Maryland linguist; built STRAND (1999), an early system for mining parallel bilingual text from the open Web. |
+| Michele Banko / Eric Brill | — | Microsoft Research co-authors of the 2001 ACL paper that tested how more data changed disambiguation performance. |
 | Kenneth Church | — | Johns Hopkins computational linguist; key figure in the 1990s empirical revival; authored "A Pendulum Swung Too Far" (2011) warning that data-driven success had marginalised rationalist methods. |
 
 </details>
@@ -36,8 +36,8 @@ timeline
     1989 : March — Berners-Lee drafts Information Management: A Proposal at CERN : System internally called "Mesh"; AI never mentioned
     1990 : Berners-Lee implements the system; renames "Mesh" to "World Wide Web"
     1993 : SIGDAT founded; first Workshop on Very Large Corpora held
-    1999 : Resnik publishes STRAND — 2,491 English-French pairs mined from the Web at 100% precision
-    2001 : Banko & Brill ACL paper — log-linear learning curves to one billion words
+    1999 : Resnik publishes STRAND for mining bilingual text from the Web
+    2001 : Banko & Brill ACL paper tests data scale in disambiguation
     2006 : Google releases Web 1T 5-Gram corpus via LDC — 1.024 trillion tokens
     2007 : Brants et al. describe distributed LM infrastructure at 2 trillion tokens; introduce Stupid Backoff
     2009 : Halevy, Norvig, and Pereira publish The Unreasonable Effectiveness of Data
@@ -51,11 +51,11 @@ timeline
 
 - **Brown Corpus** — A 1,014,312-word collection of edited American English assembled at Brown University from texts published in 1961. Divided into 500 samples across fifteen genre categories, it was the standard NLP benchmark for three decades — "large" by the standards of the era, but the size of a few thick novels.
 - **Empirical revival** — The shift in computational linguistics, already underway by the late 1980s and institutionalised with SIGDAT in 1993, toward statistical and data-driven methods after a period dominated by symbolic AI and generative grammar. The Web amplified the swing; it did not start it.
-- **STRAND** — Philip Resnik's 1999 pipeline for finding parallel bilingual text on the Web without human curators. It used a commercial search index (AltaVista) to find candidate pages, matched them by HTML structure, then filtered by character-level language statistics — producing usable translation pairs at measured precision and recall.
-- **Confusion-set disambiguation** — The task of choosing the correct word from a set of look-alikes (e.g., *then* vs. *than*, *to* vs. *two* vs. *too*). Banko and Brill chose it because ordinary text already carries the "right answer," allowing training data to be generated automatically at any scale.
-- **Log-linear learning curve** — A pattern where each ten-fold increase in training data produces a roughly equal gain in accuracy. Banko and Brill's 2001 result showed this curve held out to one billion words with no sign of flattening — no asymptote in sight at the sizes the field then used.
-- **Stupid Backoff** — A simplified n-gram smoothing technique introduced by Brants et al. (2007) for Google's trillion-token language models. Instead of computing fully normalised probability distributions when a long context is rare, it falls back to a shorter context with a fixed penalty — cheap enough to work at distributed scale, and close enough in quality to elaborate alternatives once data is plentiful.
-- **Web 1T 5-Gram corpus** — The frequency table of English word sequences up to five words long, derived from approximately one trillion tokens of public Web text, released by Google through the Linguistic Data Consortium in September 2006. Exactly one million times larger than the Brown Corpus.
+- **STRAND** — Philip Resnik's 1999 pipeline for finding parallel bilingual text on the Web without human curators.
+- **Confusion-set disambiguation** — The task of choosing the correct word from a set of look-alikes, such as *then* vs. *than*.
+- **Log-linear learning curve** — A pattern where each ten-fold increase in training data produces a roughly equal gain in accuracy.
+- **Stupid Backoff** — A simplified n-gram smoothing technique designed to work cheaply at very large scale.
+- **Web 1T 5-Gram corpus** — A Google-released frequency table of English word sequences derived from public Web text.
 
 </details>
 

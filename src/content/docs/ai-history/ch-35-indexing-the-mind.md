@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1998, Stanford PhD candidates Sergey Brin and Lawrence Page reframed web search as an academic citation problem: each hyperlink was a vote, and a page's importance was the principal eigenvector of the link graph. Their PageRank algorithm and the *Anatomy* paper crystallized a new search engine. By 2003, Google had scaled this to more than 15,000 commodity PCs — tolerating failure in software rather than hardware — and Barroso, Dean, and Hölzle's *IEEE Micro* paper turned that pattern into a documented engineering discipline.
+In 1998, Stanford PhD candidates Sergey Brin and Lawrence Page reframed web search as an academic citation problem: hyperlinks could signal authority across the graph. Their PageRank algorithm and the *Anatomy* paper crystallized a new search engine. By 2003, Google had turned that ranking problem into a production-scale cluster discipline documented by Barroso, Dean, and Hölzle.
 :::
 
 <details>
@@ -34,8 +34,8 @@ timeline
     1997 : AltaVista claims ~20 million queries/day : Anatomy paper notes "only one of the top four search engines finds itself"
     1998 : PageRank paper dated January 29 on cover : Anatomy paper presented at WWW7, Brisbane, April : Google prototype indexes 24 million pages on Solaris/Linux at google.stanford.edu
     1999 : PageRank formally published as Stanford InfoLab Tech Report 1999-66
-    2002 : RackSaver.com rack of 88 dual-CPU Xeon servers priced at ~$278K vs. ~$758K for comparable single high-end server
-    2003 : Barroso, Dean, Hölzle publish Web Search for a Planet in IEEE Micro vol. 23 no. 2 : more than 15,000 commodity PCs in production : GFS paper corroborates design-for-failure thesis at SOSP
+    2002 : RackSaver.com rack of 88 dual-CPU Xeon servers priced around 278,000 dollars vs. 758,000 dollars for comparable single high-end server
+    2003 : Barroso, Dean, Hölzle publish Web Search for a Planet in IEEE Micro vol. 23 no. 2 : GFS paper corroborates design-for-failure thesis at SOSP
 ```
 
 </details>
@@ -44,11 +44,11 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **PageRank** — An algorithm that scores a web page's importance by examining which other pages link to it, and weighting each link by the importance of the linking page. Importance is computed globally across all pages simultaneously, not page by page.
-- **Eigenvector (principal)** — In a matrix equation, the eigenvector is the vector that points in the same direction after the matrix is applied. PageRank is the principal eigenvector of Google's link-transition matrix: the unique stable distribution of "attention" that the link graph settles into after repeated computation.
-- **Random surfer model** — An intuitive interpretation of PageRank: imagine a user who clicks links at random and occasionally "gets bored" and jumps to any page. The PageRank of a page is the probability that this bored surfer lands on it at any given moment.
-- **Damping factor** — The probability (0.85 in the original PageRank experiments) that the random surfer follows a link rather than jumping to a random page. Its complement, 0.15, is the jump probability (`||E||_1 = 0.15` in the paper).
-- **Commodity cluster** — A computing infrastructure built from large numbers of inexpensive, off-the-shelf PCs rather than a small number of high-end, fault-tolerant servers. Reliability is achieved through software-level replication rather than hardware redundancy.
-- **Warehouse-scale computing** — The engineering discipline, crystallized by the 2003 Barroso-Dean-Hölzle paper and formalized in Barroso and Hölzle's 2009 book, that treats the entire datacenter — not the individual server — as the unit of computing.
+- **Eigenvector (principal)** — In a matrix equation, the vector that points in the same direction after the matrix is applied.
+- **Random surfer model** — An intuitive interpretation of PageRank based on a user moving through links and sometimes jumping elsewhere.
+- **Damping factor** — The parameter that balances following links against jumping to another page in the random-surfer model.
+- **Commodity cluster** — A computing infrastructure built from many inexpensive, off-the-shelf machines.
+- **Warehouse-scale computing** — The engineering discipline that treats a datacenter as one coordinated computing system.
 
 </details>
 
@@ -126,7 +126,7 @@ Google’s engineers, including Urs Hölzle, Luiz André Barroso, Jeffrey Dean, 
 
 They codified this approach into explicit design principles. First, they prioritized software-level reliability over hardware fault tolerance. Instead of buying a server that would never crash, they built a software stack that expected machines to fail. Second, they used replication for both throughput and fault tolerance. By keeping "dozens of copies of the Web" across their clusters, they could serve more queries and survive the loss of hardware without treating every individual machine as precious. Third, they prioritized price/performance over peak performance. They would rather have many cheap, slightly slower CPUs than one expensive, top-of-the-line processor.
 
-The cost comparison provided in the 2003 paper was a definitive argument for this new model. In late 2002, a rack from RackSaver.com containing 88 dual-CPU 2GHz Intel Xeon servers, each with 2GB of RAM and an 80GB disk, cost about $278,000. A comparable high-end x86 server with eight CPUs, 64 gigabytes of RAM, and 8 terabytes of disk cost approximately $758,000. This meant the high-end alternative cost nearly three times as much while offering roughly one twenty-second the CPU count. For an application that could be divided across shards and replicas, the arithmetic was devastating.
+The cost comparison provided in the 2003 paper was a definitive argument for this new model. In late 2002, a rack from RackSaver.com containing 88 dual-CPU 2GHz Intel Xeon servers, each with 2GB of RAM and an 80GB disk, cost about 278,000 dollars. A comparable high-end x86 server with eight CPUs, 64 gigabytes of RAM, and 8 terabytes of disk cost approximately 758,000 dollars. This meant the high-end alternative cost nearly three times as much while offering roughly one twenty-second the CPU count. For an application that could be divided across shards and replicas, the arithmetic was devastating.
 
 This choice forced the creation of a new kind of engineering discipline: warehouse-scale computing. Because the clusters were built from cheap Celeron and Pentium III PCs, hardware failure was no longer an unlikely accident; it was a statistical certainty. The contemporaneous *Google File System* paper stated the premise bluntly: component failures were normal rather than exceptional in a file system built from inexpensive commodity hardware. Its largest deployed clusters already held hundreds of terabytes across thousands of disks on more than a thousand machines. The search cluster described by Barroso, Dean, and Hölzle pushed the same design assumption into query serving at still larger scale.
 
