@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1982, Japan's Ministry of International Trade and Industry launched the Fifth Generation Computer Systems project, creating ICOT to pursue knowledge information processing on logic-programming languages and highly parallel inference machines. The Western reaction was larger than the project: observers read a coherent national research bet as a strategic threat that might leapfrog existing software and hardware advantages. FGCS built real machines, languages, and researchers, but did not deliver the popular AI revolution — a recurring caution about mistaking a research hypothesis for an industrial forecast.
+In 1982, Japan's MITI launched the Fifth Generation Computer Systems project and created ICOT to pursue knowledge information processing on logic-programming languages and parallel inference machines. The Western reaction was larger than the project: observers read a national research bet as a strategic threat that might leapfrog existing software and hardware advantages. FGCS built real machines, languages, and researchers, but did not produce the popular AI revolution.
 :::
 
 <details>
@@ -15,11 +15,11 @@ In 1982, Japan's Ministry of International Trade and Industry launched the Fifth
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Kazuhiro Fuchi | — | ICOT Research Center director; articulated the original predicate-logic/kernel-language philosophy in his 1984 keynote and distinguished the project's actual goals from its exaggerated public image in his 1992 retrospective. |
+| Kazuhiro Fuchi | — | ICOT Research Center director; articulated the original predicate-logic/kernel-language philosophy in his 1984 keynote. |
 | H. Kinoshita | — | Director-General of MITI's Machinery and Information Industries Bureau; framed FGCS within Japan's software crisis and the ambition for an advanced information society in his 1984 keynote. |
-| Koichi Furukawa | — | ICOT researcher and author of TR-228 (1986/1987); supplied the mid-project technical frame — knowledge information processing above logic programming above highly parallel architecture and VLSI. |
-| Takashi Kurozumi | — | ICOT author of the 1992 ten-year overview; documented the 1979–1981 preliminary study, 1982 launch, staged R&D, PSI/PIM hardware progression, and budget. |
-| H. Gallaire | — | External evaluator at the 1992 FGCS evaluation workshop; offered the balanced outside verdict: limited real-world application use, but strong technical work in parallel OS, hardware, and logic programming. |
+| Koichi Furukawa | — | ICOT researcher and author of TR-228 (1986/1987), a key mid-project technical account. |
+| Takashi Kurozumi | — | ICOT author of the 1992 ten-year overview; documented the preliminary study, launch, staged R&D, and budget. |
+| H. Gallaire | — | External evaluator at the 1992 FGCS evaluation workshop. |
 | T. Moto-oka | — | Conference and project figure; edited the 1982 FGCS proceedings that announced the project to international audiences. |
 
 </details>
@@ -31,13 +31,13 @@ In 1982, Japan's Ministry of International Trade and Industry launched the Fifth
 timeline
     title Japan's Fifth Generation Computer Systems Project, 1979–1995
     1979 : Fifth Generation Computer Research Committee and subcommittee established : Preliminary study stage begins
-    October 1981 : FGCS'81 conference announces committee results to international researchers : Fuchi later says this generated a sensational, exaggerated worldwide image
+    October 1981 : FGCS'81 conference announces committee results to international researchers
     1982 : MITI launches the FGCS national project : ICOT created as the core research institute
-    1982–1984 : Initial stage — R&D on basic fifth-generation technologies : Prolog on DEC machines as the working environment
+    1982–1984 : Initial stage — R&D on basic fifth-generation technologies using existing machines
     1984 : FGCS'84 conference — Fuchi restates original philosophy; Kinoshita frames software-crisis rationale
-    1985–1988 : Intermediate stage — small and medium subsystems : ESP on PSI/SIMPOS as the main environment
-    1988 : Multi-PSI and PIMOS demonstrated at FGCS'88
-    1989–1992 : Final stage — KL1, Multi-PSI/PIM, PIMOS prototype system : Stage extended to four years for evaluation
+    1985–1988 : Intermediate stage — small and medium subsystems and a workstation environment
+    1988 : Parallel inference work demonstrated at FGCS'88
+    1989–1992 : Final stage — prototype system work and evaluation; stage extended to four years
     1992 : FGCS'92 marks project end; free disclosure of ICOT software announced : Evaluation workshop collects international assessments
     April 1993 : Two-year FGCS Follow-on Project begins : KLIC ports KL1 to Unix-based sequential and parallel machines
     1994–1995 : ICOT Free Software distributed; ICOT closes March 1995
@@ -553,5 +553,3 @@ future of AI for a plan announced at a conference.
 :::note[Why this still matters today]
 Every decade produces a version of the FGCS story: a government-backed AI initiative, a credible technical bet, and a threat narrative larger than the project. Today's practitioners encounter the same pattern in national AI strategies, large-model race coverage, and claims that one architecture will make existing software irrelevant. The FGCS legacy offers two calibration points: research programs can produce real technical output — languages, machines, trained people — without delivering the industrial revolution observers feared; and software tied to proprietary hardware spreads less easily than software portable to commodity platforms. Both lessons remain live.
 :::
-
-
