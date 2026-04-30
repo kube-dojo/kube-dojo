@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1989, George Cybenko proved that finite sums of sigmoidal units can uniformly approximate any continuous function on the unit hypercube. The same year, Hornik, Stinchcombe, and White showed multilayer feedforward networks are universal approximators, and Funahashi gave a parallel continuous-mapping result. The 1989 cluster did not make neural networks easy to train; it ended a representational doubt left by the perceptron backlash, giving researchers mathematical permission to keep building hidden-layer systems.
+In 1989, several approximation results made multilayer neural networks mathematically plausible again. George Cybenko, Hornik/Stinchcombe/White, and Ken-ichi Funahashi each showed, in different forms, that networks with nonlinear hidden units could approximate broad classes of continuous functions. The results did not make neural networks easy to train; they answered a representational doubt left by the perceptron backlash.
 :::
 
 <details>
@@ -15,7 +15,7 @@ In 1989, George Cybenko proved that finite sums of sigmoidal units can uniformly
 
 | Name | Lifespan | Role |
 |---|---|---|
-| George Cybenko | — | Author of the 1989 sigmoidal-superposition theorem; proved finite sums of sigmoidal units are dense in continuous functions on compact domains. |
+| George Cybenko | — | Author of a 1989 theorem showing sigmoidal neural networks had broad approximation power. |
 | Kurt Hornik | — | Co-author of the 1989 "Multilayer feedforward networks are universal approximators" paper in *Neural Networks*. |
 | Maxwell Stinchcombe | — | Co-author of Hornik/Stinchcombe/White 1989; contributed the multi-author framing of universal approximation for feedforward networks. |
 | Halbert White | — | Co-author of Hornik/Stinchcombe/White 1989; brought econometric and statistical-learning context to the universal-approximation result. |
@@ -45,12 +45,12 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Feedforward network** — A neural network in which information flows in one direction only: from inputs, through one or more hidden layers, to the output. No cycles, no feedback loops.
-- **Universal approximator** — A model family is a universal approximator if, for any continuous target function on a compact domain and any desired error tolerance, some member of the family can come within that tolerance. The phrase describes representational richness, not training ease.
+- **Universal approximator** — A model family that can approximate every target in a specified function class to any desired tolerance, under the theorem's assumptions.
 - **Uniform approximation** — A guarantee that a network can get close to a target function everywhere on the domain simultaneously, not just on average or at scattered points. Cybenko's theorem is phrased in terms of uniform approximation.
 - **Sigmoidal function** — A smooth, bounded, S-shaped activation function that is nondecreasing and approaches distinct limits as its input goes to positive and negative infinity. The logistic function is the canonical example.
 - **Compact domain** — A closed and bounded region, such as the unit hypercube $[0,1]^n$. Compactness is a key assumption in classical universal-approximation theorems; it rules out unbounded or open domains.
-- **Density** — In approximation theory, a family of functions is dense in a larger class if every function in that class can be approximated arbitrarily closely by some member of the family. Density is what the theorem proves; it is not the same as saying a specific network exists that is ready to use.
-- **Existence result** — A mathematical statement that guarantees some object with a desired property exists, without providing a method to find or construct it. Universal approximation is an existence result: it promises a suitable network is in the family, not that training will locate it.
+- **Density** — In approximation theory, a family of functions is dense in a larger class if every function in that class can be approximated arbitrarily closely by some member of the family.
+- **Existence result** — A mathematical statement that guarantees some object with a desired property exists, without providing a method to find or construct it.
 
 </details>
 
@@ -63,8 +63,7 @@ The 1989 results established that multilayer networks with nonlinear activations
 - **Cybenko 1989 — discriminatory functions (Theorem 2):** A sigmoidal function $\sigma$ is discriminatory: if $\int \sigma(\mathbf{w}^\top \mathbf{x} + \theta) \, d\mu(\mathbf{x}) = 0$ for all $\mathbf{w}, \theta$ implies $\mu = 0$, then finite sums of $\sigma$-units are dense in $C(I_n)$. This is the technical engine that makes Theorem 1 possible.
 - **Hornik, Stinchcombe, and White 1989:** Any nonconstant, bounded, and continuous activation function makes a standard multilayer feedforward network a universal approximator of measurable functions (in a suitable $L^p$ sense). The result generalises beyond the sigmoidal special case.
 - **Funahashi 1989 — Theorem 1:** For any continuous mapping $f : K \to \mathbb{R}^m$ on a compact set $K \subset \mathbb{R}^n$ and any $\varepsilon > 0$, there exists a three-layer neural network (input, one hidden layer, output) that approximates $f$ to within $\varepsilon$ uniformly on $K$.
-- **Barron 1993 — approximation rate:** For functions whose Fourier transform satisfies a first-moment bound $C_f = \int |\omega| |\hat{f}(\omega)| \, d\omega < \infty$, a one-hidden-layer sigmoidal network with $n$ units achieves integrated squared error bounded by $O(C_f^2 / n)$. This is an efficiency result: it says how fast approximation error can fall as units are added, and shows that some well-behaved functions are approximated efficiently — but it does not remove the computational cost of training.
-- **Key separations the math enforces:** (1) $\exists$ a network that approximates $\not\Rightarrow$ gradient descent finds it; (2) approximation on compact domain $\not\Rightarrow$ generalisation from finite samples; (3) "finite" network $\not\Rightarrow$ computationally affordable network.
+- **Barron 1993 — approximation rate:** For functions whose Fourier transform satisfies a first-moment bound $C_f = \int |\omega| |\hat{f}(\omega)| \, d\omega < \infty$, a one-hidden-layer sigmoidal network with $n$ units achieves integrated squared error bounded by $O(C_f^2 / n)$.
 
 </details>
 
@@ -554,4 +553,3 @@ Every modern deep-learning framework rests, at some level, on the assurance the 
 > as proof that neural networks can learn any task. The sources support a
 > careful capacity claim under assumptions; they do not support a blanket story
 > about training, generalization, or practical deployment.
-

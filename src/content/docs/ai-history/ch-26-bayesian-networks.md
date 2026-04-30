@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Bayesian networks gave AI a disciplined infrastructure for reasoning under uncertainty. Judea Pearl's 1986 belief-network paper showed how directed acyclic graphs could store expert knowledge as conditional probability tables and propagate evidence locally through singly connected networks. Pearl's 1988 book and independent work by Lauritzen and Spiegelhalter placed probability — not symbolic rules alone — at the centre of expert-system reasoning. The price: exact inference in general networks is NP-hard.
+Bayesian networks gave AI a disciplined infrastructure for reasoning under uncertainty. Judea Pearl's belief-network work showed how directed acyclic graphs could store expert knowledge as conditional probability tables and use graph structure to update beliefs. Pearl's 1988 book and independent work by Lauritzen and Spiegelhalter placed probability — not symbolic rules alone — at the centre of expert-system reasoning. The framework made uncertainty structured, while leaving computation as the central bill.
 :::
 
 <details>
@@ -18,7 +18,7 @@ Bayesian networks gave AI a disciplined infrastructure for reasoning under uncer
 | Judea Pearl | 1936– | Computer scientist at UCLA; developed belief-network propagation (1986) and authored *Probabilistic Reasoning in Intelligent Systems* (1988), establishing probabilistic graphs as a core AI framework. |
 | Steffen L. Lauritzen | — | Statistician; co-author of the 1988 local-computation paper on graphical probabilistic structures and their application to expert systems. |
 | David J. Spiegelhalter | 1953– | Statistician; co-author with Lauritzen (1988); helped broaden the graphical-model framework beyond Pearl's AI context. |
-| Gregory F. Cooper | — | AI researcher; proved in 1990 that probabilistic inference in general Bayesian belief networks is NP-hard, setting the computational bounds for the field. |
+| Gregory F. Cooper | — | AI researcher whose 1990 complexity result clarified the computational bounds of Bayesian-network inference. |
 | Eugene Charniak | 1946– | AI researcher; wrote the 1991 *AI Magazine* tutorial "Bayesian Networks without Tears," making the framework accessible to a broad audience. |
 
 </details>
@@ -30,10 +30,10 @@ Bayesian networks gave AI a disciplined infrastructure for reasoning under uncer
 timeline
     title Bayesian Networks, 1980s–1991
     1970s-early 1980s : Rule-based expert systems grow, using informal certainty factors and quasi-probabilistic schemes (MYCIN, PROSPECTOR, CASNET, INTERNIST) to handle uncertainty
-    1986 : Pearl publishes "Fusion, propagation, and structuring in belief networks" — establishes DAG belief networks and local propagation in singly connected networks
+    1986 : Pearl publishes "Fusion, propagation, and structuring in belief networks" — establishes DAG belief networks and local propagation
     1988 : Pearl publishes Probabilistic Reasoning in Intelligent Systems — book-length framework for probabilistic reasoning and belief updating by network propagation
-    1988 : Lauritzen and Spiegelhalter publish local computations with probabilities on graphical structures — expert-system context, MUNIN, and probabilistic exactness argument
-    1990 : Cooper proves probabilistic inference in general Bayesian belief networks is NP-hard, requiring special-case and approximation algorithms
+    1988 : Lauritzen and Spiegelhalter publish local computations with probabilities on graphical structures for expert-system reasoning
+    1990 : Cooper publishes a complexity result that bounds what exact Bayesian-network inference can promise
     1991 : Charniak publishes "Bayesian Networks without Tears" — accessible tutorial anchoring the framework in the AI community
 ```
 
@@ -44,10 +44,10 @@ timeline
 
 - **Directed acyclic graph (DAG)** — A network of nodes connected by arrows where no path loops back to its starting point. In a Bayesian network, each arrow means "this node can directly influence that one."
 - **Conditional probability table (CPT)** — A small table attached to each node listing the probability of each state that node can be in, given every combination of its parents' states. The tables together define the model's joint distribution.
-- **Belief propagation** — Pearl's algorithm for updating probability estimates across a network when new evidence arrives. In singly connected networks, messages pass locally through the graph rather than requiring a global recalculation.
-- **Singly connected network** — A Bayesian network in which there is at most one undirected path between any two nodes. This structure allows efficient local message passing; multiply connected networks require more expensive inference methods.
-- **Conditional independence** — Two variables are conditionally independent given a third when knowing the third makes the first two irrelevant to each other. Bayesian networks encode these assumptions in graph structure, compressing what would otherwise be an enormous joint probability table.
-- **NP-hard inference** — Cooper's 1990 result: for general (multiply connected) Bayesian networks, computing exact probabilities is at least as hard as the hardest problems in NP. Practical systems need restricted topologies or approximation algorithms.
+- **Belief propagation** — An algorithmic family for updating probability estimates across a network when new evidence arrives, using the graph to route messages.
+- **Singly connected network** — A Bayesian network in which there is at most one undirected path between any two nodes.
+- **Conditional independence** — Two variables are conditionally independent given a third when knowing the third makes the first two irrelevant to each other.
+- **NP-hard inference** — A complexity label meaning a problem is at least as hard as the hardest problems in NP.
 
 </details>
 
@@ -533,4 +533,3 @@ Bayesian networks are the direct ancestor of modern probabilistic graphical mode
 > uncertainty, tutorial definitions, and computational limits are carried by
 > Lauritzen/Spiegelhalter, Charniak, and Cooper, where page anchors are
 > available in the research contract.
-
