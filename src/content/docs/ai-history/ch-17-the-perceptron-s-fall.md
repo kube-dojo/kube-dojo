@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The perceptron's fall was not one theorem killing neural networks. Frank Rosenblatt's Mark I — a real electromechanical machine backed by the Office of Naval Research — learned simple patterns from examples. Minsky and Papert's 1969 *Perceptrons* proved that local, single-layer systems could not compute global predicates such as connectedness. The winter effect came from how that precise result was absorbed by a field whose funding and authority had already shifted toward symbolic AI.
+The perceptron's fall was not one theorem killing neural networks. Frank Rosenblatt's Mark I — a real electromechanical machine backed by the Office of Naval Research — learned simple patterns from examples. Minsky and Papert's 1969 *Perceptrons* exposed severe limits in a defined class of local, single-layer systems. The winter effect came from how that precise result was absorbed by a field whose funding and authority had already shifted toward symbolic AI.
 :::
 
 <details>
@@ -16,11 +16,11 @@ The perceptron's fall was not one theorem killing neural networks. Frank Rosenbl
 | Name | Lifespan | Role |
 |---|---|---|
 | Frank Rosenblatt | — | Cornell Aeronautical Laboratory psychologist; originator of perceptron theory and director of the ONR/RADC-funded Mark I program. |
-| Marvin Minsky | — | MIT AI leader; co-author of *Perceptrons* (1969). Earlier neural-net researcher who argued that learning machines need prior structure. |
+| Marvin Minsky | — | MIT AI leader; co-author of *Perceptrons* (1969). Earlier neural-net researcher as well as symbolic-AI institution builder. |
 | Seymour Papert | — | Co-author of *Perceptrons*; later explicitly addressed whether he and Minsky had tried to "kill connectionism." |
 | Marvin Denicoff | — | ONR program officer; quoted by Olazaran on the funding scale gap between ONR support for Rosenblatt and ARPA's larger backing of symbolic AI. |
-| Mikel Olazaran | — | Historian and sociologist whose 1996 *Social Studies of Science* analysis separates the technical proof from the "official history" built around it. |
-| Leon Bottou | — | Author of the 2017 MIT Press foreword to *Perceptrons*; provides the key framing that neural-net research became unfashionable and that revival came only with PDP/backprop. |
+| Mikel Olazaran | — | Historian and sociologist whose 1996 *Social Studies of Science* analysis is a key later source on the controversy. |
+| Leon Bottou | — | Author of the 2017 MIT Press foreword to *Perceptrons*; key later commentator on the book's reception. |
 
 </details>
 
@@ -45,10 +45,10 @@ timeline
 
 - **Perceptron** — A computing element that applies weights to features of its input, sums them, and outputs a yes/no decision above a threshold. Rosenblatt's machine adjusted those weights by correcting its own errors during training.
 - **Predicate** — A function that returns true or false about its input. Minsky and Papert asked which predicates a perceptron can compute given that its parts each see only a limited portion of the input field.
-- **Connectedness** — The topological property of a figure whose marked pixels form a single unbroken region. A global predicate: no fixed-size local test can always answer it correctly as the image grows.
+- **Connectedness** — A central example in *Perceptrons*, used to show how an apparently simple visual property can require nonlocal information.
 - **Order (of a perceptron)** — Minsky and Papert's measure of how many input pixels a single partial predicate may examine simultaneously. Higher order means larger and more expensive local tests; the required order grows with problem size for parity and connectedness.
 - **Locality/diameter-limited** — A perceptron whose partial predicates each look only at a bounded neighborhood of the input field. Minsky and Papert's proofs apply specifically to this constrained architecture, not to all possible multilayer systems.
-- **Prior structure** — The representational bias built into a learning system before training begins — the choice of what features to look at, how they combine, and what the architecture can represent. Minsky and Papert's core argument: without appropriate prior structure, even a trainable system scales badly.
+- **Prior structure** — The representational bias built into a learning system before training begins: features, combinations, and architectural constraints.
 
 </details>
 
@@ -308,12 +308,6 @@ computations in some abstract sense, but still have little chance of solving a
 high-order problem efficiently. A big bag of possible features is not the same
 as the right representation.
 
-:::note[The 1969 hinge]
-> "But we do believe that significant learning at a significant rate presupposes some significant prior structure."
-
-The critique was not anti-learning; it shifted the burden from trainable weights to architecture and task-matched features.
-:::
-
 That argument was not anti-AI. It was a demand for theory. It said that learning
 machines could not be judged only by small demonstrations or by biological
 analogy. They needed mathematical accounts of what their architectures could
@@ -519,7 +513,6 @@ The theorem did not close the door. It marked the threshold. For a generation,
 most of AI chose not to walk through it.
 
 :::note[Why this still matters today]
-Every modern deep-learning system still answers the question Minsky and Papert posed: what prior structure makes learning tractable? Convolutional layers encode spatial locality and translation invariance. Attention mechanisms build a different structure for sequence context. Scaling laws depend on the relationship between data, parameters, and compute. The specific architecture of the perceptron lost, but the argument from the perceptron controversy — that trainable weights alone do not guarantee useful generalization — remains the working assumption behind every architecture choice in contemporary machine learning.
+Every modern deep-learning system still answers the question Minsky and Papert posed: what built-in assumptions make learning tractable? Convolutional layers encode spatial locality and translation invariance. Attention mechanisms build a different structure for sequence context. Scaling laws depend on the relationship between data, parameters, and compute. The specific architecture of the perceptron lost, but the argument from the perceptron controversy — that trainable weights alone do not guarantee useful generalization — remains the working assumption behind every architecture choice in contemporary machine learning.
 :::
-
 

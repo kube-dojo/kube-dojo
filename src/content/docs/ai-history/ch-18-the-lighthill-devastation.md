@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1972 the UK Science Research Council asked Cambridge mathematician Sir James Lighthill to survey artificial intelligence. His report separated the field into application automation (A), computer-based brain studies (C), and a disputed bridge category (B) covering general-purpose AI. His argument — that category B had failed to escape combinatorial explosion and deserved no independent funding — triggered a decade-long loss of confidence in British AI. Researchers continued, but under colder labels; the field returned in the 1980s only by rebranding itself as Intelligent Knowledge-Based Systems under the Alvey Programme.
+In 1972 the UK Science Research Council asked Cambridge mathematician Sir James Lighthill to survey artificial intelligence. His report divided the field in a way that isolated general-purpose AI as the weakest funding case, then used combinatorial explosion to argue that broad promises had outrun results. The result was not extinction, but a decade of colder confidence, tighter labels, and narrower expectations for British AI.
 :::
 
 <details>
@@ -16,9 +16,9 @@ In 1972 the UK Science Research Council asked Cambridge mathematician Sir James 
 | Name | Lifespan | Role |
 |---|---|---|
 | Sir James Lighthill | 1924–1998 | Cambridge applied mathematician; commissioned outsider who wrote the 1972 survey that divided AI into categories A, B, and C. |
-| N. S. Sutherland | 1927–1998 | Sussex experimental psychologist; argued that Lighthill's category B should be understood as basic science, not a vague bridge activity. |
-| Donald Michie | 1923–2007 | Edinburgh machine intelligence leader; challenged the classification, demanded US consultation, and made the infrastructure argument for importing DEC System 10 machines. |
-| R. M. Needham | 1931–2003 | Cambridge computer scientist; partially agreed with Lighthill's conclusions, adding balance to the rebuttal. |
+| N. S. Sutherland | 1927–1998 | Sussex experimental psychologist and key respondent in the 1973 published symposium. |
+| Donald Michie | 1923–2007 | Edinburgh machine intelligence leader and key respondent in the 1973 symposium and BBC debate. |
+| R. M. Needham | 1931–2003 | Cambridge computer scientist and key respondent in the 1973 published symposium. |
 | H. C. Longuet-Higgins | 1923–2004 | Edinburgh theoretical psychologist; responded to the report, providing a middle voice between Sutherland and Michie. |
 | Terry Winograd | 1946– | Author of SHRDLU; cited by Lighthill as a remarkable table-top-world achievement that nonetheless illustrated the limits of narrow domain constraint. |
 
@@ -39,7 +39,7 @@ timeline
     June 1973 : BBC broadcasts the Lighthill Controversy debate at the Royal Institution with Lighthill, Michie, Gregory, and McCarthy
     1970s : UK AI continues under tighter application framing; Chilton overview reports a loss of confidence lasting almost a decade
     September 1982 : Research Area Review Meeting on Intelligent Knowledge-Based Systems — the next major UK AI-related effort
-    1980s : IKBS becomes part of the Alvey Programme, reframing AI under an industrially legible policy label
+    1980s : Alvey Programme reframes AI-related work in industrial and application-linked terms
 ```
 
 </details>
@@ -47,11 +47,11 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-- **ABC classification** — Lighthill's three-part map of AI: Category A (Advanced Automation, work tied to real application domains), Category C (computer-based study of the central nervous system), and Category B (the disputed bridge activity — general-purpose AI including search, language, and robotics). The classification made B the hardest to justify to funders.
+- **ABC classification** — Lighthill's administrative map of AI, used to separate application work, brain-modeling work, and the disputed general-purpose middle. The details matter in Section 2.
 - **Combinatorial explosion** — The problem that arises when a program's search space grows faster than any feasible computation can handle. As a problem widens (more words, more pieces, more states), the number of possibilities multiplies exponentially. Lighthill used this as his central technical argument against general AI.
 - **Universe of discourse** — The bounded world a program operates within. A chess game or a table-top of blocks is a universe of discourse. Lighthill's point was that AI programs worked only when their universe was carefully fenced, and that extending the fence to real-world scope remained unsolved.
 - **Science Research Council (SRC)** — The UK government body responsible for funding academic science in the early 1970s. Its decision to commission Lighthill's review, and the policy weight it gave to the report, made the review consequential beyond its page count.
-- **IKBS / Alvey** — Intelligent Knowledge-Based Systems; the label UK science policy adopted in the early 1980s when it returned to AI-related funding. The Alvey Programme framed AI in more industrial and application-linked terms, deliberately avoiding the open-ended ambitions Lighthill had criticised. IKBS is the evidence that AI survived the winter by changing its promises.
+- **IKBS / Alvey** — The early-1980s UK policy label and programme through which AI-related work re-entered industrial funding debates. Section 6 returns to why the label mattered.
 
 </details>
 
@@ -499,5 +499,4 @@ learning to make smaller promises with better machinery behind them.
 :::note[Why this still matters today]
 Every modern AI funding cycle inherits the Lighthill structure. Funders still ask whether a system works only inside a bounded domain or whether it generalises — the combinatorial explosion argument recurs each time a language model meets an edge case it was not trained on. Research programmes still survive by anchoring claims to applications rather than general intelligence; the rebranding from "AI" to "machine learning" to "foundation models" each time optimism overshoots results repeats the IKBS move. Knowing that this cycle is structural, not new, helps practitioners calibrate expectations and distinguish genuine capability advances from re-labelled promises.
 :::
-
 

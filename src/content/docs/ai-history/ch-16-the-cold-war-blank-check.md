@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The "blank check" early symbolic AI received was not literally blank. Before ARPA/IPTO, RAND, ONR, Air Force, and MIT military-lab channels had already funded Logic Theorist, GPS, and the MIT AI Project. What changed after October 1962 was scale, coherence, and tolerance for long horizons. Licklider's IPTO translated command-and-control anxiety into center-based funding for machines, languages, time-sharing, and graduate communities rather than narrowly specified weapons. By 1969 the Mansfield Amendment had begun to tighten the bargain.
+Early symbolic AI did not move from poverty to patronage in one leap. RAND, ONR, Air Force, and MIT military-lab channels were already supporting theorem proving, GPS, and the MIT AI Project. Licklider's IPTO changed the funding ecology: center-scale commitments, shared machines, time-sharing, symbolic languages, and graduate communities could now be justified as future command-and-control infrastructure. By 1969 the Mansfield Amendment had begun to tighten that bargain.
 :::
 
 <details>
@@ -15,10 +15,10 @@ The "blank check" early symbolic AI received was not literally blank. Before ARP
 | Name | Lifespan | Role |
 |---|---|---|
 | J. C. R. Licklider | 1915–1990 | Author of "Man-Computer Symbiosis" (March 1960). First director of ARPA's Information Processing Techniques Office (IPTO) from October 1962. The chapter's central protagonist; translated command-and-control anxiety into center-based funding. |
-| Jack Ruina | 1923–2015 | ARPA director who hired Licklider and personally approved the $3-million Project MAC commitment within days of receiving the proposal. |
+| Jack Ruina | 1923–2015 | ARPA director who hired Licklider and backed Project MAC as one of IPTO's early center-scale commitments. |
 | Allen Newell & Herbert A. Simon | 1927–1992 / 1916–2001 | Carnegie Tech / RAND. Their Logic Theorist (1956) and GPS (1959) were the field's earliest defense-funded symbolic-AI demonstrations. |
-| John McCarthy & Marvin Minsky | 1927–2011 / 1927–2016 | Co-founders of the MIT Artificial Intelligence Project in September 1957 — initially "a room, two programmers, a secretary, and a keypunch machine." McCarthy later founded the Stanford AI Lab on ARPA support beginning June 1963. |
-| Senator Mike Mansfield | 1903–2001 | Sponsor of Public Law 91-121 §203, signed November 19, 1969. The "Mansfield Amendment" required defense research funds to relate to a "direct and apparent" military function. |
+| John McCarthy & Marvin Minsky | 1927–2011 / 1927–2016 | Co-founders of the MIT Artificial Intelligence Project in September 1957. McCarthy later founded the Stanford AI Lab on ARPA support beginning June 1963. |
+| Senator Mike Mansfield | 1903–2001 | Sponsor of Public Law 91-121 §203, signed November 19, 1969, which narrowed how defense research funds had to justify military relevance. |
 | Ivan Sutherland & Robert Taylor | — | Licklider's successors at IPTO. Carried the centers-of-excellence philosophy forward into graphics, networking, and resource-sharing. |
 
 </details>
@@ -32,9 +32,9 @@ timeline
     October 4 1957 : Sputnik launch shocks U.S. national-security planners
     February 7 1958 : ARPA created in the Sputnik aftermath
     March 1960 : Licklider publishes "Man-Computer Symbiosis" — the conceptual vocabulary that would later open the defense budget to symbolic computing
-    October 1962 : Licklider begins as ARPA/IPTO director with a combined IPTO + Behavioral Sciences budget of about $11 million
+    October 1962 : Licklider begins as ARPA/IPTO director with a combined IPTO + Behavioral Sciences budget of about 11 million dollars
     July 1 1963 : Project MAC begins at MIT as a major IPTO experiment in interactive, time-shared computing : Stanford AI Project also begins on ARPA support (June 15, 1963)
-    November 19 1969 : Public Law 91-121 §203 (Mansfield Amendment) — defense research funds must have a "direct and apparent relationship to a specific military function or operation"
+    November 19 1969 : Public Law 91-121 §203 (Mansfield Amendment) requires tighter military-relevance justification for defense research funds
     FY1971 : IPTO program tables show "Intelligent systems," "Speech understanding systems," "Distributed information systems," and "Computer networks" as named categories
 ```
 
@@ -47,8 +47,8 @@ timeline
 - **IPTO** — Information Processing Techniques Office. The ARPA office Licklider directed from October 1962. The chapter's central institutional actor.
 - **Command and control** — The defence-planning frame under which interactive computing, time-sharing, theorem proving, symbolic languages, and machine perception could all be described as future decision infrastructure. The capacious umbrella that made ARPA/IPTO funding plausible to defence officials.
 - **Centers of excellence** — Licklider's term for institutional bets like Project MAC, Carnegie Tech, and Stanford AI: large, broad-mandate funding to a handful of departments rather than scattered grants for narrow deliverables.
-- **Project MAC** — Multiple Access Computer / Machine-Aided Cognition. MIT's IPTO-funded interactive computing experiment, beginning July 1, 1963 with a $3-million commitment from Jack Ruina.
-- **Mansfield Amendment** — Public Law 91-121 §203 (1969). The statute that required defence research funds to relate to a "direct and apparent" military function. The boundary that started to tighten the open-ended bargain.
+- **Project MAC** — Multiple Access Computer / Machine-Aided Cognition. MIT's IPTO-funded interactive computing experiment, beginning July 1, 1963, and one of IPTO's first major center-scale bets.
+- **Mansfield Amendment** — Public Law 91-121 §203 (1969). The statute that tightened how defence research funds had to demonstrate military relevance.
 - **JOHNNIAC** — RAND's copy of the IAS computer, Air Force-funded. Newell, Shaw, and Simon's Logic Theorist ran on it.
 
 </details>
@@ -85,11 +85,11 @@ A similar environment existed at the Massachusetts Institute of Technology. In S
 
 The establishment of IPTO under Licklider radically changed the scale of artificial intelligence research, transforming it from a collection of small, isolated efforts into a large, high-profile academic domain. From the 1960s onward, the defense agency provided the bulk of United States support for artificial intelligence, an influx of resources that helped legitimize it as a permanent discipline. The new feature was not simply a larger pot of money. It was the decision to spend that money on centers, machines, languages, meetings, and continuity.
 
-Licklider managed IPTO and the Behavioral Sciences Office with a combined budget of about $11 million and a lean administrative structure. That combination gave the office unusual leverage. A small staff could move quickly, but the funds it controlled were large enough to alter the lives of entire departments. Licklider's approach represented a departure from ordinary military procurement. Rather than scattering small grants to individual researchers for narrow deliverables, IPTO funded coherent programs and established major centers of excellence. Early commitments clustered around MIT and Carnegie Tech, reflecting his preference for broad institutional bets over isolated experiments.
+Licklider managed IPTO and the Behavioral Sciences Office with a combined budget of about 11 million dollars and a lean administrative structure. That combination gave the office unusual leverage. A small staff could move quickly, but the funds it controlled were large enough to alter the lives of entire departments. Licklider's approach represented a departure from ordinary military procurement. Rather than scattering small grants to individual researchers for narrow deliverables, IPTO funded coherent programs and established major centers of excellence. Early commitments clustered around MIT and Carnegie Tech, reflecting his preference for broad institutional bets over isolated experiments.
 
 The administrative style was personal, but not casual. Licklider looked for researchers who already seemed capable of defining important problems, then tried to place their work in relation to other sponsored efforts. That stance helps explain both the generosity and the limits of the period. A strong investigator might receive support for work whose military payoff was distant, but the work still had to belong to an intelligible program. The office was trying to make interactive computing real: to move from papers about symbiosis to machines that many people could use, languages that could express symbolic procedures, and laboratories where those pieces reinforced each other. In that sense, Licklider's budget was not a prize fund for isolated brilliance. It was a tool for building a distributed research system.
 
-At MIT, Project MAC became one of IPTO's first major investments. The project was conceived as an experiment in interactive computing, aimed broadly at human-computer interaction and general-purpose time-sharing. Licklider was deeply involved in the evaluation of the proposal, and ARPA director Jack Ruina backed a $3-million commitment within days. The speed of that approval helps explain why later participants remembered the period as unusually permissive. Yet the permissiveness had a shape. Project MAC was not a blank order to do anything that seemed interesting. It offered a way to pursue machine-aided cognition, time-sharing, and online computation under the larger premise that future command systems would require more fluent interaction between people and machines.
+At MIT, Project MAC became one of IPTO's first major investments. The project was conceived as an experiment in interactive computing, aimed broadly at human-computer interaction and general-purpose time-sharing. Licklider was deeply involved in the evaluation of the proposal, and ARPA director Jack Ruina backed a three-million-dollar commitment within days. The speed of that approval helps explain why later participants remembered the period as unusually permissive. Yet the permissiveness had a shape. Project MAC was not a blank order to do anything that seemed interesting. It offered a way to pursue machine-aided cognition, time-sharing, and online computation under the larger premise that future command systems would require more fluent interaction between people and machines.
 
 Carnegie Tech offered a different but complementary center. Its proposal drew strength from the combined presence of Simon, Newell, Alan Perlis, and Herbert Green. Licklider wanted to reinforce their ongoing information-processing work and later identified the institution as an essential early center of excellence. The point was not merely to reward famous names. Carnegie joined behavioral science, computer science, programming languages, and problem-solving research in a setting where symbolic AI could be treated as part of a larger inquiry into information processing. That fit Licklider’s criteria: a strong team, a plausible connection to defense problems, and a relationship to the rest of the sponsored portfolio.
 
