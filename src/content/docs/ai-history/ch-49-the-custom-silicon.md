@@ -5,6 +5,88 @@ sidebar:
   order: 49
 ---
 
+:::tip[In one paragraph]
+In 2013 a single projection forced Google's hardware decision: three minutes of daily voice search per user would require doubling the company's entire datacenter capacity under conventional CPUs. The answer was the Tensor Processing Unit — a custom ASIC for 8-bit matrix arithmetic, built and deployed in fifteen months, running in production a year before its 2016 announcement. TPU v1 delivered 15–30x the speed and 30–80x the performance-per-watt of contemporary CPUs and GPUs across Google's six dominant inference workloads.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Norman P. Jouppi | — | Google Fellow; TPU project technical lead; MIPS-era computer architect; first author of the 2017 ISCA paper |
+| Cliff Young | — | Google Brain software engineer; co-author of the 2017 TPU paper and the 2017 public explainer |
+| David Patterson | 1947– | Computer architect; UC Berkeley / Google; co-author of the TPU paper and the 2019 CACM domain-specific-architecture argument |
+| Jeff Dean | — | Google research leader; TPU paper co-author; co-author of the 2017 Cloud TPU announcement |
+| Urs Hoelzle | — | Google Cloud infrastructure leader; co-author of the 2017 Cloud TPU announcement |
+| John Hennessy | 1952– | Computer scientist; co-authored the 2019 CACM framing of TPU v1 as a prime example of domain-specific architecture |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2006–2019)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 49 — The Custom Silicon
+    2006 : Google discusses GPU / FPGA / ASIC options for datacenter acceleration — idea not yet compelling
+    2013 : Voice-search projection reveals doubling-datacenter problem — high-priority custom ASIC project begins
+    2015 : TPU v1 deployed in Google datacenters for neural-network inference
+    March 2016 : TPU provides inference for AlphaGo during Lee Sedol matches
+    May 2016 : Google publicly announces the Tensor Processing Unit — already running more than a year
+    April 2017 : TPU performance paper submitted to arXiv (arXiv:1704.04760)
+    May 2017 : Sato and Young publish in-depth TPU v1 explainer — Dean and Hoelzle announce Cloud TPUs
+    June 2017 : TPU v1 paper presented at ISCA 2017 in Toronto
+    2019 : Hennessy and Patterson cite TPU v1 as the canonical example of domain-specific architecture
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**ASIC (Application-Specific Integrated Circuit)** — A chip designed to do one specific job rather than general computation. TPU v1 is an ASIC for neural-network inference; unlike a CPU or GPU it cannot easily be repurposed for unrelated work.
+
+**Systolic array** — A grid of arithmetic units where data flows through in coordinated waves, each cell performing a multiply-add as values pass through, rather than each cell fetching its own data from a central store. The name comes from the rhythmic pumping motion, like a heartbeat.
+
+**Quantization** — Compressing a trained model's weights from 32-bit floating-point numbers down to narrower integers (often 8-bit). Inference tolerates this loss of precision; the payoff is that 8-bit arithmetic units are far smaller and cheaper in power than 32-bit ones.
+
+**Inference** — Using an already-trained neural network to answer a question (classify an image, translate a sentence, rank a search result). Contrasts with training, which adjusts the weights. TPU v1 was built solely for inference.
+
+**Performance-per-watt** — A datacenter's practical measure of efficiency: how much useful computation fits within a fixed power and cooling budget. TPU v1's 30–80x advantage over contemporaries meant the same inference load required far less electricity and heat.
+
+**PCIe coprocessor** — A chip that plugs into a server's PCI Express slot, augmenting but not replacing the host CPU. TPU v1 used this form factor so it could enter Google's existing rack infrastructure without rebuilding it.
+
+**Domain-specific architecture (DSA)** — A processor tailored to one application domain (neural networks, signal processing, genomics) rather than general code. Hennessy and Patterson argued in 2019 that DSAs are the primary path to performance gains now that Moore's Law scaling has slowed.
+
+</details>
+
+<details>
+<summary><strong>Architecture sketch</strong></summary>
+
+```mermaid
+flowchart LR
+    %% Form: flowchart LR — reusing the Ch41 form-lock (PR #627).
+    %% TPU v1's systolic array is a left-to-right dataflow machine: weights load from the
+    %% Weight FIFO into the top of the matrix unit, activations enter from the left, and
+    %% partial sums flow diagonally rightward through 65,536 MAC cells before settling in
+    %% the accumulators. This is a linear pipeline of data movement, not a nested hierarchy.
+    %% Ch42 (CUDA) deviated to TD because grid→block→thread is a memory-scoped hierarchy;
+    %% TPU v1's topology has no equivalent nesting — LR reflects the true dataflow direction.
+    HB["Host bus (PCIe)\ninput activations\nfrom CPU"] --> UB["Unified Buffer\n24 MiB on-chip\nactivation storage"]
+    WM["Weight Memory\n8 GiB off-chip\nread-only weights"] --> WF["Weight FIFO\nstreams weights\ninto matrix unit"]
+    UB --> MMU["Matrix Multiply Unit\n256×256 MAC array\n65,536 8-bit MACs\n92 TOPS peak"]
+    WF --> MMU
+    MMU --> ACC["Accumulators\n4 MiB\npartial sums"]
+    ACC --> ACT["Activation unit\napplies nonlinearity\n(ReLU / sigmoid)"]
+    ACT --> UB
+    ACT --> HB
+```
+
+Weights and activations enter the matrix unit from opposite sides and meet inside the 256×256 systolic grid; the accumulators catch results as each diagonal wave completes. The host bus serves as both input source and output sink, keeping the TPU's role narrow: receive a tensor, multiply it by stored weights, return the result.
+
+</details>
+
 By 2013, deep neural networks were no longer just academic experiments or isolated research projects inside Google; they were producing measurable, significant gains in the company's core services. The technology had already yielded a reported thirty percent reduction in word-error rates for speech recognition and was driving sharp improvements in image recognition. But embedding these models into products used by billions of people fundamentally changed the hardware question. The computationally intensive work of deep learning was splitting into two distinct phases: training, the computationally massive but intermittent process of teaching a model; and inference, the continuous, millisecond-by-millisecond work of using that trained model to serve user requests in production.
 
 That split mattered because the two jobs stressed machines differently. Training could be scheduled as a large internal computation. It consumed floating-point arithmetic, moved through large batches, and could tolerate the rhythms of an offline job. Inference had to answer people. It was a service obligation: a voice query, a translation request, an image classification, or a search ranking operation entered the datacenter and had to come back quickly enough to feel interactive. Once neural networks became part of the request path, every improvement in model quality carried a shadow bill in server cycles, power, cooling, and latency.
@@ -102,3 +184,7 @@ That coexistence is the honest ending to the TPU v1 story. CPUs still ran the ge
 The creation of the TPU represented a broader shift in the technology industry. As computer architects John Hennessy and David Patterson later observed, the TPU v1 served as a prime example of a "domain-specific architecture." With the historical performance gains of general-purpose processors slowing down due to the physical limits of Moore's Law and Dennard scaling, the most promising path forward for massive computational leaps was specialization. The TPU demonstrated that by aggressively tailoring a chip to the specific domain of neural networks, a cloud provider could achieve order-of-magnitude improvements in cost and power efficiency. It established custom AI silicon not just as an internal optimization, but as a foundational strategy for the era of deep learning.
 
 The deeper shift was conceptual. For decades, much of computing had benefited from broad processors becoming faster on a predictable curve. By the middle of the 2010s, that bargain had weakened. Neural networks were moving into production just as general-purpose scaling was becoming less generous. TPU v1 did not end the age of CPUs or GPUs, and it did not settle the future of AI hardware. It showed something narrower and more consequential for the next stage of the story: once models became infrastructure, the infrastructure itself had to learn the shape of the models.
+
+:::note[Why this still matters today]
+Every major cloud provider now offers custom AI silicon: Google's TPU line continues through v5, Amazon has Trainium and Inferentia, and Apple ships Neural Engines in its consumer chips. The TPU established the template — identify the bottleneck operation (matrix multiply), shrink arithmetic precision to what inference actually needs (8-bit integers), and design memory hierarchy around that single workload. The systolic-array principle is now embedded in edge devices, data-center accelerators, and open hardware research. The economics argument TPU v1 made in 2013 — that general-purpose processors could not absorb neural networks without proportional capacity growth — remains the primary driver of the custom-silicon industry today.
+:::
