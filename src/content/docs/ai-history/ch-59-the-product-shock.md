@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a chat box wrapping a GPT-3.5 model fine-tuned with RLHF on Azure supercomputing. The break was not new science but packaging: conversational turn-taking turned model behaviour into consumer habit. Reuters/UBS estimated 100M monthly active users by January 2023, the fastest-growing consumer application at that time. Stack Overflow banned generated answers, NYC schools blocked it, and Microsoft's Bing and Google's Bard launched within ten days of each other.
+On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a chat box wrapping a GPT-3.5 model fine-tuned with RLHF on Azure supercomputing. The break was not new science but packaging: conversational turn-taking turned model behaviour into consumer habit. Record-breaking consumer adoption forced institutions, competitors, and users to react, while Microsoft's Bing and Google's Bard launched within ten days of each other.
 :::
 
 <details>
@@ -19,7 +19,7 @@ On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a ch
 | Satya Nadella | — | Microsoft CEO; anchors the January 2023 OpenAI partnership extension and the Bing/search response |
 | Yusuf Mehdi | — | Microsoft executive author of the February 7, 2023 AI-powered Bing and Edge announcement |
 | Sundar Pichai | — | Google/Alphabet CEO; author of the February 6, 2023 Bard and AI-Search post |
-| Jenna Lyle | — | NYC education department spokesperson quoted by Chalkbeat on the school-device/network block |
+| Jenna Lyle | — | NYC education department spokesperson quoted by Chalkbeat during the early school-policy reaction |
 
 </details>
 
@@ -30,9 +30,9 @@ On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a ch
 timeline
     title Chapter 59 — The Product Shock
     Nov 30 2022 : OpenAI launches ChatGPT as a free research preview
-    Dec 5 2022 : Stack Overflow posts the temporary ban on generative AI content; Altman reports ChatGPT crossed 1M users
-    Jan 3 2023 : NYC education department confirms ChatGPT blocked on school devices and networks
-    Jan 2023 : Reuters relays UBS estimate of 100M monthly active users
+    Dec 5 2022 : Early public adoption and moderation pressure become visible
+    Jan 3 2023 : NYC education department confirms an early ChatGPT school-access restriction
+    Jan 2023 : Reuters relays UBS estimate of record consumer adoption
     Jan 23 2023 : Microsoft announces the third phase of its OpenAI partnership
     Feb 1 2023 : OpenAI announces ChatGPT Plus at $20/month
     Feb 6 2023 : Google announces Bard and AI-powered Search features
@@ -46,11 +46,11 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**Research preview** — OpenAI's framing for the ChatGPT launch: free public access while the company gathered user feedback to find strengths, weaknesses, and failure modes. The label sounded provisional, but the product was deployed at scale to millions of users from day one.
+**Research preview** — OpenAI's framing for the ChatGPT launch: free public access while the company gathered user feedback to find strengths, weaknesses, and failure modes.
 
 **RLHF (Reinforcement Learning from Human Feedback)** — The training method that shaped ChatGPT's conversational behaviour: supervised fine-tuning on dialogues written by human AI trainers, comparison/ranking data, a learned reward model, and Proximal Policy Optimization. Inherited from InstructGPT (Ch57); ChatGPT made it the default assistant interface.
 
-**Monthly active users (MAU)** — A standard product metric: distinct users who interact with a service in a 30-day window. The Reuters/UBS estimate of 100M MAU in January 2023 is what made ChatGPT a coordination problem for executives, schools, regulators, and competitors rather than a research demo.
+**Monthly active users (MAU)** — A standard product metric: distinct users who interact with a service in a 30-day window. In this chapter it matters because adoption scale turned ChatGPT from a research demo into an institutional coordination problem.
 
 **ChatGPT Plus** — OpenAI's first paid tier, announced February 1, 2023 at $20/month. It sold reliability under load — general access during peak times, faster responses, priority on new features — while preserving the free tier. Demand had made inference itself a consumer expectation.
 
@@ -58,7 +58,7 @@ timeline
 
 **Jailbreak / adversarial prompting** — User prompts crafted to route around a model's safety policy or refusal behaviour. The GPT-4 System Card (March 2023) explicitly treats jailbreaks as a deployment surface: mitigations reduce but do not eliminate them, and Figure 10 walks through example exploits against GPT-4-launch.
 
-**Hallucination** — Plausible but incorrect output. OpenAI's launch page warned ChatGPT could produce confident wrong answers, and the GPT-4 page kept the warning. Plausible wrongness is what made Stack Overflow and NYC schools react: cheap to produce, expensive to verify.
+**Hallucination** — Plausible but incorrect output. OpenAI's launch page warned ChatGPT could produce confident wrong answers, and the GPT-4 page kept the warning. Plausible wrongness is cheap to produce and expensive to verify.
 
 </details>
 
@@ -189,4 +189,3 @@ That question belongs to the next chapter. The product shock was the moment the 
 :::note[Why this still matters today]
 Almost every consumer-facing AI product after late 2022 borrows ChatGPT's grammar — a chat box, conversational turn-taking, visible refusals, a feedback button, a paid tier sold on capacity rather than only capability. Search engines now ship synthesised answers above link lists. Productivity tools embed conversational drafting into documents, mail, and code editors. Schools, publishers, and Q&A communities still litigate the line between fluent generation and verifiable expertise that Stack Overflow and NYC schools first hit in late 2022. The product shock also normalised release rhythm — usage caps, waitlists, subscription tiers, and capacity warnings — as part of how frontier capability reaches users.
 :::
-

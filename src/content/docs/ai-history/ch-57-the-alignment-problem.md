@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-On January 27, 2022 OpenAI announced InstructGPT — a layer over GPT-3 that turned next-token predictors into instruction-followers using RLHF: about 40 contracted labelers wrote demonstrations, ranked outputs, and trained a reward model that PPO then optimized. The method traced back to Christiano et al. 2017 (preferences over Atari clips) via Stiennon et al. 2020 (summarization). InstructGPT became the default API model. Alignment became a trainable behavioural layer — but only over sampled preferences, not "humanity."
+On January 27, 2022 OpenAI announced InstructGPT — a layer over GPT-3 that used human feedback to turn next-token predictors into better instruction-followers. The method drew on earlier preference-learning work and became the default API model. Alignment became a trainable behavioural layer, improving the assistant interface without settling the broader alignment problem.
 :::
 
 <details>
@@ -14,12 +14,12 @@ On January 27, 2022 OpenAI announced InstructGPT — a layer over GPT-3 that tur
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Paul Christiano | — | Co-author of the 2017 "Deep RL from human preferences" paper; co-author of InstructGPT; method-lineage protagonist for reward learning from comparisons |
-| Long Ouyang | — | Lead author of the March 2022 "Training language models to follow instructions with human feedback" paper detailing the InstructGPT pipeline |
+| Paul Christiano | — | Co-author of the 2017 "Deep RL from human preferences" paper; co-author of InstructGPT |
+| Long Ouyang | — | Lead author of the March 2022 "Training language models to follow instructions with human feedback" paper |
 | Jan Leike | — | OpenAI alignment lead; co-author of the InstructGPT blog and paper |
 | Ryan Lowe | — | OpenAI alignment co-lead; co-author of the InstructGPT blog and paper |
-| Nisan Stiennon | — | Lead author of the 2020 "Learning to Summarize from Human Feedback" paper; bridge from preference-RL to language-model outputs |
-| OpenAI labelers (~40 contractors via Upwork & ScaleAI) | — | Central human-labour layer per Ouyang §3.4: screened and trained to write demonstrations, rank outputs, and evaluate model behaviour |
+| Nisan Stiennon | — | Lead author of the 2020 "Learning to Summarize from Human Feedback" paper |
+| OpenAI labelers | — | Central human-labour layer for demonstrations, rankings, and model-behaviour evaluation |
 
 </details>
 
@@ -29,11 +29,11 @@ On January 27, 2022 OpenAI announced InstructGPT — a layer over GPT-3 that tur
 ```mermaid
 timeline
     title Chapter 57 — The Alignment Problem
-    2017 : Christiano et al. publish "Deep RL from Human Preferences" — comparison-trained reward model on Atari and simulated robotics
-    2020 : Stiennon et al. publish "Learning to Summarize from Human Feedback" — comparison/reward-model/PPO pattern applied to language outputs
+    2017 : Christiano et al. publish "Deep RL from Human Preferences"
+    2020 : Stiennon et al. publish "Learning to Summarize from Human Feedback"
     Jan 2021 : Earlier InstructGPT version deployed in OpenAI API Playground; prompts later filtered into training source
     Jan 27 2022 : OpenAI publishes "Aligning language models to follow instructions" blog — InstructGPT becomes default API model
-    Mar 2022 : Ouyang et al. release detailed paper on arXiv — full RLHF pipeline, results, and limitations
+    Mar 2022 : Ouyang et al. release detailed InstructGPT paper on arXiv
 ```
 
 </details>
@@ -43,15 +43,15 @@ timeline
 
 **Alignment** — The problem of making powerful AI systems pursue goals compatible with what their users (and broader society) actually want. *Narrow* alignment is the InstructGPT scope: making a model follow user intent on a measured prompt distribution. *Broad* alignment includes truthfulness, refusal of harm, value pluralism, and robust behaviour outside the training distribution.
 
-**RLHF (Reinforcement Learning from Human Feedback)** — The InstructGPT recipe in three stages. (1) *SFT*: fine-tune the base model on human-written demonstrations. (2) *Reward modelling*: collect ranked comparisons of model outputs from labellers; train a reward model to predict which output a human would prefer. (3) *RL*: use PPO to optimize the language model against the reward model, with a KL penalty against the SFT model to prevent over-optimization.
+**RLHF (Reinforcement Learning from Human Feedback)** — A training approach that uses human judgments about model outputs to steer a pretrained model toward preferred behaviour. In InstructGPT, it supplied a behavioural layer on top of GPT-3 rather than replacing pretraining.
 
-**Reward model** — A learned model that takes a prompt + candidate response and returns a scalar score predicting human preference. A *proxy* for human judgment: usable by an optimizer, but inheriting the limits of the labellers, instructions, interface, and prompt distribution that produced its training data.
+**Reward model** — A learned proxy for human judgment that scores candidate responses. It is usable by an optimizer, but it inherits the limits of the labellers, instructions, interface, and prompt distribution that produced its training data.
 
-**PPO (Proximal Policy Optimization)** — The reinforcement-learning algorithm Ouyang et al. used to optimize the language model against the reward model. The *proximal* part keeps each policy update close to the previous policy via a clipped objective, which prevents destabilizing collapse during training.
+**PPO (Proximal Policy Optimization)** — A reinforcement-learning algorithm used to update a policy while keeping changes controlled enough to avoid destabilizing jumps.
 
 **Preference comparison** — A data point of the form "given prompt P, response A is better than response B." Easier for humans to produce than absolute scores or full rule specifications. Christiano's 2017 insight: comparisons can replace explicit reward engineering when the true goal is hard to specify in code.
 
-**Demonstration / supervised fine-tuning (SFT)** — Stage 1 of RLHF. Labellers write the desired response to a prompt, and the base model is fine-tuned on `(prompt, response)` pairs in a standard supervised-learning setup. SFT alone produces a usable instruction-follower; RLHF adds the reward-model + PPO stages on top.
+**Demonstration / supervised fine-tuning (SFT)** — Human-written examples of desired responses used to teach the base model the shape of instruction-following behaviour.
 
 **Instruction following** — The behavioural property RLHF was designed to install: when given an instruction, the model attempts to do the instructed task rather than continuing the most-likely-next-text continuation that pretraining alone would produce. Distinct from *capability*: a base GPT-3 already had the capability; RLHF added the linkage between user intent and model response.
 
