@@ -5,6 +5,98 @@ sidebar:
   order: 50
 ---
 
+:::tip[In one paragraph]
+In June 2017, Vaswani and seven Google co-authors proposed the Transformer: an encoder-decoder architecture that replaced the recurrent time-step dependency of LSTMs with stacked self-attention, feed-forward layers, residual paths, layer normalization, and positional encodings. Trained on one machine with 8 P100 GPUs, it reached 28.4 BLEU on WMT 2014 English-German translation. Attention was not new — Bahdanau et al. had introduced it in 2014 — but the Transformer made it the layer operation, freeing sequence models to scale on matrix-friendly hardware.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Ashish Vaswani | — | Transformer co-author; the equal-contribution footnote credits him with co-designing and implementing the first Transformer models with Illia Polosukhin |
+| Noam Shazeer | — | Transformer co-author; the footnote credits him with scaled dot-product attention, multi-head attention, and the parameter-free positional representation |
+| Jakob Uszkoreit | — | Transformer co-author; the footnote credits him with proposing the replacement of RNNs with self-attention and starting the evaluation effort |
+| Niki Parmar | — | Transformer co-author; the footnote credits her with designing, implementing, tuning, and evaluating model variants in the original codebase and Tensor2Tensor |
+| Ilya Sutskever | 1986– | Co-author of the 2014 sequence-to-sequence LSTM paper that supplied the immediate recurrent encoder-decoder baseline |
+| Dzmitry Bahdanau | — | Lead author of the 2014/2015 attention-with-alignment paper that supplied the pre-Transformer attention bridge |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2014–2017)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 50 — Attention Is All You Need
+    2014 : Sutskever, Vinyals, Le publish seq2seq LSTM — multilayer LSTM encodes input into a fixed-dimensional vector; second LSTM decodes the target
+    2014 : Bahdanau, Cho, Bengio introduce neural machine translation with learned soft alignment — recurrent encoder-decoder with attention
+    June 2017 : Vaswani et al. submit "Attention Is All You Need" to arXiv (1706.03762) — proposes the Transformer architecture
+    December 2017 : Paper appears at NeurIPS 2017 — reported machine-translation experiments use one machine with 8 NVIDIA P100 GPUs
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Sequence transduction** — A learning task where an input sequence (a sentence, a phoneme stream) maps to an output sequence (a translation, a transcription). Translation is the canonical example. The Transformer paper places itself inside this older problem class rather than claiming a wholly new task.
+
+**Recurrent neural network (RNN) / LSTM** — A model that processes a sequence one position at a time, carrying a hidden state forward across positions. The Long Short-Term Memory variant added gates that helped the state survive across longer sequences. The chapter's core complaint is not that LSTMs failed but that their per-position dependency limited how much of a layer's work could run in parallel.
+
+**Attention (Bahdanau-style)** — A mechanism that lets a decoder consult the encoder's per-position annotations as it produces each output token, retrieving relevant source-side information instead of relying on one compressed vector. Predates the Transformer and runs inside a recurrent encoder-decoder.
+
+**Self-attention** — Attention applied within a single sequence: every position attends to every other position in the same layer. The Transformer's distinctive substitution — self-attention replaces the recurrent step as the way representations flow across positions.
+
+**Multi-head attention** — Running several scaled dot-product attention operations in parallel with different learned projections, then concatenating the outputs. Lets the model attend to information from different representation subspaces in the same layer.
+
+**Positional encoding** — A signal added to the input embeddings to mark each token's position in the sequence. Because the Transformer removed recurrence and convolution, it needed an explicit order signal. The 2017 paper used sinusoidal encodings and reported similar results from learned positional embeddings.
+
+**Autoregressive decoding (with masking)** — At generation time the decoder still produces one token at a time, conditioning on earlier outputs. During training, masking blocks each position from attending to later target positions so many positions can be processed in parallel without leaking the future.
+
+</details>
+
+<details>
+<summary><strong>The math, on demand</strong></summary>
+
+- **Scaled dot-product attention.** $\text{Attention}(Q, K, V) = \text{softmax}\!\left(\dfrac{Q K^{\top}}{\sqrt{d_k}}\right) V$ — queries $Q$, keys $K$, and values $V$ are matrices of projected token representations. The dot products score every query against every key, the softmax turns the scores into weights, and the weighted sum over values is the layer output. The $\sqrt{d_k}$ scaling keeps softmax gradients trainable as the key dimension grows. Source: Vaswani et al. 2017 §3.2.1.
+
+- **Multi-head attention.** $\text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_h)\, W^{O}$, with each $\text{head}_i = \text{Attention}(Q W_i^{Q}, K W_i^{K}, V W_i^{V})$ — the model learns $h$ sets of projections, runs $h$ attention operations in parallel, and recombines them. The paper uses $h = 8$ in the base model so each head sees a slice of dimension $d_k = d_v = d_{model} / h = 64$. Source: Vaswani et al. 2017 §3.2.2.
+
+- **Sinusoidal positional encoding.** $PE_{(pos, 2i)} = \sin\!\left(pos / 10000^{2i / d_{model}}\right)$ and $PE_{(pos, 2i+1)} = \cos\!\left(pos / 10000^{2i / d_{model}}\right)$ — each dimension is a sinusoid of geometrically growing wavelength. The motivation given in the paper is that the relative offset between two positions can be expressed as a linear function of the encodings, which the model may exploit to learn relative-position behaviour. Source: Vaswani et al. 2017 §3.5.
+
+- **Per-layer complexity comparison (Table 1).** Self-attention runs in $O(n^2 \cdot d)$ per layer with $O(1)$ sequential operations and a maximum path length of $O(1)$ between any two positions; recurrent layers are $O(n \cdot d^2)$ per layer with $O(n)$ sequential operations and $O(n)$ path length; convolutional layers are $O(k \cdot n \cdot d^2)$ with $O(1)$ sequential operations but $O(\log_k n)$ or $O(n / k)$ path length depending on dilation. The Transformer trades quadratic sequence cost for short paths and short critical compute chains. Source: Vaswani et al. 2017 §4 / Table 1.
+
+- **The trade, in one inequality.** For sequence length $n$ and representation dimension $d$, self-attention is cheaper than a recurrent layer when $n < d$ — i.e. the regime of typical 2017 translation. As $n$ grows, the $n^2$ term dominates and the trade flips, which is why long-context attention later became its own engineering subfield. Source: Vaswani et al. 2017 §4 (sentence-length caveat and "restricted self-attention" remark).
+
+</details>
+
+<details>
+<summary><strong>Architecture sketch</strong></summary>
+
+```mermaid
+flowchart LR
+    %% Form: flowchart LR — reusing the Ch41/Ch49 form-lock for sequential dataflow.
+    %% The Transformer is fundamentally a left-to-right pipeline: source tokens flow
+    %% through encoder layers; encoder output supplies keys+values to the decoder;
+    %% the decoder consumes those plus its own causal-masked self-attention to emit
+    %% one target token at a time. The encoder and decoder stacks are not nested in
+    %% the way a memory hierarchy is nested (Ch42 CUDA TD case); they are linked in
+    %% series along the dataflow direction. LR reflects that pipeline.
+    SRC["Source tokens\n(x_1 ... x_n)\n+ positional encoding"] --> EMB["Input embedding\nd_model = 512"]
+    EMB --> ENC["Encoder stack\n6 identical layers\nself-attention\n+ feed-forward\n(residual + LayerNorm)"]
+    ENC --> KV["Encoder output\n(used as keys + values\nfor cross-attention)"]
+    TGT["Target tokens so far\n(y_1 ... y_t-1)\n+ positional encoding"] --> TEMB["Output embedding\nd_model = 512"]
+    TEMB --> DEC["Decoder stack\n6 identical layers\nmasked self-attention\n+ encoder-decoder attention\n+ feed-forward\n(residual + LayerNorm)"]
+    KV --> DEC
+    DEC --> PROJ["Linear + softmax\nover target vocabulary"]
+    PROJ --> NXT["Next target token\ny_t"]
+```
+
+The encoder and decoder stacks each contain six identical layers; the decoder additionally takes the encoder output as the source of keys and values for one of its attention sub-layers. The mask on decoder self-attention prevents a target position from attending to later target positions, which is what keeps generation autoregressive even though many positions are processed in parallel during training.
+
+</details>
+
 The previous chapter ended with custom silicon. Google had learned that neural networks were no longer just models; they were workloads large enough to bend datacenter design. The Tensor Processing Unit narrowed hardware around the arithmetic of inference. But the next turn in artificial intelligence did not begin with a new chip. It began with a different way to arrange the computation inside the model itself.
 
 By 2017, machine translation was one of the clearest places to see the pressure. Translation had a concrete input and output: a sentence in one language enters, a sentence in another language emerges. It also had a history of measurable benchmarks, public datasets, and high commercial value. If a model could translate better and train faster, the result was not an abstract gain. It touched search, mobile products, international communication, and the broader question of whether neural networks could handle language as more than a collection of short classification tasks.
@@ -85,6 +177,12 @@ The author list also matters, but only within the evidence. The paper names Ashi
 
 The phrase "Attention Is All You Need" was rhetorically brilliant because it sounded like a manifesto. But the paper's actual claim was narrower. To the authors' knowledge, it was the first transduction model relying entirely on self-attention to compute representations of input and output without using sequence-aligned recurrent networks or convolution. That is a precise architectural claim, not a universal theory of intelligence. It did not say attention would solve all reasoning, memory, grounding, or alignment problems. It did not yet contain BERT, GPT-2, model hubs, scaling laws, RLHF, or diffusion.
 
+:::note
+> We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.
+
+This abstract sentence is the paper's own mission statement before the later tables and experiments make the engineering case: remove recurrence and convolution, then prove the attention-only stack can compete on translation. — *Vaswani et al. 2017, abstract, p. 1.*
+:::
+
 The title also hid how much scaffolding remained. The model still needed embeddings, residual paths, normalization, feed-forward blocks, masking, training schedules, regularization, and benchmark discipline. "Attention" became the symbol because it was the distinctive substitution, but the working system was a complete architecture. That matters because later imitators did not scale an isolated formula. They scaled a recipe: blocks, dimensions, heads, depth, data, optimization, and hardware.
 
 Still, the title captured the break. Attention had moved from an auxiliary mechanism inside recurrent translation systems to the organizing principle of the model. Once that happened, every later system in this part could build on a different computational substrate. BERT would use the architecture to pretrain bidirectional representations. GPT-style models would use the decoder side for next-token prediction and few-shot behavior. Open-source frameworks and model hubs would distribute implementations and checkpoints. Scaling-law work would treat model size, data, and compute as variables to be optimized around architectures that could absorb huge training runs.
@@ -98,3 +196,7 @@ That negotiation is why the Transformer belongs at the beginning of Part 8 rathe
 The honest ending is therefore neither modest nor mythic. The Transformer did not invent attention. It did not generate sentences all at once. It did not remove every bottleneck; it introduced the quadratic attention problem that later engineers would spend years trying to manage. But it did remove the recurrent time-step dependency from the center of sequence transduction, and it replaced that dependency with stacked attention blocks that could train efficiently on modern accelerators.
 
 That was enough. In 2017, "Attention Is All You Need" turned attention from a helpful component into the backbone of a new era. The next chapters are the story of what happened when that backbone was pretrained, open-sourced, scaled, served, aligned, and eventually pushed into images, agents, products, datacenters, and geopolitics. The paper did not contain that whole future. It made the future easier to compute.
+
+:::note[Why this still matters today]
+Almost every modern large language model — GPT, Claude, Llama, Gemini, Mistral — descends from the 2017 Transformer. The query-key-value pattern, multi-head attention, residual connections wrapped around feed-forward blocks, layer normalization, and positional signals are the shared substrate underneath every chat assistant, coding assistant, and embedding API a practitioner touches. The quadratic per-layer cost of self-attention is also still the engineering frontier: long-context, sparse, sliding-window, and linear-attention variants are all answers to the same Table 1 trade. Reading a Transformer paper today is reading current production-system design, not history.
+:::
