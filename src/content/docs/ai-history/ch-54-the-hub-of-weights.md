@@ -125,6 +125,12 @@ The widget also blurred the boundary between repository and application. A repos
 
 Caching mattered for the same reason. If model files are large, repeated downloads are wasteful and brittle. A library that knows where to fetch a model and how to cache it turns a remote artifact into a local dependency. This is infrastructure work, not headline science. But without it, open weights remain difficult to use at scale. A hub of weights requires a logistics layer.
 
+:::note
+> The concept of providing easy caching for pretrained models stemmed from AllenNLP (Gardner et al., 2018).
+
+This lineage matters: Hugging Face's packaging layer borrowed caching practice from AllenNLP while extending it into a hub-and-library distribution workflow. — *Wolf et al. 2020, "Transformers: State-of-the-Art Natural Language Processing," §2 Related Work, p. 39.*
+:::
+
 Fine-tuning fit naturally into that logistics layer. A user could start from a shared checkpoint, attach or select the appropriate head, and adapt it to a downstream task. The important change was not that fine-tuning became trivial. It was that fine-tuning could begin from a standardized loading path rather than a custom reconstruction of a paper's artifacts. The system made the first steps repeatable.
 
 Deployment pathways pushed the system beyond notebooks. The Transformers paper mentions TorchScript, TensorFlow serving options, ONNX, JAX/XLA, TVM, and CoreML as routes toward production or intermediate formats. That list should not be overread as a guarantee that every model could be deployed easily everywhere. It shows that the library's ambition extended from research use to the transition toward production environments.
