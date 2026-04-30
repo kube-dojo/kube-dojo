@@ -5,6 +5,56 @@ sidebar:
   order: 32
 ---
 
+:::tip[In one paragraph]
+In May 1971, an ARPA-IPTO study group chaired by Allen Newell published a five-year charter for connected speech understanding research. CMU's HARPY met its specifications in September 1976 at 1,011 words and 5% semantic error. But the program's most durable contribution was Section 8.6's call for public data, common tasks, and instrumented measurement — the methodology Charles Wayne re-institutionalised in the mid-1980s and that the statistical-ASR groups inherited.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Allen Newell | 1927–1992 | CMU University Professor; chair of the ARPA-IPTO study group; principal author of the May 1971 charter and its Section 8.6 methodological proposal. |
+| John R. Pierce | 1910–2002 | Bell Telephone Laboratories engineer; chaired the 1966 ALPAC report; author of the October 1969 *JASA* letter "Whither Speech Recognition?" |
+| Raj Reddy | b. 1937 | CMU faculty; principal investigator of CMU's SUR contracts; member of the 1971 study group; co-author of the 1979 HARPY chapter. |
+| Bruce T. Lowerre | — | CMU PhD student under Reddy; principal architect of HARPY; April 1976 dissertation; co-author of the 1979 *Trends in Speech Recognition* chapter. |
+| Frederick Jelinek | 1932–2010 | Manager of IBM Yorktown Heights' Continuous Speech Recognition Group from 1972; co-author of the 1983 PAMI paper; first uttered "Whenever I fire a linguist…" in December 1988. |
+| Charles L. Wayne | — | DARPA program manager who, in the mid-1980s, restarted US speech-and-language funding via the "common task method" (NIST as neutral evaluator, shared datasets). |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1966–1988)</strong></summary>
+
+```mermaid
+timeline
+    title The DARPA SUR Program and Its Methodological Heir
+    1966 : ALPAC report (Pierce, chair) ends US machine-translation funding
+    1969 : Pierce publishes "Whither Speech Recognition?" in JASA
+    1971 : Newell et al. study-group report (May, CMU technical report) : ARPA-IPTO awards SUR contracts to CMU, BBN, SDC
+    1971-1976 : SUR program runs as five-year multi-contractor effort
+    1976 : HARPY operational at the 1,011-word task (13 August) : September four-system demonstration — HARPY meets Final Specs
+    1977 : Klatt publishes "Review of the ARPA Speech Understanding Project" in JASA
+    1983 : Bahl, Jelinek, Mercer "Maximum Likelihood Approach" in PAMI
+    1985 : Mercer at Arden House — "There is no data like more data"
+    1988 : Jelinek's December Wayne PA talk — "Whenever I fire a linguist..."
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Speech-understanding system** — A research goal beyond pure transcription: a machine that recognises spoken words *and* extracts enough meaning to carry out a defined task (data retrieval, document lookup) within a constrained vocabulary and grammar.
+- **Final Specifications (Newell 1971)** — The reduced, measurable target adopted by the May 1971 study group: ~1,000 words, an artificial syntax, a quiet room, cooperative speakers of General American dialect, less than 10% semantic error, demonstrable by 1976.
+- **Semantic error** — A scoring rule that counts an utterance wrong only if the system's interpretation would cause the wrong action — not if it merely mis-heard a phoneme. Newell's charter chose this metric over phonetic-purity scores.
+- **Common task method** — Charles Wayne's mid-1980s framework: a defined dataset, a neutral evaluator (NIST), a fixed metric. Multiple research groups submit systems against the same task. Structurally a return to Newell 1971 §8.6.
+- **Maximum-likelihood decoding** — IBM's framing of speech recognition as recovering the most probable word sequence given an acoustic signal. The probability factors into a *language model* (how likely is this text?) and an *acoustic model* (how likely are these sounds given that text?).
+- **Perplexity** — An information-theoretic measure of task difficulty introduced for ASR by Bahl, Jelinek, and Mercer in 1983. Higher perplexity means the language model leaves more plausible next words at each step. Vocabulary size alone, the IBM group argued, was "practically useless" by comparison.
+- **Forward-Backward Algorithm** — The iterative procedure the IBM group used to estimate the parameters of a hidden-Markov speech model from training data. The same machinery underlies modern HMM training pipelines.
+
+</details>
+
 In 1966, John Pierce—then a senior figure at Bell Telephone Laboratories—chaired the Automatic Language Processing Advisory Committee (ALPAC) for the National Academy of Sciences. The committee's resulting report effectively ended United States government funding for machine-translation research for over a decade. The significance for speech recognition was not that translation and speech were the same technical problem. It was that Pierce had shown how an influential committee could turn a field's promises into a funding question: What exactly had been demonstrated, what remained speculative, and why should the government keep paying?
 
 Three years later, in October 1969, Pierce published a sharply skeptical Letter to the Editor in *The Journal of the Acoustical Society of America* titled "Whither Speech Recognition?" In it, he characterized automatic-speech-recognition research as being "attractive to money," writing that "the attraction is perhaps similar to the attraction of schemes for turning water into gasoline, extracting gold from the sea, or going to the moon." The sentence had a Bell Labs engineer's dry cruelty. It did not say that speech recognition was uninteresting. It said that the subject had become good at attracting support before it had become good at explaining its own progress.
@@ -110,3 +160,7 @@ The scope of this methodological and statistical inheritance is visible in the p
 The DARPA SUR contractor systems—HARPY, HEARSAY-II, HWIM, and SDC—are now largely retired as historical research artifacts. The program's most durable contribution was not the software that ran on CMU's PDP-10 in September 1976, nor even the fact that one system met a 1,000-word target under constrained conditions. The enduring legacy of SUR was the measurement methodology that Allen Newell's study group named in 1971, that ARPA proved workable in 1976, and that Charles Wayne re-institutionalized a decade later to underwrite the statistical revolution.
 
 That legacy is quieter than the machines. It is not a demo photograph or a famous slogan. It is the expectation that a speech recognizer should be tested on a known task, against known data, with known metrics, in a way that lets outsiders understand why it succeeded or failed. Pierce had warned that speech recognition attracted money before it deserved trust. Newell's group answered by designing a program in which trust would have to be earned by measurement. HARPY earned it once. The statistical systems that followed learned to earn it repeatedly.
+
+:::note[Why this still matters today]
+Newell's 1971 charter did not stop at speech recognition. Section 8.6 named what the field lacked: shared data, public task descriptions, and instrumented systems whose failures could be diagnosed. That paragraph is the institutional ancestor of every benchmark-driven discipline that followed it. Wayne's mid-1980s revival made the methodology routine; the statistical groups won by submitting their work to it. The lesson is older than any model: a research field becomes legible to outsiders only when its claims can be tested on data of known structure. Every team that argues today over an evaluation harness, a reproducibility script, or a data card is descended from that paragraph.
+:::
