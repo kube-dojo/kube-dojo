@@ -7,7 +7,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-After the second AI winter, Vladimir Vapnik and colleagues gave machine learning a disciplined new promise: pick the separating hyperplane with the widest margin between classes, use kernel functions to work in high-dimensional feature spaces without building them explicitly, and solve a convex optimization problem with a unique global solution. Tested on handwritten-digit benchmarks in the 1990s, SVMs showed that generalization could be an engineering argument — one backed by statistical learning theory — not just a hope.
+After the second AI winter, Vladimir Vapnik and colleagues gave machine learning a disciplined new promise: choose decision boundaries using geometry, kernels, optimization, and statistical learning theory rather than expert rules or unchecked fitting. Tested on handwritten-digit benchmarks in the 1990s, support vector machines showed that generalization could be argued mathematically and evaluated operationally, not merely hoped for.
 :::
 
 <details>
@@ -44,11 +44,10 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Support vector** — A training example that lies on or nearest to the decision boundary; the final classifier depends only on these examples, not on the full training set.
-- **Margin** — The width of the empty strip between the two classes on either side of a separating hyperplane. Maximum-margin classifiers choose the hyperplane that makes this strip as wide as possible.
-- **Kernel function** — A function that computes the inner product of two points in a high-dimensional feature space without constructing that space explicitly; allows SVMs to draw curved decision boundaries in the original input space.
-- **VC dimension (Vapnik-Chervonenkis dimension)** — A measure of a classifier's capacity: roughly, the largest set of points the classifier can separate in every possible way. Higher capacity risks overfitting; VC theory bounds the gap between training and test error.
-- **Soft margin** — An extension that allows some training examples to violate the margin or be misclassified, penalizing violations rather than demanding perfect separation; makes SVMs practical for noisy, overlapping real-world data.
-- **Convex optimization** — An optimization problem in which any local solution is also a global solution; SVM training is formulated this way, making the result independent of starting conditions.
+- **Hyperplane** — A flat decision surface used to separate classes in a feature space.
+- **Margin** — The width of the empty strip between the two classes on either side of a separating hyperplane.
+- **Kernel function** — A function that computes an inner product after an implicit feature transformation.
+- **Convex optimization** — An optimization problem in which any local solution is also a global solution.
 
 </details>
 
@@ -511,4 +510,3 @@ SVM ideas remain embedded in modern machine learning infrastructure. Kernel meth
   *Data Mining and Knowledge Discovery* 2, 121-167 (1998): tutorial anchor for
   margins, support vectors, convex quadratic programming, kernels, Mercer
   conditions, implementation concerns, VC dimension, and generalization.
-
