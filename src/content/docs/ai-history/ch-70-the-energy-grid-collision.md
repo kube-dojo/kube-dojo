@@ -5,6 +5,63 @@ sidebar:
   order: 70
 ---
 
+:::tip[In one paragraph]
+AI data centers stopped looking like background internet infrastructure and became visible grid actors. The IEA estimated about 415 TWh in 2024 and projected about 945 TWh by 2030, still under 3% of global electricity. The collision was local: EPRI saw frontier training at 100-150 MW now and possibly 1-2 GW by 2028; FERC rejected PJM's amended Susquehanna ISA on November 1, 2024; Microsoft, Google, and Meta turned nuclear procurement into AI infrastructure strategy.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| IEA Energy and AI analysts | — | Institutional source for global demand/supply framing in the 2025 Energy and AI report |
+| EPRI / Epoch AI forecasters | — | Authors of *Scaling Intelligence* (Aug 2025), translating training scale into grid quantities |
+| Joe Dominguez (Constellation) | — | Company voice on the Microsoft / Three Mile Island / Crane Clean Energy Center 20-year PPA |
+| Michael Terrell (Google Energy and Climate) | — | Announcement voice for the Google / Kairos Power SMR agreement (Oct 2024) |
+| Urvi Parekh (Meta Global Energy) | — | Announcement voice for the Meta / Constellation Clinton Clean Energy Center deal (Jun 2025) |
+| Mark Christie & Willie Phillips (FERC) | — | Concurring and dissenting commissioners on the Nov 1, 2024 Susquehanna ISA rejection |
+
+</details>
+
+<details>
+<summary><strong>Timeline (2019–2025)</strong></summary>
+
+```mermaid
+timeline
+    title Chapter 70 — The Energy Grid Collision
+    2019 : Three Mile Island Unit 1 closes for economic reasons
+    2023 : DOE/LBNL — U.S. data centers about 4.4% of U.S. electricity
+    Sep 2024 : Constellation/Microsoft announce 20-year PPA to restart TMI Unit 1 as Crane Clean Energy Center
+    Oct 2024 : Google/Kairos Power announce SMR agreement, first deployment by 2030, up to 500 MW by 2035
+    Nov 1 2024 : FERC rejects PJM's amended Susquehanna ISA (300 MW to 480 MW), Phillips dissenting, Christie concurring
+    Nov 3 2024 : Talen says existing ISA still allows 300 MW for first AWS campus phases
+    Dec 2024 : DOE/LBNL publishes U.S. Data Center Energy Usage Report with 2028 share scenarios
+    Jun 2025 : Meta/Constellation announce 20-year Clinton Clean Energy Center agreement starting 2027
+    Aug 2025 : EPRI publishes Scaling Intelligence on frontier-training power growth
+    2025 : IEA Energy and AI report projects global data-center electricity doubling by 2030
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+**Interconnection service agreement (ISA)** — The contract that governs how a generator or load connects to a regional transmission system. PJM's amended ISA at Susquehanna sought to raise co-located load from 300 MW to 480 MW; FERC rejected the amendment because PJM had not met the high burden required for non-conforming provisions on the record.
+
+**Co-located load** — A large customer (here, an AWS data-center campus) sited next to a generator (the Susquehanna nuclear plant) and electrically arranged so that some or all of its supply comes from that plant rather than across the public transmission grid. The arrangement raises questions about backup service, market dispatch, and who pays for grid reliability.
+
+**Power purchase agreement (PPA)** — A long-term contract under which a buyer agrees to take electricity (or its clean-energy attributes) from a specific generator. Microsoft/Constellation, Meta/Constellation, and Google/Kairos all signed PPAs; a PPA can finance a plant's operation without electrons physically flowing from that plant to the buyer's data center.
+
+**Behind the meter** — A load located on the generator's side of the utility billing meter rather than the public grid's side. The phrase makes the arrangement sound private, but if the load needs backup supply or affects market dispatch, the public system retains an interest.
+
+**Firm clean power** — Low-carbon electricity available continuously, including overnight, during heat waves, and during low-wind periods. Hourly matching is a stricter claim than annual matching. Nuclear, hydro with reservoirs, geothermal, and storage-paired renewables qualify in different degrees; intermittent solar and wind alone do not.
+
+**Small modular reactor (SMR)** — A class of advanced nuclear reactor designed to be built in factory modules and deployed at smaller unit sizes than conventional plants. Google's Kairos Power agreement targets first deployment by 2030 and up to 500 MW by 2035. SMRs face technology, licensing, construction, cost, and fuel uncertainties.
+
+**Interconnection queue** — The ordered list of generation and large-load projects awaiting study and approval to connect to a transmission system. Data centers can be operational in two to three years; queue studies, transmission upgrades, and generator builds typically move on longer clocks. The mismatch is the chapter's structural tension.
+
+</details>
+
 The cloud was never weightless.
 
 It only looked that way from the browser.
@@ -101,6 +158,12 @@ That procedural framing is important because the political slogans were tempting
 
 Commissioner Mark Christie's concurrence showed why the issue mattered. He focused on reliability, consumer costs, precedent, backup service, and whether a large behind-the-meter or co-located load could benefit from the grid while avoiding costs that other customers pay. The concern was not just whether a data center could buy power from a nearby generator. It was whether that arrangement changed who pays for transmission, ancillary services, reliability support, and backup supply when the generator is unavailable or the load still depends on the grid.
 
+:::note
+> "Establishing this precedent would undermine PJM reliability and PJM competitive markets."
+
+Christie's concurrence cites the PJM Independent Market Monitor's warning to install the precedent stake: one AI-load contract, copied across PJM's nuclear fleet, becomes a tariff problem rather than a single procurement.
+:::
+
 That concern goes to the social contract of the power system. If a large load uses the grid only in emergencies but does not pay enough for the grid to be there, other customers may carry the insurance cost. If a co-located load reduces power available to the wider market, prices or reliability may change. If regulators approve one structure, other generators and data centers may copy it. A single AI campus can become precedent.
 
 Chairman Willie Phillips dissented. His dissent framed the arrangement as first-of-its-kind and argued that the Commission should have accepted it or handled the issues through subsequent stakeholder processes. He emphasized reliability and the national-security and economic importance of building AI infrastructure. In his view, rejecting the agreement risked slowing the development of power arrangements needed for large AI loads.
@@ -169,6 +232,11 @@ The deeper historical shift was that AI capability had become entangled with uti
 
 That is why Ch70 sits between data exhaustion and chip geopolitics. Ch69 showed that useful human signal was not infinitely elastic. Ch70 shows that compute is not only a number of accelerators; it is a load on a grid. Ch71 will turn to the geopolitical control of the chips themselves. Ch72 will return to the full body of the datacenter: land, water, cooling, campuses, and the industrial footprint of scale.
 
+:::note[Why this still matters today]
+Every cloud region a developer chooses sits inside a regulated power system with finite interconnection capacity. The grid timing mismatch the chapter describes — data centers in two to three years, transmission and generation on much longer clocks — is the lived reality of any platform team siting AI capacity today. The split between contractual clean-energy claims and the physical grid mix matters whenever a sustainability report is read alongside an interconnection queue. The Susquehanna order changed how co-located load arrangements are filed and contested at FERC. And nuclear procurement deals announced for 2027–2035 mean that the model stack now includes power plants on multi-year delivery clocks.
+:::
+
 The cloud had become infrastructure in the old sense.
 
 Steel, wires, fuel, permits, regulators, and clocks.
+
