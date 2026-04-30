@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-After ChatGPT, the architectural problem shifted from making models talk to letting them act. RAG gave models external memory; WebGPT taught them to search and cite; chain-of-thought made reasoning a visible scratchpad; ReAct and Toolformer fused reasoning with tool calls; OpenAI's plugins and function calling productized the interface; LangChain and AutoGPT made agent loops legible to developers. Early agents were brittle, not autonomous workers — but the center of AI applications moved from a single chat reply to model-plus-retriever-plus-tools systems.
+After ChatGPT, the architectural problem shifted from making models talk to letting them act. The next wave connected language models to memory, search, tools, schemas, and software loops. Early agents were brittle, not autonomous workers, but the center of AI applications moved from a single chat reply toward systems that could consult external state, call capabilities, and report back through a model.
 :::
 
 <details>
@@ -48,11 +48,11 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-- **Parametric memory** — what the model "knows" because it is baked into the weights from training. Hard to inspect, expensive to update.
-- **Non-parametric memory** — knowledge stored outside the model in documents, indexes, or vector stores. Can be swapped or refreshed without retraining.
+- **Parametric memory** — information represented inside the model's learned weights.
+- **Non-parametric memory** — information kept outside the model in a retrievable store.
 - **Retrieval-augmented generation (RAG)** — a pattern where the model answers using passages fetched from an external store at query time, not just from its weights.
 - **Chain-of-thought** — prompting the model to write intermediate reasoning steps before its final answer; a scratchpad pattern, not a window into the model's actual computation.
-- **ReAct loop** — interleaving thought, action, and observation: the model reasons, calls a tool, reads what came back, then reasons again.
+- **ReAct loop** — a prompting pattern that connects reasoning text with actions in an external environment.
 - **Function calling** — a structured interface where the developer describes functions and the model emits JSON arguments; the surrounding software, not the model, decides whether to execute.
 - **Prompt injection** — instructions hidden inside untrusted text (a webpage, document, or tool output) that try to hijack a tool-using model.
 
@@ -209,4 +209,3 @@ The architecture this chapter describes is what every modern AI application is m
 :::
 
 The public had met the assistant in Chapter 59. In Chapter 60, builders tried to give that assistant memory and hands. The result was powerful, unstable, and unfinished. It pointed toward the next constraint: once models act through tools, the cost of every token, every retrieval, every function call, and every retry starts to matter. The agent turn made language models operational. It also made their limits operational.
-

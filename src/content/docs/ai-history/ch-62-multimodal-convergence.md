@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Between 2021 and 2024, frontier AI stopped being text-only. CLIP (2021) and Flamingo (2022) aligned language with images and interleaved video. GPT-4 and GPT-4V (2023) put images into the chat window and exposed new visual risks. Gemini (2023) was framed as jointly trained across image, audio, video, and text. GPT-4o (2024) collapsed speech into real-time interaction. Sora and Veo (2024) pushed generation into video while listing simulator limits. Language stayed the control surface; the model's world became visual, audible, temporal.
+Between 2021 and 2024, frontier AI stopped being text-only. Research systems aligned language with images, then product systems brought vision, speech, mixed-media prompts, and video generation into the assistant frame. Language stayed the control surface, but the model's world became visual, audible, and temporal, with new latency, safety, and evaluation problems attached.
 :::
 
 <details>
@@ -14,7 +14,7 @@ Between 2021 and 2024, frontier AI stopped being text-only. CLIP (2021) and Flam
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Alec Radford et al. (OpenAI CLIP team) | — | Trained image and text encoders on 400M image-text pairs; established natural language as a supervisor for visual concepts. |
+| Alec Radford et al. (OpenAI CLIP team) | — | Established natural language as a supervisor for visual concepts. |
 | Jean-Baptiste Alayrac et al. (Flamingo team) | — | Built a visual language model handling arbitrarily interleaved images, videos, and text with free-form text outputs. |
 | OpenAI GPT-4 / GPT-4V teams | — | Shipped GPT-4 as a multimodal model with image and text inputs, then deployed vision through GPT-4V with documented risk surfaces. |
 | Google Gemini team | — | Framed Gemini as trained jointly across image, audio, video, and text with interleaved multimodal inputs. |
@@ -50,8 +50,8 @@ timeline
 - **Contrastive image-text pretraining.** CLIP's training setup: separate image and text encoders are trained so that matching pairs (a caption and its picture) land near each other in a shared representation space, while mismatched pairs are pushed apart.
 - **Interleaved input.** A prompt that mixes media in order — for example, a screenshot, then a question, then another image — rather than one isolated picture or one block of text. Flamingo and Gemini are described in their reports as supporting interleaved inputs.
 - **Native multimodality.** Used in the Gemini report to mean joint training across image, audio, video, and text in one model family, rather than a text model stitched together with separate specialist systems. Treat as a source-bound term, not a generic adjective.
-- **Spacetime patches.** Sora's representation unit: pieces of video and image latent codes that carry both spatial and temporal information, letting one model handle clips of varying duration, resolution, and aspect ratio.
-- **Three-model voice pipeline.** The earlier ChatGPT Voice Mode setup: one model transcribed audio to text, GPT-3.5 or GPT-4 processed the text, and a third model converted text back to audio. Tone, multiple speakers, background sound, and emotion were lost on the way through.
+- **Spacetime patches.** Sora's representation unit for pieces of video and image latent codes that carry both spatial and temporal information.
+- **Three-model voice pipeline.** The earlier ChatGPT Voice Mode setup that routed speech through separate transcription, language-model, and audio-generation steps.
 - **Image-borne jailbreak.** A prompt-injection attempt that hides instructions inside an image — text written on a sign, a screenshot of a UI, an embedded note — so the model has to decide whether visible text is content to describe, evidence to use, or a command to follow.
 
 </details>
@@ -177,5 +177,4 @@ The interface most people now reach for can read a screenshot, hear a question, 
 :::
 
 Multimodal convergence did not make AI understand the world the way humans do. It made the model's inputs and outputs look more like the world humans inhabit: visual, auditory, temporal, messy, and mixed. That was enough to break the old category.
-
 

@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The post-GPT era scaled because engineers learned to split one training run across thousands of accelerators. GPipe (2019) introduced micro-batch pipeline parallelism with a bubble tax. Megatron-LM 2019 added intra-layer tensor parallelism on 512 GPUs. ZeRO partitioned optimizer states, gradients, and parameters. Megatron-LM 2021 composed PTD-P across 3072 GPUs at 502 petaFLOP/s; PaLM (2022) trained 540B on 6144 TPU v4 chips. Chinchilla (2022) corrected the slogan: parameter count alone is the wrong axis of scale.
+The post-GPT era scaled because engineers learned to split one training run across many accelerators. Pipeline parallelism, tensor parallelism, optimizer-state sharding, and data parallelism each paid a different tax in memory, communication, or idle time. Megatron-LM and PaLM made thousand-chip training concrete; Chinchilla corrected the slogan: parameter count alone is the wrong axis of scale.
 :::
 
 <details>
@@ -17,8 +17,8 @@ The post-GPT era scaled because engineers learned to split one training run acro
 | Yanping Huang et al. | — | GPipe authors (Google); micro-batch pipeline parallelism, rematerialization, ~6B-parameter Transformer demo |
 | Mohammad Shoeybi et al. | — | Megatron-LM 2019 authors (NVIDIA); intra-layer tensor model parallelism, 8.3B Transformer on 512 GPUs |
 | Samyam Rajbhandari, Jeff Rasley, Olatunji Ruwase, Yuxiong He | — | ZeRO authors (Microsoft); optimizer-state, gradient, and parameter partitioning |
-| Narayanan et al. | — | Megatron-LM 2021 authors (NVIDIA + collaborators); PTD-P composition, 1T-parameter iteration on 3072 GPUs |
-| Aakanksha Chowdhery et al. | — | PaLM/Pathways authors (Google); 540B dense Transformer on 6144 TPU v4 chips, 46.2% MFU |
+| Narayanan et al. | — | Megatron-LM 2021 authors (NVIDIA + collaborators); composed pipeline, tensor, and data parallelism at cluster scale |
+| Aakanksha Chowdhery et al. | — | PaLM/Pathways authors (Google); TPU-side frontier-scale dense Transformer training |
 | Jordan Hoffmann et al. | — | Chinchilla authors (DeepMind); compute-optimal training argument — scale parameters and tokens together |
 
 </details>
@@ -34,9 +34,9 @@ timeline
     2019-10 / 2020-03 : Megatron-LM paper — intra-layer tensor model parallelism, 8.3B Transformer on 512 GPUs
     2019-10 / 2020-05 : ZeRO paper — optimizer-state, gradient, and parameter partitioning for memory-efficient training
     2020-01 : DeepSpeed repository created — open-source ZeRO implementation context
-    2021-04 : Megatron-LM GPU-cluster paper — PTD-P composition, 1T-parameter iteration at 502 petaFLOP/s on 3072 GPUs
+    2021-04 : Megatron-LM GPU-cluster paper — composed pipeline, tensor, and data parallelism
     2022-03 : Chinchilla paper — compute-optimal training scales parameters and tokens together
-    2022-04 / 2022-10 : PaLM paper — 540B dense Transformer on 6144 TPU v4 chips via Pathways
+    2022-04 / 2022-10 : PaLM paper — Pathways-era TPU training at frontier scale
 ```
 
 </details>
@@ -52,11 +52,11 @@ timeline
 
 **Pipeline bubble** — Idle time at the start (later stages waiting for work) and end (earlier stages done while later stages drain) of a pipeline schedule. GPipe amortized the bubble by increasing the micro-batch count, but the tax never fully disappears.
 
-**ZeRO (Zero Redundancy Optimizer)** — Microsoft's three-stage scheme that partitions optimizer states (stage 1), then gradients (stage 2), then parameters (stage 3) across data-parallel workers — eliminating memory redundancy at the cost of additional gather/communicate operations.
+**ZeRO (Zero Redundancy Optimizer)** — Microsoft's scheme for reducing redundant model-state memory across data-parallel workers.
 
-**PTD-P** — Megatron-LM 2021 shorthand for composing **P**ipeline, **T**ensor, and **D**ata parallelism. The system maps each parallelism dimension onto cluster topology: tensor parallelism inside high-bandwidth servers, pipeline across servers, data parallelism across model replicas.
+**PTD-P** — Megatron-LM 2021 shorthand for composing **P**ipeline, **T**ensor, and **D**ata parallelism in one training system.
 
-**Model FLOPs utilization (MFU)** — The fraction of a cluster's theoretical peak FLOPs actually spent on useful model computation, after subtracting communication, idle time, input stalls, and inefficient kernels. PaLM reported 46.2% MFU for the 540B model — high by frontier-training standards.
+**Model FLOPs utilization (MFU)** — the fraction of a cluster's theoretical peak FLOPs actually spent on useful model computation.
 
 </details>
 
@@ -207,4 +207,3 @@ Every modern frontier-model release is the visible tip of a parallelism plan ben
 :::
 
 The next bottlenecks would move again. Once giant models could be trained, they had to be served cheaply and quickly. Tool-using agents would multiply calls. Long context would grow memory pressure. Millions of users would turn training miracles into inference bills. But that is the next chapter's economics. This chapter's lesson is simpler: modern AI did not scale by ignoring physics. It scaled by learning where to cut the model so physics would let the run continue.
-
