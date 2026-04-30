@@ -1,1755 +1,712 @@
 ---
 title: "Scikit-learn API & Pipelines"
+description: "Master the scikit-learn estimator/transformer/pipeline contract: fit/predict/transform, ColumnTransformer, model_selection splitters, custom transformers via BaseEstimator, persistence, and search-CV interfaces."
 slug: ai-ml-engineering/machine-learning/module-1.1-scikit-learn-api-and-pipelines
 sidebar:
   order: 1
 ---
-> **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
-**Prerequisites**: Module 25 (Python for ML), Module 26 (Neural Networks basics)
 
----
+> **AI/ML Engineering Track** | Complexity: Intermediate | Time: 4-5 hours
+> **Prerequisites**: Comfortable Python, NumPy, pandas. No prior ML library experience required.
 
-## The Algorithm That Quietly Runs the World
+## Learning Outcomes
 
-**Seattle, Washington. August 2014. 2:17 AM.**
+By the end of this module, a practitioner will be able to:
 
-Tianqi Chen stared at his screen, watching the numbers scroll by. His new algorithm—XGBoost—had just won another Kaggle competition. Not by a little, but by a lot. The dataset? Credit card fraud detection for a major bank. The prize? $10,000. But more importantly, the implications.
+1. **Design** a leakage-safe preprocessing-and-modeling workflow using `Pipeline` and `ColumnTransformer` so that no validation-set statistics ever influence training.
+2. **Evaluate** a candidate model with the right `model_selection` splitter (`KFold`, `StratifiedKFold`, `GroupKFold`, `TimeSeriesSplit`) for the problem's data structure, and explain why the wrong splitter silently inflates scores.
+3. **Debug** a sklearn estimator's behavior by inspecting `get_params`, `set_params`, fitted attributes (the trailing-underscore convention), and the steps inside a `Pipeline`.
+4. **Implement** a custom transformer that follows the estimator contract (subclassing `BaseEstimator` and `TransformerMixin`) and drops cleanly into a `Pipeline`.
+5. **Compare** `GridSearchCV` versus `RandomizedSearchCV` for hyperparameter search and choose the right one based on parameter-space size and compute budget.
 
-"This changes everything," he muttered.
+These outcomes are about the *workflow that wraps every algorithm*. The algorithms themselves — linear and logistic regression, decision trees, random forests, gradient boosting, naive Bayes, k-NN, SVMs, clustering, anomaly detection, dimensionality reduction — each get their own dedicated module later in this section.
 
-For years, machine learning competitions had been dominated by neural networks and support vector machines. Complex, finicky models that required GPUs, careful tuning, and armies of hyperparameters. Then XGBoost arrived—a humble tree-based algorithm that could be trained on a laptop and still crush the competition.
+## Why This Module Matters
 
-What happened next defied all predictions. Within two years, XGBoost would win virtually every tabular data competition on Kaggle. Companies like Airbnb, Uber, and Amazon quietly replaced their neural networks with gradient boosting for everything from pricing to fraud detection. The algorithm that academia dismissed as "just trees" became the engine of modern business AI.
+In late 2018, a mid-size lender deployed a credit-risk model that had passed every offline benchmark with a strikingly clean ROC curve. Within a quarter, expected default rates were missing the model's predictions by a wide margin in production. Postmortem traced the failure to a single line of code in their preprocessing notebook: the team had standardized features using `StandardScaler.fit_transform` over the *entire* dataset before splitting into train and test. The scaler had peeked at the test rows. The test scores were hallucinations.
 
-> "XGBoost isn't magic. It's just the chain rule applied to decision trees. But sometimes the simple ideas win."
-> — Tianqi Chen, creator of XGBoost, 2016
+The fix was not a smarter algorithm. It was a `Pipeline`.
 
----
+This is the most common failure mode in applied machine learning, and the most preventable. Every production-grade scikit-learn workflow funnels every transformer and every estimator through a single `Pipeline` object, calls `fit` only on training data, and lets the cross-validation splitters do the splitting. The "API" you are about to learn is the discipline that makes that workflow automatic instead of accidental.
 
-## What You'll Be Able to Do
+The same lesson reappears in subtler forms: target encoding leaking into validation, oversampling applied before splitting, hyperparameter search optimizing against a single held-out split until it overfits, and custom feature-engineering scripts that fit statistics on the wrong rows. None of these are algorithm bugs. They are workflow bugs, and the scikit-learn API design exists to prevent them.
 
-By the end of this module, you will:
-- Understand why tabular ML dominates production systems
-- Master decision trees and ensemble methods
-- Implement gradient boosting from scratch conceptually
-- Use XGBoost, LightGBM, and CatBoost effectively
-- Know when to use trees vs neural networks
-- Tune hyperparameters systematically
-- Interpret models with feature importance and SHAP
+The official scikit-learn documentation [user guide](https://scikit-learn.org/stable/user_guide.html) and [developer guide](https://scikit-learn.org/stable/developers/develop.html) codify this discipline as a contract. The rest of this module teaches that contract well enough that you can read any sklearn code and predict its data flow at a glance.
 
----
+## Section 1: The Estimator Contract
 
-##  Why Tabular ML Still Matters
+Every learnable object in scikit-learn — every model, every preprocessor — is an **estimator**. Estimators implement a tiny, predictable interface, and once you internalize it the rest of the library becomes mechanical.
 
-### The Uncomfortable Truth About Deep Learning
+### The Five Methods
 
-You've spent the last 12 modules learning deep learning, transformers, and LLMs. Here's a surprising fact:
+| Method | Inputs | Output | Who implements it |
+|---|---|---|---|
+| `fit(X, y=None)` | training data | self (mutates internal state) | every estimator |
+| `predict(X)` | new data | array of predictions | predictors (classifiers, regressors) |
+| `transform(X)` | data | transformed data | transformers (scalers, encoders, decomposers) |
+| `score(X, y)` | data + targets | scalar score | predictors (default metric per estimator type) |
+| `partial_fit(X, y=None)` | a chunk of data | self (incremental) | online-capable estimators |
 
-**~80% of production ML systems use tree-based models on tabular data.**
+A *classifier* or *regressor* implements `fit` + `predict` + `score`. A *transformer* implements `fit` + `transform`. An estimator that does both — like `PCA`, which can also predict reconstructions — implements all of them. Some estimators add `predict_proba`, `decision_function`, or `inverse_transform`; those are optional but well-documented when present.
 
-```
-PRODUCTION ML REALITY
-=====================
+The key invariant is that **fitted state lives on the estimator**, in attributes whose names end in a trailing underscore. After calling `fit` on `LinearRegression`, you can read `coef_`, `intercept_`, and `n_features_in_`. Before `fit`, those attributes do not exist. This convention is enforced by the developer guide and is the fastest way to tell at a glance whether you are looking at a hyperparameter (no underscore, set in `__init__`) or a learned parameter (trailing underscore, set in `fit`).
 
-What gets the hype:          What runs in production:
-- gpt-5, Claude              - XGBoost fraud detection
-- Stable Diffusion           - LightGBM recommendation ranking
-- Self-driving cars          - Random Forest credit scoring
-- ChatGPT                    - Gradient Boosting churn prediction
+> **Pause and predict** — Suppose you write `model = Ridge(alpha=1.0)` then immediately try to access `model.coef_`. What happens? Why? (Answer: `AttributeError`. `coef_` is set during `fit`. `alpha` is the hyperparameter you passed; `coef_` is the learned parameter that does not yet exist.)
 
-Deep Learning wins:          Tree-based models win:
-- Images                     - Tabular data (most business data!)
-- Text                       - Structured databases
-- Audio                      - Time series features
-- Video                      - Mixed feature types
-```
-
-**Did You Know?** In Kaggle competitions on tabular data, gradient boosting methods (XGBoost, LightGBM, CatBoost) win approximately 70% of the time. Deep learning rarely beats them on structured data, despite years of research into "deep learning for tabular data."
-
-### Why Trees Beat Neural Nets on Tabular Data
+### Worked Example: Reading a Fitted Estimator
 
 ```python
-# The fundamental difference
+import numpy as np
+from sklearn.linear_model import Ridge
 
-# Neural Networks need:
-# 1. Lots of data (often millions of samples)
-# 2. Homogeneous features (all same type/scale)
-# 3. Spatial/temporal structure (images, sequences)
-# 4. Careful preprocessing and normalization
-# 5. GPU for efficient training
+# Toy data: y = 2 * x_0 + 3 * x_1 + noise
+rng = np.random.default_rng(seed=0)
+X = rng.normal(size=(200, 2))
+y = 2.0 * X[:, 0] + 3.0 * X[:, 1] + rng.normal(scale=0.1, size=200)
 
-# Tree-based models handle:
-# 1. Small to medium datasets (thousands to millions)
-# 2. Mixed feature types (categorical + numerical)
-# 3. Irregular feature relationships
-# 4. Missing values natively
-# 5. No normalization needed
-# 6. Fast training on CPU
+model = Ridge(alpha=1.0)             # hyperparameters set here
+print(hasattr(model, "coef_"))        # False — not fitted yet
+
+model.fit(X, y)                       # learns from data
+
+# Anything ending in "_" is a fitted attribute
+print("coef_      :", model.coef_)        # ~[2.0, 3.0]
+print("intercept_ :", model.intercept_)   # ~0.0
+print("n_features_in_:", model.n_features_in_)
+print("score on training:", model.score(X, y))  # default R^2
 ```
 
-The key insight: **tabular data lacks the spatial/temporal structure that makes deep learning shine.**
+The trailing-underscore convention is enforced everywhere — `KMeans` exposes `cluster_centers_`, `RandomForestClassifier` exposes `feature_importances_`, `StandardScaler` exposes `mean_` and `scale_`. When you debug a misbehaving sklearn workflow, look at the trailing-underscore attributes first; they tell you what the model actually learned.
 
----
+### `partial_fit`: When the Dataset Does Not Fit in Memory
 
-##  Decision Trees: The Foundation
+A subset of estimators implement `partial_fit`, which accepts data in chunks and updates the model incrementally. This is the right interface for streaming or out-of-core workloads, and the user guide on [scaling computationally](https://scikit-learn.org/stable/user_guide.html) discusses which estimators support it. Notable examples include `SGDClassifier`, `SGDRegressor`, `PassiveAggressiveClassifier`, `MiniBatchKMeans`, and `MultinomialNB`. Calling `fit` would reset the estimator; calling `partial_fit` repeatedly accumulates state. Most batch-trained estimators (`RandomForest`, `SVC`, `LogisticRegression` with default solver) do *not* support `partial_fit` and will raise.
 
-Think of a decision tree like a game of "20 Questions." You're trying to guess what animal someone is thinking of: "Is it bigger than a cat? Does it live in water? Can it fly?" Each question narrows down the possibilities until you reach an answer. A decision tree works the same way—it asks a series of yes/no questions about your data (Is age > 30? Is income > $50,000?) until it reaches a prediction. The art is asking the *right* questions in the *right* order to classify examples as quickly as possible.
+### `get_params` and `set_params`
 
-### How Decision Trees Work
-
-A decision tree makes predictions by asking a series of yes/no questions:
-
-```
-                    Is age > 30?
-                   /            \
-                 Yes             No
-                 /                \
-        Income > 50K?         Student?
-        /          \          /       \
-      Yes          No       Yes        No
-       |            |         |          |
-    Approve     Deny      Approve     Deny
-```
-
-### The Math: Information Gain
-
-Trees split on features that maximize **information gain** (or minimize impurity):
+Every estimator inherits two reflective methods from `BaseEstimator`:
 
 ```python
-def gini_impurity(labels):
-    """
-    Gini impurity: probability of misclassifying a random sample.
+from sklearn.linear_model import LogisticRegression
 
-    Gini = 1 - sum(p_i^2) for all classes i
+clf = LogisticRegression(C=0.5, penalty="l2", max_iter=200)
 
-    Perfect purity: Gini = 0 (all same class)
-    Maximum impurity: Gini = 0.5 (binary, 50/50 split)
-    """
-    if len(labels) == 0:
-        return 0
+# Inspect every constructor argument
+clf.get_params()
+# {'C': 0.5, 'penalty': 'l2', 'max_iter': 200, ...}
 
-    counts = {}
-    for label in labels:
-        counts[label] = counts.get(label, 0) + 1
-
-    total = len(labels)
-    gini = 1.0
-    for count in counts.values():
-        p = count / total
-        gini -= p ** 2
-
-    return gini
-
-
-def information_gain(parent, left_child, right_child):
-    """
-    Information gain from a split.
-
-    IG = Gini(parent) - weighted_avg(Gini(children))
-    """
-    parent_gini = gini_impurity(parent)
-
-    n = len(parent)
-    n_left = len(left_child)
-    n_right = len(right_child)
-
-    if n_left == 0 or n_right == 0:
-        return 0
-
-    weighted_child_gini = (
-        (n_left / n) * gini_impurity(left_child) +
-        (n_right / n) * gini_impurity(right_child)
-    )
-
-    return parent_gini - weighted_child_gini
+# Mutate a hyperparameter without reconstructing
+clf.set_params(C=2.0)
+clf.get_params()["C"]   # 2.0
 ```
 
-### Building a Simple Decision Tree
+Search-CV objects (`GridSearchCV`, `RandomizedSearchCV`) and pipelines lean on this contract heavily — it is how they programmatically explore a hyperparameter space without knowing anything about the underlying estimator.
+
+## Section 2: Pipelines and the Leakage Problem
+
+A pipeline is an estimator that chains other estimators together. The output of each step's `transform` becomes the input of the next step's `fit` (and `transform`, and `predict`). The last step is typically a final estimator (classifier or regressor); every preceding step must be a transformer.
+
+### Why Pipelines Exist
+
+Consider this innocent-looking code:
 
 ```python
-class DecisionTreeNode:
-    """A node in the decision tree."""
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
 
-    def __init__(self):
-        self.feature_index = None  # Which feature to split on
-        self.threshold = None      # Split threshold
-        self.left = None           # Left child (feature <= threshold)
-        self.right = None          # Right child (feature > threshold)
-        self.value = None          # Leaf prediction (if leaf node)
-        self.is_leaf = False
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)            # fits on the FULL dataset
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y)
 
-
-def build_tree(X, y, max_depth=10, min_samples=2, depth=0):
-    """
-    Recursively build a decision tree.
-
-    Args:
-        X: Feature matrix (n_samples, n_features)
-        y: Labels (n_samples,)
-        max_depth: Maximum tree depth
-        min_samples: Minimum samples to split
-        depth: Current depth
-
-    Returns:
-        DecisionTreeNode
-    """
-    node = DecisionTreeNode()
-
-    # Stopping conditions
-    if (depth >= max_depth or
-        len(y) < min_samples or
-        len(set(y)) == 1):  # Pure node
-        node.is_leaf = True
-        node.value = most_common(y)
-        return node
-
-    # Find best split
-    best_gain = 0
-    best_feature = None
-    best_threshold = None
-
-    for feature_idx in range(X.shape[1]):
-        thresholds = sorted(set(X[:, feature_idx]))
-
-        for threshold in thresholds:
-            left_mask = X[:, feature_idx] <= threshold
-            right_mask = ~left_mask
-
-            if sum(left_mask) == 0 or sum(right_mask) == 0:
-                continue
-
-            gain = information_gain(y, y[left_mask], y[right_mask])
-
-            if gain > best_gain:
-                best_gain = gain
-                best_feature = feature_idx
-                best_threshold = threshold
-
-    # No good split found
-    if best_gain == 0:
-        node.is_leaf = True
-        node.value = most_common(y)
-        return node
-
-    # Create split
-    node.feature_index = best_feature
-    node.threshold = best_threshold
-
-    left_mask = X[:, best_feature] <= best_threshold
-    node.left = build_tree(X[left_mask], y[left_mask],
-                          max_depth, min_samples, depth + 1)
-    node.right = build_tree(X[~left_mask], y[~left_mask],
-                           max_depth, min_samples, depth + 1)
-
-    return node
+clf = LogisticRegression()
+clf.fit(X_train, y_train)
+print(clf.score(X_test, y_test))
 ```
 
-**Did You Know?** The first decision tree algorithm (ID3) was created by Ross Quinlan in 1986. He later developed C4.5, which became one of the top 10 data mining algorithms ever. His work was done at the University of Sydney and his algorithms remain foundational to modern ML.
+This is a leakage bug. `StandardScaler` learned its mean and standard deviation from the entire dataset, including the rows that are about to become the test set. The test score is biased upward because the scaler has already seen the test distribution. In a small academic dataset this bias is mild; in noisy real-world data it can mask serious overfitting.
 
----
-
-##  Ensemble Methods: Better Together
-
-### The Wisdom of Crowds
-
-Think of ensemble methods like a jury instead of a single judge. A single judge might have biases or make mistakes, but when 12 jurors deliberate together, their collective wisdom tends to be more accurate and reliable. The same principle applies to decision trees: any single tree might overfit or miss important patterns, but when you combine hundreds of trees—each trained slightly differently—their averaged predictions become remarkably robust. This is the "wisdom of crowds" applied to machine learning.
-
-A single decision tree is prone to overfitting. The solution: **combine many trees**.
-
-```
-ENSEMBLE METHODS
-================
-
-Single Tree:         Ensemble:
-- High variance      - Lower variance
-- Overfits easily    - Generalizes better
-- Unstable           - More stable
-- Fast               - Still fast (parallelizable)
-
-Key insight: Diverse weak learners → strong learner
-```
-
-### Bagging vs Boosting
-
-Two main approaches to combining trees:
-
-```
-BAGGING (Bootstrap Aggregating)
-===============================
-
-1. Create B bootstrap samples (random sampling with replacement)
-2. Train one tree on each sample
-3. Average predictions (regression) or vote (classification)
-
-Example: Random Forest
-
-   Data → [Sample 1] → Tree 1 ─┐
-        → [Sample 2] → Tree 2 ─┼→ Average/Vote → Prediction
-        → [Sample 3] → Tree 3 ─┘
-
-Key: Trees are trained INDEPENDENTLY (parallelizable!)
-
-
-BOOSTING
-========
-
-1. Train first weak learner
-2. Focus on examples the first learner got wrong
-3. Train second learner on weighted data
-4. Repeat, combining learners
-
-Example: Gradient Boosting
-
-   Data → Tree 1 → Residual 1 → Tree 2 → Residual 2 → Tree 3 → ...
-                                                              ↓
-                                          Sum all trees → Prediction
-
-Key: Trees are trained SEQUENTIALLY (each corrects previous errors)
-```
-
-### Random Forest: The Reliable Workhorse
-
-Random Forest adds extra randomness to bagging:
+The pipeline-correct version:
 
 ```python
-# Random Forest = Bagging + Feature Randomness
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
 
-def random_forest_predict(X, trees, feature_subsets):
-    """
-    Prediction with random forest.
+X_train, X_test, y_train, y_test = train_test_split(X, y)
 
-    Each tree:
-    1. Was trained on a bootstrap sample
-    2. Only considered a random subset of features at each split
-    """
-    predictions = []
+pipe = Pipeline([
+    ("scaler", StandardScaler()),
+    ("clf",    LogisticRegression()),
+])
 
-    for tree, features in zip(trees, feature_subsets):
-        # Use only the features this tree was trained on
-        X_subset = X[:, features]
-        pred = tree.predict(X_subset)
-        predictions.append(pred)
-
-    # Majority vote for classification
-    return mode(predictions, axis=0)
-
-
-# Hyperparameters:
-# - n_estimators: Number of trees (more = better, diminishing returns)
-# - max_features: Features to consider at each split (sqrt(n) typical)
-# - max_depth: Tree depth (deeper = more complex)
-# - min_samples_split: Minimum samples to split a node
+pipe.fit(X_train, y_train)        # scaler.fit on TRAIN only
+print(pipe.score(X_test, y_test)) # scaler.transform applied to TEST
 ```
 
-**Did You Know?** Random Forest was invented by Leo Breiman at UC Berkeley in 2001. Breiman was a legendary statistician who also invented bagging and CART (Classification and Regression Trees). He famously criticized the statistics community for being too focused on simple models, arguing that prediction accuracy should matter more than interpretability.
+Now `fit` on the pipeline calls `fit_transform` on every step except the last, and `fit` on the last. `score` and `predict` call `transform` on every step except the last, and the appropriate predictor method on the last. The training statistics never see the test rows.
 
----
-
-##  Gradient Boosting: The Competition Winner
-
-Think of gradient boosting like a team of specialists improving a student's essay. The first editor fixes major structural problems. The second editor focuses on what the first missed—maybe awkward sentences. The third targets remaining grammar issues. Each editor only works on the "residual errors" left by previous editors. No single editor needs to be perfect; they just need to incrementally improve what's already there. By the end, the essay is polished—not by one brilliant editor, but by a sequence of focused corrections.
-
-### The Key Insight
-
-Gradient boosting builds trees **sequentially**, where each tree corrects the errors (residuals) of the previous trees:
+### Anatomy of a Pipeline
 
 ```
-GRADIENT BOOSTING INTUITION
-===========================
+                 ┌──────────┐    ┌──────────┐    ┌─────────┐
+   X_train ────▶ │ scaler   │ ──▶│ encoder  │ ──▶│ classif │
+                 │ fit_trf  │    │ fit_trf  │    │ fit     │
+                 └──────────┘    └──────────┘    └─────────┘
 
-Initial prediction: Mean of all labels
-                    ↓
-Tree 1 predicts:    Residuals (errors) from initial prediction
-                    ↓
-Combined:           Initial + Tree 1
-                    ↓
-Tree 2 predicts:    Residuals from (Initial + Tree 1)
-                    ↓
-Combined:           Initial + Tree 1 + Tree 2
-                    ↓
-...continue...
-                    ↓
-Final:              Initial + Tree 1 + Tree 2 + ... + Tree N
+                 ┌──────────┐    ┌──────────┐    ┌─────────┐
+   X_test  ────▶ │ scaler   │ ──▶│ encoder  │ ──▶│ classif │
+                 │ transform│    │ transform│    │ predict │
+                 └──────────┘    └──────────┘    └─────────┘
 ```
 
-### The Math: Gradient Descent on Functions
+The pipeline is itself an estimator: it has `fit`, `predict`, `score`, `get_params`, `set_params`. You can drop it into a cross-validator. You can put it inside `GridSearchCV`. You can pickle it. From the outside it looks like a single model, even though internally it composes several.
 
-Gradient boosting is **gradient descent in function space**:
+### Accessing Steps and Their Parameters
+
+Steps are accessible by name through `named_steps` or by index through `steps`:
 
 ```python
-def gradient_boosting_train(X, y, n_trees=100, learning_rate=0.1, max_depth=3):
-    """
-    Train a gradient boosting model.
-
-    For regression with MSE loss:
-    - Gradient of MSE = 2(prediction - target) = 2 * residual
-    - So we fit trees to negative residuals
-    """
-    # Initial prediction: mean of targets
-    initial_pred = np.mean(y)
-    predictions = np.full(len(y), initial_pred)
-
-    trees = []
-
-    for i in range(n_trees):
-        # Calculate residuals (negative gradient for MSE)
-        residuals = y - predictions
-
-        # Fit tree to residuals
-        tree = DecisionTreeRegressor(max_depth=max_depth)
-        tree.fit(X, residuals)
-        trees.append(tree)
-
-        # Update predictions with learning rate
-        predictions += learning_rate * tree.predict(X)
-
-    return initial_pred, trees, learning_rate
-
-
-def gradient_boosting_predict(X, initial_pred, trees, learning_rate):
-    """
-    Make predictions with gradient boosting model.
-    """
-    predictions = np.full(len(X), initial_pred)
-
-    for tree in trees:
-        predictions += learning_rate * tree.predict(X)
-
-    return predictions
+pipe.named_steps["scaler"].mean_       # fitted state of the scaler step
+pipe.named_steps["clf"].coef_          # fitted state of the classifier step
 ```
 
-### Why Learning Rate Matters
-
-```
-LEARNING RATE EFFECT
-====================
-
-High learning rate (0.3):
-- Fewer trees needed
-- Faster training
-- Risk of overfitting
-- Each tree has big impact
-
-Low learning rate (0.01):
-- More trees needed
-- Slower training
-- Better generalization
-- Each tree has small impact
-
-Rule of thumb: Lower learning rate + more trees = better results
-               (but more computation)
-```
-
-**Did You Know?** The gradient boosting algorithm was developed by Jerome Friedman at Stanford in 2001. His paper "Greedy Function Approximation: A Gradient Boosting Machine" is one of the most cited ML papers ever. Friedman also created MARS (Multivariate Adaptive Regression Splines) and co-authored "The Elements of Statistical Learning," the bible of classical ML.
-
----
-
-##  The Big Three: XGBoost, LightGBM, CatBoost
-
-### XGBoost: The Kaggle King
-
-XGBoost (eXtreme Gradient Boosting) revolutionized gradient boosting in 2014:
+Hyperparameters of inner steps follow the `<step>__<param>` double-underscore convention:
 
 ```python
-import xgboost as xgb
-
-# Create DMatrix (XGBoost's optimized data structure)
-dtrain = xgb.DMatrix(X_train, label=y_train)
-dtest = xgb.DMatrix(X_test, label=y_test)
-
-# Parameters
-params = {
-    'objective': 'binary:logistic',  # or 'reg:squarederror'
-    'eval_metric': 'auc',
-    'max_depth': 6,
-    'learning_rate': 0.1,
-    'subsample': 0.8,           # Row sampling
-    'colsample_bytree': 0.8,    # Column sampling
-    'reg_alpha': 0.1,           # L1 regularization
-    'reg_lambda': 1.0,          # L2 regularization
-    'tree_method': 'hist',      # Fast histogram-based
-}
-
-# Train with early stopping
-model = xgb.train(
-    params,
-    dtrain,
-    num_boost_round=1000,
-    evals=[(dtrain, 'train'), (dtest, 'test')],
-    early_stopping_rounds=50,
-    verbose_eval=100
-)
-
-# Predict
-predictions = model.predict(dtest)
+pipe.set_params(clf__C=0.1, scaler__with_mean=False)
 ```
 
-**XGBoost Innovations:**
-- Regularized objective (L1 + L2)
-- Second-order gradients (Newton's method)
-- Parallel tree construction
-- Sparsity-aware algorithm
-- Cache optimization
+This naming is what makes `GridSearchCV` over a pipeline ergonomic. You write `param_grid={"clf__C": [0.01, 0.1, 1.0]}` and the search-CV navigates into the right step automatically.
 
-### LightGBM: The Speed Demon
+### `make_pipeline`: The Quick Form
 
-LightGBM (Microsoft, 2017) is faster than XGBoost on large datasets:
+For one-off pipelines where step names do not matter, `make_pipeline` auto-names each step after its class (lowercased):
 
 ```python
-import lightgbm as lgb
+from sklearn.pipeline import make_pipeline
 
-# Create Dataset
-train_data = lgb.Dataset(X_train, label=y_train)
-test_data = lgb.Dataset(X_test, label=y_test, reference=train_data)
-
-# Parameters
-params = {
-    'objective': 'binary',
-    'metric': 'auc',
-    'boosting_type': 'gbdt',
-    'num_leaves': 31,           # Key param! Not max_depth
-    'learning_rate': 0.1,
-    'feature_fraction': 0.8,    # Column sampling
-    'bagging_fraction': 0.8,    # Row sampling
-    'bagging_freq': 5,
-    'verbose': -1
-}
-
-# Train
-model = lgb.train(
-    params,
-    train_data,
-    num_boost_round=1000,
-    valid_sets=[train_data, test_data],
-    callbacks=[lgb.early_stopping(50)]
-)
-
-# Predict
-predictions = model.predict(X_test)
+pipe = make_pipeline(StandardScaler(), LogisticRegression())
+pipe.named_steps   # {"standardscaler": ..., "logisticregression": ...}
 ```
 
-**LightGBM Innovations:**
-- **Leaf-wise growth** (vs XGBoost's level-wise)
-- **Gradient-based One-Side Sampling (GOSS)**: Focus on large gradients
-- **Exclusive Feature Bundling (EFB)**: Bundle sparse features
-- **Histogram-based**: Bin continuous features
+Use the explicit `Pipeline([(name, step), ...])` form when you plan to grid-search hyperparameters or read the steps by name; use `make_pipeline` for prototypes.
 
-### CatBoost: The Categorical Champion
+## Section 3: ColumnTransformer for Heterogeneous Data
 
-CatBoost (Yandex, 2017) handles categorical features natively:
+`Pipeline` chains transformers vertically. `ColumnTransformer` arranges them horizontally — different columns get different preprocessing in parallel, then the outputs are concatenated.
+
+This is the most common preprocessing pattern in tabular ML, because real datasets mix numerical columns (need scaling), low-cardinality categorical columns (need one-hot encoding), high-cardinality categorical columns (need target or hashing encoding), and text columns (need vectorization).
+
+### The Pattern
 
 ```python
-from catboost import CatBoostClassifier, Pool
-
-# Specify categorical features
-cat_features = ['city', 'device_type', 'browser']
-
-# Create Pool (CatBoost's data structure)
-train_pool = Pool(X_train, y_train, cat_features=cat_features)
-test_pool = Pool(X_test, y_test, cat_features=cat_features)
-
-# Train
-model = CatBoostClassifier(
-    iterations=1000,
-    learning_rate=0.1,
-    depth=6,
-    l2_leaf_reg=3,
-    early_stopping_rounds=50,
-    verbose=100
-)
-
-model.fit(train_pool, eval_set=test_pool)
-
-# Predict
-predictions = model.predict_proba(X_test)[:, 1]
-```
-
-**CatBoost Innovations:**
-- **Ordered boosting**: Prevents target leakage
-- **Native categorical encoding**: No one-hot needed
-- **Symmetric trees**: Faster inference
-- **GPU support**: Built-in
-
-### Comparison Table
-
-| Feature | XGBoost | LightGBM | CatBoost |
-|---------|---------|----------|----------|
-| Speed | Fast | Fastest | Medium |
-| Memory | Medium | Low | High |
-| Categorical handling | Manual | Manual | Native! |
-| GPU support | Yes | Yes | Yes (best) |
-| Tree growth | Level-wise | Leaf-wise | Symmetric |
-| Accuracy | Excellent | Excellent | Excellent |
-| Ease of use | Good | Good | Best |
-
-**Did You Know?** XGBoost was created by Tianqi Chen as a research project at the University of Washington. It became so dominant that for several years, "XGBoost" was practically synonymous with "winning Kaggle competition." Chen later co-created Apache TVM and MXNet.
-
----
-
-##  When to Use Trees vs Neural Networks
-
-### Decision Framework
-
-```
-USE TREE-BASED MODELS WHEN:
-===========================
-
- Data is tabular (rows and columns)
- Mix of categorical and numerical features
- Dataset is small to medium (< 1M rows)
- Features have different scales
- Missing values are present
- Interpretability matters
- Training time is constrained
- No GPU available
-
-Examples:
-- Credit scoring
-- Fraud detection
-- Customer churn
-- Click-through rate prediction
-- Medical diagnosis
-- Insurance pricing
-
-
-USE NEURAL NETWORKS WHEN:
-=========================
-
- Data has spatial structure (images)
- Data has sequential structure (text, audio)
- Very large datasets (millions+ samples)
- Features are homogeneous
- Transfer learning is applicable
- End-to-end learning is beneficial
- GPU is available
-
-Examples:
-- Image classification
-- Natural language processing
-- Speech recognition
-- Recommendation (with embeddings)
-- Game playing
-```
-
-### Hybrid Approaches
-
-Modern systems often combine both:
-
-```python
-# Example: Neural network embeddings + gradient boosting
-
-# 1. Use neural net to create embeddings for categorical features
-user_embedding = neural_net.encode(user_features)
-item_embedding = neural_net.encode(item_features)
-
-# 2. Concatenate with other features
-combined_features = np.concatenate([
-    user_embedding,
-    item_embedding,
-    numerical_features,
-    categorical_encoded
-], axis=1)
-
-# 3. Train gradient boosting on combined features
-model = lgb.train(params, combined_features, labels)
-```
-
----
-
-##  Hyperparameter Tuning
-
-### The Most Important Parameters
-
-```python
-# XGBoost/LightGBM key parameters
-
-CRITICAL_PARAMS = {
-    # Tree complexity
-    'max_depth': [3, 5, 7, 9],           # Deeper = more complex
-    'num_leaves': [15, 31, 63, 127],     # LightGBM: 2^depth - 1
-    'min_child_weight': [1, 3, 5, 10],   # Minimum samples in leaf
-
-    # Regularization
-    'learning_rate': [0.01, 0.05, 0.1],  # Lower = more trees needed
-    'reg_alpha': [0, 0.1, 1],            # L1 regularization
-    'reg_lambda': [0, 0.1, 1],           # L2 regularization
-
-    # Sampling (prevent overfitting)
-    'subsample': [0.6, 0.8, 1.0],        # Row sampling
-    'colsample_bytree': [0.6, 0.8, 1.0], # Column sampling
-
-    # Number of trees
-    'n_estimators': [100, 500, 1000],    # Use early stopping!
-}
-```
-
-### Tuning Strategy
-
-```python
-from sklearn.model_selection import cross_val_score
-import optuna
-
-def objective(trial):
-    """Optuna objective for hyperparameter tuning."""
-
-    params = {
-        'objective': 'binary',
-        'metric': 'auc',
-        'verbosity': -1,
-
-        # Parameters to tune
-        'num_leaves': trial.suggest_int('num_leaves', 20, 150),
-        'max_depth': trial.suggest_int('max_depth', 3, 12),
-        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
-        'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1.0),
-        'bagging_fraction': trial.suggest_float('bagging_fraction', 0.5, 1.0),
-        'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-        'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
-        'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
-        'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
-    }
-
-    # Cross-validation
-    model = lgb.LGBMClassifier(**params, n_estimators=1000)
-
-    scores = cross_val_score(
-        model, X_train, y_train,
-        cv=5, scoring='roc_auc',
-        fit_params={'callbacks': [lgb.early_stopping(50)]}
-    )
-
-    return scores.mean()
-
-
-# Run optimization
-study = optuna.create_study(direction='maximize')
-study.optimize(objective, n_trials=100)
-
-print(f"Best AUC: {study.best_value:.4f}")
-print(f"Best params: {study.best_params}")
-```
-
-**Did You Know?** Optuna was created by Preferred Networks, a Japanese AI startup. It uses sophisticated algorithms like Tree-structured Parzen Estimator (TPE) to explore hyperparameter space efficiently. The name comes from "optimize" + "tuna" (a fish that swims efficiently through water, like the algorithm through parameter space).
-
----
-
-##  Feature Importance & Interpretability
-
-### Built-in Feature Importance
-
-```python
-import matplotlib.pyplot as plt
-
-# Train model
-model = lgb.LGBMClassifier(n_estimators=100)
-model.fit(X_train, y_train)
-
-# Get feature importance
-importance = model.feature_importances_
-feature_names = X_train.columns
-
-# Plot
-plt.figure(figsize=(10, 8))
-sorted_idx = importance.argsort()
-plt.barh(range(len(sorted_idx)), importance[sorted_idx])
-plt.yticks(range(len(sorted_idx)), [feature_names[i] for i in sorted_idx])
-plt.xlabel('Feature Importance')
-plt.title('LightGBM Feature Importance')
-plt.tight_layout()
-plt.show()
-```
-
-### SHAP Values: The Gold Standard
-
-Think of SHAP values like dividing a restaurant bill fairly among friends. If four friends go out and the total is $100, but Alice ordered expensive wine while Bob just had salad, you don't split it evenly—you figure out each person's fair contribution. SHAP does the same for predictions: if your model predicts someone will default on a loan, SHAP calculates exactly how much each feature (income, credit score, debt ratio) contributed to that prediction. It's fair, consistent, and mathematically rigorous—based on Nobel Prize-winning game theory!
-
-SHAP (SHapley Additive exPlanations) provides consistent, theoretically-grounded feature importance:
-
-```python
-import shap
-
-# Create explainer
-explainer = shap.TreeExplainer(model)
-
-# Calculate SHAP values
-shap_values = explainer.shap_values(X_test)
-
-# Summary plot
-shap.summary_plot(shap_values, X_test, feature_names=feature_names)
-
-# Force plot for single prediction
-shap.force_plot(
-    explainer.expected_value,
-    shap_values[0],
-    X_test.iloc[0],
-    feature_names=feature_names
-)
-
-# Dependence plot
-shap.dependence_plot('feature_name', shap_values, X_test)
-```
-
-**SHAP Interpretation:**
-- Positive SHAP = pushes prediction higher
-- Negative SHAP = pushes prediction lower
-- Magnitude = importance for that prediction
-
-**Did You Know?** SHAP values come from game theory! They were invented by Lloyd Shapley in 1953 to fairly distribute payouts among players in a cooperative game. Shapley won the Nobel Prize in Economics in 2012 for this work. Scott Lundberg adapted the concept for ML in 2017.
-
----
-
-##  Production Considerations
-
-### Model Serving
-
-```python
-# Save model
-model.save_model('model.lgb')
-
-# Load for serving
-model = lgb.Booster(model_file='model.lgb')
-
-# Fast prediction
-# LightGBM is already fast, but for latency-critical apps:
-
-# 1. Reduce number of trees (trade accuracy for speed)
-model = lgb.train(params, train_data, num_boost_round=100)  # vs 1000
-
-# 2. Use smaller max_depth
-params['max_depth'] = 4  # vs 8
-
-# 3. Batch predictions when possible
-predictions = model.predict(batch_of_inputs)  # Much faster than one-by-one
-```
-
-### Monitoring and Retraining
-
-```python
-# Monitor for data drift
-def check_feature_drift(new_data, baseline_stats):
-    """Check if features have drifted from training distribution."""
-    drift_detected = {}
-
-    for feature in new_data.columns:
-        new_mean = new_data[feature].mean()
-        baseline_mean = baseline_stats[feature]['mean']
-        baseline_std = baseline_stats[feature]['std']
-
-        # Z-score drift
-        z_score = abs(new_mean - baseline_mean) / baseline_std
-
-        if z_score > 3:  # 3 standard deviations
-            drift_detected[feature] = z_score
-
-    return drift_detected
-
-
-# Retrain triggers:
-# 1. Performance degradation (monitor AUC, precision, recall)
-# 2. Significant feature drift
-# 3. Business rule changes
-# 4. Regular schedule (weekly, monthly)
-```
-
----
-
-##  Production War Stories: Gradient Boosting Gone Wrong
-
-### The Model That Cost $18 Million
-
-**Chicago. February 2022. Insurance company underwriting.**
-
-The data science team had built an XGBoost model for auto insurance pricing. It was brilliant—AUC of 0.94 on the test set, 15% better lift than the previous model. Management was thrilled. They deployed to production in Q1.
-
-By Q3, the company had lost $18 million in unexpected claims. What went wrong?
-
-**Data leakage.** One of the features was "days_since_last_claim" which was calculated at scoring time. But in training, it was calculated using future data—claims that happened after the policy was written. The model had learned to give low prices to people who wouldn't file claims... because it could see the future.
-
-**The fix:**
-
-```python
-def validate_no_leakage(X_train, y_train, feature_names):
-    """Detect potential data leakage by checking suspiciously powerful features."""
-
-    # Quick check: features that predict too well are suspicious
-    from sklearn.tree import DecisionTreeClassifier
-    from sklearn.model_selection import cross_val_score
-
-    for i, feature in enumerate(feature_names):
-        X_single = X_train[:, i].reshape(-1, 1)
-        tree = DecisionTreeClassifier(max_depth=1)
-        score = cross_val_score(tree, X_single, y_train, cv=3, scoring='roc_auc').mean()
-
-        if score > 0.75:  # Single feature predicting well = suspicious
-            print(f"️ WARNING: '{feature}' has AUC {score:.3f} alone!")
-            print(f"   Check for data leakage - should this feature exist at prediction time?")
-
-# Always run this before training
-validate_no_leakage(X_train, y_train, feature_names)
-```
-
-**Lesson**: A model that seems too good is usually cheating. Always ask: "Would I have this feature at the moment I need to make a prediction?"
-
-### The 99.9% Accurate Fraud Detector
-
-**Singapore. 2023. E-commerce payments.**
-
-A team deployed a LightGBM fraud detection model with 99.9% accuracy. Executives celebrated. Then they looked at the confusion matrix.
-
-The dataset was 99.9% legitimate transactions. The model had learned to predict "not fraud" for everything. It was 99.9% accurate and effectively useless.
-
-```python
-#  What they did
-accuracy = (y_pred == y_true).mean()  # 99.9%!
-
-#  What they should have done
-from sklearn.metrics import classification_report, confusion_matrix
-
-print(confusion_matrix(y_true, y_pred))
-# [[99900     0]
-#  [  100     0]]  # Detected ZERO fraud cases!
-
-print(classification_report(y_true, y_pred))
-# precision for fraud: 0.00
-# recall for fraud: 0.00
-```
-
-**The fix:**
-
-```python
-from sklearn.metrics import roc_auc_score, precision_recall_curve, average_precision_score
-
-# Always use these metrics for imbalanced data:
-print(f"AUC-ROC: {roc_auc_score(y_true, y_proba):.4f}")
-print(f"Average Precision: {average_precision_score(y_true, y_proba):.4f}")
-
-# And visualize the trade-offs
-precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
-# Choose threshold based on business cost of false positives vs false negatives
-```
-
-**Lesson**: Never use accuracy for imbalanced datasets. A coin flip has 50% accuracy; predicting the majority class beats that but catches nothing.
-
-### The Feature That Worked Too Well
-
-**Austin. 2021. Credit scoring startup.**
-
-The model used "zip_code" as a feature. It improved AUC significantly. The team was proud until the compliance team reviewed it.
-
-Zip codes in the US are highly correlated with race. The model had effectively learned to discriminate by race—a violation of the Equal Credit Opportunity Act. The company faced regulatory investigation and had to rebuild their entire model.
-
-```python
-# Check for proxy discrimination
-def fairness_audit(model, X_test, sensitive_features):
-    """Check if model predictions vary by sensitive attributes."""
-    from sklearn.metrics import roc_auc_score
-
-    for feature in sensitive_features:
-        groups = X_test[feature].unique()
-        print(f"\nAnalyzing: {feature}")
-
-        for group in groups:
-            mask = X_test[feature] == group
-            if mask.sum() < 100:
-                continue
-            auc = roc_auc_score(y_test[mask], model.predict_proba(X_test[mask])[:, 1])
-            approval_rate = (model.predict(X_test[mask]) == 0).mean()
-            print(f"  {group}: AUC={auc:.3f}, approval_rate={approval_rate:.1%}")
-
-        # Check for disparate impact (4/5ths rule)
-        # ...
-
-fairness_audit(model, X_test, ['zip_code', 'age_group'])
-```
-
-**Lesson**: High-performing features may encode protected attributes. Always audit for fairness before deployment.
-
----
-
-##  Common Mistakes and How to Avoid Them
-
-### Mistake 1: Not Handling Missing Values Properly
-
-Think of missing values like blank answers on a test. The absence of an answer often *means* something—maybe the student didn't know, or ran out of time, or deliberately skipped it. XGBoost can learn from this pattern.
-
-```python
-#  BAD - Dropping missing values loses information
-df = df.dropna()
-
-#  BAD - Mean imputation destroys the signal
-df['age'] = df['age'].fillna(df['age'].mean())
-
-#  GOOD - Let gradient boosting handle it natively
-# XGBoost, LightGBM, and CatBoost all handle NaN automatically
-import xgboost as xgb
-model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-model.fit(X_train, y_train)  # NaN values handled internally
-
-#  GOOD - If you must impute, add a missing indicator
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
-imputer = SimpleImputer(strategy='median', add_indicator=True)
-X_imputed = imputer.fit_transform(X)
-```
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
 
-### Mistake 2: Overfitting to Validation Set During Tuning
+numeric_features = ["age", "income", "tenure_months"]
+categorical_features = ["country", "subscription_tier"]
 
-```python
-#  BAD - Tuning on same validation set hundreds of times
-for trial in range(500):
-    params = sample_params()
-    model = lgb.LGBMClassifier(**params)
-    model.fit(X_train, y_train)
-    score = roc_auc_score(y_val, model.predict_proba(X_val)[:, 1])  # Same val set!
-    # After 500 trials, you've overfit to y_val
+numeric_pipe = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("scale",  StandardScaler()),
+])
 
-#  GOOD - Use cross-validation during tuning
-from sklearn.model_selection import cross_val_score
-for trial in range(500):
-    params = sample_params()
-    model = lgb.LGBMClassifier(**params)
-    scores = cross_val_score(model, X_train, y_train, cv=5, scoring='roc_auc')
-    score = scores.mean()  # 5-fold CV prevents overfitting
-```
+categorical_pipe = Pipeline([
+    ("impute", SimpleImputer(strategy="most_frequent")),
+    ("onehot", OneHotEncoder(handle_unknown="ignore")),
+])
 
-### Mistake 3: Using Label Encoding for Non-Ordinal Categories
-
-```python
-#  BAD - Label encoding implies ordering
-from sklearn.preprocessing import LabelEncoder
-df['city'] = LabelEncoder().fit_transform(df['city'])
-# Now NYC=3, LA=1, Chicago=0 ... model thinks Chicago < LA < NYC
-
-#  GOOD - Use CatBoost's native handling
-from catboost import CatBoostClassifier
-cat_features = ['city', 'state', 'product_category']
-model = CatBoostClassifier(cat_features=cat_features)
-model.fit(X_train, y_train)  # Handles categoricals properly
-
-#  GOOD - Or use target encoding
-from category_encoders import TargetEncoder
-encoder = TargetEncoder(cols=['city'])
-X_train_encoded = encoder.fit_transform(X_train, y_train)
-```
-
-### Mistake 4: Not Using Early Stopping
-
-```python
-#  BAD - Training until max rounds
-model = xgb.XGBClassifier(n_estimators=10000)
-model.fit(X_train, y_train)  # Will overfit badly!
-
-#  GOOD - Early stopping prevents overfitting
-model = xgb.XGBClassifier(
-    n_estimators=10000,  # High number
-    early_stopping_rounds=50,  # Stop if no improvement for 50 rounds
-    eval_metric='logloss'
+preprocess = ColumnTransformer(
+    transformers=[
+        ("num", numeric_pipe,     numeric_features),
+        ("cat", categorical_pipe, categorical_features),
+    ],
+    remainder="drop",   # any column not listed is dropped
 )
-model.fit(
-    X_train, y_train,
-    eval_set=[(X_val, y_val)],
-    verbose=False
-)
-print(f"Best iteration: {model.best_iteration}")
+
+model = Pipeline([
+    ("preprocess", preprocess),
+    ("clf",        LogisticRegression(max_iter=1000)),
+])
 ```
 
-### Mistake 5: Ignoring Feature Interaction Effects
+`model` is now a single object you can `fit`, `predict`, `score`, cross-validate, grid-search, and persist. The official compose guide on [`ColumnTransformer`](https://scikit-learn.org/stable/modules/compose.html) is the canonical reference.
+
+### `remainder` and Column Selection
+
+`remainder="drop"` (the default) discards columns not listed. `remainder="passthrough"` keeps them as-is. `remainder=SomeTransformer()` applies that transformer to the remaining columns.
+
+For projects with dozens of columns, prefer the `make_column_selector` helper:
 
 ```python
-#  BAD - Assuming features are independent
-# Trees find interactions, but only to max_depth
-# If age-income interaction matters, but max_depth=3, you might miss it
+from sklearn.compose import make_column_selector as selector
 
-#  GOOD - Create explicit interaction features for important pairs
-df['age_income_interaction'] = df['age'] * df['income']
-df['income_per_year_age'] = df['income'] / (df['age'] - 18 + 1)
+preprocess = ColumnTransformer([
+    ("num", numeric_pipe,     selector(dtype_include=np.number)),
+    ("cat", categorical_pipe, selector(dtype_include=object)),
+])
+```
 
-#  BETTER - Let the model learn deeper interactions
-model = lgb.LGBMClassifier(
-    max_depth=8,  # Allow deeper trees
-    num_leaves=64,  # More leaf nodes
-    min_child_samples=20  # But require samples per leaf
+This selects columns by dtype rather than by hard-coded name, which makes the pipeline robust to schema drift between train and serving.
+
+### Why `handle_unknown="ignore"` Matters
+
+A common production failure: the training set has values `{"US", "DE", "FR"}` for `country`; production data eventually contains `"BR"`. Without `handle_unknown="ignore"`, `OneHotEncoder.transform` raises and the model serves zero predictions until someone retrains. With `handle_unknown="ignore"`, the unseen category is encoded as all zeros and inference proceeds.
+
+> **Pause and predict** — In the pipeline above, suppose at serving time you call `model.predict(X_new)` where `X_new` has the columns in a different order than training. Does it work? (Answer: yes, because `ColumnTransformer` selects columns by name when given a DataFrame, not by position. This is one of the strongest reasons to keep the input as a DataFrame and not convert to ndarray prematurely.)
+
+## Section 4: model_selection — Splitters and Cross-Validation
+
+Cross-validation is the workhorse of honest model evaluation. The `model_selection` module ([API reference](https://scikit-learn.org/stable/api/sklearn.base.html), [user guide on cross-validation](https://scikit-learn.org/stable/modules/cross_validation.html)) splits the splitter into a small set of strategies and lets you pick the one whose assumption matches your data.
+
+### `train_test_split`: The One-Shot Split
+
+```python
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=0,
+    stratify=y,        # preserves class proportions in both splits
 )
 ```
 
----
+`stratify=y` is the difference between a believable test score and a misleading one for imbalanced classification. When the positive class is 4% of the data, a non-stratified random split can give the test set 6% positives and the training set 3.5%, distorting both training and evaluation.
 
-##  Economics of Tabular ML
+### Cross-Validation Splitters
 
-### Cost Comparison: Trees vs Neural Networks
+The right splitter depends on the data structure.
 
-| Factor | Gradient Boosting | Neural Network |
-|--------|------------------|----------------|
-| **Training hardware** | CPU (any laptop) | GPU ($1-10/hr) |
-| **Training time (1M rows)** | 5-30 minutes | 2-8 hours |
-| **Inference latency** | 0.1-1 ms | 5-50 ms |
-| **Model size** | 1-100 MB | 100 MB - 10 GB |
-| **Engineering complexity** | Low | High |
-| **Interpretability** | Built-in (SHAP) | Requires extra work |
-| **Maintenance** | Straightforward | Complex |
+| Splitter | Use when | What it preserves |
+|---|---|---|
+| `KFold(n_splits=5)` | Rows are independent. Regression, balanced classification. | Nothing extra. |
+| `StratifiedKFold(n_splits=5)` | Classification, especially imbalanced. | Class proportions per fold. |
+| `GroupKFold(n_splits=5)` | Rows have a group identifier (patient, customer, session) and the same group must not appear in train and test. | Group disjointness. |
+| `StratifiedGroupKFold(n_splits=5)` | Both group constraint and class imbalance. | Group disjointness + class proportions. |
+| `TimeSeriesSplit(n_splits=5)` | Time-ordered data; future must not leak into past. | Temporal order. |
+| `LeaveOneGroupOut()` | One held-out group per fold. | Group disjointness. |
 
-### ROI Analysis: When to Invest in Deep Learning
+Picking the wrong splitter is the second-most-common evaluation bug after leakage. `KFold` on time-series data lets the model train on the future and test on the past, producing scores that cannot exist in production. `KFold` on grouped data (multiple rows per patient) lets the model memorize patient-level signal in training and recognize it in test, again producing inflated scores.
 
-```
-DECISION FRAMEWORK: TREES VS NEURAL NETWORKS
-═══════════════════════════════════════════════
+### `cross_val_score` and `cross_validate`
 
-                  ┌───────────────────────────────┐
-                  │ Is it tabular/structured data? │
-                  └───────────────┬───────────────┘
-                                  │
-                    YES ──────────┼────────── NO
-                      │           │             │
-                      ▼           │             ▼
-              ┌───────────────┐   │     ┌───────────────┐
-              │ Start with    │   │     │ Deep Learning │
-              │ Gradient      │   │     │ (Images, text,│
-              │ Boosting      │   │     │  audio, etc.) │
-              └───────┬───────┘   │     └───────────────┘
-                      │
-            ┌─────────▼─────────┐
-            │ Is performance    │
-            │ sufficient?       │
-            └─────────┬─────────┘
-                      │
-        YES ──────────┼────────── NO
-          │           │             │
-          ▼           │             ▼
-    ┌───────────┐     │     ┌───────────────┐
-    │ Ship it!  │     │     │ Try TabNet or │
-    │ You're    │     │     │ neural nets,  │
-    │ done.     │     │     │ but likely    │
-    └───────────┘     │     │ diminishing   │
-                      │     │ returns       │
-                      │     └───────────────┘
-```
-
-### Real-World Cost Savings
-
-| Company | Switch | Savings |
-|---------|--------|---------|
-| Startup A | Neural network → XGBoost | 80% reduction in inference costs |
-| Bank B | Complex ensemble → LightGBM | $2.3M/year in compute savings |
-| E-commerce C | TensorFlow → CatBoost | 3x faster iteration cycles |
-
-**Did You Know?** According to a 2023 survey of ML practitioners, 67% of production models for business applications are tree-based. The remaining 33% are split between neural networks, linear models, and other approaches. Trees dominate because they're fast, interpretable, and good enough.
-
----
-
-##  Feature Engineering for Gradient Boosting
-
-### What Trees Need (And Don't Need)
-
-One of gradient boosting's greatest advantages is minimal preprocessing—but smart feature engineering can still improve performance significantly.
-
-**What trees handle automatically:**
-- **Missing values**: XGBoost, LightGBM, and CatBoost all learn optimal directions for missing values
-- **Feature scaling**: Trees split on feature values, so scaling doesn't affect them
-- **Outliers**: Trees are naturally robust to outliers since they split, not multiply
-- **Non-linear relationships**: Trees find breakpoints automatically
-
-**What you should still do:**
+`cross_val_score` returns an array of scores, one per fold:
 
 ```python
-# Feature engineering that helps gradient boosting
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc")
+print(scores)                # 5 numbers
+print(scores.mean(), scores.std())
+```
+
+`cross_validate` returns a dict that can include multiple metrics, train scores, and timing:
+
+```python
+from sklearn.model_selection import cross_validate
+
+result = cross_validate(
+    model, X, y,
+    cv=cv,
+    scoring=["roc_auc", "average_precision", "f1"],
+    return_train_score=True,
+    n_jobs=-1,
+)
+result["test_roc_auc"], result["train_roc_auc"], result["fit_time"]
+```
+
+`return_train_score=True` is invaluable for diagnosing overfitting — a healthy model has train and test scores in the same neighborhood; a memorizer has train scores near 1.0 and test scores far lower. Module 1.3 (Evaluation, Validation, Leakage & Calibration) goes deep on metrics; for now the relevant point is that the splitter and the pipeline are independent concerns and `cross_validate` composes them cleanly.
+
+### Why Pipelines Make Cross-Validation Honest
+
+Cross-validation only protects against leakage when the *entire* preprocessing chain is inside the pipeline. If you scale outside the pipeline and then pass the scaled features into `cross_val_score`, every fold uses statistics from rows that are about to become its validation set. The pipeline pattern eliminates that class of bug by construction.
+
+## Section 5: Custom Transformers — `BaseEstimator` and `TransformerMixin`
+
+Real projects always reach a point where built-in transformers do not cover the feature engineering you need. The sklearn [developer guide on rolling your own estimator](https://scikit-learn.org/stable/developers/develop.html) defines the contract.
+
+### The Minimal Transformer
+
+```python
+from sklearn.base import BaseEstimator, TransformerMixin
+import numpy as np
+
+class WinsorizeTransformer(BaseEstimator, TransformerMixin):
+    """Clip each numeric column to per-column [low, high] quantiles
+    learned from the training data. Compatible with sklearn's
+    Pipeline and ColumnTransformer.
+    """
+
+    def __init__(self, low_quantile=0.01, high_quantile=0.99):
+        # All __init__ arguments must be assigned to self with the
+        # same name and must not be modified. This is what makes
+        # get_params / set_params / clone work correctly.
+        self.low_quantile = low_quantile
+        self.high_quantile = high_quantile
+
+    def fit(self, X, y=None):
+        X = np.asarray(X, dtype=float)
+        self.low_  = np.quantile(X, self.low_quantile,  axis=0)
+        self.high_ = np.quantile(X, self.high_quantile, axis=0)
+        self.n_features_in_ = X.shape[1]
+        return self
+
+    def transform(self, X):
+        X = np.asarray(X, dtype=float)
+        return np.clip(X, self.low_, self.high_)
+```
+
+The class follows three rules from the developer guide:
+
+1. **`__init__` is a dumb assigner.** It only stores the arguments. No validation, no logging, no derived computation. This guarantees that `clone(estimator)` (used heavily by cross-validation and grid search) produces a fresh, equivalent instance.
+2. **`fit` returns `self`.** This is what enables the chaining idiom `MyTransformer().fit(X).transform(X)` and what `Pipeline` relies on internally.
+3. **Learned state lives in trailing-underscore attributes.** `low_`, `high_`, and `n_features_in_` only exist after `fit` has run.
+
+`TransformerMixin` gives you `fit_transform` for free (it just calls `fit` then `transform`). `BaseEstimator` gives you `get_params`, `set_params`, and the default `__repr__`.
+
+### Worked Example: A Per-Group Mean Encoder
+
+```python
+from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
 import numpy as np
 
-def engineer_features(df):
-    """Feature engineering patterns that help tree models."""
-
-    # 1. INTERACTION FEATURES
-    # Trees find interactions, but explicit ones can help
-    df['age_x_income'] = df['age'] * df['income']
-    df['spend_ratio'] = df['monthly_spend'] / (df['income'] + 1)
-
-    # 2. BINNED FEATURES
-    # Sometimes discrete bins help, especially for noisy data
-    df['age_group'] = pd.cut(df['age'],
-                             bins=[0, 25, 35, 50, 65, 100],
-                             labels=['young', 'early_career', 'mid_career', 'senior', 'retired'])
-
-    # 3. TEMPORAL FEATURES (for datetime columns)
-    df['day_of_week'] = df['timestamp'].dt.dayofweek
-    df['hour'] = df['timestamp'].dt.hour
-    df['is_weekend'] = df['day_of_week'].isin([5, 6]).astype(int)
-    df['month'] = df['timestamp'].dt.month
-
-    # 4. AGGREGATED FEATURES
-    # Historical patterns per customer, product, etc.
-    df['avg_order_value'] = df.groupby('customer_id')['order_value'].transform('mean')
-    df['orders_last_30d'] = df.groupby('customer_id')['order_id'].transform(
-        lambda x: x.rolling('30D').count()
-    )
-
-    # 5. TARGET ENCODING (careful with leakage!)
-    # Use CatBoost's native handling or proper cross-validation encoding
-    from category_encoders import TargetEncoder
-    encoder = TargetEncoder(cols=['city', 'product_category'])
-    # Important: fit only on training data!
-    df[['city_encoded', 'category_encoded']] = encoder.fit_transform(
-        df[['city', 'product_category']], df['target']
-    )
-
-    return df
-```
-
-### The 20-80 Rule of Feature Engineering
-
-**Did You Know?** In competitive ML (Kaggle), winners report that 80% of their performance gain typically comes from feature engineering, while only 20% comes from model selection and hyperparameter tuning. Yet most practitioners spend 80% of their time on modeling and 20% on features. Flip that ratio for better results.
-
-### Feature Importance Interpretation
-
-Think of feature importance like analyzing a basketball team's scoring. If one player scores 30 points per game, they seem important. But what if they also take 40 shots? Points-per-shot (efficiency) might be a better metric. Similarly, gradient boosting has multiple feature importance metrics:
-
-```python
-import lightgbm as lgb
-import shap
-
-model = lgb.LGBMClassifier()
-model.fit(X_train, y_train)
-
-# 1. SPLIT COUNT - How many times was this feature used for splitting?
-# Problem: Favors high-cardinality features
-split_importance = model.feature_importances_  # default
-
-# 2. GAIN - How much did splits on this feature improve the objective?
-# Better than split count, but can still be biased
-lgb.plot_importance(model, importance_type='gain')
-
-# 3. PERMUTATION IMPORTANCE - How much does accuracy drop if we shuffle this feature?
-# Unbiased, but slow and can be unstable
-from sklearn.inspection import permutation_importance
-perm_imp = permutation_importance(model, X_val, y_val, n_repeats=10)
-
-# 4. SHAP VALUES - Game-theoretic feature attribution
-# Gold standard for interpretation
-explainer = shap.TreeExplainer(model)
-shap_values = explainer.shap_values(X_val)
-shap.summary_plot(shap_values, X_val)
-```
-
----
-
-##  Interview Preparation: Tabular ML Questions
-
-### Q1: "When would you use XGBoost vs LightGBM vs CatBoost?"
-
-**Strong Answer**:
-"The choice depends on the dataset characteristics and constraints.
-
-**XGBoost**: I'd use this for smaller datasets (under 1M rows) where I need extensive documentation and community support. It's the most battle-tested option. The depth-first tree growth gives excellent accuracy, though it's slower than LightGBM.
-
-**LightGBM**: For larger datasets or when training speed matters. It uses histogram-based learning and leaf-wise growth, making it 10-20x faster than XGBoost on large data. I'd also use it when I need to run many hyperparameter experiments quickly.
-
-**CatBoost**: When I have many categorical features. CatBoost handles them natively with ordered target encoding, avoiding label encoding issues. It's also great when I want robust defaults—CatBoost often works well out of the box.
-
-In practice, I'd prototype with all three if I have time, since performance varies by dataset. But if I had to pick one blind, LightGBM is my default due to speed and flexibility."
-
-### Q2: "How do you handle imbalanced datasets with gradient boosting?"
-
-**Strong Answer**:
-"I'd approach this at multiple levels: sampling, weighting, and evaluation.
-
-For sampling, I might use SMOTE to oversample the minority class during training, or random undersample the majority class. I'd be careful not to apply sampling to the validation set.
-
-For weighting, XGBoost and LightGBM support `scale_pos_weight` to give higher weight to the minority class:
-
-```python
-scale_pos_weight = (y_train == 0).sum() / (y_train == 1).sum()
-model = xgb.XGBClassifier(scale_pos_weight=scale_pos_weight)
-```
-
-Most importantly, I'd change evaluation metrics. Accuracy is meaningless for imbalanced data. I'd use AUC-ROC for ranking ability, precision-recall AUC when false positives are costly, and F1 score when I need a single threshold-dependent metric.
-
-I'd also tune the classification threshold based on the business cost of false positives vs false negatives rather than using the default 0.5."
-
-### Q3: "Explain the bias-variance tradeoff in gradient boosting."
-
-**Strong Answer**:
-"In gradient boosting, we're fitting an additive model of weak learners (trees). The bias-variance tradeoff is controlled by several parameters.
-
-**High bias (underfitting)**: If trees are too shallow (low max_depth) or learning rate is too high, each tree makes large corrections but can't capture complexity. The model underfits.
-
-**High variance (overfitting)**: If trees are too deep, too many trees, or no regularization, the model memorizes the training data. New data performs poorly.
-
-Key parameters to control this:
-- `max_depth`: Higher = more variance
-- `learning_rate`: Lower = more trees needed, less variance
-- `n_estimators`: Higher = more variance (but early stopping helps)
-- `min_child_weight` / `min_samples_leaf`: Higher = less variance
-- `subsample` / `colsample_bytree`: Lower = less variance (like dropout)
-
-In practice, I set a low learning rate (0.01-0.1), high n_estimators (1000+), and use early stopping to find the sweet spot automatically."
-
-### Q4: "How do you interpret a gradient boosting model?"
-
-**Strong Answer**:
-"I use multiple interpretation approaches depending on the audience.
-
-**Global interpretation** for overall model behavior:
-- Feature importance (gain-based or permutation) shows which features drive predictions overall
-- SHAP summary plots show both importance and direction of effect
-- Partial dependence plots show how changing one feature affects predictions
-
-**Local interpretation** for individual predictions:
-- SHAP waterfall plots show how each feature pushed a specific prediction up or down
-- This is crucial for explaining decisions to customers or regulators
-
-Code example:
-```python
-import shap
-explainer = shap.TreeExplainer(model)
-shap_values = explainer.shap_values(X_test)
-
-# Global: which features matter most?
-shap.summary_plot(shap_values, X_test)
-
-# Local: why this specific prediction?
-shap.waterfall_plot(explainer.expected_value, shap_values[0], X_test.iloc[0])
-```
-
-For regulated industries like finance, I'd also document feature importance stability across different time periods and data samples to show the model isn't relying on spurious correlations."
-
-### Q5: "Design a production gradient boosting pipeline for fraud detection."
-
-**Strong Answer**:
-"I'd design a system with these components:
-
-**Data Pipeline**:
-- Feature store with point-in-time correctness (no future leakage)
-- Real-time features: transaction amount, merchant category, time of day
-- Aggregated features: transactions in last hour/day/week, spending patterns
-
-**Model Training**:
-- LightGBM for speed (need frequent retraining)
-- Stratified cross-validation (fraud is rare)
-- Scale class weights inversely to frequency
-- Early stopping on AUC-ROC
-
-**Inference**:
-- Sub-10ms latency requirement (don't block payments)
-- Model served as ONNX or native LightGBM format
-- Fall back to rules-based system if model unavailable
-
-**Monitoring**:
-- Track prediction distribution daily (drift detection)
-- Monitor fraud rate by score band
-- Alert if feature distributions shift significantly
-- A/B test new models against production
-
-**Feedback Loop**:
-- Confirmed frauds update training data
-- Retrain weekly with sliding window
-- Separate models for different transaction types (card-present vs online)
-
-The key is balancing catch rate vs customer friction. I'd work with the fraud team to set thresholds that block 90%+ of fraud while declining less than 1% of legitimate transactions."
-
----
-
-##  Hands-On Exercises
-
-### Exercise 1: Implement Gradient Boosting
-
-```python
-# TODO: Implement gradient boosting from scratch
-def gradient_boosting_from_scratch(X, y, n_trees=10, learning_rate=0.1):
+class GroupMeanEncoder(BaseEstimator, TransformerMixin):
+    """Replace a categorical column with the in-group mean of the
+    target. Demonstration only — for production target encoding,
+    prefer category_encoders.TargetEncoder which adds smoothing.
     """
-    Implement gradient boosting for regression.
 
-    1. Initialize with mean
-    2. For each tree:
-       a. Calculate residuals
-       b. Fit tree to residuals
-       c. Update predictions
-    """
-    pass
+    def __init__(self, column, default=0.0):
+        self.column = column
+        self.default = default
+
+    def fit(self, X, y):
+        # IMPORTANT: y is required. The encoder leaks if computed
+        # without a CV-aware split, which is why this is a teaching
+        # example, not a production recipe.
+        df = pd.DataFrame({self.column: X[self.column], "_y": y})
+        self.mapping_ = df.groupby(self.column)["_y"].mean().to_dict()
+        return self
+
+    def transform(self, X):
+        X = X.copy()
+        X[self.column] = X[self.column].map(self.mapping_).fillna(self.default)
+        return X
 ```
 
-### Exercise 2: Compare XGBoost, LightGBM, CatBoost
+This compiles, runs, and slots into a `Pipeline`. It also illustrates a real concern: target encoders are leakage-prone when fit on the same rows used to evaluate the model. Inside a properly-configured `Pipeline` driven by `cross_val_score`, the encoder's `fit` only sees the training fold, which is the leakage-safe arrangement. Module 1.4 (Feature Engineering & Preprocessing) treats encoders in depth.
+
+> **Pause and predict** — Suppose someone writes `GroupMeanEncoder(column="city", smoothing=10)`. What goes wrong, and what error do you get? (Answer: `__init__` does not accept `smoothing`, so Python raises `TypeError: __init__() got an unexpected keyword argument 'smoothing'`. Adding the parameter requires both an `__init__` argument *and* matching usage in `fit` — not just a decorator on the class.)
+
+### `clone` and the No-Side-Effects Rule
+
+`sklearn.base.clone` produces a copy of an estimator with the same hyperparameters but no fitted state. Cross-validation and grid search call `clone` on every fold so each fold trains a fresh model. `clone` works by reading `get_params` and re-instantiating, which is exactly why `__init__` cannot mutate its arguments — if you stored `np.array(low_quantile)` instead of `low_quantile`, clones would diverge from the original and grid search would behave non-deterministically. The user guide and developer guide both flag this as the most common mistake when authoring custom estimators.
+
+## Section 6: Persistence, Search-CV, and Meta-Estimators
+
+### Saving and Loading Fitted Estimators
+
+The official guidance lives in the [joblib persistence docs](https://joblib.readthedocs.io/en/stable/persistence.html). For typical sklearn workflows:
 
 ```python
-# TODO: Compare the three libraries on a dataset
-def compare_boosting_libraries(X_train, y_train, X_test, y_test):
-    """
-    Train all three and compare:
-    - Training time
-    - Prediction time
-    - AUC score
-    """
-    pass
+import joblib
+
+# Save the entire fitted pipeline — preprocess + estimator together
+joblib.dump(model, "model.joblib")
+
+# Later, in a serving process
+loaded = joblib.load("model.joblib")
+predictions = loaded.predict(X_new)
 ```
 
-### Exercise 3: Hyperparameter Tuning
+A few discipline points:
+
+- **Persist the whole pipeline, not just the final estimator.** If you save only the final classifier, you have lost the preprocessing chain and cannot reproduce inference.
+- **Pin library versions.** A pipeline pickled under sklearn 1.5 may not unpickle cleanly under sklearn 1.7 if internal attributes changed. Lock the version in your serving environment.
+- **Pickled files are arbitrary code.** Never `joblib.load` a file from an untrusted source. The joblib docs are explicit about this.
+- **Inspect what got saved.** `loaded.named_steps`, `loaded.get_params()`, and `loaded.feature_names_in_` (when present) tell you whether the artifact matches what you expect.
+
+For higher-stakes production (cross-version stability, security, smaller artifacts), consider `skops` or ONNX export — both linked from the joblib persistence page.
+
+### `GridSearchCV` and `RandomizedSearchCV`
+
+Both are themselves estimators. They wrap an inner estimator, exhaustively try (or randomly sample) hyperparameter combinations, evaluate each via cross-validation, and then expose the best one through their own `predict` and `score`.
 
 ```python
-# TODO: Use Optuna to tune LightGBM
-def tune_lightgbm(X, y, n_trials=50):
-    """
-    Find optimal hyperparameters using Optuna.
-    Return best params and CV score.
-    """
-    pass
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from scipy.stats import loguniform
+
+# GridSearchCV: try every combination on the grid
+grid = GridSearchCV(
+    estimator=model,
+    param_grid={
+        "clf__C":            [0.01, 0.1, 1.0, 10.0],
+        "preprocess__num__scale__with_mean": [True, False],
+    },
+    cv=cv,
+    scoring="roc_auc",
+    n_jobs=-1,
+)
+grid.fit(X_train, y_train)
+grid.best_params_
+grid.best_score_
+grid.cv_results_   # full table of every config tried
+
+# RandomizedSearchCV: sample from distributions
+rand = RandomizedSearchCV(
+    estimator=model,
+    param_distributions={
+        "clf__C": loguniform(1e-3, 1e2),
+    },
+    n_iter=50,
+    cv=cv,
+    scoring="roc_auc",
+    n_jobs=-1,
+    random_state=0,
+)
+rand.fit(X_train, y_train)
 ```
 
----
+When to use which:
 
-##  Further Reading
+- **Grid** is appropriate when the parameter space is small and discrete (a handful of values, no continuous ranges). It is exhaustive but combinatorial — adding a fourth parameter with five values multiplies runtime by five.
+- **Randomized** is the default when any parameter is continuous or the joint space is large. Sampling 50 random points usually covers the important regions of a high-dimensional space far more efficiently than a grid of the same compute budget.
 
-### Papers
-- "XGBoost: A Scalable Tree Boosting System" (Chen & Guestrin, 2016)
-- "LightGBM: A Highly Efficient Gradient Boosting" (Ke et al., 2017)
-- "CatBoost: unbiased boosting with categorical features" (Prokhorenkova et al., 2018)
-- "A Unified Approach to Interpreting Model Predictions" (SHAP, Lundberg, 2017)
+These objects are full-fledged estimators. The fitted `grid` has `predict`, `score`, `best_estimator_`, and survives a `joblib.dump` round-trip just like any other model. Halving search variants (`HalvingGridSearchCV`, `HalvingRandomSearchCV`) and Bayesian alternatives are the topic of module 1.11 (Hyperparameter Optimization); the contract here is the same.
 
-### Tutorials
-- XGBoost documentation: xgboost.readthedocs.io
-- LightGBM documentation: lightgbm.readthedocs.io
-- CatBoost documentation: catboost.ai
-- SHAP: github.com/slundberg/shap
+### Meta-Estimators: Pipelines, FeatureUnion, and Friends
 
----
+A meta-estimator is an estimator built out of other estimators. The ones every practitioner hits early:
 
-##  Knowledge Check
-
-Test your understanding with these review questions:
-
-### 1. Why do tree-based models often beat neural networks on tabular data?
-
-**Answer**: Tree-based models handle tabular data's characteristics better: they naturally capture non-linear relationships and feature interactions without requiring feature engineering, handle mixed data types (numerical, categorical, ordinal) natively, are invariant to feature scaling, handle missing values gracefully, and don't require as much data as neural networks to generalize well. Neural networks excel when there's spatial or sequential structure (images, text), but tabular data often lacks such structure.
-
-### 2. What is the difference between bagging and boosting?
-
-**Answer**: Both are ensemble methods but work differently. **Bagging** (Bootstrap Aggregating) trains independent models on random subsets of data in parallel, then averages their predictions—this reduces variance (overfitting). Random Forest is the classic example. **Boosting** trains models sequentially, where each model focuses on correcting the errors of previous models—this reduces bias (underfitting). Gradient boosting is the dominant boosting approach, with XGBoost, LightGBM, and CatBoost being popular implementations.
-
-### 3. How does gradient boosting use gradient descent?
-
-**Answer**: Traditional gradient descent optimizes parameters by moving in the direction of the negative gradient. Gradient boosting applies the same idea to function space: instead of updating parameters, we add a new tree that points in the direction of the negative gradient of the loss function. The "residuals" we fit each tree to are actually the negative gradients of the loss with respect to current predictions. This is why it's called gradient *boosting*—we're doing gradient descent, but in function space rather than parameter space.
-
-### 4. What makes LightGBM faster than XGBoost?
-
-**Answer**: LightGBM has two key innovations. **Histogram-based splitting**: Instead of sorting all data points for each split, LightGBM bins continuous features into 256 bins, dramatically reducing computation. **Leaf-wise tree growth**: XGBoost grows trees level-by-level (all nodes at same depth), while LightGBM grows the leaf with largest gain first. This creates deeper trees faster and often achieves better accuracy with fewer leaves. Combined, these make LightGBM 10-20x faster on large datasets.
-
-### 5. When would you choose CatBoost over the other two?
-
-**Answer**: Choose CatBoost when you have many categorical features with high cardinality (many unique values). CatBoost uses "ordered target encoding" that avoids target leakage during encoding, which is a common problem with standard target encoding. It also has excellent default hyperparameters—often works well out of the box without tuning. CatBoost is also the best choice when you need to deploy to production without preprocessing pipelines, as it handles categoricals natively in the model file.
-
-### 6. What are SHAP values and why are they useful?
-
-**Answer**: SHAP (SHapley Additive exPlanations) values come from game theory and answer: "How much did each feature contribute to this specific prediction?" They decompose any prediction into contributions from each feature, where positive SHAP values push the prediction higher and negative values push it lower. They're useful because: (1) they provide local interpretability for individual predictions (required by regulations in finance), (2) aggregating them gives global feature importance, (3) they reveal which direction features push predictions (unlike basic feature importance), and (4) they work for any model, though TreeExplainer is especially fast for trees.
-
----
-
-##  Key Takeaways
-
-1. **Trees dominate tabular ML** - Despite deep learning hype, ~80% of production ML uses tree-based models on structured data. This includes fraud detection, credit scoring, recommendation ranking, and churn prediction at most major companies.
-
-2. **Ensembles beat single trees** - Combining many weak learners creates strong predictions. Bagging reduces variance (Random Forest), boosting reduces bias (Gradient Boosting). Modern boosting implementations have made Random Forest less common in competitive settings.
-
-3. **Gradient boosting = gradient descent on functions** - Each tree corrects the errors of previous trees by fitting residuals. The learning rate controls how aggressively each tree corrects—lower rates need more trees but generalize better.
-
-4. **The Big Three are all excellent** - XGBoost, LightGBM, CatBoost all achieve similar accuracy on most datasets. Choose XGBoost for stability and documentation, LightGBM for speed, CatBoost for categorical features.
-
-5. **Interpretability is a feature** - SHAP values let you explain predictions, which is crucial for business applications. In regulated industries, you often can't deploy a model you can't explain.
-
-6. **Hyperparameter tuning has diminishing returns** - Most gains come from: (1) good feature engineering, (2) using early stopping, (3) handling class imbalance correctly. Spending days tuning hyperparameters rarely beats a day of better feature work.
-
-7. **Data leakage is one of the most common causes of production failures** - Ask: "Would I have this feature at prediction time?" Test for leakage by checking if any single feature predicts the target suspiciously well.
-
-8. **Use the right metrics for your problem** - Accuracy is useless for imbalanced data. Use AUC-ROC for ranking, precision-recall AUC for rare events, and always check the confusion matrix.
-
-9. **Production deployment is straightforward** - Tree models are small, fast, and don't need GPUs for inference. A LightGBM model can serve sub-millisecond latency on a single CPU core.
-
-10. **Fairness auditing is non-negotiable** - Check that model predictions don't vary by protected attributes. Features like zip code often proxy for race or income, creating legal liability.
-
----
-
-##  Real-World Success Stories
-
-### Airbnb's Search Ranking
-
-Airbnb uses gradient boosting at the core of their search ranking system. When you search for a place to stay, LightGBM models rank results based on hundreds of features: listing attributes, user preferences, historical booking patterns, and pricing. The model serves 300+ million requests per day with P99 latency under 50ms.
-
-Key insight: They use separate models for different regions, as user preferences vary significantly (city apartments vs beach houses).
-
-### Uber's Surge Pricing
-
-Uber's dynamic pricing system uses XGBoost to predict supply and demand across city regions. Every few minutes, models predict: How many ride requests will we get in this area? How many drivers will be available? The difference determines surge multipliers.
-
-Key insight: They retrain models daily because demand patterns shift rapidly (concerts, weather, events).
-
-### Capital One's Credit Decisions
-
-Capital One was an early adopter of ML for credit underwriting. Their gradient boosting models evaluate credit applications in real-time, considering thousands of features while remaining explainable for regulatory compliance. SHAP values help loan officers explain why applications were approved or denied.
-
-Key insight: They maintain separate challenger models that run on a fraction of traffic to continuously test improvements.
-
-### Netflix's Recommendation Engine
-
-While Netflix's famous recommendation system uses deep learning for visual features and embeddings, their core ranking model is gradient boosting. After candidate generation produces 500 potential titles, XGBoost ranks them based on user behavior patterns, viewing history, and content features. The model must score in under 100ms to maintain responsive UI.
-
-Key insight: They discovered that simple models with great features beat complex models with poor features. Feature engineering—like "last genre watched" and "time since last session"—drives most of the recommendation quality.
-
-### Spotify's Discover Weekly
-
-Spotify's beloved Discover Weekly playlist uses a hybrid approach, but gradient boosting is central to the final ranking step. After collaborative filtering generates candidate songs, LightGBM ranks them based on listening patterns, skip rates, and audio features. The system processes 400 million users weekly.
-
-Key insight: They use a multi-objective approach—optimizing for both immediate plays and long-term engagement requires careful weighting in the loss function.
-
----
-
-##  Debugging Gradient Boosting Models
-
-### When Your Model Isn't Learning
-
-Think of debugging like being a doctor diagnosing a patient. You check vital signs, look for patterns, and narrow down causes systematically. Here's a systematic debugging approach:
+- **`Pipeline`** — chain of transformers ending in a final estimator (covered in Section 2).
+- **`ColumnTransformer`** — parallel transformers on disjoint column subsets (covered in Section 3).
+- **`FeatureUnion`** — parallel transformers on the *same* columns whose outputs are concatenated. Used when you want both a `PCA` projection and the raw scaled features fed into the classifier together.
 
 ```python
-def diagnose_model(model, X_train, y_train, X_val, y_val):
-    """Diagnose common gradient boosting problems."""
+from sklearn.pipeline import FeatureUnion
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
-    train_score = model.score(X_train, y_train)
-    val_score = model.score(X_val, y_val)
-
-    print(f"Train score: {train_score:.4f}")
-    print(f"Validation score: {val_score:.4f}")
-    print(f"Gap: {train_score - val_score:.4f}")
-
-    # Diagnosis
-    if train_score < 0.6:
-        print(" UNDERFITTING: Model isn't learning")
-        print("   → Increase max_depth, num_leaves")
-        print("   → Increase n_estimators")
-        print("   → Lower learning_rate (with more trees)")
-        print("   → Add more features")
-
-    elif (train_score - val_score) > 0.15:
-        print(" OVERFITTING: Model memorized training data")
-        print("   → Decrease max_depth, num_leaves")
-        print("   → Increase min_child_samples")
-        print("   → Add regularization (reg_alpha, reg_lambda)")
-        print("   → Use more aggressive early stopping")
-        print("   → Add subsample < 1.0, colsample_bytree < 1.0")
-
-    else:
-        print(" Model looks healthy!")
-        print("   Consider feature engineering for improvement")
+union = FeatureUnion([
+    ("scaled", StandardScaler()),
+    ("pca5",   PCA(n_components=5)),
+])
+# union.transform(X) returns concat([scaled X, PCA-5 X], axis=1)
 ```
 
-### The Learning Curve Diagnostic
+All meta-estimators expose `get_params` / `set_params` with the `step__param` convention, which is what makes them grid-searchable end-to-end. The compose user-guide page is the canonical reference. Other meta-estimators worth knowing exist (`MultiOutputClassifier`, `OneVsRestClassifier`, calibration wrappers, voting and stacking ensembles), but the three above cover the majority of preprocessing patterns and are sufficient for everything in modules 1.2 through 1.12.
+
+## Section 7: Putting the Contract Together
+
+A practitioner-grade workflow ties every concept above into a single object. Read this end-to-end skeleton as a checklist for every future tabular project.
 
 ```python
-from sklearn.model_selection import learning_curve
-import matplotlib.pyplot as plt
+import joblib
+import numpy as np
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.compose import ColumnTransformer, make_column_selector
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import (
+    StratifiedKFold,
+    cross_validate,
+    RandomizedSearchCV,
+    train_test_split,
+)
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from scipy.stats import loguniform
 
-def plot_learning_curve(model, X, y):
-    """Visualize if more data would help."""
-    train_sizes, train_scores, val_scores = learning_curve(
-        model, X, y,
-        train_sizes=np.linspace(0.1, 1.0, 10),
-        cv=5,
-        scoring='roc_auc'
-    )
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(train_sizes, train_scores.mean(axis=1), label='Training')
-    plt.plot(train_sizes, val_scores.mean(axis=1), label='Validation')
-    plt.xlabel('Training Size')
-    plt.ylabel('AUC Score')
-    plt.title('Learning Curve')
-    plt.legend()
+class TenureBucket(BaseEstimator, TransformerMixin):
+    """Bucket a 'tenure_months' column into [new, growing, established].
+    Adds the bucket as a new column without touching the original.
+    Hyperparameters are bucket boundaries; learned state is the
+    column index after fit."""
 
-    # Interpretation:
-    # - Curves converging at low score → need more features or model complexity
-    # - Curves not converging → need more data or regularization
-    # - Large gap at end → overfitting, need regularization
-```
+    def __init__(self, low=6, high=24, column="tenure_months"):
+        self.low = low
+        self.high = high
+        self.column = column
 
-**Did You Know?** According to Kaggle's State of ML survey, gradient boosting models win 70% of tabular data competitions. The remaining 30% are split between neural networks (10%), linear models (10%), and ensembles of boosting + neural networks (10%). When time is limited, gradient boosting is almost always the best first choice.
+    def fit(self, X, y=None):
+        self.col_loc_ = X.columns.get_loc(self.column)
+        return self
 
----
-
-##  Model Monitoring and Drift Detection
-
-### Why Models Degrade Over Time
-
-Think of your model like a weather forecast. A forecast for tomorrow is usually accurate, but one for next month is unreliable. Similarly, a model trained on last year's data may not capture this year's reality. Customer behaviors change, market conditions shift, and new product launches alter patterns.
-
-### Types of Drift
-
-**Concept Drift**: The relationship between features and target changes. Example: During COVID, models predicting retail foot traffic saw massive concept drift—the underlying relationships broke down.
-
-**Data Drift (Covariate Shift)**: The distribution of input features changes. Example: If your model was trained on customers aged 25-45 but you start acquiring customers aged 18-22, the input distribution has shifted.
-
-**Label Drift**: The target distribution changes. Example: Fraud rates might increase from 0.1% to 0.5%, making your model's calibration invalid.
-
-```python
-def monitor_feature_drift(training_data, production_data, threshold=0.1):
-    """Monitor for feature distribution drift using PSI."""
-    from scipy.stats import ks_2samp
-
-    drift_report = {}
-    for col in training_data.columns:
-        statistic, p_value = ks_2samp(
-            training_data[col].dropna(),
-            production_data[col].dropna()
+    def transform(self, X):
+        X = X.copy()
+        bins = pd.cut(
+            X[self.column],
+            bins=[-np.inf, self.low, self.high, np.inf],
+            labels=["new", "growing", "established"],
         )
+        X["tenure_bucket"] = bins.astype(object)
+        return X
 
-        drift_report[col] = {
-            'ks_statistic': statistic,
-            'p_value': p_value,
-            'drifted': p_value < 0.05  # Statistically significant drift
-        }
 
-        if drift_report[col]['drifted']:
-            print(f"️ DRIFT DETECTED in {col}: KS={statistic:.3f}, p={p_value:.4f}")
+def build_pipeline():
+    numeric = Pipeline([
+        ("impute", SimpleImputer(strategy="median")),
+        ("scale",  StandardScaler()),
+    ])
+    categorical = Pipeline([
+        ("impute", SimpleImputer(strategy="most_frequent")),
+        ("onehot", OneHotEncoder(handle_unknown="ignore")),
+    ])
+    preprocess = ColumnTransformer([
+        ("num", numeric,     make_column_selector(dtype_include=np.number)),
+        ("cat", categorical, make_column_selector(dtype_include=object)),
+    ])
+    return Pipeline([
+        ("bucket",     TenureBucket(low=6, high=24)),
+        ("preprocess", preprocess),
+        ("clf",        LogisticRegression(max_iter=1000)),
+    ])
 
-    return drift_report
 
-def monitor_prediction_drift(expected_dist, actual_dist):
-    """Compare prediction distributions using PSI (Population Stability Index)."""
-    import numpy as np
+def evaluate_and_tune(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=0,
+    )
+    pipe = build_pipeline()
 
-    # Bin predictions
-    bins = np.linspace(0, 1, 11)  # Deciles
-    expected_pct = np.histogram(expected_dist, bins=bins)[0] / len(expected_dist)
-    actual_pct = np.histogram(actual_dist, bins=bins)[0] / len(actual_dist)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    baseline = cross_validate(
+        pipe, X_train, y_train,
+        cv=cv,
+        scoring=["roc_auc", "average_precision"],
+        return_train_score=True,
+        n_jobs=-1,
+    )
 
-    # Add small epsilon to avoid division by zero
-    expected_pct = np.maximum(expected_pct, 0.001)
-    actual_pct = np.maximum(actual_pct, 0.001)
+    search = RandomizedSearchCV(
+        pipe,
+        param_distributions={
+            "clf__C":         loguniform(1e-3, 1e2),
+            "bucket__low":    [3, 6, 12],
+            "bucket__high":   [18, 24, 36],
+        },
+        n_iter=30, cv=cv, scoring="roc_auc",
+        n_jobs=-1, random_state=0, refit=True,
+    )
+    search.fit(X_train, y_train)
 
-    # Calculate PSI
-    psi = np.sum((actual_pct - expected_pct) * np.log(actual_pct / expected_pct))
+    # The held-out set is touched exactly once.
+    final_score = search.score(X_test, y_test)
 
-    if psi < 0.1:
-        status = " Stable (PSI < 0.1)"
-    elif psi < 0.25:
-        status = "️ Some drift (0.1 <= PSI < 0.25)"
-    else:
-        status = " Significant drift (PSI >= 0.25) - consider retraining"
-
-    print(f"PSI: {psi:.4f} - {status}")
-    return psi
+    joblib.dump(search.best_estimator_, "model.joblib")
+    return baseline, search, final_score
 ```
 
-### Retraining Strategy
+Read what this code is and is not doing. It is not a serious model — `LogisticRegression` on a few engineered columns is a baseline, not a finished system. What it *is* is a complete instance of the contract this module defines:
 
-Most production teams use one of these retraining approaches:
+- Every transformer (custom and built-in) lives inside a `Pipeline`. No one calls `fit_transform` on raw data.
+- Column selection is by dtype via `make_column_selector`, so schema drift in production fails loudly at the boundary instead of silently mis-routing columns.
+- The custom `TenureBucket` follows the `__init__`-is-dumb-assignment, `fit`-returns-self, trailing-underscore-state rule. It can be cloned, grid-searched (`bucket__low`, `bucket__high`), and pickled.
+- Cross-validation uses `StratifiedKFold` because the task is classification and class balance matters; `cross_validate` returns train and test scores so you can see overfitting at a glance.
+- Hyperparameter search uses `RandomizedSearchCV` because the parameter space mixes continuous and discrete values; `n_iter=30` is far cheaper than the equivalent grid.
+- The held-out test set is touched exactly once, at the very end, after the search has selected its best configuration on training-only cross-validation.
+- The persistence step saves `best_estimator_` — the entire fitted pipeline — not just the inner classifier. Inference at serving time reproduces every preprocessing decision.
 
-1. **Scheduled retraining**: Retrain weekly/monthly regardless of performance
-2. **Triggered retraining**: Retrain when drift metrics exceed thresholds
-3. **Online learning**: Continuously update model with new labeled data
-4. **Champion/challenger**: Always run new models against production, swap when better
+Every module from 1.2 onward swaps the *algorithm* (the `clf` step) and the *feature engineering* (the bucket transformer and friends), but the surrounding workflow stays exactly this shape.
 
-The right choice depends on: how fast your domain changes, cost of wrong predictions, and labeling latency.
+## Did You Know?
 
----
+1. **`fit_transform` is not always the same as `fit` then `transform`.** Some transformers (notably text vectorizers and dimensionality reducers) have an optimized fused implementation. Most behave identically; the developer guide notes the exceptions.
+2. **`Pipeline` supports memory caching.** Pass `memory="./cache_dir"` and the pipeline will memoize transformer outputs across grid-search folds, which can dramatically speed up cross-validation when the early steps are expensive (text vectorization, image preprocessing) and only the final estimator's hyperparameters are being searched.
+3. **The trailing-underscore convention is enforced by `check_estimator`.** Sklearn ships a battery of contract tests in `sklearn.utils.estimator_checks` that any custom estimator can run against itself; the developer guide recommends it as the way to verify your estimator behaves like the rest of the library.
+4. **`ColumnTransformer` selects columns by name on DataFrames and by integer index on ndarrays.** The same code can quietly mean different things depending on the input type; keeping inputs as DataFrames end-to-end is the safer convention and is what `make_column_selector(dtype_include=...)` assumes.
 
-##  Advanced Optimization Tips
+## Common Mistakes
 
-### Hyperparameter Tuning That Actually Works
+| Mistake | Why it bites | The right move |
+|---|---|---|
+| Calling `fit_transform` on the full dataset before splitting | Test statistics leak into training; offline scores beat production. | Put every transformer inside a `Pipeline`; only `train_test_split` (or a CV splitter) sees raw `X`. |
+| Using `KFold` on time-series data | Future leaks into past; reported AUC is unachievable in production. | Use `TimeSeriesSplit`. |
+| Using `KFold` on grouped data (multiple rows per patient/user) | The model memorizes group-level features; held-out scores reflect within-group recall, not generalization. | Use `GroupKFold` or `StratifiedGroupKFold`. |
+| Mutating constructor args inside `__init__` of a custom estimator | `clone` produces non-equivalent copies; grid search becomes non-deterministic; `get_params` lies. | `__init__` is a dumb assigner only; do all derivations in `fit`. |
+| Saving the trained classifier without the preprocessing pipeline | Inference at serving time skips scaling / encoding; predictions are nonsense or crash on unseen categories. | `joblib.dump(pipeline, ...)` — persist the whole composed object. |
+| Forgetting `handle_unknown="ignore"` on `OneHotEncoder` for production | First unseen category in production raises; serving outage. | Set `handle_unknown="ignore"` on every production-bound `OneHotEncoder`. |
+| Tuning hyperparameters on the test set | The "test" set silently becomes a second validation set; reported numbers are search-overfit. | Use `GridSearchCV` / `RandomizedSearchCV` with `cv=` on the training data; touch `X_test` exactly once at the end. |
+| Hard-coding column positions in `ColumnTransformer` | Schema drift in production reorders columns; preprocessing applies to wrong fields. | Select by column name (DataFrame input) or by `make_column_selector(dtype_include=...)`. |
 
-After years of competitions and production systems, practitioners have converged on a few reliable tuning strategies.
+## Quiz
 
-**Did You Know?** According to research by Bergstra and Bengio (2012), random search finds better hyperparameters than grid search in 95% of cases, while using only 60% of the compute time. The key insight: most hyperparameters don't matter much, and random search explores the important ones more efficiently.
+Six scenario-based questions. Click each `<details>` to see the worked answer.
 
-### The 80/20 Rule of Hyperparameter Tuning
+<details>
+<summary>1. A teammate ships a churn model with 0.93 AUC on a held-out test split. Production AUC is 0.71. Their preprocessing notebook calls `MinMaxScaler().fit_transform(df)` once at the top, then splits into train and test. What is the most likely cause and what is the minimal fix?</summary>
 
-Focus on these parameters first—they account for 80% of performance gains:
+The scaler peeks at the test set during fit. `min_` and `scale_` are computed over rows that are about to become the held-out test, so the test distribution is normalized using its own statistics. The minimal fix is to put the scaler inside a `Pipeline` so its `fit` runs only on the training fold. After the fix, the offline AUC will drop somewhat — that drop is the leakage being removed, and the new number is an honest estimate of production performance.
+</details>
 
-1. **Learning Rate**: Start with 0.1, then try 0.01 and 0.3
-2. **Number of Trees**: Use early stopping rather than fixing this
-3. **Max Depth**: 3-10 for most problems (6 is a good default)
-4. **Min Child Weight / Min Samples Leaf**: Controls overfitting directly
+<details>
+<summary>2. You have a hospital readmission dataset with multiple admissions per patient. You use `StratifiedKFold(n_splits=5, shuffle=True)` and report a 0.89 AUC. A clinical reviewer calls the result implausible. What did the splitter do wrong?</summary>
 
-Only tune these when the basics are optimized:
-- Subsample ratio (0.5-1.0)
-- Column sampling (0.5-1.0)
-- Regularization (L1/L2)
+`StratifiedKFold` preserves class balance but assumes rows are independent. Multiple admissions per patient violate that assumption: the same patient appears in both training and validation folds, and the model can memorize patient-level signal (chronic conditions, demographics) rather than learning generalizable patterns. The honest splitter is `StratifiedGroupKFold` keyed on `patient_id`, which guarantees no patient appears in both train and validation within a fold.
+</details>
 
-### Cross-Validation Best Practices
+<details>
+<summary>3. You write a custom transformer `LogPlusOne` and inside `__init__` you do `self.eps_ = max(epsilon, 1e-12)`. Cross-validation with this transformer produces inconsistent scores between runs even with `random_state` fixed. Why?</summary>
 
-```python
-def robust_cv_evaluation(model, X, y, n_splits=5, random_state=42):
-    """Cross-validation with proper reporting for business stakeholders."""
-    from sklearn.model_selection import StratifiedKFold, cross_val_score
-    import numpy as np
+`__init__` mutated its argument and stored a derived value (`eps_`, with the trailing underscore that signals fitted state). `clone(estimator)` reads `get_params` (which sees `epsilon`) and re-instantiates — but the cloned object's `eps_` is recomputed from `epsilon`, and any code path that reads `eps_` before `fit` runs sees an inconsistent value. The fix: store only `self.epsilon = epsilon` in `__init__` and compute `self.eps_ = max(self.epsilon, 1e-12)` inside `fit`. Trailing-underscore attributes are fitted state; non-underscore attributes are hyperparameters.
+</details>
 
-    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    scores = cross_val_score(model, X, y, cv=cv, scoring='roc_auc')
+<details>
+<summary>4. You wrap a `RandomForestClassifier` in a `Pipeline` with a `StandardScaler` first. The model trains fine, but a code reviewer asks why the scaler is there. What is the right answer?</summary>
 
-    # Calculate confidence interval
-    mean_score = scores.mean()
-    std_score = scores.std()
-    ci_95 = 1.96 * std_score / np.sqrt(n_splits)
+It is unnecessary and worth removing. Tree-based models split on feature values and are invariant to monotonic rescaling, so `StandardScaler` does nothing useful and adds latency at inference time. The pipeline pattern is correct — it just contains a no-op step. Linear models, distance-based models (k-NN, k-means), and neural networks need scaling; tree ensembles do not. Module 1.5 (Trees and Forests) treats this in depth.
+</details>
 
-    print(f"Mean AUC: {mean_score:.4f} ± {std_score:.4f}")
-    print(f"95% CI: [{mean_score - ci_95:.4f}, {mean_score + ci_95:.4f}]")
-    print(f"Fold scores: {[f'{s:.4f}' for s in scores]}")
+<details>
+<summary>5. You run `GridSearchCV` over a four-parameter grid with five values each, on a dataset that takes 90 seconds per fit, with `cv=5`. How long does the search take, and what would you change?</summary>
 
-    # Check for fold instability
-    if std_score > 0.05:
-        print("️ High variance across folds - consider more data or simpler model")
+Five raised to the fourth is six hundred and twenty-five combinations; times five folds is over three thousand fits; times ninety seconds is on the order of three days of single-process compute. Two changes help. First, `n_jobs=-1` parallelizes folds across CPU cores. Second, `RandomizedSearchCV` with `n_iter=60` (or a halving variant) usually finds a near-best configuration far faster, because most parameters do not contribute equally — random sampling concentrates compute on configurations the grid would never reach. Module 1.11 (Hyperparameter Optimization) covers when to escalate to Bayesian or population-based search.
+</details>
 
-    return mean_score, std_score
-```
+<details>
+<summary>6. A pipeline trained on a DataFrame works in development. In production, the data arrives as a NumPy array because the upstream service was rewritten in Go. The pipeline raises on the first request. What broke and how do you make this robust?</summary>
 
-### Ensemble Strategies That Win Competitions
+`ColumnTransformer` referenced columns by name (`["country", "subscription_tier"]`). When the input is an ndarray, those names do not exist; the transformer cannot find the columns and raises. Two robust options: (a) keep the input layer as a DataFrame in production by validating and reconstructing it at the service boundary, with column names locked to a schema; (b) switch to integer indices in `ColumnTransformer`, which then requires you to lock the column order at the schema layer instead. Option (a) is generally safer because it surfaces the schema-drift error at the boundary, not deep inside the model.
+</details>
 
-The secret weapon of Kaggle grandmasters is thoughtful ensembling. A simple average of diverse models often beats complex single models:
+## Hands-On Exercise
 
-```python
-def weighted_ensemble_predict(models, X, weights=None):
-    """Create weighted ensemble predictions."""
-    import numpy as np
+You will build, evaluate, and persist a leakage-safe sklearn pipeline on a small tabular classification problem.
 
-    if weights is None:
-        weights = np.ones(len(models)) / len(models)
+**Setup.** Use any binary-classification CSV you have on hand with at least one numeric and one categorical column. If you do not have one, generate a synthetic dataset with `sklearn.datasets.make_classification`.
 
-    predictions = np.zeros(len(X))
-    for model, weight in zip(models, weights):
-        predictions += weight * model.predict_proba(X)[:, 1]
+Success criteria:
 
-    return predictions
+- [ ] The whole preprocessing chain (numeric imputation + scaling, categorical imputation + one-hot encoding) lives inside a `ColumnTransformer` inside a `Pipeline` together with a final `LogisticRegression` (or any other classifier of your choice). No call to `fit_transform` outside the pipeline anywhere in your script.
+- [ ] You evaluate the pipeline with `cross_validate` on `StratifiedKFold(n_splits=5, shuffle=True, random_state=0)` and report mean and standard deviation of `roc_auc`. Print `train_roc_auc` alongside `test_roc_auc` and explain the gap to yourself in a comment in the script.
+- [ ] You write a custom transformer (subclassing `BaseEstimator` and `TransformerMixin`) that adds at least one engineered feature. Test it: instantiate it, call `clone` on it, and verify `clone(t).get_params() == t.get_params()`.
+- [ ] You run `RandomizedSearchCV` over at least two hyperparameters (one from the preprocessing chain, one from the classifier) with `n_iter=20`. Print `best_params_`, `best_score_`, and the standard deviation of the best configuration's CV scores.
+- [ ] You persist the fitted `RandomizedSearchCV` (or its `best_estimator_`) with `joblib.dump`, then in a fresh interpreter `joblib.load` it and call `predict` on a small held-out slice. Verify the predictions match the in-memory pipeline's predictions on the same rows.
+- [ ] You deliberately introduce a leakage bug (call `StandardScaler().fit_transform` on the full dataset before splitting) and observe the inflated test score. Restore the leakage-safe pipeline and document the magnitude of the bias in a comment.
 
-# Example: Combine XGBoost, LightGBM, and CatBoost
-# Each model sees the problem slightly differently
-models = [xgb_model, lgb_model, catboost_model]
-weights = [0.4, 0.35, 0.25]  # Based on individual CV scores
-ensemble_preds = weighted_ensemble_predict(models, X_test, weights)
-```
-
-**The Diversity Principle**: Two 80% accurate models that make different mistakes will ensemble to >85% accuracy. Three identical 85% models will ensemble to exactly 85%. Diversity matters more than individual accuracy. This is why successful competition teams combine different algorithms (XGBoost, LightGBM, CatBoost, neural networks) rather than just tuning one. Netflix's prize-winning solution famously combined over 100 diverse models.
-
-### Production Checklist Before Deployment
-
-Before deploying any tabular model, verify:
-
-- [ ] Feature distributions match between training and production data
-- [ ] No data leakage in feature engineering pipeline
-- [ ] Model calibration verified (predictions match actual rates)
-- [ ] Inference latency tested under production load
-- [ ] Monitoring dashboards for drift detection set up
-- [ ] Rollback procedure documented and tested
-- [ ] A/B testing framework ready for gradual rollout
-
----
-
-## ⏭️ Next Steps
-
-You've mastered the workhorse of production ML! Next, learn how to prepare data for these models.
-
-**Up Next**: Module 38 - Feature Engineering
-
----
-
-_Module 37 Complete! You now understand tabular ML!_
-
-_"The best model is the one that ships to production." - Practical ML wisdom_
+When all six checkboxes are green, you have internalized the contract this module exists to teach. The remaining modules in this section assume it.
 
 ## Sources
 
-- [XGBoost: A Scalable Tree Boosting System](https://arxiv.org/abs/1603.02754) — Primary paper for XGBoost's core algorithmic and systems contributions.
-- [LightGBM Advanced Topics](https://lightgbm.readthedocs.io/en/v4.5.0/Advanced-Topics.html) — Official docs covering LightGBM's handling of missing values and categorical features.
-- [A Unified Approach to Interpreting Model Predictions](https://arxiv.org/abs/1705.07874) — Primary SHAP paper connecting Shapley-value ideas to model explanations.
+- [Scikit-learn user guide](https://scikit-learn.org/stable/user_guide.html)
+- [Developing scikit-learn estimators (developer guide)](https://scikit-learn.org/stable/developers/develop.html)
+- [Pipelines and composite estimators (`Pipeline`, `ColumnTransformer`, `FeatureUnion`)](https://scikit-learn.org/stable/modules/compose.html)
+- [Cross-validation: evaluating estimator performance](https://scikit-learn.org/stable/modules/cross_validation.html)
+- [Metrics and scoring (overview)](https://scikit-learn.org/stable/modules/model_evaluation.html)
+- [`sklearn.base` API reference (`BaseEstimator`, `TransformerMixin`, `clone`)](https://scikit-learn.org/stable/api/sklearn.base.html)
+- [Joblib persistence guide](https://joblib.readthedocs.io/en/stable/persistence.html)
+
+## Next Module
+
+[Module 1.2 — Linear & Logistic Regression with Regularization](../module-1.2-linear-and-logistic-regression-with-regularization/) (coming soon, Phase 1b) walks into the algorithm layer with the workflow you just built around it.
