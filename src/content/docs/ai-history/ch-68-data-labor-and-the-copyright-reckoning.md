@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Frontier AI needed people and rights-cleared material, not just compute. Ouyang et al. 2022 described about 40 RLHF contractors; TIME reported Sama workers in Kenya labeling toxic content for OpenAI safety filtering. GPT-3, The Pile, Books3, LAION-5B, and Stable Diffusion turned web pages, books, and images into training inputs. Getty (2023), New York Times (2023), and Bartz v. Anthropic (2025) put that pipeline into court records. Crawler controls and publisher licensing closed the loop: data became negotiated, blocked, or priced.
+Frontier AI needed people and rights-cleared material, not just compute. RLHF contractors and safety labelers made human judgment part of the model stack, while GPT-3, The Pile, Books3, LAION-5B, and Stable Diffusion turned web pages, books, and images into training inputs. Getty, New York Times, and Bartz v. Anthropic put that pipeline into court records. Crawler controls and publisher licensing closed the loop: data became negotiated, blocked, or priced.
 :::
 
 <details>
@@ -14,7 +14,7 @@ Frontier AI needed people and rights-cleared material, not just compute. Ouyang 
 
 | Name | Lifespan | Role |
 |---|---|---|
-| OpenAI labelers / Ouyang et al. contractors | — | About 40 contractors who wrote demonstrations and rankings for InstructGPT/RLHF (March 2022). |
+| OpenAI labelers / Ouyang et al. contractors | — | Contractors who wrote demonstrations and rankings for InstructGPT/RLHF (March 2022). |
 | Sama workers in Kenya | — | TIME's anonymous sources for toxic-content labeling on an OpenAI safety-filtering project (Nov. 2021–March 2022). |
 | Getty Images | — | Stock-image licensor; commenced UK proceedings against Stability AI and amended a US complaint in 2023. |
 | The New York Times | — | News publisher; sued Microsoft/OpenAI on December 27, 2023. |
@@ -33,14 +33,14 @@ timeline
     2020 : GPT-3 reports filtered Common Crawl, WebText2, Books1, Books2, Wikipedia mixture
     2020-2021 : The Pile formalizes 825 GiB / 22 subsets, including Books3
     Nov 2021-Mar 2022 : TIME reports Sama/Kenya safety-labeling work for OpenAI
-    Mar 2022 : Ouyang et al. publish InstructGPT/RLHF (about 40 contractors)
+    Mar 2022 : Ouyang et al. publish InstructGPT/RLHF
     2022 : LAION-5B and Stable Diffusion publish open image-caption work
     Jan-Mar 2023 : Getty commences UK proceedings; files/amends US complaint
     Dec 27 2023 : New York Times sues Microsoft and OpenAI
     Jan 8 2024 : OpenAI publishes "OpenAI and journalism" response
     Dec 2023-May 2024 : OpenAI announces Axel Springer, FT, Reddit, News Corp deals
     Apr 4 2025 : NYT/OpenAI motion-to-dismiss opinion narrows some claims
-    Jun 23 2025 : Bartz v. Anthropic fair-use order splits training, purchase, piracy
+    Jun 23 2025 : Bartz v. Anthropic fair-use order separates key copying and acquisition questions
     Apr 2026 : Bartz settlement-finality hearing pending
 ```
 
@@ -55,7 +55,7 @@ timeline
 - **LAION-5B:** An open dataset of 5.85 billion CLIP-filtered image-text pairs used to train and study image-generation models such as Stable Diffusion v1-4.
 - **Fair use:** A US copyright defense that excuses some unlicensed copying based on factors including transformativeness, purpose, market harm, and amount used; the defense is fact-specific, not a general permission.
 - **Motion to dismiss:** An early procedural request asking a court to throw out claims; at this stage the court assumes complaint facts are true to test legal sufficiency, not to find liability.
-- **Robots.txt / GPTBot:** A web-server file telling crawlers which paths they may visit; OpenAI documents OAI-SearchBot and GPTBot tags so site owners can allow search while disallowing training-related crawling.
+- **Robots.txt / GPTBot:** A web-server control surface for telling crawlers which paths they may visit.
 
 </details>
 
@@ -228,4 +228,3 @@ The reckoning began when those people and that culture asked who had been counte
 :::note[Why this still matters today]
 Every modern assistant inherits this supply chain. Behind a chat reply sits a chain of contractors, safety labelers, scraped pages, image-text corpora, books, and platform APIs — each with its own permission and labor story. Court orders, robots.txt distinctions between search and training crawlers, and publisher licensing deals are now standard parts of how AI products are built and sold. Procurement, indemnity, and dataset provenance are no longer back-office concerns; they are gates on shipping. The chapter's split — training use, acquisition path, market harm, and worker conditions — is the working vocabulary practitioners read in model cards, terms of use, and risk disclosures today.
 :::
-

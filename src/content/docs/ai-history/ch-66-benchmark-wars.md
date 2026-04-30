@@ -14,8 +14,8 @@ Benchmarks began as scientific instruments and became market signals. In 2020 MM
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Dan Hendrycks et al. (MMLU authors) | — | Introduced MMLU (2020) — 57 academic and professional subjects compressed into a broad scorecard for language-model knowledge |
-| BIG-bench community | — | 450 authors across 132 institutions contributed 204 tasks (2022) — broad benchmark expansion plus explicit recognition of short benchmark lifespans |
+| Dan Hendrycks et al. (MMLU authors) | — | Introduced MMLU (2020) as a broad scorecard for language-model knowledge |
+| BIG-bench community | — | Expanded benchmark culture through a large community task collection and explicit recognition of short benchmark lifespans |
 | Stanford CRFM / HELM authors (Percy Liang et al.) | — | Authored Holistic Evaluation of Language Models (2022) — transparency, multi-metric measurement, and standardized comparison instead of single-score rankings |
 | OpenAI GPT-4 / Evals teams | — | Released the GPT-4 Technical Report (March 2023) — benchmark tables as release evidence, contamination disclosure, and OpenAI Evals as deployment infrastructure |
 | Lianmin Zheng et al. (MT-Bench / Chatbot Arena, LMSYS) | — | Introduced MT-Bench and Chatbot Arena (June 2023) — pairwise preference arenas and LLM-as-judge methodology |
@@ -29,8 +29,8 @@ Benchmarks began as scientific instruments and became market signals. In 2020 MM
 ```mermaid
 timeline
     title Chapter 66 — Benchmark Wars
-    2020 : MMLU introduced — 57 academic and professional subjects; largest GPT-3 reaches 43.9% (Hendrycks et al.)
-    2022 : BIG-bench (204 tasks, 450 authors, 132 institutions) and HELM (multi-metric standardized evaluation) broaden benchmark culture
+    2020 : MMLU introduced as a broad academic/professional knowledge benchmark
+    2022 : BIG-bench and HELM broaden benchmark culture beyond single-task accuracy
     March 2023 : GPT-4 Technical Report turns professional exams, MMLU, HumanEval, contamination checks, and OpenAI Evals into release evidence
     June 2023 : MT-Bench and Chatbot Arena formalize LLM-as-judge and pairwise-preference public arenas (Zheng et al.)
     October 2023 : SWE-bench introduces real GitHub issue/PR benchmark — Claude 2 solves 1.96% in initial setup (Jimenez et al.)
@@ -41,19 +41,19 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**MMLU (Measuring Massive Multitask Language Understanding)** — Hendrycks et al. 2020. A multiple-choice benchmark covering 57 academic and professional subjects (math, US history, computer science, law, medicine, ethics, and more) with 15,908 questions and a 5-shot dev set. Designed to test broad world knowledge, not a single task; the original paper reported the largest GPT-3 at 43.9% — far below expert level.
+**MMLU (Measuring Massive Multitask Language Understanding)** — Hendrycks et al. 2020. A multiple-choice benchmark designed to test broad academic and professional knowledge, not a single narrow task.
 
-**BIG-bench (Beyond the Imitation Game)** — A 2022 community benchmark of 204 tasks contributed by 450 authors across 132 institutions, openly developed on GitHub. Probes reasoning, math, commonsense, social bias, software, science, and edge categories. The authors explicitly discussed how benchmarks have restricted scope and short useful lifespans, and noted that direct leakage was impossible for the reported models but indirect leakage could not be ruled out.
+**BIG-bench (Beyond the Imitation Game)** — a 2022 community benchmark collection designed to probe many forms of language-model behavior and to surface the limits of benchmark lifespan.
 
-**HELM (Holistic Evaluation of Language Models)** — Stanford CRFM, 2022. A multi-metric evaluation framework arguing that accuracy alone is not enough. Measures 7 metrics across 16 core scenarios, with targeted evaluations across 26 scenarios and 30 prominent models on 42 scenarios; raises evaluated-scenario overlap from 17.9% to 96.0%. Calibration, robustness, fairness, bias, toxicity, and efficiency sit alongside accuracy.
+**HELM (Holistic Evaluation of Language Models)** — Stanford CRFM, 2022. A multi-metric evaluation framework arguing that accuracy alone is not enough; calibration, robustness, fairness, bias, toxicity, and efficiency sit alongside accuracy.
 
 **MT-Bench / Chatbot Arena** — Zheng et al. 2023. *MT-Bench* is 80 high-quality multi-turn questions scored by an LLM judge. *Chatbot Arena* is anonymous pairwise crowdsourced voting between two model answers. Together they introduced public preference comparison as a continuously updating model-reputation layer beyond static test items.
 
-**LLM-as-judge** — Using a strong language model (e.g., GPT-4) to score or compare other models' outputs at scale. Zheng et al. reported GPT-4 judge agreement with humans over 80%, comparable to human-human agreement in their setup, but documented position bias, verbosity bias, self-enhancement bias, and math/reasoning failures.
+**LLM-as-judge** — using a strong language model to score or compare other models' outputs at scale.
 
 **Contamination / leakage** — When benchmark questions appear (directly or indirectly) in a model's training data, scores reflect memorization rather than capability. Modern reports treat this as a design problem: the GPT-4 report ran contamination checks and disclosed GSM-8K training-set inclusion; SWE-bench separated training-data repositories from evaluation repositories to limit overlap.
 
-**Goodhart's law** — Manheim & Garrabrant 2018 (preprint). When a measure becomes a target, it ceases to be a good measure. They categorize four variants — regressional, extremal, causal, and adversarial. In benchmark culture, the warning is that once a score becomes valuable, actors optimize against it and the score's connection to the underlying goal weakens.
+**Goodhart's law** — Manheim & Garrabrant 2018 (preprint). A warning about measurements changing behavior once people optimize for them.
 
 </details>
 
@@ -258,4 +258,3 @@ The war over benchmarks is the war over who gets to say what the system is.
 :::note[Why this still matters today]
 Every public AI scoreboard you read today — provider release tables, third-party leaderboards, agentic-coding benchmarks, multi-metric harnesses, public preference arenas — sits inside the institutional pattern this chapter traces. MMLU's broad-knowledge scorecard, HELM's anti-single-score push, GPT-4's release-table framing, Chatbot Arena's pairwise voting, and SWE-bench's execution-tested tasks each hardened into a standard format. The Goodhart cycle still runs: every benchmark that becomes valuable becomes a target, gets gamed, and gets replaced. Contamination checks, time-stamped results, evaluation harnesses, and "evals as deployment infrastructure" are now table stakes for serious model launches, procurement, and regulatory conversations — and the score, as the chapter warns, still is not the system.
 :::
-
