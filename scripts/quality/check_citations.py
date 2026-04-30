@@ -209,7 +209,7 @@ def iter_target_files(args: argparse.Namespace) -> Iterable[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     parser.add_argument("paths", nargs="*", help="markdown files to check")
     parser.add_argument(
         "--all-ml",
