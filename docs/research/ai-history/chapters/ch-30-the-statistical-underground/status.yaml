@@ -15,3 +15,9 @@ notes:
   - "Codex drafted prose at 4,198 words from the approved research contract after removing reviewer-flagged process leakage."
   - "Guardrail: do not use the famous Jelinek linguist quote without a primary or near-primary source; do not frame the chapter as anti-linguistics folklore."
   - "PR #432 merged after Claude re-review APPROVE and Gemini Flash re-review APPROVE; Ch30 prose is accepted."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

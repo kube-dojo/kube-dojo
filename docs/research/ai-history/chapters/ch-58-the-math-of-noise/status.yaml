@@ -57,3 +57,9 @@ notes: |
 
   Accepted 2026-04-29 after Claude and Gemini cross-family prose approval.
   Published draft is 4,000 words.
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: none                      # none | pr_open | landed
+lifecycle_updated: 2026-04-30

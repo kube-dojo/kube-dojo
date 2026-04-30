@@ -16,3 +16,9 @@ notes:
   - "First public prose draft was 4018 words; golden-module formatting pass brought the prose markdown to 4131 words."
   - "Gemini prose review approved after removing process/meta language; Claude approved after narrow review."
   - "Claude review follow-up tightened Werbos repetition and softened Linnainmaa date wording; current prose markdown is 4094 words."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

@@ -54,3 +54,9 @@ checks:
   prose_capacity_plan_layers_have_sources_md_anchors: true
   shell_curl_available_for_external_fetches: false
   generated_artifacts_included: false
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

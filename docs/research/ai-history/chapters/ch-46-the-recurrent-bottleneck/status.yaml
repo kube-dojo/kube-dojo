@@ -18,3 +18,9 @@ notes:
   - "Original LSTM and later forget-gate extension are separated to avoid anachronism."
   - "No GPU-utilization percentage, GNMT deployment scale, or internal Google motivation is Green."
   - "Shell curl was unavailable in this sandbox due DNS resolution failure; anchors were verified through browser-accessible PDF/HTML text and conservative bibliographic records."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: none                      # none | pr_open | landed
+lifecycle_updated: 2026-04-30

@@ -101,3 +101,9 @@ notes: |
   Gemini reviews capacity-plan honesty + narrative gaps + missing scenes
   only — Gemini does NOT assert page anchors or URLs (per
   feedback_gemini_hallucinates_anchors.md).
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: landed                    # none | pr_open | landed
+lifecycle_updated: 2026-04-30

@@ -67,3 +67,9 @@ notes: |
   begin on a codex/394-ch12-prose branch off main, capped at 4,500 words.
   This contract has cleared dual cross-family review (Codex authored +
   Gemini gap-audited + Claude integrated + dual verdict pass).
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: landed                    # none | pr_open | landed
+lifecycle_updated: 2026-04-30

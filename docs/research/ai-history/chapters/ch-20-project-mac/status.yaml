@@ -17,3 +17,9 @@ notes:
   - "Guardrail: leave DEC/XCON commercialization to Ch21 and Lisp-machine commercialization to Ch22."
   - "Codex drafted first prose pass at 4,148 words, inside the approved 4,000-4,800 range; final review-adjusted prose is 4,155 words."
   - "Claude source-fidelity review approved; Gemini narrative review approved with one acronym-density nit now applied."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: landed                    # none | pr_open | landed
+lifecycle_updated: 2026-04-30

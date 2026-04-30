@@ -15,3 +15,9 @@ notes:
   - "Claude requested a non-ICOT anchor for FGCS as a Western trigger; Roland/Shiman pp.5, 37, and 56-57 were added."
   - "Codex drafted 4089-word golden-format prose and requested Gemini plus Claude prose review."
   - "Claude and Gemini approved Ch28 prose with no must-fix findings; status moved to accepted."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

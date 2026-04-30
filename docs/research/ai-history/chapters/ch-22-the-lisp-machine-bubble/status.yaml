@@ -19,3 +19,9 @@ notes:
   - "Codex drafted first prose pass at 4,265 words; Gemini narrative review required removing process-language leakage, leaving 4,174 words inside the capped 4,000-5,000 target."
   - "Exact Symbolics/LMI revenue, headcount, bankruptcy, sales, market-share, and single-cause failure claims remain excluded."
   - "Claude source-fidelity review approved; Gemini narrative review approved after required process-language cleanup."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: landed                    # none | pr_open | landed
+lifecycle_updated: 2026-04-30

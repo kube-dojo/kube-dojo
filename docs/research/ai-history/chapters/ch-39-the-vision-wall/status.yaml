@@ -36,3 +36,9 @@ checks:
   legacy_prose_used_only_for_scope: true
   shell_curl_attempted: true
   shell_curl_blocked_by_dns: true
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

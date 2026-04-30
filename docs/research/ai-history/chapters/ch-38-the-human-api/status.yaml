@@ -39,3 +39,9 @@ notes:
   - Shell curl was attempted but DNS resolution is blocked in this sandbox; anchors were verified via accessible web/PDF extraction.
   - All Prose Capacity Plan layers reference Green claim IDs in sources.md.
   - No generated artifacts should be included.
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

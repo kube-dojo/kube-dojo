@@ -36,3 +36,9 @@ validation_notes:
   - "All five Prose Capacity Plan layers cite at least one anchored sources.md Green entry."
   - "Remote curl failed in this sandbox due DNS resolution; anchors were verified through the browser tool and recorded by page/section."
   - "Book-only research contract; no executable code or published Astro content changed."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: none                      # none | pr_open | landed
+lifecycle_updated: 2026-04-30

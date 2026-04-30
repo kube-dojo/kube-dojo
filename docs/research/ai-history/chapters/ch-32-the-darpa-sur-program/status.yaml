@@ -108,3 +108,9 @@ notes: |
   capacity-plan honesty and narrative gaps (without asserting page anchors,
   per `feedback_gemini_hallucinates_anchors.md`). Status advances to
   `research_contract_approved` only when both reviewers approve.
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: pr_open                   # none | pr_open | landed
+lifecycle_updated: 2026-04-30

@@ -59,3 +59,9 @@ next_steps:
   - "Cross-family review: Codex (anchor verification) and Gemini (gap analysis, no URL/anchor assertions per 2026-04-28 role split)"
   - "Optional anchor upgrade before drafting unlocks: fetch Aizawa-Schlatter 2008 metadata + open-access route"
   - "Library access required for Smalheiser 2000 / McCorduck 1979 / Conway-Siegelman 2005 page anchors (would lift Pitts-biography Yellow rows)"
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: landed                    # none | pr_open | landed
+lifecycle_updated: 2026-04-30

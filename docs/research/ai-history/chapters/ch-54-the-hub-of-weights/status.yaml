@@ -57,3 +57,9 @@ notes: |
   the recheck on PR #569. Gemini review was requested with
   gemini-3.1-pro-preview, fell back to gemini-3-flash-preview, and also
   returned APPROVE.
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: none                      # none | pr_open | landed
+lifecycle_updated: 2026-04-30

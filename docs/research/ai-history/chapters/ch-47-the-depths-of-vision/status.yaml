@@ -20,3 +20,9 @@ notes:
   - "All Prose Capacity Plan layers cite scene-sketches.md scenes and specific sources.md Green row anchors."
   - "Local curl was blocked by DNS resolution failure; anchors were verified through browser-backed PDF/HTML extraction."
   - "Do not draft human-level, lab-drama, or exact ResNet hardware claims without new anchors."
+
+# Lifecycle fields (added 2026-04-30 to decouple reader-aid rollout state
+# from research-phase `status` field; see Codex review forwarded by user).
+prose_state: published_on_main            # research_only | published_on_main
+reader_aids: none                      # none | pr_open | landed
+lifecycle_updated: 2026-04-30
