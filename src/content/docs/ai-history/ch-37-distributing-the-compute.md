@@ -5,6 +5,56 @@ sidebar:
   order: 37
 ---
 
+:::tip[In one paragraph]
+Between 2003 and 2004, Google engineers published two papers — the Google File System (SOSP 2003) and MapReduce (OSDI 2004) — describing production systems that stored and processed hundreds of terabytes across thousands of commodity machines while treating failure as normal. Doug Cutting and Mike Cafarella ported those specifications to Java as Apache Hadoop, splitting it from the Nutch crawler on 28 January 2006. The compute the deep-learning era would later inherit was not built for AI; it was pre-paid by web search.
+:::
+
+<details>
+<summary><strong>Cast of characters</strong></summary>
+
+| Name | Lifespan | Role |
+|---|---|---|
+| Jeffrey Dean | — | Google engineer; co-author of *MapReduce: Simplified Data Processing on Large Clusters* (OSDI 2004) with Ghemawat. |
+| Sanjay Ghemawat | — | Google engineer; lead author of *The Google File System* (SOSP 2003) and co-author of the MapReduce paper. |
+| Howard Gobioff | — | Google engineer; co-author of *The Google File System* (SOSP 2003) with Ghemawat and Leung. |
+| Shun-Tak Leung | — | Google engineer; co-author of *The Google File System* (SOSP 2003) with Ghemawat and Gobioff. |
+| Doug Cutting | — | Author of Lucene (1997); co-creator of Apache Nutch; reporter on Apache JIRA INFRA-700 (28 January 2006) splitting Hadoop out of Nutch; joined Yahoo January 2006. |
+| Mike Cafarella | — | University of Washington graduate student; Cutting's collaborator on Apache Nutch and the Java re-implementation of GFS and MapReduce that became Hadoop. |
+
+</details>
+
+<details>
+<summary><strong>Timeline (1997–2009)</strong></summary>
+
+```mermaid
+timeline
+    title From Lucene to Hadoop — Web Search Builds the AI Substrate
+    1997 : Doug Cutting begins writing Lucene, a personal text-search library
+    2001 : Lucene moves to the Apache Software Foundation : Cutting and Cafarella begin Apache Nutch
+    2003 : October — GFS paper published at SOSP (Bolton Landing, NY) : February — Google's first internal MapReduce library written
+    2004 : August — Google runs 29,423 MapReduce jobs reading 3,288 TB : December — MapReduce paper published at OSDI (San Francisco) : Cutting and Cafarella reimplement GFS in Java as NDFS
+    2005 : MapReduce integrated into Nutch on top of NDFS
+    2006 : 28 January — Apache JIRA INFRA-700 splits Hadoop from Nutch : Cutting joins Yahoo; Hadoop becomes critical infrastructure within six months
+    2007 : Hadoop 0.10.1 released (11 January)
+    2008 : Cloudera founded by ex-Google and ex-Yahoo engineers
+    2009 : Hadoop determines what 300 million people/month see on Yahoo's homepage
+```
+
+</details>
+
+<details>
+<summary><strong>Plain-words glossary</strong></summary>
+
+- **Distributed file system** — A file system that stores data across many machines at once, making them appear as one large, reliable store. GFS was Google's version; NDFS (later HDFS) was its open-source Java clone.
+- **Chunkserver** — In GFS, one of many machines that actually holds file data. Files are cut into 64 MB chunks; each chunk lives on multiple chunkservers so that if one machine dies the data is not lost.
+- **MapReduce** — A programming model in which the user writes two functions — Map (transform each record) and Reduce (aggregate matching records) — and the runtime handles splitting the work, running it on many machines, and recovering from failures automatically.
+- **Commodity hardware** — Ordinary, inexpensive off-the-shelf machines rather than specialized fault-tolerant servers. GFS and MapReduce were designed assuming these machines *would* fail, and built failure recovery into the system itself.
+- **Straggler / backup task** — A straggler is a worker machine that runs unusually slowly near the end of a job. MapReduce counters this by launching duplicate backup copies of nearly-finished tasks; whichever copy finishes first is used, cutting total job time significantly.
+- **Fault tolerance** — The ability of a system to continue operating correctly when individual components fail. GFS achieved this through replication (three copies of each chunk by default); MapReduce achieved it by detecting dead workers and reassigning their tasks.
+- **Open-source port** — Reimplementing a design described in a research paper as publicly available software anyone can run. Cutting and Cafarella used the GFS and MapReduce papers as specifications and rebuilt them in Java, giving the broader industry access to the same architecture Google had built internally.
+
+</details>
+
 The compute substrate that the deep-learning revolution would later inherit was not built for machine learning. It was built for web search. In the early 2000s, the engineering challenge of the era was not the training of massive neural networks but the indexing of the rapidly expanding World Wide Web. The scale of data required to map billions of web pages forced a fundamental rethinking of how computers should work together. The solution that emerged--a pair of systems designed at Google and later cloned into the open-source project known as Hadoop--provided the reliable, planet-scale plumbing that AI researchers would eventually use to feed their models. The machine learning era did not have to invent its own compute substrate; it rented one that web indexing had already paid for.
 
 ### The Four-Machine Ceiling
@@ -94,3 +144,7 @@ That inheritance was practical rather than symbolic. The hard problems were not 
 When researchers began feeding billions of images and trillions of tokens into their models, they did not have to solve the fundamental problem of how to read terabytes and eventually petabytes of data across thousands of machines without the system collapsing at the first disk failure. That problem had been made routine by web search engineers a decade earlier. GFS had shown how to store hundreds of terabytes across over a thousand machines while assuming failures would happen. MapReduce had shown how to express large computations so a runtime could partition input, schedule tasks, restart failed work, and push through slow machines. Hadoop had made an open-source version of that pattern available outside Google.
 
 The convergence was not accidental, but it was also not planned as a deep-learning program. The MapReduce programming model, with its emphasis on simple primitives and massive parallelism, aligned with the needs of large-scale data preparation because both were responses to the same underlying pressure: too much data for one machine, too much failure for manual recovery, and too much repeated plumbing for every application team to write alone. As the OSDI 2004 paper concluded, MapReduce was already being used for "the generation of data for Google's production web search service, for sorting, for data mining, for machine learning, and many other systems." By the time the world needed a planet-scale machine for AI, it already had one, named after a toddler's toy.
+
+:::note[Why this still matters today]
+The design commitments GFS and MapReduce introduced in 2003–2004 — treat failure as the norm, replicate data across commodity machines, let the runtime manage scheduling and recovery — became the baseline assumptions of cloud-native engineering. HDFS underpins the Hadoop ecosystem still in production at major enterprises; the Map-then-Reduce batch pattern lives on in Apache Spark and Flink. More broadly, every cloud object store (S3, GCS, Azure Blob) inherits the GFS principle that cheap hardware plus transparent replication equals durable storage. The "failure is weather, not catastrophe" design philosophy now runs through Kubernetes itself.
+:::
