@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-30 (night-4) | Part 7 reader-aids (Ch41–Ch49) RELEASED + 26-PR merge sweep + lifecycle bookkeeping migration — Parts 1–7 fully on main (49 chapters); arch-sketch form-lock confirmed (LR for sequential, TD for hierarchies) | [`docs/session-state/2026-04-30-part7-reader-aids-shipped.md`](./docs/session-state/2026-04-30-part7-reader-aids-shipped.md) | **All Part 5/6/7 PRs merged** — 4/18 Part 7 Tier 3 candidates landed (~22%); Codex revived 3, revised 2; lifecycle fields (`prose_state` + `reader_aids`) on all 72 chapter status.yaml |
+| 2026-04-30 (night-5) | Part 8 reader-aids Ch50–Ch58 shipped — 9 PRs merged-as-you-go; **all Tier 2 (math/architecture) chapters in the entire book are now landed**; 14 Tier-1-only chapters (Ch59–Ch72) remain | [`docs/session-state/2026-04-30-part8-9-ch50-58-shipped.md`](./docs/session-state/2026-04-30-part8-9-ch50-58-shipped.md) | **58 of 72 chapters with reader aids on main.** Codex caught 2 math-sidebar errors (Ch55 α_C^min notation; Ch58 CFG explanation) and 1 verbatim hallucination (Ch57 InstructGPT §5.2). Tier 3 yield 6/27 (~22%) |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-30 (night-4) | Part 7 reader-aids (Ch41–Ch49) RELEASED + 26-PR merge sweep + lifecycle bookkeeping migration — Parts 1–7 fully on main (49 chapters); arch-sketch form-lock confirmed (LR for sequential, TD for hierarchies) | [`docs/session-state/2026-04-30-part7-reader-aids-shipped.md`](./docs/session-state/2026-04-30-part7-reader-aids-shipped.md) |
 | 2026-04-30 (night-3) | Part 6 reader-aids (Ch32–Ch40) PR-complete — 9 PRs open; inline-sequential single-Agent-dispatch pattern validated at 9-chapter scale; first orchestrator-override of a Codex Tier 3 verdict (Ch38) | [`docs/session-state/2026-04-30-part6-reader-aids-prs.md`](./docs/session-state/2026-04-30-part6-reader-aids-prs.md) |
 | 2026-04-30 (night-2) | Part 5 reader-aids (Ch24–Ch31) PR-complete — 8 PRs open; Agent worktree fan-out retired after 5/8 race incident; Tier 3 ran sequential | [`docs/session-state/2026-04-30-part5-reader-aids-prs.md`](./docs/session-state/2026-04-30-part5-reader-aids-prs.md) |
 | 2026-04-30 | Part 4 reader-aids (Ch17–Ch23) RELEASED — 7 PRs #600–#606 merged via squash; parallel headless-Claude + parallel Codex Tier 3 dispatch | [`docs/session-state/2026-04-30-part4-reader-aids-prs.md`](./docs/session-state/2026-04-30-part4-reader-aids-prs.md) |
@@ -143,9 +144,9 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 ## TODO
 
 - [ ] AI history #559: cross-family review backfill on Ch01-31 (28 chapters, 30 marked backfill_pending per offline audit)
-- [ ] AI history #562: Tier 1 reader-aid rollout — **Parts 1–7 RELEASED on main (Ch01–Ch49); Parts 8–9 (Ch50–Ch72, 23 chapters) remain.** INLINE / SEQUENTIAL with merge-as-you-go (squash each PR immediately after Codex review).
+- [ ] AI history #562: Tier 1 reader-aid rollout — **Parts 1–8(partial) RELEASED on main (Ch01–Ch58, 58 chapters); 14 Tier-1-only chapters (Ch59–Ch72) remain.** INLINE / SEQUENTIAL with merge-as-you-go.
 - [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC. Same flow optional for Bing Webmaster Tools.
-- [ ] AI history #563: Tier 2 math + architecture sidebars on remaining target chapters: **Ch50 (math + arch), Ch52 (arch), Ch55 (math), Ch58 (math + arch)** — done: Ch01/Ch04/Ch15/Ch24/Ch25/Ch27/Ch29/Ch41/Ch42/Ch44/Ch49.
+- [x] AI history #563: Tier 2 math + architecture sidebars — **ALL DONE**: Ch01/Ch04/Ch15/Ch24/Ch25/Ch27/Ch29/Ch41/Ch42/Ch44/Ch49 + Ch50/Ch52/Ch55/Ch58 (15 chapters total). Every Tier 2 chapter in the entire book is now on main.
 - [ ] AI history #564: Tier 3 selective passes — pattern proven on Ch01–Ch49; ~20% landing rate; all Codex cross-family-reviewed.
 - [ ] PR #567 review + merge → then re-run audit_review_coverage.py with live gh
 - [ ] PR #558 + PR #565 stale-prose cleanup (content already on main)
