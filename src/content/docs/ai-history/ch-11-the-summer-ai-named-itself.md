@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-The 1956 Dartmouth Summer Research Project did not invent the ideas of artificial intelligence — those came from McCulloch-Pitts, Wiener, Shannon, Turing, Solomonoff, and others. What it did was give the cluster a name, four credentialed organizers, and a fundable proposal. Most attendees came partway, produced no shared theory, and left with their pre-existing research programs unchanged. Dartmouth's durable achievement was institutional condensation: a phrase that funders, students, and rival programmes could thereafter recognise.
+The 1956 Dartmouth Summer Research Project did not invent the ideas of artificial intelligence — those came from McCulloch-Pitts, Wiener, Shannon, Turing, Solomonoff, and others. What it did was give the cluster a name, four credentialed organizers, and a fundable proposal. Most attendees came partway, produced no shared theory, and left with their pre-existing research programs unchanged. Dartmouth mattered because a thin summer meeting made an institutional label stick.
 :::
 
 <details>
@@ -18,7 +18,7 @@ The 1956 Dartmouth Summer Research Project did not invent the ideas of artificia
 | Marvin Minsky | 1927–2016 | Junior Fellow at Harvard in Math and Neurology, soon moving to MIT. Co-organizer; wrote the proposal's "neural nets" section. One of three full-time attendees of the eight-week workshop. |
 | Nathaniel Rochester | 1919–2001 | Manager of the IBM 701 development team. Co-organizer; brought industrial computing weight and IBM access. The proposal's only direct industrial-research voice. |
 | Claude Shannon | 1916–2001 | Bell Labs; already famous for the 1948 information-theory paper. Co-organizer; gave the proposal the star name it needed to clear Rockefeller's review. Conference attendance partial. |
-| Ray Solomonoff | 1926–2009 | Independent researcher from the Technical Research Group, New York. The only non-organizer to attend for the full eight weeks; his contemporaneous handwritten notes are the chapter's most reliable record of what actually happened. |
+| Ray Solomonoff | 1926–2009 | Independent researcher from the Technical Research Group, New York. Full-summer attendee whose contemporaneous handwritten notes are the chapter's most reliable record of what actually happened. |
 | Allen Newell & Herbert Simon | 1927–1992 / 1916–2001 | Newell at RAND; Simon at Carnegie Tech. Arrived partway through the summer with a working version of the Logic Theorist program — the only substantial running demonstration of the conference. |
 
 </details>
@@ -31,7 +31,7 @@ timeline
     title The Dartmouth Project, 1955–1956
     August 31 1955 : "A Proposal for the Dartmouth Summer Research Project on Artificial Intelligence" drafted : Cover page lists McCarthy (Dartmouth), Minsky (Harvard), Rochester (IBM), Shannon (Bell Labs)
     September 2 1955 : Proposal sent to the Rockefeller Foundation
-    Spring 1956 : Rockefeller approves approximately $7,500 against the $13,500 request
+    Spring 1956 : Rockefeller approves approximately 7,500 dollars against the 13,500-dollar request
     June 18 1956 : Workshop begins at Dartmouth College, Hanover, New Hampshire
     August 17 1956 : Solomonoff delivers the final talk; workshop concludes after eight weeks
 ```
@@ -42,12 +42,12 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Dartmouth Summer Research Project on Artificial Intelligence** — The eight-week workshop convened at Dartmouth College in 1956. The first event whose proposal used the phrase "Artificial Intelligence" as a research-programme label. It did not adopt a unified theory or publish proceedings.
-- **Cybernetics** — Norbert Wiener's 1948 framework for control and communication in animals and machines. McCarthy's choice of "Artificial Intelligence" was deliberately a way to name a programme that was not Wiener's; the chapter's thesis turns on that distancing.
+- **Cybernetics** — Norbert Wiener's 1948 framework for control and communication in animals and machines. McCarthy's choice of "Artificial Intelligence" distinguished the Dartmouth agenda from Wiener's existing banner.
 - **Logic Theorist** — Newell and Simon's 1956 program demonstrated at Dartmouth. It searched for proofs of theorems from *Principia Mathematica*. The summer's only substantial running demonstration; ahead of the organizers' less concrete agenda.
 - **Information theory** — Claude Shannon's 1948 mathematical theory of communication. One of the older banners the proposal drew on without folding the new field into.
 - **McCulloch-Pitts neuron** — Warren McCulloch and Walter Pitts's 1943 model of an artificial neuron as a binary logical gate. The intellectual ancestry of the proposal's "neural nets" topic.
 - **Inductive inference** — Solomonoff's research programme on machine learning from data, developed both before and after the summer. His Dartmouth talks introduced what would become algorithmic probability.
-- **Rockefeller Foundation** — The American philanthropic foundation that approved roughly $7,500 of the proposal's $13,500 ask. Rockefeller's willingness to fund the proposal — chiefly on the strength of Shannon's name — is the institutional precondition that turned a private memo into a sponsored event.
+- **Rockefeller Foundation** — The American philanthropic foundation that approved roughly 7,500 dollars of the proposal's 13,500-dollar ask. Rockefeller's willingness to fund the proposal — chiefly on the strength of Shannon's name — turned a private memo into a sponsored event.
 
 </details>
 
@@ -77,7 +77,7 @@ The document also listed the research areas that made "Artificial Intelligence" 
 
 Read as a document, the list is revealing because it is not a syllabus for a mature discipline. It is a map of unresolved claims. Some topics are about hardware, some about programming, some about mathematical limits, and some about behavior that would have been difficult even to define cleanly. The proposal did not prove that these belonged together. It asserted that they were close enough to study under one roof, for one summer, with one funder.
 
-The budget made the same point in institutional form. The organizers asked Rockefeller for $13,500. Secondary histories generally report that the award was smaller, roughly $7,500, and the primary Rockefeller disbursement record remains the missing anchor. Even the requested amount tells the scale. This was not a national laboratory program or a military crash project. It was a modest foundation-funded summer study, built around travel, salaries, and the credibility of the people asking.
+The budget made the same point in institutional form. The organizers asked Rockefeller for 13,500 dollars. Secondary histories generally report that the award was smaller, roughly 7,500 dollars, and the primary Rockefeller disbursement record remains the missing anchor. Even the requested amount tells the scale. This was not a national laboratory program or a military crash project. It was a modest foundation-funded summer study, built around travel, salaries, and the credibility of the people asking.
 
 The modesty is easy to lose because the later phrase became so large. Nothing in the budget suggests an event that already knew it would become an origin story. The proposal reads more like a bid to create a temporary zone of permission: bring the right people together, suspend ordinary academic schedules for a summer, and see whether a set of hard problems could be made precise enough to attack.
 

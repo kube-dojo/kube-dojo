@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Between 1947 and 1952, Alan Turing replaced the unanswerable question "Can machines think?" with an empirical protocol: a typed parlour game routed through a teleprinter, in which an interrogator decides whether the hidden party is human or machine. Turing did not found AI as a research field — that came in 1956. He set the empirical goalpost. Later commentators rebranded the Imitation Game as the "Turing Test" and stripped its original gender-disambiguation structure.
+Between 1947 and 1952, Alan Turing turned machine intelligence from a definition hunt into a controlled comparison of performances. Turing did not found AI as a research field — that came in 1956. He supplied a testable setup, a way to bracket bodily cues, and a provocation later readers would simplify under the name "Turing Test."
 :::
 
 <details>
@@ -41,7 +41,7 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Imitation Game** — Turing's 1950 protocol for testing machine intelligence: a typed exchange in which an interrogator, hidden from the other parties, tries to identify which of two unseen respondents is the human and which is the machine. Turing's term; the rebrand to "Turing Test" came later.
-- **Teleprinter** — A 1950s electromechanical device that sent typed text over a wire to another teleprinter. Turing called it "the ideal arrangement" for the game because it strips away voice, face, body, and any other non-linguistic evidence the interrogator might use.
+- **Teleprinter** — A 1950s electromechanical device that sent typed text over a wire. In Turing's game it made the exchange text-only, so the interrogator judged linguistic behaviour rather than bodily cues.
 - **Discrete-state machine** — In Turing's 1950 framing, a system whose future behaviour is determined by its current state and input, moving through a finite (if enormous) space of configurations. The class to which Turing argues a digital computer belongs.
 - **Universality argument** — Turing's claim that a single discrete-state machine, given adequate storage, speed, and the right programme, can imitate any other discrete-state machine. The argumentative bridge from the parlour game to actual digital hardware.
 - **Unorganized machine** — Turing's 1948 term for a discrete-state random network of simple logical units (A-type machines used NAND-like elements). Its initial state is deliberately unformed; he proposed the human infant cortex as a biological analogue.
@@ -165,5 +165,5 @@ Whether this abstraction was faithful to Turing's intent remains disputed. Diane
 Regardless of whether the gender structure was load-bearing, Turing's core epistemic move survived. By substituting an empirical, teleprinter-bound imitation game for the unanswerable question of whether machines can think, Turing set an operational baseline. The rest of the field would repeatedly argue about whether the baseline was sufficient, fair, too behavioural, too linguistic, too anthropomorphic, or too easy to game. But those arguments took place on the ground Turing had cleared: do not begin with a definition of thinking; begin with a test of what a machine can make a competent interrogator believe.
 
 :::note[Why this still matters today]
-Every benchmark that asks whether a model can hold a conversation indistinguishable from a person's descends from Turing's move. So does every "AI evaluation" panel that compares a model's typed output against a human's, every chatbot transcript a tester scores, every adversarial probe designed to catch a machine in a tell. The framing is so naturalised that it is easy to forget it had to be invented — and that the invention was an act of refusal: refusal of the definitional debate over the word "thinking," in favour of an empirical protocol. The arguments about whether the protocol is sufficient have not stopped; they take place on the ground Turing cleared.
+Every benchmark that asks whether a model can hold a conversation indistinguishable from a person's descends from Turing's move. So does every "AI evaluation" panel that compares a model's typed output against a human's, every chatbot transcript a tester scores, every adversarial probe designed to catch a machine in a tell. The framing is so naturalised that it is easy to forget it had to be invented — and that the invention was an act of refusal. The adequacy of the setup remains disputed; its durability lies in forcing the dispute into observable behaviour.
 :::

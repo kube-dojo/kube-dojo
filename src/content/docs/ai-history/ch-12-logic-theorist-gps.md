@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Allen Newell, Herbert Simon, and J. C. Shaw built two different symbol machines. Logic Theorist (1956) searched for proofs in the sentential calculus of *Principia Mathematica* using heuristics rather than blind enumeration. GPS (1959) tried to lift that success into a reusable architecture — objects, operators, differences, goals, means-ends analysis. The chapter's hinge: turning problem solving into inspectable symbol manipulation, then discovering how much infrastructure and task knowledge a "general" architecture still required.
+Allen Newell, Herbert Simon, and J. C. Shaw built two different symbol machines. Logic Theorist (1956) searched for proofs in the sentential calculus of *Principia Mathematica* using heuristics rather than blind enumeration. GPS (1959) tried to turn that success into a broader architecture for problem solving. The chapter's hinge is the move from a working theorem prover to a "general" system whose reach still depended on hand-built representations.
 :::
 
 <details>
@@ -17,7 +17,7 @@ Allen Newell, Herbert Simon, and J. C. Shaw built two different symbol machines.
 | Allen Newell | 1927–1992 | Co-designer of LT and GPS at RAND. Brought non-numerical computing, organizational simulation, and symbolic-processing ambitions into the collaboration. |
 | Herbert A. Simon | 1916–2001 | Co-designer at Carnegie Tech. Organizational theorist and cognitive scientist; later 1978 Nobel laureate in economics — out of scope here. |
 | J. C. "Cliff" Shaw | — | RAND programmer; central to making LT and GPS programmable rather than only conceptual specifications. Author of the IPL programming languages on which LT and GPS ran. |
-| Oliver Selfridge | 1926–2008 | MIT/Lincoln Lab researcher whose mid-November 1954 RAND talk Newell later credited with making arbitrary information processing, symbolic processing, and adaptive processing clear to him. |
+| Oliver Selfridge | 1926–2008 | MIT/Lincoln Lab researcher whose mid-November 1954 RAND talk Newell later remembered as a turning point toward symbolic processing. |
 | Alfred N. Whitehead & Bertrand Russell | 1861–1947 / 1872–1970 | Authors of *Principia Mathematica* (1910–1913). The sentential calculus from Chapter 2 was LT's task domain — its theorems the program's targets. |
 
 </details>
@@ -42,12 +42,12 @@ timeline
 <summary><strong>Plain-words glossary</strong></summary>
 
 - **Logic Theorist (LT)** — Newell, Shaw, and Simon's 1956 program that searched for proofs of theorems in the sentential calculus of *Principia Mathematica*, using a small set of heuristics rather than exhaustive enumeration.
-- **GPS (General Problem Solver)** — Newell, Shaw, and Simon's 1959 successor: a problem-solving architecture in which any task is recast as objects, operators, differences (between current and goal states), and a tree of goals and subgoals.
-- **Means-ends analysis** — GPS's signature heuristic. Compute the difference between the current state and the goal; choose an operator that *reduces* that specific kind of difference; recurse on whatever new subgoals the chosen operator opens up.
+- **GPS (General Problem Solver)** — Newell, Shaw, and Simon's 1959 successor, designed to test whether problem solving could be described through a reusable symbolic architecture rather than one theorem-proving task.
+- **Means-ends analysis** — GPS's signature heuristic: compare the current state with the goal, then choose actions aimed at reducing the relevant difference.
 - **Sentential calculus / propositional logic** — The logical system of *Principia Mathematica* Chapter 2 — propositions combined by AND, OR, NOT, IMPLIES — the formal domain LT searched.
 - **IPL (Information Processing Language)** — Shaw's family of list-processing languages (IPL-I through IPL-V, 1956–1960). LT and GPS ran on IPL. The languages were designed for symbolic, not numerical, computation.
 - **JOHNNIAC** — RAND's copy of the IAS computer, built 1952–1953. The hardware on which Shaw eventually ran LT.
-- **Performance vs. simulation** — The chapter's organising distinction. A *performance* program is judged by whether it solves the problem; a *simulation* program is judged by whether the *trace* of its work resembles a human's. LT was performance-oriented; GPS shifted toward simulation.
+- **Performance vs. simulation** — The chapter's organising distinction between solving a task and modelling the trace of human problem solving.
 
 </details>
 
