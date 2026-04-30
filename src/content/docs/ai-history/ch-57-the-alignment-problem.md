@@ -69,6 +69,12 @@ This is the clean way to understand the alignment problem at this moment in the 
 
 The phrase "alignment" can become too large too quickly. In its broadest form, it asks whether powerful AI systems reliably pursue goals compatible with human values. In the InstructGPT work, the claim was narrower. OpenAI was trying to make language models follow user intent better on a measured distribution of prompts, according to preferences collected from labelers and shaped by researcher instructions. That is still historically important. It turned assistant behavior into something trainable.
 
+:::note
+> We are not claiming that researchers, the labelers we hired, or our API customers are the right source of preferences.
+
+This keeps RLHF's reference group explicit: practical alignment was not a universal-values settlement. — *Ouyang et al. 2022, "Training language models to follow instructions with human feedback," §5.2 ("Who are we aligning to?").*
+:::
+
 The key insight was that a model's behavior could be adjusted after pretraining. The base model supplied linguistic competence and broad world-pattern knowledge. A second training layer supplied behavioral preference. Instead of trying to bake every desired behavior into the original corpus, researchers could collect examples and comparisons from humans, train another model to predict which outputs humans preferred, and use reinforcement learning to steer the language model toward those preferences.
 
 The method had a prehistory. In 2017, Paul Christiano and collaborators published work on deep reinforcement learning from human preferences. Their problem was not chat assistants. It was the more general problem of learning a reward function when the true goal is difficult to specify in code. Humans compared short clips of agent behavior. A model learned to predict which behavior humans preferred. A policy was then trained to optimize the learned reward. The paper showed this pattern on Atari and simulated robotics tasks without direct access to the environment reward.
