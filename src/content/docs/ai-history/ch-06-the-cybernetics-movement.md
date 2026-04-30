@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Between 1940 and 1953 a parallel research program took shape — built on physical feedback machines, interdisciplinary lab meetings, and a vocabulary of steering and homeostasis rather than logic. Cybernetics had its own failed weapons program (Wiener's anti-aircraft predictor), founding paper (Rosenblueth, Wiener, and Bigelow 1943), institutional venue (the Macy Conferences at the Beekman Hotel), and canonical machine (Ashby's Homeostat). By 1953 it had dispersed — information theory absorbed the symbolic side, control engineering the analog, neurophysiology kept the McCulloch-Pitts substrate, and the "thinking machine" question went to Dartmouth in 1956.
+Between 1940 and 1953 a parallel research program took shape — built on physical feedback machines, interdisciplinary lab meetings, and a vocabulary of steering and homeostasis rather than logic. Cybernetics had its own failed weapons program (Wiener's anti-aircraft predictor), founding paper (Rosenblueth, Wiener, and Bigelow 1943), institutional venue (the Macy Conferences at the Beekman Hotel), and canonical machine (Ashby's Homeostat). By 1953, the synthesis had begun to disperse into the disciplines that had produced it.
 :::
 
 <details>
@@ -16,7 +16,7 @@ Between 1940 and 1953 a parallel research program took shape — built on physic
 |---|---|---|
 | Norbert Wiener | 1894–1964 | Professor of Mathematics, MIT. Anti-aircraft predictor work (1940–1943); co-author of the 1943 paper; coined "cybernetics" from Greek *kybernētēs* in summer 1947; published *Cybernetics* in 1948. Withdrew from classified weapons work after Hiroshima. |
 | Julian Bigelow | 1913–2003 | MIT-trained electrical engineer; hired by Wiener in January 1941 for the AA-predictor circuits. Designed the deliberately-sluggish "pilot" control stick that mimicked human reaction lag in the 1941 light-spot tracking apparatus. Co-author of the 1943 paper. |
-| Arturo Rosenblueth | 1900–1970 | Cardiologist and physiologist; with Wiener at the Harvard Medical School discussion group until 1944. Diagnosed "purpose tremor" as the cerebellar-feedback condition that became the bridge between the AA-predictor work and the 1943 redefinition of teleology. Co-author of "Behavior, Purpose and Teleology." |
+| Arturo Rosenblueth | 1900–1970 | Cardiologist and physiologist; with Wiener at the Harvard Medical School discussion group until 1944. Co-author of "Behavior, Purpose and Teleology." |
 | Warren McCulloch | 1898–1969 | Neurophysiologist; chairman and intellectual moderator of the Macy Conferences from 1946. Architect of the strict disciplinary-parity attendance policy. Cross-link to Ch5 for the 1943 Pitts-McCulloch logical calculus. |
 | W. Ross Ashby | 1903–1972 | Director of Research, Barnwood House Hospital, Gloucester. Designed the Homeostat (first published 1948 in *Electronic Engineering*; formalised in the 1952 *Design for a Brain* book). Presented "Homeostasis" at the ninth Macy Conference (1952). Refused to call his machine "intelligent" — only "ultrastable." |
 | Gregory Bateson | 1904–1980 | Anthropologist; co-organiser of the second Macy meeting on "Teleological Mechanisms in Society" (20 September 1946). Coined the closing line: "I think that cybernetics is the biggest bite out of the fruit of the Tree of Knowledge that mankind has taken in the last 2000 years." |
@@ -57,10 +57,10 @@ timeline
 
 - **Cybernetics** — Wiener's 1947 coinage from Greek *kybernētēs* ("steersman") for the interdisciplinary study of control and communication in animals and machines. The term named the field; the field had been forming since 1942 under earlier labels ("circular causal mechanisms," "feedback").
 - **Negative feedback** — A control loop in which a system measures the difference between its current state and a target state, and uses that error signal to drive its next action so as to *reduce* the error. The thermostat is the textbook example. Cybernetics elevated negative feedback from a control-engineering term to the operational definition of *purpose*.
-- **Teleology (cybernetic sense)** — In the Rosenblueth-Wiener-Bigelow 1943 paper, "teleological behavior" is recast in strictly mechanical terms: behaviour controlled by negative feedback. A torpedo with a target-seeker is teleological by this definition; metaphysical readings of teleology as a future-cause-acting-on-the-present are dropped.
+- **Teleology (cybernetic sense)** — In the Rosenblueth-Wiener-Bigelow 1943 paper, "teleological behavior" is recast in strictly mechanical terms: behaviour controlled by negative feedback. Metaphysical readings of teleology as a future-cause-acting-on-the-present are dropped.
 - **Macy Conferences** — A series of ten closed interdisciplinary meetings (1946–1953), sponsored by the Josiah Macy, Jr. Foundation, organised by Frank Fremont-Smith and chaired by McCulloch. Approximately 20 attendees per meeting under a strict disciplinary-parity policy. The first five had no stenographic record; conferences 6–10 (1949–1953) were transcribed by Heinz von Foerster.
 - **Servo-mechanism** — The control-engineering term for a feedback-driven system that drives an output to match a target input — gun aimers, autopilots, factory positioners. The 1943 paper deliberately equated "servo-mechanism" with cybernetic teleology.
-- **Homeostat** — Ashby's 1948 electromechanical demonstration of an *ultrastable* system: four units with pivoted magnets, water-trough electrodes, triode outputs, and 25-position stepping switches that searched 781,250 configurations until the magnets returned to centre. Demonstrated equilibrium-finding, not symbol manipulation. Ashby refused the adjective "homeostatic" — that priority belonged to Cannon's 1932 coinage.
+- **Homeostat** — Ashby's 1948 electromechanical demonstration of an *ultrastable* system: four units with pivoted magnets, water-trough electrodes, triode outputs, and stepping switches that searched for a configuration returning the magnets to centre. Demonstrated equilibrium-finding, not symbol manipulation. Ashby refused the adjective "homeostatic" — that priority belonged to Cannon's 1932 coinage.
 
 </details>
 
@@ -159,4 +159,3 @@ The cybernetics movement had not failed; rather, it had successfully distributed
 :::note[Why this still matters today]
 The vocabulary of feedback, control, and homeostasis is so embedded in modern engineering and biology that it has stopped looking like a contribution at all. Thermostats, autopilots, PID controllers, robotic arms, error-correcting codes, training-loop telemetry, and the closed-loop reward signal of reinforcement learning are all heirs of the 1943 paper's redefinition of purpose as negative-feedback-controlled behaviour. Cybernetics' analog-substrate limitation is also visible in the modern split: anything that needs to be reprogrammable for radically different tasks runs on stored-program digital hardware; anything that needs continuous, fast, low-latency control of physical state still uses dedicated feedback loops with their structure built into the substrate.
 :::
-
