@@ -12,11 +12,7 @@ sidebar:
 >
 > **Prerequisites**: K8s basics, basic understanding of IaaS concepts, networking fundamentals helpful, and Module 5.1 Private Cloud Platforms recommended.
 
-For command examples, this module uses `k` as a short alias for `kubectl`.
-
-Create it once in your shell with `alias k=kubectl` before running the hands-on work.
-
-All Kubernetes examples assume Kubernetes 1.35+ behavior unless a tool-specific command says otherwise.
+For command examples, this module uses `k` as a short alias for `kubectl`. Create it once in your shell with `alias k=kubectl` before running the hands-on work. All Kubernetes examples assume Kubernetes 1.35+ behavior unless a tool-specific command says otherwise.
 
 ---
 
@@ -34,89 +30,29 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-At 03:20 during a holiday sales event, Walmart's private cloud operators cannot treat the platform as a lab curiosity.
+At 03:20 during a holiday sales event, Walmart's private cloud operators cannot treat the platform as a lab curiosity. The retail systems behind stores, supply-chain planning, internal developer platforms, and data services need compute capacity even when public cloud spend controls tighten. OpenStack is not an academic choice in that environment; it is the internal infrastructure product that has scaled beyond a million cores in public case-study material. The surprising part is not that OpenStack still runs at that scale.
 
-The retail systems behind stores, supply-chain planning, internal developer platforms, and data services need compute capacity even when public cloud spend controls tighten.
+The surprising part is that the operational center of gravity around private cloud has moved. For years, the default picture was simple: install OpenStack on bare metal, expose Nova, Neutron, Cinder, Glance, Keystone, and Horizon, then let teams create VMs. If a team wanted Kubernetes, it launched Kubernetes clusters on top of those VMs. OpenStack was the substrate.
 
-OpenStack is not an academic choice in that environment; it is the internal infrastructure product that has scaled beyond a million cores in public case-study material.
+Kubernetes was the tenant workload. In practice, that picture is no longer the only serious production design. Operators now run OpenStack's own control plane as Kubernetes workloads, so Keystone becomes pods.
 
-The surprising part is not that OpenStack still runs at that scale.
+Glance becomes pods. In turn, Nova API, scheduler, conductor, metadata, and placement become pods. Neutron server becomes pods, and Cinder API and scheduler become pods.
 
-The surprising part is that the operational center of gravity around private cloud has moved.
+MariaDB Galera and RabbitMQ become StatefulSets. Ceph may be operated by Rook. OVN may serve both the infra Kubernetes cluster and OpenStack tenant networking. The architectural direction has inverted.
 
-For years, the default picture was simple: install OpenStack on bare metal, expose Nova, Neutron, Cinder, Glance, Keystone, and Horizon, then let teams create VMs.
-
-If a team wanted Kubernetes, it launched Kubernetes clusters on top of those VMs.
-
-OpenStack was the substrate.
-
-Kubernetes was the tenant workload.
-
-That picture is no longer the only serious production design.
-
-Operators now run OpenStack's own control plane as Kubernetes workloads.
-
-Keystone becomes pods.
-
-Glance becomes pods.
-
-Nova API, scheduler, conductor, metadata, and placement become pods.
-
-Neutron server becomes pods.
-
-Cinder API and scheduler become pods.
-
-MariaDB Galera and RabbitMQ become StatefulSets.
-
-Ceph may be operated by Rook.
-
-OVN may serve both the infra Kubernetes cluster and OpenStack tenant networking.
-
-The architectural direction has inverted.
-
-This module is about that inversion.
-
-You will learn why Kubernetes has become a credible lifecycle manager for non-Kubernetes services, how OpenStack-Helm expresses OpenStack as charts, how Loci and Atmosphere package the ecosystem, and when the older direction still wins.
-
-The goal is not to declare one architecture universally better.
-
-The goal is to recognize which layer should manage which lifecycle, then design a platform that does not confuse operators, tenants, storage teams, and network teams during the first serious incident.
+This module is about that inversion. You will learn why Kubernetes has become a credible lifecycle manager for non-Kubernetes services, how OpenStack-Helm expresses OpenStack as charts, how Loci and Atmosphere package the ecosystem, and when the older direction still wins. The goal is not to declare one architecture universally better. The goal is to recognize which layer should manage which lifecycle, then design a platform that does not confuse operators, tenants, storage teams, and network teams during the first serious incident.
 
 ---
 
 ## 1. The Architectural Inversion
 
-Traditional OpenStack installations usually start from hosts.
+Traditional OpenStack installations usually start from hosts. Operators install packages or containers onto controller nodes, network nodes, compute nodes, and storage nodes. Puppet, Ansible, Director, TripleO, OpenStack-Ansible, Kolla-Ansible, or vendor tooling lays down configuration files. Systemd units start services.
 
-Operators install packages or containers onto controller nodes, network nodes, compute nodes, and storage nodes.
+Journald records logs. Host networking is prepared with bridges, Open vSwitch, OVN, VLANs, provider networks, and sometimes SR-IOV or DPDK. The mental model is host-first. You choose the server role.
 
-Puppet, Ansible, Director, TripleO, OpenStack-Ansible, Kolla-Ansible, or vendor tooling lays down configuration files.
+Then you place OpenStack services on that role. Then you run orchestration against that estate. Kubernetes changed the operator's expectations. It created a normal language for desired state, rolling updates, probes, pod disruption budgets, service discovery, secrets, config projection, health checks, horizontal scaling, storage claims, and event streams.
 
-Systemd units start services.
-
-Journald records logs.
-
-Host networking is prepared with bridges, Open vSwitch, OVN, VLANs, provider networks, and sometimes SR-IOV or DPDK.
-
-The mental model is host-first.
-
-You choose the server role.
-
-Then you place OpenStack services on that role.
-
-Then you run orchestration against that estate.
-
-Kubernetes changed the operator's expectations.
-
-It created a normal language for desired state, rolling updates, probes, pod disruption budgets, service discovery, secrets, config projection, health checks, horizontal scaling, storage claims, and event streams.
-
-Those primitives were built for containers, but they are not limited to web applications.
-
-An OpenStack API service is also a long-running process with configuration, credentials, health endpoints, logs, dependencies, and restart behavior.
-
-That makes OpenStack a candidate for Kubernetes lifecycle management.
-
-The inversion looks like this:
+Those primitives were built for containers, but they are not limited to web applications. An OpenStack API service is also a long-running process with configuration, credentials, health endpoints, logs, dependencies, and restart behavior. That makes OpenStack a candidate for Kubernetes lifecycle management. The inversion looks like this:
 
 ```text
 Traditional direction
@@ -153,161 +89,49 @@ Inverted direction
   +----------------------------------------------------------+
 ```
 
-This is more than a packaging choice.
+This is more than a packaging choice. It changes the operational API. In a classic install, an operator might restart Keystone with `systemctl restart httpd` or re-run an Ansible role that renders Keystone configuration. In OpenStack-Helm, the same operator may inspect a ConfigMap, update chart values, run `helm upgrade`, and watch a Deployment rollout.
 
-It changes the operational API.
+The service is still Keystone. The lifecycle manager is different. The same pattern applies across OpenStack services. Nova scheduler is a Kubernetes Deployment.
 
-In a classic install, an operator might restart Keystone with `systemctl restart httpd` or re-run an Ansible role that renders Keystone configuration.
+Nova conductor is a Deployment. Nova compute may be a DaemonSet on hypervisor nodes or managed outside the infra cluster depending on architecture. Neutron server is a Deployment. OVN components may run as StatefulSets or DaemonSets.
 
-In OpenStack-Helm, the same operator may inspect a ConfigMap, update chart values, run `helm upgrade`, and watch a Deployment rollout.
+MariaDB and RabbitMQ are StatefulSets because identity, persistence, and ordered recovery matter. Memcached is simpler and can be treated as replaceable cache capacity. The reason this became practical is not one single breakthrough. Container images matured.
 
-The service is still Keystone.
+Helm became a standard packaging format. Kubernetes probes and rollouts became normal operational tools. CSI made storage integration a platform concern rather than a one-off host script. CNI made pod networking pluggable.
 
-The lifecycle manager is different.
+Operators became comfortable debugging pods, Services, Ingresses, StatefulSets, and PersistentVolumeClaims. The surrounding CNCF ecosystem made observability, GitOps, policy, and secret delivery composable. OpenStack itself also changed. Its services already had clear API boundaries.
 
-The same pattern applies across OpenStack services.
+Most control-plane components are stateless or externally stateful. State lives in MariaDB, RabbitMQ, Keystone tokens, image backends, block storage backends, and message queues. That makes many OpenStack services a good fit for Deployment-style lifecycle. The hard parts did not disappear.
 
-Nova scheduler is a Kubernetes Deployment.
+They moved. In practice, instead of asking "which controller node owns this systemd unit?", the operator asks "which pod revision, Secret, ConfigMap, chart value, and database migration produced this service behavior?" Instead of logging into three controllers to compare files, the operator compares Helm releases and rendered Kubernetes objects.
 
-Nova conductor is a Deployment.
+Instead of handling every restart by hand, the operator uses Kubernetes rollout primitives. Pause and predict: if a Helm value changes the Keystone database connection string, what do you expect Kubernetes to restart, and what state should remain outside the pod? The right answer is that Keystone pods should roll so they consume the updated configuration, while the database itself remains a separate persistent service. If the database state lives inside ephemeral Keystone containers, the architecture is wrong.
 
-Nova compute may be a DaemonSet on hypervisor nodes or managed outside the infra cluster depending on architecture.
+The inversion also creates a naming trap. OpenStack-on-Kubernetes does not mean every OpenStack tenant workload becomes a pod. OpenStack still provides IaaS APIs. Tenants still create VMs, networks, volumes, images, routers, floating IPs, and security groups.
 
-Neutron server is a Deployment.
+The control plane is containerized. In other words, the cloud product is still OpenStack. The opposite direction still exists and still matters. Kubernetes-on-OpenStack means OpenStack provides VMs and networks, and Kubernetes clusters run on top.
 
-OVN components may run as StatefulSets or DaemonSets.
+Magnum is OpenStack's Kubernetes-as-a-service project. Cluster API Provider OpenStack is another common route. Both directions can coexist in the same platform. That coexistence is the main architectural lesson.
 
-MariaDB and RabbitMQ are StatefulSets because identity, persistence, and ordered recovery matter.
+An infra Kubernetes cluster may run OpenStack's control plane. OpenStack may then expose Magnum. Magnum may create tenant Kubernetes clusters on Nova instances. Those tenant clusters are not the same cluster as the infra Kubernetes cluster.
 
-Memcached is simpler and can be treated as replaceable cache capacity.
+Treating them as the same failure domain is a serious design mistake. The infra cluster is a platform operations cluster. Tenant clusters are user products. They have different RBAC, upgrades, storage classes, network policies, blast radius, monitoring, and backup rules.
 
-The reason this became practical is not one single breakthrough.
-
-Container images matured.
-
-Helm became a standard packaging format.
-
-Kubernetes probes and rollouts became normal operational tools.
-
-CSI made storage integration a platform concern rather than a one-off host script.
-
-CNI made pod networking pluggable.
-
-Operators became comfortable debugging pods, Services, Ingresses, StatefulSets, and PersistentVolumeClaims.
-
-The surrounding CNCF ecosystem made observability, GitOps, policy, and secret delivery composable.
-
-OpenStack itself also changed.
-
-Its services already had clear API boundaries.
-
-Most control-plane components are stateless or externally stateful.
-
-State lives in MariaDB, RabbitMQ, Keystone tokens, image backends, block storage backends, and message queues.
-
-That makes many OpenStack services a good fit for Deployment-style lifecycle.
-
-The hard parts did not disappear.
-
-They moved.
-
-Instead of asking "which controller node owns this systemd unit?", the operator asks "which pod revision, Secret, ConfigMap, chart value, and database migration produced this service behavior?"
-
-Instead of logging into three controllers to compare files, the operator compares Helm releases and rendered Kubernetes objects.
-
-Instead of handling every restart by hand, the operator uses Kubernetes rollout primitives.
-
-Pause and predict: if a Helm value changes the Keystone database connection string, what do you expect Kubernetes to restart, and what state should remain outside the pod?
-
-The right answer is that Keystone pods should roll so they consume the updated configuration, while the database itself remains a separate persistent service.
-
-If the database state lives inside ephemeral Keystone containers, the architecture is wrong.
-
-The inversion also creates a naming trap.
-
-OpenStack-on-Kubernetes does not mean every OpenStack tenant workload becomes a pod.
-
-OpenStack still provides IaaS APIs.
-
-Tenants still create VMs, networks, volumes, images, routers, floating IPs, and security groups.
-
-The control plane is containerized.
-
-The cloud product is still OpenStack.
-
-The opposite direction still exists and still matters.
-
-Kubernetes-on-OpenStack means OpenStack provides VMs and networks, and Kubernetes clusters run on top.
-
-Magnum is OpenStack's Kubernetes-as-a-service project.
-
-Cluster API Provider OpenStack is another common route.
-
-Both directions can coexist in the same platform.
-
-That coexistence is the main architectural lesson.
-
-An infra Kubernetes cluster may run OpenStack's control plane.
-
-OpenStack may then expose Magnum.
-
-Magnum may create tenant Kubernetes clusters on Nova instances.
-
-Those tenant clusters are not the same cluster as the infra Kubernetes cluster.
-
-Treating them as the same failure domain is a serious design mistake.
-
-The infra cluster is a platform operations cluster.
-
-Tenant clusters are user products.
-
-They have different RBAC, upgrades, storage classes, network policies, blast radius, monitoring, and backup rules.
-
-In a mature platform, the phrase "Kubernetes manages OpenStack" and the phrase "OpenStack sells Kubernetes" can both be true.
-
-They describe different layers.
+In a mature platform, the phrase "Kubernetes manages OpenStack" and the phrase "OpenStack sells Kubernetes" can both be true. They describe different layers.
 
 ---
 
 ## 2. OpenStack-Helm Reference Architecture
 
-OpenStack-Helm is the reference project for deploying OpenStack and related infrastructure services onto Kubernetes with Helm charts.
+OpenStack-Helm is the reference project for deploying OpenStack and related infrastructure services onto Kubernetes with Helm charts. The project provides charts for OpenStack services and charts for supporting components. OpenStack charts include Keystone, Glance, Nova, Neutron, Cinder, Heat, Horizon, Barbican, Octavia, Designate, Placement, and related jobs. Infrastructure charts include MariaDB, RabbitMQ, Memcached, Ingress, Ceph adapters, and other dependencies used by the control plane.
 
-The project provides charts for OpenStack services and charts for supporting components.
+Each chart owns a service boundary, and that boundary matters because OpenStack is not a single binary. It is a distributed system of APIs, workers, schedulers, conductors, agents, databases, queues, caches, and storage backends. OpenStack-Helm expresses those boundaries as Kubernetes objects.
 
-OpenStack charts include Keystone, Glance, Nova, Neutron, Cinder, Heat, Horizon, Barbican, Octavia, Designate, Placement, and related jobs.
+An API service usually becomes a Deployment fronted by a Service and Ingress. A database becomes a StatefulSet with persistent volume claims. A bootstrap action becomes a Kubernetes Job. Configuration becomes ConfigMaps and Secrets.
 
-Infrastructure charts include MariaDB, RabbitMQ, Memcached, Ingress, Ceph adapters, and other dependencies used by the control plane.
+Policy files, paste pipelines, WSGI settings, and oslo.config values are rendered from Helm templates. The reference architecture starts with an infra Kubernetes cluster. That cluster is not a tenant cluster.
 
-Each chart owns a service boundary.
-
-That matters because OpenStack is not a single binary.
-
-It is a distributed system of APIs, workers, schedulers, conductors, agents, databases, queues, caches, and storage backends.
-
-OpenStack-Helm expresses those boundaries as Kubernetes objects.
-
-An API service usually becomes a Deployment fronted by a Service and Ingress.
-
-A database becomes a StatefulSet with persistent volume claims.
-
-A bootstrap action becomes a Kubernetes Job.
-
-Configuration becomes ConfigMaps and Secrets.
-
-Policy files, paste pipelines, WSGI settings, and oslo.config values are rendered from Helm templates.
-
-The reference architecture starts with an infra Kubernetes cluster.
-
-That cluster is not a tenant cluster.
-
-It is dedicated to platform services.
-
-It should have its own etcd, its own API server, its own CNI, its own storage classes, and its own operational access policy.
-
-Tenant Kubernetes clusters created later by Magnum, Cluster API, or Terraform should not run the OpenStack control plane that sells them capacity.
-
-That separation prevents a tenant cluster failure from becoming a private cloud control-plane failure.
+It is dedicated to platform services. It should have its own etcd, its own API server, its own CNI, its own storage classes, and its own operational access policy. Tenant Kubernetes clusters created later by Magnum, Cluster API, or Terraform should not run the OpenStack control plane that sells them capacity. That separation prevents a tenant cluster failure from becoming a private cloud control-plane failure.
 
 The physical shape often looks like this:
 
@@ -346,65 +170,21 @@ The physical shape often looks like this:
 +------------------------------------------------------------------+
 ```
 
-The dependency graph is important.
+The dependency graph is important. Keystone needs database access. Glance needs Keystone for identity and its own storage backend. Cinder needs Keystone, MariaDB, RabbitMQ, and a volume backend.
 
-Keystone needs database access.
+Nova needs Keystone, Placement, MariaDB, RabbitMQ, Neutron, Glance, and a compute layer. Neutron needs Keystone, MariaDB, RabbitMQ, and the chosen SDN backend. Horizon needs Keystone and service catalog entries. Octavia needs Keystone, Neutron, certificates, images, and amphora or provider-driver resources.
 
-Glance needs Keystone for identity and its own storage backend.
+Heat needs Keystone, MariaDB, RabbitMQ, and access to the APIs it orchestrates. Designate needs Keystone, MariaDB, RabbitMQ, and DNS backend integration. Barbican needs Keystone, MariaDB, and a secret backend. This dependency graph shapes installation order and upgrade order.
 
-Cinder needs Keystone, MariaDB, RabbitMQ, and a volume backend.
+You do not install Horizon first and expect it to discover a cloud. You build the identity, database, queue, cache, endpoint, image, network, compute, storage, and dashboard layers in an order that lets each service register itself. OpenStack-Helm usually uses Helm hooks and bootstrap jobs for service registration, database sync, endpoint creation, and user creation. Those jobs are as important as the long-running pods.
 
-Nova needs Keystone, Placement, MariaDB, RabbitMQ, Neutron, Glance, and a compute layer.
+When a deployment fails, check Jobs and init containers before assuming the service binary is broken. MariaDB runs as a Galera cluster in the Kubernetes world. The Kubernetes object is a StatefulSet because each database member needs stable identity and persistent storage. A PodDisruptionBudget protects quorum during voluntary disruptions.
 
-Neutron needs Keystone, MariaDB, RabbitMQ, and the chosen SDN backend.
+That does not make Galera magically simple. It means Kubernetes can express the placement and disruption rules. Operators still need a Galera recovery runbook for total cluster outage, split-brain symptoms, failed state snapshot transfer, and stale persistent volumes. RabbitMQ also runs as a StatefulSet because identity and persistent queue metadata matter.
 
-Horizon needs Keystone and service catalog entries.
+OpenStack services rely heavily on RabbitMQ for RPC and notification paths. If RabbitMQ partitions, Nova, Cinder, Neutron, and Heat can look broken even when their API pods are healthy. Kubernetes may report every RabbitMQ pod as Running while the cluster is logically partitioned. That is why operational probes must include RabbitMQ cluster status, not just pod phase.
 
-Octavia needs Keystone, Neutron, certificates, images, and amphora or provider-driver resources.
-
-Heat needs Keystone, MariaDB, RabbitMQ, and access to the APIs it orchestrates.
-
-Designate needs Keystone, MariaDB, RabbitMQ, and DNS backend integration.
-
-Barbican needs Keystone, MariaDB, and a secret backend.
-
-This dependency graph shapes installation order and upgrade order.
-
-You do not install Horizon first and expect it to discover a cloud.
-
-You build the identity, database, queue, cache, endpoint, image, network, compute, storage, and dashboard layers in an order that lets each service register itself.
-
-OpenStack-Helm usually uses Helm hooks and bootstrap jobs for service registration, database sync, endpoint creation, and user creation.
-
-Those jobs are as important as the long-running pods.
-
-When a deployment fails, check Jobs and init containers before assuming the service binary is broken.
-
-MariaDB runs as a Galera cluster in the Kubernetes world.
-
-The Kubernetes object is a StatefulSet because each database member needs stable identity and persistent storage.
-
-A PodDisruptionBudget protects quorum during voluntary disruptions.
-
-That does not make Galera magically simple.
-
-It means Kubernetes can express the placement and disruption rules.
-
-Operators still need a Galera recovery runbook for total cluster outage, split-brain symptoms, failed state snapshot transfer, and stale persistent volumes.
-
-RabbitMQ also runs as a StatefulSet because identity and persistent queue metadata matter.
-
-OpenStack services rely heavily on RabbitMQ for RPC and notification paths.
-
-If RabbitMQ partitions, Nova, Cinder, Neutron, and Heat can look broken even when their API pods are healthy.
-
-Kubernetes may report every RabbitMQ pod as Running while the cluster is logically partitioned.
-
-That is why operational probes must include RabbitMQ cluster status, not just pod phase.
-
-Day-2 operations become Kubernetes-native.
-
-To inspect Keystone pods:
+Day-2 operations become Kubernetes-native. To inspect Keystone pods:
 
 ```bash
 k -n openstack get pods -l application=keystone
@@ -428,57 +208,19 @@ helm -n openstack get values keystone
 helm -n openstack get manifest keystone | less
 ```
 
-Those commands are ordinary Kubernetes operations.
+Those commands are ordinary Kubernetes operations. The content behind them is OpenStack-specific. This is why an OpenStack-on-Kubernetes team needs both skill sets. A pure Kubernetes operator may understand rollouts but miss Nova cell mapping.
 
-The content behind them is OpenStack-specific.
+A pure OpenStack operator may understand service catalog errors but miss that a pod never mounted a Secret. The strongest teams build shared runbooks that cross both APIs. Service endpoints are published through Kubernetes Services and Ingress. Internally, Keystone, Glance, Cinder, Neutron, Nova, and Horizon communicate through cluster DNS names and Services.
 
-This is why an OpenStack-on-Kubernetes team needs both skill sets.
+Externally, tenants reach public endpoints through Ingress, load balancers, or provider network addresses. The OpenStack service catalog must match those externally reachable URLs. If the service catalog points tenants to names that only resolve inside the infra cluster, the cloud appears broken from outside even when every pod is healthy. Before running a Helm upgrade, what output do you expect from `openstack endpoint list`, `k -n openstack get ingress`, and `k -n openstack get svc`?
 
-A pure Kubernetes operator may understand rollouts but miss Nova cell mapping.
+If those three views disagree, the upgrade may be technically successful but tenant-visible behavior may still fail. The upgrade story is one of the main reasons teams look at OpenStack-Helm. In a classic host-based install, upgrades often involve coordinated Ansible or Puppet runs, package repository changes, database migrations, service restarts, compute-service version pinning, and evacuation planning. In OpenStack-Helm, the operator can render chart changes, review diffs, apply `helm upgrade`, and let Kubernetes roll Deployments.
 
-A pure OpenStack operator may understand service catalog errors but miss that a pod never mounted a Secret.
+That is a cleaner lifecycle boundary. It is not an automatic guarantee. OpenStack still has database migrations, RPC version compatibility, Nova upgrade levels, Neutron agent compatibility, and storage backend constraints. Helm gives the operator a better tool for applying desired state.
 
-The strongest teams build shared runbooks that cross both APIs.
+It does not remove the need to read release notes and test the upgrade path. The most useful practical habit is to treat chart rendering as a preflight artifact. Render the chart with your values. Diff the Kubernetes objects.
 
-Service endpoints are published through Kubernetes Services and Ingress.
-
-Internally, Keystone, Glance, Cinder, Neutron, Nova, and Horizon communicate through cluster DNS names and Services.
-
-Externally, tenants reach public endpoints through Ingress, load balancers, or provider network addresses.
-
-The OpenStack service catalog must match those externally reachable URLs.
-
-If the service catalog points tenants to names that only resolve inside the infra cluster, the cloud appears broken from outside even when every pod is healthy.
-
-Before running a Helm upgrade, what output do you expect from `openstack endpoint list`, `k -n openstack get ingress`, and `k -n openstack get svc`?
-
-If those three views disagree, the upgrade may be technically successful but tenant-visible behavior may still fail.
-
-The upgrade story is one of the main reasons teams look at OpenStack-Helm.
-
-In a classic host-based install, upgrades often involve coordinated Ansible or Puppet runs, package repository changes, database migrations, service restarts, compute-service version pinning, and evacuation planning.
-
-In OpenStack-Helm, the operator can render chart changes, review diffs, apply `helm upgrade`, and let Kubernetes roll Deployments.
-
-That is a cleaner lifecycle boundary.
-
-It is not an automatic guarantee.
-
-OpenStack still has database migrations, RPC version compatibility, Nova upgrade levels, Neutron agent compatibility, and storage backend constraints.
-
-Helm gives the operator a better tool for applying desired state.
-
-It does not remove the need to read release notes and test the upgrade path.
-
-The most useful practical habit is to treat chart rendering as a preflight artifact.
-
-Render the chart with your values.
-
-Diff the Kubernetes objects.
-
-Check which Deployments, StatefulSets, Jobs, Secrets, and ConfigMaps will change.
-
-Then upgrade in a maintenance window that matches the service risk.
+Check which Deployments, StatefulSets, Jobs, Secrets, and ConfigMaps will change. Then upgrade in a maintenance window that matches the service risk.
 
 ```bash
 helm template keystone openstack-helm/keystone \
@@ -492,83 +234,29 @@ helm upgrade --install keystone openstack-helm/keystone \
 k -n openstack rollout status deploy/keystone-api
 ```
 
-The command is short.
-
-The judgment around it is the real engineering work.
+The command is short. The judgment around it is the real engineering work.
 
 ---
 
 ## 3. Loci, Atmosphere, and the Packaging Layer
 
-OpenStack-Helm describes how to deploy services.
+OpenStack-Helm describes how to deploy services. Loci describes how to build lightweight OpenStack container images. That distinction matters. The chart is the deployment shape.
 
-Loci describes how to build lightweight OpenStack container images.
+The image is the runnable payload. If a team treats images as an afterthought, it may end up with inconsistent Python dependencies, mismatched OpenStack release versions, unexpected package sources, and bloated attack surface. Loci exists to make OpenStack images minimal and repeatable. It builds project-specific container images such as Keystone, Nova, Neutron, Glance, Cinder, Horizon, and supporting services from OpenStack source and base image choices.
 
-That distinction matters.
+The style is close to a distroless mindset: keep the runtime image focused on what the service needs, and avoid turning every container into a full general-purpose host. That design aligns with OpenStack-Helm. Helm charts can reference consistent images. Operators can pin tags.
 
-The chart is the deployment shape.
+Security teams can scan smaller images. Release teams can build the same service images for test, staging, and production. Loci does not solve architecture. It solves packaging discipline.
 
-The image is the runnable payload.
+That discipline is valuable because OpenStack services are Python applications with many dependencies. A mismatch between chart expectations and image contents can show up as a missing WSGI entry point, a failed database migration, an oslo.config option error, or a service plugin import failure. When debugging OpenStack-on-Kubernetes, always record both the chart version and image tag.
 
-If a team treats images as an afterthought, it may end up with inconsistent Python dependencies, mismatched OpenStack release versions, unexpected package sources, and bloated attack surface.
+Atmosphere is a higher-level distribution from VEXXHOST. It combines a production opinion set around Kubernetes, OpenStack-Helm, Loci-built images, Rook or Ceph integration patterns, OVN, and operational automation. The important part is not the brand name. The important part is that a full private cloud is larger than a folder of Helm charts.
 
-Loci exists to make OpenStack images minimal and repeatable.
+A production platform needs host preparation, Kubernetes lifecycle, storage lifecycle, network design, TLS, DNS, secrets, image builds, release compatibility, monitoring, backup, and day-2 procedures. Atmosphere is valuable because it packages those decisions into an opinionated reference architecture that people actually run. OpenStack-Helm standalone gives maximum control. The team owns every chart value, every image tag, every storage integration, every network integration, and every upgrade plan.
 
-It builds project-specific container images such as Keystone, Nova, Neutron, Glance, Cinder, Horizon, and supporting services from OpenStack source and base image choices.
+That is attractive for platform teams with strong OpenStack and Kubernetes skills. It is painful for teams that mainly want a working private cloud product. Atmosphere narrows the decision space. It gives a more batteries-included path, including a quickstart that expects real infrastructure for the full experience.
 
-The style is close to a distroless mindset: keep the runtime image focused on what the service needs, and avoid turning every container into a full general-purpose host.
-
-That design aligns with OpenStack-Helm.
-
-Helm charts can reference consistent images.
-
-Operators can pin tags.
-
-Security teams can scan smaller images.
-
-Release teams can build the same service images for test, staging, and production.
-
-Loci does not solve architecture.
-
-It solves packaging discipline.
-
-That discipline is valuable because OpenStack services are Python applications with many dependencies.
-
-A mismatch between chart expectations and image contents can show up as a missing WSGI entry point, a failed database migration, an oslo.config option error, or a service plugin import failure.
-
-When debugging OpenStack-on-Kubernetes, always record both the chart version and image tag.
-
-Atmosphere is a higher-level distribution from VEXXHOST.
-
-It combines a production opinion set around Kubernetes, OpenStack-Helm, Loci-built images, Rook or Ceph integration patterns, OVN, and operational automation.
-
-The important part is not the brand name.
-
-The important part is that a full private cloud is larger than a folder of Helm charts.
-
-A production platform needs host preparation, Kubernetes lifecycle, storage lifecycle, network design, TLS, DNS, secrets, image builds, release compatibility, monitoring, backup, and day-2 procedures.
-
-Atmosphere is valuable because it packages those decisions into an opinionated reference architecture that people actually run.
-
-OpenStack-Helm standalone gives maximum control.
-
-The team owns every chart value, every image tag, every storage integration, every network integration, and every upgrade plan.
-
-That is attractive for platform teams with strong OpenStack and Kubernetes skills.
-
-It is painful for teams that mainly want a working private cloud product.
-
-Atmosphere narrows the decision space.
-
-It gives a more batteries-included path, including a quickstart that expects real infrastructure for the full experience.
-
-That tradeoff is familiar.
-
-Kubernetes itself can be installed with kubeadm, Cluster API, Talos, RKE2, kOps, managed cloud services, or vendor distributions.
-
-The lower-level tool offers control.
-
-The distribution offers an integrated path.
+That tradeoff is familiar. Kubernetes itself can be installed with kubeadm, Cluster API, Talos, RKE2, kOps, managed cloud services, or vendor distributions. The lower-level tool offers control. The distribution offers an integrated path.
 
 OpenStack-on-Kubernetes has the same spectrum.
 
@@ -579,77 +267,27 @@ OpenStack-on-Kubernetes has the same spectrum.
 | Atmosphere | Teams wanting a production-shaped OpenStack-on-Kubernetes distribution with Ceph and OVN opinions | Less freedom to invent every integration detail |
 | Classic Ansible or director workflow | Teams with mature host-based OpenStack operations | Less Kubernetes-native day-2 lifecycle |
 
-The packaging layer also affects incident response.
+The packaging layer also affects incident response. If a Keystone pod fails after an upgrade, the operator should ask four questions. Which chart version rendered this Deployment? Which image tag is running?
 
-If a Keystone pod fails after an upgrade, the operator should ask four questions.
+Which ConfigMap and Secret were mounted? Which database migration job ran before the pod restarted? Those questions cross Helm, Kubernetes, image build, and OpenStack release boundaries. That is the cost and power of the inversion.
 
-Which chart version rendered this Deployment?
-
-Which image tag is running?
-
-Which ConfigMap and Secret were mounted?
-
-Which database migration job ran before the pod restarted?
-
-Those questions cross Helm, Kubernetes, image build, and OpenStack release boundaries.
-
-That is the cost and power of the inversion.
-
-The platform is more observable through Kubernetes.
-
-It is also easier to forget that a pod image still contains a complex OpenStack service with its own release lifecycle.
+The platform is more observable through Kubernetes. It is also easier to forget that a pod image still contains a complex OpenStack service with its own release lifecycle.
 
 ---
 
 ## 4. Storage Backends: Ceph as the Unifying Layer
 
-OpenStack needs storage in several different forms.
+OpenStack needs storage in several different forms. Cinder needs block volumes. Nova may need ephemeral disk storage for VM instances. Glance needs image storage.
 
-Cinder needs block volumes.
+Manila needs shared file systems. Swift traditionally supplies object storage, but Ceph RGW is often used instead in modern private-cloud designs. Kubernetes also needs storage. Pods need PersistentVolumes.
 
-Nova may need ephemeral disk storage for VM instances.
+Databases need durable volumes. RabbitMQ needs durable identity. Monitoring systems need time-series storage. The obvious mistake is to build a separate storage platform for every layer.
 
-Glance needs image storage.
+One SAN for OpenStack volumes. One NFS system for Kubernetes. One object store for images. One shared file store for Manila.
 
-Manila needs shared file systems.
+One local disk convention for Nova. That path creates operational silos and inconsistent failure behavior. Ceph is popular in OpenStack-on-Kubernetes designs because it can serve all of those roles from one distributed storage system. RBD provides block devices.
 
-Swift traditionally supplies object storage, but Ceph RGW is often used instead in modern private-cloud designs.
-
-Kubernetes also needs storage.
-
-Pods need PersistentVolumes.
-
-Databases need durable volumes.
-
-RabbitMQ needs durable identity.
-
-Monitoring systems need time-series storage.
-
-The obvious mistake is to build a separate storage platform for every layer.
-
-One SAN for OpenStack volumes.
-
-One NFS system for Kubernetes.
-
-One object store for images.
-
-One shared file store for Manila.
-
-One local disk convention for Nova.
-
-That path creates operational silos and inconsistent failure behavior.
-
-Ceph is popular in OpenStack-on-Kubernetes designs because it can serve all of those roles from one distributed storage system.
-
-RBD provides block devices.
-
-RGW provides S3-compatible object storage.
-
-CephFS provides a shared filesystem.
-
-The Ceph CSI drivers provide Kubernetes PersistentVolumes.
-
-The same cluster can back Cinder, Nova, Glance, Manila, RGW, and Kubernetes storage classes.
+RGW provides S3-compatible object storage. CephFS provides a shared filesystem. The Ceph CSI drivers provide Kubernetes PersistentVolumes. The same cluster can back Cinder, Nova, Glance, Manila, RGW, and Kubernetes storage classes.
 
 The architecture looks like this:
 
@@ -674,65 +312,21 @@ The architecture looks like this:
 +--------------+              +----------------+              +----------------+
 ```
 
-Rook-Ceph brings Ceph lifecycle into Kubernetes.
+Rook-Ceph brings Ceph lifecycle into Kubernetes. The Rook operator manages Ceph custom resources, monitors, managers, OSDs, pools, filesystems, object stores, and CSI integration. For an infra Kubernetes cluster, that is attractive because the storage system becomes visible through Kubernetes APIs. Operators can inspect Ceph custom resources with `k`.
 
-The Rook operator manages Ceph custom resources, monitors, managers, OSDs, pools, filesystems, object stores, and CSI integration.
+They can use Kubernetes scheduling and health primitives around Ceph daemons. They can integrate storage provisioning with Kubernetes StorageClasses. That does not mean every OpenStack-on-Kubernetes platform should run Ceph inside the same infra cluster. Rook is excellent when the team wants Kubernetes-native Ceph lifecycle and can dedicate suitable nodes and disks.
 
-For an infra Kubernetes cluster, that is attractive because the storage system becomes visible through Kubernetes APIs.
+Standalone Ceph is often better when a storage team already operates Ceph as a separate service, when the storage cluster spans non-Kubernetes consumers, or when strict failure-domain separation matters. The choice is not "modern" versus "old". The choice is lifecycle ownership. If Kubernetes owns Ceph lifecycle, Rook is a strong fit.
 
-Operators can inspect Ceph custom resources with `k`.
+If a storage organization owns Ceph lifecycle independently, OpenStack-Helm can consume that external Ceph cluster. Ceph pool design is the production detail learners often skip. Do not put every workload in one pool and hope performance isolation appears. Cinder volumes, Glance images, Nova ephemeral disks, RGW buckets, CephFS metadata, and Kubernetes PVCs have different IO patterns.
 
-They can use Kubernetes scheduling and health primitives around Ceph daemons.
+Cinder may have random writes from databases. Glance image storage is often large sequential reads and writes. Nova ephemeral disks may spike during boot storms. Kubernetes PVCs vary wildly.
 
-They can integrate storage provisioning with Kubernetes StorageClasses.
+RGW has object workload behavior. CephFS metadata can be sensitive to namespace-heavy activity. CRUSH maps and pool rules give you a way to place data across failure domains. A CRUSH rule can target device classes such as SSD or HDD.
 
-That does not mean every OpenStack-on-Kubernetes platform should run Ceph inside the same infra cluster.
+It can respect host, rack, room, or site boundaries. It can let you separate latency-sensitive volumes from bulk image storage. Pool quotas and placement groups help prevent one workload family from consuming the entire cluster. Ceph is unified storage.
 
-Rook is excellent when the team wants Kubernetes-native Ceph lifecycle and can dedicate suitable nodes and disks.
-
-Standalone Ceph is often better when a storage team already operates Ceph as a separate service, when the storage cluster spans non-Kubernetes consumers, or when strict failure-domain separation matters.
-
-The choice is not "modern" versus "old".
-
-The choice is lifecycle ownership.
-
-If Kubernetes owns Ceph lifecycle, Rook is a strong fit.
-
-If a storage organization owns Ceph lifecycle independently, OpenStack-Helm can consume that external Ceph cluster.
-
-Ceph pool design is the production detail learners often skip.
-
-Do not put every workload in one pool and hope performance isolation appears.
-
-Cinder volumes, Glance images, Nova ephemeral disks, RGW buckets, CephFS metadata, and Kubernetes PVCs have different IO patterns.
-
-Cinder may have random writes from databases.
-
-Glance image storage is often large sequential reads and writes.
-
-Nova ephemeral disks may spike during boot storms.
-
-Kubernetes PVCs vary wildly.
-
-RGW has object workload behavior.
-
-CephFS metadata can be sensitive to namespace-heavy activity.
-
-CRUSH maps and pool rules give you a way to place data across failure domains.
-
-A CRUSH rule can target device classes such as SSD or HDD.
-
-It can respect host, rack, room, or site boundaries.
-
-It can let you separate latency-sensitive volumes from bulk image storage.
-
-Pool quotas and placement groups help prevent one workload family from consuming the entire cluster.
-
-Ceph is unified storage.
-
-It is not one magic pool.
-
-A simple production-shaped pool plan might look like this:
+It is not one magic pool. A simple production-shaped pool plan might look like this:
 
 | Use Case | Ceph Interface | Example Pool | Isolation Goal |
 |---|---|---|---|
@@ -743,73 +337,25 @@ A simple production-shaped pool plan might look like this:
 | Manila shares | CephFS | `cephfs_data`, `cephfs_metadata` | Shared filesystem behavior |
 | Kubernetes PVs | RBD CSI | `k8s-pv` | Infra workload persistence |
 
-High-IOPS workloads need explicit tuning.
+High-IOPS workloads need explicit tuning. RBD cache settings, BlueStore device layout, WAL and DB devices, network MTU, replication size, erasure coding choices, object size, and client concurrency can all dominate real performance. If a Cinder volume performs badly, do not start by blaming Cinder. Trace the path.
 
-RBD cache settings, BlueStore device layout, WAL and DB devices, network MTU, replication size, erasure coding choices, object size, and client concurrency can all dominate real performance.
+VM filesystem to QEMU. QEMU to librbd. librbd to Ceph monitors and OSDs. OSDs to disks.
 
-If a Cinder volume performs badly, do not start by blaming Cinder.
-
-Trace the path.
-
-VM filesystem to QEMU.
-
-QEMU to librbd.
-
-librbd to Ceph monitors and OSDs.
-
-OSDs to disks.
-
-Disks back through the same path.
-
-Kubernetes added another lifecycle layer for the control plane, but the data path still needs storage engineering.
-
-Before running a production Cinder benchmark, what do you expect from `ceph -s`, `ceph osd df tree`, `rbd perf image iostat`, and Cinder scheduler logs?
-
-If those views disagree, the benchmark is measuring confusion rather than storage capability.
+Disks back through the same path. Kubernetes added another lifecycle layer for the control plane, but the data path still needs storage engineering. Before running a production Cinder benchmark, what do you expect from `ceph -s`, `ceph osd df tree`, `rbd perf image iostat`, and Cinder scheduler logs? If those views disagree, the benchmark is measuring confusion rather than storage capability.
 
 ---
 
 ## 5. Networking: OVN-Kubernetes and Neutron-OVN Convergence
 
-Networking is where the inversion becomes hardest to reason about.
+Networking is where the inversion becomes hardest to reason about. The infra Kubernetes cluster needs pod networking. OpenStack tenants need virtual networks, routers, security groups, provider networks, floating IPs, and external connectivity. Those are different planes.
 
-The infra Kubernetes cluster needs pod networking.
+They may both use OVN. That is useful. It is also a common source of wrong assumptions. OVN-Kubernetes is a Kubernetes CNI implementation.
 
-OpenStack tenants need virtual networks, routers, security groups, provider networks, floating IPs, and external connectivity.
+It uses Open Virtual Network to provide pod networking, Services, NetworkPolicy behavior, and node integration for Kubernetes clusters. In this module, OVN-Kubernetes is responsible for the infra cluster where OpenStack control-plane pods run. Neutron with the OVN ML2 driver is OpenStack's SDN path. It uses Neutron APIs to create logical switches, routers, ports, security groups, provider networks, and floating IP behavior for OpenStack tenants.
 
-Those are different planes.
+In this module, Neutron-OVN is responsible for OpenStack tenant networks. The convergence opportunity is that both systems speak OVN concepts. They can share operational knowledge and sometimes control-plane components. The OVN northbound database stores desired logical network state.
 
-They may both use OVN.
-
-That is useful.
-
-It is also a common source of wrong assumptions.
-
-OVN-Kubernetes is a Kubernetes CNI implementation.
-
-It uses Open Virtual Network to provide pod networking, Services, NetworkPolicy behavior, and node integration for Kubernetes clusters.
-
-In this module, OVN-Kubernetes is responsible for the infra cluster where OpenStack control-plane pods run.
-
-Neutron with the OVN ML2 driver is OpenStack's SDN path.
-
-It uses Neutron APIs to create logical switches, routers, ports, security groups, provider networks, and floating IP behavior for OpenStack tenants.
-
-In this module, Neutron-OVN is responsible for OpenStack tenant networks.
-
-The convergence opportunity is that both systems speak OVN concepts.
-
-They can share operational knowledge and sometimes control-plane components.
-
-The OVN northbound database stores desired logical network state.
-
-The OVN southbound database stores the physical realization plan.
-
-`ovn-northd` translates northbound intent into southbound data.
-
-OVS and OVN controllers on nodes program local forwarding.
-
-The conceptual model is shared even when the objects belong to different platform layers.
+The OVN southbound database stores the physical realization plan. `ovn-northd` translates northbound intent into southbound data. OVS and OVN controllers on nodes program local forwarding. The conceptual model is shared even when the objects belong to different platform layers.
 
 Here is the mental map:
 
@@ -839,41 +385,15 @@ Here is the mental map:
       +----------------+                    +----------------+
 ```
 
-In small labs, teams often keep the OVN databases separate.
+In small labs, teams often keep the OVN databases separate. That makes boundaries easier. In advanced production designs, teams may consolidate or tightly coordinate OVN operations so one SDN control-plane practice serves both Kubernetes and OpenStack. The benefit is operational convergence.
 
-That makes boundaries easier.
+The risk is blast radius. If one OVN database issue can affect both pod networking and tenant VM networking, the incident scope is larger. Convergence must be designed, not assumed. Neutron-OVN alongside OVN-Kubernetes needs careful interface planning.
 
-In advanced production designs, teams may consolidate or tightly coordinate OVN operations so one SDN control-plane practice serves both Kubernetes and OpenStack.
+The infra cluster CNI chooses its pod CIDRs, service CIDRs, node overlay settings, and gateway behavior. Neutron chooses tenant overlay networks, provider networks, VLAN ranges, Geneve or VXLAN encapsulation, logical router behavior, and external gateway nodes. Provider networks must map to physical NICs and bridges on the right hosts. Tenant overlays must not collide with pod overlays.
 
-The benefit is operational convergence.
+Tunnel IDs must stay within expected ranges. Encapsulation ports must not be blocked. MTU must account for overlay overhead. VLAN tags must be reserved and documented.
 
-The risk is blast radius.
-
-If one OVN database issue can affect both pod networking and tenant VM networking, the incident scope is larger.
-
-Convergence must be designed, not assumed.
-
-Neutron-OVN alongside OVN-Kubernetes needs careful interface planning.
-
-The infra cluster CNI chooses its pod CIDRs, service CIDRs, node overlay settings, and gateway behavior.
-
-Neutron chooses tenant overlay networks, provider networks, VLAN ranges, Geneve or VXLAN encapsulation, logical router behavior, and external gateway nodes.
-
-Provider networks must map to physical NICs and bridges on the right hosts.
-
-Tenant overlays must not collide with pod overlays.
-
-Tunnel IDs must stay within expected ranges.
-
-Encapsulation ports must not be blocked.
-
-MTU must account for overlay overhead.
-
-VLAN tags must be reserved and documented.
-
-External network bridging must be deliberate.
-
-A practical Neutron-OVN configuration has these concerns:
+External network bridging must be deliberate. A practical Neutron-OVN configuration has these concerns:
 
 ```ini
 [ml2]
@@ -896,33 +416,13 @@ ovn_l3_scheduler = leastloaded
 enable_distributed_floating_ip = true
 ```
 
-Those values are illustrative.
+Those values are illustrative. The real values must match your fabric. If the network team uses VLAN 120 for storage and Neutron is allowed to hand VLAN 120 to tenants, the cloud will create its own outage. If OVN-Kubernetes and Neutron both try to own the same bridge mappings, debugging becomes painful.
 
-The real values must match your fabric.
+If MTU is wrong, small pings pass while real application traffic fragments or stalls. The main gotchas are predictable. VLAN tagging must match switch trunks and Neutron provider network definitions. VXLAN or Geneve encapsulation must fit through firewalls and MTU.
 
-If the network team uses VLAN 120 for storage and Neutron is allowed to hand VLAN 120 to tenants, the cloud will create its own outage.
+Tunnel ID ranges must not overlap unexpectedly between SDN domains. Gateway nodes must have the right physical connectivity. DVR-style distributed routing changes where traffic exits. Centralized routing is simpler to reason about but can bottleneck.
 
-If OVN-Kubernetes and Neutron both try to own the same bridge mappings, debugging becomes painful.
-
-If MTU is wrong, small pings pass while real application traffic fragments or stalls.
-
-The main gotchas are predictable.
-
-VLAN tagging must match switch trunks and Neutron provider network definitions.
-
-VXLAN or Geneve encapsulation must fit through firewalls and MTU.
-
-Tunnel ID ranges must not overlap unexpectedly between SDN domains.
-
-Gateway nodes must have the right physical connectivity.
-
-DVR-style distributed routing changes where traffic exits.
-
-Centralized routing is simpler to reason about but can bottleneck.
-
-External network bridges must not accidentally expose infra cluster control-plane traffic to tenant networks.
-
-The runbook should include both Kubernetes and OVN views:
+External network bridges must not accidentally expose infra cluster control-plane traffic to tenant networks. The runbook should include both Kubernetes and OVN views:
 
 ```bash
 k -n ovn-kubernetes get pods
@@ -935,93 +435,31 @@ openstack subnet list
 openstack router list
 ```
 
-The habit is simple.
+The habit is simple. When pod-to-pod traffic fails, start with the infra cluster CNI. When VM-to-VM or VM-to-external traffic fails, start with Neutron-OVN. When OpenStack control-plane pods cannot reach databases, queues, or service endpoints, investigate Kubernetes networking first.
 
-When pod-to-pod traffic fails, start with the infra cluster CNI.
-
-When VM-to-VM or VM-to-external traffic fails, start with Neutron-OVN.
-
-When OpenStack control-plane pods cannot reach databases, queues, or service endpoints, investigate Kubernetes networking first.
-
-When Nova instances cannot reach provider networks, investigate Neutron, OVN, bridges, gateways, VLANs, and fabric state.
-
-Do not debug every packet as if it belongs to the same plane.
+When Nova instances cannot reach provider networks, investigate Neutron, OVN, bridges, gateways, VLANs, and fabric state. Do not debug every packet as if it belongs to the same plane.
 
 ---
 
 ## 6. Magnum and the Inverse Pattern
 
-The inversion does not retire Kubernetes-on-OpenStack.
+The inversion does not retire Kubernetes-on-OpenStack. It makes the distinction sharper. Magnum is OpenStack's container infrastructure management service. Its purpose is to expose Kubernetes clusters as an OpenStack-managed product.
 
-It makes the distinction sharper.
+A tenant uses OpenStack APIs to request a cluster. OpenStack authenticates the tenant through Keystone. Magnum validates the request against a cluster template. The underlying driver provisions infrastructure and bootstraps Kubernetes.
 
-Magnum is OpenStack's container infrastructure management service.
+Historically, Magnum commonly used Heat templates. Heat creates Nova instances, Neutron networks, security groups, load balancers, and other resources. Cloud-init and bootstrap scripts configure Kubernetes on those instances. That model fits OpenStack's orchestration heritage.
 
-Its purpose is to expose Kubernetes clusters as an OpenStack-managed product.
+It also means cluster lifecycle depends heavily on Heat stacks, images, templates, and guest bootstrap behavior. The newer direction is integration with Cluster API. Cluster API expresses Kubernetes cluster lifecycle as Kubernetes custom resources. Cluster API Provider OpenStack knows how to create and manage OpenStack infrastructure for those clusters.
 
-A tenant uses OpenStack APIs to request a cluster.
+Magnum can become an OpenStack API front door that delegates cluster lifecycle to a CAPI-based management cluster. This is closer to the Kubernetes ecosystem's current lifecycle pattern. The key question is not "Is Magnum old?" The key question is "Who is the customer?"
 
-OpenStack authenticates the tenant through Keystone.
+Magnum is compelling when the customer is an OpenStack tenant. The tenant already has a Keystone project. The tenant already has quotas. The tenant already uses OpenStack networks, images, flavors, volumes, security groups, and billing or chargeback.
 
-Magnum validates the request against a cluster template.
+The platform wants to offer Kubernetes as another product in the OpenStack catalog. The tenant should not need direct access to the infra Kubernetes cluster. That is the service-provider pattern. Cluster templates are the product definition.
 
-The underlying driver provisions infrastructure and bootstraps Kubernetes.
+A template can constrain Kubernetes version, image, external network, flavor, master count, node count, volume size, CNI, labels, load balancer settings, and driver-specific options. Templates are how a platform team prevents every tenant from inventing a new cluster shape. If templates are too loose, support becomes chaos. If templates are too rigid, tenants bypass the product.
 
-Historically, Magnum commonly used Heat templates.
-
-Heat creates Nova instances, Neutron networks, security groups, load balancers, and other resources.
-
-Cloud-init and bootstrap scripts configure Kubernetes on those instances.
-
-That model fits OpenStack's orchestration heritage.
-
-It also means cluster lifecycle depends heavily on Heat stacks, images, templates, and guest bootstrap behavior.
-
-The newer direction is integration with Cluster API.
-
-Cluster API expresses Kubernetes cluster lifecycle as Kubernetes custom resources.
-
-Cluster API Provider OpenStack knows how to create and manage OpenStack infrastructure for those clusters.
-
-Magnum can become an OpenStack API front door that delegates cluster lifecycle to a CAPI-based management cluster.
-
-This is closer to the Kubernetes ecosystem's current lifecycle pattern.
-
-The key question is not "Is Magnum old?"
-
-The key question is "Who is the customer?"
-
-Magnum is compelling when the customer is an OpenStack tenant.
-
-The tenant already has a Keystone project.
-
-The tenant already has quotas.
-
-The tenant already uses OpenStack networks, images, flavors, volumes, security groups, and billing or chargeback.
-
-The platform wants to offer Kubernetes as another product in the OpenStack catalog.
-
-The tenant should not need direct access to the infra Kubernetes cluster.
-
-That is the service-provider pattern.
-
-Cluster templates are the product definition.
-
-A template can constrain Kubernetes version, image, external network, flavor, master count, node count, volume size, CNI, labels, load balancer settings, and driver-specific options.
-
-Templates are how a platform team prevents every tenant from inventing a new cluster shape.
-
-If templates are too loose, support becomes chaos.
-
-If templates are too rigid, tenants bypass the product.
-
-Magnum is less attractive when the platform team only needs internal Kubernetes clusters on bare metal and does not need OpenStack tenant semantics.
-
-In that case, Cluster API with Metal3, bare-metal automation, or another Kubernetes lifecycle manager may be more direct.
-
-Use Magnum when OpenStack identity, quota, project isolation, billing, and tenant-facing APIs are the product boundary.
-
-Use direct Cluster API when Kubernetes lifecycle is the product and OpenStack is not the tenant interface.
+Magnum is less attractive when the platform team only needs internal Kubernetes clusters on bare metal and does not need OpenStack tenant semantics. In that case, Cluster API with Metal3, bare-metal automation, or another Kubernetes lifecycle manager may be more direct. Use Magnum when OpenStack identity, quota, project isolation, billing, and tenant-facing APIs are the product boundary. Use direct Cluster API when Kubernetes lifecycle is the product and OpenStack is not the tenant interface.
 
 The coexistence diagram looks strange at first, but it is common in mature private clouds:
 
@@ -1040,113 +478,35 @@ flowchart TD
     I --> J
 ```
 
-This diagram has two Kubernetes layers.
+This diagram has two Kubernetes layers. The top layer is the infra cluster that runs OpenStack services. The bottom layer is a tenant cluster created through OpenStack. They should not share administrator credentials.
 
-The top layer is the infra cluster that runs OpenStack services.
+They should not share upgrade windows by accident. They should not share node pools. They may share identity and observability integrations, but only through designed interfaces. The strongest reason to keep Magnum in the architecture is organizational.
 
-The bottom layer is a tenant cluster created through OpenStack.
-
-They should not share administrator credentials.
-
-They should not share upgrade windows by accident.
-
-They should not share node pools.
-
-They may share identity and observability integrations, but only through designed interfaces.
-
-The strongest reason to keep Magnum in the architecture is organizational.
-
-A service provider, university, research lab, telecom, or enterprise private cloud team may already have thousands of OpenStack users.
-
-Those users know how to request quotas, networks, floating IPs, and volumes.
-
-The platform team can expose Kubernetes without creating a second, unrelated access model.
-
-That is still valuable even when the OpenStack control plane itself runs on Kubernetes.
+A service provider, university, research lab, telecom, or enterprise private cloud team may already have thousands of OpenStack users. Those users know how to request quotas, networks, floating IPs, and volumes. The platform team can expose Kubernetes without creating a second, unrelated access model. That is still valuable even when the OpenStack control plane itself runs on Kubernetes.
 
 ---
 
 ## 7. Identity Integration
 
-Identity is the part of the stack that prevents the platform from becoming two clouds with one logo.
+Identity is the part of the stack that prevents the platform from becoming two clouds with one logo. OpenStack uses Keystone. Keystone authenticates users, projects, domains, roles, service users, application credentials, and federated identities. Every OpenStack service trusts Keystone tokens and policy.
 
-OpenStack uses Keystone.
+Kubernetes uses its own authentication and authorization path. The API server authenticates users through certificates, bearer tokens, OIDC, webhook authenticators, or other configured methods. Authorization commonly uses RBAC. ServiceAccounts represent in-cluster workload identity.
 
-Keystone authenticates users, projects, domains, roles, service users, application credentials, and federated identities.
+Running OpenStack on Kubernetes does not automatically unify those identity systems. Keystone service users are not Kubernetes ServiceAccounts. A Keystone project is not a Kubernetes namespace. A Kubernetes RoleBinding is not an OpenStack role assignment.
 
-Every OpenStack service trusts Keystone tokens and policy.
+The platform must choose where identities map and where they remain separate. For operators, one useful pattern is federated login. Users authenticate to an enterprise identity provider. Keystone trusts that provider through federation.
 
-Kubernetes uses its own authentication and authorization path.
+Kubernetes trusts an OIDC issuer that is connected to the same identity source. Dex, Keystone auth integrations, or another OIDC bridge can let the Kubernetes API server accept identities aligned with Keystone users or groups. The user gets one login flow. The authorization rules remain separate and explicit.
 
-The API server authenticates users through certificates, bearer tokens, OIDC, webhook authenticators, or other configured methods.
+That is the important distinction. One login does not mean one permission model. OpenStack policy decides whether a user can create a volume in a project. Kubernetes RBAC decides whether a user can restart a Keystone pod in the infra cluster.
 
-Authorization commonly uses RBAC.
+Those should almost never be granted to the same broad audience. Application credentials in Keystone are important for automation. They are long-lived service principals scoped to a user and project. They allow automation to call OpenStack APIs without storing a user's password.
 
-ServiceAccounts represent in-cluster workload identity.
+For tenant workloads, application credentials are often better than shared user accounts. For platform services, Keystone service users and Kubernetes Secrets are usually used together. A Cinder service pod may receive a Secret containing credentials it uses to register with Keystone or call another API. That Secret is mounted or injected into the pod by Kubernetes.
 
-Running OpenStack on Kubernetes does not automatically unify those identity systems.
+The credential itself belongs to Keystone's identity model. Barbican is OpenStack's secret management service. It can store keys, certificates, and secret material for OpenStack workflows. Kubernetes has Secrets, but they are not the same product.
 
-Keystone service users are not Kubernetes ServiceAccounts.
-
-A Keystone project is not a Kubernetes namespace.
-
-A Kubernetes RoleBinding is not an OpenStack role assignment.
-
-The platform must choose where identities map and where they remain separate.
-
-For operators, one useful pattern is federated login.
-
-Users authenticate to an enterprise identity provider.
-
-Keystone trusts that provider through federation.
-
-Kubernetes trusts an OIDC issuer that is connected to the same identity source.
-
-Dex, Keystone auth integrations, or another OIDC bridge can let the Kubernetes API server accept identities aligned with Keystone users or groups.
-
-The user gets one login flow.
-
-The authorization rules remain separate and explicit.
-
-That is the important distinction.
-
-One login does not mean one permission model.
-
-OpenStack policy decides whether a user can create a volume in a project.
-
-Kubernetes RBAC decides whether a user can restart a Keystone pod in the infra cluster.
-
-Those should almost never be granted to the same broad audience.
-
-Application credentials in Keystone are important for automation.
-
-They are long-lived service principals scoped to a user and project.
-
-They allow automation to call OpenStack APIs without storing a user's password.
-
-For tenant workloads, application credentials are often better than shared user accounts.
-
-For platform services, Keystone service users and Kubernetes Secrets are usually used together.
-
-A Cinder service pod may receive a Secret containing credentials it uses to register with Keystone or call another API.
-
-That Secret is mounted or injected into the pod by Kubernetes.
-
-The credential itself belongs to Keystone's identity model.
-
-Barbican is OpenStack's secret management service.
-
-It can store keys, certificates, and secret material for OpenStack workflows.
-
-Kubernetes has Secrets, but they are not the same product.
-
-In production, teams often integrate external secret tooling so Kubernetes workloads can consume secrets from a central secret backend.
-
-That can include Barbican-backed flows, external-secrets patterns, Vault, cloud KMS equivalents, or enterprise secret stores.
-
-The design question is not "Which Secret object is easiest?"
-
-The design question is "Which system is authoritative for this class of secret, and how is access audited?"
+In production, teams often integrate external secret tooling so Kubernetes workloads can consume secrets from a central secret backend. That can include Barbican-backed flows, external-secrets patterns, Vault, cloud KMS equivalents, or enterprise secret stores. The design question is not "Which Secret object is easiest?" The design question is "Which system is authoritative for this class of secret, and how is access audited?"
 
 A clean identity map looks like this:
 
@@ -1159,21 +519,9 @@ A clean identity map looks like this:
 | Kubernetes RoleBinding | Kubernetes | API authorization in a namespace | OpenStack role assignment |
 | Barbican secret | OpenStack | OpenStack-managed secret material | Plain Kubernetes Secret |
 
-Identity mistakes are expensive because they often look like service failures.
+Identity mistakes are expensive because they often look like service failures. A Glance upload may fail because the endpoint is wrong. It may also fail because the token scope is wrong. A Magnum cluster create may fail because Heat cannot create a stack.
 
-A Glance upload may fail because the endpoint is wrong.
-
-It may also fail because the token scope is wrong.
-
-A Magnum cluster create may fail because Heat cannot create a stack.
-
-It may also fail because the trustee or application credential path is misconfigured.
-
-A Kubernetes operator may fail to view pods.
-
-It may be an RBAC issue, not a pod issue.
-
-During incidents, always identify the request identity, token scope, policy file, service account, and API target.
+It may also fail because the trustee or application credential path is misconfigured. A Kubernetes operator may fail to view pods. It may be an RBAC issue, not a pod issue. During incidents, always identify the request identity, token scope, policy file, service account, and API target.
 
 That practice prevents teams from debugging networking when the actual problem is authorization.
 
@@ -1181,21 +529,9 @@ That practice prevents teams from debugging networking when the actual problem i
 
 ## 8. OpenStack-on-Kubernetes vs Traditional Install
 
-The central fork is not ideology.
+The central fork is not ideology. It is operating model. OpenStack-Helm is attractive when the team wants Kubernetes-native lifecycle management for OpenStack control-plane services. Traditional installation is attractive when the team already has mature OpenStack operations around host roles, Ansible, Puppet, packages, and vendor-supported workflows.
 
-It is operating model.
-
-OpenStack-Helm is attractive when the team wants Kubernetes-native lifecycle management for OpenStack control-plane services.
-
-Traditional installation is attractive when the team already has mature OpenStack operations around host roles, Ansible, Puppet, packages, and vendor-supported workflows.
-
-Both can run production clouds.
-
-Both can fail badly when chosen for the wrong team.
-
-The decision matrix below is intentionally practical.
-
-It focuses on the friction operators feel during upgrades, incidents, scaling, and staff onboarding.
+Both can run production clouds. Both can fail badly when chosen for the wrong team. The decision matrix below is intentionally practical. It focuses on the friction operators feel during upgrades, incidents, scaling, and staff onboarding.
 
 | Dimension | OpenStack-Helm / OpenStack-on-K8s | Traditional Host-Based OpenStack | Main Question |
 |---|---|---|---|
@@ -1210,161 +546,47 @@ It focuses on the friction operators feel during upgrades, incidents, scaling, a
 | Community direction | K8s operator and Helm patterns are growing | Some older director patterns are in maintenance or vendor-specific paths | Which ecosystem path fits the next five years? |
 | Failure isolation | Infra cluster failure can affect OpenStack APIs | Controller host failure affects OpenStack APIs | Which failure domain is easier to protect? |
 
-The debugging difference is worth dwelling on.
+The debugging difference is worth dwelling on. In a traditional install, a Keystone failure might send you to Apache logs, systemd status, package versions, rendered config files, database connectivity, and HAProxy state. In OpenStack-Helm, the same failure might send you to pod logs, Deployment status, ConfigMap mounts, Secret values, Ingress rules, Service endpoints, and Helm release history. The OpenStack problem is similar.
 
-In a traditional install, a Keystone failure might send you to Apache logs, systemd status, package versions, rendered config files, database connectivity, and HAProxy state.
+The operational lens changes. Do not underestimate the cost of that lens change. A team that cannot debug Kubernetes should not put the OpenStack control plane on Kubernetes just because it sounds modern. A team that cannot debug OpenStack should not expect Kubernetes to hide OpenStack complexity.
 
-In OpenStack-Helm, the same failure might send you to pod logs, Deployment status, ConfigMap mounts, Secret values, Ingress rules, Service endpoints, and Helm release history.
+OpenStack-on-Kubernetes requires both. Traditional installs are not automatically simpler. They can accumulate years of host drift, hand patches, snowflake controller nodes, hidden playbook assumptions, and fear around upgrades. OpenStack-Helm can reduce host drift because desired state is rendered as Kubernetes objects.
 
-The OpenStack problem is similar.
+But charts can drift too. Values files can become a second codebase. Image tags can lag behind chart expectations. Local overrides can make upstream upgrades difficult.
 
-The operational lens changes.
-
-Do not underestimate the cost of that lens change.
-
-A team that cannot debug Kubernetes should not put the OpenStack control plane on Kubernetes just because it sounds modern.
-
-A team that cannot debug OpenStack should not expect Kubernetes to hide OpenStack complexity.
-
-OpenStack-on-Kubernetes requires both.
-
-Traditional installs are not automatically simpler.
-
-They can accumulate years of host drift, hand patches, snowflake controller nodes, hidden playbook assumptions, and fear around upgrades.
-
-OpenStack-Helm can reduce host drift because desired state is rendered as Kubernetes objects.
-
-But charts can drift too.
-
-Values files can become a second codebase.
-
-Image tags can lag behind chart expectations.
-
-Local overrides can make upstream upgrades difficult.
-
-The practical rule is this:
-
-Choose OpenStack-Helm when Kubernetes is already the platform control plane your team operates well.
-
-Choose traditional installation when your OpenStack host-based operations are mature, supported, and easier for your organization to reason about.
-
-Choose Atmosphere or another integrated distribution when you want the Kubernetes-based model but need a production-shaped path rather than assembling every piece from first principles.
-
-Choose Magnum or Cluster API Provider OpenStack when the problem is tenant Kubernetes lifecycle on top of OpenStack, not OpenStack control-plane lifecycle.
+The practical rule is this: Choose OpenStack-Helm when Kubernetes is already the platform control plane your team operates well. Choose traditional installation when your OpenStack host-based operations are mature, supported, and easier for your organization to reason about. Choose Atmosphere or another integrated distribution when you want the Kubernetes-based model but need a production-shaped path rather than assembling every piece from first principles. Choose Magnum or Cluster API Provider OpenStack when the problem is tenant Kubernetes lifecycle on top of OpenStack, not OpenStack control-plane lifecycle.
 
 ---
 
 ## 9. Production Realities
 
-Large operators keep OpenStack relevant because private cloud solves problems public cloud does not always solve economically or organizationally.
+Large operators keep OpenStack relevant because private cloud solves problems public cloud does not always solve economically or organizationally. CERN is one of the most visible examples in scientific computing. Its OpenStack and Kubernetes fleet supports research workloads at a scale where quota, automation, bare metal, storage, and identity integration matter. CERN has publicly discussed long-running OpenStack operations, Kubernetes integration, repeated upgrades, and a broad service portfolio.
 
-CERN is one of the most visible examples in scientific computing.
+It is also associated with OpenStack-Helm usage in the containerized control-plane movement since 2020. The lesson from CERN is not "copy their exact architecture." The lesson is that OpenStack and Kubernetes can coexist at serious scale when teams invest in lifecycle, automation, and platform boundaries. Walmart is another production signal.
 
-Its OpenStack and Kubernetes fleet supports research workloads at a scale where quota, automation, bare metal, storage, and identity integration matter.
+Public OpenInfra material describes Walmart's OpenStack private cloud as exceeding one million cores. That scale changes the discussion. At small scale, OpenStack can look like a complicated way to run a few VMs. At large scale, it becomes a programmable infrastructure product with quota, tenancy, image catalogs, network APIs, automation, and cost control.
 
-CERN has publicly discussed long-running OpenStack operations, Kubernetes integration, repeated upgrades, and a broad service portfolio.
+The question becomes how to operate the control plane predictably. That is where Kubernetes-native lifecycle becomes attractive. AT&T's Airship and Akraino work helped push the idea that telecom and edge clouds need declarative, Kubernetes-based deployment of cloud infrastructure. Airship's original focus included OpenStack on Kubernetes and lifecycle management for network clouds.
 
-It is also associated with OpenStack-Helm usage in the containerized control-plane movement since 2020.
+Akraino explored edge blueprints that combined Kubernetes, OpenStack, and related infrastructure. The exact projects and implementations have evolved, but the direction was clear: operators wanted declarative infrastructure platforms, not hand-built controller farms. Production pitfalls cluster around a few areas. The first is storage performance.
 
-The lesson from CERN is not "copy their exact architecture."
+Ceph can back many use cases, but it must be engineered. RBD cache settings, BlueStore layout, network design, OSD count, replication, erasure coding, placement groups, and disk classes affect VM performance. High-IOPS Cinder volumes need benchmarks that match real tenant behavior. Do not benchmark only empty volumes on quiet clusters and call the design complete.
 
-The lesson is that OpenStack and Kubernetes can coexist at serious scale when teams invest in lifecycle, automation, and platform boundaries.
+The second is Neutron-OVN topology. Gateway nodes need physical network access. Distributed routing changes the failure and inspection points. Centralized routing is easier to observe but can become a choke point.
 
-Walmart is another production signal.
+External bridges must be mapped carefully. Provider networks must match switch configuration. Floating IP behavior must be tested during node maintenance, gateway failure, and OVN database failover. The third is Helm chart drift.
 
-Public OpenInfra material describes Walmart's OpenStack private cloud as exceeding one million cores.
+OpenStack releases, chart branches, image tags, and local values must move together. If charts expect one config option and images contain another release, the result may fail at runtime. If local values override half the chart, upstream upgrades become archaeology. Keep a version matrix.
 
-That scale changes the discussion.
+Render charts in CI. Diff manifests before upgrades. Test database migrations before production windows. The fourth is MariaDB Galera recovery.
 
-At small scale, OpenStack can look like a complicated way to run a few VMs.
+Kubernetes can restart pods. It cannot decide by itself which Galera node has the authoritative sequence number after a full outage. Operators need a documented recovery path, including how to inspect `grastate.dat`, choose the bootstrap node, avoid accidental split-brain, and verify cluster health after recovery.
 
-At large scale, it becomes a programmable infrastructure product with quota, tenancy, image catalogs, network APIs, automation, and cost control.
+The fifth is RabbitMQ partition handling. Message queues can fail logically while pods remain Running. OpenStack services may hang, retry, or accumulate RPC errors. Monitor RabbitMQ cluster status, queue depth, partitions, memory alarms, and connection churn.
 
-The question becomes how to operate the control plane predictably.
+Do not stop at `k get pods`. The 2024-2026 trajectory favors Kubernetes-native operations for more parts of the private-cloud stack. The former OpenStack Foundation became the OpenInfra Foundation, reflecting a broader open infrastructure scope that includes Kubernetes-adjacent projects, CI, edge, containers, and cloud infrastructure. Atmosphere continues to present a Kubernetes-powered OpenStack distribution path.
 
-That is where Kubernetes-native lifecycle becomes attractive.
-
-AT&T's Airship and Akraino work helped push the idea that telecom and edge clouds need declarative, Kubernetes-based deployment of cloud infrastructure.
-
-Airship's original focus included OpenStack on Kubernetes and lifecycle management for network clouds.
-
-Akraino explored edge blueprints that combined Kubernetes, OpenStack, and related infrastructure.
-
-The exact projects and implementations have evolved, but the direction was clear: operators wanted declarative infrastructure platforms, not hand-built controller farms.
-
-Production pitfalls cluster around a few areas.
-
-The first is storage performance.
-
-Ceph can back many use cases, but it must be engineered.
-
-RBD cache settings, BlueStore layout, network design, OSD count, replication, erasure coding, placement groups, and disk classes affect VM performance.
-
-High-IOPS Cinder volumes need benchmarks that match real tenant behavior.
-
-Do not benchmark only empty volumes on quiet clusters and call the design complete.
-
-The second is Neutron-OVN topology.
-
-Gateway nodes need physical network access.
-
-Distributed routing changes the failure and inspection points.
-
-Centralized routing is easier to observe but can become a choke point.
-
-External bridges must be mapped carefully.
-
-Provider networks must match switch configuration.
-
-Floating IP behavior must be tested during node maintenance, gateway failure, and OVN database failover.
-
-The third is Helm chart drift.
-
-OpenStack releases, chart branches, image tags, and local values must move together.
-
-If charts expect one config option and images contain another release, the result may fail at runtime.
-
-If local values override half the chart, upstream upgrades become archaeology.
-
-Keep a version matrix.
-
-Render charts in CI.
-
-Diff manifests before upgrades.
-
-Test database migrations before production windows.
-
-The fourth is MariaDB Galera recovery.
-
-Kubernetes can restart pods.
-
-It cannot decide by itself which Galera node has the authoritative sequence number after a full outage.
-
-Operators need a documented recovery path, including how to inspect `grastate.dat`, choose the bootstrap node, avoid accidental split-brain, and verify cluster health after recovery.
-
-The fifth is RabbitMQ partition handling.
-
-Message queues can fail logically while pods remain Running.
-
-OpenStack services may hang, retry, or accumulate RPC errors.
-
-Monitor RabbitMQ cluster status, queue depth, partitions, memory alarms, and connection churn.
-
-Do not stop at `k get pods`.
-
-The 2024-2026 trajectory favors Kubernetes-native operations for more parts of the private-cloud stack.
-
-The former OpenStack Foundation became the OpenInfra Foundation, reflecting a broader open infrastructure scope that includes Kubernetes-adjacent projects, CI, edge, containers, and cloud infrastructure.
-
-Atmosphere continues to present a Kubernetes-powered OpenStack distribution path.
-
-OpenStack-Helm remains an active reference for chart-based OpenStack deployment.
-
-Operator patterns for infrastructure services continue to mature.
-
-The safe prediction is not that every OpenStack cloud will move onto Kubernetes.
-
-The safe prediction is that every serious OpenStack operator must understand the Kubernetes-based option and be able to explain when it wins.
+OpenStack-Helm remains an active reference for chart-based OpenStack deployment. Operator patterns for infrastructure services continue to mature. The safe prediction is not that every OpenStack cloud will move onto Kubernetes. The safe prediction is that every serious OpenStack operator must understand the Kubernetes-based option and be able to explain when it wins.
 
 ---
 
@@ -1395,13 +617,7 @@ The safe prediction is that every serious OpenStack operator must understand the
 
 ## Decision Framework
 
-Use this framework when your team is deciding how OpenStack and Kubernetes should relate.
-
-Start with the product boundary, not the tool.
-
-If the product is an OpenStack cloud, OpenStack APIs are the tenant interface.
-
-If the product is Kubernetes clusters, Kubernetes lifecycle APIs may be the tenant interface.
+Use this framework when your team is deciding how OpenStack and Kubernetes should relate. Start with the product boundary, not the tool. If the product is an OpenStack cloud, OpenStack APIs are the tenant interface. If the product is Kubernetes clusters, Kubernetes lifecycle APIs may be the tenant interface.
 
 If the product is a platform control plane, Kubernetes may be the operator interface even when the tenant product is OpenStack.
 
@@ -1434,23 +650,9 @@ Decision questions:
 | Which tool explains incidents fastest? | `k`, Helm, OpenStack CLI, service logs | OpenStack CLI, Heat/CAPI, tenant cluster logs | Ansible/Puppet, systemd, OpenStack CLI |
 | What is the organizational pressure? | Standardize operations on Kubernetes | Offer managed K8s through existing OpenStack | Preserve stable supported OpenStack operations |
 
-The most common hybrid answer is:
+The most common hybrid answer is: Run OpenStack's control plane on a dedicated infra Kubernetes cluster. Use OpenStack APIs for tenants. Use Magnum or Cluster API Provider OpenStack only when tenants need managed Kubernetes clusters. Run Ceph as the shared storage substrate.
 
-Run OpenStack's control plane on a dedicated infra Kubernetes cluster.
-
-Use OpenStack APIs for tenants.
-
-Use Magnum or Cluster API Provider OpenStack only when tenants need managed Kubernetes clusters.
-
-Run Ceph as the shared storage substrate.
-
-Use OVN carefully across pod and tenant network planes.
-
-Keep identity federated but authorization separate.
-
-That hybrid is powerful because it uses each platform at the layer where it is strongest.
-
-It is also complex.
+Use OVN carefully across pod and tenant network planes. Keep identity federated but authorization separate. That hybrid is powerful because it uses each platform at the layer where it is strongest. It is also complex.
 
 Complexity is acceptable only when the team has clear ownership boundaries and tested recovery procedures.
 
@@ -1485,91 +687,49 @@ Complexity is acceptable only when the team has clear ownership boundaries and t
 <details>
 <summary>Your team runs OpenStack-Helm on a dedicated infra cluster. After a Keystone values change, tenants receive authentication errors, but the Keystone pods are Running. How do you diagnose the problem?</summary>
 
-Start by comparing the rendered Helm release, Keystone ConfigMaps, Secrets, and Deployment rollout history.
-
-Then verify the Keystone endpoint URLs in the OpenStack service catalog and test a scoped token request.
-
-Running pods only prove that containers started; they do not prove the service consumed the intended config or can reach MariaDB.
-
-Check Keystone logs, database connectivity, and recent bootstrap jobs before restarting unrelated services.
+Start by comparing the rendered Helm release, Keystone ConfigMaps, Secrets, and Deployment rollout history. Then verify the Keystone endpoint URLs in the OpenStack service catalog and test a scoped token request. Running pods only prove that containers started; they do not prove the service consumed the intended config or can reach MariaDB. Check Keystone logs, database connectivity, and recent bootstrap jobs before restarting unrelated services.
 
 </details>
 
 <details>
 <summary>A platform team wants one Ceph cluster to serve Cinder volumes, Glance images, Kubernetes PVCs, and RGW object storage. What design concern should they address before production?</summary>
 
-They need pool and CRUSH design, not just a shared Ceph endpoint.
-
-Cinder, Glance, Kubernetes PVCs, and RGW have different IO patterns and failure sensitivity.
-
-The team should separate pools, define placement rules, consider device classes, set quotas, and test real workload profiles.
-
-A single Ceph cluster can unify operations, but one undifferentiated pool creates avoidable contention.
+They need pool and CRUSH design, not just a shared Ceph endpoint. Cinder, Glance, Kubernetes PVCs, and RGW have different IO patterns and failure sensitivity. The team should separate pools, define placement rules, consider device classes, set quotas, and test real workload profiles. A single Ceph cluster can unify operations, but one undifferentiated pool creates avoidable contention.
 
 </details>
 
 <details>
 <summary>A network engineer says OVN is already deployed for OVN-Kubernetes, so Neutron-OVN should be easy. What risk should you explain?</summary>
 
-OVN-Kubernetes and Neutron-OVN may use similar technology while serving different network planes.
-
-Pod CIDRs, service CIDRs, tenant overlays, provider VLANs, gateway nodes, bridge mappings, and MTU must be planned separately.
-
-Sharing operational knowledge is useful, but accidental overlap can break infra pods and tenant VMs at the same time.
-
-The team should document ownership and test both pod and VM traffic paths.
+OVN-Kubernetes and Neutron-OVN may use similar technology while serving different network planes. Pod CIDRs, service CIDRs, tenant overlays, provider VLANs, gateway nodes, bridge mappings, and MTU must be planned separately. Sharing operational knowledge is useful, but accidental overlap can break infra pods and tenant VMs at the same time. The team should document ownership and test both pod and VM traffic paths.
 
 </details>
 
 <details>
 <summary>An enterprise already has thousands of OpenStack tenants and wants to offer managed Kubernetes clusters. Should it bypass Magnum and give tenants direct access to the infra Kubernetes cluster?</summary>
 
-No.
-
-The infra Kubernetes cluster is an operations plane for platform services, not a tenant product surface.
-
-Magnum or a Cluster API Provider OpenStack path lets tenants request Kubernetes clusters through OpenStack identity, quota, networks, images, and billing boundaries.
-
-Direct tenant access to the infra cluster mixes failure domains and authorization models.
+No. The infra Kubernetes cluster is an operations plane for platform services, not a tenant product surface. Magnum or a Cluster API Provider OpenStack path lets tenants request Kubernetes clusters through OpenStack identity, quota, networks, images, and billing boundaries. Direct tenant access to the infra cluster mixes failure domains and authorization models.
 
 </details>
 
 <details>
 <summary>During an OpenStack-Helm upgrade, Nova API rolls successfully, but instance creation fails with scheduler and conductor errors. What should you check next?</summary>
 
-Check RabbitMQ, MariaDB migrations, Nova conductor, scheduler logs, Placement API health, and Nova service version compatibility.
-
-An API rollout can succeed while backend coordination fails.
-
-Nova depends on RPC, database state, Placement, Neutron, Glance, and compute-service compatibility.
-
-The upgrade runbook should treat Nova as a distributed service family, not one Deployment.
+Check RabbitMQ, MariaDB migrations, Nova conductor, scheduler logs, Placement API health, and Nova service version compatibility. An API rollout can succeed while backend coordination fails. Nova depends on RPC, database state, Placement, Neutron, Glance, and compute-service compatibility. The upgrade runbook should treat Nova as a distributed service family, not one Deployment.
 
 </details>
 
 <details>
 <summary>A team wants OpenStack-on-Kubernetes because they think Kubernetes will hide OpenStack complexity. How would you evaluate that assumption?</summary>
 
-The assumption is weak.
-
-Kubernetes improves lifecycle management, rollout control, health checks, and object visibility, but it does not remove OpenStack concepts such as Keystone policy, Nova cells, Neutron provider networks, Cinder backends, or service catalog endpoints.
-
-The team needs both Kubernetes and OpenStack skills.
-
-If they lack OpenStack knowledge, an integrated distribution or managed service may be a better starting point.
+The assumption is weak. Kubernetes improves lifecycle management, rollout control, health checks, and object visibility, but it does not remove OpenStack concepts such as Keystone policy, Nova cells, Neutron provider networks, Cinder backends, or service catalog endpoints. The team needs both Kubernetes and OpenStack skills. If they lack OpenStack knowledge, an integrated distribution or managed service may be a better starting point.
 
 </details>
 
 <details>
 <summary>A lab deployment uses hostpath storage for Cinder and works on kind. What conclusion is valid, and what conclusion is not valid?</summary>
 
-It is valid to conclude that the learner observed OpenStack control-plane structure, Helm releases, service pods, basic identity, image upload, and volume API flow.
-
-It is not valid to conclude that the storage design is production-ready.
-
-Hostpath does not represent Ceph quorum, replication, CRUSH placement, failure domains, RBD performance, or real attach behavior.
-
-The next step is a multi-node lab with Ceph and real network planning.
+It is valid to conclude that the learner observed OpenStack control-plane structure, Helm releases, service pods, basic identity, image upload, and volume API flow. It is not valid to conclude that the storage design is production-ready. Hostpath does not represent Ceph quorum, replication, CRUSH placement, failure domains, RBD performance, or real attach behavior. The next step is a multi-node lab with Ceph and real network planning.
 
 </details>
 
@@ -1577,21 +737,9 @@ The next step is a multi-node lab with Ceph and real network planning.
 
 ## Hands-On Exercise
 
-In this exercise you will deploy a minimal OpenStack control-plane shape on a kind cluster and inspect the Kubernetes objects behind the services.
+In this exercise you will deploy a minimal OpenStack control-plane shape on a kind cluster and inspect the Kubernetes objects behind the services. A full production OpenStack-on-Kubernetes platform requires real multi-node hardware. Ceph alone needs at least 3 nodes for quorum, and production networking needs real provider networks, gateway planning, MTU validation, and storage devices. This exercise therefore provides two paths.
 
-A full production OpenStack-on-Kubernetes platform requires real multi-node hardware.
-
-Ceph alone needs at least 3 nodes for quorum, and production networking needs real provider networks, gateway planning, MTU validation, and storage devices.
-
-This exercise therefore provides two paths.
-
-The minimal path runs on a laptop.
-
-It uses kind, OpenStack-Helm charts, MariaDB, RabbitMQ, Memcached, Keystone, Glance, Cinder with a simple hostpath or LVM-style backend, and Horizon.
-
-It intentionally skips Ceph and OVN so you can focus on the control-plane structure.
-
-The production-realistic path is to study the Atmosphere quickstart and prepare real hosts with storage and networking prerequisites.
+The minimal path runs on a laptop. It uses kind, OpenStack-Helm charts, MariaDB, RabbitMQ, Memcached, Keystone, Glance, Cinder with a simple hostpath or LVM-style backend, and Horizon. It intentionally skips Ceph and OVN so you can focus on the control-plane structure. The production-realistic path is to study the Atmosphere quickstart and prepare real hosts with storage and networking prerequisites.
 
 Do not confuse the laptop path with a production architecture.
 
@@ -1634,19 +782,11 @@ mkdir -p "$HOME/openstack-on-k8s-lab/values"
 cd "$HOME/openstack-on-k8s-lab"
 ```
 
-The exact values required by OpenStack-Helm can change between releases.
-
-Use the commands below as the learning path, and compare them with the current OpenStack-Helm install guide before running in a serious lab.
+The exact values required by OpenStack-Helm can change between releases. Use the commands below as the learning path, and compare them with the current OpenStack-Helm install guide before running in a serious lab.
 
 ### Task 1: Deploy a kind Infra Cluster
 
-The first task creates a dedicated infra Kubernetes cluster.
-
-Even on a laptop, keep the language precise: this is the cluster that runs OpenStack services.
-
-It is not a tenant cluster.
-
-Create a kind configuration with node labels and host port mappings for API access:
+The first task creates a dedicated infra Kubernetes cluster. Even on a laptop, keep the language precise: this is the cluster that runs OpenStack services. It is not a tenant cluster. Create a kind configuration with node labels and host port mappings for API access:
 
 ```bash
 cat > kind-openstack-infra.yaml <<'EOF'
@@ -1692,13 +832,7 @@ k -n ingress-nginx rollout status deploy/ingress-nginx-controller
 <details>
 <summary>Solution notes</summary>
 
-You should see a 3-node kind cluster with one control-plane node and two workers.
-
-The `openstack` namespace will hold OpenStack services.
-
-The `osh-infra` namespace can hold supporting components depending on chart choices.
-
-In production, ingress, load balancers, DNS, certificates, and endpoint names require a real design rather than local host ports.
+You should see a 3-node kind cluster with one control-plane node and two workers. The `openstack` namespace will hold OpenStack services. The `osh-infra` namespace can hold supporting components depending on chart choices. In production, ingress, load balancers, DNS, certificates, and endpoint names require a real design rather than local host ports.
 
 </details>
 
@@ -1712,13 +846,7 @@ Success criteria:
 
 ### Task 2: Install MariaDB, RabbitMQ, and Memcached
 
-OpenStack control-plane services need a database, message queue, and cache before most APIs become useful.
-
-In a production OpenStack-Helm design, MariaDB normally runs as a Galera-backed StatefulSet with disruption controls.
-
-RabbitMQ also runs as a StatefulSet.
-
-Memcached is usually simpler and replaceable.
+OpenStack control-plane services need a database, message queue, and cache before most APIs become useful. In a production OpenStack-Helm design, MariaDB normally runs as a Galera-backed StatefulSet with disruption controls. RabbitMQ also runs as a StatefulSet. Memcached is usually simpler and replaceable.
 
 Create a small values file for laptop scheduling:
 
@@ -1773,13 +901,7 @@ k -n openstack get secret | sort
 <details>
 <summary>Solution notes</summary>
 
-The exact object names may vary by chart release.
-
-The important observation is the object shape.
-
-MariaDB and RabbitMQ should be stateful services with stable identities and persistent storage.
-
-Memcached should look more like replaceable cache capacity.
+The exact object names may vary by chart release. The important observation is the object shape. MariaDB and RabbitMQ should be stateful services with stable identities and persistent storage. Memcached should look more like replaceable cache capacity.
 
 If pods stay Pending, inspect events for storage class or resource pressure issues.
 
@@ -1795,13 +917,7 @@ Success criteria:
 
 ### Task 3: Deploy Keystone and Obtain a Scoped Token
 
-Keystone is the identity center of the OpenStack cloud.
-
-Other services register endpoints and trust Keystone tokens.
-
-Deploying Keystone first gives the lab a real OpenStack API to query.
-
-Create a minimal values file:
+Keystone is the identity center of the OpenStack cloud. Other services register endpoints and trust Keystone tokens. Deploying Keystone first gives the lab a real OpenStack API to query. Create a minimal values file:
 
 ```bash
 cat > values/keystone-kind.yaml <<'EOF'
@@ -1847,11 +963,7 @@ Forward the Keystone API locally if ingress is not available:
 k -n openstack port-forward svc/keystone-api 5000:5000
 ```
 
-In a second terminal, configure OpenStack client variables.
-
-Use the passwords and endpoints generated by your chart values or chart secrets.
-
-The placeholders below are intentionally not realistic secrets.
+In a second terminal, configure OpenStack client variables. Use the passwords and endpoints generated by your chart values or chart secrets. The placeholders below are intentionally not realistic secrets.
 
 ```bash
 export OS_AUTH_URL=http://127.0.0.1:5000/v3
@@ -1880,11 +992,7 @@ k -n openstack describe configmap keystone-etc
 <details>
 <summary>Solution notes</summary>
 
-Keystone should expose an identity API, run bootstrap jobs, and store configuration through Kubernetes objects.
-
-If `openstack token issue` fails, check endpoint URL, pod logs, database jobs, and the Secret containing the admin password.
-
-If the ConfigMap name differs, list ConfigMaps with the Keystone label and inspect the one containing `keystone.conf`.
+Keystone should expose an identity API, run bootstrap jobs, and store configuration through Kubernetes objects. If `openstack token issue` fails, check endpoint URL, pod logs, database jobs, and the Secret containing the admin password. If the ConfigMap name differs, list ConfigMaps with the Keystone label and inspect the one containing `keystone.conf`.
 
 </details>
 
@@ -1898,13 +1006,7 @@ Success criteria:
 
 ### Task 4: Deploy Glance and Upload a Cirros Image
 
-Glance provides the image catalog.
-
-Nova uses Glance images when booting instances.
-
-In production, Glance often stores images in Ceph RBD or object storage.
-
-In this laptop lab, use a simple persistent backend so you can observe the API flow.
+Glance provides the image catalog. Nova uses Glance images when booting instances. In production, Glance often stores images in Ceph RBD or object storage. In this laptop lab, use a simple persistent backend so you can observe the API flow.
 
 Create values:
 
@@ -1977,11 +1079,7 @@ k -n openstack get endpoints glance-api
 <details>
 <summary>Solution notes</summary>
 
-The important result is an image visible through the OpenStack image API and a Kubernetes-backed storage claim for the lab backend.
-
-If the upload fails with authorization errors, revisit Keystone token scope and service catalog endpoints.
-
-If it fails with storage errors, inspect the Glance PVC and pod logs.
+The important result is an image visible through the OpenStack image API and a Kubernetes-backed storage claim for the lab backend. If the upload fails with authorization errors, revisit Keystone token scope and service catalog endpoints. If it fails with storage errors, inspect the Glance PVC and pod logs.
 
 </details>
 
@@ -1995,13 +1093,7 @@ Success criteria:
 
 ### Task 5: Deploy Cinder and Create a 1 GiB Volume
 
-Cinder provides block storage APIs.
-
-In production, Cinder commonly talks to Ceph RBD.
-
-In this laptop lab, use a simple backend such as hostpath or LVM-style storage where your chart release supports it.
-
-The goal is to observe the Cinder API, scheduler, and volume worker behavior, not to build production storage.
+Cinder provides block storage APIs. In production, Cinder commonly talks to Ceph RBD. In this laptop lab, use a simple backend such as hostpath or LVM-style storage where your chart release supports it. The goal is to observe the Cinder API, scheduler, and volume worker behavior, not to build production storage.
 
 Create values:
 
@@ -2078,13 +1170,7 @@ k -n openstack logs -l application=cinder,component=scheduler --tail=120
 <details>
 <summary>Solution notes</summary>
 
-Cinder backends vary more than Keystone or Glance in small labs.
-
-If the chart release does not support the exact hostpath or LVM shape shown here, use the release's documented test backend and keep the same diagnostic goal.
-
-You should still see the API receive the request, the scheduler choose a backend, and the volume service reconcile the request.
-
-In production, replace this with Ceph RBD and test attach, detach, snapshot, clone, and failure behavior.
+Cinder backends vary more than Keystone or Glance in small labs. If the chart release does not support the exact hostpath or LVM shape shown here, use the release's documented test backend and keep the same diagnostic goal. You should still see the API receive the request, the scheduler choose a backend, and the volume service reconcile the request. In production, replace this with Ceph RBD and test attach, detach, snapshot, clone, and failure behavior.
 
 </details>
 
@@ -2098,13 +1184,7 @@ Success criteria:
 
 ### Task 6: Open Horizon and Confirm Service Health
 
-Horizon is the OpenStack dashboard.
-
-It is not the control plane's source of truth, but it is a useful tenant-facing view.
-
-Deploy Horizon after Keystone, Glance, and Cinder are reachable.
-
-Create values:
+Horizon is the OpenStack dashboard. It is not the control plane's source of truth, but it is a useful tenant-facing view. Deploy Horizon after Keystone, Glance, and Cinder are reachable. Create values:
 
 ```bash
 cat > values/horizon-kind.yaml <<'EOF'
@@ -2158,13 +1238,7 @@ Open the dashboard:
 open http://127.0.0.1:8080
 ```
 
-Log in as the tenant user created in Task 3.
-
-Navigate to project overview, images, and volumes.
-
-Confirm that Keystone authentication works, the Cirros image is visible, and the Cinder volume appears.
-
-Then inspect the Kubernetes objects one final time:
+Log in as the tenant user created in Task 3. Navigate to project overview, images, and volumes. Confirm that Keystone authentication works, the Cirros image is visible, and the Cinder volume appears. Then inspect the Kubernetes objects one final time:
 
 ```bash
 k -n openstack get pods
@@ -2179,13 +1253,7 @@ openstack catalog list
 <details>
 <summary>Solution notes</summary>
 
-Horizon proves that a tenant-facing UI can consume the same Keystone-backed service catalog as the CLI.
-
-If Horizon login fails, compare the Keystone endpoint configured in Horizon with the working `OS_AUTH_URL` from the CLI.
-
-If images or volumes do not appear, verify the user's project scope and the service catalog.
-
-Do not debug Horizon first when the API underneath is wrong.
+Horizon proves that a tenant-facing UI can consume the same Keystone-backed service catalog as the CLI. If Horizon login fails, compare the Keystone endpoint configured in Horizon with the working `OS_AUTH_URL` from the CLI. If images or volumes do not appear, verify the user's project scope and the service catalog. Do not debug Horizon first when the API underneath is wrong.
 
 </details>
 
@@ -2202,21 +1270,9 @@ Final success criteria:
 
 ### Exercise Debrief
 
-The lab should leave you with one concrete mental model.
+The lab should leave you with one concrete mental model. OpenStack APIs can be real tenant-facing services while their control-plane processes are Kubernetes workloads. You used OpenStack CLI and Horizon as a tenant would. You used `k` and Helm as a platform operator would.
 
-OpenStack APIs can be real tenant-facing services while their control-plane processes are Kubernetes workloads.
-
-You used OpenStack CLI and Horizon as a tenant would.
-
-You used `k` and Helm as a platform operator would.
-
-That dual view is the core skill.
-
-When the tenant says "volume create is stuck," the platform operator must translate that into Cinder API, scheduler, volume worker, RabbitMQ, database, backend storage, Kubernetes pod, Secret, ConfigMap, and network checks.
-
-OpenStack-on-Kubernetes does not reduce the need for systems thinking.
-
-It gives you better objects for expressing and observing the system.
+That dual view is the core skill. When the tenant says "volume create is stuck," the platform operator must translate that into Cinder API, scheduler, volume worker, RabbitMQ, database, backend storage, Kubernetes pod, Secret, ConfigMap, and network checks. OpenStack-on-Kubernetes does not reduce the need for systems thinking. It gives you better objects for expressing and observing the system.
 
 ---
 
