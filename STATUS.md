@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-05-01 (session 3) | **#559 review-coverage closeout (option c hybrid) + #394 epic ready to close + `context-monitor.sh` Block A fix + issue closeout audit.** Audit-script `_expected_lane_fields` + `_lane_satisfied` relaxed to "any two distinct cross-family markers" for prose lane (Gemini-retired post-#421 patterns now valid evidence). `audit_review_coverage.py --write` populated `review_coverage:` blocks across 72 chapter `status.yaml` files. Two genuine single-reviewer chapters got their second cross-family review: Claude source-fidelity on Ch02 (PR #479, 5 issues found incl. internal-consistency carryover from Codex's prior fix that had not propagated to line 119); Codex prose-quality on Ch03 (PR #480). `context-monitor.sh` (both physical copies) updated to point at `docs/session-state/YYYY-MM-DD-<topic>.md`. Issue closeout audit produced zero new closures (every "likely closeable" candidate from prior handoff was already closed). | [`docs/session-state/2026-05-01-3-559-evidence-prep.md`](./docs/session-state/2026-05-01-3-559-evidence-prep.md) | **Next session: pick up Block B Gemini queue (deadline 2026-05-05) or evaluate #503 closeout candidacy. Bonus finding: Ch32–Ch37 research-pending under strict-gh audit (out of #559 scope).** |
+| 2026-05-01 (session 4) | **Issue tracker triage: 40 → 14 open (26 closures) + greenfield-before-#388 sequencing locked + KServe dispatch brief staged.** Closed 16 #388-subsumed (#180 chain + 8 slices + showcase + queue + pipeline rebuilds + Phase C/D plan), 4 completed (#248, #378, #384, #421), 5 stale (#142, #156, #157, #183, #246), 1 substantially shipped (#503). Pushed back on user's initial framing for #378/#384 (closed both as completed/scope-decay) and #379/#385 (kept open — #379's 4 modules genuinely missing; #385 scope-decayed to 4 modules but 3/7 already shipped). Confirmed routing: no Gemini, Codex drafts greenfield + #388 rewrites, Claude reviews source-fidelity. Confirmed within #388: REWRITE-tier (~165 modules at <18 wpp) ships before REVIEW-tier. KServe brief at `docs/session-state/2026-05-01-4-kserve-dispatch-brief.md` ready to fire next session. | [`docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md`](./docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md) | **Next session: fire KServe dispatch (FG sync, ~5-10 min) → source-fidelity review → toolkit index update → npm build → PR. Then 3 more #379 modules (Seldon / BentoML / bare-metal MLOps recipe), then #385.** |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-05-01 (session 3) | **#559 review-coverage closeout (option c hybrid) + #394 epic closure + `context-monitor.sh` Block A fix + issue closeout audit.** Audit-script `_expected_lane_fields` + `_lane_satisfied` relaxed to "any two distinct cross-family markers" for prose lane. `audit_review_coverage.py --write` populated `review_coverage:` blocks across 72 chapter `status.yaml` files. Backfill reviews on Ch02 (PR #479) + Ch03 (PR #480). | [`docs/session-state/2026-05-01-3-559-evidence-prep.md`](./docs/session-state/2026-05-01-3-559-evidence-prep.md) |
 | 2026-05-01 (session 2) | **#677 closeout (3 PRs merged) + Dependabot psutil + deep git hygiene + dashboard panels finished.** ML 2.7 (#708, Codex APPROVE 36/40) + RL 2.1 (#709, 847 lines, 11 arxiv IDs verified) + DL 1.7 cleanup (#710, filename/slug/forward-link aligned). Dependabot psutil >=7.2.2 merged (#542). Worktrees 50→3, branches 87→4, 8 dead PIDs + 1 detached HEAD + 2 stashes resolved. Stash@{1} popped + finished: dashboard panels (Book Progress + Module Distribution). | [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) |
 | 2026-05-01 | **ML curriculum expansion (#677) — 19 of 22 modules merged in one session.** Phase 0 foundation + 11 Tier-1 (machine-learning/) + RL 1.1 + DL 1.8/1.9 + 6 Tier-2 ML (2.1-2.6). ML 2.7 in flight at session-end; RL 2.1 + DL 1.7 cleanup pending. Locked the dispatch-and-fallback pattern, pinned-slug discipline, plain-text Next-Module convention, no-skill / no-cold-start preamble. | [`docs/session-state/2026-05-01-ml-expansion-batch.md`](./docs/session-state/2026-05-01-ml-expansion-batch.md) |
 | 2026-04-30 (night-7) | **Post-Ch59-72 followups** — reader-aid lint script (`check_reader_aids.py`), 9-Part sidebar grouping for AI history, deep-link bridge from AI/ML history module to the book; surfaced classical-ml curriculum gap (only 3 modules) needing dedicated next-session plan | [`docs/session-state/2026-04-30-night-7-followups.md`](./docs/session-state/2026-04-30-night-7-followups.md) |
@@ -143,29 +144,47 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 
 ## Open GitHub Issues
 
+Issue tracker shrunk 40 → 14 open via batch triage 2026-05-01 (session 4). 26 closures: 16 subsumed by #388 (#180 + slices #331-#338, #181, #348, #375, #376, #381-#383); 4 completed (#248, #378, #384, #421); 5 stale (#142, #156, #157, #183, #246); 1 substantially shipped (#503). See [`docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md`](./docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md) for the full triage rationale.
+
 | # | Issue | Status |
 |---|-------|--------|
-| #14 | Curriculum Monitoring & Official Sources | Open |
-| #143 | Ukrainian Translation — Full Coverage | Open (~40%) |
-| #157 | Supabase Auth + Progress Migration | Open |
-| #156 | CKA Parts 3-5 Labs | Open |
-| #165 | Epic: Pedagogical Quality Review | Open (Phases 1-3,5 done; Phase 4: CKA/CKAD/On-Prem complete) |
-| #180 | Elevate All Modules to 4/5 | Open (CKA/CKAD/On-Prem done; CKS/KCNA/KCSA/Cloud/Platform pending) |
-| #177 | Improve Lowest-Quality Modules | Open (8 critical/high done, ~19 remaining) |
-| #179 | Improve Lowest-Quality Labs | Open (blocked on Phase 3 lab audit) |
-| #199 | AI/ML Engineering track migration + modernization | Open (Phase 4b done; Phase 7 cross-link + Phase 8 UK translate remain) |
-| #200 | AI/ML local per-section module numbering (filename rename) | Open (delegated to Codex in worktree) |
-| #394 | AI History book — 72-chapter prose lift | All prose on main + reader aids landed (Ch01–Ch72); review-coverage backfill closed via #559; deployment-state confirmed via dashboard panel (72/72 published · 72 with aids) |
-| #559 | AI history review-coverage backfill | Closed 2026-05-01 (session 3) — audit script relaxed to "any two distinct cross-family markers" for prose lane; Ch04–Ch15 already had two markers each (Codex+Claude or Gemini+Claude); Ch02 + Ch03 backfilled via two new reviews; `review_coverage:` blocks populated across all 72 chapter `status.yaml` files |
-| #677 | ML/RL/DL curriculum expansion | **CLOSED** 2026-05-01 (22 work items shipped) |
-| #542 | Dependabot psutil bump | **MERGED** 2026-05-01 |
+| #14 | Curriculum Monitoring & Official Sources | Open — permanent tracker |
+| #143 | Ukrainian Translation — Full Site Coverage | Open (~40%) |
+| #186 | Ukrainian Translations sync with quality improvements | Open |
+| #197 | On-Premises Track expansion | Open — strategic per `project_onprem_vision.md` |
+| #341 | Citation residuals auto-resolver epic | Open — tooling, separate from #388 |
+| #342 | pipeline-v4 rename `needs_human` → `residuals_filed` | Open — 5-min mechanical task |
+| #344 | Citation-residuals: extend resolver | Open — in flight per worktree `codex/issue-344` |
+| #373 | Liveness probes for LLM-dispatch subprocesses | Open — stalled but coherent infra-reliability scope |
+| **#379** | **Phase A.2 greenfield MLOps (KServe / Seldon / BentoML / bare-metal MLOps)** | **TIER 1 priority — KServe drafting next session** |
+| **#385** | **Phase E.2 on-prem expansion** (scope-tightened to Tanzu / OpenStack / Gardener / Karmada-Liqo / kube-vip) | **TIER 1 priority — after #379** |
+| #386 | Phase F: Lab quality audit | Open — labs ≠ modules; distinct from #388 |
+| **#388** | **Site-wide module quality rewrite** | Active — Phase 2a triage runs anytime; **defer Phase 2b heavy rewrite until #379 + #385 land**; within Phase 2b run **REWRITE-tier first** (~165 modules at <18 wpp) per user 2026-05-01 |
+| #391 | Public-facing status page | Open — borderline-stale; coherent product idea |
+| #393 | Post-#388 ML/AI history depth pass | Open — explicitly post-#388 |
 
 ## TODO
 
-**Next session — pick up Block B Gemini queue or #503 candidacy:**
-- [x] Issue closeout audit — DONE 2026-05-01 session 3. Every "likely closeable" candidate from prior handoff was already closed before the audit ran (#199, #177, #165, #560–#564). Remaining open issues all have legitimate residual work; nothing else to close as of this session.
-- [x] **#559 review-coverage closeout — DONE 2026-05-01 session 3 (option c hybrid).** Audit script's prose-lane required-set relaxed from `{gemini, codex}` to "any two distinct cross-family markers" (`scripts/audit_review_coverage.py:_expected_lane_fields` + `_lane_satisfied`). Two genuine single-reviewer chapters got their second cross-family review (Claude source-fidelity on Ch02 PR #479, Codex prose-quality on Ch03 PR #480). `audit_review_coverage.py --write` ran to populate `review_coverage:` blocks across all 72 chapter `status.yaml` files. See **Review-coverage rollup matrix** below.
-- [ ] **#503 closeout candidacy** — last session shipped book-progress + module-distribution dashboard panels (commit `c70b6f2d`). Re-read #503 body + verify whether scope is fully covered before drafting close comment.
+**Next session — fire KServe dispatch + greenfield #379 + #385 (greenfield-before-#388 sequencing locked):**
+
+- [ ] **KServe dispatch (Tier 1, FIRST)** — fire Codex draft using brief at `docs/session-state/2026-05-01-4-kserve-dispatch-brief.md`. Smoke-check Codex first (per `feedback_verify_codex_auth.md`); dispatch FG sync (NOT background — confirmed BG dies silently this session). After draft: source-fidelity review (Claude), update toolkit `index.md` (insert KServe at 9.3, bump planned-but-unshipped down by one), `npm run build`, health check, PR linked to #379. ~30-60 min total.
+- [ ] **#379 remaining (Tier 1, after KServe)** — Seldon Core deep-dive, BentoML deep-dive, bare-metal MLOps recipe. Same pattern as KServe (Codex draft + Claude review). ~2-3h dispatched per module.
+- [ ] **#385 (Tier 1, after #379)** — VMware Tanzu, OpenStack on K8s, Gardener, Multi-cluster on-prem (Karmada/Liqo + kube-vip). Update #385 body to remove already-shipped items (private LLM via 9.3, MetalLB in toolkits, bare-metal observability via 7.4/7.8).
+- [ ] **#384 residuals (Tier 2)** — file fresh issue covering eBPF foundation + dedicated Edge K8s + IPv6/dual-stack networking. Open after #379 + #385 are in flight.
+
+**Routing locked 2026-05-01 (session 4):**
+- **No Gemini** in writer routing (saving past 2026-05-05 downgrade).
+- **Codex drafts** all greenfield + #388 rewrites (gpt-5.5, danger mode, reasoning=high).
+- **Claude reviews** source-fidelity (orchestrator pass, posts `<!-- prose review claude -->` marker).
+- **Codex 10x window** runs to **2026-05-17** (16 days from 2026-05-01) — fits ~10-12 greenfield modules cleanly.
+
+**#388 sequencing (defer Phase 2b until greenfield lands):**
+- [ ] **Phase 2a triage** — deterministic Python pass, free, can run anytime in parallel with greenfield. No quota cost.
+- [ ] **Phase 2b heavy rewrite** — defer until #379 + #385 land. Within Phase 2b, run **REWRITE-tier first** (~165 modules at <18 wpp; clear pad-bombs / punchy-bullets / thin-essay signatures) per user 2026-05-01 ("we will focus on the rewrite part first"). REVIEW-tier (~85-200 additional at <22 wpp threshold needing teaching-judge LLM call) waits.
+
+**Carryover residuals from prior handoffs:**
+- [ ] **Ch02 line-119 fix** — "five years before" → "more than a decade before" follow-up. Codex caught the same factual error at line 127 in commit `b4d09a00` but missed line 119; surfaced in Claude source-fidelity backfill review on PR #479 this session. One-line fix; low priority.
+- [ ] **Ch32–Ch37 research-pending** under strict-gh audit (out of #559 scope; could spin a fresh sub-issue).
 
 **Review-coverage rollup matrix (Ch02–Ch15, scope of #559):**
 
@@ -188,32 +207,14 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 
 Bonus finding from the run: **Ch32–Ch37 are research-pending** under the strict-gh audit (out of #559 scope, which is Ch01–Ch31). Filed as a follow-up note for next session.
 
-**Block A — mechanical cleanups (small):**
-- [x] Git hygiene sweep — DONE 2026-05-01 session 2 (50→3 worktrees, 87→4 branches, 8 PIDs + 1 detached HEAD + 2 stashes resolved).
-- [x] Fix `context-monitor.sh` handoff target — DONE 2026-05-01 session 3 (both physical copies updated; bash -n clean).
-
-**Block B — post-#677 Gemini queue** (kick off when ML revamp closes; ideally before 2026-05-05 Gemini downgrade per `project_budget_and_delegation.md`):
-- [ ] **Gap analysis** on the 19-module ML/RL/DL batch — "given what we shipped, what's missing for a practitioner?" Cross-check Gemini's claimed gaps against the actual `src/content/docs/ai-ml-engineering/` tree before acting (Gemini sometimes flags existing content as missing).
-- [ ] **Bulk source-link audit** on all 19 new modules — Gemini fast-passes URLs; pair with deterministic `scripts/quality/check_citations.py` for the actual verdict. Gemini hands triage on the failures, not the truth.
-- [ ] **Tie-break reviewer** standby — only invoke if a future Codex review feels weak/contradictory (AI-history Tier 3 coeditor pattern).
-- **Prompt guards (mandatory for all 3 above)**: per `feedback_gemini_hallucinates_anchors.md`, Gemini hallucinates URLs/anchors. Every prompt must require: (a) for each URL cited, paste a 1-line verification result (HTTP status + page title or grep hit); (b) "if you cannot verify, mark as UNVERIFIED — do not promote to Green"; (c) cross-validate against `check_citations.py` output before trusting Gemini's all-clear.
-- **Quota strategy**: try API-key tier first; on 429 / capacity-exhausted, prefix `KUBEDOJO_GEMINI_SUBSCRIPTION=1` to flip to OAuth (per-account quota). Operator can rotate 3–6 Ultra accounts via OAuth; API key is a single shared bucket across accounts.
-
-**Block C — #388 rubric-critical rewrite work** (after #677 closes):
-- [ ] #388 rubric-critical rewrite — 485 modules at <2.0 score. Note: rubric is regex-based per memory `reference_rubric_heuristic_structural.md`; read content before trusting score. The 21 modules under #677 are out of scope per the cross-link comment on #388.
+**Block B — Gemini queue (SUPERSEDED 2026-05-01 session 4):**
+The post-#677 Gemini queue (gap analysis / bulk source-link audit / tie-break standby on the 19 ML/RL/DL modules) is **deprecated under the new "no Gemini in routing" policy**. Source-link audit can run via deterministic `scripts/quality/check_citations.py` alone if needed; gap analysis can be done by Claude or Codex inline as part of the greenfield work. The original Block B notes are preserved in [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) for reference.
 
 **Background / lower priority:**
-- [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC. Same flow optional for Bing Webmaster Tools.
-- [x] AI history #562/#563/#564 — all reader-aid work complete (Ch01–Ch72).
-- [ ] PR #567 review + merge → then re-run audit_review_coverage.py with live gh
+- [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC.
+- [ ] PR #567 review + merge → then re-run `audit_review_coverage.py` with live gh
 - [ ] PR #558 + PR #565 stale-prose cleanup (content already on main)
-- [ ] AI/ML Engineering #199 remaining: Phase 7 cross-link (run), Phase 8 UK translate (skipped for now)
-- [ ] AI/ML Engineering #200: local per-section module numbering (delegated to Codex)
-- [ ] Remaining pipeline: On-Premises (30), Platform (209), Specialty (18) — #180
-- [ ] Stuck modules: ~11 at WRITE (Gemini rejection loop), need knowledge packet retry
-- [ ] ASCII→Mermaid conversion pass for all 587 modules — #193 (after #180)
-- [ ] UK prereqs translation: re-sync after pipeline rewrites
-- [ ] Lab quality audit and improvements — #179
+- [ ] #344 (citation-residuals resolver work in `codex/issue-344` worktree) — verify if work is current or abandoned
 
 ## Blockers
 
