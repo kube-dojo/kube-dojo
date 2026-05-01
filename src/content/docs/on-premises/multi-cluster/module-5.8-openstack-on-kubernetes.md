@@ -184,7 +184,7 @@ That does not make Galera magically simple. It means Kubernetes can express the 
 
 OpenStack services rely heavily on RabbitMQ for RPC and notification paths. If RabbitMQ partitions, Nova, Cinder, Neutron, and Heat can look broken even when their API pods are healthy. Kubernetes may report every RabbitMQ pod as Running while the cluster is logically partitioned. That is why operational probes must include RabbitMQ cluster status, not just pod phase.
 
-Day-2 operations become Kubernetes-native. To inspect Keystone pods:
+Day-2 operations become Kubernetes-native, but the commands still need OpenStack context behind them. A first Keystone inspection should confirm which pods exist, what the Deployment believes, and whether logs show identity, database, endpoint, or policy errors:
 
 ```bash
 k -n openstack get pods -l application=keystone
@@ -192,14 +192,14 @@ k -n openstack logs deploy/keystone-api
 k -n openstack describe deploy keystone-api
 ```
 
-To restart a service after changing a Secret or ConfigMap:
+After a Secret or ConfigMap change, restart the affected Deployment deliberately and wait for the rollout instead of deleting random pods. That habit keeps the action auditable and exposes failed replacements quickly:
 
 ```bash
 k -n openstack rollout restart deploy/keystone-api
 k -n openstack rollout status deploy/keystone-api
 ```
 
-To inspect chart values and release history:
+When the question is what Helm actually installed, inspect the release history, values, and rendered manifest before changing the cluster again. Those artifacts connect the live Kubernetes objects back to chart intent:
 
 ```bash
 helm -n openstack list
@@ -234,7 +234,7 @@ helm upgrade --install keystone openstack-helm/keystone \
 k -n openstack rollout status deploy/keystone-api
 ```
 
-The command is short. The judgment around it is the real engineering work.
+The command sequence is short, but the engineering judgment around it is the real work. A disciplined operator treats rendered manifests, migration behavior, rollout status, endpoint checks, and rollback limits as one upgrade decision rather than as separate rituals.
 
 ---
 
@@ -258,7 +258,7 @@ That is attractive for platform teams with strong OpenStack and Kubernetes skill
 
 That tradeoff is familiar. Kubernetes itself can be installed with kubeadm, Cluster API, Talos, RKE2, kOps, managed cloud services, or vendor distributions. The lower-level tool offers control. The distribution offers an integrated path.
 
-OpenStack-on-Kubernetes has the same spectrum.
+OpenStack-on-Kubernetes has the same spectrum, and the right point on it depends on whether the team values direct control, integrated defaults, vendor support, or reduced local design burden most.
 
 | Choice | Best Fit | Tradeoff |
 |---|---|---|
@@ -289,7 +289,7 @@ One local disk convention for Nova. That path creates operational silos and inco
 
 RGW provides S3-compatible object storage. CephFS provides a shared filesystem. The Ceph CSI drivers provide Kubernetes PersistentVolumes. The same cluster can back Cinder, Nova, Glance, Manila, RGW, and Kubernetes storage classes.
 
-The architecture looks like this:
+The architecture looks like this when Ceph is treated as a shared substrate rather than as a single-purpose backend. Each consumer reaches the same storage system through the interface that matches its workload:
 
 ```text
                          +---------------------------+
@@ -326,7 +326,7 @@ RGW has object workload behavior. CephFS metadata can be sensitive to namespace-
 
 It can respect host, rack, room, or site boundaries. It can let you separate latency-sensitive volumes from bulk image storage. Pool quotas and placement groups help prevent one workload family from consuming the entire cluster. Ceph is unified storage.
 
-It is not one magic pool. A simple production-shaped pool plan might look like this:
+It is not one magic pool, and treating it that way hides the performance and blast-radius decisions that production clouds must make explicitly. A simple production-shaped pool plan might look like this:
 
 | Use Case | Ceph Interface | Example Pool | Isolation Goal |
 |---|---|---|---|
@@ -339,7 +339,7 @@ It is not one magic pool. A simple production-shaped pool plan might look like t
 
 High-IOPS workloads need explicit tuning. RBD cache settings, BlueStore device layout, WAL and DB devices, network MTU, replication size, erasure coding choices, object size, and client concurrency can all dominate real performance. If a Cinder volume performs badly, do not start by blaming Cinder. Trace the path.
 
-VM filesystem to QEMU. QEMU to librbd. librbd to Ceph monitors and OSDs. OSDs to disks.
+Trace the request from the VM filesystem into QEMU, from QEMU into librbd, from librbd through Ceph monitors and OSDs, and from the OSDs down to the actual disks and networks. That full path is where most storage truth lives.
 
 Disks back through the same path. Kubernetes added another lifecycle layer for the control plane, but the data path still needs storage engineering. Before running a production Cinder benchmark, what do you expect from `ceph -s`, `ceph osd df tree`, `rbd perf image iostat`, and Cinder scheduler logs? If those views disagree, the benchmark is measuring confusion rather than storage capability.
 
@@ -357,7 +357,7 @@ In this module, Neutron-OVN is responsible for OpenStack tenant networks. The co
 
 The OVN southbound database stores the physical realization plan. `ovn-northd` translates northbound intent into southbound data. OVS and OVN controllers on nodes program local forwarding. The conceptual model is shared even when the objects belong to different platform layers.
 
-Here is the mental map:
+Here is the mental map that keeps those two OVN uses separate. The technology vocabulary overlaps, but the owners, objects, failure domains, and packet paths are different:
 
 ```text
 +----------------------------+       +------------------------------+
@@ -393,7 +393,7 @@ The infra cluster CNI chooses its pod CIDRs, service CIDRs, node overlay setting
 
 Tunnel IDs must stay within expected ranges. Encapsulation ports must not be blocked. MTU must account for overlay overhead. VLAN tags must be reserved and documented.
 
-External network bridging must be deliberate. A practical Neutron-OVN configuration has these concerns:
+External network bridging must be deliberate because it is the point where tenant intent meets the physical fabric. A practical Neutron-OVN configuration has these concerns, and every illustrative value needs review against the real network:
 
 ```ini
 [ml2]
@@ -461,7 +461,7 @@ A template can constrain Kubernetes version, image, external network, flavor, ma
 
 Magnum is less attractive when the platform team only needs internal Kubernetes clusters on bare metal and does not need OpenStack tenant semantics. In that case, Cluster API with Metal3, bare-metal automation, or another Kubernetes lifecycle manager may be more direct. Use Magnum when OpenStack identity, quota, project isolation, billing, and tenant-facing APIs are the product boundary. Use direct Cluster API when Kubernetes lifecycle is the product and OpenStack is not the tenant interface.
 
-The coexistence diagram looks strange at first, but it is common in mature private clouds:
+The coexistence diagram looks strange at first because Kubernetes appears twice, once as an operations substrate and once as a tenant product. That layering is common in mature private clouds:
 
 ```mermaid
 flowchart TD
@@ -508,7 +508,7 @@ The credential itself belongs to Keystone's identity model. Barbican is OpenStac
 
 In production, teams often integrate external secret tooling so Kubernetes workloads can consume secrets from a central secret backend. That can include Barbican-backed flows, external-secrets patterns, Vault, cloud KMS equivalents, or enterprise secret stores. The design question is not "Which Secret object is easiest?" The design question is "Which system is authoritative for this class of secret, and how is access audited?"
 
-A clean identity map looks like this:
+A clean identity map makes those boundaries explicit before an incident forces the discussion. Use it to decide which system owns each actor, permission, credential, and audit trail:
 
 | Identity Object | Lives In | Typical Use | Do Not Confuse With |
 |---|---|---|---|
@@ -523,7 +523,7 @@ Identity mistakes are expensive because they often look like service failures. A
 
 It may also fail because the trustee or application credential path is misconfigured. A Kubernetes operator may fail to view pods. It may be an RBAC issue, not a pod issue. During incidents, always identify the request identity, token scope, policy file, service account, and API target.
 
-That practice prevents teams from debugging networking when the actual problem is authorization.
+That practice prevents teams from debugging networking when the actual problem is authorization, and it also keeps emergency fixes focused on the policy or token path that actually failed.
 
 ---
 
@@ -639,7 +639,7 @@ flowchart TD
     M -->|No| O[Operate classic OpenStack cloud]
 ```
 
-Decision questions:
+The decision questions below turn that rule into an operational comparison. They force the team to name the tenant product, upgrade target, incident surface, and organizational pressure before choosing tooling:
 
 | Question | Prefer OpenStack-on-K8s When | Prefer K8s-on-OpenStack When | Prefer Traditional OpenStack When |
 |---|---|---|---|
@@ -654,7 +654,7 @@ The most common hybrid answer is: Run OpenStack's control plane on a dedicated i
 
 Use OVN carefully across pod and tenant network planes. Keep identity federated but authorization separate. That hybrid is powerful because it uses each platform at the layer where it is strongest. It is also complex.
 
-Complexity is acceptable only when the team has clear ownership boundaries and tested recovery procedures.
+Complexity is acceptable only when the team has clear ownership boundaries and tested recovery procedures. Without those guardrails, the hybrid architecture becomes an impressive diagram that nobody can operate confidently during a real outage.
 
 ---
 
@@ -741,11 +741,11 @@ In this exercise you will deploy a minimal OpenStack control-plane shape on a ki
 
 The minimal path runs on a laptop. It uses kind, OpenStack-Helm charts, MariaDB, RabbitMQ, Memcached, Keystone, Glance, Cinder with a simple hostpath or LVM-style backend, and Horizon. It intentionally skips Ceph and OVN so you can focus on the control-plane structure. The production-realistic path is to study the Atmosphere quickstart and prepare real hosts with storage and networking prerequisites.
 
-Do not confuse the laptop path with a production architecture.
+Do not confuse the laptop path with a production architecture; it is a controlled learning environment for observing object shapes, API flows, and troubleshooting habits before real hardware enters the design.
 
 ### Setup
 
-Install these tools before starting:
+Install these tools before starting so the exercise can move between Kubernetes, Helm, OpenStack client commands, and simple HTTP checks without stopping for local setup:
 
 ```bash
 kind version
@@ -755,13 +755,13 @@ openstack --version
 curl --version
 ```
 
-Create the `k` alias if you have not already done so:
+Create the `k` alias if you have not already done so, because the lab examples use it consistently and the short form keeps the diagnostic commands readable:
 
 ```bash
 alias k=kubectl
 ```
 
-Clone the chart repositories used by OpenStack-Helm:
+Clone the chart repositories used by OpenStack-Helm so you can compare packaged chart behavior with source examples, values files, and current installation guidance:
 
 ```bash
 mkdir -p "$HOME/src"
@@ -775,7 +775,7 @@ helm repo add openstack-helm-infra https://tarballs.opendev.org/openstack/openst
 helm repo update
 ```
 
-Create a working directory for local values:
+Create a working directory for local values; keeping overrides together makes it easier to inspect, repeat, and discard the laptop deployment later:
 
 ```bash
 mkdir -p "$HOME/openstack-on-k8s-lab/values"
@@ -822,7 +822,7 @@ k create namespace openstack
 k create namespace osh-infra
 ```
 
-Install a simple ingress controller suitable for local testing:
+Install a simple ingress controller suitable for local testing so the lab can expose API endpoints through familiar Kubernetes objects instead of relying only on port-forwarding:
 
 ```bash
 k apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
@@ -836,7 +836,7 @@ You should see a 3-node kind cluster with one control-plane node and two workers
 
 </details>
 
-Success criteria:
+Use these checks to confirm that the lab has a separate infra cluster foundation before you install OpenStack services on top of it:
 
 - [ ] `k get nodes` shows all kind nodes Ready.
 - [ ] The `openstack` namespace exists.
@@ -848,7 +848,7 @@ Success criteria:
 
 OpenStack control-plane services need a database, message queue, and cache before most APIs become useful. In a production OpenStack-Helm design, MariaDB normally runs as a Galera-backed StatefulSet with disruption controls. RabbitMQ also runs as a StatefulSet. Memcached is usually simpler and replaceable.
 
-Create a small values file for laptop scheduling:
+Create a small values file for laptop scheduling that reduces replicas and resource expectations while preserving the important workload shapes for the supporting services:
 
 ```bash
 cat > values/infra-kind.yaml <<'EOF'
@@ -868,7 +868,7 @@ conf:
 EOF
 ```
 
-Install the infrastructure charts:
+Install the infrastructure charts after the values file is ready, because OpenStack APIs will depend on database, queue, and cache services during bootstrap:
 
 ```bash
 helm upgrade --install mariadb openstack-helm-infra/mariadb \
@@ -889,7 +889,7 @@ k -n openstack get pdb
 k -n openstack get svc
 ```
 
-Inspect the generated objects:
+Inspect the generated objects before moving on, and connect each Kubernetes object type to the persistence or discovery role it serves in the control plane:
 
 ```bash
 k -n openstack describe statefulset mariadb-server
@@ -907,7 +907,7 @@ If pods stay Pending, inspect events for storage class or resource pressure issu
 
 </details>
 
-Success criteria:
+Use these checks to verify that the infrastructure layer is present and that you can explain why process status is not full service health:
 
 - [ ] MariaDB has a StatefulSet or equivalent stateful workload object.
 - [ ] RabbitMQ has a StatefulSet or equivalent stateful workload object.
@@ -945,7 +945,7 @@ endpoints:
 EOF
 ```
 
-Install Keystone:
+Install Keystone after the identity values are in place, then watch both the long-running API Deployment and the bootstrap Jobs that prepare service state:
 
 ```bash
 helm upgrade --install keystone openstack-helm/keystone \
@@ -957,7 +957,7 @@ k -n openstack get jobs | grep keystone
 k -n openstack rollout status deploy/keystone-api
 ```
 
-Forward the Keystone API locally if ingress is not available:
+Forward the Keystone API locally if ingress is not available, and keep that terminal open while the OpenStack client exercises the identity endpoint:
 
 ```bash
 k -n openstack port-forward svc/keystone-api 5000:5000
@@ -981,7 +981,7 @@ openstack user create --project lab-project --password your-user-password-here l
 openstack role add --project lab-project --user lab-user member
 ```
 
-Inspect how configuration is delivered:
+Inspect how configuration is delivered so you can see the practical difference between an OpenStack config file on a host and a Helm-rendered ConfigMap mounted into a pod:
 
 ```bash
 k -n openstack logs deploy/keystone-api --tail=80
@@ -996,7 +996,7 @@ Keystone should expose an identity API, run bootstrap jobs, and store configurat
 
 </details>
 
-Success criteria:
+Use these checks to prove that identity is reachable through OpenStack APIs and traceable through the Kubernetes objects that delivered its configuration:
 
 - [ ] Keystone API pod reaches Running state.
 - [ ] Keystone bootstrap jobs complete.
@@ -1008,7 +1008,7 @@ Success criteria:
 
 Glance provides the image catalog. Nova uses Glance images when booting instances. In production, Glance often stores images in Ceph RBD or object storage. In this laptop lab, use a simple persistent backend so you can observe the API flow.
 
-Create values:
+Create values for Glance that keep the image API small enough for a laptop while still showing storage, ingress, and service configuration:
 
 ```bash
 cat > values/glance-kind.yaml <<'EOF'
@@ -1040,7 +1040,7 @@ endpoints:
 EOF
 ```
 
-Install Glance:
+Install Glance once Keystone is usable, because image service registration, authentication, and endpoint discovery all depend on working identity:
 
 ```bash
 helm upgrade --install glance openstack-helm/glance \
@@ -1052,7 +1052,7 @@ k -n openstack get pvc
 k -n openstack get pods -l application=glance
 ```
 
-Upload Cirros:
+Upload Cirros through the OpenStack image API so the lab demonstrates a tenant-facing workflow rather than only a successful pod rollout:
 
 ```bash
 curl -L -o cirros.img \
@@ -1068,7 +1068,7 @@ openstack image list
 openstack image show cirros-0.6.3
 ```
 
-Observe Glance:
+Observe Glance from the Kubernetes side after the upload, then relate the API logs, PVC, and endpoint object to the image record you created:
 
 ```bash
 k -n openstack logs deploy/glance-api --tail=80
@@ -1083,7 +1083,7 @@ The important result is an image visible through the OpenStack image API and a K
 
 </details>
 
-Success criteria:
+Use these checks to confirm that the image service works as both an OpenStack API and a set of Kubernetes-managed workloads:
 
 - [ ] Glance API pod reaches Running state.
 - [ ] A PersistentVolumeClaim exists for the lab image backend.
@@ -1095,7 +1095,7 @@ Success criteria:
 
 Cinder provides block storage APIs. In production, Cinder commonly talks to Ceph RBD. In this laptop lab, use a simple backend such as hostpath or LVM-style storage where your chart release supports it. The goal is to observe the Cinder API, scheduler, and volume worker behavior, not to build production storage.
 
-Create values:
+Create values for Cinder that separate API, scheduler, and volume roles, even though the backend is intentionally simplified for a laptop:
 
 ```bash
 cat > values/cinder-kind.yaml <<'EOF'
@@ -1140,7 +1140,7 @@ endpoints:
 EOF
 ```
 
-Install Cinder:
+Install Cinder after Glance and Keystone are working, because block storage requests depend on identity, service registration, scheduling, and backend worker behavior:
 
 ```bash
 helm upgrade --install cinder openstack-helm/cinder \
@@ -1152,7 +1152,7 @@ k -n openstack rollout status deploy/cinder-api
 k -n openstack rollout status deploy/cinder-scheduler
 ```
 
-Create a volume:
+Create a volume through the OpenStack API to exercise the scheduler and backend path instead of stopping at Kubernetes workload readiness:
 
 ```bash
 openstack volume create --size 1 lab-volume-1
@@ -1160,7 +1160,7 @@ openstack volume list
 openstack volume show lab-volume-1
 ```
 
-Watch the worker:
+Watch the worker and scheduler logs while the request reconciles, because volume failures often appear in backend services rather than at the API edge:
 
 ```bash
 k -n openstack logs -l application=cinder,component=volume --tail=120
@@ -1174,7 +1174,7 @@ Cinder backends vary more than Keystone or Glance in small labs. If the chart re
 
 </details>
 
-Success criteria:
+Use these checks to verify that Cinder’s service family is visible, functional enough for the lab, and clearly distinct from a production Ceph deployment:
 
 - [ ] Cinder API, scheduler, and volume components are visible as Kubernetes workloads.
 - [ ] `openstack volume create --size 1 lab-volume-1` returns a volume record.
@@ -1215,7 +1215,7 @@ endpoints:
 EOF
 ```
 
-Install Horizon:
+Install Horizon only after the underlying APIs are reachable, because the dashboard is a consumer of the service catalog rather than the authority for cloud health:
 
 ```bash
 helm upgrade --install horizon openstack-helm/horizon \
@@ -1226,13 +1226,13 @@ k -n openstack rollout status deploy/horizon
 k -n openstack get svc horizon
 ```
 
-Forward the dashboard if needed:
+Forward the dashboard if needed so the browser can reach the same tenant-facing service that Kubernetes is managing behind the scenes:
 
 ```bash
 k -n openstack port-forward svc/horizon 8080:80
 ```
 
-Open the dashboard:
+Open the dashboard and use it as a tenant would, while remembering that any failed view should be traced back to Keystone, Glance, Cinder, or endpoint configuration:
 
 ```bash
 open http://127.0.0.1:8080
@@ -1257,7 +1257,7 @@ Horizon proves that a tenant-facing UI can consume the same Keystone-backed serv
 
 </details>
 
-Final success criteria:
+Use these final checks to tie the tenant experience back to Helm releases, Kubernetes objects, and OpenStack service catalog entries:
 
 - [ ] Horizon pod reaches Running state.
 - [ ] You can reach Horizon through port-forward or local ingress.
