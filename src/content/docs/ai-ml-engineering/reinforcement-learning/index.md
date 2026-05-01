@@ -22,7 +22,7 @@ If you have not yet worked through `machine-learning/` or `deep-learning/`, do t
 | # | Module | Status |
 |---|---|---|
 | 1.1 | [RL Practitioner Foundations](./module-1.1-rl-practitioner-foundations/) | Live |
-| 2.1 | Offline RL & Imitation Learning | Coming soon (Phase 3) |
+| 2.1 | [Offline RL & Imitation Learning](./module-2.1-offline-rl-and-imitation-learning/) | Live |
 
 See the full plan in [issue #677](https://github.com/kube-dojo/kube-dojo.github.io/issues/677).
 
