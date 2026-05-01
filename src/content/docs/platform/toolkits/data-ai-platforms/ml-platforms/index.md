@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "ML Platforms"
 ---
-> **Toolkit Track** | 6 Modules | ~5 hours total
+> **Toolkit Track** | 8 Modules | ~6.5 hours total
 
 ## Overview
 
@@ -31,6 +31,7 @@ Before starting this toolkit:
 | 9.5 | [Ray Serve](module-9.5-ray-serve/) | `[COMPLEX]` | 50-60 min |
 | 9.6 | [LangChain & LlamaIndex](module-9.6-langchain-llamaindex/) | `[COMPLEX]` | 50-60 min |
 | 9.7 | [GPU Scheduling](module-9.7-gpu-scheduling/) | `[COMPLEX]` | 50 min |
+| 9.8 | [KServe](module-9.8-kserve/) | `[COMPLEX]` | 55-65 min |
 
 ## Learning Outcomes
 
@@ -202,6 +203,16 @@ Module 9.6: LangChain & LlamaIndex
      │
      │  LLM application frameworks
      │  RAG and agents
+     ▼
+Module 9.7: GPU Scheduling
+     │
+     │  GPU resource management
+     │  Device plugins, NVIDIA operator
+     ▼
+Module 9.8: KServe
+     │
+     │  Production model inference
+     │  Serverless + raw deployment modes
      ▼
 [Toolkit Complete] → Production AI/ML!
 ```
@@ -384,6 +395,8 @@ Latency: < 100ms total
 | vLLM | Deploy LLM with PagedAttention, benchmark throughput |
 | Ray Serve | Build multi-model pipeline with composition |
 | LangChain/LlamaIndex | Create RAG application with vector store |
+| GPU Scheduling | Install NVIDIA operator, schedule GPU workloads |
+| KServe | Deploy InferenceService, canary rollout, switch to raw mode |
 
 ## Tool Comparison
 
