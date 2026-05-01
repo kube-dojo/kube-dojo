@@ -18,3 +18,4 @@ sidebar:
 | 1.5 | [RNNs & Sequence Models](/ai-ml-engineering/deep-learning/module-1.5-rnns-sequence-models/) |
 | 1.6 | [Backpropagation Deep Dive](/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive/) |
 | 1.7 | [Transformers from Scratch](/ai-ml-engineering/deep-learning/module-1.7-transformers-from-scratch/) |
+| 1.8 | [Self-Supervised Learning](/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/) |
