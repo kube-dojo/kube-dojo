@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In March 2022, DeepMind's Chinchilla showed compute-optimal training must scale model size and tokens together. Two years later, Llama 3's 15T-token model card and FineWeb made the public web feel countable. Villalobos and Epoch AI then estimated public human text could be fully utilized between 2026 and 2032 if trends continued. Engineers answered with a portfolio — filter, deduplicate, repeat, transcribe audio, synthesize textbooks — and each workaround changed the signal. Benchmark contamination spread the exhaustion problem into evaluation.
+In March 2022, DeepMind's Chinchilla made tokens a co-equal scaling variable. Two years later, Llama 3's 15T-token model card and FineWeb made the public web feel countable. Villalobos and Epoch AI then put a near-term clock on public-text exhaustion if trends continued. Engineers answered with a portfolio — filter, deduplicate, repeat, transcribe audio, synthesize textbooks — and each workaround changed the signal. Benchmark contamination spread the exhaustion problem into evaluation.
 :::
 
 <details>
@@ -14,10 +14,10 @@ In March 2022, DeepMind's Chinchilla showed compute-optimal training must scale 
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Jordan Hoffmann | — | Lead author of the 2022 Chinchilla paper; argued compute-optimal training scales parameters and tokens together |
-| Pablo Villalobos | — | Lead author of the Epoch AI "Will we run out of data?" analysis; put a 2026–2032 date range on public-text exhaustion |
+| Jordan Hoffmann | — | Lead author of the 2022 Chinchilla paper; made data allocation central to compute-optimal scaling |
+| Pablo Villalobos | — | Lead author of the Epoch AI "Will we run out of data?" analysis; framed public text as a measurable scaling stock |
 | Niklas Muennighoff | — | Lead author of "Scaling Data-Constrained Language Models"; characterised repetition, filtering, and code augmentation under finite data |
-| Alec Radford | — | Lead author of Whisper; demonstrated 680,000 hours of internet audio paired with transcripts as a multilingual supervision corpus |
+| Alec Radford | — | Lead author of Whisper; demonstrated internet audio paired with transcripts as multilingual supervision |
 | Sebastien Bubeck | — | Senior author of phi-1 / "Textbooks Are All You Need"; argued curated synthetic textbook data could alter scaling in code |
 | Ilia Shumailov | — | Lead author of "The Curse of Recursion"; defined model collapse as recursive training on generated data erasing distribution tails |
 
@@ -29,15 +29,15 @@ In March 2022, DeepMind's Chinchilla showed compute-optimal training must scale 
 ```mermaid
 timeline
     title Chapter 69 — The Data Exhaustion Limit
-    Mar 2022 : Hoffmann et al. publish Chinchilla — compute-optimal training scales model size and tokens together
+    Mar 2022 : Hoffmann et al. publish Chinchilla — tokens become a co-equal scaling variable
     Nov 2022 : Villalobos et al. first post the data-exhaustion analysis
     Dec 2022 : Self-Instruct shows a model-generated instruction-data pipeline
-    Dec 2022 : Whisper paper — 680,000 hours of internet audio paired with transcripts
+    Dec 2022 : Whisper paper — internet audio becomes multilingual supervision
     May 2023 : Muennighoff et al. release data-constrained scaling work on repeated data
     Jun 2023 : Phi-1 paper — synthetic textbook and exercise data produce strong code performance
     Mar 2023 / Mar 2024 : GPT-4 technical report and revisions describe contamination checks and synthetic comparison data
     Apr 2024 : Meta releases Llama 3 model card — 15T+ public-source pretraining tokens
-    Jun 2024 : Villalobos/Epoch v2 — public human text could be fully utilized between 2026 and 2032
+    Jun 2024 : Villalobos/Epoch v2 — public human text gets a near-term exhaustion model
     Jun 2024 / Oct 2024 : FineWeb — 15T-token Common Crawl dataset and 1.3T FineWeb-Edu subset
     Jul 2024 : Shumailov et al. popularise "model collapse" as a recursive synthetic-data risk
     Apr 2025 : LiveBench ICLR version frames contamination as a reason for monthly updated benchmarks
@@ -48,7 +48,7 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**Chinchilla-optimal scaling** — Hoffmann et al.'s 2022 finding that, for a fixed compute budget, language-model training should scale parameters and training tokens together rather than pour compute into ever-larger models on fixed datasets. The headline comparison: a 70B-parameter model trained on 1.4T tokens beat a much larger model trained less optimally with the same compute.
+**Chinchilla-optimal scaling** — The idea that a fixed compute budget has to be allocated across model size and training tokens, rather than spent only on ever-larger parameter counts.
 
 **Token** — The unit a language model trains on, roughly a sub-word fragment. "15T tokens" describes the volume of text a model has seen; it is not the same as 15T unique words, since a token vocabulary mixes whole words, word pieces, punctuation, and code symbols.
 
@@ -245,4 +245,3 @@ But it had stopped being free infinity.
 :::note[Why this still matters today]
 Every modern AI training run is now a logistical operation built on the lessons of this turn. Public model cards routinely cite trillion-token budgets, and dataset teams treat filtering, deduplication, and contamination checks as engineering disciplines with their own ablations and benchmarks. Synthetic data is part of mainstream pipelines for instruction tuning, code generation, and safety work — paired with filtering rather than trusted on its own. Model-collapse arguments shape how labs think about recursive training and provenance. Evaluation has shifted toward fresh, contamination-limited benchmarks that update faster than crawls. The data machine — crawlers, transcribers, synthesizers, annotators, legal review — has become as load-bearing as the architecture it feeds.
 :::
-

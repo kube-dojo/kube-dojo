@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-AI data centers stopped looking like background internet infrastructure and became visible grid actors. The IEA estimated about 415 TWh in 2024 and projected about 945 TWh by 2030, still under 3% of global electricity. The collision was local: EPRI saw frontier training at 100-150 MW now and possibly 1-2 GW by 2028; FERC rejected PJM's amended Susquehanna ISA on November 1, 2024; Microsoft, Google, and Meta turned nuclear procurement into AI infrastructure strategy.
+AI data centers stopped looking like background internet infrastructure and became visible grid actors. Global demand projections stayed modest as a share of electricity, but the collision was local: concentrated AI loads arrived faster than interconnection studies, transmission upgrades, and firm generation usually move. FERC's Susquehanna order made the tariff questions concrete, while Microsoft, Google, and Meta turned firm clean power into AI infrastructure strategy.
 :::
 
 <details>
@@ -46,17 +46,17 @@ timeline
 <details>
 <summary><strong>Plain-words glossary</strong></summary>
 
-**Interconnection service agreement (ISA)** — The contract that governs how a generator or load connects to a regional transmission system. PJM's amended ISA at Susquehanna sought to raise co-located load from 300 MW to 480 MW; FERC rejected the amendment because PJM had not met the high burden required for non-conforming provisions on the record.
+**Interconnection service agreement (ISA)** — The contract that governs how a generator or load connects to a regional transmission system, including the technical and tariff terms for that connection.
 
-**Co-located load** — A large customer (here, an AWS data-center campus) sited next to a generator (the Susquehanna nuclear plant) and electrically arranged so that some or all of its supply comes from that plant rather than across the public transmission grid. The arrangement raises questions about backup service, market dispatch, and who pays for grid reliability.
+**Co-located load** — A large customer sited next to a generator and electrically arranged so that some or all of its supply comes from that nearby plant rather than through an ordinary grid-delivery path.
 
 **Power purchase agreement (PPA)** — A long-term contract under which a buyer agrees to take electricity (or its clean-energy attributes) from a specific generator. Microsoft/Constellation, Meta/Constellation, and Google/Kairos all signed PPAs; a PPA can finance a plant's operation without electrons physically flowing from that plant to the buyer's data center.
 
-**Behind the meter** — A load located on the generator's side of the utility billing meter rather than the public grid's side. The phrase makes the arrangement sound private, but if the load needs backup supply or affects market dispatch, the public system retains an interest.
+**Behind the meter** — A load located on the generator's side of the utility billing meter rather than the public grid's side.
 
 **Firm clean power** — Low-carbon electricity available continuously, including overnight, during heat waves, and during low-wind periods. Hourly matching is a stricter claim than annual matching. Nuclear, hydro with reservoirs, geothermal, and storage-paired renewables qualify in different degrees; intermittent solar and wind alone do not.
 
-**Small modular reactor (SMR)** — A class of advanced nuclear reactor designed to be built in factory modules and deployed at smaller unit sizes than conventional plants. Google's Kairos Power agreement targets first deployment by 2030 and up to 500 MW by 2035. SMRs face technology, licensing, construction, cost, and fuel uncertainties.
+**Small modular reactor (SMR)** — A class of advanced nuclear reactor designed to be built in factory modules and deployed at smaller unit sizes than conventional plants.
 
 **Interconnection queue** — The ordered list of generation and large-load projects awaiting study and approval to connect to a transmission system. Data centers can be operational in two to three years; queue studies, transmission upgrades, and generator builds typically move on longer clocks. The mismatch is the chapter's structural tension.
 
@@ -239,4 +239,3 @@ Every cloud region a developer chooses sits inside a regulated power system with
 The cloud had become infrastructure in the old sense.
 
 Steel, wires, fuel, permits, regulators, and clocks.
-
