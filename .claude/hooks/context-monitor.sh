@@ -1,6 +1,7 @@
 #!/bin/bash
 # Hook: PostToolUse — monitors context size and warns Claude before auto-compact
-# triggers, demanding a session handoff to .pipeline/session-handoff.md instead.
+# triggers, demanding a session handoff to docs/session-state/YYYY-MM-DD-<topic>.md
+# instead (per CLAUDE.md session workflow).
 #
 # Tiers (% of autoCompactWindow):
 #   75% -> heads-up: prepare handoff soon
@@ -53,21 +54,21 @@ if [ "$PCT" -ge 95 ]; then
     "EMERGENCY: Context at ${PCT}% of auto-compact window [~${TOKENS}/${WINDOW} tokens]. AUTO-COMPACT IS IMMINENT." \
     "" \
     "STOP all current work THIS TURN. Do not start any new tool calls beyond what is needed to:" \
-    "1. Write or update .pipeline/session-handoff.md NOW with: latest commit hash on main, any background tasks still running [PIDs + log paths], what was just completed, what is left to do, and the EXACT next-step commands the new session should run." \
-    "2. Tell the user to /exit immediately and start a fresh session that reads .pipeline/session-handoff.md first. Auto-compaction is a billed model call that summarizes your entire conversation: much more expensive than a 3KB handoff file the next session reads cheaply.")
+    "1. Write or update docs/session-state/YYYY-MM-DD-<topic>.md NOW with: latest commit hash on main, any background tasks still running [PIDs + log paths], what was just completed, what is left to do, and the EXACT next-step commands the new session should run. Then update STATUS.md (the index) per CLAUDE.md workflow." \
+    "2. Tell the user to /exit immediately and start a fresh session that reads the new docs/session-state/ handoff first. Auto-compaction is a billed model call that summarizes your entire conversation: much more expensive than a 3KB handoff file the next session reads cheaply.")
 elif [ "$PCT" -ge 85 ]; then
   MSG=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
     "CRITICAL: Context at ${PCT}% of auto-compact window [~${TOKENS}/${WINDOW} tokens]." \
     "" \
     "Finish your current task ASAP, then:" \
-    "1. Write or update .pipeline/session-handoff.md with commit hashes, in-flight tasks, next steps, restart commands." \
+    "1. Write or update docs/session-state/YYYY-MM-DD-<topic>.md with commit hashes, in-flight tasks, next steps, restart commands. Then update STATUS.md (the index) per CLAUDE.md workflow." \
     "2. Tell the user to /exit and start fresh." \
     "Do NOT start any new multi-step work or large operations. Handoff is much cheaper than the auto-compact that is about to trigger.")
 elif [ "$PCT" -ge 75 ]; then
   MSG=$(printf '%s\n%s\n%s\n' \
     "HEADS UP: Context at ${PCT}% of auto-compact window [~${TOKENS}/${WINDOW} tokens]." \
     "" \
-    "Wrap up your current logical unit of work soon. Once it lands, prepare .pipeline/session-handoff.md so we can hand off to a fresh session before auto-compact triggers. Handoff costs ~3KB; compaction costs a full model summarization call.")
+    "Wrap up your current logical unit of work soon. Once it lands, prepare docs/session-state/YYYY-MM-DD-<topic>.md (and update STATUS.md as the index) so we can hand off to a fresh session before auto-compact triggers. Handoff costs ~3KB; compaction costs a full model summarization call.")
 else
   exit 0
 fi
