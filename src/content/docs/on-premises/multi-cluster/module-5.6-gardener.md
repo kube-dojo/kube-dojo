@@ -1275,7 +1275,7 @@ Node rollout may take longer than control-plane rollout because nodes must be re
 
 ### Task 6: Rotate Kubeconfig Credentials and Delete the Shoot
 
-Use gardenctl to target the local Shoot.
+Use gardenctl to target the local Shoot before changing credentials, because this step makes the active Garden, Project, and Shoot explicit in your shell. Treat the target selection as part of the safety procedure, not as a convenience shortcut.
 
 ```bash
 gardenctl target --garden local --project local --shoot local
@@ -1283,13 +1283,13 @@ eval "$(gardenctl kubectl-env bash)"
 k get ns
 ```
 
-Rotate the Shoot's kubeconfig credentials with the operator workflow requested for this module.
+Rotate the Shoot's kubeconfig credentials with the operator workflow requested for this module, then watch the Shoot status rather than assuming the command completed every phase instantly. Credential rotation is a reconciled lifecycle operation, so status is the source of truth.
 
 ```bash
 gardenctl rotate-kubeconfig --garden local --project local --shoot local
 ```
 
-If your installed gardenctl does not provide that exact command, use the Gardener credential-rotation annotations:
+If your installed gardenctl does not provide that exact command, use the Gardener credential-rotation annotations shown below as the equivalent API-level path. This keeps the exercise aligned with Gardener's reconciliation model while avoiding dependence on one particular gardenctl release.
 
 ```bash
 k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
