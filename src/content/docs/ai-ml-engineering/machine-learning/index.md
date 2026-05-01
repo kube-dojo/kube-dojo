@@ -25,7 +25,7 @@ This section is organized as a Tier-1 spine of twelve practitioner-essentials, f
 | 1.4 | [Feature Engineering & Preprocessing](module-1.4-feature-engineering-and-preprocessing/) | Available |
 | 1.5 | [Decision Trees & Random Forests](module-1.5-decision-trees-and-random-forests/) | Available |
 | 1.6 | [XGBoost & Gradient Boosting](module-1.6-xgboost-gradient-boosting/) | Available |
-| 1.7 | Naive Bayes, k-NN & SVMs | Coming soon (Phase 1b) |
+| 1.7 | [Naive Bayes, k-NN & SVMs](module-1.7-naive-bayes-knn-and-svms/) | Available |
 | 1.8 | Unsupervised Learning: Clustering | Coming soon (Phase 1b) |
 | 1.9 | Anomaly Detection & Novelty Detection | Coming soon (Phase 1b) |
 | 1.10 | Dimensionality Reduction | Coming soon (Phase 1b) |
