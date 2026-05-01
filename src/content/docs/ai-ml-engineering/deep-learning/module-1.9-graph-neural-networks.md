@@ -33,7 +33,7 @@ direct analog in CNNs or transformers.
 - **Decide** whether a problem benefits from graph-structured inductive bias before reaching for a GNN, by comparing against a strong tabular baseline and inspecting whether the graph carries information the features do not.
 - **Choose** between GCN, GraphSAGE, and GAT for a given regime by matching their assumptions about homophily, scale, and inductive versus transductive deployment to the data you actually have.
 - **Diagnose** the three GNN-specific failure modes — over-smoothing as you stack layers, over-squashing on long-range tasks, heterophily that violates the connected-nodes-are-similar assumption — and explain which mitigations apply to each.
-- **Design** train, validation, and test splits for transductive and inductive node-classification, link-prediction, and graph-classification tasks without leaking neighborhood information into the held-out set.
+- **Design** train, validation, and test splits for transductive and inductive graph tasks that match the deployment shape, avoid leaking held-out labels (transductive) or held-out structural fragments (inductive), and prevent the link-prediction-specific traps of overlapping positive/negative edges and reverse-edge leakage.
 - **Build** a working PyTorch Geometric pipeline using `Data`, the `MessagePassing` family, `GCNConv` / `SAGEConv` / `GATConv`, and `NeighborLoader` for graphs that do not fit in memory.
 
 ## Why This Module Matters
