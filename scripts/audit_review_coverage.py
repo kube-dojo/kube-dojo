@@ -81,14 +81,25 @@ def _author_family(chapter_num: int) -> str:
 
 
 def _expected_lane_fields(chapter_num: int, lane: str) -> set[str]:
+    """Markers expected to *possibly* fire on this lane (for research-side normalization).
+
+    Research lane keeps the strict author-aware pair (Claude-authored research is
+    cross-reviewed by Gemini gap-analysis + Codex anchor-verification; Codex-authored
+    research is cross-reviewed by Gemini gap-analysis + Claude anchor-verification).
+
+    Prose lane returns the full set of three families because the cross-family rule
+    is "any two distinct families reviewed", not a specific pair. This reflects the
+    post-2026-04-27 reality where Gemini was retired from source-bearing prose
+    review (Issue #421); Ch04-Ch09 were reviewed by Claude+Codex (no Gemini),
+    Ch10-Ch15 were reviewed by Claude+Gemini (pre-#421). Both patterns are valid
+    cross-family coverage.
+    """
     author = _author_family(chapter_num)
     if lane == "research":
         if author == "claude":
             return {"gemini_gap", "codex_anchor"}
         return {"gemini_gap", "claude_anchor"}
-    if author == "claude":
-        return {"gemini_prose_quality", "codex_prose_quality"}
-    return {"gemini_prose_quality", "claude_source_fidelity"}
+    return set(PROSE_FIELDS)
 
 
 def _normalize_not_expected(
@@ -106,6 +117,9 @@ def _normalize_not_expected(
 def _lane_satisfied(values: dict[str, str], chapter_num: int, lane: str) -> bool:
     if all(value == "n/a" for value in values.values()):
         return True
+    if lane == "prose":
+        # Prose cross-family rule: any two distinct families reviewed.
+        return sum(1 for value in values.values() if value == "done") >= 2
     expected = _expected_lane_fields(chapter_num, lane)
     return all(values.get(field_name) == "done" for field_name in expected)
 
@@ -170,11 +184,17 @@ def _apply_comment_markers(coverage: ChapterCoverage, lane: str, comments: list[
             coverage.prose["codex_prose_quality"] = "done"
             marker_seen.add("codex_prose_quality")
 
-    expected = _expected_lane_fields(coverage.chapter_num, lane)
     if lane == "research":
+        expected = _expected_lane_fields(coverage.chapter_num, lane)
         coverage.research = _normalize_not_expected(coverage.research, expected, marker_seen)
     else:
-        coverage.prose = _normalize_not_expected(coverage.prose, expected, marker_seen)
+        # Prose lane: any unfired marker is "n/a" (not "pending"). The cross-family
+        # rule is "any two distinct families reviewed", so families that did not
+        # review this chapter are correctly recorded as not-applicable.
+        coverage.prose = {
+            field_name: ("done" if field_name in marker_seen else "n/a")
+            for field_name in PROSE_FIELDS
+        }
 
 
 def _status_text_hints(path: Path) -> str:
@@ -286,12 +306,8 @@ def _build_coverage(strict_gh: bool) -> dict[int, ChapterCoverage]:
             )
         if not coverage.prose_prs:
             coverage.prose = {name: "n/a" for name in PROSE_FIELDS}
-        else:
-            coverage.prose = _normalize_not_expected(
-                coverage.prose,
-                _expected_lane_fields(coverage.chapter_num, "prose"),
-                {name for name, value in coverage.prose.items() if value == "done"},
-            )
+        # Otherwise prose dict was already finalized by _apply_comment_markers
+        # (any unfired marker flipped to "n/a").
     return coverages
 
 
