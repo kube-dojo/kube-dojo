@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-05-01 (session 2) | **#677 closeout (3 PRs merged) + Dependabot psutil + deep git hygiene + dashboard panels finished.** ML 2.7 (#708, Codex APPROVE 36/40) + RL 2.1 (#709, 847 lines, 11 arxiv IDs verified) + DL 1.7 cleanup (#710, filename/slug/forward-link aligned) — issue #677 closed. Dependabot psutil >=7.2.2 merged (#542). Worktrees 50→3, branches 87→4, 8 dead PIDs + 1 detached HEAD + 2 stashes resolved. Stash@{1} popped + finished: two new dashboard panels (AI History Book Progress with deployment-state truth + Module Distribution with per-track UK coverage), backed by lifecycle-field exposure in `/api/briefing/book` and per-track UK counts in `/api/status/summary`. AI track is now properly named (was bucketing into "Other"). Memory: `reference_gemini_subscription_switch.md` extended with multi-account OAuth rotation rule. | [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) | **Next session: issue closeout pass + decide #559 review-coverage option (a/b/c) + ship Block B Gemini queue before 2026-05-05 downgrade.** |
+| 2026-05-01 (session 3) | **#559 review-coverage closeout (option c hybrid) + #394 epic ready to close + `context-monitor.sh` Block A fix + issue closeout audit.** Audit-script `_expected_lane_fields` + `_lane_satisfied` relaxed to "any two distinct cross-family markers" for prose lane (Gemini-retired post-#421 patterns now valid evidence). `audit_review_coverage.py --write` populated `review_coverage:` blocks across 72 chapter `status.yaml` files. Two genuine single-reviewer chapters got their second cross-family review: Claude source-fidelity on Ch02 (PR #479, 5 issues found incl. internal-consistency carryover from Codex's prior fix that had not propagated to line 119); Codex prose-quality on Ch03 (PR #480). `context-monitor.sh` (both physical copies) updated to point at `docs/session-state/YYYY-MM-DD-<topic>.md`. Issue closeout audit produced zero new closures (every "likely closeable" candidate from prior handoff was already closed). | [`docs/session-state/2026-05-01-3-559-evidence-prep.md`](./docs/session-state/2026-05-01-3-559-evidence-prep.md) | **Next session: pick up Block B Gemini queue (deadline 2026-05-05) or evaluate #503 closeout candidacy. Bonus finding: Ch32–Ch37 research-pending under strict-gh audit (out of #559 scope).** |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-05-01 (session 2) | **#677 closeout (3 PRs merged) + Dependabot psutil + deep git hygiene + dashboard panels finished.** ML 2.7 (#708, Codex APPROVE 36/40) + RL 2.1 (#709, 847 lines, 11 arxiv IDs verified) + DL 1.7 cleanup (#710, filename/slug/forward-link aligned). Dependabot psutil >=7.2.2 merged (#542). Worktrees 50→3, branches 87→4, 8 dead PIDs + 1 detached HEAD + 2 stashes resolved. Stash@{1} popped + finished: dashboard panels (Book Progress + Module Distribution). | [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) |
 | 2026-05-01 | **ML curriculum expansion (#677) — 19 of 22 modules merged in one session.** Phase 0 foundation + 11 Tier-1 (machine-learning/) + RL 1.1 + DL 1.8/1.9 + 6 Tier-2 ML (2.1-2.6). ML 2.7 in flight at session-end; RL 2.1 + DL 1.7 cleanup pending. Locked the dispatch-and-fallback pattern, pinned-slug discipline, plain-text Next-Module convention, no-skill / no-cold-start preamble. | [`docs/session-state/2026-05-01-ml-expansion-batch.md`](./docs/session-state/2026-05-01-ml-expansion-batch.md) |
 | 2026-04-30 (night-7) | **Post-Ch59-72 followups** — reader-aid lint script (`check_reader_aids.py`), 9-Part sidebar grouping for AI history, deep-link bridge from AI/ML history module to the book; surfaced classical-ml curriculum gap (only 3 modules) needing dedicated next-session plan | [`docs/session-state/2026-04-30-night-7-followups.md`](./docs/session-state/2026-04-30-night-7-followups.md) |
 | 2026-04-30 (night-6) | **Ch59–Ch72 shipped — entire 72-chapter AI history book reader-aid rollout (#562) complete.** 14 chapters end-to-end; Tier 3 yield 14/26 (~54%, Codex source-fetch REVIVEs); caps verification + worktree-write discipline tightened mid-session | [`docs/session-state/2026-04-30-part8-9-ch59-72-shipped.md`](./docs/session-state/2026-04-30-part8-9-ch59-72-shipped.md) |
@@ -154,20 +155,42 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 | #179 | Improve Lowest-Quality Labs | Open (blocked on Phase 3 lab audit) |
 | #199 | AI/ML Engineering track migration + modernization | Open (Phase 4b done; Phase 7 cross-link + Phase 8 UK translate remain) |
 | #200 | AI/ML local per-section module numbering (filename rename) | Open (delegated to Codex in worktree) |
-| #394 | AI History book — 72-chapter prose lift | All prose on main + reader aids landed (Ch01–Ch72); deployment-state confirmed via new dashboard panel showing 72/72 published · 72 with aids |
-| #559 | AI history review-coverage backfill | Open — precise scope captured 2026-05-01 session 2 (14 chapters missing prose-review markers; bookkeeping ACs unmet; AC may need re-interpretation under current writer/reviewer split — see handoff) |
+| #394 | AI History book — 72-chapter prose lift | All prose on main + reader aids landed (Ch01–Ch72); review-coverage backfill closed via #559; deployment-state confirmed via dashboard panel (72/72 published · 72 with aids) |
+| #559 | AI history review-coverage backfill | Closed 2026-05-01 (session 3) — audit script relaxed to "any two distinct cross-family markers" for prose lane; Ch04–Ch15 already had two markers each (Codex+Claude or Gemini+Claude); Ch02 + Ch03 backfilled via two new reviews; `review_coverage:` blocks populated across all 72 chapter `status.yaml` files |
 | #677 | ML/RL/DL curriculum expansion | **CLOSED** 2026-05-01 (22 work items shipped) |
 | #542 | Dependabot psutil bump | **MERGED** 2026-05-01 |
 
 ## TODO
 
-**Next session — issue closeout pass (the user-stated next move):**
-- [ ] Audit which open issues are actually done vs still tracking residual work; draft close comments with PR refs; close the done ones. Obvious candidates from STATUS.md row state: **#394 AI History** (all 72 chapters of prose + reader aids on main, confirmed via dashboard panel), **#562 / #563 / #564** (reader-aid sub-issues, marked complete). **#180 / #199 / #177 / #165** stay open with scope-narrow.
-- [ ] **#559 review-coverage closeout — pick option (a/b/c) per the handoff and execute.** Precise scope: 14 chapters missing prose-review markers (Ch02–Ch09 missing `gemini_prose_quality`; Ch03 also missing `codex_prose_quality`; Ch10–Ch15 missing `codex_prose_quality`). Plus 0 chapters have `review_coverage:` block, none have `review_state: prose_dual_cross_family_accepted`, STATUS.md lacks the roll-up matrix. AC may need re-interpretation under the current writer/reviewer split (Gemini was permanently moved off source-bearing review at 2026-04-27). See full breakdown in `docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`.
+**Next session — pick up Block B Gemini queue or #503 candidacy:**
+- [x] Issue closeout audit — DONE 2026-05-01 session 3. Every "likely closeable" candidate from prior handoff was already closed before the audit ran (#199, #177, #165, #560–#564). Remaining open issues all have legitimate residual work; nothing else to close as of this session.
+- [x] **#559 review-coverage closeout — DONE 2026-05-01 session 3 (option c hybrid).** Audit script's prose-lane required-set relaxed from `{gemini, codex}` to "any two distinct cross-family markers" (`scripts/audit_review_coverage.py:_expected_lane_fields` + `_lane_satisfied`). Two genuine single-reviewer chapters got their second cross-family review (Claude source-fidelity on Ch02 PR #479, Codex prose-quality on Ch03 PR #480). `audit_review_coverage.py --write` ran to populate `review_coverage:` blocks across all 72 chapter `status.yaml` files. See **Review-coverage rollup matrix** below.
+- [ ] **#503 closeout candidacy** — last session shipped book-progress + module-distribution dashboard panels (commit `c70b6f2d`). Re-read #503 body + verify whether scope is fully covered before drafting close comment.
+
+**Review-coverage rollup matrix (Ch02–Ch15, scope of #559):**
+
+| Ch | Prose PR | Markers present | Audit verdict |
+|----|----------|-----------------|---------------|
+| Ch02 | #479 | claude + codex | OK (claude marker backfilled 2026-05-01) |
+| Ch03 | #480 | claude + codex | OK (codex marker backfilled 2026-05-01) |
+| Ch04 | #481 | claude + codex | OK (post-#421 standard) |
+| Ch05 | #483 | claude + codex | OK (post-#421 standard) |
+| Ch06 | #496 | claude + codex | OK (post-#421 standard) |
+| Ch07 | #497 | claude + codex | OK (post-#421 standard) |
+| Ch08 | #498 | claude + codex | OK (post-#421 standard) |
+| Ch09 | #499 | claude + codex | OK (post-#421 standard) |
+| Ch10 | #500 | claude + gemini | OK (pre-#421 standard, valid evidence) |
+| Ch11 | #451 | claude + gemini | OK (pre-#421 standard) |
+| Ch12 | #452 | claude + gemini | OK (pre-#421 standard) |
+| Ch13 | #454 | claude + gemini | OK (pre-#421 standard) |
+| Ch14 | #455 | claude + gemini | OK (pre-#421 standard) |
+| Ch15 | #506 | claude + gemini | OK (pre-#421 standard) |
+
+Bonus finding from the run: **Ch32–Ch37 are research-pending** under the strict-gh audit (out of #559 scope, which is Ch01–Ch31). Filed as a follow-up note for next session.
 
 **Block A — mechanical cleanups (small):**
 - [x] Git hygiene sweep — DONE 2026-05-01 session 2 (50→3 worktrees, 87→4 branches, 8 PIDs + 1 detached HEAD + 2 stashes resolved).
-- [ ] Fix `context-monitor.sh` handoff target — point at `docs/session-state/YYYY-MM-DD-<topic>.md` instead of stale `.pipeline/session-handoff.md`. Carryover from prior handoffs.
+- [x] Fix `context-monitor.sh` handoff target — DONE 2026-05-01 session 3 (both physical copies updated; bash -n clean).
 
 **Block B — post-#677 Gemini queue** (kick off when ML revamp closes; ideally before 2026-05-05 Gemini downgrade per `project_budget_and_delegation.md`):
 - [ ] **Gap analysis** on the 19-module ML/RL/DL batch — "given what we shipped, what's missing for a practitioner?" Cross-check Gemini's claimed gaps against the actual `src/content/docs/ai-ml-engineering/` tree before acting (Gemini sometimes flags existing content as missing).
