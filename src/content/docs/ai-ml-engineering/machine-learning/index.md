@@ -42,7 +42,7 @@ This section is organized as a Tier-1 spine of twelve practitioner-essentials, f
 | 2.4 | [Recommender Systems](module-2.4-recommender-systems/) | Available |
 | 2.5 | [Conformal Prediction & Uncertainty Quantification](module-2.5-conformal-prediction-and-uncertainty-quantification/) | Available |
 | 2.6 | [Fairness & Bias Auditing](module-2.6-fairness-and-bias-auditing/) | Available |
-| 2.7 | Causal Inference for ML Practitioners | Coming soon (Phase 3) |
+| 2.7 | [Causal Inference for ML Practitioners](module-2.7-causal-inference-for-ml-practitioners/) | Available |
 
 ## Recommended Order
 
