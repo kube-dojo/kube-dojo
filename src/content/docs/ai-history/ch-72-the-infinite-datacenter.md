@@ -18,8 +18,8 @@ The model became a construction project. By 2025, frontier AI announcements were
 | Masayoshi Son / SoftBank | — | Stargate chair and financial lead in the January 2025 announcement |
 | Brad Smith / Microsoft | — | Author of the January 2025 essay framing AI infrastructure as a physical buildout |
 | Susan Li / Meta CFO | — | Capex guidance and Blue Owl financing voice for Meta's 2025 infrastructure push |
-| Blue Owl Capital | — | Infrastructure-finance partner; 80% owner of the Hyperion JV |
-| Dario Amodei / Anthropic | — | Frontier-model customer making the AWS 5GW agreement narratively concrete |
+| Blue Owl Capital | — | Infrastructure-finance partner in Meta's Hyperion JV |
+| Dario Amodei / Anthropic | — | Frontier-model customer making AWS infrastructure commitments narratively concrete |
 
 </details>
 
@@ -52,13 +52,13 @@ timeline
 
 **Gigawatt (GW)** — One billion watts of power capacity. Frontier AI campuses use this unit because their planned electrical loads resemble large industrial systems, not ordinary office computing.
 
-**PUE (Power Usage Effectiveness)** — Total facility energy divided by IT-equipment energy. Lower is better; Google reported a 2024 fleet PUE of 1.09 versus an industry average of 1.56. PUE measures overhead efficiency, not absolute power growth.
+**PUE (Power Usage Effectiveness)** — Total facility energy divided by IT-equipment energy. Lower is better, but PUE measures overhead efficiency, not absolute power growth.
 
 **WUE / closed-loop cooling** — Water Use Effectiveness measures water consumed per unit of IT energy. Closed-loop cooling recirculates water inside the facility, reducing operational withdrawal, but it does not mean lifecycle water is zero.
 
 **Joint venture (JV) / residual value guarantee** — A jointly owned legal entity and a lease-finance promise about an asset's future value. In AI infrastructure, these structures can move datacenter construction into a mix of tenant commitments, investor ownership, private debt, and long-term guarantees.
 
-**Project Rainier / UltraCluster** — AWS's named compute cluster built around Trainium2 chips for Anthropic, with hundreds of thousands of chips, petabit-scale EFA networking, and dedicated long-term capacity — cloud as named industrial system rather than generic instance pool.
+**Project Rainier / UltraCluster** — AWS's named Trainium2 compute cluster for Anthropic, an example of cloud capacity becoming a dedicated industrial system rather than a generic instance pool.
 
 </details>
 
