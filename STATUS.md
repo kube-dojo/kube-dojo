@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-04-30 (night-7) | **Post-Ch59-72 followups** — reader-aid lint script (`check_reader_aids.py`), 9-Part sidebar grouping for AI history, deep-link bridge from AI/ML history module to the book; surfaced classical-ml curriculum gap (only 3 modules) needing dedicated next-session plan | [`docs/session-state/2026-04-30-night-7-followups.md`](./docs/session-state/2026-04-30-night-7-followups.md) | **Plan locked for next session: git hygiene sweep + context-monitor hook fix + dedicated ML home + 8 Tier 1 module specs (linear/log reg, unsupervised, dim reduction, FE, eval, HP tuning, NB/kNN/SVMs, RL practitioner)** |
+| 2026-05-01 | **ML curriculum expansion (#677) — 19 of 22 modules merged in one session.** Phase 0 foundation + 11 Tier-1 (machine-learning/) + RL 1.1 + DL 1.8/1.9 + 6 Tier-2 ML (2.1-2.6). ML 2.7 in flight (agent `a6c9e17bdc391e662`); RL 2.1 + DL 1.7 cleanup PR pending. Locked the dispatch-and-fallback pattern, pinned-slug discipline, plain-text Next-Module convention, no-skill / no-cold-start preamble. External findings: `implicit.readthedocs.io` hijacked → use `benfred.github.io/implicit/`; MAPIE v1 API breaking change; arxiv:1212.5745 is NOT Bergstra & Bengio. | [`docs/session-state/2026-05-01-ml-expansion-batch.md`](./docs/session-state/2026-05-01-ml-expansion-batch.md) | **Next session: recover/merge ML 2.7 if still in flight, then RL 2.1, then DL 1.7 cleanup PR, then close #677.** |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-04-30 (night-7) | **Post-Ch59-72 followups** — reader-aid lint script (`check_reader_aids.py`), 9-Part sidebar grouping for AI history, deep-link bridge from AI/ML history module to the book; surfaced classical-ml curriculum gap (only 3 modules) needing dedicated next-session plan | [`docs/session-state/2026-04-30-night-7-followups.md`](./docs/session-state/2026-04-30-night-7-followups.md) |
 | 2026-04-30 (night-6) | **Ch59–Ch72 shipped — entire 72-chapter AI history book reader-aid rollout (#562) complete.** 14 chapters end-to-end; Tier 3 yield 14/26 (~54%, Codex source-fetch REVIVEs); caps verification + worktree-write discipline tightened mid-session | [`docs/session-state/2026-04-30-part8-9-ch59-72-shipped.md`](./docs/session-state/2026-04-30-part8-9-ch59-72-shipped.md) |
 | 2026-04-30 (night-5) | Part 8 reader-aids Ch50–Ch58 shipped — 9 PRs merged-as-you-go; all Tier 2 (math/architecture) chapters in the entire book landed; Codex caught 2 math errors + 1 verbatim hallucination | [`docs/session-state/2026-04-30-part8-9-ch50-58-shipped.md`](./docs/session-state/2026-04-30-part8-9-ch50-58-shipped.md) |
 | 2026-04-30 (night-4) | Part 7 reader-aids (Ch41–Ch49) RELEASED + 26-PR merge sweep + lifecycle bookkeeping migration — Parts 1–7 fully on main (49 chapters); arch-sketch form-lock confirmed (LR for sequential, TD for hierarchies) | [`docs/session-state/2026-04-30-part7-reader-aids-shipped.md`](./docs/session-state/2026-04-30-part7-reader-aids-shipped.md) |
@@ -151,25 +152,18 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 
 ## TODO
 
-**Next session — Block A (mechanical cleanups, ~30 min):**
-- [ ] Git hygiene sweep: 50 prunable branches (`git cleanup-merged`), 49 prunable worktrees, 2 stashes >24h, 1 detached HEAD at `.worktrees/codex-interactive`, 5 stale pid files
-- [ ] Fix `context-monitor.sh` handoff target — point at `docs/session-state/YYYY-MM-DD-<topic>.md` instead of stale `.pipeline/session-handoff.md` (or symlink)
+**Next session — Issue #677 closeout (3 items):**
+- [ ] Recover/merge ML 2.7 Causal Inference for ML Practitioners — agent `a6c9e17bdc391e662` was dispatched at session end; if its runtime timed out, re-dispatch Codex directly via `scripts/ab ask-codex - < /tmp/ml-2.7-codex-prompt.md` and verify the file at the worktree path before assuming failure. Brief + sources are at `/tmp/ml-2.7-*`.
+- [ ] Dispatch RL 2.1 Offline RL & Imitation Learning — last module of the #677 plan. Brief format mirrors RL 1.1; cross-link to advanced-genai/1.4 RLHF.
+- [ ] DL 1.7 cleanup PR — pre-existing inconsistency (file `module-1.7-transformers-from-scratch.md`, frontmatter title "Backpropagation and Autograd from Scratch", index displays "Transformers from Scratch"). Recommend: rename file + fix index display to match existing content. Several Tier-2 modules already worked around this with plain text.
+- [ ] Close #677 once 2.7 + RL 2.1 ship.
 
-**Next session — Block B (proper ML curriculum home):**
-- [ ] Decide ML home structure: expand `classical-ml/` + add `reinforcement-learning/`, OR restructure into a unified `machine-learning/` with sub-categories
-- [ ] Draft Tier 1 module specs (titles + 2-line scope each) for the 8 foundational gaps:
-  - Linear/Logistic regression + regularization (L1/L2/Elastic Net, GLMs)
-  - Unsupervised learning (k-means, DBSCAN, hierarchical, GMM)
-  - Dimensionality reduction (PCA, t-SNE, UMAP)
-  - Feature engineering systematic (encoding, scaling, imputation, selection)
-  - Model evaluation deep dive (metrics, CV, calibration, leakage)
-  - Hyperparameter tuning depth (Optuna/Hyperopt/Ray Tune)
-  - Naive Bayes / k-NN / SVMs as practitioner content
-  - Reinforcement learning practitioner module (PPO/DQN/Stable-Baselines3/RLlib)
-- [ ] Decide whether `bridges/` directory is alive or should be removed (currently empty, only `index.md`)
+**Block A — pre-existing mechanical cleanups (~30 min):**
+- [ ] Git hygiene sweep: prunable branches/worktrees (count grew this session due to 19 PRs), 2+ stashes >24h, 1 detached HEAD at `.worktrees/codex-interactive`, stale pid files
+- [ ] Fix `context-monitor.sh` handoff target — point at `docs/session-state/YYYY-MM-DD-<topic>.md` instead of stale `.pipeline/session-handoff.md`
 
-**Next session — Block C (after Blocks A + B):**
-- [ ] #388 rubric-critical rewrite work — 485 modules at <2.0 score. Note: rubric is regex-based per memory `reference_rubric_heuristic_structural.md`; read content before trusting score.
+**Block C — #388 rubric-critical rewrite work** (after #677 closes):
+- [ ] #388 rubric-critical rewrite — 485 modules at <2.0 score. Note: rubric is regex-based per memory `reference_rubric_heuristic_structural.md`; read content before trusting score. The 21 modules under #677 are out of scope per the cross-link comment on #388.
 
 **Background / lower priority:**
 - [ ] AI history #559: cross-family review backfill on Ch01-31 (28 chapters, 30 marked backfill_pending per offline audit)
