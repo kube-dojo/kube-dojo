@@ -18,7 +18,7 @@ For command examples, this module uses `k` as a short alias for `kubectl`. Creat
 
 ## Learning Outcomes
 
-After completing this module, you will be able to:
+After completing this module, you will be able to explain Tanzu as a portfolio decision, trace its cluster lifecycle machinery, and defend when VMware integration is worth the operational and commercial tradeoffs:
 
 1. **Compare** TKG, vSphere with Tanzu, Tanzu Mission Control, and Tanzu Application Platform without treating Tanzu as one product.
 2. **Design** a vSphere-integrated Kubernetes platform that separates Supervisor, vSphere Namespaces, VM Service, and workload clusters.
@@ -279,7 +279,7 @@ Which approach would you choose for a VMware-centered enterprise with hundreds o
 
 ### Practical Example: TAP-Like Flow
 
-A TAP-style path might look like this:
+A TAP-style path usually looks linear to the developer even though several controllers are working behind the scenes. The platform team should make each handoff observable, because opaque build, scan, config, or delivery failures quickly undermine trust in the paved path:
 
 ```text
 Developer pushes code
@@ -400,7 +400,7 @@ It should include an exit plan even if the recommendation is to stay. That does 
 
 ## Decision Framework
 
-Use this flow before choosing Tanzu.
+Use this flow before choosing Tanzu, and treat every branch as a prompt for evidence rather than a shortcut to a favorite product. A credible recommendation should show existing infrastructure commitments, staff skills, support expectations, and exit costs before it names the winning platform.
 
 ```text
 Start
@@ -430,7 +430,7 @@ Do you already operate a large VMware vSphere estate?
               +-- fleet governance --> Compare TMC with Rancher and GitOps + policy assembly
 ```
 
-Decision matrix:
+The decision matrix below turns that flow into common operating situations. Use it to test whether Tanzu is solving the real constraint or whether another platform model would give the same Kubernetes outcome with less dependency, cost, or integration work:
 
 | Situation | Tanzu Fit | Better First Alternative |
 |---|---|---|
@@ -534,21 +534,21 @@ You can run the lab on a workstation with Docker, kind, `clusterctl`, and `kubec
 
 ### Setup
 
-Install tools:
+Install the local tools first, then keep the versions visible in your notes so later failures can be separated from Tanzu concepts. This lab uses commodity binaries to expose the lifecycle pattern, not to simulate VMware entitlement, vCenter integration, NSX behavior, or Broadcom support.
 
 ```bash
 brew install kind kubectl clusterctl argocd
 alias k=kubectl
 ```
 
-Create a local management cluster:
+Create a local management cluster with kind. In this lab, the kind cluster stands in for the management plane that would normally run lifecycle controllers, store Cluster API objects, and reconcile workload cluster intent into infrastructure actions.
 
 ```bash
 kind create cluster --name capi-mgmt --image kindest/node:v1.35.0
 k cluster-info --context kind-capi-mgmt
 ```
 
-Initialize Cluster API with the Docker provider:
+Initialize Cluster API with the Docker provider after the management cluster is reachable. The provider is deliberately lightweight, but it gives you the same controller vocabulary you need when reading TKG failures on vSphere, AWS, Azure, or another supported infrastructure target.
 
 ```bash
 clusterctl init --infrastructure docker
@@ -560,7 +560,7 @@ The management cluster now plays the role that a TKG management cluster would pl
 
 ### Task 1: Generate a Workload Cluster
 
-Generate a small workload cluster manifest:
+Generate a small workload cluster manifest from the management context. This is the moment where the operator moves from imperative VM creation to declarative cluster intent, and that shift is the central idea behind TKG-style lifecycle management.
 
 ```bash
 clusterctl generate cluster tkg-style \
@@ -571,13 +571,13 @@ clusterctl generate cluster tkg-style \
   > tkg-style.yaml
 ```
 
-Inspect before applying:
+Inspect the generated manifest before applying it, because real platform teams should understand the lifecycle objects their tooling emits. A CLI can simplify authoring, but the YAML still defines the controller graph you will debug during upgrades and failed provisioning.
 
 ```bash
 grep -E 'kind: Cluster|kind: MachineDeployment|version:' tkg-style.yaml
 ```
 
-Apply the manifest:
+Apply the manifest only after you can identify the Cluster and MachineDeployment resources it will create. The workload cluster will not appear instantly; first the management cluster records desired state, then controllers begin reconciling machines, bootstrap data, and Kubernetes control-plane readiness.
 
 ```bash
 k apply -f tkg-style.yaml
@@ -595,21 +595,21 @@ You should see Cluster API objects appear before the workload cluster is fully u
 
 ### Task 2: Retrieve the Workload Cluster Kubeconfig
 
-Wait for the control plane:
+Wait for the control plane from the management cluster and watch the Machine objects instead of guessing whether the process is stuck. In a real TKG environment, this same habit helps you distinguish slow infrastructure provisioning from failed bootstrap or node-registration problems.
 
 ```bash
 k get kubeadmcontrolplanes
 k get machines
 ```
 
-Retrieve the kubeconfig:
+Retrieve the workload cluster kubeconfig once the control plane is far enough along to answer API requests. This separate kubeconfig is an important boundary: management objects live in one cluster, while application workloads and add-ons run in another.
 
 ```bash
 clusterctl get kubeconfig tkg-style > tkg-style.kubeconfig
 KUBECONFIG=tkg-style.kubeconfig k get nodes
 ```
 
-If nodes are not Ready yet, continue observing:
+If nodes are not Ready yet, continue observing instead of rebuilding the lab immediately. Cluster creation has several asynchronous steps, and the most useful learning comes from correlating management-cluster Machines with workload-cluster Nodes as they converge.
 
 ```bash
 watch -n 5 'KUBECONFIG=tkg-style.kubeconfig kubectl get nodes'
@@ -624,21 +624,21 @@ The workload cluster is a separate Kubernetes API server. The management cluster
 
 ### Task 3: Install Calico and Contour
 
-Install Calico into the workload cluster:
+Install Calico into the workload cluster to make the networking dependency explicit. Commercial distributions usually package and test a supported CNI path, but operators still need to understand that nodes cannot become useful application capacity until pod networking is healthy.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/calico.yaml
 KUBECONFIG=tkg-style.kubeconfig k -n kube-system rollout status daemonset/calico-node
 ```
 
-Install Contour:
+Install Contour after the CNI is progressing, because ingress depends on a working cluster network and service routing. This step separates cluster lifecycle from platform add-ons: Cluster API created the cluster, while the platform team still curates the runtime stack.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k apply -f https://projectcontour.io/quickstart/contour.yaml
 KUBECONFIG=tkg-style.kubeconfig k -n projectcontour get pods
 ```
 
-Deploy a simple app:
+Deploy a simple app only after the core add-ons are visible. The app is intentionally plain, because the goal is to prove the workload cluster behaves like normal Kubernetes after the management plane has finished creating it.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k create deployment web --image=nginx:1.29
@@ -655,7 +655,7 @@ TKG distributions commonly package supported networking and ingress choices. Her
 
 ### Task 4: Add Argo CD as a GitOps Layer
 
-Install Argo CD into the workload cluster:
+Install Argo CD into the workload cluster as a representative GitOps layer. TKG-style architectures often pair lifecycle management with GitOps, but those responsibilities should remain distinct so cluster replacement, add-on drift, and application deployment can be reasoned about independently.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k create namespace argocd
@@ -663,7 +663,7 @@ KUBECONFIG=tkg-style.kubeconfig k apply -n argocd -f https://raw.githubuserconte
 KUBECONFIG=tkg-style.kubeconfig k -n argocd rollout status deploy/argocd-server
 ```
 
-Create a sample namespace managed by GitOps later:
+Create a sample namespace that GitOps could manage later, then use it as a boundary marker in your notes. Namespaces are small objects, but they help demonstrate which cluster owns application desired state after the lifecycle system has delivered the cluster.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k create namespace apps
@@ -679,14 +679,14 @@ GitOps is optional in TKG-style architectures, but it is common in real platform
 
 ### Task 5: Scale the Workload Cluster
 
-Return to the management cluster context:
+Return to the management cluster context before scaling, because node pool changes belong to the lifecycle layer rather than to ad hoc commands inside the workload cluster. This boundary is easy to blur when both kubeconfigs are open in the same terminal.
 
 ```bash
 k config use-context kind-capi-mgmt
 k get machinedeployments
 ```
 
-Scale the worker MachineDeployment:
+Scale the worker MachineDeployment from the management plane and watch the declared replica count change before the new node appears. In production, this same pattern underlies autoscaling reviews, capacity changes, and replacement after a failed VM or host event.
 
 ```bash
 k scale machinedeployment tkg-style-md-0 --replicas=2
@@ -694,7 +694,7 @@ k get machinedeployments
 k get machines
 ```
 
-Watch the workload cluster:
+Watch the workload cluster after the management-side change so you can connect Machine reconciliation to Node registration. The two views should eventually agree, and disagreement between them is a useful diagnostic signal rather than just noise.
 
 ```bash
 KUBECONFIG=tkg-style.kubeconfig k get nodes -w
@@ -709,7 +709,7 @@ Scaling happens through the management cluster, not by manually joining a node f
 
 ### Task 6: Trigger a Kubernetes Version Upgrade Intent
 
-Inspect the current MachineDeployment version:
+Inspect the current MachineDeployment version before changing it, because upgrades are controlled mutations of lifecycle intent. Real TKG releases also depend on available node images, supported Kubernetes versions, provider compatibility, and policy gates that this local lab cannot fully reproduce.
 
 ```bash
 k get machinedeployment tkg-style-md-0 -o yaml | grep 'version:'
@@ -723,7 +723,7 @@ k patch machinedeployment tkg-style-md-0 \
   -p '{"spec":{"template":{"spec":{"version":"v1.35.1"}}}}'
 ```
 
-Observe the lifecycle:
+Observe the lifecycle objects after expressing upgrade intent and avoid treating the patch command as the whole upgrade. MachineDeployments, MachineSets, and Machines reveal whether the controllers are creating replacements, blocked by templates, or waiting for infrastructure capacity.
 
 ```bash
 k get machinedeployments
@@ -739,7 +739,7 @@ A Kubernetes version change on a MachineDeployment expresses upgrade intent. Con
 
 </details>
 
-Final success criteria:
+Final success criteria should be evaluated from both the management and workload cluster viewpoints. You are done when you can explain the lifecycle boundary, not merely when the commands have completed without errors:
 
 - [ ] You created a kind management cluster.
 - [ ] You initialized Cluster API with the Docker infrastructure provider.
@@ -753,7 +753,7 @@ Final success criteria:
 
 ### Cleanup
 
-Delete the workload cluster:
+Delete the workload cluster from the management cluster first. This mirrors the lifecycle ownership model: the management plane created the workload cluster resources, so it should also coordinate their removal and clean up related Machines.
 
 ```bash
 k config use-context kind-capi-mgmt
@@ -761,7 +761,7 @@ k delete cluster tkg-style
 k get machines
 ```
 
-Delete the management cluster:
+Delete the management cluster only after the workload cluster has been removed or you have intentionally abandoned the lab environment. Removing the management plane first leaves you without the controllers that understand the declared lifecycle objects.
 
 ```bash
 kind delete cluster --name capi-mgmt
@@ -769,9 +769,9 @@ kind delete cluster --name capi-mgmt
 
 ### Exercise Debrief
 
-The lab should leave you with a concrete mental model. TKG is easier to reason about when you see it as a supported Cluster API distribution with packaged infrastructure integration and add-ons. vSphere with Tanzu adds a deeper vSphere integration layer around the same broad idea of declarative workload cluster lifecycle. TMC adds fleet governance.
+The lab should leave you with a concrete mental model. TKG is easier to reason about when you see it as a supported Cluster API distribution with packaged infrastructure integration and add-ons. vSphere with Tanzu adds a deeper vSphere integration layer around the same broad idea of declarative workload cluster lifecycle, while TMC adds fleet governance for clusters that need shared inventory, policy, access, and backup visibility across teams or locations.
 
-TAP adds developer supply chains. The open-source lab is not a substitute for commercial Tanzu validation. It is a way to learn the moving parts before you evaluate the licensed platform.
+TAP adds developer supply chains above that cluster layer, so it belongs in a different part of the architecture conversation. The open-source lab is not a substitute for commercial Tanzu validation, because it does not exercise vCenter, Supervisor behavior, VM classes, NSX, Avi, storage policies, entitlement, or support boundaries. It is a way to learn the moving parts before you evaluate the licensed platform with a realistic operating model.
 
 ---
 
