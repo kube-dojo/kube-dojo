@@ -153,7 +153,7 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 ## TODO
 
 **Next session — Issue #677 closeout (3 items):**
-- [ ] Recover/merge ML 2.7 Causal Inference for ML Practitioners — agent `a6c9e17bdc391e662` was dispatched at session end; if its runtime timed out, re-dispatch Codex directly via `scripts/ab ask-codex - < /tmp/ml-2.7-codex-prompt.md` and verify the file at the worktree path before assuming failure. Brief + sources are at `/tmp/ml-2.7-*`.
+- [ ] **Cross-family review + merge ML 2.7** — PR #708 is OPEN (Claude-direct, 9,809 words). Dispatch Codex review via `scripts/ab ask-codex --task-id ml-2.7-review-pr708 --new-session --review --from claude` with a body that summarizes the canonical pitfalls + the brief's three corrected source bugs.
 - [ ] Dispatch RL 2.1 Offline RL & Imitation Learning — last module of the #677 plan. Brief format mirrors RL 1.1; cross-link to advanced-genai/1.4 RLHF.
 - [ ] DL 1.7 cleanup PR — pre-existing inconsistency (file `module-1.7-transformers-from-scratch.md`, frontmatter title "Backpropagation and Autograd from Scratch", index displays "Transformers from Scratch"). Recommend: rename file + fix index display to match existing content. Several Tier-2 modules already worked around this with plain text.
 - [ ] Close #677 once 2.7 + RL 2.1 ship.

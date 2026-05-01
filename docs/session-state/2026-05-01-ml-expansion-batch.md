@@ -30,7 +30,7 @@
 
 ## What's still in flight
 
-- **ML 2.7 Causal Inference for ML Practitioners** — agent dispatched ~ 5 minutes before this handoff was written (agent ID `a6c9e17bdc391e662`, worktree `agent-a6c9e17bdc391e662`). Brief saved at `/tmp/ml-2.7-brief.md`, sources at `/tmp/ml-2.7-sources.txt`, prompt at `/tmp/ml-2.7-codex-prompt.md`. If the agent runtime times out (recurring pattern), use the same recovery path as 2.6: dispatch Codex directly via `scripts/ab ask-codex --task-id ml-2.7-orchestrator-direct --new-session --from claude - < /tmp/ml-2.7-codex-prompt.md` and verify the file at the worktree path before assuming failure.
+- **ML 2.7 Causal Inference for ML Practitioners** — **PR #708 opened post-handoff**. Claude-direct write per the documented Codex-fallback path; 9,809 words (denser than peers 2.5/2.6). The agent caught **two arxiv-ID hallucinations in the orchestrator's brief** during source curation (`1610.04018` was listed as "Athey & Wager causal forests" but is actually a colloidal physics paper — correct is `1510.04342`; `1706.03461` was reused for two different papers). Memory entry `feedback_verify_arxiv_ids_in_briefs.md` saved. **PR awaits cross-family Codex review + merge** in the next session — same flow as DL 1.9 and ML 2.1.
 
 ## What's NOT yet done under #677
 
