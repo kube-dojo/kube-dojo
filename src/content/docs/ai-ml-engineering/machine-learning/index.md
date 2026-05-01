@@ -37,7 +37,7 @@ This section is organized as a Tier-1 spine of twelve practitioner-essentials, f
 | # | Module | Status |
 |---|---|---|
 | 2.1 | [Class Imbalance & Cost-Sensitive Learning](module-2.1-class-imbalance-and-cost-sensitive-learning/) | Available |
-| 2.2 | ML Interpretability: SHAP, LIME, PDP/ICE + Failure Slicing | Coming soon (Phase 3) |
+| 2.2 | [ML Interpretability + Failure Slicing](module-2.2-interpretability-and-failure-slicing/) | Available |
 | 2.3 | Probabilistic & Bayesian ML with PyMC | Coming soon (Phase 3) |
 | 2.4 | Recommender Systems | Coming soon (Phase 3) |
 | 2.5 | Conformal Prediction & Uncertainty Quantification | Coming soon (Phase 3) |
