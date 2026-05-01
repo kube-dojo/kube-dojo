@@ -59,17 +59,7 @@ It wraps a model or custom callable and lets BentoML run it outside the API serv
 
 An embedding model may need a GPU, more memory, and batching. A classifier may need CPU but scale independently. With runners, those stages can have separate queues, processes, and in Yatai deployments, separate Kubernetes Deployments. The third abstraction is the IO descriptor.
 
-`bentoml.io.JSON` describes JSON request and response payloads.
-
-It is the right fit for structured metadata, text lists, scores, labels, or mixed fields.
-
-`bentoml.io.Image` describes image inputs and handles image decoding at the API boundary.
-
-It is useful when the client sends images and the model expects PIL images or arrays.
-
-`bentoml.io.NumpyNdarray` describes array payloads.
-
-It is useful for tensors, embeddings, numerical feature arrays, and protocol-compatible clients that already speak array shapes. The descriptor is both documentation and runtime behavior. It tells BentoML how to parse the request, what validation path to use, and how to expose the endpoint.
+`bentoml.io.JSON` describes JSON request and response payloads, which makes it the right fit for structured metadata, text lists, scores, labels, or mixed fields. `bentoml.io.Image` describes image inputs and handles image decoding at the API boundary when clients send images and the model expects PIL images or arrays. `bentoml.io.NumpyNdarray` describes array payloads for tensors, embeddings, numerical feature arrays, and protocol-compatible clients that already speak array shapes. The descriptor is both documentation and runtime behavior because it tells BentoML how to parse the request, what validation path to use, and how to expose the endpoint.
 
 The fourth abstraction is the Bento. A Bento is the packaged artifact produced from service code, model references, dependency specifications, and runtime configuration. You can run it locally, containerize it, push it, or deploy it with a control plane.
 
@@ -1095,7 +1085,7 @@ alias k=kubectl
 
 ### Task 1: Install BentoML and Save Two Models
 
-Create a clean project directory and install dependencies.
+Start by creating a clean project directory and installing only the serving dependencies needed for the exercise. Keeping this environment small makes later Bento inspection easier because stray training tools and notebooks are less likely to leak into the build context.
 
 ```bash
 mkdir -p bentoml-two-runner-demo
@@ -1103,7 +1093,7 @@ cd bentoml-two-runner-demo
 .venv/bin/pip install bentoml scikit-learn sentence-transformers numpy
 ```
 
-Create `train_and_save.py`.
+Next, create `train_and_save.py` so the exercise has two model artifacts with batchable signatures. The script intentionally trains a tiny classifier from embeddings because the goal is to practice the serving workflow, not to optimize model quality.
 
 ```python
 from __future__ import annotations
@@ -1157,7 +1147,7 @@ bentoml.sklearn.save_model(
 )
 ```
 
-Run it and verify the model store.
+Run the training script with the project virtual environment and then inspect the BentoML model store. This check confirms that the Service code later can retrieve both artifacts by tag instead of depending on local notebook state.
 
 ```bash
 .venv/bin/python train_and_save.py
@@ -1172,7 +1162,7 @@ You should see `demo_embedder` and `demo_classifier` in `bentoml models list`. I
 
 ### Task 2: Write a Two-Runner Service and Test Locally
 
-Create `service.py`.
+Create `service.py` with one API function and two runners. The API handler should stay thin, while the embedding and classifier runners own the model work that you will later tune through batching and Kubernetes resources.
 
 ```python
 from __future__ import annotations
@@ -1214,13 +1204,13 @@ async def classify(payload: dict) -> dict:
     }
 ```
 
-Serve locally and test the API.
+Serve the Service locally before building a Bento so Python errors, missing model tags, and response-shape mistakes appear in the shortest feedback loop. A local request should prove that both runners load and that the response contains one prediction per input text.
 
 ```bash
 bentoml serve service:svc --reload
 ```
 
-In another terminal:
+In another terminal, send a small request against the local endpoint while the development server is still running. This separates server logs from client output, which makes it easier to notice whether a failure is request parsing, runner loading, or response formatting.
 
 ```bash
 curl -s http://127.0.0.1:3000/classify \
@@ -1236,7 +1226,7 @@ You should receive two labels and two scores. If the endpoint is missing, confir
 
 ### Task 3: Build the Bento and Inspect Container Layers
 
-Create `bentofile.yaml`.
+Create `bentofile.yaml` to describe the package boundary explicitly. The file names the Service entry point, includes the runtime configuration, excludes local-only material, and pins dependency intent so the container build is reviewable.
 
 ```yaml
 service: "service:svc"
@@ -1260,7 +1250,7 @@ docker:
     - "libgomp1"
 ```
 
-Add a first batching configuration.
+Add a first batching configuration before the initial build so the Bento records the runner behavior you want to evaluate. Both runners are enabled here to make the mechanics visible, even though a real service might batch one method and leave another unbatched.
 
 ```yaml
 # bentoml_configuration.yml
@@ -1277,7 +1267,7 @@ runners:
       max_latency_ms: 10
 ```
 
-Build and inspect.
+Build the Bento and inspect its stored files before containerizing it. This is the moment to catch accidental notebooks, raw data, credentials, or missing configuration while the artifact is still easy to rebuild.
 
 ```bash
 bentoml build
@@ -1287,7 +1277,7 @@ find . -maxdepth 2 -type f | sort
 cd -
 ```
 
-Containerize and inspect the generated build output.
+Containerize the Bento and inspect the generated build output as an operational artifact. The important lesson is the layer order and packaged content, because those details affect image size, rebuild speed, and release debugging.
 
 ```bash
 bentoml containerize demo_text_intelligence:latest \
@@ -1309,7 +1299,7 @@ For kind, create or reuse a local registry that the cluster can reach. The exact
 docker push 127.0.0.1:5001/demo-text-intelligence:bento-v1
 ```
 
-Create `k8s-plain.yaml`.
+Create `k8s-plain.yaml` with a Namespace, Deployment, and Service so the first cluster deployment uses ordinary Kubernetes objects. This keeps the request path visible before introducing a Yatai control plane or runner-split deployment.
 
 ```yaml
 apiVersion: v1
@@ -1366,7 +1356,7 @@ spec:
       targetPort: http
 ```
 
-Deploy and verify.
+Deploy the manifest and verify the rollout before testing the API through the Service. If the response fails, use the rollout status and pod logs to distinguish image pull problems from BentoML startup or model-loading errors.
 
 ```bash
 k apply -f k8s-plain.yaml
@@ -1385,7 +1375,7 @@ The Deployment should reach ready state and the port-forwarded request should re
 
 ### Task 5: Compare Batching Windows Under Load
 
-Run a baseline with batching disabled. Edit `bentoml_configuration.yml`, rebuild, retag, push, and redeploy.
+Run a baseline with batching disabled before comparing any latency windows. Edit `bentoml_configuration.yml`, rebuild, retag, push, and redeploy so every measurement comes from a fresh image whose batching behavior is known.
 
 ```yaml
 runners:
@@ -1397,7 +1387,7 @@ runners:
       enabled: false
 ```
 
-Use `hey` or `wrk` to apply concurrent load.
+Use `hey` or `wrk` to apply concurrent load against the port-forwarded Service. Keep the payload, concurrency, and duration stable across runs, because changing the load shape at the same time as the batching window makes the results hard to interpret.
 
 ```bash
 cat > payload.json <<'EOF'
