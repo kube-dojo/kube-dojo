@@ -52,7 +52,7 @@ Full agent recipe: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 ## Build & Serve
 
 ```bash
-npm run build              # builds to dist/, ~56s for 1,297 pages
+npm run build              # builds to dist/, ~38s for 1,999 pages
 npx astro dev              # dev server with hot reload
 npx astro preview          # preview built site
 ```

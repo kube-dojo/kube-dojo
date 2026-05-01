@@ -20,12 +20,13 @@
 
 | Date | Thread | File | Status |
 |------|--------|------|--------|
-| 2026-05-01 (session 4) | **Issue tracker triage: 40 → 14 open (26 closures) + greenfield-before-#388 sequencing locked + KServe dispatch brief staged.** Closed 16 #388-subsumed (#180 chain + 8 slices + showcase + queue + pipeline rebuilds + Phase C/D plan), 4 completed (#248, #378, #384, #421), 5 stale (#142, #156, #157, #183, #246), 1 substantially shipped (#503). Pushed back on user's initial framing for #378/#384 (closed both as completed/scope-decay) and #379/#385 (kept open — #379's 4 modules genuinely missing; #385 scope-decayed to 4 modules but 3/7 already shipped). Confirmed routing: no Gemini, Codex drafts greenfield + #388 rewrites, Claude reviews source-fidelity. Confirmed within #388: REWRITE-tier (~165 modules at <18 wpp) ships before REVIEW-tier. KServe brief at `docs/session-state/2026-05-01-4-kserve-dispatch-brief.md` ready to fire next session. | [`docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md`](./docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md) | **Next session: fire KServe dispatch (FG sync, ~5-10 min) → source-fidelity review → toolkit index update → npm build → PR. Then 3 more #379 modules (Seldon / BentoML / bare-metal MLOps recipe), then #385.** |
+| 2026-05-01 (session 5) | **#379 Phase A.2 (KServe / Seldon / BentoML / bare-metal MLOps) + #385 Phase E.2 (Gardener / multi-cluster on-prem / OpenStack on K8s / VMware Tanzu) — all 8 modules shipped as 8 PRs, both issues closed.** 4 density fix-pass PRs (#720-723) followed after user flagged choppy prose; fix-pass improved mean_wpp but did not eliminate `max_consecutive_short_run`. Re-audit against Codex's gates (median_wpp >= 28, max_run < 3) shows only 2 of 8 (KServe, Seldon) actually pass. Codex consulted twice on #388 architecture (bridge #3384 + #3386): verifier-first, pilot-then-volume, density-first brief. Canonical brief addendum at `scripts/prompts/module-rewriter-388.md`. Codex 2x parallel confirmed. | [`docs/session-state/2026-05-01-5-greenfield-shipped-388-prep.md`](./docs/session-state/2026-05-01-5-greenfield-shipped-388-prep.md) | **Next session: build `scripts/quality/verify_module.py` (#388 Day 1) → re-fix 6 failing modules → run verifier across all 235 `revision_pending` → pilot 8-12 modules → volume run.** |
 
 ## Predecessor chain (most-recent first)
 
 | Date | Thread | Where to find it |
 |------|--------|------------------|
+| 2026-05-01 (session 4) | **Issue tracker triage: 40 → 14 open (26 closures) + greenfield-before-#388 sequencing locked + KServe dispatch brief staged.** Closed 16 #388-subsumed, 4 completed, 5 stale, 1 substantially shipped. Locked routing: no Gemini, Codex drafts, Claude reviews. REWRITE-tier first within #388. | [`docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md`](./docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md) |
 | 2026-05-01 (session 3) | **#559 review-coverage closeout (option c hybrid) + #394 epic closure + `context-monitor.sh` Block A fix + issue closeout audit.** Audit-script `_expected_lane_fields` + `_lane_satisfied` relaxed to "any two distinct cross-family markers" for prose lane. `audit_review_coverage.py --write` populated `review_coverage:` blocks across 72 chapter `status.yaml` files. Backfill reviews on Ch02 (PR #479) + Ch03 (PR #480). | [`docs/session-state/2026-05-01-3-559-evidence-prep.md`](./docs/session-state/2026-05-01-3-559-evidence-prep.md) |
 | 2026-05-01 (session 2) | **#677 closeout (3 PRs merged) + Dependabot psutil + deep git hygiene + dashboard panels finished.** ML 2.7 (#708, Codex APPROVE 36/40) + RL 2.1 (#709, 847 lines, 11 arxiv IDs verified) + DL 1.7 cleanup (#710, filename/slug/forward-link aligned). Dependabot psutil >=7.2.2 merged (#542). Worktrees 50→3, branches 87→4, 8 dead PIDs + 1 detached HEAD + 2 stashes resolved. Stash@{1} popped + finished: dashboard panels (Book Progress + Module Distribution). | [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) |
 | 2026-05-01 | **ML curriculum expansion (#677) — 19 of 22 modules merged in one session.** Phase 0 foundation + 11 Tier-1 (machine-learning/) + RL 1.1 + DL 1.8/1.9 + 6 Tier-2 ML (2.1-2.6). ML 2.7 in flight at session-end; RL 2.1 + DL 1.7 cleanup pending. Locked the dispatch-and-fallback pattern, pinned-slug discipline, plain-text Next-Module convention, no-skill / no-cold-start preamble. | [`docs/session-state/2026-05-01-ml-expansion-batch.md`](./docs/session-state/2026-05-01-ml-expansion-batch.md) |
@@ -62,6 +63,11 @@
 
 These are state items that span individual sessions. Prune entries as threads close.
 
+- **8 greenfield modules merged 2026-05-01 session 5 (#379 + #385 closed)** but only 2 of 8 (KServe, Seldon) pass Codex's full density bar (median_wpp >= 28, max_consecutive_short_run < 3). Four density fix-pass PRs (#720-723) improved mean_wpp but did not eliminate clustered runs of short paragraphs. Six modules (5.6 Gardener, 5.7 multi-cluster, 5.8 OpenStack, 5.9 Tanzu, 9.10 BentoML, 9.11 bare-metal MLOps) need re-fix next session using the new brief.
+- **`scripts/prompts/module-rewriter-388.md` is the canonical brief addendum for all #388 dispatches** (committed 2026-05-01 session 5). Layered on top of `module-writer.md`. Codex's 5 prose-discipline fragments verbatim plus 5,000-7,000 word target replacing 600+ lines. Density gates (mean_wpp >= 30, median_wpp >= 28, short_rate <= 20%, max_run <= 2) are hard gates; verifier enforces them.
+- **Codex 2x parallel dispatch capacity confirmed** (2026-05-01 session 5 density fix-pass batch ran 2 lanes concurrently with zero failures). Stale memory `feedback_codex_dispatch_sequential.md` is superseded. New operating point: 2 lanes parallel is safe for codex dispatches.
+- **The user's quality bar is Codex's tighter prescription**, not the project's older 18-wpp threshold. The verifier to be built next session (`scripts/quality/verify_module.py`) must enforce: mean_wpp >= 30, median_wpp >= 28, short_rate <= 20%, max_consecutive_short_run <= 2, body_words >= 5000.
+- **Build is ~38s for 1,999-2,011 pages.** CLAUDE.md updated 2026-05-01 from stale 1,297 value.
 - **#394 AI History — all 72 chapters of prose are on main.** Codex's autonomous Part 9 chain shipped through Ch72 (verified by file existence and word counts ≥4k each).
 - **All 72 AI history chapters carry full reader aids on main (#562 complete, 2026-04-30 night-6).** Every chapter has Tier 1 (TL;DR + cast + timeline + glossary + Why-still-matters); 15 chapters carry selective Tier 2 (math sidebars on Ch01/04/15/24/25/27/29/44/50/55/58 + architecture sketches on Ch41/42/49/50/52/58); 51+ Tier 3 elements landed across the book under cross-family Codex review. Tier 3 yield averaged ~22% on Parts 5–8 and ~54% on Parts 8–9 (Ch59–Ch72) — the higher rate is driven by Codex REVIVEs from concept-only proposals.
 - **AI history sidebar grouped into 9 Parts** (commit `5ba5871e`, 2026-04-30 night-7). URLs unchanged — only render hierarchy. Implementation: explicit `items[]` in `astro.config.mjs` instead of flat `autogenerate`. Future chapter additions/renames now require a sidebar update (autogenerate convenience traded for grouping).
@@ -144,7 +150,7 @@ Per-track breakdowns (Cert / Cloud / On-Prem / Platform / AI/ML / AI / UK transl
 
 ## Open GitHub Issues
 
-Issue tracker shrunk 40 → 14 open via batch triage 2026-05-01 (session 4). 26 closures: 16 subsumed by #388 (#180 + slices #331-#338, #181, #348, #375, #376, #381-#383); 4 completed (#248, #378, #384, #421); 5 stale (#142, #156, #157, #183, #246); 1 substantially shipped (#503). See [`docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md`](./docs/session-state/2026-05-01-4-issue-triage-greenfield-prep.md) for the full triage rationale.
+Issue tracker shrunk 40 → 14 open via batch triage 2026-05-01 (session 4); then 14 → 12 open via #379 + #385 closures (session 5). 28 total closures since session 4.
 
 | # | Issue | Status |
 |---|-------|--------|
@@ -156,37 +162,32 @@ Issue tracker shrunk 40 → 14 open via batch triage 2026-05-01 (session 4). 26 
 | #342 | pipeline-v4 rename `needs_human` → `residuals_filed` | Open — 5-min mechanical task |
 | #344 | Citation-residuals: extend resolver | Open — in flight per worktree `codex/issue-344` |
 | #373 | Liveness probes for LLM-dispatch subprocesses | Open — stalled but coherent infra-reliability scope |
-| **#379** | **Phase A.2 greenfield MLOps (KServe / Seldon / BentoML / bare-metal MLOps)** | **TIER 1 priority — KServe drafting next session** |
-| **#385** | **Phase E.2 on-prem expansion** (scope-tightened to Tanzu / OpenStack / Gardener / Karmada-Liqo / kube-vip) | **TIER 1 priority — after #379** |
 | #386 | Phase F: Lab quality audit | Open — labs ≠ modules; distinct from #388 |
-| **#388** | **Site-wide module quality rewrite** | Active — Phase 2a triage runs anytime; **defer Phase 2b heavy rewrite until #379 + #385 land**; within Phase 2b run **REWRITE-tier first** (~165 modules at <18 wpp) per user 2026-05-01 |
+| **#388** | **Site-wide module quality rewrite** | **Active — Day 1: build verifier + re-fix 6 modules from session 5; then pilot 8-12 + volume run. Brief addendum at `scripts/prompts/module-rewriter-388.md`.** |
 | #391 | Public-facing status page | Open — borderline-stale; coherent product idea |
 | #393 | Post-#388 ML/AI history depth pass | Open — explicitly post-#388 |
 
 ## TODO
 
-**Next session — fire KServe dispatch + greenfield #379 + #385 (greenfield-before-#388 sequencing locked):**
+**Next session — #388 Day 1: verifier + re-fix 6 failing modules + pilot:**
 
-- [ ] **KServe dispatch (Tier 1, FIRST)** — fire Codex draft using brief at `docs/session-state/2026-05-01-4-kserve-dispatch-brief.md`. Smoke-check Codex first (per `feedback_verify_codex_auth.md`); dispatch FG sync (NOT background — confirmed BG dies silently this session). After draft: source-fidelity review (Claude), update toolkit `index.md` (insert KServe at 9.3, bump planned-but-unshipped down by one), `npm run build`, health check, PR linked to #379. ~30-60 min total.
-- [ ] **#379 remaining (Tier 1, after KServe)** — Seldon Core deep-dive, BentoML deep-dive, bare-metal MLOps recipe. Same pattern as KServe (Codex draft + Claude review). ~2-3h dispatched per module.
-- [ ] **#385 (Tier 1, after #379)** — VMware Tanzu, OpenStack on K8s, Gardener, Multi-cluster on-prem (Karmada/Liqo + kube-vip). Update #385 body to remove already-shipped items (private LLM via 9.3, MetalLB in toolkits, bare-metal observability via 7.4/7.8).
-- [ ] **#384 residuals (Tier 2)** — file fresh issue covering eBPF foundation + dedicated Edge K8s + IPv6/dual-stack networking. Open after #379 + #385 are in flight.
+- [ ] **Build `scripts/quality/verify_module.py`** (#388 Day 1, FIRST) — deterministic verifier implementing Codex's gates: mean_wpp >= 30, median_wpp >= 28, short_rate <= 20%, max_consecutive_short_run <= 2, body_words >= 5000, mean_sentence_length 12-28. Also: section presence + order, DYK/Mistakes/quiz counts, hands-on checkbox count, sources count + URL status, protected assets count, anti-leak grep, Learning Outcome alignment. Output JSONL per module. Test on the 4 fix-pass-merged modules + 5.4/5.5 (known-bad).
+- [ ] **Run verifier across all 235 `revision_pending: true` modules** — output `scripts/quality/audit-2026-05-02.jsonl`. Manually inspect 10 samples to validate tier classification.
+- [ ] **Re-fix 6 modules that fail Codex's gates** (5.6 Gardener, 5.7 multi-cluster, 5.8 OpenStack, 5.9 Tanzu, 9.10 BentoML, 9.11 bare-metal MLOps) — 2 lanes parallel using `scripts/prompts/module-rewriter-388.md`. Target `max_consecutive_short_run` — decompose clustered short-paragraph runs into flowing prose. Body words must not drop below 5,000.
+- [ ] **Pilot 8-12 modules from the 235** with cross-family Codex review on each pilot PR — freeze thresholds on observed failures before volume run.
+- [ ] **Volume run** — 2 lanes, ~20-25 modules/day, batched 3-6 per PR (T1/T2) and 1-2 per PR (T3). Codex 10x window expires 2026-05-17 (15 days).
 
-**Routing locked 2026-05-01 (session 4):**
-- **No Gemini** in writer routing (saving past 2026-05-05 downgrade).
-- **Codex drafts** all greenfield + #388 rewrites (gpt-5.5, danger mode, reasoning=high).
-- **Claude reviews** source-fidelity (orchestrator pass, posts `<!-- prose review claude -->` marker).
-- **Codex 10x window** runs to **2026-05-17** (16 days from 2026-05-01) — fits ~10-12 greenfield modules cleanly.
-
-**#388 sequencing (defer Phase 2b until greenfield lands):**
-- [ ] **Phase 2a triage** — deterministic Python pass, free, can run anytime in parallel with greenfield. No quota cost.
-- [ ] **Phase 2b heavy rewrite** — defer until #379 + #385 land. Within Phase 2b, run **REWRITE-tier first** (~165 modules at <18 wpp; clear pad-bombs / punchy-bullets / thin-essay signatures) per user 2026-05-01 ("we will focus on the rewrite part first"). REVIEW-tier (~85-200 additional at <22 wpp threshold needing teaching-judge LLM call) waits.
+**Routing locked (still active):**
+- **No Gemini** in writer routing.
+- **Codex drafts** all #388 rewrites (gpt-5.5, danger mode, reasoning=high).
+- **Claude reviews** source-fidelity.
+- **Within #388: REWRITE-tier first** (~165 modules at <18 wpp), REVIEW-tier waits.
 
 **Carryover residuals from prior handoffs:**
-- [ ] **Ch02 line-119 fix** — "five years before" → "more than a decade before" follow-up. Codex caught the same factual error at line 127 in commit `b4d09a00` but missed line 119; surfaced in Claude source-fidelity backfill review on PR #479 this session. One-line fix; low priority.
+- [ ] **Ch02 line-119 fix** — "five years before" → "more than a decade before". One-line fix; low priority.
 - [ ] **Ch32–Ch37 research-pending** under strict-gh audit (out of #559 scope; could spin a fresh sub-issue).
 
-**Review-coverage rollup matrix (Ch02–Ch15, scope of #559):**
+**Review-coverage rollup matrix (Ch02–Ch15, scope of #559 — COMPLETE):**
 
 | Ch | Prose PR | Markers present | Audit verdict |
 |----|----------|-----------------|---------------|
@@ -205,11 +206,6 @@ Issue tracker shrunk 40 → 14 open via batch triage 2026-05-01 (session 4). 26 
 | Ch14 | #455 | claude + gemini | OK (pre-#421 standard) |
 | Ch15 | #506 | claude + gemini | OK (pre-#421 standard) |
 
-Bonus finding from the run: **Ch32–Ch37 are research-pending** under the strict-gh audit (out of #559 scope, which is Ch01–Ch31). Filed as a follow-up note for next session.
-
-**Block B — Gemini queue (SUPERSEDED 2026-05-01 session 4):**
-The post-#677 Gemini queue (gap analysis / bulk source-link audit / tie-break standby on the 19 ML/RL/DL modules) is **deprecated under the new "no Gemini in routing" policy**. Source-link audit can run via deterministic `scripts/quality/check_citations.py` alone if needed; gap analysis can be done by Claude or Codex inline as part of the greenfield work. The original Block B notes are preserved in [`docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md`](./docs/session-state/2026-05-01-2-677-closeout-hygiene-dashboard.md) for reference.
-
 **Background / lower priority:**
 - [ ] Google Search Console verification — user will paste the meta-tag token (or HTML file). Then submit `https://kube-dojo.github.io/sitemap-index.xml` to GSC.
 - [ ] PR #567 review + merge → then re-run `audit_review_coverage.py` with live gh
@@ -218,7 +214,7 @@ The post-#677 Gemini queue (gap analysis / bulk source-link audit / tie-break st
 
 ## Blockers
 
-- Gemini CLI output inconsistency: sometimes writes to files, sometimes returns to stdout — handled but fragile
+(none — verifier-first plan ready to execute next session)
 
 ## Key Decisions
 
