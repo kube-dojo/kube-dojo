@@ -96,6 +96,7 @@ TRACK_ORDER = (
     ("cloud", "Cloud"),
     ("platform", "Platform Engineering"),
     ("on-premises", "On-Premises"),
+    ("ai", "AI"),
     ("ai-ml-engineering", "AI/ML Engineering"),
 )
 TRACK_SLUGS = {slug for slug, _ in TRACK_ORDER}
@@ -117,21 +118,43 @@ def _track_for_key(module_key: str) -> str:
 
 
 def _build_track_rollup(docs_root: Path) -> list[dict[str, Any]]:
-    counts: dict[str, int] = {slug: 0 for slug, _ in TRACK_ORDER}
-    counts["other"] = 0
+    en_counts: dict[str, int] = {slug: 0 for slug, _ in TRACK_ORDER}
+    en_counts["other"] = 0
     for path in _iter_en_modules(docs_root):
         rel = path.relative_to(docs_root).as_posix()
         top = rel.split("/", 1)[0] if "/" in rel else rel
-        if top in counts:
-            counts[top] += 1
+        if top in en_counts:
+            en_counts[top] += 1
         else:
-            counts["other"] += 1
+            en_counts["other"] += 1
+
+    uk_counts: dict[str, int] = {slug: 0 for slug, _ in TRACK_ORDER}
+    uk_counts["other"] = 0
+    uk_root = docs_root / "uk"
+    for path in _iter_uk_modules(docs_root):
+        rel = path.relative_to(uk_root).as_posix()
+        top = rel.split("/", 1)[0] if "/" in rel else rel
+        if top in uk_counts:
+            uk_counts[top] += 1
+        else:
+            uk_counts["other"] += 1
+
     rollup = [
-        {"slug": slug, "label": label, "module_count": counts[slug]}
+        {
+            "slug": slug,
+            "label": label,
+            "module_count": en_counts[slug],
+            "uk_module_count": uk_counts[slug],
+        }
         for slug, label in TRACK_ORDER
     ]
-    if counts["other"]:
-        rollup.append({"slug": "other", "label": "Other", "module_count": counts["other"]})
+    if en_counts["other"] or uk_counts["other"]:
+        rollup.append({
+            "slug": "other",
+            "label": "Other",
+            "module_count": en_counts["other"],
+            "uk_module_count": uk_counts["other"],
+        })
     return rollup
 
 

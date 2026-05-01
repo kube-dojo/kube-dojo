@@ -4009,6 +4009,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     .progress-fill.green {{ background: var(--green); }}
     .progress-fill.amber {{ background: var(--amber); }}
     .progress-fill.accent {{ background: var(--accent); }}
+    .progress-fill.teal {{ background: var(--teal); }}
 
     .sections {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
     .section-full {{ grid-column: 1 / -1; }}
@@ -4258,6 +4259,36 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     .clr-amber {{ color: var(--amber); }}
     .clr-red {{ color: var(--red); }}
     .clr-accent {{ color: var(--accent); }}
+    .clr-teal {{ color: var(--teal); }}
+
+    .book-chip-cell {{ padding: 6px 12px !important; }}
+    .book-chip {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      padding: 2px 7px 2px 4px;
+      border-radius: 999px;
+      margin: 1px 4px 1px 0;
+      line-height: 1.4;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }}
+    .book-chip-n {{
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.25);
+    }}
+    .book-chip-green {{ color: var(--green); background: rgba(74,222,128,0.10); border-color: rgba(74,222,128,0.30); }}
+    .book-chip-teal {{ color: var(--teal); background: var(--teal-muted); border-color: rgba(45,212,191,0.30); }}
+    .book-chip-accent {{ color: var(--accent); background: var(--accent-muted); border-color: rgba(56,189,248,0.30); }}
+    .book-chip-amber {{ color: var(--amber); background: var(--amber-muted); border-color: rgba(251,191,36,0.30); }}
+    .book-chip-dim {{ color: var(--text-dim); background: rgba(255,255,255,0.04); border-color: var(--border-subtle); }}
     .empty-state {{ padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }}
     .skeleton {{
       background: linear-gradient(90deg, var(--surface-1) 25%, var(--surface-2) 50%, var(--surface-1) 75%);
@@ -4786,6 +4817,28 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           <span class="panel-badge" id="missing-badge"></span>
         </div>
         <div class="panel-body" id="missing"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon" style="background:var(--accent-muted);color:var(--accent);">B</span>
+            AI History Book Progress
+          </div>
+          <span class="panel-badge" id="book-badge"></span>
+        </div>
+        <div class="panel-body-flush" id="book-body"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="panel-icon" style="background:var(--teal-muted);color:var(--teal);">C</span>
+            Module Distribution
+          </div>
+          <span class="panel-badge" id="completion-badge"></span>
+        </div>
+        <div class="panel-body-flush" id="completion-body"></div>
       </div>
 
       <div class="panel">
@@ -5636,6 +5689,135 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       el.innerHTML = `<ul class="activity-feed">${{rows}}</ul>`;
     }}
 
+    const BOOK_STATUS_TONE = {{
+      accepted: 'green',
+      prose_ready: 'teal',
+      capacity_plan_anchored: 'accent',
+      capacity_planned: 'accent',
+      research_only: 'amber',
+      pending: 'amber',
+    }};
+
+    function bookStatusChip(status, count) {{
+      const tone = BOOK_STATUS_TONE[status] || 'dim';
+      const label = esc(status.replace(/_/g, ' '));
+      return `<span class="book-chip book-chip-${{tone}}"><span class="book-chip-n">${{count}}</span>${{label}}</span>`;
+    }}
+
+    function renderBookProgress(data) {{
+      if (data.error) {{
+        $('#book-body').innerHTML = `<div class="empty-state">Error loading book data</div>`;
+        return;
+      }}
+      const badge = $('#book-badge');
+      const total = data.expected_chapter_count || 0;
+      const published = data.published_count || 0;
+      const aidsLanded = data.aids_landed_count || 0;
+      const accepted = (data.total_status_rollup || {{}}).accepted || 0;
+      badge.textContent = `${{published}} / ${{total}} published · ${{aidsLanded}} with aids`;
+
+      const orderedStatuses = ['accepted', 'prose_ready', 'capacity_plan_anchored'];
+
+      let html = `<div class="queue-summary">
+        <div class="queue-stat">
+          <div class="queue-stat-val clr-green">${{published}}</div>
+          <div class="queue-stat-label">Published</div>
+        </div>
+        <div class="queue-stat">
+          <div class="queue-stat-val clr-teal">${{aidsLanded}}</div>
+          <div class="queue-stat-label">Reader Aids Landed</div>
+        </div>
+        <div class="queue-stat">
+          <div class="queue-stat-val clr-accent">${{accepted}}</div>
+          <div class="queue-stat-label">Research Accepted</div>
+        </div>
+      </div>`;
+
+      html += `<table class="tracks-table">
+        <thead>
+          <tr>
+            <th class="num">Part</th>
+            <th>Name</th>
+            <th class="num">Chs</th>
+            <th>Live</th>
+            <th>Research Status</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      (data.parts || []).forEach(part => {{
+         const chips = Object.entries(part.status_rollup || {{}})
+           .sort((a, b) => {{
+             const oa = orderedStatuses.indexOf(a[0]);
+             const ob = orderedStatuses.indexOf(b[0]);
+             return (oa === -1 ? 99 : oa) - (ob === -1 ? 99 : ob);
+           }})
+           .map(([k, v]) => bookStatusChip(k, v))
+           .join(' ');
+         const live = part.published_count === part.chapter_count && part.chapter_count > 0
+           ? `<span class="book-chip book-chip-green"><span class="book-chip-n">${{part.aids_landed_count}}/${{part.chapter_count}}</span>aids</span>`
+           : `<span class="book-chip book-chip-amber"><span class="book-chip-n">${{part.published_count}}/${{part.chapter_count}}</span>live</span>`;
+         html += `<tr>
+            <td class="num">${{part.part}}</td>
+            <td class="name">${{esc(part.name)}}</td>
+            <td class="num">${{part.chapter_count}}</td>
+            <td class="book-chip-cell">${{live}}</td>
+            <td class="book-chip-cell">${{chips || '<span class="dim">—</span>'}}</td>
+         </tr>`;
+      }});
+      html += `</tbody></table>`;
+      $('#book-body').innerHTML = html;
+    }}
+
+    function renderModuleCompletion(summary, missing) {{
+      const badge = $('#completion-badge');
+      const totalEng = summary.english_modules || 0;
+      const ukPresent = summary.uk_modules_present || 0;
+      const ukPct = totalEng > 0 ? Math.round(100 * ukPresent / totalEng) : 0;
+      badge.textContent = `${{totalEng}} EN · ${{ukPresent}} UK · ${{ukPct}}%`;
+
+      let html = `<div class="queue-summary">
+         <div class="queue-stat">
+            <div class="queue-stat-val clr-accent">${{totalEng}}</div>
+            <div class="queue-stat-label">English Modules</div>
+         </div>
+         <div class="queue-stat">
+            <div class="queue-stat-val clr-teal">${{ukPresent}}</div>
+            <div class="queue-stat-label">Ukrainian Present</div>
+         </div>
+         <div class="queue-stat">
+            <div class="queue-stat-val clr-amber">${{ukPct}}%</div>
+            <div class="queue-stat-label">UK Coverage</div>
+         </div>
+      </div>`;
+
+      html += `<table class="tracks-table">
+        <thead>
+          <tr>
+            <th>Track</th>
+            <th class="num">EN</th>
+            <th class="num">UK</th>
+            <th>UK Coverage</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      (summary.tracks || []).forEach(t => {{
+         const en = t.module_count || 0;
+         const uk = t.uk_module_count || 0;
+         const trackPct = en > 0 ? Math.round(100 * uk / en) : 0;
+         const tone = en === 0 ? 'dim' : (trackPct >= 80 ? 'green' : trackPct > 0 ? 'teal' : 'dim');
+         html += `<tr>
+            <td class="name">${{esc(t.label)}}</td>
+            <td class="num">${{en}}</td>
+            <td class="num ${{tone === 'dim' ? 'dim' : 'clr-' + tone}}">${{uk}}</td>
+            <td>${{en > 0 ? progressBar(trackPct, trackPct >= 80 ? 'green' : 'teal') : '<span class="dim" style="font-size:11px;">—</span>'}}</td>
+         </tr>`;
+      }});
+      html += `</tbody></table>`;
+      $('#completion-body').innerHTML = html;
+    }}
+
     let refreshing = false;
     async function refresh() {{
       if (refreshing) return;
@@ -5645,7 +5827,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
 
       try {{
         const [summary, missing, services, worktree, feedback, reviews, v2Status, transStatus,
-               briefing, readiness, qualityBoard, activity] = await Promise.all([
+               briefing, readiness, qualityBoard, activity, bookProgress] = await Promise.all([
           fetchJson('/api/status/summary'),
           fetchJson('/api/missing-modules/status'),
           fetchJson('/api/runtime/services'),
@@ -5658,6 +5840,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
           fetchJson('/api/tracks/readiness'),
           fetchJson('/api/quality/board'),
           fetchJson('/api/activity?limit=60'),
+          fetchJson('/api/briefing/book'),
         ]);
 
         summary.missing_modules = missing;
@@ -5675,6 +5858,8 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
         renderPipelinePanel('#trans-body', '#trans-badge', t2Queue, 'Translation V2');
         renderWorktree(worktree);
         renderMissing(missing);
+        renderBookProgress(bookProgress);
+        renderModuleCompletion(summary, missing);
         renderReviews(reviews);
         renderFeedback(feedback);
 
@@ -5777,7 +5962,7 @@ _AI_HISTORY_PARTS: tuple[dict[str, Any], ...] = (
     {"part": 6, "name": "The Rise of Data & Distributed Compute", "range": (32, 40), "issue": 404},
     {"part": 7, "name": "The Deep Learning Revolution & GPU Coup", "range": (41, 49), "issue": 405},
     {"part": 8, "name": "The Transformer, Scale & Open Source", "range": (50, 58), "issue": 406},
-    {"part": 9, "name": "The Product Shock & Physical Limits", "range": (59, 68), "issue": 407},
+    {"part": 9, "name": "The Product Shock & Physical Limits", "range": (59, 72), "issue": 407},
 )
 
 _BOOK_NUMERIC_KEYS = frozenset({"part", "chapter", "green_claims", "yellow_claims", "red_claims"})
@@ -5814,6 +5999,12 @@ def _parse_status_yaml(path: Path) -> dict[str, Any]:
         value = value.strip()
         if not key:
             continue
+        # Strip a trailing `# comment` when the value is unquoted. We don't
+        # support `#` inside values (none of our chapter scalars need it).
+        if value and not value.startswith(('"', "'")):
+            hash_idx = value.find(" #")
+            if hash_idx >= 0:
+                value = value[:hash_idx].rstrip()
         # Block-scalar markers (`|`, `>`) and bare empty values mean the
         # value is on subsequent indented lines, which we skip.
         if value in ("", "|", ">", "|-", ">-"):
@@ -5868,15 +6059,22 @@ def build_book_briefing(repo_root: Path) -> dict[str, Any]:
                 "yellow_claims": data.get("yellow_claims"),
                 "red_claims": data.get("red_claims"),
                 "last_updated": data.get("last_updated"),
+                "prose_state": data.get("prose_state"),
+                "reader_aids": data.get("reader_aids"),
+                "lifecycle_updated": data.get("lifecycle_updated"),
             }
 
     parts_out: list[dict[str, Any]] = []
     total_status: dict[str, int] = {}
+    total_published = 0
+    total_aids_landed = 0
     for spec in _AI_HISTORY_PARTS:
         lo, hi = spec["range"]
         chapters = [chapters_by_num[n] for n in range(lo, hi + 1) if n in chapters_by_num]
         rollup: dict[str, int] = {}
         owners_seen: set[str] = set()
+        published_count = 0
+        aids_landed_count = 0
         for ch in chapters:
             status_value = ch.get("status") or "unknown"
             rollup[status_value] = rollup.get(status_value, 0) + 1
@@ -5884,6 +6082,12 @@ def build_book_briefing(repo_root: Path) -> dict[str, Any]:
             owner = ch.get("owner")
             if owner:
                 owners_seen.add(owner)
+            if ch.get("prose_state") == "published_on_main":
+                published_count += 1
+                total_published += 1
+            if ch.get("reader_aids") == "landed":
+                aids_landed_count += 1
+                total_aids_landed += 1
         parts_out.append(
             {
                 "part": spec["part"],
@@ -5892,15 +6096,20 @@ def build_book_briefing(repo_root: Path) -> dict[str, Any]:
                 "tracking_issue": spec["issue"],
                 "owners_seen": sorted(owners_seen),
                 "chapter_count": len(chapters),
+                "published_count": published_count,
+                "aids_landed_count": aids_landed_count,
                 "status_rollup": rollup,
                 "chapters": chapters,
             }
         )
 
+    expected = sum(spec["range"][1] - spec["range"][0] + 1 for spec in _AI_HISTORY_PARTS)
     return {
         "epic_issue": 394,
         "chapter_count": sum(p["chapter_count"] for p in parts_out),
-        "expected_chapter_count": 68,
+        "expected_chapter_count": expected,
+        "published_count": total_published,
+        "aids_landed_count": total_aids_landed,
         "total_status_rollup": total_status,
         "parts": parts_out,
     }

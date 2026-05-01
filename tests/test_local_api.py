@@ -3021,14 +3021,14 @@ def test_briefing_book_groups_chapters_by_part_with_rollup(tmp_path: Path) -> No
         last_updated="2026-04-27",
     )
     _seed_book_chapter(tmp_path, 50, "attention-is-all-you-need", status="researching", owner="Codex")
-    _seed_book_chapter(tmp_path, 68, "the-infinite-datacenter", status="researching", owner="Claude")
+    _seed_book_chapter(tmp_path, 72, "the-infinite-datacenter", status="researching", owner="Claude")
 
     status_code, payload, content_type = local_api.route_request(tmp_path, "/api/briefing/book")
     assert status_code == 200
     assert content_type.startswith("application/json")
     assert isinstance(payload, dict)
     assert payload["epic_issue"] == 394
-    assert payload["expected_chapter_count"] == 68
+    assert payload["expected_chapter_count"] == 72
     assert payload["chapter_count"] == 6
     assert len(payload["parts"]) == 9
 
@@ -3102,9 +3102,13 @@ def test_briefing_book_handles_missing_or_malformed_status_files(tmp_path: Path)
 def test_briefing_book_returns_empty_skeleton_when_directory_missing(tmp_path: Path) -> None:
     payload = local_api.build_book_briefing(tmp_path)
     assert payload["chapter_count"] == 0
-    assert payload["expected_chapter_count"] == 68
+    assert payload["expected_chapter_count"] == 72
+    assert payload["published_count"] == 0
+    assert payload["aids_landed_count"] == 0
     assert len(payload["parts"]) == 9
     assert all(p["chapter_count"] == 0 for p in payload["parts"])
+    assert all(p["published_count"] == 0 for p in payload["parts"])
+    assert all(p["aids_landed_count"] == 0 for p in payload["parts"])
     assert payload["total_status_rollup"] == {}
 
 
