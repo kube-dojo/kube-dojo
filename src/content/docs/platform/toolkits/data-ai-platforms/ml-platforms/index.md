@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "ML Platforms"
 ---
-> **Toolkit Track** | 8 Modules | ~6.5 hours total
+> **Toolkit Track** | 9 Modules | ~7.5 hours total
 
 ## Overview
 
@@ -32,6 +32,7 @@ Before starting this toolkit:
 | 9.6 | [LangChain & LlamaIndex](module-9.6-langchain-llamaindex/) | `[COMPLEX]` | 50-60 min |
 | 9.7 | [GPU Scheduling](module-9.7-gpu-scheduling/) | `[COMPLEX]` | 50 min |
 | 9.8 | [KServe](module-9.8-kserve/) | `[COMPLEX]` | 55-65 min |
+| 9.9 | [Seldon Core](module-9.9-seldon-core/) | `[COMPLEX]` | 55-65 min |
 
 ## Learning Outcomes
 
@@ -43,6 +44,7 @@ After completing this toolkit, you will be able to:
 4. **Serve LLMs efficiently** — vLLM with PagedAttention for high throughput
 5. **Build distributed inference** — Ray Serve for multi-model pipelines
 6. **Create RAG applications** — LangChain and LlamaIndex for LLM apps
+7. **Deploy inference graphs** — Seldon Core 2 pipelines, multi-model serving, and Alibi explainability
 
 ## Tool Selection Guide
 
@@ -84,6 +86,13 @@ WHICH ML PLATFORM TOOL?
      • Canary deployments
      • Multi-framework support
      • GPU inference
+
+"I need inference graphs, multi-model serving, and explainability"
+└──▶ Seldon Core
+     • Multi-framework model loading (sklearn, MLflow, Triton, HuggingFace)
+     • Inference graph pipelines with chaining, joins, and conditional routing
+     • Alibi explainability (anchors, integrated gradients, counterfactual)
+     • Drift and outlier detection (Alibi-Detect)
 
 "I need to serve LLMs with high throughput"
 └──▶ vLLM
@@ -213,6 +222,11 @@ Module 9.8: KServe
      │
      │  Production model inference
      │  Serverless + raw deployment modes
+     ▼
+Module 9.9: Seldon Core
+     │
+     │  Multi-framework model serving
+     │  Inference graphs, Alibi explainability
      ▼
 [Toolkit Complete] → Production AI/ML!
 ```
@@ -397,6 +411,7 @@ Latency: < 100ms total
 | LangChain/LlamaIndex | Create RAG application with vector store |
 | GPU Scheduling | Install NVIDIA operator, schedule GPU workloads |
 | KServe | Deploy InferenceService, canary rollout, switch to raw mode |
+| Seldon Core | Deploy inference graph with two model variants, A/B Experiment, and Alibi explainer |
 
 ## Tool Comparison
 
