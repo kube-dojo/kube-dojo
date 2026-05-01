@@ -1199,7 +1199,7 @@ Success criteria:
 <!-- /v4:generated -->
 ## Next Module
 
-Ready to move from recurrent architectures into the modern transformer era? Proceed directly to **[Module 1.7: Transformers from Scratch](./module-1.7-transformers-from-scratch/)** where you will discover why the phrase "Attention Is All You Need" permanently altered the trajectory of artificial intelligence, and how self-attention scales in ways that recurrent networks cannot.
+RNN training surfaces gradient pathology — vanishing gradients across long sequences, exploding gradients on bad initializations, and silent backprop bugs in custom recurrent layers. Continue with **[Module 1.6: Backpropagation Deep Dive](./module-1.6-backpropagation-deep-dive/)** for the theory of how those gradients move through computation graphs, then **[Module 1.7: Backpropagation and Autograd from Scratch](./module-1.7-backpropagation-and-autograd-from-scratch/)** to build the autodiff machinery from primitive operations and learn the debugging techniques that catch broken gradient flows before a long training run wastes hours.
 
 ## Sources
 
