@@ -29,7 +29,7 @@ This section is organized as a Tier-1 spine of twelve practitioner-essentials, f
 | 1.8 | [Unsupervised Learning: Clustering](module-1.8-unsupervised-learning-clustering/) | Available |
 | 1.9 | [Anomaly Detection & Novelty Detection](module-1.9-anomaly-detection-and-novelty-detection/) | Available |
 | 1.10 | [Dimensionality Reduction](module-1.10-dimensionality-reduction/) | Available |
-| 1.11 | Hyperparameter Optimization | Coming soon (Phase 1b) |
+| 1.11 | [Hyperparameter Optimization](module-1.11-hyperparameter-optimization/) | Available |
 | 1.12 | [Time Series Forecasting](module-1.12-time-series-forecasting/) | Available |
 
 ## Tier-2 Modules
