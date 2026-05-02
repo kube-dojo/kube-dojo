@@ -36,15 +36,15 @@ Top failure gates (post-synonym-fix):
 
 The 100% T3 is **real**, not a verifier bug. Codex's consult predicted "T3 = 45-60% until audit proves otherwise" — empirical answer is 100%. The dominant gate is the 5000-word body floor: most modules are 1000-4500 words. The #388 plan IS to expand all 235 to meet this bar. The 50,000-foot conclusion: every `revision_pending: true` module needs a full rewrite, not a structural patch.
 
-Section-name synonym investigation revealed convention sprawl across the curriculum:
+Section-name variants observed across the curriculum (verifier matches all):
 - Learning Outcomes: 457 `## What You'll Be Able to Do`, 261 `## Learning Outcomes`, 104 `## What You'll Learn`, 2 `## Learning Objectives`
 - Did You Know: 675 `## Did You Know?` (with question mark)
-- Common Mistakes: 685 + variants
+- Common Mistakes: 685 + minor variants
 - Quiz: 662 `## Quiz` + 28 `## Knowledge Check` + ~10 `## Quiz: <topic>`
-- Hands-On: 324 `## Hands-On Exercise` + variants like `## Hands-On: <RAG topic>`
+- Hands-On: 324 `## Hands-On Exercise` + variants like `## Hands-On: <topic>`
 - Sources: 282 `## Sources`, 165 `## Further Reading`
 
-Verifier now matches all of these.
+This is **low-priority cosmetic drift**, not a real problem — "What You'll Be Able to Do" is arguably better pedagogically than "Learning Outcomes" (Bloom's action framing). The verifier handles it; learners don't notice. Annoyance only when (a) site-search for "Learning Outcomes" misses 561 of 822 modules, or (b) a future tool needs section-aware logic and has to redo the synonym table. A one-time normalization sweep (1-2h) when convenient — never a blocker.
 
 ### 6 density fix-pass modules merged
 
@@ -108,7 +108,7 @@ Codex 10x window expires 2026-05-17 (15 days). Target: 20-25 modules/day across 
 - The 235-module #388 audit empirically resolves the tier-distribution question: 100% T3, dominant gate is `body_words_5000`. Plan accordingly — every module is a full rewrite, not a structural patch.
 - `scripts/quality/verify_module.py` is now the contract. CI hookable. JSONL audit at `scripts/quality/audit-2026-05-02-v2.jsonl`.
 - The 6 fix-passes confirm that 30-45 min per module is realistic for density-only re-fixes (T2-equivalent). Full rewrites (T3) will run longer — budget 60-90 min per module for Day 2+ pilot estimation.
-- Section-name synonym sprawl is a curriculum-wide hygiene issue. The verifier handles it now; consider a separate cleanup pass to canonicalize headings later (orthogonal to #388).
+- Section-name variants exist (4 LO conventions, etc.) but it's low-priority cosmetic drift — verifier handles it; learners don't notice. No cleanup needed unless a section-aware tool later wants to skip the synonym table.
 - Codex orchestration via `agent_runtime.runner.invoke` + `mode="workspace-write"` requires manual commit recovery. Switch to `mode="danger"` for Day 2 to remove that step.
 
 **DROP / RESOLVE:**
