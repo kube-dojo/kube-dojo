@@ -729,7 +729,7 @@ Success criteria for this lab are listed below; use them as a final self-check t
 - [etcd Documentation: Disaster Recovery](https://etcd.io/docs/v3.6/op-guide/recovery/)
 - [Kubernetes Documentation: kube-scheduler](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-scheduler/)
 - [Kubernetes Documentation: kube-controller-manager](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-controller-manager/)
-- [Kubernetes Documentation: cloud-controller-manager](https://kubernetes.io/docs/reference/command-line-tools-reference/cloud-controller-manager/)
+- [Kubernetes Documentation: Cloud Controller Manager Administration](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/)
 - [Kubernetes Documentation: Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)
 - [Kubernetes Documentation: Highly Available Clusters with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/high-availability/)
 - [Kubernetes Documentation: Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
