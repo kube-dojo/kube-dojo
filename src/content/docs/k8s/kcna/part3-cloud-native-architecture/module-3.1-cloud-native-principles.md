@@ -553,6 +553,8 @@ Use the framework as a conversation tool with application teams. Instead of aski
 
 ## Quiz
 
+Test your judgment on these architecture scenarios before moving into the refactoring exercise.
+
 <details><summary>Your team moved a legacy monolith into a container and deployed it on Kubernetes. The app still writes uploads to `/app/uploads`, reads a hardcoded database URL, and exposes no readiness endpoint. Is it cloud native, and what would you change first?</summary>
 
 It is containerized, but it is not yet cloud native in the operational sense. The local upload path violates stateless process design because Pod replacement can lose data, and the hardcoded database URL violates externalized configuration and backing-service attachment. I would first move durable files to object storage or another backing service, inject the database URL through a Secret, and add readiness so Services only route to instances that can handle traffic.
