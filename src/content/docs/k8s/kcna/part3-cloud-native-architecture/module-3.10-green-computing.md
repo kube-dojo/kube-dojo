@@ -1,19 +1,18 @@
 ---
+revision_pending: false
 title: "Module 3.10: Green Computing and Sustainability"
 slug: k8s/kcna/part3-cloud-native-architecture/module-3.10-green-computing
 sidebar:
   order: 11
 ---
 
+# Module 3.10: Green Computing and Sustainability
+
 > **Complexity**: `[QUICK]` - Awareness and applied analysis level
->
-> **Time to Complete**: 30-40 minutes
->
-> **Prerequisites**: Module 3.1 (Cloud Native Principles), Module 3.2 (CNCF Ecosystem), basic Kubernetes resource requests and limits
+> **Time to Complete**: 45-60 minutes
+> **Prerequisites**: Module 3.1 (Cloud Native Principles), Module 3.2 (CNCF Ecosystem), basic Kubernetes resource requests and limits, and the ability to inspect Kubernetes objects with `kubectl` or its common alias `k`.
 
----
-
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
@@ -23,19 +22,21 @@ After completing this module, you will be able to:
 4. **Evaluate** when GreenOps decisions align with FinOps goals, and when reliability, latency, or data residency constraints limit the greener option.
 5. **Design** a practical improvement plan for a Kubernetes workload using measurable sustainability signals and safe operational guardrails.
 
----
 
 ## Why This Module Matters
 
 A platform engineer is asked to review the monthly cloud bill after a product team complains that the bill doubled even though traffic barely changed. The first dashboard shows money, not carbon, but the pattern is familiar: three non-production environments are still running after a project was cancelled, several services request far more CPU than they use, and nightly jobs all start during the same regional demand peak. Nothing is obviously broken from a user perspective, yet the platform is wasting electricity every hour.
 
+This is not an imaginary management story. In 2022, 37signals publicly described spending well over half a million dollars a year on cloud infrastructure before deciding that the economics no longer matched the work they were running. Their response was a larger repatriation decision, not a Kubernetes tuning exercise, but the lesson lands cleanly for cluster operators: when infrastructure grows without tight feedback, the waste becomes a business problem long before anyone has a perfect carbon model. A smaller company may see the same pattern as a surprise five-figure bill; a larger company may see it as an estate of idle environments, duplicated services, and reserved capacity that no team feels personally responsible for removing.
+
+Green computing matters because the cloud bill is only the easiest part to see. Behind the invoice are powered servers, cooling systems, networking equipment, storage devices, replacement cycles, and regional electricity grids with different carbon intensity over time. A Kubernetes engineer may not buy the power contract or design the data center, but they do influence how much infrastructure the platform asks for. The decisions that look ordinary in a manifest, such as replica count, CPU request, memory request, image size, and schedule, can determine whether the scheduler packs workloads tightly or keeps more machines active than the useful work requires.
+
 This is why green computing belongs in a Kubernetes curriculum. Cloud native systems make it easy to create more workloads, more replicas, more regions, and more automation, but the same mechanisms can either reduce waste or multiply it. Containers improve density only when resource requests are realistic. Autoscaling reduces idle capacity only when it is configured against a useful signal. Carbon-aware scheduling helps only when the workload can actually move in time or location.
 
 For KCNA, the goal is not to turn you into a carbon accounting specialist. The goal is to recognize sustainability as an engineering property that appears in architecture reviews, capacity planning, scheduling decisions, and operational dashboards. A strong beginner can name green computing practices; a stronger practitioner can look at a workload and decide which practice is safe, measurable, and worth doing first.
 
-> **Working principle**: The greenest compute is the compute you do not need to run. Measure first, remove waste next, then optimize the work that must remain.
+The working principle for this module is simple: the greenest compute is the compute you do not need to run. Measure first, remove waste next, then optimize the work that must remain. That order prevents two common failures: buying a fashionable sustainability tool while obvious idle resources keep running, or cutting resources blindly and creating reliability incidents that erase trust in the whole program.
 
----
 
 ## From Cloud Waste to Carbon Impact
 
@@ -87,7 +88,10 @@ Cloud native can make this better. A well-run platform can pack workloads effici
 
 The important mental shift is that sustainability is not separate from good operations. A cluster with realistic requests, useful autoscaling, and regular cleanup usually costs less and emits less. The hard part is not believing that waste is bad; the hard part is choosing an improvement that does not break reliability, hide risk, or move emissions somewhere else.
 
----
+A useful way to test the idea is to ask whether the workload is doing valuable work, reserving capacity for possible work, or simply existing because nobody removed it. Those are different problems. Valuable work may need a more efficient design, such as better caching, queueing, or hardware choice. Reserved capacity may need right-sizing, autoscaling, or scheduling changes. Forgotten work needs ownership and cleanup. Treating all three as the same "carbon problem" leads to vague advice; separating them gives engineers a concrete next step.
+
+There is also a boundary around what Kubernetes can solve. Kubernetes can improve placement, scaling, observability, and policy, but it does not make inefficient application code efficient by itself. A service that performs wasteful retries, returns huge payloads, or recomputes expensive reports unnecessarily can still burn energy on a perfectly tuned cluster. Green computing therefore spans layers: application design reduces the amount of work, Kubernetes reduces idle reservation and poor placement, and infrastructure choices affect the energy profile of the remaining work.
+
 
 ## The CNCF Sustainability Context
 
@@ -131,7 +135,10 @@ The CNCF ecosystem also includes projects and adjacent tools that help teams mea
 
 For KCNA, remember the shape of the ecosystem rather than memorizing every project name. The pattern is measurement, waste removal, efficient scaling, and carbon-aware placement. If a question asks what group organizes cloud native environmental sustainability, the answer is the CNCF TAG Environmental Sustainability. If a question asks how to see per-workload energy signals, Kepler is the important CNCF project to recognize.
 
----
+The community context also matters because sustainability claims need scrutiny. A vendor dashboard may report a carbon number, but a platform engineer still needs to ask what is being measured, what is estimated, which emissions scopes are included, and whether the number can be attributed to a namespace or service owner. Good GreenOps work is closer to reliability engineering than public relations. It starts from imperfect but useful signals, documents assumptions, and improves decisions incrementally instead of claiming mathematical certainty where the data is still modeled.
+
+That is why CNCF-style practices fit the topic. Cloud native teams already know how to make operational decisions from telemetry that is noisy but actionable, such as latency percentiles, saturation, error rates, and rollout health. Energy and carbon data should be handled with the same discipline. The number is not a verdict by itself; it is a prompt to investigate workload shape, business value, and safer alternatives.
+
 
 ## Measuring Before Optimizing
 
@@ -173,6 +180,10 @@ Measurement has limitations. Public cloud providers may not expose every hardwar
 
 A useful first dashboard usually includes resource requests, observed usage, replica count, node count, and energy or carbon estimates. If energy metrics are unavailable, teams can still start with proxy signals such as low utilization, idle namespaces, unused PersistentVolumes, and stale Deployments. The best dashboards show trends, not just snapshots, because a workload that is quiet today may be busy during payroll, reporting, or seasonal traffic.
 
+The first measurement mistake is to rank workloads by current CPU alone. Current CPU is useful, but it misses reserved memory, persistent storage, network transfer, replica count, and the node-level effect of scheduling constraints. A low-CPU workload with a large memory request can still prevent consolidation. A job that runs for only an hour can dominate the day's energy profile if it starts many large Pods at the same time. A quiet service may be intentionally waiting for rare emergency use, while a chatty service may be doing harmless lightweight checks. Measurement should narrow the investigation, not replace it.
+
+Another practical habit is to store the business context next to the technical signal. Labels such as `owner`, `environment`, `app`, `cost-center`, and `expires-at` are not cosmetic metadata when sustainability work begins. They let the platform team move from "this namespace looks idle" to "this staging namespace belongs to the document team, expired last Tuesday, and has no production dependency." Without that context, the team either deletes dangerously or leaves waste untouched because nobody can prove what is safe.
+
 | Signal | What It Reveals | How to Interpret It Carefully |
 |---|---|---|
 | Requested CPU versus observed CPU | Scheduling waste and poor bin packing | Low usage may be normal for bursty services, so check history before cutting. |
@@ -184,7 +195,6 @@ A useful first dashboard usually includes resource requests, observed usage, rep
 
 > **Active learning prompt**: Your dashboard shows a service with very low CPU usage but steady memory usage near its request. Would you lower CPU, memory, both, or neither first? Decide what evidence you would want before changing each value, because CPU and memory failures behave differently in Kubernetes.
 
----
 
 ## Right-Sizing and Bin Packing
 
@@ -257,6 +267,10 @@ spec:
 
 The manifest above is not a universal recommendation; it is a realistic shape for a small internal dashboard in a lab. A production dashboard with strict availability requirements might need multiple replicas and a PodDisruptionBudget. A dashboard with a memory-heavy runtime might need more memory. The point is to justify requests from evidence and service requirements instead of copying large defaults.
 
+Right-sizing also changes the conversation between application teams and platform teams. If the platform only says "your service is wasteful," the application owner may hear blame and defend the status quo. If the platform shows a time series of requested CPU, used CPU, memory working set, restarts, latency, and rollout history, the conversation becomes engineering. The team can decide whether to reduce CPU first, leave memory alone, add autoscaling, or run a load test before changing production.
+
+The scheduler's perspective is especially important for KCNA. Kubernetes schedules against requests, not against a hopeful future where every container behaves politely. That makes requests a contract with the cluster. Too high, and the contract reserves capacity that the workload does not use. Too low, and the workload may be placed onto a node that cannot support its real demand during peaks. The sustainable setting is the one that reflects measured need plus justified headroom.
+
 | Right-Sizing Decision | Good Evidence | Risk If Done Carelessly |
 |---|---|---|
 | Lower CPU request | Sustained usage is far below request and latency is healthy. | CPU throttling or slower request handling during bursts. |
@@ -267,7 +281,8 @@ The manifest above is not a universal recommendation; it is a realistic shape fo
 
 A senior-level habit is to ask what failure mode the change introduces. Lowering CPU tends to cause slower work or throttling; lowering memory can terminate processes. Reducing replicas may save energy but reduce fault tolerance. Carbon savings are not useful if the team compensates by running emergency infrastructure later because the change caused instability.
 
----
+Worked right-sizing usually starts outside production. A staging or internal workload gives the team room to practice the method, validate dashboards, and write rollback steps before touching customer-facing services. Once the team trusts the workflow, production changes should still be gradual. Apply one change at a time, watch service indicators and node-level outcomes, and keep a clear rollback path. Sustainability programs fail when they are treated as one heroic cleanup push; they succeed when they become a normal review habit.
+
 
 ## Autoscaling, Scale-to-Zero, and Zombie Workloads
 
@@ -321,13 +336,17 @@ Zombie workloads are different from intentionally idle services. A zombie worklo
 A practical cleanup program starts with labels. Every namespace and workload should have an owner, environment, application, and expiration policy where appropriate. Cleanup becomes safer when platform teams can distinguish a production service from a stale preview namespace. Without those labels, green computing work turns into manual detective work, and teams become afraid to delete anything.
 
 ```bash
-kubectl get deployments --all-namespaces \
+alias k=kubectl
+k get deployments --all-namespaces \
   -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,REPLICAS:.spec.replicas,OWNER:.metadata.labels.owner,ENV:.metadata.labels.environment'
 ```
 
-The command uses `kubectl`; in later modules and daily practice you may see the common alias `k` for the same command. The output is a starting point, not a deletion list. A responsible engineer confirms traffic, ownership, and dependencies before scaling down or removing a workload, especially in shared clusters.
+The first line defines the common `k` alias for `kubectl`, and the second line uses it for a read-only inventory query. The output is a starting point, not a deletion list. A responsible engineer confirms traffic, ownership, and dependencies before scaling down or removing a workload, especially in shared clusters.
 
----
+Autoscaling deserves the same humility. A queue worker that scales from queue depth can be an excellent sustainability improvement because the workload has a visible backlog and can often tolerate short waits. A web API that scales from average CPU may behave badly if each request is latency-sensitive, the metric lags behind traffic, or startup time is long. Scale-to-zero can be excellent for preview environments and development services, but it is a poor default for a service that must answer the first request quickly. The greener pattern is workload-specific, not a slogan.
+
+Zombie cleanup is often the fastest win because it removes work rather than tuning it. The difficult part is social and procedural rather than technical. Teams need an expiration convention, a way to notify owners, and a rollback or recovery path for accidental deletion. Some organizations use namespace TTL controllers, pull-request environment cleanup, or periodic owner attestations. The exact mechanism matters less than the habit: temporary resources should have a planned end, and every long-running resource should have a living owner.
+
 
 ## Carbon-Aware Scheduling
 
@@ -357,7 +376,7 @@ Carbon-aware scheduling means running flexible work when or where electricity ha
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The word flexible is doing most of the work. A production checkout API cannot wait several hours for cleaner electricity because users expect immediate responses. A nightly analytics job might wait, provided downstream reports still finish before the business day starts. A machine learning training job may move to another region if data gravity, privacy, cost, and accelerator availability do not block the move.
+The word flexible is doing most of the work. A production checkout service cannot wait several hours for cleaner electricity because users expect immediate responses. A nightly analytics job might wait, provided downstream reports still finish before the business day starts. A machine learning training job may move to another region if data gravity, privacy, cost, and accelerator availability do not block the move.
 
 Carbon-aware scheduling also has a rebound risk. Moving a job to a cleaner region can increase network transfer, create duplicate storage, or violate data residency. Delaying too much work into the same clean window can create a capacity spike that forces extra nodes online. A mature GreenOps design considers the whole system rather than optimizing one metric in isolation.
 
@@ -405,7 +424,12 @@ spec:
 
 This CronJob is runnable in a Kubernetes 1.35+ cluster, but the label is only a marker. A real carbon-aware platform would connect policy, carbon data, batch orchestration, and admission controls or scheduler extensions. At KCNA level, focus on deciding which workloads are eligible and what trade-offs must be checked before moving them.
 
----
+The safest carbon-aware design begins with eligibility classes. Class one is real-time user traffic, which usually stays close to users and optimizes waste through right-sizing and autoscaling. Class two is deadline-bound batch work, which can shift inside a known time window if the result still arrives on time. Class three is interruptible or restartable work, such as CI, indexing, simulations, and some training jobs, which may tolerate spot capacity or cleaner regional placement. Class four is regulated or data-heavy work, which may be technically flexible but legally or economically pinned to a location.
+
+Pause and predict: if every team shifts its nightly jobs to the same low-carbon hour, what new problem might appear? The answer is capacity contention. A clean window can become a peak window if the scheduler has no throttling, priorities, or fallback behavior. Mature platforms avoid that by using queues, quotas, and deadlines so lower-priority work yields to urgent work and missed windows do not block the business.
+
+Carbon-aware scheduling should also be auditable. If a job moves or waits, the platform should record why the decision happened, which carbon signal was used, what deadline was applied, and what fallback was available. That record protects the team when a report is late or a region becomes unavailable. It also helps sustainability leaders distinguish real carbon reductions from paperwork claims that never changed workload behavior.
+
 
 ## GreenOps and FinOps Together
 
@@ -449,7 +473,10 @@ The alignment is weaker when the greener option costs more, increases latency, o
 
 A useful meeting question is, "What is the smallest change that removes confirmed waste without changing the user experience?" That question usually leads to cleanup, requests, and scaling before region moves or sophisticated schedulers. Advanced sustainability work is valuable, but it should build on the basics instead of distracting from obvious waste.
 
----
+FinOps and GreenOps can still disagree in legitimate ways. Reserved instances or committed-use discounts may make an inefficient system look cheap for a while, even though it still consumes resources. A cleaner region may cost more or require more network transfer. Keeping hardware longer may reduce embodied carbon pressure but increase operational power draw or support risk. These conflicts are not proof that sustainability is unrealistic. They are proof that the team needs a decision framework that names cost, carbon, reliability, data, and user experience as separate constraints.
+
+The most persuasive GreenOps reports therefore avoid abstract virtue language. They say, for example, "we reduced staging replicas from four to one outside business hours, node count dropped by two during the night window, no failed tests increased, and rollback is one command." That kind of report speaks to engineers, finance teams, and sustainability teams at once. It links an operational change to a measurable outcome and makes the remaining risk visible.
+
 
 ## Worked Example: Audit a Low-Traffic Dashboard
 
@@ -527,7 +554,81 @@ spec:
 
 The teaching point is the decision sequence. First, classify the workload. Second, compare requested resources with observed usage. Third, consider replica count against reliability needs. Fourth, add guardrails such as limits, labels, ownership, and monitoring. Finally, verify that the cluster can actually remove nodes or free capacity after the change. Without that last step, a team may celebrate a smaller manifest while the same number of nodes continues running.
 
----
+Before running a similar review yourself, predict which recommendation would be hardest to defend in a production review: lowering CPU, lowering memory, reducing replicas, or adding off-hours scale-down. Most teams find memory and replicas require the most context because their failure modes are sharper. CPU can often degrade gradually, while memory pressure can kill a process and replica reduction can remove redundancy during maintenance. This does not mean those changes are forbidden; it means the evidence and guardrails must match the risk.
+
+The worked example also shows why sustainability reviews should end with verification, not with a prettier manifest. If the Deployment changes but node count never falls, the platform may still benefit from freed headroom, yet the carbon claim needs to be smaller. If the node count falls but latency worsens, the change may not be acceptable. If latency stays healthy and nodes scale down, the team has a repeatable pattern. Green computing is engineering when the conclusion survives measurement.
+
+
+## Patterns & Anti-Patterns
+
+Green computing patterns are most effective when they remove confirmed waste while keeping the service promise clear. A production checkout service, a staging conversion worker, a preview namespace, and a weekly model training job should not receive the same treatment. The platform team needs patterns that connect the workload's purpose to a specific operating decision, because vague sustainability advice often turns into either harmless dashboards or risky resource cuts.
+
+The following patterns are deliberately conservative. They start with visibility and ownership because those are prerequisites for safe action. They then move toward right-sizing, scaling, and scheduling, which can produce larger savings but require stronger evidence. A mature platform uses these patterns as defaults in templates, review checklists, and paved paths so that teams do not need to rediscover the same decisions during every incident review or cost review.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---|---|---|---|
+| Owner and expiry labels | Non-production namespaces, preview environments, shared clusters, and temporary projects | Cleanup becomes safe because the responsible team and intended lifetime are visible. | Automate reminders before deletion and keep a recovery process for accidental cleanup. |
+| Evidence-based right-sizing | Services with sustained request-to-usage gaps and stable performance history | Scheduler reservations become closer to real demand, improving bin packing and reducing idle headroom. | Apply changes gradually, especially for memory and latency-sensitive workloads. |
+| Demand-driven scaling | Queue workers, internal tools, batch processors, and services with predictable demand signals | Replicas shrink when work is absent and grow when useful work arrives. | Verify that lower replica counts can eventually reduce node count or free constrained capacity. |
+| Carbon-aware batch windows | Jobs with deadline slack, restartability, and clear data constraints | Work can run when grid carbon intensity is lower without affecting users. | Use quotas and priorities so many jobs do not create a new peak in the same window. |
+| GreenOps plus FinOps reporting | Reviews where finance, platform, and sustainability teams share accountability | Cost, carbon, and reliability trade-offs are visible in one decision record. | Separate waste removal from harder region, hardware, or architecture changes. |
+
+Anti-patterns usually begin with a true idea applied too broadly. It is true that fewer replicas can save resources, but not every service should run one replica. It is true that clean grids matter, but not every workload can move. It is true that CPU waste is common, but memory changes can fail differently from CPU changes. The platform engineer's job is to keep the useful principle while rejecting the unsafe shortcut.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|---|---|---|
+| Carbon theater dashboard | Teams celebrate a carbon chart without changing requests, replicas, cleanup, or scheduling behavior. | Pair every dashboard with an owner, candidate action, expected impact, and verification signal. |
+| Universal scale-to-zero | User-facing or operational services get cold starts, missed alerts, or unavailable first requests. | Limit scale-to-zero to eligible workloads and define minimum replicas for critical periods. |
+| Blind memory cuts | Pods restart or get evicted, causing retries, failed jobs, and emergency over-correction. | Review memory peaks, working set, restart history, and OOM risk before changing requests or limits. |
+| Region hopping without data analysis | Data transfer, duplicate storage, residency constraints, or latency erase the apparent carbon benefit. | Evaluate spatial shifting only after data location, user location, legal boundaries, and deadlines are known. |
+| One-time cleanup sprint | Waste returns because templates, labels, and ownership rules did not change. | Turn cleanup into a recurring platform capability with default labels, expiry, and reporting. |
+
+These patterns are meant to be boring in the best possible way. The best first sustainability changes rarely require exotic scheduler plugins or a brand-new platform. They require knowing who owns work, whether the work is still needed, how much capacity it reserves, and whether the cluster can give unused capacity back. More advanced tooling becomes valuable after those basics are in place, because then the tooling acts on a platform that already has clean ownership and measurable signals.
+
+## Decision Framework
+
+When a sustainability opportunity appears, do not start by asking which tool is most impressive. Start by asking what kind of waste or carbon opportunity you are looking at. The decision below is designed for KCNA-level reasoning: classify the workload, identify the constraint, choose a conservative action, and define verification before rollout. That flow keeps the team from applying carbon-aware scheduling to real-time APIs or deleting workloads simply because their current traffic is low.
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         GREENOPS DECISION FLOW                             │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  1. Is the workload still needed?                                          │
+│        ├─ No or unknown owner → confirm ownership, then expire or delete   │
+│        └─ Yes → continue                                                   │
+│                                                                            │
+│  2. Are requests much higher than observed usage?                          │
+│        ├─ Yes → right-size conservatively and monitor failures             │
+│        └─ No → continue                                                    │
+│                                                                            │
+│  3. Does demand vary or disappear for long periods?                        │
+│        ├─ Yes → add autoscaling, scheduled scale-down, or scale-to-zero     │
+│        └─ No → continue                                                    │
+│                                                                            │
+│  4. Can the work move in time or location?                                 │
+│        ├─ Yes → evaluate carbon-aware scheduling with guardrails            │
+│        └─ No → optimize efficiency, images, retries, and architecture       │
+│                                                                            │
+│  5. Did the change reduce nodes, headroom, energy, or carbon safely?        │
+│        ├─ Yes → record pattern and make it repeatable                       │
+│        └─ No → revise the hypothesis or roll back                           │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+The framework intentionally ends with verification because GreenOps claims are easy to overstate. A smaller CPU request is a useful scheduling change, but it is not the same as a measured carbon reduction. A delayed batch job may run during a cleaner grid window, but the team must still check missed deadlines, queue buildup, and data movement. Verification does not need to be perfect carbon accounting at KCNA level; it does need to connect the engineering action to observable consequences.
+
+| If You See | Choose First | Avoid First | Verification Signal |
+|---|---|---|---|
+| Stale namespace with unclear owner | Ownership check and expiry workflow | Immediate deletion without dependency review | Owner confirmation, no traffic dependency, successful cleanup |
+| CPU request far above usage | Conservative CPU request reduction | Memory cuts without memory evidence | CPU throttling, latency, node allocatable headroom |
+| Low-traffic internal service | Replica review and possible off-hours scale-down | Scale-to-zero for critical services | Replica count, availability, restart count, user reports |
+| Queue-backed staging worker | KEDA-style or queue-depth scaling | Fixed high replica count all night | Queue depth, processing delay, replica count, node pressure |
+| Deadline-flexible batch job | Carbon-aware time window with fallback | Moving regulated data across regions | Deadline success, carbon signal, data transfer, job retries |
+| Cleaner but distant region | Full trade-off review | Assuming lower grid carbon always wins | Latency, transfer cost, residency approval, total emissions estimate |
+
+Use the framework as a review conversation, not as a mechanical checklist. Some decisions require more than one pass. A staging service may need owner labels, lower requests, fewer replicas, and queue-aware scaling. A production service may need only right-sizing at first because latency and availability leave little room for scheduling experiments. The key is to keep the scope small enough to verify and reversible enough to keep trust.
 
 ## Did You Know?
 
@@ -536,11 +637,10 @@ The teaching point is the decision sequence. First, classify the workload. Secon
 - **Carbon-aware scheduling depends on flexibility**: The same idea that works well for batch jobs can be wrong for user-facing APIs, because delayed work is only acceptable when the workload has deadline slack.
 - **Embodied carbon changes the hardware conversation**: Replacing servers with newer efficient hardware can reduce operational energy, but manufacturing and disposal impacts mean the best answer depends on lifecycle analysis, not only power draw.
 
----
 
 ## Common Mistakes
 
-| Mistake | Why It Hurts | Better Practice |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Treating sustainability as only a facilities problem | Application teams set requests, replicas, retries, images, and schedules that directly affect infrastructure demand. | Make sustainability part of workload review and platform defaults. |
 | Reducing replicas without checking availability needs | A lower replica count can create outages during node maintenance, rollouts, or traffic bursts. | Classify the workload and document the reliability trade-off before reducing replicas. |
@@ -551,7 +651,6 @@ The teaching point is the decision sequence. First, classify the workload. Secon
 | Optimizing a single metric in isolation | A greener region can add latency, data transfer, duplicate storage, or compliance risk. | Evaluate cost, carbon, reliability, data residency, and user impact together. |
 | Measuring once and assuming the result is permanent | Traffic, releases, seasonal events, and team ownership change over time. | Review trends and schedule recurring sustainability audits. |
 
----
 
 ## Quiz
 
@@ -646,7 +745,6 @@ D) Disable all limits so workloads can share nodes more freely
 **A) Deploy workload-level energy telemetry such as Kepler and export metrics to Prometheus for namespace and Pod analysis.** Kepler is designed to estimate and expose energy-related metrics for Kubernetes workloads. The measurements still require careful interpretation, but they give teams much better evidence than total infrastructure reports alone. Names and controller types do not provide energy attribution by themselves.
 </details>
 
----
 
 ## Hands-On Exercise: Build a GreenOps Review Plan
 
@@ -696,16 +794,15 @@ Create a short review note that includes three parts. First, identify the likely
 Use these commands as examples if you have a Kubernetes 1.35+ practice cluster. They are safe inspection commands, and they help connect the paper exercise to real cluster operations. If you do not have a cluster available, write the expected evidence you would request from the platform team.
 
 ```bash
-kubectl get deployment document-converter-staging -o yaml
-kubectl top pods -l app=document-converter
-kubectl get pods -l app=document-converter -o wide
-kubectl describe deployment document-converter-staging
+k get deployment document-converter-staging -o yaml
+k top pods -l app=document-converter
+k get pods -l app=document-converter -o wide
+k describe deployment document-converter-staging
 ```
 
-After you have used `kubectl` once, many Kubernetes practitioners use the alias `k` for speed. The alias is only a shell shortcut; it does not change the command behavior.
+The `k` alias was introduced earlier in the module. It is only a shell shortcut for `kubectl`; it does not change authorization, context, namespace behavior, or the safety of the command.
 
 ```bash
-alias k=kubectl
 k get deployment document-converter-staging
 ```
 
@@ -722,7 +819,22 @@ k get deployment document-converter-staging
 
 When you finish, ask whether your plan saves carbon by removing actual waste or merely moves risk to another team. Good GreenOps changes are measurable and reversible. They improve the resource system while preserving the service promises that still matter.
 
----
+
+## Sources
+
+- [Kubernetes documentation: Resource management for Pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [Kubernetes documentation: Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
+- [Kubernetes documentation: CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/)
+- [Kubernetes documentation: Managing resources with kubectl](https://kubernetes.io/docs/reference/kubectl/)
+- [Kubernetes Autoscaler: Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)
+- [Kubernetes Autoscaler: Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)
+- [CNCF TAG Environmental Sustainability](https://tag-env-sustainability.cncf.io/)
+- [Kepler project documentation](https://sustainable-computing.io/)
+- [KEDA documentation: Scaling deployments, StatefulSets, and custom resources](https://keda.sh/docs/latest/concepts/scaling-deployments/)
+- [Knative documentation: Configuring scale bounds](https://knative.dev/docs/serving/autoscaling/scale-bounds/)
+- [Fairwinds Goldilocks project](https://github.com/FairwindsOps/goldilocks)
+- [Green Software Foundation: Carbon Aware SDK](https://github.com/Green-Software-Foundation/carbon-aware-sdk)
+- [Green Software Foundation: Software Carbon Intensity specification](https://sci.greensoftware.foundation/)
 
 ## Next Module
 
