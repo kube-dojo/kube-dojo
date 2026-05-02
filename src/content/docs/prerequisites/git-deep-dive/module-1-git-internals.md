@@ -507,5 +507,5 @@ Next, continue to [Module 2: The Art of the Branch](../module-2-advanced-merging
 - [Git documentation: git-rev-parse](https://git-scm.com/docs/git-rev-parse)
 - [Git documentation: gitrevisions](https://git-scm.com/docs/gitrevisions)
 - [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog)
-- [GitHub Blog: Highlights from Git 2.29](https://github.blog/open-source/git/highlights-from-git-2-29/)
+- [Git documentation: hash-function-transition (SHA-256)](https://git-scm.com/docs/hash-function-transition)
 - [Kubernetes documentation: ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
