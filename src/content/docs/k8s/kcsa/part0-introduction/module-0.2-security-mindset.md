@@ -502,7 +502,7 @@ Success criteria:
 - [Kubernetes documentation: Admission Controllers](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)
 - [Kubernetes documentation: Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 - [NIST Special Publication 800-207: Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
-- [CNCF Blog: The 4C's of Cloud Native Security](https://www.cncf.io/blog/2020/08/12/the-4c-of-cloud-native-security/)
+- [Kubernetes documentation: Cloud Native Security and Kubernetes](https://kubernetes.io/docs/concepts/security/cloud-native-security/)
 
 ## Next Module
 
