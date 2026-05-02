@@ -1,0 +1,32 @@
+# Day 3 #388 proving batch — KCNA bucket (B3 first bucket: foundational, single-track)
+# 28 modules at <2.0 critical-rubric. Source: /api/quality/scores @ 2026-05-02.
+# Per ab discuss day3-388 (2026-05-02): A2+B3+C3+D1 with dispatcher hardening prerequisites.
+# This batch validates the new APPROVE_WITH_NITS routing + portable repo path.
+src/content/docs/k8s/kcna/part0-introduction/module-0.1-kcna-overview.md
+src/content/docs/k8s/kcna/part0-introduction/module-0.2-study-strategy.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.1-what-is-kubernetes.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.2-container-fundamentals.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.3-control-plane.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.4-node-components.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.5-pods.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.6-workload-resources.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.7-services.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.8-namespaces-labels.md
+src/content/docs/k8s/kcna/part1-kubernetes-fundamentals/module-1.9-debugging-basics.md
+src/content/docs/k8s/kcna/part2-container-orchestration/module-2.1-scheduling.md
+src/content/docs/k8s/kcna/part2-container-orchestration/module-2.2-scaling.md
+src/content/docs/k8s/kcna/part2-container-orchestration/module-2.3-storage.md
+src/content/docs/k8s/kcna/part2-container-orchestration/module-2.4-configuration.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.1-cloud-native-principles.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.10-green-computing.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.2-cncf-ecosystem.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.3-patterns.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.4-observability-fundamentals.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.5-observability-tools.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.6-security-basics.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.7-community-collaboration.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.8-ai-ml-cloud-native.md
+src/content/docs/k8s/kcna/part3-cloud-native-architecture/module-3.9-webassembly.md
+src/content/docs/k8s/kcna/part4-application-delivery/module-4.1-ci-cd.md
+src/content/docs/k8s/kcna/part4-application-delivery/module-4.2-application-packaging.md
+src/content/docs/k8s/kcna/part4-application-delivery/module-4.3-release-strategies.md

@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""#388 Day 2 pilot dispatcher.
+"""#388 volume-run dispatcher (originally Day 2 pilot, now generalized).
 
-For each module in pilot-2026-05-02.txt:
+For each module path in --input (default scripts/quality/pilot-2026-05-02.txt):
   1. Worktree at .worktrees/codex-388-pilot-<slug> from origin/main
   2. Codex (gpt-5.5, mode=danger) rewrites per module-rewriter-388.md,
      runs verifier, commits, pushes, opens PR
   3. Gemini cross-family review on the PR (read-only)
-  4. If APPROVE -> squash-merge with --delete-branch
+  4. APPROVE       -> squash-merge with --delete-branch
+     APPROVE_WITH_NITS -> log + post review; orchestrator triages (C3 fix-up lane)
+     NEEDS CHANGES -> log + hold; orchestrator decides (re-dispatch vs inline)
   5. Brief pause; next module
 
-Sequential per item. JSONL log at logs/388_pilot_2026-05-02.jsonl.
+Sequential per item. JSONL log under logs/.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import subprocess
@@ -20,7 +23,10 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path("/Users/krisztiankoos/projects/kubedojo")
+# Derive REPO from this file's location so the dispatcher works from any
+# checkout (primary OR a worktree) without a hard-coded absolute path.
+# scripts/quality/dispatch_388_pilot.py -> repo root is parents[2].
+REPO = Path(__file__).resolve().parents[2]
 PILOT_FILE = REPO / "scripts/quality/pilot-2026-05-02.txt"
 LOG = REPO / "logs/388_pilot_2026-05-02.jsonl"
 BRIEF = REPO / "scripts/prompts/module-rewriter-388.md"
@@ -169,14 +175,25 @@ def dispatch_gemini_review(pr_num: int, module_path: str, slug: str):
         return None, "ERROR"
     text = result.response or ""
     log({"event": "gemini_done", "pr": pr_num, "ok": result.ok, "response_excerpt": text[-2000:]})
-    upper = text.upper()
-    if "VERDICT: NEEDS CHANGES" in upper or "NEEDS CHANGES" in upper.split("VERDICT:")[-1]:
-        verdict = "NEEDS CHANGES"
-    elif "VERDICT: APPROVE" in upper:
-        verdict = "APPROVE"
-    else:
-        verdict = "UNCLEAR"
-    return text, verdict
+    return text, classify_verdict(text)
+
+
+def classify_verdict(text: str) -> str:
+    """Classify a gemini review into APPROVE / APPROVE_WITH_NITS / NEEDS CHANGES / UNCLEAR.
+
+    Order matters: must check APPROVE WITH NITS BEFORE APPROVE so the
+    longer phrase wins (otherwise nits silently auto-merge — see #388
+    Day 2 pilot ab-discuss day3-388 deliberation, 2026-05-02).
+    """
+    upper = (text or "").upper()
+    tail = upper.split("VERDICT:")[-1]
+    if "VERDICT: NEEDS CHANGES" in upper or "NEEDS CHANGES" in tail:
+        return "NEEDS CHANGES"
+    if "VERDICT: APPROVE WITH NITS" in upper or "APPROVE WITH NITS" in tail:
+        return "APPROVE_WITH_NITS"
+    if "VERDICT: APPROVE" in upper:
+        return "APPROVE"
+    return "UNCLEAR"
 
 
 def post_review_comment(pr_num: int, body: str) -> None:
@@ -194,11 +211,42 @@ def merge_pr(pr_num: int) -> None:
     )
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="#388 volume-run dispatcher")
+    p.add_argument(
+        "--input", "-i", type=Path, default=None,
+        help=f"Path to module list (one path per line). Default: {PILOT_FILE.relative_to(REPO)}",
+    )
+    p.add_argument(
+        "--max", "-n", type=int, default=0,
+        help="Stop after this many modules (0 = unlimited).",
+    )
+    p.add_argument(
+        "--log", type=Path, default=None,
+        help=f"Override log path. Default: {LOG.relative_to(REPO)}",
+    )
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    global LOG
+    args = parse_args(argv)
+    input_file = args.input or PILOT_FILE
+    if args.log is not None:
+        LOG = args.log
     LOG.parent.mkdir(parents=True, exist_ok=True)
-    pilot = [l.strip() for l in PILOT_FILE.read_text().splitlines() if l.strip()]
-    log({"event": "pilot_start", "count": len(pilot)})
-    for module_path in pilot:
+    if not input_file.exists():
+        print(f"❌ input file not found: {input_file}", file=sys.stderr)
+        return 1
+    queue = [
+        line.strip()
+        for line in input_file.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    if args.max and args.max > 0:
+        queue = queue[: args.max]
+    log({"event": "pilot_start", "count": len(queue), "input": str(input_file), "repo": str(REPO)})
+    for module_path in queue:
         slug = slugify(module_path)
         log({"event": "module_start", "module": module_path, "slug": slug})
         try:
@@ -220,7 +268,19 @@ def main() -> int:
         if verdict == "APPROVE":
             merge_pr(pr_num)
             log({"event": "merged", "pr": pr_num, "module": module_path})
-        else:
+        elif verdict == "APPROVE_WITH_NITS":
+            # C3 fix-up lane: orchestrator triages inline (trivial nits) or
+            # re-dispatches codex (semantic). Do NOT auto-merge — the
+            # original collapse of APPROVE_WITH_NITS into APPROVE was the
+            # bug that motivated this distinction (ab discuss day3-388 2026-05-02).
+            log({
+                "event": "merge_held_nits",
+                "pr": pr_num,
+                "module": module_path,
+                "verdict": verdict,
+                "review_excerpt": (review_text or "")[-1500:],
+            })
+        else:  # NEEDS CHANGES or UNCLEAR
             log({"event": "merge_held", "pr": pr_num, "module": module_path, "verdict": verdict})
         time.sleep(5)
     log({"event": "pilot_done"})
