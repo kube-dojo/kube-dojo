@@ -151,6 +151,16 @@ docs/session-state/
 STATUS.md  (Latest handoff promotion at session end)
 ```
 
+## Use `ab discuss` for high-leverage decisions (agreed end-of-session)
+
+User flagged that we underutilize `ab discuss --with claude,codex,gemini` — the agent bridge supports multi-agent rounds (default 2, cap 4). We've been treating ab as point-to-point dispatch (codex writes, gemini reviews, I merge) and missing real quorum reasoning.
+
+**Scope agreement**: use it for high-leverage decisions only — architecture choices, threshold freezes, contested NEEDS CHANGES — NOT per-PR review (would 3x the latency we just measured at 12 min/module).
+
+**Voting machinery**: do NOT build quorum/tie-break code yet. Start with a prompt convention — each agent ends its turn with `VOTE: YES|NO|ABSTAIN` + one-sentence reason, claude extracts the verdict. Add code only after 3-5 real discussions reveal where free-form actually fails.
+
+**First test next session**: `ab discuss day3-388 --with claude,codex,gemini --max-rounds 3` on Day 3 volume-run architecture (lane count, batch shape, coherence-review cadence). That's the cleanest signal — a decision affecting 226 modules where a single-agent blind spot is genuinely costly.
+
 ## Blockers
 
-(none — Day 3 volume run ready to plan + execute. Decision points: lane count, batch shape, coherence-review cadence.)
+(none — Day 3 volume run ready to plan + execute. First action: ab discuss session on Day 3 architecture per the agreement above.)
