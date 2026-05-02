@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Observability at Scale"
 description: "Architect and operate scalable observability stacks on bare metal using Prometheus, Mimir, OpenTelemetry, and the Grafana LGTM stack."
 slug: on-premises/operations/module-7.8-observability-at-scale
@@ -8,6 +8,8 @@ sidebar:
 ---
 
 # Observability at Scale
+
+**Complexity:** Advanced. **Time to complete:** 90-120 minutes. **Prerequisites:** Prometheus fundamentals, Kubernetes operations, basic object storage concepts, and comfort reading YAML manifests.
 
 ## Learning Outcomes
 
@@ -252,6 +254,32 @@ inhibit_rules:
 
 > **Stop and think:** you currently page on "disk above 85%". A team-wide policy change moves you to "disk will be full in less than 4 hours at current write rate." What changes about the alert's signal-to-noise ratio, and what changes about the *response* you expect on-call to take when it fires? The shift from threshold-based to *predictive* alerts is one of the highest-leverage moves a mature platform team makes.
 
+## Patterns & Anti-Patterns
+
+The first durable pattern is to separate local collection from global storage, then make the boundary explicit in both ownership and SLOs. A cluster-local Prometheus, Prometheus Agent, or OpenTelemetry Collector Agent should have a narrow responsibility: discover targets, collect data close to the workload, survive short local disruptions, and forward to the platform backend. The global tier should own tenancy, retention, query acceleration, rule evaluation at platform scope, and object-storage durability. This pattern works because it lets the local tier fail small and the central tier scale wide, but it only holds if the remote-write and OTLP paths are treated as production dependencies with their own alerts, capacity plans, and backpressure behavior.
+
+The second proven pattern is to enforce budgets before data lands, not after it has already become expensive. Prometheus scrape limits, Mimir tenant limits, Loki stream limits, Collector memory limiters, and relabeling rules are all admission-control mechanisms, even though they live in different products. They protect the platform at the boundary where a bad label, a broken exporter, or a runaway trace producer first appears. Teams sometimes resist this because a rejected scrape or HTTP 429 feels harsh, but the alternative is worse: accepting unbounded data into shared storage and then asking every other tenant to pay the memory, compaction, and query cost.
+
+The third pattern is to make each signal answer a different operational question. Metrics should tell you whether the service is healthy and where saturation is trending; logs should explain discrete events with enough context to reproduce the path; traces should connect a slow or failed request across process boundaries; profiles should show which code path consumed CPU or allocation time during a window. When a dashboard tries to make logs behave like metrics, or a trace backend becomes the first place operators search for every outage, the stack becomes expensive and confusing. A mature runbook names the signal to consult next and states what uncertainty that signal is meant to remove.
+
+The most common anti-pattern is the heroic central Prometheus: one enormous instance, one enormous disk, one large query path, and a pile of recording rules everyone is afraid to touch. It usually survives longer than it should because vertical scaling buys time, but the architecture has no graceful failure mode when the next cardinality event arrives. A better design shards scraping, remote-writes raw samples to a backend built for multi-node ingest, and moves expensive global queries away from the collection path. The point is not that Prometheus is weak; the point is that single-process reliability and platform-wide multi-tenancy are different design goals.
+
+Another anti-pattern is using labels as a search engine. Prometheus labels, Loki labels, and resource attributes in OpenTelemetry are powerful because they build indexes, and indexes are exactly why they must be controlled. If a developer promotes `customer_id`, raw URL path, trace ID, or request ID into a label, the platform stops storing observations and starts storing one stream or series per request. The better alternative is to keep dynamic values inside the payload, normalize paths at instrumentation time, use exemplars to bridge metrics to traces, and reserve labels for dimensions that support aggregation.
+
+A subtler anti-pattern is alerting on every component's private fear instead of on the user's experience. High CPU, a full queue, a slow compaction, and a failed scrape can all matter, but they do not all deserve to wake a human at night. The better alternative is a layered alert design: symptom alerts page, cause alerts enrich, and diagnostic alerts route to dashboards or low-urgency channels. Inhibition and grouping then express operational truth directly in configuration, so a rack failure, node failure, and pod failure become one incident narrative rather than competing pages.
+
+## Decision Framework
+
+Start with the failure you are trying to survive. If the main risk is that a single Prometheus is running out of memory while your team still wants local alerting and a familiar operational model, keep full Prometheus servers, shard scraping deliberately, and add Thanos Sidecars for durable historical queries. This path preserves local autonomy: when the central query layer or object store has a bad day, the cluster-local Prometheus still evaluates alerts from its own TSDB. The trade-off is that recent global queries depend on live sidecars, and true tenant isolation requires extra architecture around Thanos Receive or an external gateway.
+
+Choose Prometheus Agent plus Mimir when the main requirement is a shared metrics platform for many tenants. That design makes the ingestion contract explicit: agents collect and forward, Mimir enforces the tenant boundary, per-tenant limits, replication, and query path. It is the better fit when different teams need independent retention, rate limits, ruler namespaces, and access control. The cost is operational complexity, because the platform team now owns distributors, ingesters, store gateways, compactors, caches, ring health, and object-storage latency as first-class production systems.
+
+For logs, choose Loki only if the team accepts label discipline as part of the operating contract. Loki is excellent when labels describe infrastructure and the log line carries dynamic request context, because object storage and chunk indexes stay compact. It is a poor fit when teams expect full-text indexing of every field at ingestion time without paying Elasticsearch-like cost. The decision is less about product preference than about query shape: if operators usually start from namespace, app, container, level, and time, Loki fits; if they usually start from arbitrary words inside the message body, the ingestion model must be discussed honestly.
+
+For traces and profiles, decide where sampling and retention decisions belong. Head-based sampling in the Agent tier is cheap and protects the network, but it cannot know whether a trace will become interesting later. Tail-based sampling in the Gateway tier can keep slow or failed traces after seeing the whole request, but it needs memory, buffering, and careful backpressure handling. Continuous profiling adds another cost surface, so introduce it first for services where CPU, allocation, or lock contention is already a recurring incident theme rather than enabling it everywhere on day one.
+
+Finally, decide what pages a human. The default should be symptom-based alerts tied to user-visible SLOs, with component alerts routed as context unless the component is itself the user-facing service. Use grouping when several alerts describe the same incident, inhibition when one alert explains another, and routing when different receivers genuinely own different response actions. If an alert cannot name a likely owner, a likely action, and a likely consequence of inaction, it belongs in a dashboard or ticket queue until it earns the right to page.
+
 ## Did You Know?
 
 1. The Prometheus TSDB's two-hour head block is not arbitrary. It was chosen because two hours is short enough to keep the in-memory index manageable on commodity hardware, and long enough that a typical query window (last hour, last thirty minutes) almost always lives entirely in the head, avoiding any disk read at all. Changing it is technically possible but operationally inadvisable.
@@ -261,72 +289,64 @@ inhibit_rules:
 
 ## Common Mistakes
 
-| # | Mistake | What Goes Wrong | Fix |
-|---|---------|-----------------|-----|
-| 1 | Federating raw metrics through `/federate` to a "central" Prometheus | Global instance OOMs as it carries the full cardinality of every leaf; the architecture you wanted (isolation) becomes the architecture you got (single point of failure) | Federate only pre-aggregated recording-rule output; for raw data, use remote-write to Mimir or Thanos Receive |
-| 2 | Promoting a high-cardinality field (request ID, user ID, trace ID) into a Loki label | Ingester memory explodes; "maximum active streams" rejection follows; ingestion drops with HTTP 429 | Keep dynamic fields in the log payload; extract at query time with `| json | field="..."`; reserve labels for infrastructure metadata only |
-| 3 | Running Prometheus Agent mode without sizing the WAL for expected network outages | When remote-write is unreachable, the WAL fills, and once full the agent silently drops new samples; you do not detect this until the dashboard returns from the dead with a hole in it | Size the WAL volume for the longest tolerable network partition; alert on `prometheus_remote_storage_dropped_samples_total` and on WAL disk usage |
-| 4 | Restarting a memory-pressured Prometheus and watching it crash-loop on WAL replay | Replay loads every uncompacted sample into the head block; if the WAL grew past the new pod's limit, every restart OOMs again at the same point | Increase memory temporarily, or in a true emergency move the `wal/` directory aside (you lose recent uncompacted data) and bring the pod up clean before fixing the underlying cardinality cause |
-| 5 | Relying on threshold-based CPU alerts for application health | Pages fire constantly during normal busy hours; on-call learns to ignore them; the real CPU saturation page that matters is buried | Move to symptom-based alerts (error rate, latency, queue depth); use CPU only as a *correlating* signal during incident triage, not a paging signal |
-| 6 | Ordering the Collector pipeline as `[batch, k8sattributes, memory_limiter]` | Memory limiter runs after batching has already consumed memory; under pressure the limiter cannot help; OOMKills follow | Always place `memory_limiter` first, enrichment in the middle, and `batch` last — drop early, enrich once, batch the enriched result |
-| 7 | Running multiple Thanos Compactors against the same object-storage bucket | Compactors overwrite each other's metadata; "overlapping blocks" errors halt the singleton-by-design component; data integrity at risk | Run exactly one Compactor per bucket; use a Lease or a dedicated StatefulSet with `replicas: 1` and pod anti-affinity to enforce singleton |
-| 8 | Building one Alertmanager route tree per team without inhibition rules | Same root cause (a rack power loss, a network partition) fires dozens of unrelated alerts; on-call is paged from many directions; mean-time-to-resolution rises | Add inhibition rules linking infrastructure alerts to application alerts; group by the failure-domain label (rack, AZ, cluster) so one event becomes one notification |
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Federating raw metrics through `/federate` to a "central" Prometheus | Global instance OOMs as it carries the full cardinality of every leaf; the architecture you wanted (isolation) becomes the architecture you got (single point of failure) | Federate only pre-aggregated recording-rule output; for raw data, use remote-write to Mimir or Thanos Receive |
+| Promoting a high-cardinality field (request ID, user ID, trace ID) into a Loki label | Ingester memory explodes; "maximum active streams" rejection follows; ingestion drops with HTTP 429 | Keep dynamic fields in the log payload; extract at query time with `| json | field="..."`; reserve labels for infrastructure metadata only |
+| Running Prometheus Agent mode without sizing the WAL for expected network outages | When remote-write is unreachable, the WAL fills, and once full the agent silently drops new samples; you do not detect this until the dashboard returns from the dead with a hole in it | Size the WAL volume for the longest tolerable network partition; alert on `prometheus_remote_storage_dropped_samples_total` and on WAL disk usage |
+| Restarting a memory-pressured Prometheus and watching it crash-loop on WAL replay | Replay loads every uncompacted sample into the head block; if the WAL grew past the new pod's limit, every restart OOMs again at the same point | Increase memory temporarily, or in a true emergency move the `wal/` directory aside (you lose recent uncompacted data) and bring the pod up clean before fixing the underlying cardinality cause |
+| Relying on threshold-based CPU alerts for application health | Pages fire constantly during normal busy hours; on-call learns to ignore them; the real CPU saturation page that matters is buried | Move to symptom-based alerts (error rate, latency, queue depth); use CPU only as a *correlating* signal during incident triage, not a paging signal |
+| Ordering the Collector pipeline as `[batch, k8sattributes, memory_limiter]` | Memory limiter runs after batching has already consumed memory; under pressure the limiter cannot help; OOMKills follow | Always place `memory_limiter` first, enrichment in the middle, and `batch` last so the collector drops early, enriches once, and batches the enriched result |
+| Running multiple Thanos Compactors against the same object-storage bucket | Compactors overwrite each other's metadata; "overlapping blocks" errors halt the singleton-by-design component; data integrity at risk | Run exactly one Compactor per bucket; use a Lease or a dedicated StatefulSet with `replicas: 1` and pod anti-affinity to enforce singleton |
+| Building one Alertmanager route tree per team without inhibition rules | Same root cause (a rack power loss, a network partition) fires dozens of unrelated alerts; on-call is paged from many directions; mean-time-to-resolution rises | Add inhibition rules linking infrastructure alerts to application alerts; group by the failure-domain label (rack, AZ, cluster) so one event becomes one notification |
 
 ## Quiz
 
-**1.** Your central Prometheus has 18 million active series and is OOMKilling at 64 GiB. The platform team has rejected upgrading to a 128 GiB node because next quarter's traffic projection will overrun that too. You have a stable workload, no need for multi-tenancy in the immediate term, and a strong preference for not redesigning the existing scraping topology. Which architecture should you propose, and what is the *first* component you deploy?
-
 <details>
-<summary>Answer</summary>
-Hash-based sharding combined with Thanos for longevity. The first component is the Thanos Sidecar attached to the existing Prometheus pods, because that gives you object-storage-backed retention without changing how anything writes. Once Sidecars are in place and uploads are healthy, partition the targets across N replicas using the `hashmod` action so each replica owns a deterministic slice. Mimir would also work, but it requires moving every Prometheus to Agent mode and standing up a microservices backend, which is a much larger change for a team that explicitly does not want to redesign scraping.
+<summary>1. Your central Prometheus has 18 million active series and is OOMKilling at 64 GiB. You need to diagnose the scaling bottleneck without redesigning the existing scraping topology. Which architecture should you propose first?</summary>
+
+Hash-based sharding combined with Thanos for longevity is the least disruptive proposal. The diagnosis is that active-series count and head-block memory pressure are the bottleneck, so a larger node only delays the next OOM rather than changing the scaling curve. The first component is the Thanos Sidecar attached to the existing Prometheus pods, because that gives you object-storage-backed retention without changing how anything writes. Once Sidecars are in place and uploads are healthy, partition targets across replicas using `hashmod` so each replica owns a deterministic slice.
 </details>
 
-**2.** A developer adds a `customer_id` label to a Loki log stream. Within an hour, ingesters start returning HTTP 429 with "maximum active streams" errors and the application team is paged. As the platform on-call, what do you change *first* — the label configuration on the agent, the tenant's stream limit in Loki, or the application's logging code — and why does that order matter?
-
 <details>
-<summary>Answer</summary>
+<summary>2. A developer adds a `customer_id` label to a Loki log stream. Ingesters start returning HTTP 429 with "maximum active streams" errors. What do you change first, and why?</summary>
+
 Change the agent's label configuration first to stop promoting `customer_id` to a Loki label. That stops the bleed in seconds and brings ingestion back. Raising the tenant's stream limit treats the symptom and lets the explosion grow further; fixing the application's logging code is correct but takes a release cycle, during which you would still be down. Once ingestion is recovered, file the application fix as a follow-up so that the dynamic field stays in the log payload (queryable with `| json`) rather than the label set.
 </details>
 
-**3.** Your OpenTelemetry Gateway is OOMKilling under load. Inspecting the configuration you find the pipeline ordered as `processors: [k8sattributes, batch, memory_limiter]`. Explain why this ordering causes the OOM and write the corrected pipeline, justifying each position.
-
 <details>
-<summary>Answer</summary>
+<summary>3. Your OpenTelemetry Gateway is OOMKilling under load, and the pipeline is ordered as `processors: [k8sattributes, batch, memory_limiter]`. What is wrong, and what order should replace it?</summary>
+
 With `memory_limiter` last, batches accumulate before memory pressure is checked, so by the time the limiter looks at usage the pod has already allocated past its limit and the kernel kills it. The corrected order is `[memory_limiter, k8sattributes, batch]`. `memory_limiter` first drops incoming data at the boundary under pressure, before any CPU is spent on enrichment. `k8sattributes` runs second so that the data that *is* admitted gets enriched once. `batch` runs last so the network gets full, enriched batches and the per-record overhead is amortized.
 </details>
 
-**4.** You are designing alerting for a cluster where occasional whole-rack power events are expected. Today, when a rack loses power, on-call receives 50 individual NotReady-pod pages, 12 NotReady-node pages, and one rack-power-fault page over a span of three minutes. Describe the Alertmanager configuration changes that turn this into one actionable notification, and identify which mechanism (routing, grouping, inhibition) does which part of the work.
-
 <details>
-<summary>Answer</summary>
-Use grouping plus inhibition together. Add `group_by: [rack]` so that all alerts sharing a `rack` label are consolidated into a single notification within `group_wait`. Add an inhibit rule that suppresses NotReady-pod and NotReady-node alerts when a rack-power-fault alert is firing for the same rack: `equal: [rack]`, `source_matchers: [alertname="RackPowerFault"]`, `target_matchers: [alertname=~"Pod|Node.*NotReady"]`. Routing is not the right mechanism here; routing decides *who gets which alert*, while grouping and inhibition decide *which alerts fire in the first place*. The result is one page that says "rack-7 lost power" instead of 63 cause-and-symptom pages.
+<summary>4. You are evaluating alerting fatigue in a cluster where a rack power event creates pod, node, and rack alerts. How do routing, grouping, and inhibition turn that cascade into one page?</summary>
+
+Use grouping plus inhibition together, and keep routing focused on ownership. Add `group_by: [rack]` so that all alerts sharing a `rack` label are consolidated into a single notification within `group_wait`. Add an inhibit rule that suppresses NotReady-pod and NotReady-node alerts when a rack-power-fault alert is firing for the same rack: `equal: [rack]`, `source_matchers: [alertname="RackPowerFault"]`, `target_matchers: [alertname=~"Pod|Node.*NotReady"]`. Routing decides which receiver owns the rack-power incident, while grouping and inhibition redesign the notification flow so the on-call sees one cause with clear symptoms instead of many competing pages.
 </details>
 
-**5.** A Prometheus Agent in a remote site loses its network link to the central Mimir for two hours. When the link is restored, the dashboard shows a clean recovery — except for a one-hour gap in the middle of the outage that never refilled. What two things probably happened, and which counter would have warned you in advance?
-
 <details>
-<summary>Answer</summary>
+<summary>5. A Prometheus Agent loses its network link to Mimir for two hours, then recovers with a permanent data gap. What probably happened, and which counter should have warned you?</summary>
+
 First, the agent's WAL filled before the link was restored, and once full it began dropping new samples silently rather than buffering further. Second, the link came back partway through the outage but the agent could not catch up before the WAL pruned the oldest data, leaving a hole between "first dropped sample" and "first sample after WAL caught up." The warning counter is `prometheus_remote_storage_dropped_samples_total`, which becomes non-zero at the moment the WAL begins evicting un-shipped data. A standing alert on a non-zero rate of this counter, plus monitoring of WAL disk usage, would have paged you while the recovery was still possible.
 </details>
 
-**6.** You are evaluating whether to adopt Mimir or stay on Thanos for a new bare-metal observability platform that will host metrics for 14 internal teams, each with their own dashboards and alerts. One of those teams has a regulatory requirement that no other team be able to query their metrics. Which backend simplifies meeting that requirement, and what configuration mechanism specifically makes it work?
-
 <details>
-<summary>Answer</summary>
+<summary>6. A new bare-metal observability platform will host metrics for 14 internal teams, and one team requires strict query isolation. Which backend simplifies that requirement?</summary>
+
 Mimir simplifies it because multi-tenancy is native: every write and query carries an `X-Scope-OrgID` header, and Mimir enforces tenant isolation at the storage layer (per-tenant blocks in object storage) and at the query layer (queriers cannot cross tenant boundaries without explicit configuration). The regulated team gets its own tenant ID, the gateway propagates the header, and other tenants are physically incapable of querying that data. With Thanos you would have to bolt on Thanos Receive plus an external proxy and reverse-proxy header manipulation to approximate the same isolation, and you would carry the operational burden of that custom stack.
 </details>
 
-**7.** A platform team enforces `sample_limit: 10000` and `label_limit: 50` on every scrape, plus per-tenant cardinality budgets in Mimir. A developer's ingestion is being rejected with "label_limit exceeded." The developer asks the platform team to raise the limit. What is the right response, and what is the underlying principle the platform team is defending?
-
 <details>
-<summary>Answer</summary>
+<summary>7. A platform team enforces `sample_limit: 10000` and `label_limit: 50`, and a developer asks for a higher label limit after ingestion is rejected. What is the right response?</summary>
+
 The right response is no. The label limit is not a quota the developer can buy more of; it is a defense against a class of mistakes that have crashed the platform before. The principle is that the platform team's contract with each tenant is "predictable cost in exchange for predictable behaviour," and unbounded label growth is what makes cost unpredictable. The right path forward is to help the developer audit which label is exceeding the limit and either reshape the metric (move dynamic fields out of labels) or pre-aggregate it with a recording rule. Raising the limit hides the signal that the metric was poorly designed.
 </details>
 
-**8.** During a rolling Mimir upgrade, you notice that exemplar diamonds disappear from a histogram panel for a brief window even though the metric itself remains continuous. What is the most likely explanation, and is this a defect you should escalate?
-
 <details>
-<summary>Answer</summary>
+<summary>8. During a rolling Mimir upgrade, exemplar diamonds disappear from a histogram panel for a brief window even though the metric remains continuous. Is this an incident?</summary>
+
 The most likely explanation is that exemplar storage in Mimir uses a separate in-memory ring per ingester, and during the rolling upgrade some ingesters have rolled before others, briefly serving exemplar queries from a partial set of replicas. The metric histogram is replicated and quorum-read, so it appears continuous; exemplars have weaker durability guarantees by design and do not survive ingester restarts the same way. This is expected behaviour, not a defect, and it should not be escalated. It is a useful reminder that exemplars are a *navigation aid*, not a system of record — if you ever feel tempted to alert on exemplar presence, you have misunderstood the contract.
 </details>
 
@@ -336,9 +356,9 @@ Build a small but honest Mimir-backed metrics platform on a kind cluster and ver
 
 ### Prerequisites
 
-- A Kubernetes cluster, version 1.32 or later (kind is fine for the lab; the same configuration works on bare metal with no changes).
+- A Kubernetes cluster, version 1.35 or later (kind is fine for the lab; the same configuration works on bare metal with no changes).
 - `helm` v3 installed and reachable.
-- `kubectl` configured against the cluster.
+- `kubectl` configured against the cluster. For the commands below, define `alias k=kubectl` in your shell and use `k` for cluster operations.
 - About 8 GiB of free RAM on the host running the cluster.
 
 ### Step 1: Object Storage Backend
@@ -466,12 +486,12 @@ spec:
             name: prometheus-agent-config
 EOF
 
-kubectl apply -f prom-agent.yaml
+k apply -f prom-agent.yaml
 ```
 
 Success criteria:
-- [ ] `kubectl logs -n observability deploy/prometheus-agent` shows `WAL started` and no remote-write errors after sixty seconds.
-- [ ] Querying Mimir for tenant-a returns the `up` series: `kubectl exec -n observability deploy/prometheus-agent -- wget -qO- --header "X-Scope-OrgID: tenant-a" "http://mimir-nginx.observability.svc.cluster.local/prometheus/api/v1/query?query=up"` returns `"status":"success"` with at least one result.
+- [ ] `k logs -n observability deploy/prometheus-agent` shows `WAL started` and no remote-write errors after sixty seconds.
+- [ ] Querying Mimir for tenant-a returns the `up` series: `k exec -n observability deploy/prometheus-agent -- wget -qO- --header "X-Scope-OrgID: tenant-a" "http://mimir-nginx.observability.svc.cluster.local/prometheus/api/v1/query?query=up"` returns `"status":"success"` with at least one result.
 
 ### Step 4: Provoke and Recover a Cardinality Event
 
@@ -505,8 +525,8 @@ Success criteria:
 ```bash
 helm uninstall mimir -n observability
 helm uninstall minio -n observability
-kubectl delete -f prom-agent.yaml
-kubectl delete namespace observability
+k delete -f prom-agent.yaml
+k delete namespace observability
 ```
 
 ## Next Module
@@ -516,6 +536,14 @@ Continue to [Module 7.9: Capacity Planning and Forecasting](../module-7.9-capaci
 ## Further Reading
 
 - [Prometheus Hash-based Sharding Documentation](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config)
+- [Prometheus Agent Mode](https://prometheus.io/docs/prometheus/latest/feature_flags/#prometheus-agent)
+- [Prometheus Storage Internals](https://prometheus.io/docs/prometheus/latest/storage/)
+- [Prometheus Alerting Rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/)
+- [Alertmanager Configuration](https://prometheus.io/docs/alerting/latest/configuration/)
 - [Thanos Architecture and Design](https://thanos.io/tip/thanos/design.md/)
+- [Grafana Mimir Architecture](https://grafana.com/docs/mimir/latest/references/architecture/)
+- [Grafana Mimir Multi-tenancy](https://grafana.com/docs/mimir/latest/manage/secure/authentication-and-authorization/)
 - [OpenTelemetry Collector Deployment Patterns](https://opentelemetry.io/docs/collector/deployment/gateway/)
+- [OpenTelemetry Collector Processors](https://opentelemetry.io/docs/collector/configuration/#processors)
 - [Loki Label Best Practices](https://grafana.com/docs/loki/latest/get-started/labels/)
+- [Tempo TraceQL Documentation](https://grafana.com/docs/tempo/latest/traceql/)
