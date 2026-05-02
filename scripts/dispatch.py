@@ -26,6 +26,8 @@ from pathlib import Path
 
 import psutil
 
+from agent_runtime.env_sanitize import build_agent_env
+from agent_runtime.redact import redact_text
 from ai_agent_bridge._prompts import build_review_message
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -36,10 +38,22 @@ MCP_CONFIG = REPO_ROOT / ".mcp.json"
 GEMINI_CLI = shutil.which("gemini") or "gemini"
 CODEX_CLI = shutil.which("codex") or "codex"
 
-# Environment for subprocesses
-_ENV = os.environ.copy()
-_ENV["GEMINI_SESSION"] = "1"        # Disable hostile aliases (eza, bat, zoxide)
-_ENV["KUBEDOJO_PIPELINE"] = "1"     # Suppress inbox hooks during pipeline runs
+# Environment for subprocesses. Agent CLIs get sanitized snapshots so broad
+# shell credentials (GitHub/cloud/npm/etc.) are not inherited by model children.
+_AGENT_ENV_OVERRIDES = {
+    "GEMINI_SESSION": "1",        # Disable hostile aliases (eza, bat, zoxide).
+    "KUBEDOJO_PIPELINE": "1",     # Suppress inbox hooks during pipeline runs.
+}
+
+
+def _agent_env(provider: str, overrides: dict[str, str | None] | None = None) -> dict:
+    merged_overrides = {**_AGENT_ENV_OVERRIDES}
+    if overrides:
+        merged_overrides.update(overrides)
+    return build_agent_env(provider=provider, overrides=merged_overrides)
+
+
+_ENV = _agent_env("bridge")
 # Gemini auth: CLI prefers GEMINI_API_KEY when set; otherwise falls
 # through to OAuth/subscription creds in ~/.gemini/oauth_creds.json.
 #
@@ -58,11 +72,11 @@ def _gemini_env(use_subscription: bool) -> dict:
     """Return the child env for a Gemini dispatch. When use_subscription=True,
     strip the API keys so the CLI falls back to OAuth creds."""
     if not use_subscription:
-        return _ENV
-    env = {**_ENV}
-    env.pop("GEMINI_API_KEY", None)
-    env.pop("GOOGLE_API_KEY", None)
-    return env
+        return _agent_env("gemini")
+    return _agent_env(
+        "gemini",
+        {"GEMINI_API_KEY": None, "GOOGLE_API_KEY": None},
+    )
 
 # GitHub comment char limit (65,536 minus safety margin)
 GH_CHAR_LIMIT = 64000
@@ -288,9 +302,9 @@ def dispatch_gemini(prompt: str, model: str | None = None,
                 # Non-zero exit but got output — likely usable
                 _log("gemini", model, full_prompt, output, True, elapsed, stderr)
                 return True, output
-            print(f"Gemini error (exit {proc.returncode}): {stderr[:500]}", file=sys.stderr)
+            print(f"Gemini error (exit {proc.returncode}): {redact_text(stderr)[:500]}", file=sys.stderr)
             _log("gemini", model, full_prompt, output, False, elapsed, stderr)
-            return False, stderr
+            return False, redact_text(stderr)
 
         output = "".join(output_lines).strip()
         _log("gemini", model, full_prompt, output, True, elapsed)
@@ -441,18 +455,20 @@ def dispatch_claude(prompt: str, model: str = CLAUDE_DEFAULT_MODEL,
     t0 = time.time()
 
     try:
-        result = _run_with_process_group(cmd, prompt, timeout, str(REPO_ROOT), _ENV)
+        result = _run_with_process_group(
+            cmd, prompt, timeout, str(REPO_ROOT), _agent_env("claude")
+        )
         elapsed = time.time() - t0
         if result.returncode != 0:
-            print(f"Claude error (exit {result.returncode}): {result.stderr[:500]}", file=sys.stderr)
+            print(f"Claude error (exit {result.returncode}): {redact_text(result.stderr)[:500]}", file=sys.stderr)
             _log("claude", model, prompt, "", False, elapsed, result.stderr)
             # Escalate rate-limit / quota failures so the pipeline can pause
             # the module instead of treating it as a generic write failure.
             if _is_rate_limited(result.stderr) or _is_rate_limited(result.stdout):
                 raise ClaudeUnavailableError(
-                    f"Claude rate-limited or quota exhausted: {result.stderr[:200]}"
+                    f"Claude rate-limited or quota exhausted: {redact_text(result.stderr)[:200]}"
                 )
-            return False, result.stderr
+            return False, redact_text(result.stderr)
         output = result.stdout.strip()
         _claude_call_count += 1
         _log("claude", model, prompt, output, True, elapsed)
@@ -485,7 +501,9 @@ def dispatch_codex(prompt: str, model: str = CODEX_DEFAULT_MODEL,
 
     t0 = time.time()
     try:
-        result = _run_with_process_group(cmd, prompt, timeout, str(REPO_ROOT), _ENV)
+        result = _run_with_process_group(
+            cmd, prompt, timeout, str(REPO_ROOT), _agent_env("codex")
+        )
         elapsed = time.time() - t0
         output = result.stdout.strip()
         stderr = result.stderr or ""
@@ -493,10 +511,10 @@ def dispatch_codex(prompt: str, model: str = CODEX_DEFAULT_MODEL,
         if result.returncode != 0:
             # Check if it was a rate limit / quota issue so caller can degrade
             rate_limited = _is_rate_limited(output + "\n" + stderr)
-            tag = "RATE_LIMIT" if rate_limited else stderr[:500]
+            tag = "RATE_LIMIT" if rate_limited else redact_text(stderr)[:500]
             print(f"Codex error (exit {result.returncode}): {tag}", file=sys.stderr)
             _log("codex", model, prompt, output, False, elapsed, tag)
-            return False, output if output else stderr
+            return False, redact_text(output if output else stderr)
 
         _log("codex", model, prompt, output, True, elapsed)
         return True, output
@@ -528,17 +546,19 @@ def dispatch_codex_review(prompt: str, model: str = CODEX_REVIEW_DEFAULT_MODEL,
 
     t0 = time.time()
     try:
-        result = _run_with_process_group(cmd, prompt, timeout, str(REPO_ROOT), _ENV)
+        result = _run_with_process_group(
+            cmd, prompt, timeout, str(REPO_ROOT), _agent_env("codex")
+        )
         elapsed = time.time() - t0
         output = result.stdout.strip()
         stderr = result.stderr or ""
 
         if result.returncode != 0:
             rate_limited = _is_rate_limited(output + "\n" + stderr)
-            tag = "RATE_LIMIT" if rate_limited else stderr[:500]
+            tag = "RATE_LIMIT" if rate_limited else redact_text(stderr)[:500]
             print(f"Codex review error (exit {result.returncode}): {tag}", file=sys.stderr)
             _log("codex-review", model, prompt, output, False, elapsed, tag)
-            return False, output if output else stderr
+            return False, redact_text(output if output else stderr)
 
         _log("codex-review", model, prompt, output, True, elapsed)
         return True, output
@@ -567,17 +587,19 @@ def dispatch_codex_patch(prompt: str, model: str = CODEX_PATCH_DEFAULT_MODEL,
 
     t0 = time.time()
     try:
-        result = _run_with_process_group(cmd, prompt, timeout, str(REPO_ROOT), _ENV)
+        result = _run_with_process_group(
+            cmd, prompt, timeout, str(REPO_ROOT), _agent_env("codex")
+        )
         elapsed = time.time() - t0
         output = result.stdout.strip()
         stderr = result.stderr or ""
 
         if result.returncode != 0:
             rate_limited = _is_rate_limited(output + "\n" + stderr)
-            tag = "RATE_LIMIT" if rate_limited else stderr[:500]
+            tag = "RATE_LIMIT" if rate_limited else redact_text(stderr)[:500]
             print(f"Codex patch error (exit {result.returncode}): {tag}", file=sys.stderr)
             _log("codex-patch", model, prompt, output, False, elapsed, tag)
-            return False, output if output else stderr
+            return False, redact_text(output if output else stderr)
 
         _log("codex-patch", model, prompt, output, True, elapsed)
         return True, output
@@ -597,7 +619,7 @@ def post_to_github(issue_num: int, content: str, model: str) -> bool:
     if not content:
         return False
 
-    chunks = _split_content(content)
+    chunks = _split_content(redact_text(content))
     total = len(chunks)
 
     for i, chunk in enumerate(chunks, start=1):
@@ -609,10 +631,10 @@ def post_to_github(issue_num: int, content: str, model: str) -> bool:
         try:
             result = subprocess.run(
                 ["gh", "issue", "comment", str(issue_num), "-F", "-"],
-                input=body, text=True, capture_output=True, timeout=15,
+                input=redact_text(body), text=True, capture_output=True, timeout=15,
             )
             if result.returncode != 0:
-                print(f"GitHub comment failed: {result.stderr[:200]}", file=sys.stderr)
+                print(f"GitHub comment failed: {redact_text(result.stderr)[:200]}", file=sys.stderr)
                 return False
         except FileNotFoundError:
             print("gh CLI not found — skipping GitHub posting", file=sys.stderr)
@@ -645,11 +667,11 @@ def _log(agent: str, model: str, prompt: str, output: str, ok: bool,
         "duration_s": round(duration_s, 1),
         "prompt_chars": len(prompt),
         "output_chars": len(output),
-        "prompt": prompt[:5000] + ("..." if len(prompt) > 5000 else ""),
-        "output": output[:10000] + ("..." if len(output) > 10000 else ""),
+        "prompt": redact_text(prompt)[:5000] + ("..." if len(prompt) > 5000 else ""),
+        "output": redact_text(output)[:10000] + ("..." if len(output) > 10000 else ""),
     }
     if stderr:
-        entry["stderr"] = stderr[:2000]
+        entry["stderr"] = redact_text(stderr)[:2000]
 
     log_file.write_text(json.dumps(entry, indent=2, ensure_ascii=False))
     return log_file

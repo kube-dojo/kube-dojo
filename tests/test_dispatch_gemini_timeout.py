@@ -116,8 +116,8 @@ def test_gemini_quiet_mode_defaults_off_outside_pipeline(monkeypatch):
 
 
 def test_gemini_env_strips_api_keys_on_subscription(monkeypatch):
-    monkeypatch.setitem(dispatch._ENV, "GEMINI_API_KEY", "sk-test")
-    monkeypatch.setitem(dispatch._ENV, "GOOGLE_API_KEY", "gg-test")
+    monkeypatch.setenv("GEMINI_API_KEY", "sk-test")
+    monkeypatch.setenv("GOOGLE_API_KEY", "gg-test")
 
     api_env = dispatch._gemini_env(use_subscription=False)
     sub_env = dispatch._gemini_env(use_subscription=True)

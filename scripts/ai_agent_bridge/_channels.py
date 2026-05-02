@@ -58,6 +58,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from agent_runtime.redact import redact_jsonable, redact_text
+
 from ._config import REPO_ROOT
 from ._db import get_db
 
@@ -699,6 +701,14 @@ def post(
     (tests, synthetic posts, system announcements) can pass explicit
     values or set ``auto_snapshot=False``.
     """
+    body = redact_text(body)
+    attachments = redact_jsonable(attachments) if attachments else None
+    monitor_state_snapshot = (
+        redact_jsonable(monitor_state_snapshot)
+        if monitor_state_snapshot is not None
+        else None
+    )
+
     _validate_agent(from_agent)
     _validate_kind(kind)
     for agent in to_agents or []:
@@ -730,7 +740,7 @@ def post(
             )
         if monitor_state_snapshot is None:
             # Best-effort — returns None on any failure, which is fine.
-            monitor_state_snapshot = fetch_monitor_state()
+            monitor_state_snapshot = redact_jsonable(fetch_monitor_state())
 
     # Normalize sentinel Nones so the DB stores empty string rather
     # than nullable columns having inconsistent semantics.
@@ -909,12 +919,16 @@ def _row_to_message(row) -> dict[str, Any]:
         "from_agent": row["from_agent"],
         "from_model": row["from_model"],
         "kind": row["kind"],
-        "body": row["body"],
-        "attachments": json.loads(row["attachments"]) if row["attachments"] else None,
+        "body": redact_text(row["body"]),
+        "attachments": (
+            redact_jsonable(json.loads(row["attachments"]))
+            if row["attachments"]
+            else None
+        ),
         "context_rev_shared": row["context_rev_shared"],
         "context_rev_channel": row["context_rev_channel"],
         "monitor_state_snapshot": (
-            json.loads(row["monitor_state_snapshot"])
+            redact_jsonable(json.loads(row["monitor_state_snapshot"]))
             if row["monitor_state_snapshot"]
             else None
         ),

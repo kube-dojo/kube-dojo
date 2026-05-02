@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import contextlib
 import importlib
-import os
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -37,11 +36,13 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.base import AgentAdapter
+from .env_sanitize import build_agent_env
 from .errors import (
     AgentTimeoutError,
     AgentUnavailableError,
     RateLimitedError,
 )
+from .redact import redact_text
 from .registry import AGENTS, get_agent_entry
 from .result import ParseResult, Result
 from .usage import has_headroom, write_record
@@ -216,7 +217,9 @@ def _build_usage_record(
         "outcome": outcome,
         "rate_limited": rate_limited,
         "stalled": stalled,
-        "stderr_excerpt": (stderr_excerpt or "")[:500] if stderr_excerpt else None,
+        "stderr_excerpt": (
+            redact_text(stderr_excerpt)[:500] if stderr_excerpt else None
+        ),
         "tokens": tokens,
     }
 
@@ -347,17 +350,12 @@ def invoke(
         tool_config=tool_config,
     )
 
-    # Merge env overrides onto a snapshot of os.environ. We do NOT mutate
-    # os.environ itself — this keeps the parent process clean and prevents
-    # leakage to other adapters running concurrently. ``None`` means "remove
-    # this variable for the child", used by Gemini OAuth fallback to strip API
-    # keys without touching the parent shell.
-    env = os.environ.copy()
-    for key, value in plan.env_overrides.items():
-        if value is None:
-            env.pop(key, None)
-        else:
-            env[key] = value
+    # Build a sanitized child environment. We do NOT mutate os.environ itself:
+    # the parent may need broad orchestration credentials, but model child
+    # processes should only inherit normal shell settings plus the credential
+    # for the provider being invoked. ``None`` in env_overrides removes a name
+    # for this child only, used by Gemini OAuth fallback to strip API keys.
+    env = build_agent_env(provider=agent_name, overrides=plan.env_overrides)
 
     # ---------- 7–9. Run the subprocess with watchdog ----------
     start_time = time.monotonic()

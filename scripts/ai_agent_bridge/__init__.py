@@ -49,6 +49,7 @@ from ._config import (
     PID_DIR,
     PYTHON_CMD,
     REPO_ROOT,
+    agent_child_env,
 )
 from ._db import get_db, get_session, init_db, set_session
 from ._gemini import ask_gemini, process_and_respond
@@ -104,6 +105,7 @@ __all__ = [
     "_write_pid_file",
     "acknowledge",
     "acknowledge_all",
+    "agent_child_env",
     # Claude
     "ask_claude",
     "ask_codex",

@@ -7,6 +7,8 @@ import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
+from agent_runtime.redact import redact_jsonable, redact_json_string, redact_text
+
 from ._db import get_db
 
 
@@ -32,7 +34,7 @@ def check_inbox(for_llm: str = "gemini"):
     print(f"📬 {len(rows)} unread message(s) for {for_llm}:\n")
     for row in rows:
         msg_id, from_llm, msg_type, preview, timestamp = row
-        preview = preview.replace('\n', ' ')
+        preview = redact_text(preview).replace('\n', ' ')
         if len(preview) >= 100:
             preview += "..."
         print(f"  [{msg_id}] From: {from_llm} | Type: {msg_type} | {timestamp}")
@@ -76,12 +78,12 @@ def read_message(message_id: int, quiet: bool = False):
         print(f"   Task: {msg['task_id'] or 'N/A'}")
         print(f"   Time: {msg['timestamp']}")
         print(f"\n{'='*60}\n")
-        print(msg['content'])
+        print(redact_text(msg['content']))
 
         if msg['data']:
             print(f"\n{'='*60}")
             print("📎 Attached Data:")
-            print(msg['data'])
+            print(redact_json_string(msg['data']))
 
     return msg
 
@@ -91,6 +93,9 @@ def send_message(content: str, task_id: str | None = None, msg_type: str = "resp
                  from_model: str | None = None, to_model: str | None = None,
                  quiet: bool = False):
     """Send a message between agents."""
+    content = redact_text(content)
+    data = redact_text(data) if data is not None else None
+
     conn = get_db()
     cursor = conn.cursor()
 
@@ -108,7 +113,7 @@ def send_message(content: str, task_id: str | None = None, msg_type: str = "resp
     if to_model:
         metadata["to_model"] = to_model
 
-    data_json = json.dumps(metadata) if metadata else None
+    data_json = json.dumps(redact_jsonable(metadata)) if metadata else None
 
     cursor.execute("""
         INSERT INTO messages (task_id, from_llm, to_llm, message_type, content, data, timestamp, status)
@@ -129,7 +134,7 @@ def send_message(content: str, task_id: str | None = None, msg_type: str = "resp
 
     # Trigger macOS notification to alert human
     try:
-        preview = content[:80].replace('"', '\\"').replace('\n', ' ')
+        preview = redact_text(content[:80]).replace('"', '\\"').replace('\n', ' ')
         notification = f'display notification "{preview}..." with title "{from_llm.title()} → {to_llm.title()}" subtitle "Check inbox"'
         subprocess.run(["osascript", "-e", notification], check=False, capture_output=True)
     except Exception:
