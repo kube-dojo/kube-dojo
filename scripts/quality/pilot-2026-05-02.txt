@@ -1,0 +1,9 @@
+src/content/docs/k8s/ckad/part1-design-build/module-1.2-jobs-cronjobs.md
+src/content/docs/cloud/managed-services/module-9.9-api-gateways.md
+src/content/docs/cloud/gcp-essentials/module-2.7-cloud-run.md
+src/content/docs/platform/toolkits/infrastructure-networking/iac-tools/module-7.8-sst.md
+src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.3-grafana.md
+src/content/docs/linux/foundations/container-primitives/module-2.3-capabilities-lsms.md
+src/content/docs/prerequisites/git-deep-dive/module-1-git-internals.md
+src/content/docs/on-premises/security/module-6.4-compliance.md
+src/content/docs/on-premises/operations/module-7.8-observability-at-scale.md
