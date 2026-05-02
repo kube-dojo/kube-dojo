@@ -864,7 +864,6 @@ The recommendation, in most cases, is Option A: a dedicated in-country cluster w
 
    ```bash
    alias k=kubectl
-   k() { kubectl "$@"; }
    k create secret generic test-secret --from-literal=password=s3cret
    k get secret test-secret -o yaml
    k delete secret test-secret
