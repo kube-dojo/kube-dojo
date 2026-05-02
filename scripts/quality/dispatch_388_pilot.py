@@ -77,7 +77,7 @@ PROCEDURE
      .venv/bin/python scripts/quality/verify_module.py --glob {module_path} --skip-source-check --summary --quiet
    Iterate until tier == T0 OR all density+structure+alignment+anti_leak+protected_assets gates pass. Sources gate may fail (we skip source check).
    Hard requirements: body_words >= 5000, mean_wpp >= 30, median_wpp >= 28, short_paragraph_rate <= 0.20, max_consecutive_short_run <= 2, exactly 4 Did You Know, 6-8 Common Mistakes, 6-8 Quiz with <details>, Hands-On with `- [ ]`. Section order per writer brief. No emojis. No number 47. K8s 1.35+. kubectl alias `k`.
-5. Commit (sign-off optional, no --no-verify):
+5. Set frontmatter `revision_pending: false` (it is currently `true` — clear it as part of the rewrite). Then commit (sign-off optional, no --no-verify):
      git add {module_path}
      git commit -m "feat(388): density+structure rewrite of <module title> (#388 pilot)"
 6. Push branch:
