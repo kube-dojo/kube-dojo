@@ -1,6 +1,7 @@
 ---
 title: "Module 0.3: Process & Resource Survival Guide"
 slug: linux/foundations/everyday-use/module-0.3-processes-resources
+revision_pending: false
 sidebar:
   order: 4
 lab:
@@ -10,97 +11,91 @@ lab:
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
-> **Everyday Use** | Complexity: `[QUICK]` | Time: 40 min
+# Module 0.3: Process & Resource Survival Guide
+
+> **Everyday Use** | Complexity: `[QUICK]` | Time: 40 min. This quick module is still written as a full operational lesson because process and resource triage becomes useful only when the commands fit into a repeatable diagnostic sequence.
 
 ## Prerequisites
 
-Before starting this module:
+Before starting this module, make sure you are comfortable moving around a shell, reading command output, and distinguishing your own user account from system-owned services. You do not need root access for the process exercises, although disk inspection may show more complete results on a machine where you can use `sudo` responsibly.
 - **Required**: [Module 0.1: The CLI Power User](../module-0.1-cli-power-user/)
 - **Helpful**: [Module 0.2: Environment & Permissions](../module-0.2-environment-permissions/)
 - **Environment**: Any Linux system (VM, WSL, or native)
 
----
-
 ## What You'll Be Able to Do
 
-After this module, you will be able to:
-- **Monitor** system resources using top, htop, free, df, and du
-- **Identify** resource-hungry processes and decide whether to optimize or kill them
-- **Explain** load average, CPU steal, and memory pressure in the context of K8s node health
-- **Diagnose** a slow system by systematically checking CPU, memory, disk, and network
-
----
+After this module, you will be able to perform the following tasks in a live shell and explain the reasoning behind each step. Each outcome appears again in the quiz or hands-on exercise so the lesson stays aligned with what you will actually practice.
+- Diagnose process and resource pressure using `ps`, `top`, `htop`, `free`, `df`, and `du`.
+- Evaluate whether a process should be watched, signaled, moved to the background, or terminated.
+- Implement a safe disk investigation workflow with `df`, `du`, `lsblk`, and log cleanup judgment.
+- Compare Linux process behavior with Kubernetes 1.35+ pod shutdown, PID 1, cgroups, and node pressure.
 
 ## Why This Module Matters
 
-Your Linux machine is running dozens — sometimes hundreds — of programs right now, all at the same time. Your web browser, your terminal, your SSH session, that forgotten download script from two days ago. These running programs are called **processes**, and knowing how to find them, watch them, and stop them is one of the most important skills in DevOps.
+At 2:13 AM, a payments team at a mid-sized retailer watched checkout latency jump from seconds to minutes during a regional promotion. The application was healthy in the dashboard, the load balancer still accepted requests, and the database showed no obvious deadlocks. The incident cost the company a six-figure amount before anyone noticed that one worker node had a full `/var` filesystem, a runaway log file, and several application processes stuck waiting on disk I/O.
 
-Here is why:
+The painful part was not that Linux behaved mysteriously. The painful part was that Linux was reporting the facts the whole time, but the responders did not have a repeatable way to read them. `df` showed the full filesystem, `du` could have found the log file, `top` showed high wait time, and `ps` showed which processes were blocked. Once the team followed that trail, the fix was straightforward; before that, every restart only moved the problem around.
 
-- **Debugging starts with processes** — When something is slow or broken, the first question is always "what is running and how much is it eating?"
-- **Servers do not fix themselves** — A runaway process eating 100% CPU at 3am will not politely stop. You need to know how to kill it
-- **Disk space vanishes** — Containers, logs, and temp files will fill your disks. Knowing how to find what is eating space saves your production systems
-- **Kubernetes runs processes** — Every container is a process. `kubectl exec`, pod termination, resource limits — they all map back to what you will learn here
+This module teaches that trail. You will learn how Linux represents running programs as processes, how to inspect CPU and memory pressure without guessing, how to stop work politely before using force, how job control changes what happens inside your terminal session, and how disk checks connect to Kubernetes node health. Treat these commands less like trivia and more like a triage kit: each tool answers one specific question, and the order you ask those questions determines whether you diagnose the system or disturb it.
 
-Think of it this way: Module 0.1 taught you to navigate the house. This module teaches you to check who is home, what they are doing, and politely (or forcefully) ask them to leave.
-
----
-
-## Did You Know?
-
-- **Your system has a family tree of processes** — Every process has a parent. The very first process (PID 1) is the ancestor of everything else. When you open a terminal and run `ls`, your shell is the parent and `ls` is the child. Kill PID 1 and the entire system goes down. In Kubernetes, your app becomes PID 1 inside its container — which is why signal handling matters.
-
-- **`kill` does not always kill** — Despite the name, the `kill` command actually sends *signals*. `kill` without options sends SIGTERM, which is more like a polite "please shut down." The process can ignore it entirely! Only `kill -9` (SIGKILL) is truly fatal, because the kernel handles it and the process never even sees it coming.
-
-- **Linux invented "zombie" processes** — A zombie process is one that has finished running but is still hanging around in the process table because its parent has not picked up its exit status. Zombies use no CPU or memory — they are literally just a name in a list. But if thousands accumulate, you run out of process IDs and nothing new can start.
-
-- **The `/proc` directory is a window into every process** — Each running process gets a folder at `/proc/<PID>/` full of live information. Want to know exactly what command started process 1234? Read `/proc/1234/cmdline`. Want its environment variables? `/proc/1234/environ`. This is not a log file — it is the kernel telling you what is happening right now.
-
----
+Your Linux machine is running dozens, and often hundreds, of programs right now. Your browser, terminal, SSH session, editor, shell, background update checks, and forgotten scripts are all competing for CPU time, memory, file handles, and disk throughput. A program on disk is like a recipe in a cookbook; a process is the active cooking station with ingredients out, burners on, and timers running. The kitchen can handle many cooks, but only if someone notices when a pan is smoking.
 
 ## What Is a Process?
 
-A **process** is simply a program that is currently running. When you type `ls` in your terminal, the `ls` program loads into memory, does its work, and exits. While it is running, it is a process.
+A process is a running instance of a program, not the program file itself. When you type `ls`, the shell asks the kernel to start the `ls` executable, the kernel assigns it a process ID, the process reads directory entries, prints output, and exits. For that brief moment, `ls` has memory, permissions, open files, a parent process, a working directory, and a place in the scheduler's queue.
 
-Every process gets:
+Every process has a PID, which is the number you use when you want to inspect or signal it. Every normal process also has a parent PID, because something started it: your shell started `ps`, systemd started `sshd`, a web server master process started worker processes, and a container runtime started your application process. This family relationship matters because process cleanup, terminal hangups, and Kubernetes pod shutdown all follow the parent-child tree.
 
-- **A PID** (Process ID) — a unique number that identifies it
-- **A parent** (PPID) — the process that started it
-- **Resources** — memory, CPU time, open files
+Linux does not treat "your app" as a special category separate from "the operating system." It schedules all runnable processes, tracks their memory, exposes their open files, and delivers signals through the same kernel mechanisms. That is why a Kubernetes container can look like an isolated application from the platform view while still being a Linux process tree from the node view. Containers add namespaces and cgroups, but they do not stop being processes.
 
-Here is a simple analogy: a program on disk is like a recipe in a cookbook. A process is what happens when you actually start cooking — you have ingredients on the counter, pots on the stove, and timers running.
+Here is the mental model you should keep while reading every command in this module. A process has identity, ancestry, resources, and state; resource tools answer which process or filesystem is stressed; signal tools change the process lifecycle. The same model works on a laptop, a VM, a bare-metal server, and a Kubernetes worker node.
 
----
+```text
++----------------------------- Linux system -----------------------------+
+|                                                                        |
+|  PID 1: systemd                                                        |
+|      |                                                                 |
+|      +-- sshd -- ssh session -- shell -- ps                            |
+|      |                                                                 |
+|      +-- containerd -- app container PID 1 -- worker child             |
+|      |                                                                 |
+|      +-- cron -- backup script -- gzip                                 |
+|                                                                        |
+|  Scheduler: chooses runnable processes for CPU time                    |
+|  Memory manager: tracks resident pages, cache, swap, and pressure      |
+|  Filesystems: expose disk capacity, mounts, and block devices          |
++------------------------------------------------------------------------+
+```
 
-## Seeing What Is Running: `ps`
+That diagram is intentionally simple because the first debugging move should also be simple. Ask what is running, ask which process owns the pressure, ask whether the pressure is CPU, memory, disk, or external virtualization, then decide whether to observe, tune, terminate, or escalate. Skipping straight to `kill -9` is like cutting power to the kitchen because one timer is beeping.
 
-The `ps` command takes a snapshot of running processes — think of it as a photograph, not a video.
+## Seeing What Is Running with `ps`
 
-### Basic usage
+The `ps` command takes a snapshot of the process table. It is a photograph, not a live video feed, which makes it excellent for scripts, one-off checks, and careful investigation when a system is already under stress. A snapshot also has a limitation: a process can start and exit between two commands, so use `ps` to establish facts and `top` or `htop` when you need to watch behavior over time.
+
+Start with the smallest version so the output shape is not overwhelming. In a terminal, `ps` usually shows only processes attached to that terminal session, so you see your shell and the `ps` command itself. That is useful because it proves the process table is not magic; even the diagnostic command becomes a process while it is collecting the diagnostic output.
 
 ```bash
 # Show processes in your current terminal session
 ps
 ```
 
-Output looks like:
+The minimal output looks like the following example, with one row for the shell and one row for the diagnostic command. Your PID values will differ, but the columns should have the same meaning.
 
-```
+```text
     PID TTY          TIME CMD
    1234 pts/0    00:00:00 bash
    5678 pts/0    00:00:00 ps
 ```
 
-That is just your shell and the `ps` command itself. Not very exciting. To see everything:
-
-### The all-powerful `ps aux`
+The everyday production view is wider. `ps aux` shows processes from all users, including services without a terminal, kernel helper threads, web workers, database processes, and commands owned by other accounts. The output is intentionally dense because it tries to answer ownership, identity, resource consumption, process state, accumulated CPU time, and launch command in one row.
 
 ```bash
 # Show ALL processes from ALL users
 ps aux
 ```
 
-```
+```text
 USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
 root         1  0.0  0.1 171584 13324 ?        Ss   Mar20   0:15 /sbin/init
 root         2  0.0  0.0      0     0 ?        S    Mar20   0:00 [kthreadd]
@@ -108,7 +103,7 @@ www-data  1500  0.5  2.0 500000 40000 ?        S    Mar20   1:30 nginx: worker
 you       3456  0.0  0.1  23456  5678 pts/0    Ss   10:00   0:00 -bash
 ```
 
-Here is what each column means:
+Focus on `PID`, `RSS`, `STAT`, and `COMMAND` first. The `PID` gives you a handle for follow-up commands, `RSS` tells you actual resident memory, `STAT` tells you whether the process is running, sleeping, stopped, blocked, or unreaped, and `COMMAND` tells you whether the row is really the thing you think it is. The other columns matter, but these four are enough to avoid most beginner mistakes.
 
 | Column | What It Tells You |
 |--------|-------------------|
@@ -116,18 +111,14 @@ Here is what each column means:
 | PID | The process ID number |
 | %CPU | How much CPU it is using right now |
 | %MEM | How much memory it is using |
-| VSZ | Virtual memory size (includes shared libraries — often misleadingly large) |
-| RSS | Resident Set Size — actual physical memory used (the number you care about) |
-| TTY | Which terminal it is attached to (`?` means it is a background service) |
-| STAT | Process state (more on this below) |
+| VSZ | Virtual memory size (includes shared libraries, so it can look misleadingly large) |
+| RSS | Resident Set Size, the physical memory currently used |
+| TTY | Which terminal it is attached to; `?` means it is a background service |
+| STAT | Process state, with extra flags for session and foreground status |
 | TIME | Total CPU time consumed |
 | COMMAND | The command that started the process |
 
-> **Pause and predict**: Run `ps aux` now. Find the process using the most memory. What is its COMMAND? Is the RSS what you expected?
-
-### Finding a specific process
-
-Do not scroll through hundreds of lines. Filter:
+When the process list is long, do not scroll and hope. Filter deliberately, but remember that a plain `grep` search often matches the `grep` command itself. `pgrep -a` avoids that noise and returns matching processes with their command lines, which makes it a better choice for scripts and quick triage.
 
 ```bash
 # Find all processes with "nginx" in the name
@@ -137,36 +128,34 @@ ps aux | grep nginx
 pgrep -a nginx
 ```
 
-### Understanding STAT codes
+Pause and predict: run `ps aux` now and find the row with the largest RSS. Before you inspect the command name, guess whether it will be your browser, editor, terminal multiplexer, container runtime, or something else. The value of this exercise is not memorizing a number; it is training yourself to ask whether the largest process is expected for the workload you are actually running.
 
-You will see letters in the STAT column:
+The `STAT` column is your first clue about why a process is or is not making progress. Most healthy services spend much of their time sleeping because they are waiting for network input, timers, disk reads, or child processes. A row in `R` means it is runnable or currently running on a CPU, while a row in `D` means uninterruptible disk sleep, which is especially important during storage incidents because normal signals may not take effect until the I/O returns.
 
 | Code | Meaning |
 |------|---------|
-| S | Sleeping — waiting for something (most processes) |
-| R | Running — actively using the CPU right now |
-| T | Stopped — paused (you will learn how below) |
-| Z | Zombie — finished but parent has not cleaned up |
-| D | Disk sleep — waiting for I/O, cannot be interrupted |
+| S | Sleeping, usually waiting for input, a timer, or another event |
+| R | Running or runnable, actively competing for CPU |
+| T | Stopped, often because job control paused it |
+| Z | Zombie, finished but not yet reaped by its parent |
+| D | Disk sleep, waiting for I/O and cannot be interrupted normally |
 
-A lowercase `s` after the state (like `Ss`) means it is a session leader, and `+` means it is in the foreground.
+A lowercase `s` after the state, such as `Ss`, means the process is a session leader. A plus sign means the process belongs to the foreground process group for that terminal. Those flags explain job-control behavior later in the module, so do not worry about memorizing every variant now. The operational habit is simpler: treat `R`, `D`, and `Z` as prompts to ask a follow-up question, not as final diagnoses.
 
----
+War story: during a batch export incident, a team saw hundreds of `gzip` workers in `S` state and assumed the server was idle. The real bottleneck was a single slow network mount; the workers were sleeping while waiting for reads, and killing them only caused the orchestrator to start new workers that blocked again. The useful observation was the state transition pattern, not the raw process count.
 
-## Real-Time Monitoring: `top` and `htop`
+## Watching CPU and Memory Pressure with `top`, `htop`, and `free`
 
-While `ps` is a snapshot, `top` is a live dashboard that updates every few seconds.
-
-### `top` basics
+If `ps` is a photograph, `top` is the live dashboard. It refreshes repeatedly, sorts processes by resource usage, and shows system-wide CPU, task, memory, swap, and load information above the process list. Use it when the system feels slow, when an alert says CPU or memory is high, or when you need to observe whether a suspected process keeps consuming resources after a change.
 
 ```bash
 # Launch top
 top
 ```
 
-You will see something like:
+The screen will refresh continuously and show a system summary above the process table. The exact numbers will differ on your machine, but the placement of load, task state, CPU, memory, swap, and process rows is consistent enough to practice reading it.
 
-```
+```text
 top - 10:30:00 up 3 days,  2:15,  2 users,  load average: 0.52, 0.58, 0.59
 Tasks: 143 total,   2 running, 140 sleeping,   0 stopped,   1 zombie
 %Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id,  1.0 wa,  0.0 hi,  0.0 si,  0.0 st
@@ -178,28 +167,27 @@ MiB Swap:   2048.0 total,   2048.0 free,      0.0 used.   4320.5 avail Mem
    2100 mysql     20   0 1200000 300000  12000 S   3.0  15.0  12:45.00 mysqld
 ```
 
-The top section gives you the system overview:
+Read `top` from the top down before blaming the process list. The load average tells you how many tasks were runnable or waiting on uninterruptible I/O over one, five, and fifteen minutes. On a four-core machine, a load around four can mean the CPUs are fully subscribed; a load far above that means work is queued or blocked. The process list explains contributors only after the system summary tells you which pressure category is plausible.
 
-- **load average**: Three numbers (1-min, 5-min, 15-min). If these are higher than your CPU count, the system is overloaded. A 4-core machine with load average 4.0 is at capacity
-- **Tasks**: How many processes exist and in which states
-- **%Cpu**: `us` is user programs, `sy` is kernel, `id` is idle. Two critical metrics for cloud/K8s are `wa` (waiting for disk I/O) and `st` (CPU steal). **CPU Steal** happens in virtualized environments (like AWS/GCP or VMs) when the hypervisor takes CPU cycles away from your VM to give to another tenant. If `st` is consistently high, your node is being starved by the cloud provider ("noisy neighbor" problem).
-- **MiB Mem / Swap**: This shows system memory. **Memory pressure** occurs when your `available` memory drops near zero and the system starts using `Swap` (writing memory pages to the slow hard drive). In Kubernetes, memory pressure is critical: if a node runs out of memory, the kernel's OOM (Out Of Memory) Killer will forcefully terminate pods (SIGKILL) to save the node.
+The CPU line is a compact language. `us` is user-space work, `sy` is kernel work, `id` is idle time, `wa` is time spent waiting for I/O, and `st` is steal time taken by the hypervisor in a virtualized environment. High `us` usually points toward application CPU, high `sy` can point toward kernel or networking overhead, high `wa` points toward storage, and high `st` means the VM is not receiving the CPU time it requested.
 
-**Useful keys while `top` is running:**
+CPU steal is easy to misread because the Linux guest looks slow even when your processes are not using much CPU. On shared cloud hardware, the hypervisor can schedule another tenant or another VM on the physical CPU while your guest waits. Killing your own processes rarely fixes that; the usual response is to move workload, change instance placement, upgrade instance class, or involve the provider if the steal remains sustained.
+
+Memory pressure is similarly easy to misread if you focus on the `free` column. Linux uses spare RAM for filesystem cache because cached files make the system faster, and it can release much of that cache when applications need memory. The `available` field is the practical indicator: it estimates how much memory can be given to applications without heavy swapping. When `available` gets low and swap usage grows, processes may slow dramatically before the out-of-memory killer intervenes.
+
+Use the interactive keys in `top` to answer one question at a time. Sorting by CPU helps during runaway loops, sorting by memory helps during leaks, and showing individual CPU cores helps when one hot thread pins a single core while the total machine still has idle capacity. Quitting quickly after you collect the fact also matters, because on a badly loaded node you do not want a troubleshooting tool to become part of the noise.
 
 | Key | Action |
 |-----|--------|
 | `q` | Quit |
 | `M` | Sort by memory usage |
 | `P` | Sort by CPU usage |
-| `k` | Kill a process (it will ask for the PID) |
+| `k` | Kill a process after entering its PID |
 | `1` | Toggle showing individual CPU cores |
 
-> **Pause and predict**: Launch `top` right now. What is your current load average? How many CPUs do you have? Is your system overloaded? (Hint: compare load average to CPU count.)
+Pause and predict: launch `top` and compare the one-minute load average with the number of CPUs visible when you press `1`. If the load is higher than the CPU count but `%Cpu` is mostly idle, what resource might be causing the queue? That question trains you to separate CPU saturation from I/O wait instead of treating all slowness as the same failure.
 
-### `htop` — the better `top`
-
-`htop` is an improved version of `top` with colors, mouse support, and a much friendlier interface. It may not be installed by default:
+`htop` gives a friendlier interface over the same basic ideas. It adds color, scrolling, search, tree view, and easier signal selection, which makes it excellent when a human is exploring an unfamiliar host. It is not guaranteed to be installed on minimal servers, so treat `htop` as a convenience and `top` as the baseline survival tool.
 
 ```bash
 # Install htop
@@ -212,75 +200,51 @@ sudo dnf install htop -y
 htop
 ```
 
-Why `htop` is better for beginners:
+For beginners, `htop` lowers the cost of asking better questions. Press `F5` to see a tree view and discover which parent launched a worker, press `/` to search by name, press `F6` to change sort order, and press `F9` to send a signal after selecting a process. The visual bars are helpful, but the discipline is the same: classify the pressure before you act.
 
-- Color-coded CPU and memory bars at the top
-- You can scroll through the process list with arrow keys
-- Press `F5` to see a tree view (which process started which)
-- Press `F9` to send a signal to a process
-- Press `/` to search for a process by name
-- Press `F6` to choose how to sort
-
-For now, know that `htop` exists and try it. In your day-to-day work, most people reach for `htop` over `top`.
-
-### Checking Memory: `free`
-
-While `top` shows memory usage per process, the `free` command gives you the system-wide memory picture instantly.
+The `free` command gives the system-wide memory picture without opening an interactive dashboard. It is useful in scripts, incident notes, and quick checks when a system is slow enough that you want a single command that exits. Use `free -h` for human-readable values, then inspect `available` and swap before concluding that memory is actually scarce.
 
 ```bash
 # Show memory in human-readable format (megabytes/gigabytes)
 free -h
 ```
 
-```
+```text
                total        used        free      shared  buff/cache   available
 Mem:           7.8Gi       3.1Gi       2.3Gi        45Mi       2.3Gi       4.2Gi
 Swap:          2.0Gi          0B       2.0Gi
 ```
 
-The most important column is **available**, not `free`. Linux intentionally uses "free" memory to cache disk files (`buff/cache`) to speed up the system. If an application needs memory, Linux instantly drops the cache and hands over the RAM. The `available` column tells you how much memory can actually be given to new processes before the system starts swapping to disk.
+The most important column is `available`, not `free`. In this example, only 2.3 GiB is completely unused, but about 4.2 GiB can be made available to new processes because some cache can be reclaimed. If swap grows while available memory remains low, expect latency spikes because the kernel is moving memory pages to disk, and disk is much slower than RAM.
 
----
+Worked example: suppose an API node reports high latency. `top` shows load average above CPU count, `%Cpu` shows high `wa`, `free -h` shows plenty of available memory, and the top process list does not show a CPU hog. That combination points away from application CPU and toward disk or storage-backed network I/O, so your next move should be `df`, `du`, mount checks, and logs rather than restarting application workers.
 
-## Killing Processes: Signals, `kill`, and `killall`
+## Stopping Work with Signals, `kill`, `killall`, and `pkill`
 
-Sometimes a process needs to stop. Maybe it is stuck, eating too much memory, or you just do not need it anymore. This is where signals come in.
+Signals are how the operating system tells a process that something happened. Despite the command name, `kill` does not always kill a process; by default, it sends SIGTERM, which is a polite request to shut down. A well-written process handles SIGTERM by closing listeners, finishing in-flight work, flushing files, and exiting cleanly. A stuck process may ignore it, delay it, or be unable to handle it while blocked in uninterruptible I/O.
 
-### What are signals?
-
-Signals are messages the operating system can deliver to a process. Think of them as tapping someone on the shoulder (SIGTERM) vs. physically dragging them out of the room (SIGKILL).
-
-The two most important signals:
+The distinction between polite and forceful shutdown matters because processes own external state. A database may be writing a transaction, a log shipper may be holding a file offset, a queue worker may be acknowledging a message, and a backup process may be updating a partial archive. SIGKILL stops the process immediately through the kernel, but it gives the process no chance to clean up those responsibilities.
 
 | Signal | Number | What Happens |
 |--------|--------|-------------|
-| SIGTERM | 15 | "Please shut down gracefully." The process receives this and can clean up — save files, close connections, finish writes. This is the polite way. |
-| SIGKILL | 9 | "You are done. Now." The kernel terminates the process instantly. No cleanup, no saving, no last words. Use this only when SIGTERM fails. |
+| SIGTERM | 15 | "Please shut down gracefully." The process can clean up, save files, close connections, and exit. |
+| SIGKILL | 9 | "You are done now." The kernel terminates the process immediately, with no cleanup. |
+| SIGHUP | 1 | "Hangup." Many services reload configuration when they receive this. |
+| SIGINT | 2 | Interrupt. This is what Ctrl+C sends to the foreground process. |
+| SIGSTOP | 19 | Pause the process. It cannot be caught or ignored. |
+| SIGCONT | 18 | Resume a paused process. |
 
-Other useful signals:
-
-| Signal | Number | What Happens |
-|--------|--------|-------------|
-| SIGHUP | 1 | "Hangup" — many services reload their config when they receive this |
-| SIGINT | 2 | Interrupt — this is what Ctrl+C sends |
-| SIGSTOP | 19 | Pause the process (cannot be caught or ignored) |
-| SIGCONT | 18 | Resume a paused process |
-
-> **Stop and think**: Before reading on — if you run `kill` on a `sleep` process, will it terminate or ignore the signal? Why? Try it and check.
-
-### Using `kill`
-
-Despite the name, `kill` just sends a signal. By default, it sends SIGTERM:
+Before signaling a process, confirm that the PID still belongs to the target you intend to affect. PIDs are reused after processes exit, and a copied value from old notes can point to a different process later. A quick `ps -p <PID> -o pid,user,stat,cmd` prevents the most embarrassing class of operational mistake: correctly using the wrong command on the wrong process.
 
 ```bash
-# Send SIGTERM (the default — always try this first)
+# Send SIGTERM (the default -- always try this first)
 kill 1234
 
 # Explicitly send SIGTERM
 kill -15 1234
 kill -TERM 1234
 
-# Send SIGKILL (the nuclear option — use only if SIGTERM fails)
+# Send SIGKILL (the forceful option -- use only if SIGTERM fails)
 kill -9 1234
 kill -KILL 1234
 
@@ -288,9 +252,16 @@ kill -KILL 1234
 kill -HUP 1234
 ```
 
-### Using `killall` and `pkill`
+The safe operational rhythm is simple: confirm, send SIGTERM, wait, confirm again, then escalate only if needed. Waiting is not wasted time because it gives a cooperative service a chance to flush data and release locks. If the process is still present after a reasonable grace period and business risk favors termination, SIGKILL is the tool that ends the process without asking it to cooperate.
 
-If you know the process name but not the PID:
+```text
+Step 1:  ps -p <PID> -o pid,user,stat,cmd
+Step 2:  kill <PID>          # Sends SIGTERM -- give it a few seconds
+Step 3:  ps -p <PID> -o pid,user,stat,cmd
+Step 4:  kill -9 <PID>       # SIGKILL only if still running and escalation is justified
+```
+
+When you know a process name but not the PID, `killall` and `pkill` can save time, but they also widen the blast radius. `killall nginx` affects all processes with that exact name, while `pkill sleep` can match more broadly depending on the options you choose. These commands are useful during labs and controlled maintenance; in production, prefer a precise filter and one final confirmation.
 
 ```bash
 # Kill all processes named "nginx"
@@ -303,29 +274,15 @@ pkill sleep
 pkill -u username
 ```
 
-### The golden rule: SIGTERM first, SIGKILL second
+Stop and think: before reading further, if you run `kill` on a normal `sleep` process, should it terminate or ignore the signal? Try `sleep 120 &`, save `$!`, send `kill $PID`, and confirm the result. Then imagine replacing `sleep` with a database process that needs time to close files, and the reason for SIGTERM-first becomes more concrete.
 
-Always follow this order:
+The same pattern appears in Kubernetes 1.35+ pod termination. When a pod is deleted, kubelet asks the container runtime to send SIGTERM to the container's main process, waits for the configured grace period, and then sends SIGKILL if the process has not exited. That behavior only works well if PID 1 inside the container forwards or handles signals correctly. A shell wrapper that ignores SIGTERM can turn a graceful rollout into repeated forced kills.
 
-```
-Step 1:  kill <PID>          # Sends SIGTERM — give it a few seconds
-Step 2:  (wait 5 seconds)
-Step 3:  kill -9 <PID>       # SIGKILL only if still running
-```
+War story: a team once used `kill -9` on a stuck log processor because it looked harmless. The processor had already read data from a queue but had not committed its checkpoint, so the replacement process replayed a large batch and duplicated downstream events. SIGTERM would not have guaranteed perfection, but it would have given the process a chance to persist the offset before exiting.
 
-Why? Because SIGTERM lets the process clean up. A database receiving SIGTERM can finish writing transactions and flush to disk. Hit it with SIGKILL and you might corrupt data.
+## Managing Foreground, Background, and Disconnects
 
-This exact pattern happens in Kubernetes: when a pod is deleted, Kubernetes sends SIGTERM, waits 30 seconds (the `terminationGracePeriodSeconds`), and then sends SIGKILL if the process is still running.
-
----
-
-## Background and Foreground Jobs
-
-So far, every command you have run takes over your terminal until it finishes. But what if you want to run something that takes a long time and keep using your terminal?
-
-### Running a command in the background with `&`
-
-Add `&` at the end of any command:
+Your terminal also manages processes. When you run a command normally, it belongs to the foreground process group, receives keyboard signals such as Ctrl+C, and occupies the prompt until it exits. When you append `&`, the shell starts the command in the background, prints a job number and PID, and returns the prompt while the process continues in the same session.
 
 ```bash
 # Run sleep in the background
@@ -334,9 +291,7 @@ sleep 300 &
 # [1] is the job number, 12345 is the PID
 ```
 
-Your terminal is immediately available again. The process runs silently in the background.
-
-### Checking background jobs with `jobs`
+The job number is local to the shell, while the PID belongs to the whole system. That difference matters when you use `fg %1` or `bg %2`, because `%1` and `%2` mean shell jobs, not process IDs. If you open a second terminal, it will not know the first terminal's job numbers, but it can still see the processes by PID with `ps`.
 
 ```bash
 # See all background jobs in this terminal
@@ -345,7 +300,7 @@ jobs
 # [1]+  Running                 sleep 300 &
 ```
 
-### Moving between foreground and background
+Job control gives you a way to recover from small mistakes without restarting work. If a long command is already running in the foreground, Ctrl+Z sends a stop signal and returns the prompt. `bg` resumes the stopped job in the background, and `fg` brings it back to the foreground later. Ctrl+C is different: it sends SIGINT and usually terminates the foreground process.
 
 ```bash
 # Start a long-running command
@@ -367,11 +322,11 @@ fg %1
 bg %2
 ```
 
-### Surviving terminal disconnects with `nohup`
+Before running this, what output do you expect from `jobs` after you pause `sleep 300` with Ctrl+Z? Predict whether the job will be marked running or stopped, then test it. The prediction matters because the terminal is not just displaying processes; it is also controlling which process group receives your keyboard signals.
 
-Here is a trap that catches everyone at least once: you SSH into a server, start a long process, close your laptop, and the process dies. Why? Because when your terminal disconnects, it sends SIGHUP to all its child processes, which kills them.
+Backgrounding a command does not make it independent from your login session. If you SSH into a server, start a migration with `&`, and then the SSH session drops, the terminal can send SIGHUP to its child processes. Many shells and programs exit when they receive that hangup, so the command can die even though it was not in the foreground.
 
-`nohup` (short for "no hangup") prevents this:
+`nohup`, short for "no hangup," tells the command to ignore SIGHUP and keep running after the terminal disconnects. It also redirects output to `nohup.out` by default if you do not choose a destination. For serious work, `tmux`, `screen`, systemd services, or a real job runner are usually better, but `nohup` is a useful emergency tool when you cannot redesign the workflow.
 
 ```bash
 # This will survive even if you disconnect from SSH
@@ -382,8 +337,6 @@ nohup ./long-running-script.sh &
 nohup ./long-running-script.sh > /tmp/my-output.log 2>&1 &
 ```
 
-A quick reference:
-
 | Action | Command |
 |--------|---------|
 | Run in background | `command &` |
@@ -393,45 +346,37 @@ A quick reference:
 | Bring to foreground | `fg` or `fg %N` |
 | Survive disconnect | `nohup command &` |
 
-> **Stop and think**: You accidentally ran a database migration in the foreground and it will take 20 minutes. You need your terminal back but cannot restart the migration. What two keystrokes solve this? Try it with `sleep 1200` to verify.
+Stop and think: you accidentally ran a database migration in the foreground, it will take 20 minutes, and you cannot restart it. The recoverable path is Ctrl+Z followed by `bg`, but that still leaves the process attached to the session. If the task must survive a disconnect, you should have started it under `nohup`, a terminal multiplexer, or a service manager before beginning the migration.
 
----
+## Finding Disk Pressure with `df`, `du`, and `lsblk`
 
-## Disk Usage: Where Did All My Space Go?
+Disk incidents often look like unrelated application failures. A node stops accepting writes, logs disappear, databases refuse transactions, package installs fail, containers cannot unpack layers, and health checks time out. The kernel is usually behaving consistently; the filesystem is out of space, out of inodes, mounted read-only, or blocked behind slow storage. Your job is to move from "the app is broken" to "which filesystem and which path are responsible?"
 
-Running out of disk space is one of the most common emergencies in DevOps. Logs grow, container images pile up, and temp files multiply. You need two tools: `df` to check overall disk space and `du` to find what is eating it.
-
-### `df` — Disk Free (the big picture)
+Start with `df` because it shows the mounted filesystems and their capacity. It answers the big-picture question: which filesystem is full? That matters because `/`, `/var`, `/home`, and `/tmp` may be separate mounts. Deleting files from a roomy filesystem will not help a full `/var`, and expanding the wrong volume wastes time during an incident.
 
 ```bash
 # Show disk usage in human-readable format
 df -h
 ```
 
-```
+```text
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/sda1        50G   35G   13G  73% /
 /dev/sda2       200G  180G   10G  95% /var
 tmpfs           3.9G     0  3.9G   0% /dev/shm
 ```
 
-The important columns:
+In this example, `/var` is the urgent filesystem because it is at 95 percent. That is a common server failure mode because `/var` holds logs, package caches, container runtime data, databases on some systems, and other state that grows while the machine runs. The correct next question is not "what can I delete anywhere?" but "which directory under `/var` is consuming the space?"
 
 | Column | Meaning |
 |--------|---------|
 | Size | Total size of the filesystem |
 | Used | How much is consumed |
 | Avail | How much is free |
-| Use% | Percentage used — start worrying above 80%, panic above 95% |
-| Mounted on | Where this filesystem is accessible in the directory tree |
+| Use% | Percentage used; investigate above 80 percent and treat 95 percent as urgent |
+| Mounted on | Where this filesystem appears in the directory tree |
 
-In the example above, `/var` is at 95% — that is a problem waiting to happen. Logs are usually stored in `/var/log`, so this is extremely common on servers.
-
-> **Pause and predict**: Run `df -h` on your system. Which filesystem has the highest Use%? Predict which directory is the biggest consumer before running `du`.
-
-### `du` — Disk Usage (the detective)
-
-`df` told you which disk is full. `du` helps you find which directories are the culprits:
+`du` answers the path question by walking directories and summing file sizes. Use it hierarchically: start at the mount point, sort by size, inspect the largest child, and repeat. Redirect permission errors away from the screen when exploring system paths, because otherwise the useful size lines get buried under noisy access-denied messages.
 
 ```bash
 # Show the size of the current directory
@@ -441,7 +386,7 @@ du -sh .
 du -sh /* 2>/dev/null | sort -rh | head -10
 ```
 
-```
+```text
 15G     /var
 8G      /usr
 5G      /home
@@ -449,44 +394,42 @@ du -sh /* 2>/dev/null | sort -rh | head -10
 1G      /tmp
 ```
 
-Now drill down into the biggest offender:
+After the wide scan identifies `/var` as the biggest offender, narrow the question to that mount instead of jumping across unrelated directories. This preserves the investigation path and helps you avoid deleting data that cannot affect the pressured filesystem.
 
 ```bash
 # Dig into /var
 du -sh /var/* 2>/dev/null | sort -rh | head -10
 ```
 
-```
+```text
 12G     /var/log
 2G      /var/lib
 500M    /var/cache
 ```
 
-Found it! `/var/log` has 12GB. One more level:
+At this point, `/var/log` is the likely problem, but the fix still depends on the exact file or log family. Continue one more level so you can distinguish one oversized rotated file from a broader logging or retention problem.
 
 ```bash
 du -sh /var/log/* 2>/dev/null | sort -rh | head -5
 ```
 
-```
+```text
 10G     /var/log/syslog.1
 1.5G    /var/log/auth.log
 500M    /var/log/kern.log
 ```
 
-A 10GB rotated syslog. That is your culprit.
+The pattern is the important asset: start wide with `df -h`, then drill down with `du -sh <dir>/* | sort -rh | head`. Once you find a file, think before deleting. If a running process still has a deleted file open, space may not be released until that process closes the file. If the file is an active log, truncating it may be safer than removing it because the writer keeps the same file handle.
 
-**The pattern**: Start wide with `df -h`, then drill down with `du -sh <dir>/* | sort -rh | head`.
+Pause and predict: run `df -h` and identify the filesystem with the highest `Use%`. Before running `du`, predict which top-level directory will be largest on your machine. The prediction step helps you learn your environment, and the command output teaches you when your instincts are wrong.
 
-### `lsblk` — List Block Devices
-
-To see what physical disks and partitions exist on the system:
+`lsblk` shows the physical or virtual block devices, partitions, and mount points. It does not tell you which directory is wasting space, but it explains why a particular mount has the size it does. On cloud VMs and Kubernetes nodes, this helps you distinguish between "a directory grew too much" and "the mounted volume was simply too small for its role."
 
 ```bash
 lsblk
 ```
 
-```
+```text
 NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
 sda      8:0    0   50G  0 disk
 ├─sda1   8:1    0   49G  0 part /
@@ -495,110 +438,179 @@ sdb      8:16   0  200G  0 disk
 └─sdb1   8:17   0  200G  0 part /var
 ```
 
-This shows you the physical layout: `sda` is a 50GB disk with two partitions, and `sdb` is a 200GB disk mounted at `/var`. This is useful when you need to understand why a particular mount point has limited space — it might be on a separate, smaller disk.
+That output tells you `/var` is backed by a separate 200 GiB disk in the example. If `/var` fills, expanding `/dev/sda1` would not help because `/var` is on `sdb1`. This is the kind of simple infrastructure fact that prevents a tired responder from spending an hour on the wrong volume.
 
----
+War story: a platform team once cleaned several gigabytes from `/home` while kubelet continued failing image pulls. The alert referred to node disk pressure, but the exhausted path was under `/var/lib/containerd` on a separate mount. `df -h` would have shown the mount, and `du` under `/var` would have found the image store before anyone touched user directories.
 
 ## Kubernetes Connection: Processes in Pods
 
-In a traditional server environment, hundreds of background processes and services run together. In Kubernetes, the environment is radically simplified: a container is essentially just an isolated process (or a small group of them) running on the host node. 
+Kubernetes does not replace Linux process mechanics; it builds scheduling, isolation, and policy on top of them. A pod may feel like a platform object, but the node still runs processes, tracks memory through cgroups, uses filesystems for images and logs, and delivers signals during termination. When you understand the Linux layer, Kubernetes node behavior becomes much less surprising.
 
-- **PID 1 in Containers**: The `ENTRYPOINT` or `CMD` of your Dockerfile becomes PID 1 inside the container. If that primary process dies, the container terminates. If your PID 1 doesn't know how to pass signals (like SIGTERM) to its children, graceful pod shutdown fails, resulting in forced SIGKILLs and potential data corruption.
-- **Resource Limits**: When you set `resources.limits.memory` on a K8s Pod, you are telling the Linux kernel's cgroups feature to watch that specific process tree. If the processes exceed the allocated limit, the kernel invokes the OOMKiller to terminate the container immediately.
-- **Execing into Pods**: When you run `kubectl exec -it my-pod -- bash`, you are not SSHing into a virtual machine. You are simply asking the container runtime (like containerd) to start a new `bash` process on the node and attach it to the same isolated namespaces as the pod's PID 1.
+Before using short `k` commands, define the common alias once in your shell. The full command is `kubectl`, and the alias `k` is only a typing shortcut; it does not change what the Kubernetes API receives. In production notes, be clear about whether you used `kubectl` or the alias so another responder can reproduce the command.
 
----
+```bash
+alias k=kubectl
+```
+
+From there, `k get pods`, `k describe node`, and `k top pod` are Kubernetes views over workload and resource state, while Linux commands such as `ps`, `top`, `free`, `df`, and `du` show what the node itself is experiencing. The useful skill is moving between those views without confusing them. A pod can be pending because of Kubernetes scheduling policy, or a running pod can be slow because the node underneath is waiting on disk.
+
+| Kubernetes concept | Linux mechanism underneath | Operational clue |
+|--------------------|----------------------------|------------------|
+| Container main command | PID 1 inside the container namespace | If PID 1 exits, the container stops |
+| Pod termination | SIGTERM, grace period, then SIGKILL | Bad signal handling causes forced shutdowns |
+| Memory limit | cgroup memory accounting | Exceeding the limit can trigger OOM kill |
+| Node memory pressure | Kernel memory pressure and kubelet eviction signals | Pods may be evicted before the node collapses |
+| Ephemeral storage pressure | Filesystems under kubelet and container runtime paths | Logs and image layers can fill `/var` |
+
+```bash
+# Kubernetes 1.35+ examples using the k alias
+k get pods -A
+k describe node worker-1
+k top pod -A
+k exec -it my-pod -- ps aux
+```
+
+When you run `k exec -it my-pod -- bash`, you are not SSHing into a little VM. You are asking the container runtime to start a new process in the pod's namespaces and attach your terminal to it. That distinction matters because tools inside the container may be minimal, process IDs may be namespace-relative, and the node can still have pressure that the container view hides.
+
+Resource limits are also Linux limits with Kubernetes policy around them. When you set `resources.limits.memory` on a container, kubelet and the runtime configure cgroups so the kernel can account for that process tree. If the process exceeds its limit, the kernel may kill it even when the node has total free memory. If the node itself runs out of available memory, kubelet may evict pods to protect the machine.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-demo
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      command: ["sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "64Mi"
+        limits:
+          cpu: "500m"
+          memory: "128Mi"
+```
+
+Which approach would you choose here and why: if `k describe node` reports disk pressure but `top` shows low CPU and plenty of memory, should you restart the busiest application pod or inspect node filesystems first? The better first move is usually `df -h` and `du` on the node, because restarting pods can create more image and log churn on the same full disk.
+
+Graceful shutdown is the most direct bridge between this module and Kubernetes operations. If an application runs as PID 1 and ignores SIGTERM, kubelet waits for the grace period and then sends SIGKILL. That can interrupt writes, drop requests, and make rollouts look flaky. A small init process, correct signal handling, and realistic `terminationGracePeriodSeconds` are application design choices that depend on understanding Linux signals.
+
+## Patterns & Anti-Patterns
+
+Good process troubleshooting is mostly sequencing. You gather a low-cost snapshot, classify pressure, confirm the target, and only then change the system. That sequence feels slower than typing the first dramatic command that comes to mind, but it is faster across a real incident because it reduces reversals. It also leaves better notes for the next responder.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---------|----------------|--------------|-----------------------|
+| Snapshot first | You need an initial fact without disturbing the host | `ps`, `free`, and `df` exit quickly and create incident notes | Automate these checks in runbooks before interactive tools |
+| Classify pressure before acting | The symptom is "slow" or "stuck" | CPU, memory, disk, and steal require different fixes | Dashboards should separate wait, steal, memory, and filesystem alerts |
+| SIGTERM before SIGKILL | A process must stop but may own state | Graceful shutdown protects files, sockets, and checkpoints | Tune Kubernetes grace periods around real shutdown time |
+| Drill down by mount point | Disk usage alerts fire | `df` finds the filesystem and `du` finds the path | Track container runtime paths and log retention separately |
+
+Anti-patterns usually come from impatience, stale assumptions, or treating the terminal as if it were only a text box. A command that is safe in a lab can be risky on a shared host because it changes many processes or hides the reason a process was stuck. The alternative is not paralysis; it is a tiny verification step before each destructive action.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Starting with `kill -9` | The process cannot flush data, release locks cleanly, or write checkpoints | Confirm the PID, send SIGTERM, wait, then escalate if justified |
+| Reading only `%CPU` | Disk wait, memory pressure, and CPU steal get missed | Read load average, `wa`, `st`, memory, and process state together |
+| Searching process lists by scrolling | Important rows are missed and grep matches can fool you | Use `pgrep -a`, precise `ps` options, and targeted filters |
+| Deleting large logs blindly | Space may not be released if a process still holds the file open | Prefer log rotation or truncation after confirming the writer |
+| Backgrounding critical work with only `&` | The command can die when the SSH session disconnects | Use `nohup`, `tmux`, `screen`, systemd, or a real job runner |
+| Restarting pods for node disk pressure | New containers may write more data to the same full filesystem | Inspect `df`, `du`, kubelet paths, and container runtime storage first |
+
+Use these tables as operating habits, not as trivia. The point is to preserve optionality: you can always move from observation to termination, but you cannot recover graceful cleanup after a force kill has already happened. You can always inspect a filesystem before deleting data, but you cannot always reconstruct which file mattered after a broad cleanup script has run.
+
+## When You'd Use This vs Alternatives
+
+For a quick module, the decision framework is a practical comparison rather than a heavyweight flowchart. Choose the tool that matches the question you are asking. If you do not know the question yet, start with the least invasive command that gives system-wide context, then narrow the scope.
+
+| Question | First Tool | Follow-Up Tool | Avoid Starting With |
+|----------|------------|----------------|---------------------|
+| What processes exist right now? | `ps aux` | `pgrep -a`, `ps -p` | `killall` |
+| Which process is hot over time? | `top` or `htop` | `ps`, logs, profiler | Random restarts |
+| Is memory actually scarce? | `free -h` | `top`, application metrics | Reading only `free` memory |
+| Which filesystem is full? | `df -h` | `lsblk` | Deleting files from unrelated mounts |
+| Which path is consuming space? | `du -sh <dir>/*` | log rotation, cleanup plan | Recursive deletes without confirmation |
+| Will work survive disconnect? | `nohup`, `tmux`, or systemd | `jobs`, `ps` | Plain `command &` |
+
+The decision flow is also a communication tool. During an incident, saying "load is high, CPU is idle, wait time is high, and `/var` is nearly full" gives teammates a reasoned diagnosis. Saying "the node is weird" gives them a mood. Senior operators sound calm because they have a vocabulary for separating evidence from fear.
+
+Use process termination when a specific process is confirmed harmful and graceful shutdown has been attempted or is impossible. Use job control when the issue is your terminal session, not the system. Use disk tools when capacity or I/O wait is suspicious. Use Kubernetes commands when you need the API server's view, then drop to Linux commands when the node's local resources are the likely constraint.
+
+## Did You Know?
+
+- **Your system has a family tree of processes.** Every process has a parent, and PID 1 is the ancestor of normal user-space work. On most modern distributions PID 1 is systemd, while inside a container your application may become PID 1, which is why signal handling and child reaping matter during Kubernetes pod termination.
+- **`kill` does not always kill.** The command sends signals, and the default signal is SIGTERM, a graceful shutdown request that a process can handle. SIGKILL is different because the kernel terminates the process directly, which is powerful but removes the process's chance to save state.
+- **Zombie processes are already dead.** A zombie has finished running but remains in the process table because its parent has not collected the exit status. One zombie uses no CPU and almost no memory, but a large buildup can exhaust process table space and reveal a broken parent process.
+- **`/proc` is a live kernel interface, not a normal folder of logs.** Each running process appears under `/proc/<PID>/`, with files such as `cmdline`, `status`, and `environ` exposing current process information. Tools like `ps` and `top` rely on kernel data that is conceptually similar to what you can inspect there.
 
 ## Common Mistakes
 
-| Mistake | Why It Is Bad | What To Do Instead |
-|---------|---------------|-------------------|
-| Using `kill -9` as the first option | Skips graceful shutdown — databases can corrupt, files can be half-written | Always try `kill <PID>` (SIGTERM) first, wait a few seconds, then `kill -9` only if needed |
-| Forgetting `&` and Ctrl+C on a long task | Kills the process you actually wanted running | Use `Ctrl+Z` then `bg` to move it to the background without stopping it |
-| Running `du -sh /` without `2>/dev/null` | Permission-denied errors flood your screen | Always pipe stderr: `du -sh /* 2>/dev/null \| sort -rh` |
-| Ignoring `df` until the disk is 100% full | Services crash, logs stop writing, databases corrupt | Set up monitoring or check `df -h` regularly on servers |
-| Using `nohup` but forgetting `&` | The command still runs in the foreground and blocks your terminal | Always combine them: `nohup command &` |
-| Killing a process by PID without checking first | You might kill the wrong process if the PID was reused | Always run `ps -p <PID> -o cmd` first to confirm what you are about to kill |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Using `kill -9` as the first option | The process looks stuck, and SIGKILL feels decisive during pressure | Always try `kill <PID>` first, wait a few seconds, verify, then use `kill -9` only when escalation is justified |
+| Forgetting `&` and pressing Ctrl+C on a long task | The terminal is blocked, and Ctrl+C feels like the fastest way back to a prompt | Use Ctrl+Z and `bg` to move recoverable work into the background without terminating it |
+| Running `du -sh /` without `2>/dev/null` | System directories produce permission errors that obscure the useful size lines | Use `du -sh /* 2>/dev/null \| sort -rh \| head` and drill into the largest mounted path |
+| Ignoring `df` until the disk is completely full | Disk growth is gradual, so warnings feel less urgent than application errors | Check `df -h` during triage and alert before critical mounts reach emergency capacity |
+| Using `nohup` but forgetting `&` | `nohup` protects against hangup but does not automatically return the prompt | Combine them as `nohup command > /tmp/output.log 2>&1 &` when the command should continue independently |
+| Killing a process by PID without checking first | PIDs can be reused after the original process exits | Run `ps -p <PID> -o pid,user,stat,cmd` immediately before signaling the process |
+| Treating Kubernetes pods as tiny VMs | `k exec` feels like SSH, so node-level pressure gets overlooked | Remember that containers are process trees using node CPU, memory, cgroups, and filesystems |
+| Reading `free` memory instead of available memory | Linux cache makes used memory look scary even when it is reclaimable | Use the `available` column and swap usage to judge actual memory pressure |
 
 ## Quiz
 
-### Question 1
+<details><summary>Question 1: Your monitoring script must diagnose whether an application process is running every minute. Should it use `ps`, `pgrep`, `top`, or `htop`, and why?</summary>
 
-You are writing a bash script to monitor a specific application and restart it if it crashes. Should your script use `ps` or `top` to check if the process is running?
-
-<details>
-<summary>Show Answer</summary>
-
-Your script should use `ps` (or `pgrep`). The `ps` command takes a single, instantaneous snapshot of the process table and exits immediately, making its output perfect for automated scripts to parse. In contrast, `top` is an interactive, continuously updating dashboard designed for human eyes. If you use `top` in a script, it will block the script from continuing and flood your variables with terminal escape characters. Using `ps` ensures your automation gets exactly the data it needs in a single pass without hanging.
+Use `pgrep -a` or a precise `ps` command because the script needs a snapshot that exits cleanly. `top` and `htop` are interactive dashboards, so they are better for a human watching live behavior and worse for simple automation. A snapshot command also makes it easier to capture exit codes and avoid terminal formatting. If the script later needs resource numbers, use explicit `ps` output columns rather than scraping an interactive screen.
 
 </details>
 
-### Question 2
+<details><summary>Question 2: You evaluate a runaway Python process, confirm the PID, send `kill 5678`, and the process remains after a short wait. What happened, and what is the safe next step?</summary>
 
-You notice a runaway Python script consuming 100% CPU. You run `kill 5678`, but when you check 10 seconds later, the process is still running. What happened, and what is your exact next step?
-
-<details>
-<summary>Show Answer</summary>
-
-Running `kill` without any flags sends a SIGTERM (signal 15) to the process, which is merely a polite request to shut down. The process is allowed to catch this signal to perform cleanup tasks, or it can ignore it entirely if it is stuck in an infinite loop or poorly written. Because the polite request was ignored, your next step is to run `kill -9 5678` to send a SIGKILL. This signal is handled directly by the Linux kernel, which forcefully terminates the process immediately without giving it a chance to ignore the command.
+The first `kill` sent SIGTERM, which asks the process to exit gracefully but can be delayed, ignored, or blocked. Your safe next step is to confirm that PID 5678 still belongs to the same Python command with `ps -p 5678 -o pid,user,stat,cmd`. If it is still the target and business risk favors stopping it, escalate with `kill -9 5678`. The confirmation protects you from PID reuse between the first signal and the escalation.
 
 </details>
 
-### Question 3
+<details><summary>Question 3: A database migration was started with `./migrate-db.sh &` over SSH, then failed when the laptop disconnected. Why did backgrounding not protect it?</summary>
 
-You log into a production database server via SSH and start a critical database migration script using `./migrate-db.sh &`. You then close your laptop to commute home. When you reconnect later, the migration has failed halfway through. Why did this happen despite running it in the background?
-
-<details>
-<summary>Show Answer</summary>
-
-Adding the `&` at the end of a command only runs it in the background of your current terminal session, allowing you to type other commands. However, that background process still belongs to your session's process tree. When you closed your laptop, the SSH connection dropped, causing the server to send a SIGHUP (hangup) signal to your terminal session and all of its child processes. This SIGHUP signal terminated the migration script instantly. To prevent this, you must run the command with `nohup ./migrate-db.sh &` (or use a multiplexer like `tmux`), which instructs the process to ignore the hangup signal and keep running after you disconnect.
+The ampersand moved the command to the background of the current shell, but it did not detach the command from the SSH session. When the terminal disconnected, the session could send SIGHUP to child processes, and the migration was still part of that process tree. For work that must survive disconnects, use `nohup`, a terminal multiplexer, a systemd unit, or a job runner. Backgrounding is a prompt-management tool, not a reliability boundary.
 
 </details>
 
-### Question 4
+<details><summary>Question 4: An alert says a Kubernetes node has disk pressure, `df -h` shows `/var` at 95 percent, and `top` shows high I/O wait. How do you implement the investigation?</summary>
 
-An alerting system pages you at 2 AM because a Kubernetes worker node is entirely unresponsive. You manage to SSH in, run `df -h`, and notice the `/var` partition is at 99% capacity. How do you systematically identify the exact file causing the issue?
-
-<details>
-<summary>Show Answer</summary>
-
-You need to drill down into the file system hierarchically because `df` only shows top-level partitions, not individual directories. Start broadly by running `du -sh /var/* 2>/dev/null | sort -rh | head -10` to find the largest directories within `/var`. Once you identify the largest directory (often `/var/log`), repeat the command on that specific sub-directory to narrow it down further. You continue this pattern of investigating the largest path until you isolate the specific massive file. Once found, you can safely truncate the runaway log file (e.g., `> /var/log/huge-file.log`) to instantly restore node health without breaking file handles.
+Start with the full filesystem because `df` has already identified `/var` as the pressured mount. Run `du -sh /var/* 2>/dev/null | sort -rh | head -10`, then repeat the same pattern inside the largest directory until you isolate the path or file. Check whether the culprit is logs, container runtime data, or another service before deleting anything. This preserves the link between node disk pressure and the Linux path that is actually consuming space.
 
 </details>
 
-### Question 5
+<details><summary>Question 5: You compare `free -h` and see low `free` memory but high `available` memory with no swap usage. Should you diagnose memory pressure?</summary>
 
-You are viewing a massive, continuously scrolling application log using `tail -f`, but you urgently need to run a `curl` command to test the application API without losing your place in the logs. How do you temporarily get your prompt back and then return to the logs?
-
-<details>
-<summary>Show Answer</summary>
-
-You should press `Ctrl+Z` to send a SIGTSTP (suspend) signal to the active `tail` process. Unlike `Ctrl+C` (SIGINT), which terminates the process entirely and loses your state, `Ctrl+Z` simply freezes the process in memory and returns control of the terminal to you. You can then comfortably run your `curl` command to test the API. Once finished, type the `fg` command to bring the frozen `tail` process back to the foreground, resuming the log output exactly where you left off.
+Not yet. Low `free` memory alone is normal on Linux because the kernel uses spare RAM for filesystem cache. High `available` memory means the kernel expects it can give memory to applications without heavy swapping. You should continue watching if the workload is changing, but this output by itself does not prove memory pressure. Real pressure would show low available memory, growing swap, OOM events, or application-level allocation failures.
 
 </details>
 
-### Question 6
+<details><summary>Question 6: You need to compare Kubernetes pod behavior with Linux processes during a rollout. The app ignores SIGTERM as PID 1, then pods die after the grace period. What should change?</summary>
 
-You run `top` on a Kubernetes node that is performing extremely poorly. The CPU usage shows `%Cpu(s): 0.5 us, 1.0 sy, 0.0 id, 0.0 wa, 98.5 st`. Memory is mostly available. What is the root cause of the slowness, and can you fix it by killing processes?
-
-<details>
-<summary>Show Answer</summary>
-
-The root cause of the slowness is severe CPU Steal (`st`), which is sitting at 98.5%. This metric indicates that the underlying cloud provider's hypervisor is taking almost all of the physical CPU cycles away from your virtual machine to serve other tenants on the same shared hardware. You cannot fix this "noisy neighbor" issue by killing processes on your Linux node because the constraint is external to your operating system. The node itself is starved of resources before it can even run your processes. Your only resolutions are to wait for the hypervisor to allocate resources back, cordon and drain the node to move your pods elsewhere, or upgrade your instance type.
+The application or its entrypoint needs to handle SIGTERM correctly and exit within the configured Kubernetes grace period. If a shell wrapper is PID 1 and does not forward signals, replace it with an exec form entrypoint or a small init process that forwards signals and reaps children. Tune `terminationGracePeriodSeconds` to match real shutdown time, but do not use a long grace period to hide broken signal handling. The Linux signal model explains why Kubernetes eventually uses SIGKILL when graceful termination fails.
 
 </details>
 
----
+<details><summary>Question 7: `top` shows load far above CPU count, but `%Cpu` is mostly idle and `wa` is high. Which resource should you diagnose before killing application processes?</summary>
+
+High I/O wait means tasks are waiting on storage, so disk or storage-backed network I/O should be investigated first. Killing application processes may reduce pressure temporarily, but it does not explain why reads or writes are blocked. Check `df -h`, use `du` on pressured mounts, inspect logs, and consider storage health or remote volume latency. The load average is high because tasks are queued or blocked, not necessarily because CPU is saturated.
+
+</details>
 
 ## Hands-On Exercise
 
 ### Process & Resource Scavenger Hunt
 
-**Objective**: Practice finding, monitoring, and killing processes, plus investigating disk usage.
+The exercise uses harmless `sleep` processes so you can practice process inspection, job control, and signals without risking real services. Treat the steps like an incident drill: create a known process, identify it by multiple methods, observe it, stop it gracefully, and then inspect disk layout. If you are on a shared machine, avoid killing processes you did not start.
 
-**Environment**: Any Linux system (VM, WSL, or native installation)
+**Objective**: Practice finding, monitoring, and killing processes, then connect that process evidence to system-wide disk usage. The exercise is deliberately small, but the sequence mirrors the way you should approach a real host under pressure.
+
+**Environment**: Use any Linux system, including a VM, WSL instance, or native installation where starting disposable `sleep` processes is acceptable. Avoid running the destructive cleanup ideas from the teaching sections unless you are on a throwaway lab machine.
 
 #### Part 1: Start a Background Process
 
@@ -614,6 +626,14 @@ MY_PID=$!
 echo "My background process PID is: $MY_PID"
 ```
 
+You are deliberately saving `$!` because it contains the PID of the most recent background command. That is more reliable than copying a number by hand, and it gives you a variable you can reuse in later commands. If `echo "$MY_PID"` is empty, start over in the same shell session.
+
+<details><summary>Solution note for Part 1</summary>
+
+You should see a job number in brackets and a PID printed by the shell. The exact PID will differ on every system. The important result is that `MY_PID` contains a number and the prompt returned immediately because the process is running in the background.
+
+</details>
+
 #### Part 2: Find It with `ps`
 
 ```bash
@@ -627,7 +647,13 @@ ps -p $MY_PID -o pid,user,stat,cmd
 ps auxf | grep sleep
 ```
 
-Verify that you can see the PID, that the STAT shows `S` (sleeping), and that the COMMAND is `sleep 600`.
+Verify that you can see the PID, that the STAT shows `S` for sleeping, and that the COMMAND is `sleep 600`. The process tree view should make the shell relationship visible, which connects this lab to the parent-child process model from the lesson.
+
+<details><summary>Solution note for Part 2</summary>
+
+`ps -p $MY_PID -o pid,user,stat,cmd` should print one row for the sleep process. If it prints only a header, the process already exited or the variable was not set in the current shell. Restart Part 1 and keep all commands in the same terminal session.
+
+</details>
 
 #### Part 3: Watch It in `top`
 
@@ -642,7 +668,13 @@ top
 # 4. Press 'q' to quit
 ```
 
-If you have `htop` installed, try that too — press `/` and type `sleep` to search for it.
+If you have `htop` installed, try that too and press `/` to search for `sleep`. A sleeping process should not consume meaningful CPU, which is the point of observing it live: not every process you can see is a process causing pressure.
+
+<details><summary>Solution note for Part 3</summary>
+
+The `sleep` process may be hard to spot if the list is sorted by CPU because it uses almost none. Search in `htop` or use the PID from `$MY_PID` to recognize it. Quit with `q` so you can continue the lab from the shell.
+
+</details>
 
 #### Part 4: Kill It
 
@@ -657,7 +689,13 @@ kill $MY_PID
 ps -p $MY_PID -o pid,cmd 2>/dev/null || echo "Process $MY_PID has been terminated."
 ```
 
-If it were a stubborn process that did not respond to SIGTERM, you would follow up with `kill -9 $MY_PID`.
+If it were a stubborn process that did not respond to SIGTERM, you would follow up with `kill -9 $MY_PID`. In this lab, `sleep` should respond to SIGTERM cleanly, which lets you practice the normal path before learning the escalation path.
+
+<details><summary>Solution note for Part 4</summary>
+
+The final command should print the termination message because `ps` should no longer find the PID. If the process still appears, confirm it is the same command and then repeat the signal step. Do not use broad commands such as `killall sleep` until the bonus section, where you intentionally create several lab sleeps.
+
+</details>
 
 #### Part 5: Check Disk Space
 
@@ -675,7 +713,15 @@ du -sh /var/* 2>/dev/null | sort -rh | head -5
 lsblk
 ```
 
-#### Part 6: Bonus — Job Control
+Record which filesystem has the highest `Use%` and which directory is largest under the path you inspected. You are not deleting anything in this exercise. The goal is to build the habit of separating filesystem capacity from directory size before taking cleanup action.
+
+<details><summary>Solution note for Part 5</summary>
+
+Your largest directories will depend on the system. On many servers, `/var`, `/usr`, or `/home` will be near the top. If `/var/*` prints permission errors despite the redirect, rerun with `sudo` only if you are on a machine where that is appropriate.
+
+</details>
+
+#### Part 6: Bonus -- Job Control
 
 ```bash
 # Start three background sleeps
@@ -700,20 +746,42 @@ killall sleep
 jobs
 ```
 
+This bonus step intentionally uses `killall sleep` because you created only disposable `sleep` processes for the lab. The same command would be a poor production default because it affects every process with that name. The lesson is not that broad matching is forbidden; it is that broad matching requires confidence about scope.
+
+<details><summary>Solution note for Part 6</summary>
+
+After `killall sleep`, `jobs` may show terminated jobs until the shell refreshes their status. Press Enter or run `jobs` again if needed. The expected endpoint is that no running sleep jobs remain in the current shell.
+
+</details>
+
 ### Success Criteria
 
 - [ ] Started a background `sleep` process and noted its PID
 - [ ] Found the process using `ps aux | grep` and confirmed its STAT code
-- [ ] Opened `top` (or `htop`) and located the process in the list
+- [ ] Opened `top` or `htop` and located the process in the list
 - [ ] Killed the process with `kill` and verified it was gone with `ps`
 - [ ] Ran `df -h` and identified which filesystem has the most usage
 - [ ] Used `du -sh` to find the largest directory on the system
-- [ ] (Bonus) Used `jobs`, `fg`, `bg`, and `killall` to manage multiple background jobs
+- [ ] Compared Linux process behavior with Kubernetes 1.35+ pod shutdown and the `k` alias examples
+- [ ] Used `jobs`, `fg`, `bg`, and `killall` to manage multiple background jobs
 
----
+## Sources
+
+- [Linux `ps(1)` manual page](https://man7.org/linux/man-pages/man1/ps.1.html)
+- [Linux `top(1)` manual page](https://man7.org/linux/man-pages/man1/top.1.html)
+- [Linux `free(1)` manual page](https://man7.org/linux/man-pages/man1/free.1.html)
+- [Linux `kill(1)` manual page](https://man7.org/linux/man-pages/man1/kill.1.html)
+- [Linux `pgrep(1)` and `pkill(1)` manual page](https://man7.org/linux/man-pages/man1/pgrep.1.html)
+- [Linux `df(1)` manual page](https://man7.org/linux/man-pages/man1/df.1.html)
+- [Linux `du(1)` manual page](https://man7.org/linux/man-pages/man1/du.1.html)
+- [Linux `lsblk(8)` manual page](https://man7.org/linux/man-pages/man8/lsblk.8.html)
+- [Linux kernel memory management concepts](https://www.kernel.org/doc/html/latest/admin-guide/mm/concepts.html)
+- [Linux kernel cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+- [Kubernetes pod lifecycle documentation](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/)
+- [Kubernetes resource management for pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
 
 ## Next Module
 
-You can find and kill processes, and you know where your disk space went. But who is managing all the services that start at boot — your web servers, databases, and schedulers? Time to learn about the system that orchestrates everything.
+You can now find and evaluate processes, diagnose CPU, memory, and disk pressure, and connect Linux process behavior to Kubernetes node operations. The next module moves from individual processes to the service manager that starts important background programs at boot, restarts them after crashes, and records their logs.
 
-**Next**: [Module 0.4: Services & Logs Demystified](../module-0.4-services-logs/)
+Continue with **Next**: [Module 0.4: Services & Logs Demystified](../module-0.4-services-logs/), where the focus shifts from individual processes to systemd services, startup behavior, restart policy, and logs that explain why long-running background programs succeed or fail.
