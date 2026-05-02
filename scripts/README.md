@@ -181,3 +181,113 @@ Gemini reviews KubeDojo content against these criteria (auto-injected with `--re
 - **Streaming** — Gemini output streams to stdout in real-time
 - **Retry** — exponential backoff on rate limits (default 3 retries)
 - **GitHub integration** — posts reviews as issue comments via `gh` CLI (with chunking for long reviews)
+
+---
+
+## #388 Module Quality Pipeline (`scripts/quality/`)
+
+End-to-end automation for the site-wide module rewrite (#388). Per item: codex (gpt-5.5, danger) writes → gemini cross-family review → auto-merge on APPROVE → cleanup. Held PRs (APPROVE_WITH_NITS / NEEDS CHANGES) surface for orchestrator triage.
+
+### Primary entry point: `run_388_batch.py`
+
+Single E2E command. Builds the bucket from the local API, dispatches, cleans up, prints summary.
+
+```bash
+# See available tracks + critical-mod counts
+python scripts/quality/run_388_batch.py --list-tracks
+
+# Run one fine-grained track (KCNA, KCSA, CKA, CKAD, CKS, "Platform Toolkits", ...)
+python scripts/quality/run_388_batch.py --track KCSA
+
+# Run a top-level alias (mirrors site-nav tab)
+python scripts/quality/run_388_batch.py --track certifications   # = k8s/
+python scripts/quality/run_388_batch.py --track platform-engineering  # = platform/
+
+# Use a curated module list (skip auto-build)
+python scripts/quality/run_388_batch.py --input scripts/quality/my-list.txt
+
+# Preview without dispatching anything
+python scripts/quality/run_388_batch.py --track CKAD --dry
+```
+
+**Top-level aliases** (map to filesystem prefixes):
+| Alias | Prefix |
+|------|------|
+| `certifications` | `k8s/` |
+| `platform-engineering` | `platform/` |
+| `fundamentals` | `prerequisites/` + `linux/` |
+| `cloud` | `cloud/` |
+| `on-premises` | `on-premises/` |
+| `ai` | `ai/` |
+| `ai-ml-engineering` | `ai-ml-engineering/` |
+
+**API integration** (replaces ad-hoc filters):
+- `/api/quality/upgrade-plan?target=5.0` — pre-bucketed candidates
+- `/api/quality/board` — filters out already-shipped modules
+- `/api/pipeline/leases` — skips modules currently leased by another worker (per CLAUDE.md "Before you claim work")
+
+### Building blocks (run_388_batch chains these; also runnable standalone)
+
+#### `verify_module.py` — the canonical contract
+
+Deterministic verifier. All gates must clear for tier T0.
+
+```bash
+# One module, no source check
+python scripts/quality/verify_module.py \
+  --glob src/content/docs/k8s/cka/part1-control-plane/module-1.1-control-plane.md \
+  --skip-source-check --summary --quiet
+
+# All revision_pending modules → JSONL audit
+python scripts/quality/verify_module.py --all-revision-pending --out logs/audit.jsonl
+```
+
+Gates: density (mean_wpp ≥ 30, median_wpp ≥ 28, short ≤ 20%, max-run ≤ 2), structure (4 Did You Know, 6-8 Common Mistakes, 6-8 Quiz with `<details>`, Hands-On with `- [ ]`), section order, anti-leak, protected assets, sources. Tiers: T0 (all pass) → T3 (multiple gate failures).
+
+#### `dispatch_388_pilot.py` — per-module orchestrator
+
+Sequential codex → gemini → merge loop.
+
+```bash
+python scripts/quality/dispatch_388_pilot.py \
+  --input scripts/quality/day3-bucket1-kcna.txt \
+  --log logs/388_kcna.jsonl \
+  --max 5    # optional canary cap
+```
+
+Verdict routing:
+- `APPROVE` → squash-merge with `--delete-branch`
+- `APPROVE_WITH_NITS` → log `merge_held_nits` + post review; **held** for orchestrator triage (C3 fix-up lane)
+- `NEEDS CHANGES` / `UNCLEAR` → log `merge_held`; orchestrator decides re-dispatch vs inline
+
+#### `cleanup_388_pilot.py` — post-batch housekeeping
+
+```bash
+python scripts/quality/cleanup_388_pilot.py --input scripts/quality/day3-bucket1-kcna.txt
+python scripts/quality/cleanup_388_pilot.py --input <file> --dry   # preview only
+python scripts/quality/cleanup_388_pilot.py --input <file> --no-fetch
+```
+
+1. `git fetch` + `git pull --ff-only origin main`
+2. Re-verify each input module on main
+3. Clear stale `revision_pending: true` on modules that pass the verifier
+4. Remove `*388-pilot*` worktrees + their branches
+5. Remove `/private/tmp/kubedojo-build-388-pilot` (codex's build workaround)
+6. Print per-module table
+
+### Held-PR triage (manual, per C3 deliberation)
+
+Held PRs require orchestrator judgment — the C3 fix-up lane was deliberated in `ab discuss day3-388` (2026-05-02). The summary at the end of `run_388_batch.py` lists each held PR with its gemini review URL:
+
+- **APPROVE_WITH_NITS** (URL fix, redundant alias, typo, single-line removal) → fix inline on the branch + `gh pr merge --squash --delete-branch <num>`
+- **NEEDS CHANGES** (structural failure, missing section, density regression) → close PR, or re-dispatch codex on the existing branch with the gemini review as the brief:
+  ```bash
+  codex exec -C .worktrees/codex-388-pilot-<slug> \
+    -m gpt-5.5 --dangerously-bypass-approvals-and-sandbox - <<< "<gemini's review as the brief>"
+  ```
+
+### Operational risks (when running solo)
+
+1. **Codex auth expiry** — batch silently dies. Run `codex login` before launching.
+2. **Gemini 429** — under load `gemini-3.1-pro-preview` returns "no capacity." Fall back: `KUBEDOJO_GEMINI_REVIEW_MODEL=gemini-3-flash-preview python scripts/quality/run_388_batch.py ...`.
+3. **Process death mid-batch** — no resume support today; manually edit the input file to skip already-merged modules and relaunch.
