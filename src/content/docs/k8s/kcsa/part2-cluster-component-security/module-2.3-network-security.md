@@ -30,7 +30,7 @@ After completing this module, you will be able to apply these outcomes in design
 
 ## Why This Module Matters
 
-In late 2018, a large electric-vehicle manufacturer disclosed that attackers had abused an exposed Kubernetes dashboard to run cryptocurrency mining workloads in its cloud account. Public reporting focused on the visible mistake, but the deeper lesson was about trust boundaries: once the intruder reached the cluster control surface, weak segmentation turned a single foothold into a much broader blast radius. The direct cost was not only compute waste; it was incident response time, engineering distraction, secret-rotation work, and the uncomfortable question every security team asks after containment: what else could that workload have reached while it was running?
+In early 2018, a large electric-vehicle manufacturer disclosed that attackers had abused an exposed Kubernetes dashboard to run cryptocurrency mining workloads in its cloud account. Public reporting focused on the visible mistake, but the deeper lesson was about trust boundaries: once the intruder reached the cluster control surface, weak segmentation turned a single foothold into a much broader blast radius. The direct cost was not only compute waste; it was incident response time, engineering distraction, secret-rotation work, and the uncomfortable question every security team asks after containment: what else could that workload have reached while it was running?
 
 Kubernetes makes distributed systems feel clean because a pod can reach a service name without caring which node holds the endpoint. That convenience is intentional, and it is one reason the platform scales operationally. The security cost is just as intentional: the default network is open until you add controls, and namespaces are organizational labels rather than packet filters. A compromised frontend, a debug container left too permissive, or a vulnerable internal API can become a route toward databases, message brokers, metadata services, and control-plane-adjacent endpoints if the cluster has no deliberate network policy.
 
@@ -716,6 +716,7 @@ spec:
   policyTypes:
   - Ingress
   - Egress
+---
 # 2. Allow ingress to frontend from anywhere
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -730,6 +731,7 @@ spec:
   - Ingress
   ingress:
   - {}  # Allow from anywhere
+---
 # 3. Allow frontend to reach backend
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -749,6 +751,7 @@ spec:
           tier: frontend
     ports:
     - port: 8080
+---
 # 4. Allow backend to reach database
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -768,6 +771,7 @@ spec:
           tier: backend
     ports:
     - port: 5432
+---
 # 5. Allow frontend egress to backend
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -795,6 +799,7 @@ spec:
     ports:
     - port: 53
       protocol: UDP
+---
 # 6. Allow backend egress to database
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
