@@ -481,7 +481,7 @@ For post-incident follow-up, convert the lesson into a reusable check. If a stal
 
 The workflow is intentionally evidence-heavy because DNS failures are easy to overgeneralize. A single name can pass from local files, to stub resolvers, to recursive resolvers, to authoritative servers, and back through caches before an application ever opens a socket. Each layer can be healthy while another layer is wrong. Your job during debugging is to find the first layer where expectation and observation diverge, then make the smallest change that corrects that layer.
 
-Keep the human workflow calm as well. DNS incidents often involve platform, networking, security, and application engineers at the same time, and each group sees a different slice of the path. A concise resolver timeline gives everyone a shared map. It reduces repeated tests, prevents broad restarts, and makes the final fix easier to review after service is restored.
+Record resolver evidence in the same order you test it. A useful note includes the failing name, the namespace or host where the query ran, the resolver address, the command output, the observed TTL, and the configuration file or pod field that explains the result. That format turns a scattered command session into a reproducible diagnosis.
 
 Finally, write the conclusion in layer-specific language. "DNS is broken" is less useful than "pod `web-2` in namespace `staging` has `dnsPolicy: None` and lacks the cluster search domains, while CoreDNS answers the fully qualified Service name correctly." The second sentence identifies the failing layer, clears CoreDNS for that record, and points to the owning configuration. That is the standard you should aim for when communicating DNS findings during real operations.
 
