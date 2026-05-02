@@ -151,15 +151,39 @@ docs/session-state/
 STATUS.md  (Latest handoff promotion at session end)
 ```
 
-## Use `ab discuss` for high-leverage decisions (agreed end-of-session)
+## `ab discuss` underutilization — Decision Card pattern (agreed end-of-session)
 
-User flagged that we underutilize `ab discuss --with claude,codex,gemini` — the agent bridge supports multi-agent rounds (default 2, cap 4). We've been treating ab as point-to-point dispatch (codex writes, gemini reviews, I merge) and missing real quorum reasoning.
+User flagged that we underutilize `ab discuss --with claude,codex,gemini` (multi-agent rounds, default 2, cap 4). The other Claude on the learn-ukrainian project independently proposed a richer protocol that supersedes my initial "every agent VOTEs" sketch. **Use the learn-ukrainian protocol when it ships**, don't reimplement here.
 
-**Scope agreement**: use it for high-leverage decisions only — architecture choices, threshold freezes, contested NEEDS CHANGES — NOT per-PR review (would 3x the latency we just measured at 12 min/module).
+**Scope** (still applies): use `ab discuss` for high-leverage decisions only — architecture choices, threshold freezes, contested NEEDS CHANGES, strategic curriculum bets affecting 100+ modules. **Not** per-PR review (would 3x latency).
 
-**Voting machinery**: do NOT build quorum/tie-break code yet. Start with a prompt convention — each agent ends its turn with `VOTE: YES|NO|ABSTAIN` + one-sentence reason, claude extracts the verdict. Add code only after 3-5 real discussions reveal where free-form actually fails.
+**Framing fix**: "distributed deliberation, not quorum." LLM agents have correlated priors — calling it quorum is theater. Frame it as multi-perspective deliberation that surfaces disagreement, not democratic voting.
 
-**First test next session**: `ab discuss day3-388 --with claude,codex,gemini --max-rounds 3` on Day 3 volume-run architecture (lane count, batch shape, coherence-review cadence). That's the cleanest signal — a decision affecting 226 modules where a single-agent blind spot is genuinely costly.
+**Decision Card pattern (from learn-ukrainian Claude)** — emit ONLY when agents disagree OR produce multi-option output, NOT when they converge with [AGREE]. Convergence needs no card; disagreement does:
+
+```markdown
+## DECISION REQUIRED — {question}
+**Agents:** claude, gemini, codex (R rounds)
+**Options:** A (proposed by ...), B (...), C (...)
+**Votes:** claude→A {rationale}; gemini→B {rationale}; codex→A {rationale}
+**Disagreement:** {what they actually differ on}
+**Orchestrator recommendation:** A — {rationale 1-3 lines}
+**Awaiting:** user override or "go"
+```
+
+**Surface protocol**:
+- Inline in chat if user online (immediate visibility)
+- `docs/decisions/pending/{date}-{slug}.md` if AFK (durable, scannable on return)
+- GH issue if multi-week (architecture-level)
+- On user decision: file moves `pending/` → `docs/decisions/{date}-{slug}.md` with chosen option recorded
+
+**Cold-start update**: future cold-start protocol must include "scan `docs/decisions/pending/` for outstanding decisions" — otherwise pending decisions stay buried in channel transcripts.
+
+**What to do next session**:
+1. Pull / import the learn-ukrainian `docs/decisions/pending/` + Decision Card convention into kubedojo (don't reinvent).
+2. First real test: Day 3 #388 volume-run architecture — `ab discuss day3-388 --with claude,codex,gemini --max-rounds 3`. Decision affects 226 modules and several days of compute, so single-agent blind spots are genuinely costly. Emit a Decision Card if disagreement surfaces, inline if online.
+
+**Memory**: `feedback_ab_discuss_for_decisions.md` — updated to point at Decision Card pattern, NOT the "VOTE: YES/NO" prompt convention I originally sketched (that would produce rubber-stamp votes 80% of the time).
 
 ## Blockers
 
