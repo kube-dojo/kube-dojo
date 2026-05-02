@@ -414,7 +414,7 @@ spec:
 
 ### Step 1: Start with the controller, then inspect the Pod
 
-A beginner often starts by changing YAML immediately, but a stronger habit is to inspect what Kubernetes created. The Deployment owns a ReplicaSet, and the ReplicaSet owns Pods. If the Deployment has unavailable replicas, the next useful evidence is usually the Pod status and events, and the following commands show the controller view before the Pod-level view.
+A beginner often starts by changing YAML immediately, but a stronger habit is to inspect what Kubernetes created. The Deployment owns a ReplicaSet, and the ReplicaSet owns Pods. If the Deployment has unavailable replicas, inspect the controller first and then move to the Pod status and scheduler events.
 
 ```bash
 k get deployment image-ranker
@@ -431,7 +431,7 @@ NAME                             READY   STATUS    RESTARTS   AGE
 image-ranker-6c9d7f8d9b-hp2lm    0/1     Pending   0          2m
 ```
 
-Pending means the container has not started. That is different from CrashLoopBackOff, where the Pod was scheduled and a container started but failed. For scheduling problems, the `describe pod` output is the main source of truth because it includes scheduler events, and the event in this scenario names the missing extended resource directly.
+Pending means the container has not started. That is different from CrashLoopBackOff, where the Pod was scheduled and a container started but failed. For scheduling problems, the `describe pod` output is the main source of truth because it includes scheduler events. In this scenario, the event names the missing extended resource directly.
 
 ```bash
 k describe pod -l app=image-ranker
@@ -450,7 +450,7 @@ Events:
 
 The scheduler says it cannot find enough `nvidia.com/gpu` capacity. That does not prove the cluster has no physical GPU. It proves the Kubernetes scheduler does not currently see allocatable free capacity for that resource. The cause could be missing device plugin, no GPU nodes, a consumed GPU, a node taint without toleration, or node affinity that excludes the right node.
 
-The next command checks whether any node advertises GPU capacity. If no node shows `nvidia.com/gpu` under allocatable resources, the problem is lower than the workload manifest. The platform team needs to confirm GPU nodes, drivers, and the device plugin, while a healthy GPU node would include a line like the one shown below somewhere under `Allocatable`.
+The next command checks whether any node advertises GPU capacity. If no node shows `nvidia.com/gpu` under allocatable resources, the problem is lower than the workload manifest. The platform team needs to confirm GPU nodes, drivers, and the device plugin. A healthy GPU node includes a line like the one shown below under `Allocatable`.
 
 ```bash
 k describe nodes | grep -A5 -E "Name:|Allocatable:"
@@ -464,7 +464,7 @@ If no such line appears, deploying more model replicas will not help. The schedu
 
 ### Step 3: Check whether the workload is missing placement rules
 
-Suppose a node does advertise `nvidia.com/gpu`, but the Pod is still Pending. The next useful question is whether the node has taints that repel ordinary Pods. GPU nodes are commonly tainted because they are expensive, and the platform team wants only GPU-aware workloads to land there, so the following command checks the taint policy before you change the Deployment.
+Suppose a node does advertise `nvidia.com/gpu`, but the Pod is still Pending. The next useful question is whether the node has taints that repel ordinary Pods. GPU nodes are commonly tainted because they are expensive, and the platform team wants only GPU-aware workloads to land there. Check the taint policy before changing the Deployment.
 
 ```bash
 k describe node gpu-node-1 | grep -A4 Taints
