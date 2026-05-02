@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Post-pilot cleanup for #388 Day 2.
+"""Post-batch cleanup for #388 (originally Day 2 pilot, now generalized).
 
-Run after `dispatch_388_pilot.py` reports `pilot_done`:
+Run after `dispatch_388_pilot.py` reports `pilot_done` for any input batch:
 
   1. Re-fetch + ff-merge origin/main so all merged PRs are local.
-  2. For each module in pilot-2026-05-02.txt: re-verify on main; record tier + body_words + revision_pending flag.
-  3. If frontmatter still has `revision_pending: true` on a merged module, set it to `false`. Stage in one cleanup commit.
-  4. Remove stale pilot worktrees + local branches.
-  5. Remove the /private/tmp/kubedojo-build-388-pilot worktree codex created during run.
+  2. For each module in --input (default scripts/quality/pilot-2026-05-02.txt):
+     re-verify on main; record tier + body_words + revision_pending flag.
+  3. If frontmatter still has `revision_pending: true` on a merged module,
+     set it to `false`. Stage in one cleanup commit.
+  4. Remove stale pilot worktrees + local branches (matches `*388-pilot*` paths).
+  5. Remove the /private/tmp/kubedojo-build-388-pilot worktree codex created
+     during run.
   6. Print a final per-module table + summary.
 
 Usage:
-  .venv/bin/python scripts/quality/cleanup_388_pilot.py        # do everything
+  .venv/bin/python scripts/quality/cleanup_388_pilot.py
+  .venv/bin/python scripts/quality/cleanup_388_pilot.py --input scripts/quality/day3-bucket1-kcna.txt
   .venv/bin/python scripts/quality/cleanup_388_pilot.py --dry  # report only, no writes
 """
 from __future__ import annotations
@@ -23,8 +27,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path("/Users/krisztiankoos/projects/kubedojo")
-PILOT_FILE = REPO / "scripts/quality/pilot-2026-05-02.txt"
+# Derive REPO from this file's location so the cleanup runs from any
+# checkout (primary OR a worktree) without a hard-coded absolute path.
+REPO = Path(__file__).resolve().parents[2]
+DEFAULT_INPUT = REPO / "scripts/quality/pilot-2026-05-02.txt"
 TMP_BUILD_WT = Path("/private/tmp/kubedojo-build-388-pilot")
 
 
@@ -71,19 +77,23 @@ def remove_pilot_worktrees(dry: bool):
     cur = {}
     for line in out.splitlines():
         if line.startswith("worktree "):
-            if cur: wts.append(cur)
+            if cur:
+                wts.append(cur)
             cur = {"path": line.split(" ", 1)[1]}
         elif line.startswith("branch "):
             cur["branch"] = line.split(" ", 1)[1]
         elif line == "" and cur:
-            wts.append(cur); cur = {}
-    if cur: wts.append(cur)
+            wts.append(cur)
+            cur = {}
+    if cur:
+        wts.append(cur)
 
     pilot_wts = [w for w in wts if "388-pilot" in w.get("path", "")]
     print(f"\n[cleanup] {len(pilot_wts)} pilot worktree(s) to remove")
     for w in pilot_wts:
         print(f"  - {w['path']}  ({w.get('branch','?')})")
-        if dry: continue
+        if dry:
+            continue
         run(["git", "worktree", "remove", "--force", w["path"]])
         if "branch" in w:
             br = w["branch"].replace("refs/heads/", "")
@@ -94,22 +104,36 @@ def remove_tmp_build_wt(dry: bool):
     if not TMP_BUILD_WT.exists():
         return
     print(f"\n[cleanup] removing {TMP_BUILD_WT}")
-    if dry: return
+    if dry:
+        return
     run(["git", "worktree", "remove", "--force", str(TMP_BUILD_WT)])
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="Post-batch cleanup for #388 module rewrites.")
+    p.add_argument(
+        "--input", "-i", type=Path, default=None,
+        help=f"Module-list file (one path per line, # comments). Default: {DEFAULT_INPUT.relative_to(REPO)}",
+    )
     p.add_argument("--dry", action="store_true", help="Report only, do not write")
     p.add_argument("--no-fetch", action="store_true", help="Skip git fetch + pull")
     args = p.parse_args(argv)
+
+    input_file = args.input or DEFAULT_INPUT
+    if not input_file.exists():
+        print(f"❌ input file not found: {input_file}", file=sys.stderr)
+        return 1
 
     if not args.no_fetch:
         print("[cleanup] fetching origin/main...")
         fetch_main()
 
-    pilot = [l.strip() for l in PILOT_FILE.read_text().splitlines() if l.strip()]
-    print(f"\n[cleanup] {len(pilot)} pilot modules to verify\n")
+    pilot = [
+        line.strip()
+        for line in input_file.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    print(f"\n[cleanup] {len(pilot)} module(s) from {input_file.name} to verify\n")
 
     needed_fix = []
     rows = []
@@ -130,17 +154,18 @@ def main(argv=None) -> int:
             if fix_revision_pending(full, args.dry):
                 needed_fix.append(path)
 
-    print("\n=== PILOT POST-MERGE STATUS ===")
+    print(f"\n=== BATCH POST-MERGE STATUS ({input_file.stem}) ===")
     print(f"{'tier':6s} {'body':>6s} {'rp':>6s} {'pass':>5s}  module")
     for path, tier, body, rp, passed in rows:
         print(f"{str(tier):6s} {str(body):>6s} {str(rp):>6s} {passed:>5s}  {path}")
 
     if needed_fix:
         print(f"\n[cleanup] frontmatter rewritten on {len(needed_fix)} module(s):")
-        for path in needed_fix: print(f"  - {path}")
+        for path in needed_fix:
+            print(f"  - {path}")
         if not args.dry:
             run(["git", "add"] + needed_fix)
-            msg = f"chore(388): clear revision_pending flag on {len(needed_fix)} pilot module(s)"
+            msg = f"chore(388): clear revision_pending flag on {len(needed_fix)} module(s) ({input_file.stem})"
             code, _ = run(["git", "commit", "-m", msg])
             print(f"[cleanup] commit: rc={code}")
             if code == 0:

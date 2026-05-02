@@ -1,0 +1,30 @@
+# Day 3 #388 bucket-2 — KCSA (B3 second bucket: foundational security, single-track)
+# 26 modules at <2.0 critical-rubric. Source: /api/quality/scores @ 2026-05-02.
+# Sequel to day3-bucket1-kcna.txt. KCSA is foundational security; harder than KCNA but still pre-CKS difficulty.
+# Per ab discuss day3-388 (2026-05-02): A2+B3+C3+D1. Run after KCNA bucket lands cleanly.
+src/content/docs/k8s/kcsa/part0-introduction/module-0.1-kcsa-overview.md
+src/content/docs/k8s/kcsa/part0-introduction/module-0.2-security-mindset.md
+src/content/docs/k8s/kcsa/part1-cloud-native-security/module-1.1-four-cs.md
+src/content/docs/k8s/kcsa/part1-cloud-native-security/module-1.2-cloud-provider-security.md
+src/content/docs/k8s/kcsa/part1-cloud-native-security/module-1.3-security-principles.md
+src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.1-control-plane-security.md
+src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.2-node-security.md
+src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.3-network-security.md
+src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.4-pki-certificates.md
+src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.1-pod-security.md
+src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.2-rbac.md
+src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.3-secrets.md
+src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.4-serviceaccounts.md
+src/content/docs/k8s/kcsa/part3-security-fundamentals/module-3.5-network-policies.md
+src/content/docs/k8s/kcsa/part4-threat-model/module-4.1-attack-surfaces.md
+src/content/docs/k8s/kcsa/part4-threat-model/module-4.2-vulnerabilities.md
+src/content/docs/k8s/kcsa/part4-threat-model/module-4.3-container-escape.md
+src/content/docs/k8s/kcsa/part4-threat-model/module-4.4-supply-chain.md
+src/content/docs/k8s/kcsa/part4-threat-model/module-4.5-threat-modeling-supply-chain-theory.md
+src/content/docs/k8s/kcsa/part5-platform-security/module-5.1-image-security.md
+src/content/docs/k8s/kcsa/part5-platform-security/module-5.2-observability.md
+src/content/docs/k8s/kcsa/part5-platform-security/module-5.3-runtime-security.md
+src/content/docs/k8s/kcsa/part5-platform-security/module-5.4-security-tooling.md
+src/content/docs/k8s/kcsa/part6-compliance/module-6.1-compliance-frameworks.md
+src/content/docs/k8s/kcsa/part6-compliance/module-6.2-cis-benchmarks.md
+src/content/docs/k8s/kcsa/part6-compliance/module-6.3-security-assessments.md
