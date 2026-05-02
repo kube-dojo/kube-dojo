@@ -4,6 +4,8 @@ import re
 import subprocess
 from datetime import UTC, datetime
 
+from agent_runtime.redact import redact_text
+
 from ._config import GH_CHAR_LIMIT
 
 
@@ -36,12 +38,13 @@ def _split_content(content: str, limit: int = GH_CHAR_LIMIT) -> list[str]:
 
 def _gh_comment(issue_num: int, body: str) -> bool:
     """Post a comment on a GitHub issue. Returns True on success."""
+    body = redact_text(body)
     result = subprocess.run(
         ["gh", "issue", "comment", str(issue_num), "-F", "-"],
         input=body, text=True, capture_output=True, timeout=15
     )
     if result.returncode != 0:
-        print(f"⚠️  GitHub comment failed: {result.stderr[:200]}")
+        print(f"⚠️  GitHub comment failed: {redact_text(result.stderr)[:200]}")
         return False
     return True
 
@@ -54,7 +57,7 @@ def _post_review_to_github(task_id: str, content: str, model: str) -> int | None
     try:
         from ._messaging import _extract_issue_number
         issue_num = _extract_issue_number(task_id)
-        chunks = _split_content(content)
+        chunks = _split_content(redact_text(content))
         total_parts = len(chunks)
 
         if issue_num:
@@ -104,11 +107,11 @@ def _post_as_new_issue(task_id: str, chunks: list[str], model: str, total_parts:
             input=first_body, text=True, capture_output=True, timeout=15
         )
     if result.returncode != 0:
-        print(f"⚠️  GitHub issue creation failed: {result.stderr[:200]}")
+        print(f"⚠️  GitHub issue creation failed: {redact_text(result.stderr)[:200]}")
         return None
 
     # Parse issue number from URL output
-    url = result.stdout.strip()
+    url = redact_text(result.stdout).strip()
     url_match = re.search(r'/issues/(\d+)', url)
     if not url_match:
         print(f"⚠️  Could not parse issue number from: {url}")

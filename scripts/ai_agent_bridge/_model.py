@@ -4,7 +4,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from ._config import _MODEL_CACHE, _MODEL_CACHE_TTL, _PARENT_ENV, GEMINI_CLI
+from ._config import _MODEL_CACHE, _MODEL_CACHE_TTL, GEMINI_CLI, agent_child_env
 
 
 def _force_gemini_subscription() -> bool:
@@ -12,10 +12,10 @@ def _force_gemini_subscription() -> bool:
 
 
 def _subscription_env() -> dict[str, str]:
-    env = _PARENT_ENV.copy()
-    env.pop("GEMINI_API_KEY", None)
-    env.pop("GOOGLE_API_KEY", None)
-    return env
+    return agent_child_env(
+        "gemini",
+        {"GEMINI_API_KEY": None, "GOOGLE_API_KEY": None},
+    )
 
 
 def _has_gemini_api_key(env: dict[str, str]) -> bool:
@@ -50,7 +50,7 @@ def check_model(model: str, timeout: int = 15, force: bool = False) -> bool:
             print(f"🔍 Model '{model}': {status} (cached {int(age)}s ago)")
             return available
 
-    env = _subscription_env() if _force_gemini_subscription() else _PARENT_ENV
+    env = _subscription_env() if _force_gemini_subscription() else agent_child_env("gemini")
     try:
         result = subprocess.run(
             [GEMINI_CLI, "-m", model, "-p", "Reply with exactly: MODEL_OK"],

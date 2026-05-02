@@ -54,10 +54,10 @@ class InvocationPlan:
             ``gemini --output-path <file>`` populate this; the runner reads
             it on completion. None if output goes to stdout.
         env_overrides: Env vars to add to or remove from the subprocess
-            environment. Merged onto ``os.environ`` fresh per invocation —
-            NEVER ``os.environ.update()``. Set a value to ``None`` to remove
-            that variable for this child only (e.g. strip Gemini API keys so
-            the CLI falls through to OAuth). Values set here leak nowhere else.
+            environment. Merged onto a sanitized environment snapshot fresh
+            per invocation. Set a value to ``None`` to remove that variable
+            for this child only (e.g. strip Gemini API keys so the CLI falls
+            through to OAuth). Values set here leak nowhere else.
         liveness_paths: Files whose mtime indicates the agent is alive.
             Used by the runner's stall detector as a fallback when stdout
             is buffered/redirected. Can be empty; if so, only stdout

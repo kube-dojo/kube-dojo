@@ -38,6 +38,7 @@ from ._config import (
     GEMINI_FALLBACK_MODEL,
     PYTHON_CMD,
     REPO_ROOT,
+    agent_child_env,
 )
 from ._github import _post_review_to_github
 from ._messaging import (
@@ -295,7 +296,7 @@ def _launch_gemini_background(msg: dict, message_id: int, model: str, prompt: st
             stdout=lf,
             stderr=subprocess.STDOUT,
             cwd=str(REPO_ROOT),
-            env=_PARENT_ENV,
+            env=agent_child_env("gemini"),
             start_new_session=True
         )
         lf.close()

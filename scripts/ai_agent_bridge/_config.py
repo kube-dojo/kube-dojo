@@ -4,6 +4,11 @@ import os
 import shutil
 from pathlib import Path
 
+try:
+    from agent_runtime.env_sanitize import build_agent_env
+except ImportError:  # pragma: no cover - package import mode
+    from scripts.agent_runtime.env_sanitize import build_agent_env
+
 # Repo root for path resolution
 REPO_ROOT = Path(
     os.environ.get("AB_REPO_ROOT", str(Path(__file__).parent.parent.parent))
@@ -51,14 +56,33 @@ if not GEMINI_DEFAULT_MODEL:
     except ImportError:
         GEMINI_DEFAULT_MODEL = GEMINI_FALLBACK_MODEL
 
-# Snapshot environment for passing to detached children
-# Set GEMINI_SESSION so .bashrc disables hostile aliases (eza, bat, zoxide)
-_PARENT_ENV = os.environ.copy()
-_PARENT_ENV["GEMINI_SESSION"] = "1"
 _PIPELINE_ENV_KEY = os.environ.get(
     "AB_PIPELINE_ENV_KEY", "KUBEDOJO_PIPELINE"
 )
-_PARENT_ENV[_PIPELINE_ENV_KEY] = "1"  # Suppress inbox hooks during pipeline runs
+_BASE_AGENT_ENV_OVERRIDES = {
+    "GEMINI_SESSION": "1",
+    _PIPELINE_ENV_KEY: "1",  # Suppress inbox hooks during pipeline runs.
+}
+
+
+def agent_child_env(
+    provider: str | None = None,
+    overrides: dict[str, str | None] | None = None,
+) -> dict[str, str]:
+    """Return a sanitized env scoped to one bridge child provider."""
+    merged_overrides = {**_BASE_AGENT_ENV_OVERRIDES}
+    if overrides:
+        merged_overrides.update(overrides)
+    env = build_agent_env(provider=provider, overrides=merged_overrides)
+    if provider == "gemini" and os.environ.get("KUBEDOJO_GEMINI_SUBSCRIPTION") == "1":
+        env.pop("GEMINI_API_KEY", None)
+        env.pop("GOOGLE_API_KEY", None)
+    return env
+
+
+# Generic sanitized snapshot for compatibility. Provider subprocesses should
+# call agent_child_env("gemini"|"claude"|"codex") instead of using this.
+_PARENT_ENV = agent_child_env()
 # Gemini auth: CLI prefers GEMINI_API_KEY when set; otherwise falls
 # through to OAuth/subscription creds in ~/.gemini/oauth_creds.json.
 # When the API-key tier is rate-limited, set

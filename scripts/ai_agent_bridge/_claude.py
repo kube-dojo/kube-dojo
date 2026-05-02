@@ -27,7 +27,7 @@ from agent_runtime.errors import (
 from agent_runtime.runner import invoke as runtime_invoke
 
 from ._broker import _is_task_locked, _remove_pid_file, _write_pid_file
-from ._config import _PARENT_ENV, CLAUDE_CMD, CLAUDE_DEFAULT_MODEL, REPO_ROOT
+from ._config import CLAUDE_CMD, CLAUDE_DEFAULT_MODEL, REPO_ROOT, agent_child_env
 from ._db import get_db, get_session, set_session
 from ._messaging import acknowledge, send_message
 from ._prompts import build_claude_prompt
@@ -284,7 +284,7 @@ def _launch_claude_background(msg, message_id, new_session):
             stdout=lf,
             stderr=subprocess.STDOUT,
             cwd=str(REPO_ROOT),
-            env=_PARENT_ENV,
+            env=agent_child_env("claude"),
             start_new_session=True
         )
         lf.close()

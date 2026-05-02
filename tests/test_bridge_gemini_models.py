@@ -338,7 +338,7 @@ def test_model_check_falls_back_to_oauth_on_api_quota(monkeypatch):
             )
         return SimpleNamespace(returncode=0, stdout="MODEL_OK", stderr="")
 
-    monkeypatch.setattr(_model, "_PARENT_ENV", {"GEMINI_API_KEY": "api-key"})
+    monkeypatch.setenv("GEMINI_API_KEY", "api-key")
     monkeypatch.setattr(_model.subprocess, "run", fake_run)
     monkeypatch.delenv("KUBEDOJO_GEMINI_SUBSCRIPTION", raising=False)
     _model._MODEL_CACHE.clear()
