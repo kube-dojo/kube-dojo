@@ -3,19 +3,18 @@ title: "Module 3.1: Pod Security"
 slug: k8s/kcsa/part3-security-fundamentals/module-3.1-pod-security
 sidebar:
   order: 2
+revision_pending: false
 ---
 
-> **Complexity**: `[MEDIUM]` - Core knowledge
+> **Complexity**: `[MEDIUM]` - Core knowledge for engineers who need to evaluate pod runtime risk and admission behavior
 >
-> **Time to Complete**: 40-50 minutes
+> **Time to Complete**: 40-50 minutes of reading, manifest review, and practical remediation work
 >
-> **Prerequisites**: [Module 2.4: PKI and Certificates](/k8s/kcsa/part2-cluster-component-security/module-2.4-pki-certificates/)
-
----
+> **Prerequisites**: [Module 2.4: PKI and Certificates](/k8s/kcsa/part2-cluster-component-security/module-2.4-pki-certificates/), plus basic comfort reading Pod YAML and namespace labels
 
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to review real Pod manifests, diagnose Pod Security Admission behavior, and explain the security tradeoffs behind each recommended change:
 
 1. **Evaluate** Pod and container `securityContext` settings to separate acceptable hardening choices from configurations that enable privilege escalation, host access, or persistence.
 2. **Compare** the `privileged`, `baseline`, and `restricted` Pod Security Standards profiles and recommend the least permissive profile that fits a workload class.
@@ -23,17 +22,15 @@ After completing this module, you will be able to:
 4. **Design** a hardened pod specification that runs as non-root, drops unnecessary Linux capabilities, uses seccomp, and preserves application functionality with explicit writable paths.
 5. **Assess** when a workload exception is justified, then contain that exception with namespace labels, workload isolation, and documented compensating controls.
 
----
-
 ## Why This Module Matters
 
 A platform team inherits a cluster where every application namespace allows privileged pods because one monitoring agent needed host access years ago. Months later, a vulnerable web application is compromised, and the attacker discovers that the container can run as root, add broad Linux capabilities, write to its filesystem, and share the node network. The original application bug was ordinary; the blast radius became dangerous because the pod was allowed to behave like part of the host.
 
 Pod security is the boundary between "the attacker controls one process" and "the attacker can interact with the node." Kubernetes does not make every pod safe by default, because many legitimate system components need powerful access to networking, devices, or host namespaces. That flexibility is useful for cluster operators, but it means application teams must learn which fields are routine hardening, which fields are exceptions, and which fields should trigger a design review.
 
-This module teaches pod security as a decision process rather than a checklist. You will first build a mental model of where pod controls apply, then inspect common dangerous fields, then connect those fields to Pod Security Standards and Pod Security Admission. By the end, you should be able to look at a pod manifest and explain not only whether it is allowed, but why the risk exists and how to reduce it without breaking the workload.
+The business impact is not theoretical. In incident reviews, the expensive part is often not the original remote code execution bug; it is the investigation, credential rotation, node rebuilds, emergency firewall work, and customer-facing downtime caused by unclear containment. If a compromised pod can only write to `/tmp` and speak through the application network path, responders have one kind of night. If the same pod can inspect host processes, mount sensitive host paths, or load kernel-facing tools, responders must assume the node boundary is suspect and widen the incident.
 
----
+This module teaches pod security as a decision process rather than a checklist. You will first build a mental model of where pod controls apply, then inspect common dangerous fields, then connect those fields to Pod Security Standards and Pod Security Admission. By the end, you should be able to look at a pod manifest and explain not only whether it is allowed, but why the risk exists and how to reduce it without breaking the workload.
 
 ## Pod Security Starts With Boundaries
 
@@ -81,11 +78,13 @@ A useful way to reason about a pod is to ask three questions in order. First, wh
 
 For example, a pod that runs as UID `0` is not automatically a host compromise, but it is a larger starting point for an attacker. A pod that runs as UID `0`, keeps default capabilities, allows privilege escalation, and mounts host paths is much closer to a node-level problem. Kubernetes security is often about preventing those small permissions from stacking into a serious escape path.
 
+Think of these settings like the keys issued to a contractor entering a secure building. A badge for one office is different from a badge for the server room, and both are different from a master key plus permission to disable alarms. Pod security works the same way: the review must consider the combination of identity, capabilities, namespaces, volumes, and admission labels. A field that looks manageable alone can become dangerous when paired with another field that removes a separate layer of isolation.
+
 > **Stop and think**: A developer argues that their container needs `privileged: true` because it must bind to port `80`. Before reading further, decide whether that justification is valid and name the smallest permission that would solve the stated problem.
 
 The minimum-privilege answer is usually `NET_BIND_SERVICE`, not `privileged: true`. Binding to ports below `1024` is controlled by a specific Linux capability, so granting every capability and device on the host would be a poor trade. This pattern appears often in security reviews: the workload has a real need, but the proposed permission is much broader than the need.
 
----
+That distinction matters on the KCSA exam and in production reviews because Kubernetes gives you several ways to meet the same application requirement. A Service can expose port `80` while the container listens on `8080`. A non-root image can own the directories it actually needs. An `emptyDir` can provide scratch space without making the image filesystem mutable. The skill is not memorizing every possible field; the skill is matching a need to the smallest Kubernetes or Linux mechanism that satisfies it.
 
 ## SecurityContext: The Main Control Surface
 
@@ -142,6 +141,10 @@ spec:
 
 This manifest separates security intent from application needs. The root filesystem is read-only, but NGINX still receives writable directories for runtime files through `emptyDir` volumes. The process runs as a non-root UID, privilege escalation is disabled, and Linux capabilities are dropped. The seccomp profile is set to `RuntimeDefault`, which gives the container runtime a chance to block dangerous system calls without requiring the learner to write a custom profile.
 
+Notice that the pod-level `securityContext` expresses defaults shared by the pod, while the container-level block expresses constraints specific to the `web` process. This division is more than style. Pod-level identity settings reduce repetition and make the manifest easier to scan, but container-level settings are still required for controls such as `readOnlyRootFilesystem`, `allowPrivilegeEscalation`, `privileged`, and capabilities. Reviewers should therefore read both levels as one combined policy rather than treating either block as complete by itself.
+
+The writable mounts are also part of the security design, not a convenience added after the fact. Many images assume they can create cache files, PID files, temporary files, or sockets under paths that live in the image filesystem. When you make that filesystem read-only, those assumptions become visible. A careful engineer uses the failure to learn exactly which paths need writes, then grants those paths explicitly. A rushed engineer disables the read-only setting and loses a useful containment control.
+
 | Field | Secure Direction | Why It Matters | Common Trade-Off |
 |---|---|---|---|
 | `runAsNonRoot` | Set to `true` | Prevents accidental root execution when an image default changes | Requires the image to work with a non-root UID |
@@ -168,7 +171,7 @@ If the logs mention a path such as `/var/cache/nginx` or `/var/run`, add an `emp
 
 Container-level `securityContext` is more specific, so it overrides the pod-level default for that container. During review, this means you cannot stop at the pod-level block and assume every container is safe. Init containers, sidecars, and application containers all need inspection because a single overriding container can weaken the pod.
 
----
+A practical review habit is to read the manifest twice. On the first pass, look for broad danger signs: host namespaces, `privileged`, `hostPath`, added capabilities, and root execution. On the second pass, look for consistency: do all containers inherit the intended user, do any init containers override the defaults, and do writable mounts match the application’s real write paths? That second pass catches many mistakes because platform teams often harden the main container but forget the helper container that runs before it.
 
 ## Linux Capabilities: Smaller Than Root, Still Powerful
 
@@ -216,6 +219,8 @@ The most important review rule is to treat `SYS_ADMIN` as a near-privileged requ
 
 A good capability review asks for the operation, not the capability name. If the workload needs port `80`, `NET_BIND_SERVICE` may be enough. If it needs to change routes or iptables rules, `NET_ADMIN` may be technically relevant, but that should usually push the workload into a tightly controlled system namespace rather than a general application namespace. If it needs `SYS_ADMIN`, the team should treat it as an exception requiring architecture review.
 
+Capabilities are easy to underestimate because their names look precise, but the operational consequence depends on the surrounding workload. `NET_ADMIN` in a CNI daemon that is owned by the platform team, deployed from a reviewed image, and isolated in a system namespace is a very different risk from `NET_ADMIN` in a customer-facing web application. The field is the same; the trust boundary is not. That is why pod security review combines technical field inspection with ownership and namespace design.
+
 | Capability | Typical Request | Risk Level | Better Question During Review |
 |---|---|---:|---|
 | `NET_BIND_SERVICE` | Bind to ports below `1024` | Low when isolated | Could the app listen on a high port behind a Service instead? |
@@ -246,7 +251,7 @@ spec:
 
 A safer pattern starts with no capabilities and adds only the smallest permission that maps to the application behavior. When there is no narrow capability that fits, the answer is not automatically to grant a broad one. The answer may be to redesign the workload, move it to a dedicated namespace, or use a purpose-built Kubernetes feature instead of host-level access.
 
----
+One subtle point for Kubernetes 1.35+ environments is that default runtime behavior and admission policy are separate concerns. A runtime may already apply a default seccomp profile or a container image may already run as a non-root user, but those facts are not as reviewable as explicit manifest intent. Explicit settings make drift visible during code review, policy evaluation, and incident response. When a future image update changes the image user or writes to a new path, the manifest-level controls help turn that drift into a clear failure instead of silent weakening.
 
 ## Host Namespaces: Where Isolation Can Disappear
 
@@ -284,6 +289,8 @@ Host namespace settings are dangerous because they change what the container can
 
 The right question is not "does Kubernetes support this field?" The right question is "what trusted component requires this, and why must it run on the host boundary?" CNI plugins, node monitoring agents, device plugins, and some storage components may have valid answers. A web application, queue worker, or API service usually does not.
 
+Host namespaces deserve special attention because they can make ordinary troubleshooting feel deceptively easy. If a container cannot see a process, `hostPID` makes the process visible. If a network probe behaves differently from inside the pod, `hostNetwork` removes part of the network abstraction. Those quick fixes teach the wrong lesson when they remain in production manifests. Temporary diagnostic access should be handled through a controlled workflow, while steady-state application pods should keep their own namespaces unless there is a strong node-level reason.
+
 | Host Setting | What It Shares | Typical Legitimate Use | Application Namespace Default |
 |---|---|---|---|
 | `hostNetwork: true` | Node network namespace | CNI, node-local DNS, selected monitoring agents | Block or require exception |
@@ -295,7 +302,7 @@ The right question is not "does Kubernetes support this field?" The right questi
 
 The web application inherits the namespace's relaxed admission policy even though it does not need host access. If that application is compromised, the attacker can submit or modify pods that use the same broad permissions allowed for the monitoring agent. A better design is to isolate trusted system workloads in a dedicated namespace and keep application namespaces at `baseline` or `restricted`.
 
----
+This is the main reason namespace layout is a security decision. A namespace is not only an organizational folder; for PSA it is the boundary where labels decide what pod specs are admitted. If a platform team mixes node agents, batch jobs, public APIs, and tenant workloads in the same namespace, the strictest workload may be constrained by the most permissive exception. Separating workload classes lets the team protect ordinary applications without pretending trusted node components can always run under the same profile.
 
 ## Pod Security Standards: Three Profiles, Different Purposes
 
@@ -338,6 +345,8 @@ The profile names describe the policy posture, not the workload value. A namespa
 
 `baseline` is useful when a cluster needs immediate protection against obvious escalation paths without breaking many existing images. It blocks fields such as `privileged`, host namespaces, and dangerous capabilities, but it does not require every workload to run as non-root. `restricted` is stronger because it expects non-root execution, disabled privilege escalation, dropped capabilities, and seccomp. Moving from `baseline` to `restricted` often requires image and filesystem cleanup, not just a label change.
 
+The profiles are best understood as a migration ladder. `privileged` says the namespace is outside the normal application boundary and must be governed by compensating controls. `baseline` says the platform will block the most common escalation routes while giving legacy images room to keep working. `restricted` says the workload has been engineered to run with a narrow identity, a narrow filesystem, narrow capabilities, and runtime guardrails. Teams that treat the profiles as labels to debate usually struggle; teams that treat them as engineering targets can plan the work.
+
 | Control | Privileged | Baseline | Restricted |
 |---|---|---|---|
 | `hostNetwork` | Allowed | Blocked | Blocked |
@@ -352,6 +361,8 @@ The profile names describe the policy posture, not the workload value. A namespa
 | Unrestricted volume types | Allowed | Limited | More limited |
 
 When choosing a profile, start from the workload class. Application namespaces should aim for `restricted`, especially for internet-facing or tenant-facing services. Legacy applications that still need root may temporarily fit `baseline` while the team fixes image ownership and write paths. Cluster infrastructure should not share a namespace with applications simply because it needs privileged access.
+
+There is no shame in using `baseline` as a temporary step, but it should not become a permanent excuse. A reasonable migration plan names the blockers: which images still run as root, which paths still need writable mounts, which containers still rely on default capabilities, and which teams own the fixes. Without that inventory, a namespace can sit at `baseline` for years while everyone assumes someone else will make it restricted-ready. Admission warnings, audit events, and deployment review checklists turn that vague intention into actionable work.
 
 The following decision path is a practical review tool. It is intentionally conservative: it pushes ordinary applications toward `restricted`, gives legacy workloads a remediation path through `baseline`, and reserves `privileged` for workloads that act on the node itself.
 
@@ -385,8 +396,6 @@ The following decision path is a practical review tool. It is intentionally cons
 │                                                               │
 └───────────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Pod Security Admission: Enforcing Standards With Namespace Labels
 
@@ -423,6 +432,8 @@ Pod Security Admission, usually abbreviated PSA, is the built-in Kubernetes admi
 
 The three modes let teams raise the bar without creating an outage. A namespace can enforce `baseline` so obviously dangerous pods are blocked, while also warning and auditing against `restricted`. Developers can continue shipping compatible workloads, but they see warnings showing which fields must change before the namespace can move to stricter enforcement.
 
+This separation between `enforce`, `warn`, and `audit` is one of the most useful operational features of PSA. Enforcement protects the cluster immediately, warnings teach the person submitting a manifest, and audit records let platform teams measure work that happens outside an interactive terminal. In a healthy rollout, the warning and audit modes run ahead of enforcement. They reveal which workloads would break under the next stricter profile before the platform team flips the blocking label.
+
 ```yaml
 apiVersion: v1
 kind: Namespace
@@ -439,6 +450,8 @@ metadata:
 
 The `latest` version label means the policy follows the current Kubernetes server's definition of the profile. Some organizations pin profile versions during upgrades to avoid surprise changes in admission behavior. For KCSA-level understanding, know that the profile label selects the standard, the mode label selects the behavior, and the version label controls which Kubernetes version of the standard is used.
 
+Pinned versions are a change-management tool, not a way to avoid upgrades forever. If a cluster pins the policy version during a Kubernetes upgrade, the platform team should schedule a follow-up review to compare the pinned profile with the new default profile. Otherwise, the organization can accidentally freeze old assumptions and miss improvements in the standard. For exam purposes, the important pattern is that each mode can have a matching `*-version` label, and the profile name alone is not the whole policy.
+
 ```bash
 k label namespace pod-security-demo \
   pod-security.kubernetes.io/enforce=baseline \
@@ -454,13 +467,15 @@ Now imagine a developer submits a pod that runs as root but does not use `privil
 
 A good answer separates enforcement from warning. The pod is not blocked merely for running as root under `baseline`, assuming it avoids the fields baseline forbids. It should still receive a restricted warning because restricted expects the workload to run as non-root. This is why PSA mode combinations are useful: they let platform teams enforce a minimum while signaling the next target.
 
----
+When debugging real warnings, copy the warning text into the pull request or ticket and translate it into manifest changes. "Violates restricted" is less useful than "container `api` must set `runAsNonRoot: true`, use a non-zero UID, drop all capabilities, and set `allowPrivilegeEscalation: false`." That translation step helps application owners learn the rule and gives reviewers a concrete way to verify the next revision.
 
 ## Worked Example: Debugging a PSA Rejection
 
 A Pod Security Admission error is useful if you read it as a map back to fields in the manifest. The API server usually reports the profile that was violated and names the offending settings. Instead of guessing, copy each violation into a small remediation list, then decide whether to fix the workload or move it to a namespace where the exception is justified.
 
-Start with a namespace that enforces `baseline`.
+This workflow is especially important during incident response or migration work because PSA messages can list several violations at once. Teams sometimes fix the first named field, retry, then discover the next blocker, which wastes time and encourages frustration with the policy. A better habit is to collect the entire rejection, identify every field category, and decide whether the manifest describes an ordinary application or a host-level component. That decision determines whether you harden the pod or isolate it as an exception.
+
+Start with a namespace that enforces `baseline`, because this gives you a clear rejection whenever the manifest crosses the minimum application-safety boundary.
 
 ```bash
 k create namespace psa-debug
@@ -470,7 +485,7 @@ k label namespace psa-debug \
   --overwrite
 ```
 
-Apply a pod that violates baseline in several ways.
+Apply a pod that violates baseline in several ways, then read the response as structured evidence rather than as a generic failure message.
 
 ```yaml
 apiVersion: v1
@@ -542,7 +557,7 @@ spec:
 
 Notice the review sequence. First, identify what the workload is supposed to do. Second, map each rejected field to a risk. Third, remove the field or replace it with a narrower mechanism. Fourth, if the field is truly required, isolate the workload instead of changing the policy for unrelated applications.
 
----
+The corrected pod is intentionally boring. It sleeps, runs as a non-root user, drops capabilities, uses a runtime seccomp profile, and writes only to a named temporary volume. That boring shape is exactly what you want for most application workloads because boring manifests are easier to review, easier to template, and easier to enforce consistently. If an application cannot fit this shape, the review should reveal a specific reason rather than a vague claim that "security breaks the app."
 
 ## Privileged Containers: Treat Them as Node-Trust Decisions
 
@@ -586,6 +601,8 @@ The common beginner mistake is to view `privileged` as a troubleshooting tool. S
 
 For example, a service that needs a low port can use a Kubernetes Service mapping port `80` to a high `containerPort`. A process that needs temporary writes can use an `emptyDir`. A process that needs to read configuration can use a ConfigMap or Secret. A pod that asks for privileged mode should be able to explain why Kubernetes-native abstractions are not enough.
 
+There is also an accountability problem with permanent privileged settings. Six months after an urgent fix, the person who added `privileged: true` may have moved teams, the application may have changed, and the original reason may no longer exist. If the manifest does not include a documented exception path outside the YAML, future reviewers see only a powerful setting with no context. Treating privileged access as a node-trust decision forces the team to record ownership, technical necessity, and revalidation expectations.
+
 | Claimed Need | Avoid `privileged` By Trying | Why This Is Safer |
 |---|---|---|
 | Bind to port `80` | Service `port: 80` to `targetPort: 8080`, or `NET_BIND_SERVICE` | Keeps host devices and broad capabilities away |
@@ -598,7 +615,7 @@ For example, a service that needs a low port can use a Kubernetes Service mappin
 
 A strong review comment names the host-level operation, explains why a narrower capability or Kubernetes abstraction cannot satisfy it, identifies the owning team, and confirms that the workload is isolated from ordinary applications. A weak comment says only "needed for monitoring" or "it works this way." Privileged access is a node-trust decision, so the justification must be specific enough for future maintainers to audit.
 
----
+The same standard applies to vendor agents. A chart from a respected vendor can still request permissions that are too broad for your cluster’s risk model. Before installing it into a privileged namespace, read the generated manifests, understand which DaemonSet needs host access, and restrict deployment rights around that namespace. Vendor trust reduces some supply-chain questions; it does not remove the need to contain powerful pods.
 
 ## Seccomp and Privilege Escalation: Runtime Guardrails
 
@@ -640,6 +657,8 @@ Seccomp filters system calls, which are the interface processes use to ask the k
 
 Seccomp, dropped capabilities, and disabled privilege escalation are strongest when used together. Dropping capabilities removes broad kernel powers. Disabling privilege escalation prevents the process from gaining new powers later. Seccomp reduces the set of kernel operations available even if the process is compromised. None of these controls is perfect alone, but together they make post-compromise movement harder.
 
+It is useful to separate compatibility problems from security problems when these controls expose old assumptions. If a helper binary fails because privilege escalation is disabled, the team should ask whether the helper belongs in the image at all. If a syscall is blocked by the runtime default seccomp profile, the team should identify the syscall and the feature that needs it rather than switching to `Unconfined` immediately. The goal is not to make every failure disappear; it is to make the permission requirement precise.
+
 | Control | Blocks or Reduces | Failure Symptom When App Depends on It | Review Response |
 |---|---|---|---|
 | `seccompProfile: RuntimeDefault` | Some risky syscalls | App logs mention operation not permitted for a syscall-like action | Confirm need, then consider custom profile only if justified |
@@ -651,13 +670,15 @@ Seccomp, dropped capabilities, and disabled privilege escalation are strongest w
 
 The manifest communicates mixed intent. One field says the workload should not gain extra privileges, while another grants broad host-level privilege from the start. Reviewers should not treat a single hardening field as proof of safety when a stronger field weakens the boundary. Security review is about the combined effect of the pod spec, not the presence of isolated good-looking settings.
 
----
+This combined-effect rule is a recurring theme across pod security. `runAsNonRoot: true` is valuable, but less convincing if the same container adds broad capabilities. A read-only root filesystem is valuable, but less convincing if the pod mounts a sensitive host path read-write. Seccomp is valuable, but less convincing if the container runs privileged. The KCSA-level habit is to read the manifest as a system of permissions, not as a checklist of individual good and bad fields.
 
 ## Designing Exceptions Without Weakening Everyone
 
 Real clusters contain exceptions. The goal is not to pretend every pod can be restricted immediately; the goal is to prevent one exception from becoming the default for unrelated workloads. Namespaces are the main PSA boundary, so exception design starts with namespace separation.
 
 A mature exception has five properties. It has a specific workload name and owner. It has a stated technical reason tied to a host-level operation. It uses the least permissive profile and fields that still work. It is isolated from ordinary applications. It has a review path so the exception can be removed or revalidated later.
+
+Exception design is where security and operations either cooperate or fight. If the security team simply says "no privileged pods," platform teams will work around the rule because some node-level agents really do need elevated access. If the platform team labels broad namespaces as privileged without review, application teams inherit risk they did not ask for. A usable process names the exception, narrows the namespace, restricts who can deploy there, and keeps the default application path as close to restricted as possible.
 
 ```yaml
 apiVersion: v1
@@ -684,7 +705,41 @@ This namespace label alone is not enough to be safe. A privileged namespace shou
 
 For KCSA exam purposes, know that PSA is namespace-scoped and profile-based. For real operations, go one level deeper: namespace labels are only one part of the control plane. RBAC, image policy, NetworkPolicy, node isolation, logging, and incident response all determine whether a privileged exception remains contained.
 
----
+One practical pattern is to maintain an exception register outside the manifests. The register does not need to be fancy, but it should record the namespace, workload, owner, reason, requested fields, approval date, and next review date. During cluster upgrades or security incidents, that register helps responders identify which workloads have host-level trust and which teams can explain them. Without it, privileged namespaces become institutional memory hidden in labels.
+
+## Patterns & Anti-Patterns
+
+Pod security patterns are most useful when they connect a workload class to a repeatable review shape. A platform team should not make every developer rediscover the same non-root, read-only, capability-dropping manifest from scratch, and it should not approve every exception as a one-off conversation. Good patterns turn the secure path into the easy path while still leaving a controlled route for workloads that genuinely sit on the node boundary.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---|---|---|---|
+| Restricted-by-default application namespaces | New services, internet-facing workloads, and teams with modern images | It makes non-root execution, dropped capabilities, seccomp, and explicit writable paths the normal expectation | Provide templates and CI checks so developers get feedback before admission rejects the pod |
+| Baseline enforce with restricted warn during migration | Legacy namespaces that still contain root-running images or mutable filesystem assumptions | It blocks the highest-risk fields immediately while showing the remaining work for restricted readiness | Track warning counts by owner, otherwise the migration stalls at baseline |
+| Dedicated privileged system namespaces | CNI, storage, device, and node-security agents that need host-level access | It prevents node-trust exceptions from spilling into ordinary application workloads | Restrict deployment rights and review vendor manifests before granting namespace access |
+| Explicit writable path design | Applications that need cache, PID, socket, or temporary file locations | It preserves a read-only image filesystem while giving the process the minimum scratch space it needs | Keep write paths documented in the chart or manifest so future image changes remain reviewable |
+
+Anti-patterns usually start as shortcuts. A team wants to fix a failing deploy, a monitoring chart needs host access, or an old image assumes root ownership everywhere. The shortcut becomes dangerous when it is copied into templates, shared namespaces, or permanent exceptions. The cure is not only a stricter setting; it is a review process that asks for the workload’s actual operation, the smallest permission that enables it, and the boundary that contains it.
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|---|---|---|---|
+| Privileged as a debugging switch | The pod receives broad host-level trust for an unknown problem | It is fast, it often makes the symptom disappear, and it avoids learning the exact missing permission | Reproduce the failure, identify the operation, and grant a narrow capability or writable mount only if needed |
+| One namespace for apps and node agents | Application pods inherit relaxed admission because a system agent needs host access | Namespace layout follows team ownership instead of security boundaries | Split workload classes into namespaces with different PSA labels and RBAC controls |
+| Hardened main container with weak init container | The pod still violates policy or starts with a high-risk helper path | Reviews focus on the long-running app container and skip setup logic | Inspect every container-level `securityContext`, including init containers and sidecars |
+| Warnings without ownership | Restricted warnings accumulate until nobody trusts or reads them | Warn mode is enabled as a checkbox, not as a migration program | Route warnings to service owners, create remediation tickets, and raise enforcement only after testing |
+
+## Decision Framework
+
+Use this framework when reviewing a new workload, a chart upgrade, or a PSA rejection. Start by classifying the workload, then choose the least permissive profile that supports its real behavior, then decide whether any exception is narrow enough to approve. The framework is intentionally conservative because most application pods should not touch host namespaces, host devices, broad capabilities, or mutable image filesystems.
+
+| Review Question | If the Answer Is Yes | If the Answer Is No |
+|---|---|---|
+| Does the workload configure node networking, storage, devices, process visibility, or another host-level feature? | Treat it as a system workload, place it in a dedicated namespace, and review privileged or baseline exceptions with RBAC and ownership controls | Continue reviewing it as an application workload that should target restricted |
+| Can every container run as a non-zero UID with `runAsNonRoot: true`? | Keep or require restricted-compatible identity settings | Use baseline temporarily only with an image remediation plan and owner |
+| Can the root filesystem be read-only with explicit writable mounts? | Set `readOnlyRootFilesystem: true` and name the write paths | Identify exact writes before relaxing the control; avoid broad mutable filesystems |
+| Are all Linux capabilities unnecessary or narrow enough to justify? | Drop `ALL` and add only the reviewed capability if there is no better design | Reject broad additions such as `SYS_ADMIN` for ordinary apps and escalate host-level cases |
+| Can PSA warnings be resolved before enforcement changes? | Move the namespace toward restricted enforcement after testing | Keep enforce at baseline, warn on restricted, and track the remaining blockers |
+
+The final decision should read like an engineering note, not a slogan. "Approved for restricted because all containers run as UID `1000`, drop capabilities, use `RuntimeDefault`, and write only to `/tmp` and `/var/cache/app`" is useful. "Approved because it passed security" is not. Clear decisions teach future reviewers what evidence mattered and make it easier to spot drift when the workload changes.
 
 ## Did You Know?
 
@@ -696,11 +751,9 @@ For KCSA exam purposes, know that PSA is namespace-scoped and profile-based. For
 
 - **Warnings are a migration tool** because `warn: restricted` can teach developers which fields to fix before the platform team changes `enforce` from `baseline` to `restricted`.
 
----
-
 ## Common Mistakes
 
-| Mistake | Why It Hurts | Better Practice |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Running application containers as root by default | A compromised process starts with more filesystem and process authority inside the container | Set `runAsNonRoot: true` and a non-zero `runAsUser` that the image supports |
 | Setting `privileged: true` to fix an unexplained failure | It grants broad host-level access and hides the real permission requirement | Identify the failing operation, then use a narrower capability, volume, or Kubernetes abstraction |
@@ -710,8 +763,6 @@ For KCSA exam purposes, know that PSA is namespace-scoped and profile-based. For
 | Treating PSA warnings as harmless noise | Warnings often show exactly what blocks future migration to stricter enforcement | Track warnings, assign owners, and remediate them before raising enforcement |
 | Reviewing only the pod-level `securityContext` | A container-level override can weaken one container even when pod defaults look safe | Inspect every app, sidecar, and init container for overrides |
 | Using host namespaces for ordinary troubleshooting | Host network or PID access exposes node-level information and can create escalation paths | Use controlled debug workflows and remove host namespace settings from application specs |
-
----
 
 ## Quiz
 
@@ -786,8 +837,6 @@ For KCSA exam purposes, know that PSA is namespace-scoped and profile-based. For
    Add non-root execution with `runAsNonRoot: true` and a non-zero `runAsUser`, set `readOnlyRootFilesystem: true` with explicit writable mounts, drop all capabilities, set `allowPrivilegeEscalation: false`, and use `seccompProfile: RuntimeDefault`. These controls do not fix the original application vulnerability, but they reduce what an attacker can do after code execution. The attacker has less process authority, fewer kernel privileges, fewer writable persistence locations, and a narrower syscall surface.
 
    </details>
-
----
 
 ## Hands-On Exercise: Security Analysis and Remediation
 
@@ -929,8 +978,6 @@ The secure version is not "secure forever" just because the manifest looks bette
 
 </details>
 
----
-
 ## Summary
 
 Pod security is the practice of preserving container isolation while granting only the runtime permissions a workload can justify. The most important review habit is to evaluate the combined effect of the pod spec: user identity, capabilities, privilege escalation, filesystem mutability, seccomp, host namespaces, and admission policy all interact. A pod with one hardened field can still be risky if another field grants broad host access.
@@ -950,8 +997,21 @@ Use Pod Security Standards as a shared language. `privileged` is for trusted sys
 
 The senior-level move is not memorizing a perfect YAML block. It is asking why a permission is needed, choosing the smallest mechanism that satisfies the need, and containing exceptions so they do not become the default for everyone else.
 
----
+## Sources
+
+- Kubernetes documentation: Pod Security Standards, https://kubernetes.io/docs/concepts/security/pod-security-standards/
+- Kubernetes documentation: Pod Security Admission, https://kubernetes.io/docs/concepts/security/pod-security-admission/
+- Kubernetes documentation: Configure a Security Context for a Pod or Container, https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+- Kubernetes documentation: Linux kernel security constraints for Pods and containers, https://kubernetes.io/docs/concepts/security/linux-kernel-security-constraints/
+- Kubernetes documentation: Seccomp, https://kubernetes.io/docs/tutorials/security/seccomp/
+- Kubernetes documentation: Admission Controllers, https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
+- Kubernetes documentation: Namespaces, https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+- Kubernetes documentation: Volumes, https://kubernetes.io/docs/concepts/storage/volumes/
+- Kubernetes documentation: Debug running Pods, https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/
+- Kubernetes documentation: Kubernetes API reference for Pod security context fields, https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/
+- Linux manual pages: capabilities, https://man7.org/linux/man-pages/man7/capabilities.7.html
+- Linux manual pages: seccomp, https://man7.org/linux/man-pages/man2/seccomp.2.html
 
 ## Next Module
 
-[Module 3.2: RBAC Fundamentals](../module-3.2-rbac/) - Role-based access control for Kubernetes authorization.
+Continue with [Module 3.2: RBAC Fundamentals](../module-3.2-rbac/) to connect pod admission controls with Kubernetes authorization decisions and workload identity design.
