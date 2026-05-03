@@ -5,17 +5,16 @@ slug: prerequisites/philosophy-design/module-1.4-dead-ends
 sidebar:
   order: 5
 ---
-# Module 1.4: Dead Ends - Technologies We Skip
 
-> **Complexity**: `[QUICK]` - Understanding what not to learn
+> **Complexity**: `[QUICK]` - Understanding what not to learn.
 >
-> **Time to Complete**: 25-30 minutes
+> **Time to Complete**: 25-30 minutes.
 >
-> **Prerequisites**: Module 1, Module 2, Module 3
+> **Prerequisites**: Module 1, Module 2, Module 3.
 
 ---
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After this module, you will be able to:
 
@@ -23,8 +22,6 @@ After this module, you will be able to:
 - **Diagnose** why Docker Swarm, Apache Mesos, Cloud Foundry, and Compose production deployments became dead ends.
 - **Compare** Docker as an image-building workflow with Docker as a Kubernetes runtime removed after dockershim.
 - **Design** a modernization plan that replaces dead-end tools with Kubernetes, containerd, Helm, Kustomize, GitOps, and managed clusters.
-
----
 
 ## Why This Module Matters
 
