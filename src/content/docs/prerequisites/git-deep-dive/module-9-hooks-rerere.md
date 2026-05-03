@@ -1,5 +1,5 @@
 ---
-title: "Module 9: Automation and Customization - Hooks and Rerere"
+title: "Module 9: Automation and Customization — Hooks and Rerere"
 description: "Master Git hooks for automated quality gates, leverage Rerere for painless conflict resolution, and customize Git for peak productivity."
 slug: prerequisites/git-deep-dive/module-9-hooks-rerere
 revision_pending: false
@@ -112,16 +112,6 @@ exec 1>&2
 
 echo "Running KubeDojo pre-commit validation suite..."
 
-# Extract a list of all files that have been Added, Copied, or Modified (staged)
-# --name-only: Ensure we only receive the raw file names
-# --diff-filter=ACM: Filter out deleted files (we can't lint a file that's gone)
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-# If no files are staged (e.g., an empty commit), exit cleanly and allow the commit
-if [ -z "$STAGED_FILES" ]; then
-    exit 0
-fi
-
 # Initialize a global error tracking flag
 ERROR_FOUND=0
 
@@ -129,7 +119,7 @@ ERROR_FOUND=0
 # Phase 1: Strict YAML Linting
 # ---------------------------------------------------------
 echo "--> Initiating YAML syntax verification..."
-for FILE in $STAGED_FILES; do
+while IFS= read -r -d '' FILE; do
     if [[ "$FILE" == *.yaml ]] || [[ "$FILE" == *.yml ]]; then
         # Verify that the yamllint binary is accessible in the environment's PATH
         if command -v yamllint &> /dev/null; then
@@ -146,13 +136,13 @@ for FILE in $STAGED_FILES; do
             echo "WARNING: 'yamllint' binary not detected, skipping validation for $FILE"
         fi
     fi
-done
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
 
 # ---------------------------------------------------------
 # Phase 2: Aggressive Secrets Scanning
 # ---------------------------------------------------------
 echo "--> Scanning staged blobs for hardcoded credentials..."
-for FILE in $STAGED_FILES; do
+while IFS= read -r -d '' FILE; do
     # Search the staged blob content for a regex of forbidden, high-risk keywords.
     # Note: This is a simplistic regex for educational illustration. Real-world
     # production setups should utilize dedicated engines like TruffleHog or Gitleaks.
@@ -160,7 +150,7 @@ for FILE in $STAGED_FILES; do
         echo "FATAL: Potential hardcoded secret identified within -> $FILE"
         ERROR_FOUND=1
     fi
-done
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
 
 # ---------------------------------------------------------
 # Phase 3: Final Execution Evaluation
@@ -638,13 +628,9 @@ Add the following robust logic to `~/.git-templates/hooks/pre-commit`:
 ```bash
 #!/bin/bash
 
-# Extract staged files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-if [ -z "$STAGED_FILES" ]; then exit 0; fi
-
 ERROR=0
 
-for FILE in $STAGED_FILES; do
+while IFS= read -r -d '' FILE; do
     # 1. Check strict file size limitations. Using wc -c to count raw bytes of the STAGED blob.
     SIZE=$(git show ":$FILE" | wc -c)
     if [ "$SIZE" -gt 1048576 ]; then
@@ -657,7 +643,7 @@ for FILE in $STAGED_FILES; do
         echo "FATAL: Hardcoded AWS secret string identified in $FILE"
         ERROR=1
     fi
-done
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
 
 if [ $ERROR -ne 0 ]; then
     echo "COMMIT ABORTED: Quality gates failed."
