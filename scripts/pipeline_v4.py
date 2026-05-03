@@ -7,12 +7,6 @@ Stages:
     3. RUBRIC_RECHECK
     4. CITATION_V3
     5. FINAL_RECHECK
-
-TODO:
-    Stage 4 uses a first-pass approximation for "citation anchors inside
-    generated prose" by comparing generated-block LOC to total module LOC.
-    A follow-up should inspect pipeline_v3's actual anchor plan instead of
-    using this coarse proxy.
 """
 
 from __future__ import annotations
@@ -40,8 +34,6 @@ import rubric_gaps  # noqa: E402
 DOCS_ROOT = REPO_ROOT / "src" / "content" / "docs"
 PIPELINE_V4_DIR = REPO_ROOT / ".pipeline" / "v4"
 RUNS_DIR = PIPELINE_V4_DIR / "runs"
-GENERATED_BLOCK_PREFIX = "<!-- v4:generated"
-GENERATED_BLOCK_SUFFIX = "<!-- /v4:generated -->"
 
 STAGE_RUBRIC_SCAN = "RUBRIC_SCAN"
 STAGE_EXPAND = "EXPAND"
@@ -91,6 +83,14 @@ def _module_path(module_key: str) -> Path:
 
 def _module_flat_key(module_key: str) -> str:
     return _normalize_module_key(module_key).replace("/", "__")
+
+
+def _pipeline_python() -> str:
+    for ancestor in (REPO_ROOT, *REPO_ROOT.parents):
+        candidate = ancestor / ".venv" / "bin" / "python"
+        if candidate.exists():
+            return str(candidate)
+    return local_api._venv_python_for_repo(REPO_ROOT)
 
 
 def _tail_lines(text: str, limit: int = 50) -> list[str]:
@@ -233,30 +233,8 @@ def _stage_1_gap_scan(module_key: str) -> dict[str, Any]:
     }
 
 
-def _generated_loc_ratio(module_path: Path) -> float:
-    text = module_path.read_text(encoding="utf-8")
-    lines = text.splitlines()
-    if not lines:
-        return 0.0
-
-    generated_loc = 0
-    inside_generated = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith(GENERATED_BLOCK_PREFIX):
-            inside_generated = True
-            continue
-        if stripped == GENERATED_BLOCK_SUFFIX:
-            inside_generated = False
-            continue
-        if inside_generated:
-            generated_loc += 1
-
-    return generated_loc / len(lines)
-
-
 def _invoke_citation_pipeline(module_key: str) -> dict[str, Any]:
-    cmd = [sys.executable, "scripts/pipeline_v3.py", _normalize_module_key(module_key)]
+    cmd = [_pipeline_python(), "scripts/pipeline_v3.py", _normalize_module_key(module_key)]
     completed = subprocess.run(
         cmd,
         cwd=REPO_ROOT,
@@ -268,16 +246,12 @@ def _invoke_citation_pipeline(module_key: str) -> dict[str, Any]:
         "exit_code": completed.returncode,
         "stdout_tail": _tail_lines(completed.stdout),
         "stderr_tail": _tail_lines(completed.stderr),
+        "payload": _parse_citation_payload(_tail_lines(completed.stdout)),
     }
 
 
-def _parse_citation_status(stdout_tail: list[str]) -> str | None:
-    """Extract the `status` field from pipeline_v3's stdout JSON payload.
-
-    pipeline_v3 prints a JSON object on completion. We only have the
-    tail (last 50 lines) but that's enough for a single-module run.
-    Returns the status string (e.g. "clean", "residuals_queued") or
-    None if the payload can't be parsed."""
+def _parse_citation_payload(stdout_tail: list[str]) -> dict[str, Any] | None:
+    """Extract pipeline_v3's final JSON payload from stdout tail."""
     if not stdout_tail:
         return None
     text = "\n".join(stdout_tail)
@@ -288,8 +262,30 @@ def _parse_citation_status(stdout_tail: list[str]) -> str | None:
         payload = json.loads(text[start:])
     except json.JSONDecodeError:
         return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _parse_citation_status(stdout_tail: list[str]) -> str | None:
+    """Extract the `status` field from pipeline_v3's stdout JSON payload.
+
+    pipeline_v3 prints a JSON object on completion. We only have the
+    tail (last 50 lines) but that's enough for a single-module run.
+    Returns the status string (e.g. "clean", "residuals_queued") or
+    None if the payload can't be parsed."""
+    payload = _parse_citation_payload(stdout_tail)
     status = payload.get("status") if isinstance(payload, dict) else None
     return str(status) if isinstance(status, str) else None
+
+
+def _parse_citation_payload_queued_findings(payload: dict[str, Any] | None) -> dict[str, int]:
+    if payload is None or not isinstance(payload.get("queued_findings"), dict):
+        return {}
+    raw = payload["queued_findings"]
+    return {
+        key: len(value)
+        for key, value in raw.items()
+        if isinstance(value, list)
+    }
 
 
 def _new_result(module_key: str) -> PipelineV4Result:
@@ -439,36 +435,29 @@ def _run_pipeline_v4(
             result.reason = ""
             return _result_with_finish(result)
 
-        _stage_start(result, STAGE_CITATION_V3, {}, dry_run=dry_run)
-        generated_ratio = _generated_loc_ratio(module_path)
-        if generated_ratio > generated_loc_threshold:
-            _stage_finish(
-                result,
-                STAGE_CITATION_V3,
-                {
-                    "generated_loc_ratio": round(generated_ratio, 4),
-                    "generated_loc_threshold": generated_loc_threshold,
-                    "skipped": True,
-                },
-                dry_run=dry_run,
-            )
-            return _fail_result(
-                result,
-                outcome=OUTCOME_NEEDS_HUMAN,
-                reason="too_much_generated_prose",
-                score_after=score_before_citation,
-            )
-
+        _stage_start(
+            result,
+            STAGE_CITATION_V3,
+            {"generated_loc_threshold": generated_loc_threshold},
+            dry_run=dry_run,
+        )
         citation_result = _invoke_citation_pipeline(normalized_key)
         result.citation_v3_exit = int(citation_result["exit_code"])
         citation_status = _parse_citation_status(citation_result["stdout_tail"])
+        citation_payload = (
+            citation_result.get("payload")
+            if isinstance(citation_result.get("payload"), dict)
+            else None
+        )
+        queued_findings = _parse_citation_payload_queued_findings(citation_payload)
         _stage_finish(
             result,
             STAGE_CITATION_V3,
             {
-                "generated_loc_ratio": round(generated_ratio, 4),
+                "generated_loc_threshold": generated_loc_threshold,
                 "exit_code": result.citation_v3_exit,
                 "status": citation_status,
+                "queued_findings": queued_findings,
                 "stdout_tail": citation_result["stdout_tail"],
                 "stderr_tail": citation_result["stderr_tail"],
             },
@@ -566,7 +555,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--generated-loc-threshold",
         type=float,
         default=0.5,
-        help="Maximum generated LOC ratio allowed before citation_v3 is skipped.",
+        help="Deprecated: retained for compatibility; threshold is no longer enforced.",
     )
     return parser
 

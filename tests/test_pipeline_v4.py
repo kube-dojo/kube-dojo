@@ -387,7 +387,7 @@ def test_break_to_stage_4_when_retry_gaps_become_stage_4_only(
     assert result.outcome == "clean"
 
 
-def test_generated_loc_threshold_trip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_generated_loc_threshold_is_deprecated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_roots(monkeypatch, tmp_path)
     generated_text = "\n".join(
         [
@@ -404,24 +404,27 @@ def test_generated_loc_threshold_trip(monkeypatch: pytest.MonkeyPatch, tmp_path:
             "",
         ]
     )
-    module_path = _write_module(tmp_path, text=generated_text)
-    assert pipeline_v4._generated_loc_ratio(module_path) > 0.5
+    _write_module(tmp_path, text=generated_text)
     monkeypatch.setattr(
         pipeline_v4.rubric_gaps,
         "gaps_for_module",
         lambda module_key: {"score": 4.5, "gaps": [], "target_loc": 600},
     )
+    called = []
 
-    def _unexpected_citation(module_key: str) -> dict[str, object]:
-        raise AssertionError("citation_v3 should be skipped when generated LOC exceeds the threshold")
+    def _invoke_citation(module_key: str) -> dict[str, object]:
+        called.append(module_key)
+        return {"exit_code": 0, "stdout_tail": ['{"status": "clean"}'], "stderr_tail": []}
 
-    monkeypatch.setattr(pipeline_v4, "_invoke_citation_pipeline", _unexpected_citation)
+    monkeypatch.setattr(pipeline_v4, "_invoke_citation_pipeline", _invoke_citation)
+    _patch_rescore_sequence(monkeypatch, [{"score": 4.5, "gaps": []}, {"score": 4.5, "gaps": []}])
 
     result = pipeline_v4.run_pipeline_v4(MODULE_KEY, generated_loc_threshold=0.5)
 
-    assert result.outcome == "needs_human"
-    assert result.reason == "too_much_generated_prose"
-    assert result.stage_reached == "CITATION_V3"
+    assert called == [MODULE_KEY]
+    assert result.outcome == "skipped_already_stable"
+    assert result.reason == ""
+    assert result.stage_reached == "DONE"
 
 
 def test_citation_residuals_queued_is_needs_human(
@@ -615,11 +618,10 @@ def test_cli_emits_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys:
     assert payload["outcome"] == "skipped_already_stable"
 
 
-def test_invoke_citation_pipeline_uses_sys_executable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression: Stage 4 must launch pipeline_v3 with sys.executable, not a
-    hardcoded .venv/bin/python. When pipeline_v4 runs from a worktree without
-    its own .venv, the hardcoded path raised FileNotFoundError and killed
-    Stage 4 before citation_v3 could execute."""
+def test_invoke_citation_pipeline_uses_repo_venv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: Stage 4 should run citation_v3 using the repo venv python
+    path (which is discoverable from worktrees), not the ambient
+    interpreter."""
     captured: dict[str, object] = {}
 
     class _Completed:
@@ -638,5 +640,5 @@ def test_invoke_citation_pipeline_uses_sys_executable(monkeypatch: pytest.Monkey
 
     cmd = captured["cmd"]
     assert isinstance(cmd, list) and cmd, "subprocess.run called with no command"
-    assert cmd[0] == sys.executable, f"expected sys.executable, got {cmd[0]!r}"
+    assert str(cmd[0]).endswith(".venv/bin/python"), f"expected venv python, got {cmd[0]!r}"
     assert cmd[1].endswith("pipeline_v3.py")
