@@ -6,11 +6,13 @@ sidebar:
 revision_pending: false
 ---
 
-# Module 1.6: Security Practices (DevSecOps)
+> **Complexity**: `[MEDIUM]`.
+>
+> **Time to Complete**: 75 minutes.
+>
+> **Prerequisites**: Modern DevOps modules 1.1-1.5, basic Kubernetes manifests, CI/CD concepts, and command-line comfort.
 
-| Complexity | Time | Prerequisites |
-|------------|------|---------------|
-| MEDIUM | 75 minutes | Modern DevOps modules 1.1-1.5, basic Kubernetes manifests, CI/CD concepts, and command-line comfort |
+---
 
 ## What You'll Be Able to Do
 
