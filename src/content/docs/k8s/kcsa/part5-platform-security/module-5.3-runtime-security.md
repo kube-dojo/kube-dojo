@@ -3,34 +3,38 @@ title: "Module 5.3: Runtime Security"
 slug: k8s/kcsa/part5-platform-security/module-5.3-runtime-security
 sidebar:
   order: 4
+revision_pending: false
 ---
+
+# Module 5.3: Runtime Security
+
 > **Complexity**: `[MEDIUM]` - Core knowledge
 >
-> **Time to Complete**: 45-60 minutes
+> **Time to Complete**: 60-75 minutes
 >
 > **Prerequisites**: [Module 5.2: Security Observability](../module-5.2-observability/)
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Implement** robust system call filtering using custom and default seccomp profiles to shrink the kernel attack surface.
-2. **Compare** the enforcement mechanisms of AppArmor and SELinux, selecting the appropriate Mandatory Access Control system based on your host operating system architecture.
-3. **Diagnose** workload failures caused by overly restrictive capability drops and design minimal-privilege security contexts.
-4. **Evaluate** the performance and security trade-offs between standard OCI runtimes (runc) and sandboxed runtimes (gVisor, Kata Containers) for multi-tenant environments.
-5. **Design** cluster-wide preventative guardrails using policy engines like OPA Gatekeeper and Kyverno to enforce runtime security baselines dynamically.
+1. **Implement** seccomp profiles and Kubernetes security contexts that reduce the Linux kernel attack surface for Kubernetes 1.35+ workloads.
+2. **Compare** AppArmor and SELinux enforcement models, then select the Mandatory Access Control approach that fits the worker node operating system.
+3. **Diagnose** failures caused by capability drops, read-only filesystems, privilege escalation controls, and runtime profile enforcement.
+4. **Evaluate** standard OCI runtimes, gVisor, and Kata Containers for trusted, untrusted, and multi-tenant workload isolation.
+5. **Design** admission and policy guardrails that keep runtime security controls consistent across teams without hiding operational tradeoffs.
 
 ## Why This Module Matters
 
-In early 2018, researchers discovered that Tesla's Kubernetes administrative console was fully exposed to the public internet without authentication. Attackers did not just steal data; they deployed malicious pods into the cluster. Because the cluster lacked fundamental runtime security controls, these pods ran with broad kernel privileges, unfettered network access, and no resource constraints. The attackers quietly installed Stratum mining protocol software and siphoned immense amounts of AWS compute resources to mine cryptocurrency. The financial impact of the stolen cloud compute and the subsequent incident response and architecture overhaul cost hundreds of thousands of dollars.
+In early 2018, researchers found that Tesla's Kubernetes administrative console had been exposed to the public internet without authentication. Attackers used that access to deploy malicious pods into the cluster, then ran cryptocurrency mining software that consumed AWS compute resources while trying to stay quiet. The public reporting focused on the exposed console, but the runtime lesson was just as important: once hostile code was running inside the cluster, weak runtime controls gave the attackers room to execute, consume resources, and blend into normal workload activity.
 
-This incident perfectly illustrates the gap between configuration security and runtime security. Build-time scanning and static misconfiguration checks are vital, but they cannot stop an attacker who has already found a way to execute code inside your environment. Once a workload is running, it is interacting dynamically with the host kernel, the network, and the filesystem. Without runtime security controls, a compromised container is merely a Linux process with a direct, unobstructed highway to the underlying node's operating system. 
+That incident is a useful warning because it separates configuration security from runtime security. Static scanners can tell you whether a manifest asks for privileged mode, and image scanners can warn about vulnerable packages before deployment, but neither one can stop an exploited process that is already making system calls on a worker node. Runtime security accepts that applications fail, dependencies contain bugs, and humans occasionally ship dangerous manifests; its job is to make the successful exploit disappointingly small.
 
-Runtime security represents the final line of defense. It assumes breach. By enforcing strict boundaries exactly when the application is running, you ensure that even if a vulnerability in your application code is exploited, the attacker finds themselves trapped in a featureless box. They cannot mount file systems, they cannot change their user ID, they cannot open raw network sockets, and they cannot trace other processes. Mastering runtime security is what separates clusters that contain breaches locally from clusters that allow lateral movement and total node compromise.
+Runtime controls are the difference between "the attacker reached one web process" and "the attacker can trace neighboring processes, mount host filesystems, load kernel features, or abuse a shared kernel bug." In this module, you will start with the Linux primitives that Kubernetes exposes, then connect them to admission policy and runtime selection. The point is not to memorize every security field in a Pod spec, but to learn how to build a layered boundary that still lets production software run.
 
 ## The Runtime Security Stack
 
-To secure a running container, you must understand that a container is not a real security boundary. A container is simply a Linux process wrapped in namespaces (for isolation) and cgroups (for resource limiting). Because all containers on a node share the exact same underlying operating system kernel, securing the runtime means placing filters and walls between the containerized process and that shared kernel.
+A container is not a miniature virtual machine with a private kernel. It is a process on the worker node, wrapped in Linux namespaces for visibility boundaries, cgroups for resource accounting, filesystem layers for packaging, and a container runtime that starts the process with a selected set of restrictions. That distinction matters because a compromised process does not attack an abstract "container"; it asks the host kernel to perform operations on its behalf, and runtime security decides which of those requests should be allowed.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -61,15 +65,21 @@ To secure a running container, you must understand that a container is not a rea
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The stack operates from the bottom up regarding execution, but from the top down regarding Kubernetes configuration. When you submit a Pod to the API server, Layer 4 (Admission) inspects the request. If approved, the Kubelet instructs Layer 3 (Container Runtime) to start the process. The runtime then configures Layer 2 (Linux Security Modules) and Layer 1 (Kernel primitives) before finally executing your application code. 
+The stack executes from the bottom upward, but operators configure it from the top downward. A developer submits a Pod manifest to the API server, admission controllers decide whether that manifest is acceptable, the scheduler assigns the Pod to a node, and the kubelet asks the container runtime to create the container. Only then does the runtime apply seccomp, AppArmor or SELinux, capabilities, filesystem flags, namespace choices, and the selected runtime handler before the application process begins.
 
-Understanding how to manipulate Layers 2, 3, and 4 is the core of Kubernetes runtime security.
+This ordering creates an important design rule: kernel enforcement is strong only for Pods that actually request or receive the right settings. If one team remembers to set `seccompProfile: RuntimeDefault` and another team forgets, the node kernel cannot infer intent from the deployment name. Good runtime security therefore has two halves, a workload-level configuration that expresses least privilege and a cluster-level policy layer that prevents insecure workloads from arriving by accident.
+
+Before using the examples, define the usual Kubernetes shortcut once in your shell with `alias k=kubectl`. The module uses `k` as the alias for `kubectl`, and commands such as `k apply -f runtime-lab.yaml` assume that alias is available.
+
+Pause and predict: if a Pod is blocked by an admission policy before it reaches the kubelet, which layers of the runtime security stack never get a chance to enforce anything? The answer should shape how you debug security failures, because a rejected manifest and a killed process produce very different evidence.
+
+Runtime security is also where Kubernetes forces you to think like both a platform engineer and a Linux operator. The Kubernetes API gives you fields such as `securityContext`, `runtimeClassName`, and Pod Security labels, but the actual enforcement happens in node software that may differ by operating system, image build, runtime configuration, and kernel version. A manifest that looks portable can therefore behave differently across node pools unless the platform publishes clear runtime classes, node labels, and security baselines.
+
+The safest mental model is to treat each layer as a separate question. Admission asks whether the cluster should accept the object. The runtime asks how the process should be started. Linux security modules ask which kernel operations, file paths, labels, and privileges remain available after startup. A failure at any one layer should not tempt you to disable the whole stack, because the layers are deliberately narrow and become strong only when combined.
 
 ## System Call Filtering with Seccomp
 
-Every action a program wants to take that involves the hardware or system resources—reading a file, opening a network connection, checking the time—requires asking the kernel for permission. The program makes a "system call" (syscall). The Linux kernel has hundreds of system calls, but the average web application only uses a small fraction of them. 
-
-### How Seccomp Operates
+Every meaningful action a process performs against the operating system eventually becomes a system call. Reading a file, creating a socket, changing ownership, asking for the current time, mapping memory, and starting another process all require a syscall boundary crossing from user space into the kernel. The Linux kernel exposes hundreds of these entry points, while a normal web service usually needs a much smaller subset to accept connections, read configuration, write logs, allocate memory, and serve responses.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -101,13 +111,11 @@ Every action a program wants to take that involves the hardware or system resour
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Think of Seccomp (Secure Computing Mode) as a highly strict bouncer at the door of the kernel. When a process attempts to execute a syscall, Seccomp checks the process's assigned profile. If the syscall is on the allowed list, it passes. If it is on the deny list, Seccomp immediately kills the process or returns an error (like `EPERM`).
+Seccomp is best understood as a syscall filter rather than a general sandbox. It does not know whether `/etc/passwd` is sensitive, whether a request came from a trusted customer, or whether an application version is vulnerable. It evaluates the syscall and its configured action, then allows it, denies it with an error, logs it, or kills the process depending on the profile and runtime behavior. That narrowness is a strength because it places a small, predictable guard at a high-value boundary.
 
-By default, Docker and containerd provide a `RuntimeDefault` profile that blocks roughly forty-four dangerous system calls while allowing the rest. This blocks calls like `kexec_load` (loading a new kernel), `bpf` (loading eBPF programs), and `unshare` (creating new namespaces)—calls that no standard web application should ever need, but which are highly useful for attackers attempting container escape.
+The container runtime's `RuntimeDefault` seccomp profile is the practical baseline for most Kubernetes workloads. It blocks families of system calls commonly used for kernel manipulation, namespace creation, tracing, module loading, and other activities that ordinary application containers rarely need. Kubernetes 1.35 clusters should treat explicit `RuntimeDefault` as the minimum acceptable setting in manifests, even though modern Kubernetes releases default new Pods more safely than older clusters did, because explicit manifests survive migrations and make review easier.
 
-### Implementing Seccomp in Kubernetes
-
-Prior to Kubernetes 1.27, pods ran as `Unconfined` by default unless specified otherwise. This meant no syscall filtering was applied. Modern clusters default to `RuntimeDefault`. However, for maximum security, explicit definition in your Pod manifests is best practice.
+Think about what an attacker does after gaining command execution in a web process. They often try to learn where they are, fetch tools, inspect credentials, trace processes, create namespaces, or interact with kernel features that were never part of the service's design. Seccomp does not need to understand the attacker's intent to frustrate several of those moves. It simply makes parts of the kernel vocabulary unavailable, so the exploit chain has fewer reliable verbs to use.
 
 ```yaml
 apiVersion: v1
@@ -128,11 +136,11 @@ spec:
         type: RuntimeDefault
 ```
 
-### Authoring Custom Profiles
+The Pod-level setting is useful when every container in the Pod should inherit the same syscall baseline. The container-level setting is useful when one sidecar has a different syscall profile than the main workload, but overrides should be rare enough to attract review. A common production mistake is to fix a crash by setting one container to `Unconfined`; that turns a local compatibility issue into a node-level attack surface issue, especially when the workload is exposed to untrusted input.
 
-For highly sensitive workloads, `RuntimeDefault` might still be too permissive. You can create custom profiles and place them on the worker nodes (typically in `/var/lib/kubelet/seccomp/`). 
+When a seccomp denial occurs, the symptom depends on the syscall, the profile action, and the application error handling. Some programs receive `EPERM` and log a clear permission problem, while others crash during initialization because a library assumes the syscall will always be available. That is why a good rollout plan includes representative traffic, startup tests, and audit log review instead of a single "container started" check. A profile that only survives the first health probe is not production evidence.
 
-A custom profile is written in JSON and defines a default action, the architecture, and explicit rules.
+For very sensitive workloads, `RuntimeDefault` may still allow more than the application needs. A custom `Localhost` profile can make the default action deny and then allow a carefully profiled set of syscalls. This model is powerful, but it carries operational cost: the profile must exist on every eligible node, it must match the processor architecture, it must be updated when the application or base image changes, and it can fail in ways that look like ordinary application bugs.
 
 ```json
 {
@@ -160,9 +168,7 @@ A custom profile is written in JSON and defines a default action, the architectu
 }
 ```
 
-In the profile above, the `defaultAction` is `SCMP_ACT_ERRNO`, meaning any syscall NOT explicitly listed will result in a permission error. This is a default-deny approach. Creating these profiles requires deep profiling of your application using tools like `strace` to ensure you do not break legitimate functionality.
-
-To use this custom profile, the JSON file must exist on the node, and your pod specification must reference it using the `Localhost` type:
+The profile above is intentionally strict because `SCMP_ACT_ERRNO` denies every syscall not listed. In real systems, you would build a candidate profile by observing the workload under representative traffic, running integration tests, reading audit logs, and then gradually tightening. If you profile only the happy path, your first production incident may discover that TLS reloads, DNS lookups, log rotation, or crash reporting need syscalls that never appeared during a simple health check.
 
 ```yaml
 apiVersion: v1
@@ -179,11 +185,19 @@ spec:
     image: my-secure-app:v2
 ```
 
+The `Localhost` reference is relative to the kubelet seccomp profile root on the node, commonly under `/var/lib/kubelet/seccomp/`. That is why custom profiles are easiest in controlled node pools and harder in clusters where nodes are replaced frequently by autoscaling. If a Pod can land on a node that lacks the profile, the kubelet cannot apply the promised boundary, so node labeling, runtime configuration management, and scheduling constraints become part of the security design.
+
+Custom profiles are most defensible when they protect a small number of high-value workloads with stable behavior. A public reverse proxy, a signing service, or a payment component may justify the profiling effort because the attack surface reduction is meaningful and the workload changes carefully. A fast-moving internal batch job that changes base images every week may be a poor candidate, because the maintenance burden can push teams toward unsafe shortcuts when the profile breaks.
+
 > **Stop and think**: If an attacker exploits a remote code execution vulnerability in your application and attempts to download a malware payload using `curl`, will a strict seccomp profile that only allows `read`, `write`, `open`, and `close` prevent the download? Why or why not?
 
-## Mandatory Access Control: AppArmor
+The most precise answer is that seccomp would likely block the network operations needed by `curl`, but it would not block "downloading malware" as a human concept. It blocks specific syscalls such as socket creation, connection setup, DNS-related file access, or process execution depending on the profile. That distinction matters when writing policies, because runtime controls are strongest when you express them as concrete kernel behaviors instead of broad attacker goals.
 
-While seccomp filters the vocabulary a program can use (syscalls), AppArmor restricts what the program can talk about (files, network paths, capabilities). AppArmor is a Linux Security Module (LSM) that implements Mandatory Access Control (MAC).
+Seccomp also pairs well with read-only filesystems and non-root execution because those controls frustrate different parts of the same post-exploitation path. A blocked socket creation may prevent a tool download, while a read-only root filesystem prevents writing into common binary locations, and non-root execution reduces the usefulness of filesystem ownership tricks. None of those controls proves the application is safe, but together they turn a remote code execution bug into a constrained process with fewer follow-on options.
+
+## Mandatory Access Control: AppArmor and SELinux
+
+Seccomp limits the verbs a process can use when speaking to the kernel, but Mandatory Access Control limits the objects that process can touch. On ordinary Linux discretionary access control, a process running as root can often bypass file permission checks or make changes that a non-root process cannot. MAC systems add a kernel-enforced policy layer that still applies when the process is root, which is exactly why they matter in container environments where "root inside the container" is easy to create accidentally.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -213,13 +227,9 @@ While seccomp filters the vocabulary a program can use (syscalls), AppArmor rest
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Discretionary Access Control (DAC) is the standard Linux permission model (read/write/execute flags owned by users and groups). If an attacker becomes the `root` user in a container, DAC allows them to do anything. Mandatory Access Control (MAC) overrides DAC. Even if a process runs as `root`, if the AppArmor profile says "deny write to /etc/passwd", the root process will receive a permission denied error.
+AppArmor is path-oriented and tends to feel approachable because a profile can say that a process may read one directory, write another directory, deny shell execution, and deny raw networking. That makes it attractive on Ubuntu, Debian, and SUSE fleets where the node operating system already supports it. Its operational edge is readability, but its limitation is that path-based policy requires careful thinking around mounted volumes, symlinks, generated files, and workload layouts that change between image versions.
 
-AppArmor profiles must be loaded into the kernel of the Kubernetes worker nodes before they can be used. This is often done using a DaemonSet that runs a privileged init container to parse and load the profiles using the `apparmor_parser` utility.
-
-### AppArmor Syntax and Usage
-
-AppArmor profiles are written in a specialized syntax that is generally considered more human-readable than SELinux policies.
+The easiest way to misuse AppArmor is to treat a copied profile as a universal answer. A profile designed for NGINX static content may be reasonable for one container image and painfully wrong for another image that writes cache files, loads modules, or shells out during startup. Platform teams should version profiles like code, test them with the images they protect, and keep the profile name meaningful enough that a reviewer can connect the Pod annotation to an owned policy artifact.
 
 ```text
 #include <tunables/global>
@@ -250,7 +260,7 @@ profile custom-nginx flags=(attach_disconnected) {
 }
 ```
 
-To apply this profile to a pod, you historically used annotations. However, in newer Kubernetes versions (1.30+), AppArmor is moving to a proper field within the `securityContext`. We will show the standard annotation method which is widely supported across production clusters today:
+Profiles must be loaded into the worker node kernel before Pods can use them. Many teams distribute AppArmor profiles with a privileged DaemonSet or node image configuration, then reference the loaded profile from the Pod. Kubernetes has been moving AppArmor toward structured `securityContext` fields, but many production clusters still contain annotation-based examples because they supported the feature for years and remain common in platform runbooks.
 
 ```yaml
 apiVersion: v1
@@ -265,11 +275,9 @@ spec:
     image: nginx:alpine
 ```
 
-**War Story**: During a red team engagement, attackers found a path traversal vulnerability in a Java web application. The application was running as the root user. The attackers attempted to read `/etc/shadow` to crack password hashes. The application had an AppArmor profile applied that explicitly denied read access to `/etc/` except for the application's specific configuration folder. The path traversal exploit succeeded in manipulating the path string, but the kernel intercepted the read request and killed the process, logging the attempt and thwarting the attack entirely.
+War story: during a red-team exercise, a Java service had a path traversal bug that allowed attackers to request files outside the intended content directory. The application ran as root in its container, so normal file ownership would not have been enough protection. The AppArmor profile denied reads from sensitive host and system paths, so the exploit still manipulated strings successfully, but the kernel rejected the file operation and produced audit evidence that defenders could investigate.
 
-## Mandatory Access Control: SELinux
-
-Security-Enhanced Linux (SELinux) serves the same fundamental purpose as AppArmor but uses a vastly different architectural approach. Originally developed by the NSA, SELinux is standard on RHEL, CentOS, Fedora, and Rocky Linux distributions.
+That story is also a reminder that MAC is not only about prevention. A well-named AppArmor or SELinux denial gives defenders a high-signal event because ordinary applications should not attempt to read Kubernetes node credentials, host configuration, or shadow password files. Runtime security observability from the previous module becomes more useful when the enforced profile is specific enough that a violation says something meaningful about the workload's behavior.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -301,15 +309,9 @@ Security-Enhanced Linux (SELinux) serves the same fundamental purpose as AppArmo
 └─────────────────────────────────────────────────────────────┘
 ```
 
-While AppArmor restricts based on file paths (e.g., `/var/log/app.log`), SELinux restricts based on labels attached to objects. Every process, file, directory, and network port has an SELinux security context. This context is a string composed of four parts: `User:Role:Type:Level`.
+SELinux enforces the same broad idea through labels rather than paths. Processes, files, directories, and sometimes ports receive security contexts with user, role, type, and level components. Container platforms on RHEL-family systems normally label container processes with a container type and assign Multi-Category Security labels so that two containers with similar permissions still cannot casually read each other's private volume content.
 
-For Kubernetes, the most critical part is the `Type`. When container runtimes (like CRI-O or containerd on RHEL) create a container, they automatically assign it a generic SELinux type, usually `container_t`. They also assign a unique Multi-Category Security (MCS) label to the Level field, such as `s0:c123,c456`.
-
-When the container attempts to read a file on a mounted host volume, SELinux checks the policy: Is a process with type `container_t` and MCS label `c123,c456` allowed to read a file with type `container_file_t` and MCS label `c123,c456`? If the labels do not match exactly, the kernel denies access, preventing container breakout and cross-container interference.
-
-### Configuring SELinux in Pods
-
-You can explicitly set SELinux labels in a pod's security context. This is often required when you are mounting custom host directories that have specific SELinux types that you want a specific pod to access.
+The label model can feel less intuitive at first because the policy decision is not written as a visible path rule in the Pod manifest. The payoff is that labels can travel with files and volumes in ways that are less brittle than raw paths. In Kubernetes, the difficult parts tend to appear around hostPath volumes, storage drivers, and migrations from non-SELinux systems, where files may carry labels that do not match the container process context.
 
 ```yaml
 apiVersion: v1
@@ -331,13 +333,17 @@ spec:
         role: "system_r"
 ```
 
-If you mount a volume and the pod receives permission denied errors, you often need to instruct Kubernetes to automatically relabel the volume to match the pod's SELinux context. You do this by appending `:z` (shared among pods) or `:Z` (private to this pod) to the volume mount path in older docker syntax, though in native Kubernetes manifests, the Kubelet handles volume relabeling automatically based on the pod's SELinux context if the storage provisioner supports it.
+The practical difference is visible during troubleshooting. AppArmor failures often lead you toward profile names and denied paths, while SELinux failures lead you toward process labels, file labels, and audit messages that explain a type enforcement denial. A Kubernetes operator does not choose between them per Pod like choosing an image tag; the worker node operating system and kernel security module decide which MAC system is available, and Pod manifests must match that reality.
+
+When a team reports "permission denied" from a volume mount, resist the urge to fix only Unix ownership. The user ID, group ID, filesystem mode, SELinux label, AppArmor profile, and storage provider behavior can all participate in the final decision. Good diagnosis asks which layer denied the access, because changing `fsGroup` may solve a discretionary permission issue but do nothing for an SELinux type mismatch.
+
+Which approach would you choose here and why: an Ubuntu node pool running internet-facing NGINX ingress, or a RHEL node pool running regulated financial workloads with existing SELinux operations expertise? The right answer is less about which acronym sounds stronger and more about which enforcement model your platform team can deploy, observe, tune, and repair during an outage.
+
+For KCSA-level practice, focus on recognizing the boundary each MAC system enforces and the operational prerequisite it requires. AppArmor requires loaded profiles and a compatible node kernel. SELinux requires correct labels and policy support on the node. Kubernetes exposes hooks for both, but it cannot make an unsupported kernel module enforce policy, and it cannot make a mislabeled host directory safe by wishful manifest design.
 
 ## Deconstructing Root with Capabilities
 
-Historically, the Linux kernel divided privileges into two categories: privileged (user ID 0, root) and unprivileged (everyone else). This binary model meant that if a web server needed to bind to port 80 (a privileged port), it had to run as root, granting it the power to do absolutely anything else on the system.
-
-Linux Capabilities solved this by breaking down the power of "root" into dozens of distinct, granular privileges.
+Linux capabilities exist because the old root-versus-not-root model was too blunt. Historically, a process that needed one privileged operation, such as binding to a low-numbered port, often had to run as root and received many unrelated powers at the same time. Capabilities split that bundle into narrower privileges, so Kubernetes can remove most of root's power even when an image still starts a process with user ID zero.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -367,11 +373,7 @@ Linux Capabilities solved this by breaking down the power of "root" into dozens 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Container runtimes do not grant full root to containers by default. They grant a default bounding set of about fourteen capabilities. While this is better than full root, the default set still includes highly dangerous capabilities like `CAP_NET_RAW` (allows crafting raw packets, useful for ARP spoofing and DNS poisoning) and `CAP_DAC_OVERRIDE` (allows bypassing file read/write permission checks).
-
-The absolute best practice for runtime security is to drop all capabilities and explicitly add back only the exact ones the application requires.
-
-### Managing Capabilities in Kubernetes
+Container runtimes usually start containers with a limited default capability set, not with every possible root privilege. That default is safer than an unrestricted root process, but it is still broader than many applications need. `CAP_NET_RAW` can support packet crafting and network spoofing; `CAP_DAC_OVERRIDE` can bypass normal file permission checks; `CAP_SYS_ADMIN` is so broad that teams should treat it as a privileged-mode warning unless there is a very specific kernel-facing reason.
 
 ```yaml
 apiVersion: v1
@@ -390,19 +392,25 @@ spec:
           - NET_BIND_SERVICE
 ```
 
-In the example above, the container starts completely unprivileged regarding kernel capabilities, except that it is permitted to bind to a network port below 1024. If an attacker compromises this container, they cannot use raw sockets, they cannot change file ownership, and they cannot trace other processes. 
+The safest default is `drop: ["ALL"]`, followed by explicit additions only after the application proves it needs them. A service listening on port 8080 does not need `NET_BIND_SERVICE`, because the port is not privileged. A packet capture troubleshooting container may need `NET_RAW` and often `NET_ADMIN`, but that should be a temporary, isolated debugging tool rather than a capability set copied into every application deployment.
+
+Capability design is where least privilege becomes concrete. Instead of saying "this container is secure," you ask whether the process needs to change file ownership, bypass file permissions, create device nodes, trace other processes, administer networking, or bind to privileged ports. Most application services need none of those abilities. When one does need an ability, the manifest should make that exception obvious enough that a future reviewer can challenge it.
 
 > **Pause and predict**: You drop `ALL` capabilities on a container running `tcpdump` for network troubleshooting. The container immediately crashes on startup. Which specific capability must you add back for `tcpdump` to function, and why does dropping it break the application?
 
-## Dynamic Enforcement with Policy Engines
+Capability failures are often diagnosed by combining application errors, runtime events, and a small reproduction. If a process reports "operation not permitted" while binding to port 80, `NET_BIND_SERVICE` is a candidate. If a process fails to change routing tables, `NET_ADMIN` is more likely. If a tool cannot inspect another process, `SYS_PTRACE` may be involved, but adding it to an ordinary application container would create a serious lateral inspection risk.
 
-Seccomp, AppArmor, and Capabilities are enforced by the node's kernel. However, managing these across hundreds of pods manually is impossible and prone to human error. You need a way to ensure that *no pod can ever be scheduled* unless it adheres to your security baseline.
+The hard part is that many permission errors look alike to application owners. A developer may not know whether `EPERM` came from a missing capability, a seccomp denial, an AppArmor rule, an SELinux label, or a read-only filesystem. Platform teams can reduce confusion by documenting a triage checklist: inspect Pod events, review admission responses, check kernel audit logs, look at the container security context, and reproduce with the smallest temporary exception before changing production policy.
 
-This is where Kubernetes Admission Controllers and Policy Engines come in. They sit at Layer 4 of our security stack. When the API server receives a request to create a pod, it pauses and sends that request to a Mutating Webhook, and then to a Validating Webhook.
+The companion control is `allowPrivilegeEscalation: false`, which sets Linux `no_new_privs` behavior for the container process. That setting prevents a process from gaining more privileges through setuid binaries or similar execution transitions. It does not replace dropping capabilities, running as non-root, or using seccomp, but it closes a common path where an attacker searches the image for a forgotten helper binary and tries to turn a small foothold into a stronger one.
 
-### OPA Gatekeeper
+This is why hardened images and hardened Pod specs should be reviewed together. Removing setuid binaries from the image is better than merely depending on `no_new_privs`, but `allowPrivilegeEscalation: false` protects you when an image contains something unexpected. Likewise, running as non-root reduces the starting privilege, while dropping capabilities reduces the special kernel powers that may remain. The controls overlap in purpose but not in exact enforcement.
 
-Open Policy Agent (OPA) Gatekeeper is a mature, widely adopted validating admission controller.
+## Policy Engines and Admission Guardrails
+
+Runtime security fields protect a Pod only after someone has put those fields into the manifest or a mutating admission controller has added them. In a small cluster, a careful platform engineer might review every manifest by hand, but that model fails as soon as multiple teams, Helm charts, operators, and generated manifests arrive. Admission policy turns the security baseline from a style guide into an API contract.
+
+Admission control should be designed with developer feedback in mind. A rejected Pod should explain what field violated the baseline and how to fix it, because unclear rejection messages train teams to look for bypasses. The best policies are boring in daily use: they catch insecure defaults, point to a clear remediation, and provide a documented exception path for workloads that genuinely need unusual privileges.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -429,16 +437,9 @@ Open Policy Agent (OPA) Gatekeeper is a mature, widely adopted validating admiss
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Gatekeeper uses a purpose-built query language called Rego. Rego is incredibly powerful and can evaluate complex logic against any JSON structure, but it has a steep learning curve. Gatekeeper operates using a two-tiered model:
+OPA Gatekeeper is powerful when an organization wants reusable constraints backed by Rego logic. A `ConstraintTemplate` defines the policy machinery, and a `Constraint` applies that machinery to selected resource kinds, namespaces, or parameters. This split is valuable for platform teams that need consistent policy primitives, but it also means the team must maintain Rego expertise and test policies carefully before they become a production admission dependency.
 
-1. **ConstraintTemplate**: Contains the actual Rego code logic (the "how").
-2. **Constraint**: The Kubernetes Custom Resource that instantiates the template with specific parameters (the "what" and "where").
-
-For example, a ConstraintTemplate might contain the complex logic to check if a capability is present in the `securityContext`. The Constraint would say, "Apply the capability check template to all Pods in the 'production' namespace, and reject if 'CAP_SYS_ADMIN' is found."
-
-### Kyverno
-
-Kyverno is a policy engine designed specifically for Kubernetes, avoiding the need to learn a new language.
+Gatekeeper is a strong fit when policy logic needs expressive evaluation across arbitrary Kubernetes resources or when an organization already uses Open Policy Agent elsewhere. For example, a platform team might enforce registry allowlists, namespace ownership labels, or custom relationships between workload annotations and service accounts. Those policies can complement runtime security, but they should be tested like application code because a broken validating webhook can block legitimate cluster changes.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -464,9 +465,7 @@ Kyverno is a policy engine designed specifically for Kubernetes, avoiding the ne
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Because Kyverno policies are written in YAML, they are highly accessible to platform engineers already accustomed to Kubernetes manifests. Kyverno can validate, but it excels at mutating resources on the fly.
-
-Here is a Kyverno ClusterPolicy that prevents any pod from running as the root user:
+Kyverno uses Kubernetes-flavored YAML and is often easier for application and platform teams to read together. It can validate that a Pod sets `runAsNonRoot`, mutate a missing `seccompProfile` into place, generate supporting resources, and verify image signatures. That accessibility does not remove the need for discipline, because mutating security fields can surprise developers unless the platform documents what gets changed and how exceptions are requested.
 
 ```yaml
 apiVersion: kyverno.io/v1
@@ -494,13 +493,17 @@ spec:
               =(runAsNonRoot): true
 ```
 
-If a developer attempts to `kubectl apply` a pod that omits `runAsNonRoot: true`, the API server will reject the request, displaying the message defined in the policy directly to the developer's terminal. This creates an immediate feedback loop, shifting security left.
+This policy rejects Pods that fail to declare non-root execution in the expected places. In real clusters, teams often begin with audit mode, collect violations, fix the most common chart templates, and then move high-confidence rules into enforcement. That progression matters because a policy engine that blocks emergency deployments without a tested exception path will be bypassed politically even if it is technically correct.
 
-## The Ultimate Isolation: Sandboxed Runtimes
+Mutation requires even more care than validation. Adding `RuntimeDefault` automatically may be a reasonable platform default because the field is low risk for most workloads, but mutating user IDs, volume mounts, or capabilities can break applications in ways that surprise owners. If you mutate security settings, expose the final rendered object through review tooling or policy reports so developers can see the security context their Pod actually received.
 
-Even with strict capabilities, seccomp profiles, and MAC, all containers on a node ultimately share a single host kernel. The Linux kernel is massive, consisting of millions of lines of C code. Zero-day vulnerabilities in the kernel are discovered regularly. If an attacker exploits a kernel vulnerability from inside a container, they bypass all layer 2 and layer 3 security controls.
+Before running this, what output do you expect from `k apply -f root-pod.yaml` if the Kyverno policy is already enforced? You should expect an admission rejection from the API server, not a Pod that starts and then crashes, because the policy engine evaluates the object before the kubelet ever creates a container.
 
-For multi-tenant environments where you are running untrusted code (like a SaaS platform executing customer scripts), shared-kernel isolation is insufficient. You need sandboxed runtimes.
+Do not use both Kyverno and Gatekeeper to enforce the same field unless you have a specific migration plan or failure-domain reason. Duplicate checks create two sources of truth, two styles of error messages, and two places where exceptions can drift. Defense in depth is usually better expressed by layering different controls, such as Pod Security Admission for broad baseline behavior, one policy engine for organization-specific rules, and kernel enforcement for the running process.
+
+## RuntimeClass and Sandboxed Runtimes
+
+Seccomp, capabilities, and MAC all reduce what a process can do to a shared kernel, but standard OCI runtimes still share that kernel. For trusted internal services, that is usually a reasonable tradeoff because runc and crun are fast, well understood, and compatible with the broad Kubernetes ecosystem. For untrusted code execution, customer plugins, browser automation at scale, or multi-tenant CI workloads, the shared-kernel assumption deserves much more scrutiny.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
@@ -535,17 +538,13 @@ For multi-tenant environments where you are running untrusted code (like a SaaS 
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### gVisor
+gVisor inserts a user-space kernel called the Sentry between the application and the host kernel. When the application makes a syscall, gVisor intercepts and implements much of the expected kernel behavior outside the host kernel's direct syscall path. This can reduce exposure to host kernel bugs, but it may add overhead and compatibility gaps for workloads that rely on unusual kernel features, low-level networking behavior, or performance-sensitive syscall patterns.
 
-Developed by Google, gVisor introduces an application kernel called the "Sentry" written in Go. The Sentry runs in user space. When an application in a gVisor container makes a system call, it does not go to the host Linux kernel. Instead, the Sentry intercepts the call, emulates the required behavior, and fulfills the request safely. Because the Sentry is written in a memory-safe language and acts as an intermediate buffer, kernel exploits executed by the containerized application attack the Sentry, not the host node. The compromise is contained.
+That compatibility tradeoff is why sandboxed runtimes should be introduced with a workload qualification process. A simple HTTP service may run with little drama, while a build runner that uses nested tooling, special filesystems, or advanced networking may expose missing behavior quickly. The right pilot includes performance measurements, syscall-heavy tests, and clear rollback steps, not only a successful Pod creation event.
 
-### Kata Containers
+Kata Containers takes a different route by running Pods inside lightweight virtual machines with their own guest kernels. That gives a stronger isolation boundary for teams that need hardware virtualization as part of their risk model, at the cost of higher startup and resource overhead than a normal runc container. The design question is therefore not "which runtime is most secure" in isolation; it is whether the workload's trust level justifies the operational and performance cost.
 
-Kata Containers takes a different approach. Instead of emulating the kernel, it uses hardware virtualization technologies (like KVM) to wrap every single container (or pod) in its own lightweight micro-virtual machine. Each Kata container has its own actual Linux kernel. If an attacker breaks out of the container via a kernel exploit, they only compromise their own dedicated, isolated VM kernel, not the underlying worker node.
-
-### Implementing RuntimeClasses
-
-You apply sandboxed runtimes dynamically by defining a `RuntimeClass` and referencing it in the Pod specification.
+Kata is especially relevant when auditors, tenant isolation requirements, or internal risk models demand a VM-like boundary while retaining Kubernetes scheduling and workflow. It does not remove the need for image hygiene, network policy, admission control, or least-privilege Pod specs. A vulnerable application inside a micro-VM can still leak its own data or attack reachable services, even if the host kernel is better protected.
 
 ```yaml
 apiVersion: node.k8s.io/v1
@@ -566,137 +565,154 @@ spec:
     image: python:3.11-alpine
 ```
 
-## Security Checklist & Summary
+`RuntimeClass` lets Kubernetes select a runtime handler configured on the node's container runtime. The manifest alone is not enough; containerd or CRI-O must know what `runsc` or the Kata handler means, the node must have the required runtime installed, and scheduling must keep those Pods on compatible nodes. If a platform offers sandboxing as a service to application teams, it should publish runtime classes with clear names, documented limitations, and example manifests that include the normal security context controls as well.
 
-To establish a comprehensive runtime security posture, administrators must implement controls iteratively across all levels of the stack.
+Scheduling is part of the runtime boundary. If only some nodes support gVisor, a `RuntimeClass` can include scheduling hints or the platform can pair it with node selectors, taints, and admission checks. Without that coordination, teams may see confusing failures where the manifest is valid but no compatible node can actually run the Pod. Runtime isolation is therefore a platform feature, not just a line in a workload YAML file.
+
+A useful rule is to reserve sandboxed runtimes for a trust boundary, not for a vague feeling of importance. A payment API that your organization writes, scans, deploys, and monitors may be better served by runc plus strict least privilege. A hosted build runner executing arbitrary customer scripts should use stronger isolation because the business model assumes hostile input from the start.
+
+The same trust-tier thinking helps control cost. If every Pod receives the heaviest runtime, teams may pay unnecessary overhead and then pressure the platform to relax the standard. If only the riskiest workloads receive stronger isolation, the platform can focus testing and capacity planning where the security return is highest. Clear tier definitions make that tradeoff explicit before an incident forces a rushed migration.
+
+## Patterns & Anti-Patterns
+
+Runtime security works best when teams treat it as a productized platform capability instead of a collection of heroic manifest tweaks. The patterns below are deliberately operational: they describe how controls survive chart upgrades, incident pressure, new node pools, and different workload trust levels. The anti-patterns are common because they feel convenient in the moment, especially when a production workload is broken and the fastest local fix is to remove the control that exposed the issue.
+
+Notice that the patterns are not exotic. They mostly turn implicit runtime behavior into explicit, reviewable, testable configuration. The hard work is consistency: getting every service template, operator, and exception process to express the same baseline without forcing teams to memorize every kernel detail. That is why the most successful platforms pair strict defaults with practical documentation and fast support for legitimate edge cases.
+
+| Pattern | When to Use | Why It Works | Scaling Consideration |
+|---------|-------------|--------------|-----------------------|
+| Default-deny capability posture | Most application workloads that do not need kernel administration privileges | Dropping all capabilities turns privilege into an explicit design choice rather than runtime inheritance | Keep exception examples small and reviewed, because copied capability blocks spread quickly through Helm values |
+| RuntimeDefault everywhere | General workloads on Kubernetes 1.35+ clusters | The runtime's maintained seccomp baseline blocks dangerous kernel entry points without requiring custom profiling | Enforce with admission so forgotten security contexts do not become the common case |
+| MAC profiles for high-risk paths | Ingress controllers, node agents, and services handling untrusted file paths | AppArmor or SELinux still constrains root processes when normal permissions are not enough | Match the profile model to the node OS and keep audit logs searchable during rollout |
+| RuntimeClass by trust tier | Customer code execution, hosted CI, plugin systems, and compliance-sensitive tenants | Sandboxed runtimes move untrusted code away from direct host-kernel reliance | Publish compatibility notes and schedule only onto nodes with the handler installed |
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|--------------|-----------------|------------------------|--------------------|
+| Setting `Unconfined` after one crash | The workload starts, but a broad syscall boundary disappears for every future exploit | The error looks like an application failure and the deadline is close | Profile the denied syscall, use a narrow `Localhost` profile, or adjust the application design |
+| Adding `CAP_SYS_ADMIN` as a universal fix | A near-root privilege enters the container and invalidates much of the least-privilege model | Many unrelated operations fail with similar permission messages | Identify the exact capability or redesign the workload to avoid host administration |
+| Mixing duplicate policy engines for the same field | Developers see confusing rejection messages and API admission latency rises | "Defense in depth" is interpreted as repeating identical checks | Assign clear ownership, such as Kyverno for Pod security and Gatekeeper for custom organization rules |
+| Treating sandboxed runtime as a silver bullet | Compatibility problems, cost increases, and weak Pod security contexts remain unsolved | Strong isolation sounds like it should replace lower-level controls | Use sandboxing for trust boundaries while keeping seccomp, capabilities, and MAC in place |
+
+## Decision Framework
+
+Choose runtime controls by starting with the workload's trust model, then work downward into kernel permissions and upward into policy enforcement. A service maintained by your team and exposed only through normal ingress still needs least privilege, but it probably does not need a micro-VM per Pod. A customer-submitted script runner starts from the opposite assumption: the code may be hostile by design, so the runtime boundary needs to be stronger before you discuss convenience.
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│              RUNTIME SECURITY CHECKLIST                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  SYSTEM CALL FILTERING                                     │
-│  ☐ Enable seccomp (RuntimeDefault minimum)                 │
-│  ☐ Custom profiles for sensitive workloads                 │
-│  ☐ Test profiles don't break applications                  │
-│                                                             │
-│  MANDATORY ACCESS CONTROL                                  │
-│  ☐ AppArmor or SELinux enabled on nodes                   │
-│  ☐ Profiles applied to pods                                │
-│  ☐ Start in complain mode, then enforce                    │
-│                                                             │
-│  CAPABILITIES                                              │
-│  ☐ Drop all capabilities by default                        │
-│  ☐ Add back only what's needed                             │
-│  ☐ Never add CAP_SYS_ADMIN                                 │
-│                                                             │
-│  RUNTIME SELECTION                                         │
-│  ☐ Consider sandboxed runtime for untrusted workloads      │
-│  ☐ Define RuntimeClasses for different isolation levels    │
-│                                                             │
-│  POLICY ENFORCEMENT                                        │
-│  ☐ Deploy policy engine (Kyverno/OPA)                     │
-│  ☐ Enforce Pod Security Standards                          │
-│  ☐ Block privileged/host namespace access                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+START
+  |
+  v
+Is the workload executing untrusted customer or tenant code?
+  |-- yes --> Use RuntimeClass for gVisor or Kata, then still enforce least privilege.
+  |
+  |-- no --> Does it need host namespaces, privileged mode, or broad capabilities?
+              |-- yes --> Treat as node-adjacent infrastructure; isolate nodes and review manually.
+              |
+              |-- no --> Use RuntimeDefault, drop all capabilities, run as non-root, and enforce by policy.
 ```
 
-| Layer | Technology | Purpose | Key Benefit |
-|-------|-----------|---------|-------------|
-| **Syscall Filter** | Seccomp | Block dangerous system calls | Shrinks kernel attack surface dynamically |
-| **MAC** | AppArmor/SELinux | File, network, capability restrictions | Overrides root user file access privileges |
-| **Capabilities** | Linux | Granular privilege control | Prevents privilege escalation and system modification |
-| **Sandboxing** | gVisor/Kata | Kernel isolation | Defends against host kernel zero-day exploits |
-| **Policy** | Kyverno/OPA | Admission enforcement | Guarantees compliance before workloads run |
+| Decision | Prefer This | Avoid This | Reasoning |
+|----------|-------------|------------|-----------|
+| Syscall baseline | `RuntimeDefault` for most Pods | `Unconfined` as a compatibility shortcut | The runtime default removes dangerous kernel entry points with low operational cost |
+| Custom syscall profile | `Localhost` after profiling and node distribution | Handwritten deny lists with no test coverage | Default-deny profiles are brittle unless exercised under realistic traffic |
+| MAC selection | AppArmor on AppArmor-capable distributions, SELinux on RHEL-family distributions | Manifests that assume the wrong node security module | The kernel cannot enforce a module that the node does not run |
+| Capabilities | `drop: ["ALL"]` plus exact additions | Default capabilities copied into every chart | Least privilege is easier to review when additions are rare and named |
+| Runtime choice | runc for trusted workloads, gVisor or Kata for untrusted code | One runtime for every risk tier | Runtime overhead should track the value of the isolation boundary |
+| Admission | One clear policy owner per security domain | Duplicate rules across engines without ownership | Operators need predictable rejection messages and exception paths |
 
----
+The framework also gives you a debugging sequence. If the API server rejects the object, inspect admission policy and Pod Security settings first. If the Pod starts and the process receives `EPERM`, inspect seccomp, capabilities, `allowPrivilegeEscalation`, and MAC audit logs. If a workload behaves differently only on some nodes, inspect node labels, runtime handler configuration, profile distribution, and operating system security modules.
+
+When you are unsure which control to tighten first, prefer the broad, low-risk defaults before custom engineering. Run as non-root, disable privilege escalation, drop capabilities, use `RuntimeDefault`, make the root filesystem read-only where the application permits, and block host namespaces. Once those are routine, add MAC profiles for workloads with meaningful file access risk and sandboxed runtimes for workloads that cross trust boundaries. This sequence gives teams visible wins without making the first rollout depend on custom kernel policy for every service.
 
 ## Did You Know?
 
-- **The Linux kernel has over 330 system calls**, yet comprehensive profiling shows that typical microservices require fewer than 50. Dropping the unneeded syscalls eliminates vast amounts of attack surface.
-- **gVisor implements its own network stack called Netstack**, written entirely in Go. This means that a network-based exploit targeting a vulnerability in the Linux kernel's TCP/IP stack will completely fail against a gVisor container.
-- **AppArmor and SELinux are mutually exclusive** at the kernel level. A Linux distribution compiles its kernel to support one or the other as its primary security module. You cannot run both simultaneously on the same host.
-- **RuntimeDefault seccomp became the default in Kubernetes version 1.27**. Prior to this, millions of pods in production environments ran with zero system call filtering by default, relying entirely on capability drops and namespaces for protection.
-
----
+- **Kubernetes enabled `RuntimeDefault` seccomp by default in version 1.27**, which means Kubernetes 1.35+ operators inherit a safer baseline than older clusters but should still declare it explicitly for reviewability.
+- **gVisor's Sentry is written in Go and implements a substantial user-space kernel surface**, so many application syscalls are handled before they can directly reach the host kernel.
+- **SELinux labels commonly include four fields in the form `user:role:type:level`**, and the `type` and MCS level are especially important for container process and volume isolation.
+- **`CAP_SYS_ADMIN` is intentionally broad enough that kernel documentation has long described it as overloaded**, so adding it to a container should trigger the same scrutiny as privileged mode.
 
 ## Common Mistakes
 
-| Mistake | Why It Hurts | Solution |
-|---------|--------------|----------|
-| **Leaving Pods Unconfined** | Without seccomp filtering, a compromised container can invoke dangerous syscalls like `kexec_load` or `ptrace` to attack the node. | Ensure `seccompProfile: type: RuntimeDefault` is applied via Pod Security Admission or policy engines. |
-| **Retaining Default Capabilities** | Container runtimes leave capabilities like `CAP_NET_RAW` enabled by default, allowing attackers to perform network spoofing attacks. | Explicitly configure `drop: ["ALL"]` in the security context, adding back only specific requirements. |
-| **Ignoring MAC Profiles** | Discretionary Access Control (file permissions) is useless once an attacker escalates to the root user within a container. | Apply AppArmor or SELinux profiles to enforce constraints that even the root user cannot bypass. |
-| **Using One Runtime for Everything** | Running highly trusted infrastructure services and completely untrusted third-party code on the exact same kernel architecture invites catastrophic lateral movement. | Implement `RuntimeClass` and utilize gVisor or Kata for untrusted workloads. |
-| **Enforcing Policies Without Testing** | Hard-enforcing strict seccomp or AppArmor profiles immediately in production will inevitably break legitimate application behaviors causing outages. | Deploy policies in "audit" or "complain" mode first, monitor logs for violations, tune the policy, and then enforce. |
-| **Relying Solely on Namespaces** | Assuming namespaces provide security isolation. Namespaces only provide visibility isolation; they do not restrict access to the shared kernel. | Layer namespaces with cgroups, capabilities, seccomp, and MAC for true defense-in-depth. |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Leaving Pods effectively unconfined | Teams rely on cluster defaults or old manifests and never verify the resulting seccomp profile | Set `seccompProfile: type: RuntimeDefault` explicitly and enforce the baseline through admission policy |
+| Retaining default capabilities | The application works during development, so nobody notices the inherited privilege set | Use `drop: ["ALL"]`, add only proven requirements, and document each addition in the workload review |
+| Applying AppArmor manifests to SELinux nodes | Engineers copy examples from Ubuntu clusters into RHEL-family environments | Match MAC controls to the node operating system and use `seLinuxOptions` where SELinux is the enforcing module |
+| Enforcing custom profiles without audit rollout | A strict profile blocks a rare but legitimate path that tests did not cover | Start with audit or complain behavior where possible, review logs, then enforce after representative traffic |
+| Using one runtime for every tenant | Standardization feels simpler than maintaining runtime classes and node pools | Define runtime classes by trust level and schedule untrusted workloads only onto compatible sandbox nodes |
+| Adding `CAP_SYS_ADMIN` to solve vague permission errors | Many kernel operations fail with similar "operation not permitted" messages | Reproduce the failure, identify the exact capability or syscall, and prefer application redesign when possible |
+| Depending only on namespaces for containment | Namespace isolation looks strong because the process view is limited | Layer namespaces with seccomp, capabilities, MAC, read-only filesystems, and admission policy |
+| Duplicating the same validation in Kyverno and Gatekeeper | Teams confuse repeated checks with stronger defense | Assign each policy domain to one engine and use monitoring plus tests to verify that enforcement works |
 
 ## Quiz
 
 <details>
-<summary>1. A developer complains that their application, which requires the ability to adjust system time for synchronization, is failing with permission errors in production. The cluster enforces strict capability drops. Which capability must be added back, and why is this generally considered a poor architectural pattern for a container?</summary>
+<summary>1. Your team deploys a Go API on Kubernetes 1.35 with `runAsNonRoot`, `readOnlyRootFilesystem`, and dropped capabilities, but the manifest omits `seccompProfile`. A reviewer asks whether this is acceptable because modern clusters already default seccomp more safely. How should you respond?</summary>
 
-The developer requires `CAP_SYS_TIME`. Adding this capability allows the container to alter the clock of the host worker node, because containers share the underlying kernel. This is a poor architectural pattern because if a container changes the node's time, it affects all other pods running on that node, potentially breaking TLS certificate validation, logging timestamps, and authentication tokens for other applications. Time synchronization should be handled by the worker node's operating system (e.g., via chrony or ntpd), not by individual containerized workloads.
+The workload may receive a safer default on a modern cluster, but the manifest should still declare `seccompProfile: type: RuntimeDefault`. Explicit configuration makes the intended boundary visible during review, survives migration to clusters with different defaults, and gives admission policy a clear field to validate. The other security context settings are valuable, but they do not replace syscall filtering because capabilities and filesystem flags control different kernel behaviors.
 </details>
 
 <details>
-<summary>2. You manage a Kubernetes cluster on RHEL worker nodes. You attempt to apply a workload manifest that includes an AppArmor annotation restricting access to `/etc/`. The pod schedules successfully, but upon inspection, the container can still read sensitive files in `/etc/`. What is the fundamental architecture issue causing this failure?</summary>
+<summary>2. A RHEL-based node pool ignores an AppArmor annotation that worked in a previous Ubuntu cluster, and the container can still read files the team expected to deny. What is the most likely architecture problem, and how do you correct the design?</summary>
 
-The fundamental issue is that RHEL (Red Hat Enterprise Linux) uses SELinux for Mandatory Access Control, not AppArmor. AppArmor and SELinux are mutually exclusive Linux Security Modules. When you apply an AppArmor annotation to a pod scheduled on an SELinux-backed node, the container runtime simply ignores the annotation because the underlying kernel has no AppArmor module loaded to enforce it. To achieve the restriction on RHEL, you must utilize SELinux contexts and labeling, configuring the `seLinuxOptions` within the pod's security context.
+The likely problem is that the node pool uses SELinux rather than AppArmor as its Mandatory Access Control system. AppArmor annotations cannot enforce path policy if the node kernel is not running AppArmor for containers, so the manifest gives a false sense of protection. Correct the design by using SELinux labels and `seLinuxOptions`, or by scheduling the workload to an AppArmor-capable node pool with the required profiles loaded.
 </details>
 
 <details>
-<summary>3. A legacy application is containerized and deployed to a cluster enforcing the `RuntimeDefault` seccomp profile. The application immediately crashes. Debugging reveals the application relies heavily on executing the `unshare` syscall to create customized execution environments. You must make the application work without completely disabling seccomp. Outline your strategy.</summary>
+<summary>3. A legacy application crashes after moving from an unconfined seccomp profile to `RuntimeDefault`, and audit evidence points to the blocked `unshare` syscall. The business wants the app online without returning to fully unconfined execution. What strategy should you propose?</summary>
 
-You cannot use `RuntimeDefault` because it explicitly blocks the `unshare` syscall to prevent namespace manipulation escapes. To resolve this securely, you must author a custom seccomp profile. You start by copying the standard `RuntimeDefault` JSON profile provided by Docker/containerd. You then modify this custom profile to explicitly add `unshare` to the `SCMP_ACT_ALLOW` array. Save this file to the node's seccomp directory (e.g., `/var/lib/kubelet/seccomp/legacy-app.json`). Finally, modify the pod manifest to utilize `seccompProfile: type: Localhost` and specify the path to your new custom profile. This grants the application the exact syscall it needs while maintaining protection against hundreds of other dangerous syscalls.
+Start by confirming that the application genuinely needs `unshare` and that the behavior cannot be removed or isolated into a safer helper. If the requirement is real, build a custom seccomp profile from the runtime default, add only the required syscall, distribute that profile to the intended nodes, and reference it with `type: Localhost`. This preserves most of the runtime default protections while making the exception explicit and testable.
 </details>
 
 <details>
-<summary>4. Your organization runs a multi-tenant CI/CD platform. Customers submit arbitrary shell scripts that execute within isolated pods. You currently use runc with strict capabilities dropped and `RuntimeDefault` seccomp. A security researcher discovers a new kernel vulnerability (like Dirty Pipe) that allows local privilege escalation. Are your customer pods secure from exploiting this vulnerability to escape? Why or why not?</summary>
+<summary>4. A hosted CI service runs arbitrary customer shell scripts in Pods using runc, `RuntimeDefault`, dropped capabilities, and non-root users. A new local kernel privilege escalation vulnerability is announced. Are these customer Pods adequately isolated from the host kernel?</summary>
 
-No, the customer pods are not secure from this specific threat. Because you are using `runc`, all customer containers share the underlying worker node's Linux kernel. Kernel zero-day vulnerabilities like Dirty Pipe operate at a level below seccomp and capabilities—they exploit flaws in how the kernel itself processes data. If a customer script executes the exploit, it compromises the shared kernel, leading to container escape and potential node takeover. To secure arbitrary, untrusted code execution, you must transition to a sandboxed runtime like gVisor or Kata Containers, which provide an intermediate application kernel or a dedicated VM kernel, isolating the host from direct exploitation.
+They are better hardened than default Pods, but they are not adequately isolated for arbitrary hostile code if the threat is a host kernel vulnerability. With runc, the containers still share the worker node kernel, so a successful kernel exploit can cross beneath seccomp and capability boundaries. A service that intentionally executes untrusted customer code should evaluate gVisor or Kata through `RuntimeClass`, while keeping the existing least-privilege settings as additional layers.
 </details>
 
 <details>
-<summary>5. You have implemented Kyverno to enforce a policy that prevents containers from running with the `privileged: true` flag. You also have OPA Gatekeeper installed, and a colleague suggests writing a Rego policy to do the exact same thing to ensure "defense in depth." Is this a recommended approach? Justify your answer.</summary>
+<summary>5. A developer adds `CAP_SYS_ADMIN` because their container receives "operation not permitted" while starting a filesystem-heavy tool. The Pod now runs, and the team wants to merge the change. What should you check before approving?</summary>
 
-While defense in depth is a core security principle, duplicating identical validation logic across two separate admission controllers is an anti-pattern. It introduces unnecessary operational complexity, increases API server latency due to multiple webhook calls, and creates a nightmare for debugging when workloads are rejected. If Kyverno is already successfully enforcing the policy, adding Gatekeeper to check the exact same field provides marginal resilience at a high operational cost. Best practice dictates selecting one primary policy engine for a specific domain (e.g., Kyverno for pod security, Gatekeeper for custom organizational labeling) rather than overlapping their rulesets identically.
+You should treat `CAP_SYS_ADMIN` as a major privilege expansion rather than a routine compatibility flag. Reproduce the failure, identify the exact kernel operation, check whether a narrower capability or different volume design solves the problem, and decide whether the workload belongs on isolated nodes if it truly needs broad host-facing power. Approval should require a documented reason because this capability weakens the containment story for future compromises.
 </details>
 
 <details>
-<summary>6. An attacker gains remote code execution in a web container running with `runAsNonRoot: true`. They discover a local privilege escalation exploit binary left behind by a developer. However, when they attempt to run the binary, the kernel blocks the execution and denies the privilege escalation, even though the file has the SetUID bit set. What specific Kubernetes security context setting prevented this attack?</summary>
+<summary>6. A Kyverno policy rejects a Pod before it is scheduled, but the application team keeps searching container logs for an explanation and finds nothing. How do you redirect the investigation?</summary>
 
-The attack was prevented by the `allowPrivilegeEscalation: false` setting in the container's security context. This setting directly configures the `no_new_privs` bit in the Linux kernel for the container process. When this bit is set, the kernel guarantees that the process and any of its children can never gain more privileges than they currently possess, regardless of file permissions or SetUID/SetGID bits on executables. The exploit binary relies on escalating privileges via execution, but the kernel categorically denies the transition, neutralizing the exploit entirely.
+There will be no container logs because the Pod never reached the kubelet and no container process started. The investigation should move to the API server response, the Kyverno policy report, admission controller logs, and the manifest fields matched by the rule. This distinction matters operationally because admission failures are configuration contract failures, while runtime denials leave evidence in kubelet events, application errors, or kernel audit logs.
 </details>
 
----
+<details>
+<summary>7. A hardened API runs as user 10001 with all capabilities dropped, but a penetration test finds a setuid helper binary inside the image. Which security context setting limits the danger, and why is it not enough by itself?</summary>
+
+`allowPrivilegeEscalation: false` limits the danger by setting `no_new_privs`, which prevents the process and its children from gaining additional privileges through setuid or similar execution transitions. It is not enough by itself because the image still contains unnecessary risky software, and other attack paths may not depend on setuid behavior. The correct response is to keep the setting, remove the helper from the image, run as non-root, drop capabilities, and use filesystem and syscall restrictions.
+</details>
 
 ## Hands-On Exercise: Engineering a Hardened Security Context
 
-**Scenario**: You are tasked with migrating a critical backend API service to a production Kubernetes cluster. The service is written in Go, listens on port 8080, reads configuration from a mounted volume, writes temporary processing data, but otherwise requires no special system access.
+You are migrating a critical backend API service to a Kubernetes 1.35 production cluster. The service is written in Go, listens on port 8080, reads configuration from a mounted volume, writes temporary processing data, and does not need host namespaces, raw sockets, tracing, filesystem administration, or low-numbered port binding. Your objective is to construct a Pod manifest that expresses least privilege clearly enough for a reviewer and strict enough for an attacker to find very little room after compromise.
 
-**Your objective**: Construct the YAML manifest for this pod implementing the strictest possible runtime security controls based on the principle of least privilege.
+Use a scratch file named `runtime-lab.yaml` and apply it with `k apply -f runtime-lab.yaml` when you are ready to test. If your cluster has Pod Security Admission or Kyverno policies enabled, compare the API server response with your expectations before changing the manifest, because a rejection may mean your platform is already enforcing part of the baseline.
+
+The exercise is intentionally centered on a normal service rather than a privileged daemon. Most Kubernetes security work is not about rare node agents that truly need unusual access; it is about making the default application path boringly safe. If you can harden this API without breaking its basic needs, you can use the same reasoning when reviewing Helm values, generated manifests, or pull requests from application teams.
 
 **Requirements Checklist:**
-- [ ] The application must run as a non-root user (User ID 10001).
-- [ ] The application must be explicitly prevented from escalating privileges via SetUID binaries.
-- [ ] The entire root filesystem must be mounted as read-only to prevent tampering.
-- [ ] A writable temporary directory must be provided at `/tmp/workdir`.
-- [ ] All default Linux capabilities must be dropped.
-- [ ] Only the specific capability required to bind to network ports (if it were binding to a port under 1024, though it uses 8080) should be considered, but since it's 8080, drop absolutely everything.
-- [ ] The default container runtime syscall filter must be explicitly applied.
-- [ ] The pod must be prevented from accessing the host's process, network, and IPC namespaces.
 
-**Task 1:** Draft the pod structure and specify the namespace isolation parameters to ensure the pod cannot view host resources.
+- [ ] The application must run as a non-root user with user ID 10001 and group ID 10001.
+- [ ] The application must be explicitly prevented from escalating privileges through setuid or similar transitions.
+- [ ] The root filesystem must be read-only, with a writable temporary directory mounted at `/tmp/workdir`.
+- [ ] All Linux capabilities must be dropped because the service listens on port 8080 and needs no privileged port binding.
+- [ ] The runtime default seccomp profile must be declared explicitly.
+- [ ] Host process, network, and IPC namespaces must remain disabled.
 
-**Task 2:** Configure the Pod-level `securityContext` to handle user identification and system call filtering.
+**Task 1:** Draft the Pod structure, name the container, and set `hostNetwork`, `hostPID`, and `hostIPC` so the Pod cannot view or join host namespaces.
 
-**Task 3:** Configure the Container-level `securityContext` to handle capabilities, filesystem permissions, and privilege escalation controls.
+**Task 2:** Configure the Pod-level `securityContext` with non-root identity, group ownership for mounted files, and the explicit runtime seccomp profile.
 
-**Task 4:** Assemble the complete manifest, adding the necessary volume mounts to satisfy the read-only filesystem requirement while allowing temporary writes.
+**Task 3:** Configure the container-level `securityContext` with `allowPrivilegeEscalation: false`, `privileged: false`, a read-only root filesystem, and a capability set that drops everything.
+
+**Task 4:** Add an `emptyDir` volume and mount it at `/tmp/workdir` so the application has a deliberate writable location while the image filesystem remains immutable.
+
+**Task 5:** Apply the manifest, inspect the resulting Pod with `k describe pod hardened-api-service`, and explain whether a failure came from admission, image pulling, or runtime enforcement.
 
 <details>
 <summary>View the Solution and Explanation</summary>
@@ -756,20 +772,35 @@ spec:
     emptyDir: {}
 ```
 
-**Why this configuration is highly secure:**
-If an attacker compromises the API service via a vulnerability in the Go application code:
-1. They are trapped as user 10001. They are not root.
-2. Even if they find a vulnerability that usually allows privilege escalation, `allowPrivilegeEscalation: false` instructs the kernel to block it.
-3. They cannot download malware, alter configurations, or install rootkits because `readOnlyRootFilesystem: true` makes the entire drive immutable. They can only write to the temporary `/tmp/workdir`, which is ephemeral.
-4. They cannot use network spoofing, alter system times, or trace processes because every single Linux capability has been dropped.
-5. They cannot execute advanced kernel exploits using obscure system calls because the `RuntimeDefault` seccomp profile blocks them.
-6. They cannot see or interact with other processes running on the host node because `hostPID` and `hostIPC` are explicitly false.
+This configuration layers several independent protections. The process runs as user 10001 rather than root, cannot gain new privileges through setuid execution, cannot write into the image filesystem, and has no Linux capabilities left to spend after compromise. The Pod also declares the runtime default seccomp filter and refuses host namespaces, so an attacker who reaches the Go process cannot casually inspect host processes, use broad kernel privileges, or persist changes into the container image layer.
 
-This creates a virtually inescapable sandbox using native Kubernetes primitives.
+The manifest is intentionally strict but not magical. If the application expects to write under `/var/cache`, it will fail until you either change the application path or mount a deliberate writable volume there. If the image requires root during startup, the non-root setting will expose that packaging problem. Those failures are useful because they move privilege decisions into reviewable YAML instead of leaving them hidden inside a container startup script.
 </details>
 
----
+Success criteria:
+
+- [ ] `k apply -f runtime-lab.yaml` creates the Pod or returns a policy message you can explain precisely.
+- [ ] `k get pod hardened-api-service -o yaml` shows `seccompProfile.type: RuntimeDefault`.
+- [ ] The container security context shows `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, and `capabilities.drop` containing `ALL`.
+- [ ] The Pod spec shows `hostNetwork: false`, `hostPID: false`, and `hostIPC: false`.
+- [ ] You can explain which setting prevents setuid escalation and which setting reduces the syscall attack surface.
 
 ## Next Module
 
-[Module 5.4: Security Tooling](../module-5.4-security-tooling/) - Now that you understand the low-level primitives of runtime security, discover the ecosystem of specialized tooling—like Falco and Trivy—designed to automate the observation and enforcement of these exact mechanisms at scale.
+[Module 5.4: Security Tooling](../module-5.4-security-tooling/) - Now that you understand the low-level primitives of runtime security, you will examine tools such as Falco and Trivy that observe, verify, and automate these controls at scale.
+
+## Sources
+
+- [Kubernetes Documentation: Configure a Security Context for a Pod or Container](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
+- [Kubernetes Documentation: Restrict a Container's Syscalls with seccomp](https://kubernetes.io/docs/tutorials/security/seccomp/)
+- [Kubernetes Documentation: Seccomp default tutorial](https://kubernetes.io/docs/tutorials/security/seccomp-default/)
+- [Kubernetes Documentation: Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/)
+- [Kubernetes Documentation: RuntimeClass](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+- [Kubernetes Documentation: AppArmor](https://kubernetes.io/docs/tutorials/security/apparmor/)
+- [Linux manual page: capabilities](https://man7.org/linux/man-pages/man7/capabilities.7.html)
+- [Linux kernel documentation: Seccomp BPF](https://docs.kernel.org/userspace-api/seccomp_filter.html)
+- [Red Hat Documentation: Using SELinux](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/using_selinux/index)
+- [gVisor Documentation: Architecture Guide](https://gvisor.dev/docs/architecture_guide/)
+- [Kata Containers Documentation: What is Kata Containers?](https://katacontainers.io/docs/)
+- [Kyverno Documentation: Validate Rules](https://kyverno.io/docs/policy-types/cluster-policy/validate/)
+- [Open Policy Agent Gatekeeper Documentation](https://open-policy-agent.github.io/gatekeeper/website/docs/)
