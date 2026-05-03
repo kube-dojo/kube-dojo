@@ -694,7 +694,7 @@ A strong review might identify Source-to-Build as the weakest boundary if workfl
 - [SLSA specification](https://slsa.dev/spec/v1.0/)
 - [Sigstore documentation](https://docs.sigstore.dev/)
 - [OpenSSF Scorecard documentation](https://github.com/ossf/scorecard)
-- [CNCF Software Supply Chain Best Practices](https://github.com/cncf/tag-security/blob/main/supply-chain-security/supply-chain-security-paper/README.md)
+- [CNCF Software Supply Chain Security Paper](https://tag-security.cncf.io/community/working-groups/supply-chain-security/supply-chain-security-paper/)
 
 ## Next Module
 
