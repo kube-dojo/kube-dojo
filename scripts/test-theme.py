@@ -344,7 +344,7 @@ def test_no_broken_builds():
     # Check that astro.config.mjs is valid (has required fields)
     config = read_file(REPO_ROOT / "astro.config.mjs")
     checks = [
-        ("Site URL configured", re.search(r"https?://kube-dojo\\.github\\.io(?:/|\\b)", config) is not None),
+        ("Site URL configured", re.search(r"https?://kube-dojo\\.github\\.io(?:/|\b)", config) is not None),
         ("i18n configured", "defaultLocale" in config and "locales" in config),
         ("Custom CSS configured", "customCss" in config),
         ("Hero override registered", "'./src/components/Hero.astro'" in config),

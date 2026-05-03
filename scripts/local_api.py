@@ -1809,16 +1809,21 @@ def _safe_review_path_for_module_key(repo_root: Path, module_key: str) -> Path |
     normalized = _validate_module_key(repo_root, module_key)
     if normalized is None:
         return None
-    reviews_dir = repo_root / _REVIEW_AUDIT_DIR
+    try:
+        reviews_dir = (repo_root / _REVIEW_AUDIT_DIR).resolve()
+    except OSError:
+        return None
     filename = _module_key_to_review_filename(normalized)
     if "/" in filename or "\\" in filename:
         return None
     if not _SAFE_REVIEW_FILENAME_RE.fullmatch(filename):
         return None
-    for existing in reviews_dir.glob("*.md"):
-        if existing.name == filename:
-            return existing
-    return None
+    try:
+        path = (reviews_dir / filename).resolve()
+        path.relative_to(reviews_dir)
+    except ValueError:
+        return None
+    return path
 
 
 def _fact_check_summary(review_body: str) -> dict[str, Any]:
