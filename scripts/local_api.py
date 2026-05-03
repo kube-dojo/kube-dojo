@@ -2025,6 +2025,7 @@ _388_COUNT_KINDS = (
     "merged", "merge_held_nits", "merge_held", "module_skip",
     "codex_error", "gemini_error", "worktree_error",
 )
+_388_PR_NUMBER_RE = re.compile(r"#(\d+)")
 
 
 def _load_388_events(log_path: Path) -> list[dict[str, Any]]:
@@ -2117,10 +2118,134 @@ def _388_rel(repo_root: Path, log_path: Path) -> str:
         return str(log_path)
 
 
+def _merged_pr_numbers_from_git(repo_root: Path) -> set[int]:
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%s", "--grep=388", "--regexp-ignore-case"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return set()
+    if result.returncode != 0:
+        return set()
+    return {
+        int(match)
+        for subject in result.stdout.splitlines()
+        for match in _388_PR_NUMBER_RE.findall(subject)
+    }
+
+
+def _fetch_388_pr_states() -> dict[int, dict[str, Any]]:
+    status_code, payload = _run_gh_json(
+        "pr",
+        "list",
+        "--state",
+        "all",
+        "--search",
+        "388 in:title",
+        "--limit",
+        "200",
+        "--json",
+        _gh_json_fields("number", "state", "mergedAt", "url"),
+        timeout=15,
+    )
+    if status_code != 200 or not isinstance(payload, list):
+        return {}
+
+    states: dict[int, dict[str, Any]] = {}
+    for item in payload:
+        if not isinstance(item, dict) or not isinstance(item.get("number"), int):
+            continue
+        states[item["number"]] = {
+            "state": item.get("state"),
+            "merged_at": item.get("mergedAt") or None,
+            "url": item.get("url") or "",
+        }
+    return states
+
+
+def _annotate_388_held_prs(
+    repo_root: Path,
+    held_prs: list[dict[str, Any]],
+    *,
+    pr_states: dict[int, dict[str, Any]] | None = None,
+    merged_from_git: set[int] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, int], str]:
+    if pr_states is None:
+        pr_states = _fetch_388_pr_states()
+    if merged_from_git is None:
+        merged_from_git = set() if pr_states else _merged_pr_numbers_from_git(repo_root)
+    source = "github" if pr_states else "git_log"
+    annotated: list[dict[str, Any]] = []
+    rollup = {"total": 0, "open": 0, "merged": 0, "closed": 0, "unknown": 0, "resolved": 0}
+
+    for held in held_prs:
+        item = dict(held)
+        pr = item.get("pr")
+        if not isinstance(pr, int):
+            status = "unknown"
+        elif pr in pr_states:
+            gh_state = str(pr_states[pr].get("state") or "").lower()
+            merged_at = pr_states[pr].get("merged_at")
+            item["url"] = pr_states[pr].get("url", "")
+            status = "merged" if merged_at or gh_state == "merged" else gh_state or "unknown"
+        elif pr in merged_from_git:
+            status = "merged"
+        else:
+            status = "unknown"
+
+        if status not in {"open", "merged", "closed"}:
+            status = "unknown"
+        item["resolution_status"] = status
+        item["resolved"] = status in {"merged", "closed"}
+        annotated.append(item)
+
+        rollup["total"] += 1
+        rollup[status] += 1
+        if item["resolved"]:
+            rollup["resolved"] += 1
+
+    return annotated, rollup, source
+
+
+def _apply_388_live_counts(
+    event_counts: dict[str, int], held_prs: list[dict[str, Any]]
+) -> dict[str, int]:
+    counts = dict(event_counts)
+    for held in held_prs:
+        if not held.get("resolved"):
+            continue
+        kind = "merge_held_nits" if held.get("kind") == "nits" else "merge_held"
+        counts[kind] = max(0, counts.get(kind, 0) - 1)
+        if held.get("resolution_status") == "merged":
+            counts["merged"] = counts.get("merged", 0) + 1
+    return counts
+
+
 def _list_388_batches(repo_root: Path) -> list[dict[str, Any]]:
+    summaries: list[tuple[Path, dict[str, Any]]] = [
+        (log_path, _summarize_388_events(_load_388_events(log_path)))
+        for log_path in _388_log_paths(repo_root)
+    ]
+    has_held_prs = any(summary["held_prs"] for _, summary in summaries)
+    pr_states = _fetch_388_pr_states() if has_held_prs else {}
+    merged_from_git = set() if pr_states or not has_held_prs else _merged_pr_numbers_from_git(repo_root)
+
     batches: list[dict[str, Any]] = []
-    for log_path in _388_log_paths(repo_root):
-        summary = _summarize_388_events(_load_388_events(log_path))
+    for log_path, summary in summaries:
+        held_prs, held_rollup, resolution_source = _annotate_388_held_prs(
+            repo_root,
+            summary["held_prs"],
+            pr_states=pr_states,
+            merged_from_git=merged_from_git,
+        )
+        summary["event_counts"] = dict(summary["counts"])
+        summary["counts"] = _apply_388_live_counts(summary["counts"], held_prs)
+        summary["held_rollup"] = held_rollup | {"resolution_source": resolution_source}
         summary.pop("held_prs", None)
         summary["log_path"] = _388_rel(repo_root, log_path)
         summary["log_stem"] = log_path.stem
@@ -2134,6 +2259,11 @@ def _load_388_batch(repo_root: Path, log_stem: str) -> dict[str, Any] | None:
         return None
     events = _load_388_events(target)
     summary = _summarize_388_events(events)
+    held_prs, held_rollup, resolution_source = _annotate_388_held_prs(repo_root, summary["held_prs"])
+    summary["held_prs"] = held_prs
+    summary["event_counts"] = dict(summary["counts"])
+    summary["counts"] = _apply_388_live_counts(summary["counts"], held_prs)
+    summary["held_rollup"] = held_rollup | {"resolution_source": resolution_source}
     summary["log_path"] = _388_rel(repo_root, target)
     summary["log_stem"] = target.stem
     # Drop large excerpts from per-event timeline so /batch/{stem} stays small.
