@@ -2,7 +2,10 @@
 title: "Module 3: History as a Choice — Interactive Rebasing"
 sidebar:
   order: 3
+revision_pending: false
 ---
+
+# Module 3: History as a Choice — Interactive Rebasing
 
 **Complexity**: [MEDIUM]
 **Time to Complete**: 90 minutes
@@ -10,37 +13,35 @@ sidebar:
 
 ## Learning Outcomes
 
-- Reconstruct a fragmented commit history into a logical narrative using interactive rebase operations (squash, reword, fixup, drop).
-- Diagnose and resolve merge conflicts that manifest iteratively during a multi-step rebase sequence.
-- Formulate a strategy for excising accidentally committed sensitive data (such as cloud credentials or certificates) from a branch's permanent history.
-- Compare and evaluate the technical trade-offs between merging and rebasing when synchronizing local feature branches with upstream changes.
-- Execute a branch transplant using the `git rebase --onto` operation to migrate active work between divergent base branches.
+- Reconstruct fragmented commit history into a logical narrative using interactive rebase operations such as squash, reword, fixup, drop, and edit.
+- Diagnose and resolve iterative rebase conflicts without creating duplicate commits or breaking the rebase sequence.
+- Formulate a safe strategy for removing accidentally committed sensitive data from an unpublished branch's permanent history.
+- Compare and evaluate merging, rebasing, and `git rebase --onto` when synchronizing feature work with upstream branches.
+- Implement a branch transplant that moves active work away from obsolete base commits after a squash merge.
 
 ## Why This Module Matters
 
-An infrastructure engineer at a mid-sized e-commerce platform was tasked with migrating legacy authentication services to Kubernetes. During the development process, they created a `configmap.yaml` file to hold environment variables. For local testing, they temporarily hardcoded an AWS IAM access key with broad database permissions directly into the file and committed it. Three commits later, realizing the error, they deleted the access key, replaced it with a reference to a Kubernetes Secret, and committed the fix. The branch was pushed, reviewed, approved, and merged. The final state of the code was perfect. However, two weeks later, an automated credential scanner utilized by a malicious actor scraped the repository's historical commits. The scanner found the original commit containing the access key. Over a single weekend, the attackers spun up hundreds of expensive GPU instances across multiple AWS regions, resulting in an eighty thousand dollar cloud bill before the security team intervened. 
+An infrastructure engineer at a mid-sized e-commerce platform was migrating a legacy authentication service onto Kubernetes 1.35+ while also preparing a pull request for a platform team review. For local testing, they added a `configmap.yaml` file and temporarily placed an AWS IAM access key with broad database permissions into the file. The key was removed three commits later, the final manifest used a Secret reference, and the pull request looked clean in the web interface. Two weeks after the branch merged, a credential scanner found the original historical commit, attackers used the exposed key to launch expensive compute in several regions, and the team spent the weekend containing a cloud bill of about eighty thousand dollars.
 
-The engineer operated under a critical misunderstanding: they believed that deleting a line of code and committing the change erased the previous state. It does not. Git is an append-only ledger by default. A commit history is not merely a backup mechanism; it is a permanent audit log and a vital communication tool. A messy history full of "work in progress," "fixed typo," and "trying again" messages obscures the architectural intent of your changes and places an unreasonable cognitive burden on your reviewers. More severely, it leaves behind artifacts that can compromise your entire system.
+The engineer made a common but dangerous assumption: deleting a line and committing the deletion does not erase the line from the branch's earlier commits. Git stores snapshots connected by immutable object identifiers, so the final tree can be correct while the old history still carries a secret, a broken manifest, or a misleading explanation of why a change exists. Reviewers also pay for messy history even when no secret is involved. A pull request made of "WIP", "fix tests", and "try again" commits forces every future maintainer to reconstruct the author's thinking from noise instead of reading a small sequence of purposeful changes.
 
-In this module, you will learn how to wield interactive rebasing to shape your commit history into a clean, secure, and logical narrative. You will move from treating Git as a passive save button to using it as an active editorial tool, ensuring that the code you share with the world is exactly the story you intend to tell.
+Interactive rebasing is the editorial tool that closes that gap between how people develop and how teams review. You still commit early while exploring, because local commits are useful checkpoints. Before sharing the branch, however, you can rewrite those checkpoints into a durable narrative: one commit introduces the Deployment with probes, another adds service routing and configuration, and no commit ever contains the discarded password. This module teaches the mechanics, the safety boundaries, and the decision-making needed to rewrite local history without confusing collaborators or losing work.
 
 ## The Philosophy of History Rewriting
 
-Before we execute commands, we must understand the conceptual shift required for history rewriting. When you develop locally, your commits represent a stream of consciousness. You are solving problems sequentially, making mistakes, backing up, and trying new approaches. This is the correct way to work locally—commit frequently to establish save points. 
+Git encourages frequent local commits because they create reliable save points during uncertain work. That local stream of consciousness is often the right way to solve a problem: you try one readiness probe, discover the container starts slowly, adjust the threshold, and commit again before touching service routing. The reviewer needs something different. They need to see the final argument for the change, not every stumble on the way there, because history becomes documentation once a branch leaves your machine.
 
-However, the history that is useful to you during development is rarely the history that is useful to a reviewer or a future maintainer attempting to understand your architectural decisions. A future engineer performing a `git blame` on a complex Kubernetes Deployment configuration does not need to see that it took you six tries to get the YAML indentation correct. They need a single, cohesive commit that introduces the Deployment with a comprehensive message explaining why specific resource limits were chosen.
+That difference is why rebasing feels more like editing a technical design document than running a synchronization command. A first draft contains paragraphs that repeat themselves, notes that belong in another section, and sentences that are true but distracting. A polished draft preserves the real decisions while removing noise. Interactive rebase does the same for commits by letting you reorder related changes, combine fixups into their parent commits, reword vague messages, drop abandoned experiments, and pause at historical commits that need content changes.
 
-### The Golden Rule of Rebasing
+Rewriting history works by creating new commits rather than changing old commits in place. A commit's SHA is derived from its content, metadata, parent reference, author data, and message, so even a message-only change produces a different identifier. The old commit usually remains reachable through the reflog for a while, but the branch name moves to the newly created sequence. That detail matters because two developers who share an old sequence and a rewritten sequence are no longer looking at the same lineage, even if the final files appear identical.
 
-Rewriting history involves creating entirely new commits with new cryptographic hashes (SHAs). If you rewrite a commit that has already been pushed to a central repository and downloaded by other developers, you create a divergent timeline. 
+The Golden Rule follows directly from that model: never rebase commits that other people already depend on unless the team deliberately coordinates the rewrite. A private feature branch is your notebook, and interactive rebase is fair game. A shared integration branch is a public record, and force-pushing rewritten commits makes everyone else's local clones point at abandoned history. When in doubt, ask whether another person, CI system, release process, or deployment automation could have based work on the current branch tip; if the answer is yes, prefer a merge or a revert unless you have explicit agreement.
 
-**The Golden Rule:** Never rebase commits that exist outside your local repository. 
+Pause and predict: if a branch contains five unpublished commits and you reword only the oldest commit message, how many commit SHAs after that point should you expect to change? The answer is all five, because every later commit names the rewritten commit as an ancestor, directly or indirectly. That cascading effect is the reason a small local edit can be safe before sharing and disruptive after sharing.
 
-If you rebase a shared branch and force-push the result, the next time your colleagues attempt to pull, Git will see their local history and the new remote history as two completely separate sets of work. It will attempt to merge them, resulting in massive, confusing conflicts and a duplicated commit history. Rebasing is a tool for preparing your personal workspace before you share it. Once a branch is public and actively collaborated on by others, you must rely on standard merges or revert commits to move forward.
+## Merging, Rebasing, and the Shape of Review
 
-### Merging vs. Rebasing
-
-When you need to integrate changes from a main branch into your feature branch, you have two primary mechanisms.
+When a feature branch falls behind `main`, Git gives you two ordinary ways to integrate upstream changes. A merge preserves the exact historical topology by creating a new commit with two parents. That is valuable when you need an auditable record of when two lines of development were joined, especially on long-lived release branches or shared integration branches. The cost is that repeated merges can create a graph full of diamonds, making it harder to answer simple questions such as "which commit introduced this regression?"
 
 ```mermaid
 flowchart LR
@@ -51,7 +52,7 @@ flowchart LR
     end
 ```
 
-A merge preserves the exact chronological history. It creates a new "merge commit" that has two parents. This is factually accurate but can lead to a tangled, "diamond-patterned" commit graph that is difficult to read.
+A rebase takes the commits that are unique to your branch, temporarily sets them aside, advances the branch base to the target commit, and replays your work one commit at a time. The result is a linear history where your feature appears to have started from the current `main`. That shape makes `git log`, `git bisect`, release note generation, and code review easier because each commit can be inspected without detouring through merge commits that only synchronize branches.
 
 ```mermaid
 flowchart LR
@@ -59,37 +60,42 @@ flowchart LR
         direction LR
         M1[M1] --> M2[M2] --> M3[M3]
         M3 --> C1_new["C1'"] --> C2_new["C2'"]
-        
+
         M1 -.-> C1[C1] -.-> C2[C2]
     end
-    
+
     classDef discarded fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5,color:#999;
     class C1,C2 discarded;
 ```
 
-A rebase takes your feature branch commits, temporarily sets them aside, updates your branch to point to the latest main branch commit, and then replays your work on top of it. This creates a perfectly linear history, which makes tools like `git log` and `git bisect` significantly more effective. The trade-off is that it rewrites history—the original SHAs of your commits are destroyed and replaced with new ones.
+The tradeoff is that rebasing converts a historical fact into a reviewed story. The original chronological order may have been "ConfigMap, Deployment, service, fix Deployment", while the reviewed order should probably be "Deployment, service, configuration". That is acceptable when the branch is private because no one else has relied on the discarded chronology. It is not acceptable when the branch has become a collaboration point, because the rewritten commits will not match the commits your teammates have already fetched.
 
-> **Pause and predict**: What do you think happens if a merge conflict occurs during a rebase? Does it happen once at the end, or differently?
->
-> *Answer: Because a rebase replays commits one by one, if multiple commits touch the same file that was modified in the main branch, you may have to resolve conflicts for every single commit being replayed. This iterative conflict resolution is the primary pain point of rebasing.*
+In Kubernetes work, this distinction is especially practical. A reviewer looking at a Deployment commit wants to evaluate selectors, labels, probes, resources, and rollout behavior as one coherent unit. If the liveness probe lands three commits later with a message like "fix stuff", the reviewer has to jump through history to decide whether the Deployment was ever intentionally incomplete. Before running Kubernetes examples in this module, define the conventional shortcut `alias k=kubectl`; after that, commands like `k apply -f deployment.yaml` and `k get deploy web-app` refer to the same `kubectl` client, targeting Kubernetes 1.35+ clusters.
+
+Pause and predict: what do you think happens if a merge conflict occurs during a rebase? It does not wait until the end like a single final reconciliation. Because Git replays commits one by one, it can pause on the first conflicting commit, ask you to resolve that exact historical step, continue, and then pause again if a later commit touches the same region differently. That iterative conflict model is the main pain point of rebasing and the main reason a tidy local history lowers review risk.
+
+| Approach | What Git Preserves | Best Fit | Main Tradeoff |
+| :--- | :--- | :--- | :--- |
+| Merge | Original branch topology and both parent lines. | Shared branches, release branches, or integration points where topology matters. | History can become visually noisy and harder to bisect. |
+| Rebase | A linear sequence replayed onto a new base. | Private feature branches being prepared for review. | Commit SHAs change, so shared work can diverge if force-pushed. |
+| Interactive rebase | A deliberately edited sequence of commits. | Cleaning local history, removing mistakes, and writing reviewable commits. | Requires careful command selection and conflict handling. |
+| `rebase --onto` | Only commits after a specified old base. | Moving dependent work after a base branch was squashed or replaced. | Easy to choose the wrong old upstream if you have not inspected the graph. |
 
 ## The Interactive Rebase Interface
 
-The standard `git rebase <branch>` command operates automatically. Interactive rebasing, invoked with the `-i` or `--interactive` flag, pauses the process and opens a text editor, allowing you to intercept and modify the instructions Git uses to replay the commits.
-
-To begin an interactive rebase against the main branch, you execute:
+The standard `git rebase main` command performs an automatic replay, but interactive rebase lets you edit the replay plan before Git starts. You invoke it with `-i` or `--interactive`, and Git opens a text editor containing an instruction sheet. Each line names one commit and one action. By changing the actions and the order of the lines, you decide which commits survive, which messages change, which commits merge together, and where Git should stop for manual surgery.
 
 ```bash
 git rebase -i main
 ```
 
-Alternatively, to rewrite the last 5 commits on your current branch regardless of the upstream base, you can use the relative reference `HEAD`:
+Sometimes the branch's upstream is not the range you want to edit. If you only need to rewrite the most recent five commits, use a relative reference so Git builds the instruction sheet from that local window. This is useful when `main` is far behind or when you are polishing the top of a stack before pushing a review update.
 
 ```bash
 git rebase -i HEAD~5
 ```
 
-When the text editor opens, you will see an instruction sheet that looks like this:
+When the editor opens, the oldest commit appears at the top and the newest appears at the bottom, which is the reverse of the default `git log` view many engineers know. Git reads the sheet from top to bottom, so moving a line changes the order in which that commit is replayed. This small interface detail carries a lot of power. A fixup commit must sit immediately under the commit it should be absorbed into, and a squash command always combines with the commit directly above it.
 
 ```text
 pick 3a2b1c4 Add initial deployment.yaml
@@ -111,11 +117,7 @@ pick 8a9b0c1 Add liveness and readiness probes
 # d, drop <commit> = remove commit
 ```
 
-**Crucial detail:** The commits are listed from oldest at the top to newest at the bottom. This is the inverse of `git log`. Git reads this file from top to bottom, applying each instruction sequentially.
-
-### The Command Arsenal
-
-Understanding the subtle differences between these commands is essential for effective history shaping.
+The command vocabulary is small, but the differences matter. `squash` and `fixup` both combine content, yet `squash` asks you to reconcile messages while `fixup` discards the lower commit's message. `edit` does not mean "open this commit in an editor"; it means "apply this commit, stop the replay, and let me change the index and working tree before continuing." `drop` is final for the rewritten branch, although the reflog can usually rescue you soon after a mistake.
 
 | Command | Action | Primary Use Case |
 | :--- | :--- | :--- |
@@ -127,49 +129,39 @@ Understanding the subtle differences between these commands is essential for eff
 | `drop` | Completely ignores the commit. It will not be replayed. | Deleting experimental code or accidental commits entirely. (You can also just delete the line in the editor). |
 | `exec` | Runs an arbitrary shell command after the previous line is applied. | Running a test suite or linter automatically after every commit to ensure the build isn't broken mid-history. |
 
+The replay loop is simple once you separate the plan from the execution. Git detaches `HEAD` at the chosen base, reads the first instruction, creates a replacement commit for that instruction, and advances through the list. If an instruction requires human input, Git pauses. If the list finishes successfully, Git moves the original branch name to the new final commit and leaves the old commits unreferenced except through safety mechanisms such as the reflog.
+
 ```mermaid
 flowchart TD
     Start["[HEAD] Current State"] --> Step1["1. Detach HEAD at the chosen base commit."]
     Step1 --> Step2["2. Read the instructions from the text editor."]
     Step2 --> Step3["3. Apply the first commit in the list."]
-    
+
     Step3 --> IsPick{"Is it 'pick'?"}
     IsPick -- Yes --> ApplyPick["Apply and move to next."]
-    
+
     IsPick -- No --> IsSquash{"Is it 'squash'?"}
     IsSquash -- Yes --> ApplySquash["Apply, wait for message edit."]
-    
+
     IsSquash -- No --> IsEdit{"Is it 'edit'?"}
     IsEdit -- Yes --> ApplyEdit["Apply, STOP execution, return control."]
-    
+
     ApplyPick --> Step4["4. Repeat until the list is empty."]
     ApplySquash --> Step4
-    
+
     Step4 -- "List not empty" --> Step3
     Step4 -- "List empty" --> Step5["5. Point the original branch reference to the new HEAD."]
-    
+
     Step5 --> Step6["6. Garbage collect the old orphaned commits eventually."]
 ```
 
-## Crafting the Perfect Pull Request
+Before running an interactive rebase on meaningful work, check three things. First, make sure the branch is private or explicitly coordinated. Second, make sure your working tree is clean, because unrelated unstaged edits complicate conflict recovery. Third, inspect the branch range with `git log --oneline --decorate main..HEAD` so you know which commits will appear. That quick inspection prevents the classic mistake of rebasing the wrong side of the relationship.
 
-Let us walk through a practical scenario. We are building a Kubernetes application tier. Our current branch history is the messy list shown earlier. We want to clean this up into a concise, logical history before opening a Pull Request.
+## Crafting a Reviewable Pull Request
 
-Our goals for this rebase:
-1. Combine the indentation fix into the initial deployment commit.
-2. Completely remove the hardcoded password from history, keeping only the final secure state of the ConfigMap.
-3. Combine the probes into the deployment commit.
-4. Reword the final deployment commit message to be descriptive.
+Consider a branch that introduces a Kubernetes application tier. The final files are acceptable, but the history is noisy: one commit creates `deployment.yaml`, another fixes indentation, another adds `service.yaml`, another commits a ConfigMap with a password, a later commit removes the password, and the last commit adds health probes. If you opened that pull request unchanged, the reviewer would need to inspect both the flawed intermediate state and the corrected final state. Interactive rebase lets you submit the logical version instead.
 
-We run `git rebase -i HEAD~6`.
-
-### Step 1: Reordering and Fixing Up
-
-To achieve our goals, we must physically move lines around in the text editor. We move the `fixup` for the deployment indentation immediately under the deployment creation. We move the probe addition up as well.
-
-We must handle the secret carefully. The secret was added in `1d2c3b4` and removed in `7e6d5c4`. If we `squash` or `fixup` the removal commit into the addition commit, the resulting combined commit will represent the net difference: the secret will never have existed. 
-
-We edit the file to look like this:
+The goals for this rewrite are concrete. The indentation fix belongs inside the initial Deployment commit because the reviewer does not need a separate record of broken YAML. The liveness and readiness probes also belong with the Deployment because they are part of the workload contract. The ConfigMap password addition and removal should collapse so the rewritten branch never contains the plaintext value at all. The remaining messages should explain intent rather than development sequence.
 
 ```text
 reword 3a2b1c4 Add initial deployment.yaml
@@ -180,30 +172,27 @@ pick 1d2c3b4 Add configmap.yaml with hardcoded db password
 fixup 7e6d5c4 Remove password, use secret reference
 ```
 
-> **Pause and predict**: Look at the first block (reword, fixup, fixup). What will the final commit message be?
->
-> *Answer: Because we used `reword` on the first commit and `fixup` on the subsequent ones, Git will open an editor for the first commit allowing us to write a new message, and it will completely discard the messages "Fix YAML indentation..." and "Add liveness...". The result is a single commit with our brand new message.*
+Look carefully at the first block. Because the first line is `reword`, Git applies that commit and asks for a new message. Because the next two lines are `fixup`, their file changes are folded into that replacement commit and their messages are discarded. The resulting commit can be named something like `feat: implement application Deployment with health checks`, which is much more useful than preserving a three-step record of adding, fixing, and then completing the same manifest.
 
-### Step 2: Execution and Rewording
+The secret cleanup requires a sharper mental model. If the password was added in one commit and removed in the next, fixing up the removal into the addition makes the combined patch represent the net effect. In the rewritten history, the ConfigMap commit contains the secure final state and no intermediate plaintext password. This is valuable for an unpublished branch, but it is not a complete incident response procedure for a secret that has already been pushed or exposed; in that case, rotate the credential immediately and treat history rewriting as only one containment step.
 
-When we save and close the editor, Git begins executing the plan. It detaches HEAD at the base commit and starts applying.
+To formulate a safe strategy for removing accidentally committed sensitive data, separate the repository cleanup problem from the credential exposure problem. Repository cleanup asks whether the sensitive data can be removed from every surviving commit before anyone else depends on the branch. Credential exposure asks whether the value might already have been copied to a remote, a log, a pull request diff, a CI cache, a notification, or another developer's machine. Interactive rebase can solve the first problem on a private branch, but it cannot prove the second problem is harmless. A careful engineer rewrites the unpublished branch, verifies the sensitive string is absent from `git log -p`, rotates the credential if exposure is possible, and documents the incident path so the same class of mistake is less likely next time.
 
-1. It applies `3a2b1c4`. Because we specified `reword`, it immediately opens an editor. We change the message to: `feat: Implement Core Application Deployment with Health Checks`. We save and close.
-2. It applies `9f8e7d6`. Because it's a `fixup`, it merges the file changes into the new commit without asking for a message.
-3. It applies `8a9b0c1` as another `fixup`.
-4. It applies `5c4b3a2` normally.
-5. It applies `1d2c3b4`.
-6. It applies `7e6d5c4`. Because it's a `fixup` attached to the ConfigMap creation, the addition and immediate deletion of the secret cancel each other out.
+This distinction also changes how you talk about the pull request. Do not write "removed secret" in a public commit message if that message itself advertises a security event that needs a quieter response path. Prefer a normal functional message such as `feat: configure application environment from Secret reference`, and handle the exposure discussion in the team's security process. The history should reveal the intended architecture, not the discarded accident. If you need a reviewer to pay special attention to a sensitive cleanup, coordinate directly rather than relying on a commit message that may be indexed, mirrored, or copied into external tooling.
 
-The resulting history is exactly two clean commits: the Deployment and the Service/ConfigMap combination. The sensitive credential has been permanently excised from the branch's history.
+When Git executes the plan, it starts at the chosen base and works through the reordered list. It applies `3a2b1c4`, pauses for the new Deployment message, absorbs the indentation fix, absorbs the probes, applies the Service commit, applies the ConfigMap commit, and then absorbs the password-removal commit. If a conflict appears, Git stops at the exact replay step that failed, which means the conflict is interpreted in the context of that historical commit rather than the branch's final state.
 
-## Advanced Maneuvers: Surgical Edits and Transplants
+Pause and predict: if you used `squash` instead of `fixup` for the two Deployment follow-up commits, what would change? The file content would end up the same, but Git would open a message editor containing the original messages from the squashed commits. That can be useful when multiple commits contain meaningful explanations, but it is noise when the lower commits are "fix typo" or "try probe again."
 
-### The `edit` Command: Splitting Commits
+A professional pull request history is not necessarily one commit. It is a sequence where each commit builds, each message explains a reviewable decision, and each commit boundary matches a concept the team might later revert or inspect. For this example, two clean commits may be better than one: one for the Deployment and one for Service plus configuration. In a larger change, you might keep manifests, tests, and documentation separate if those boundaries help review and future recovery.
 
-Sometimes you make a monolithic commit that contains changes for two entirely separate features. You need to split it. This is where the `edit` command shines.
+The reviewer experience is the best test of whether the rewrite went far enough. Imagine opening the pull request in six months while diagnosing why a rollout policy was chosen. If the Deployment commit includes health checks, labels, and resource intent, the reviewer can evaluate the workload as a complete operating unit. If the Service and ConfigMap commit shows only the secure final environment contract, the reviewer does not waste time on a secret that should never have been part of the branch. Good history compresses development noise without compressing the reasoning that future engineers need.
 
-During an interactive rebase, mark the monolithic commit with `edit`. When Git reaches that commit, it will apply the changes and then pause, returning you to the terminal.
+There is also a testing reason to keep commit boundaries coherent. When `git bisect` lands on a commit that introduces only a half-finished manifest, the tool may report a failure that has nothing to do with the regression being hunted. When every surviving commit represents a buildable or at least reviewable state, debugging tools become more reliable. This is why `exec` checks pair naturally with interactive rebase: they help enforce that your cleaned-up story is not merely tidy but operationally useful.
+
+## Surgical Edits, Splits, and Conflict Recovery
+
+The `edit` command is the right tool when combining commits is not enough. Suppose you made one large commit called "Add service and ingress manifests", but the Service and Ingress should be reviewed separately. During interactive rebase, mark that commit with `edit`. Git will apply it, stop, and return you to a shell with the large commit as `HEAD`. Your job is to replace that commit with a better sequence before telling the rebase engine to continue.
 
 ```bash
 Stopped at 5c4b3a2... Add service and ingress manifests
@@ -213,7 +202,7 @@ Once you are satisfied with your changes, run
   git rebase --continue
 ```
 
-At this point, the files are modified in your working directory, and the monolithic commit is the current HEAD. To split it, you must essentially "uncommit" the changes without losing the file modifications. 
+To split the commit, reset the branch pointer back one commit while leaving the files modified in the working tree. Then stage and commit the Service, stage and commit the Ingress, and continue the rebase. The key is that you are replacing the paused commit, not adding unrelated commits after it. If you skip the reset and simply start committing, the original large commit remains in history and your new commits sit on top of it, creating the duplication you were trying to avoid.
 
 ```bash
 # Reset HEAD to the previous commit, leaving files modified in the working tree
@@ -231,25 +220,38 @@ git commit -m "feat: Expose application via Ingress"
 git rebase --continue
 ```
 
-> **Pause and predict**: What happens if you forget to run `git reset HEAD~1` and just start staging and committing files directly during the `edit` pause?
-> 
-> *Answer: If you skip the reset, the original monolithic commit remains intact as your current HEAD. Any new commits you make will be added on top of it, rather than replacing it. You will end up adding duplicate or fragmented commits instead of actually splitting the original one.*
+The same pause mechanism helps when you need to remove a secret from the exact commit that introduced it. Mark the offending commit with `edit`, let Git stop, modify the file so the credential is gone, stage the corrected file, and run `git commit --amend`. That amendment creates a replacement commit at the same position in the rewritten sequence. Then `git rebase --continue` replays the remaining commits on top of the sanitized history.
 
-You have successfully rewritten a single historical commit into two distinct, logical commits.
+When you amend a paused commit, verify the result before continuing if the change is security-sensitive. `git show --stat` tells you which files the replacement commit touches, while `git show --patch` lets you inspect the exact diff that will become part of the rewritten sequence. For a secret-removal edit, search for the sensitive string before and after continuing, because later commits can accidentally reintroduce a value or move it into another file. That extra inspection takes seconds on a small branch and prevents the false confidence that comes from fixing only the first visible occurrence.
 
-### Transplanting with `--onto`
+Splitting commits deserves the same discipline. After `git reset HEAD~1`, the working tree contains every change from the paused commit, so your staging choices define the replacement history. Use `git diff` to inspect unstaged changes and `git diff --cached` to inspect the commit you are about to create. If the Service commit accidentally includes an Ingress annotation, stop and adjust the index before committing. Interactive rebase is powerful because it lets you revise history, but it rewards engineers who treat the index as a precise staging area rather than a dumping ground.
 
-The `git rebase --onto` command is a powerful tool for transplanting a sequence of commits from one base to another. This is highly useful in a microservices environment where feature branches often depend on other feature branches.
+Conflict recovery during a rebase has a strict rhythm. Read `git status`, open the files containing conflict markers, resolve the content, stage the resolved files, and run `git rebase --continue`. Do not run `git commit` unless Git specifically tells you the current pause is an `edit` step where you are intentionally amending or replacing a commit. In ordinary conflict resolution, the rebase engine is already constructing the commit that failed, and `--continue` hands the corrected index back to that engine.
 
-Imagine you are working on `feature-db-migration`. Another team member is working on `feature-api-update`, which branches off your migration branch because it needs the new database schema. 
+```bash
+CONFLICT (content): Merge conflict in deployment.yaml
+error: could not apply 3a2b1c4... Add memory limits
+```
 
-Your colleague merges `feature-db-migration` into `main`, but they use a "Squash and Merge" strategy on GitHub. Your original commit SHAs are gone, replaced by a single new SHA on main. Your `feature-api-update` branch is now based on ghost commits that no longer exist in the upstream history.
+When this happens, you are in a detached `HEAD` state at the specific historical step that could not be replayed. That state is expected, not a sign that your branch disappeared. Resolve the conflict markers, stage the result, and continue. If the same conflict appears several times because several commits touched the same block, consider enabling recorded resolutions with `git rerere` before future long rebases so Git can reuse a conflict solution it has already seen.
 
-> **Pause and predict**: What do you think would happen if you ran a standard `git rebase main` right now?
-> 
-> *Answer: Git would see your original `feature-db-migration` commits as distinct from the squashed commit on main because their SHAs differ. It would attempt to replay them all on top of main, resulting in massive conflicts because main already has those exact code changes in a different form.*
+```bash
+git rebase --abort
+```
 
-You need to sever the API updates from the old ghost commits and graft them directly onto `main`.
+The abort command is the emergency exit. It terminates the rebase operation and returns the branch, index, and working tree to the state they had before the rebase started. Use it when you chose the wrong range, conflict resolution is going badly, or you discover the branch is not actually private. Aborting is not failure; it is a controlled rollback that protects your work while you reassess the plan.
+
+Before running this on your own branch, what output do you expect from `git status` after a conflict is resolved and staged but before `git rebase --continue`? You should expect Git to report that all conflicts are fixed while the rebase is still in progress. That message is your cue that the index is ready and the rebase engine is waiting for permission to create the replacement commit.
+
+If conflicts repeat across several commits, pause and ask whether the current commit sequence is too fragmented. Sometimes the right move is to abort, run a smaller interactive rebase that squashes related commits together, and then rebase the simpler sequence onto `main`. A conflict repeated five times is often a signal that five local commits are all editing the same conceptual change. Reducing that noise before the upstream replay can turn an exhausting conflict session into one deliberate resolution.
+
+Recorded conflict resolutions can help, but they are not a substitute for understanding. `git rerere` stores how you resolved a conflict and can apply the same resolution when Git sees the same conflict shape again. That is useful on long-running branches, yet it can also reuse a stale resolution if the surrounding intent changed. Treat rerere as a memory aid rather than an autopilot: inspect the result, run the relevant checks, and continue only when the resolved file still matches the design you want.
+
+## Transplanting Work with `git rebase --onto`
+
+The most confusing rebase failures often happen after a dependent branch is merged with a squash strategy. Imagine `feature-api-update` was branched from `feature-db-migration` because the API work needed the new schema. Later, `feature-db-migration` is approved and merged into `main` using Squash and Merge. The final changes are on `main`, but the original migration commit SHAs are not, because the platform replaced them with one new commit during the squash.
+
+If you run a plain `git rebase main` from `feature-api-update`, Git compares commit identities, not just patch intent. It sees the old migration commits in your branch and does not recognize them as the same as the squashed commit on `main`. As a result, it may try to replay migration work that already exists in a different form, producing large conflicts and making the API commits harder to isolate.
 
 ```mermaid
 flowchart LR
@@ -265,100 +267,136 @@ flowchart LR
         M1_A[M1] --> M2_A["M2 (Squashed DB Migration)"]
         M2_A --> A1_A["A1'"] --> A2_A["A2'"]
     end
-    
+
     classDef ghost fill:#f9f9f9,stroke:#999,stroke-dasharray: 5 5,color:#999;
     class D1_B,D2_B ghost;
 ```
+
+The `--onto` form solves the problem by naming three things: the new base, the old upstream boundary, and the branch to move. You are telling Git to take commits reachable from the branch but not reachable from the old upstream, then replay only those commits onto the new base. In the dependent-branch example, that means "take the API commits that came after `feature-db-migration`, and move them directly onto `main`."
 
 The syntax is:
 `git rebase --onto <new-base> <old-upstream> <branch-to-move>`
 
 In our scenario:
+
 ```bash
 git rebase --onto main feature-db-migration feature-api-update
 ```
-This command translates to: "Take all the commits on `feature-api-update` that are NOT on `feature-db-migration`, and replay them on top of `main`." 
 
-## Resolving Conflicts During a Rebase
+This command translates to: "Take all the commits on `feature-api-update` that are NOT on `feature-db-migration`, and replay them on top of `main`." The wording is worth memorizing because it prevents the most common `--onto` mistake. The second argument is not the branch you want to land on; it is the boundary that marks what should be excluded from the replay.
 
-Because a rebase replays commits sequentially, you may encounter conflicts midway through the process. Git will pause and alert you:
+Use `git log --oneline --graph --decorate --all` before a transplant if the topology is unclear. You are looking for the first commit that belongs to the dependent work and the last commit that belongs to the old base. In a high-pressure incident branch, write the command in a scratch note before executing it, because reversing the second and third arguments can move a much larger range than intended.
 
-```bash
-CONFLICT (content): Merge conflict in deployment.yaml
-error: could not apply 3a2b1c4... Add memory limits
+A reliable transplant workflow starts with naming the old boundary in plain language. For example, "everything up to `feature-db-migration` is already represented by the squashed commit on `main`; everything after that boundary is API work that still needs review." Once you can say that sentence, the command becomes less mysterious. The new base is `main`, the old upstream boundary is `feature-db-migration`, and the branch to move is `feature-api-update`. If you cannot say the sentence confidently, inspect the graph again before running the command.
+
+After a successful `--onto`, review the resulting history from two angles. First, check the graph to confirm the dependent commits now sit directly on the intended base. Second, inspect the diff between the new branch and `main` to confirm it contains only the active work, not a replay of the old base branch. This second check catches a surprisingly common mistake: the command may succeed mechanically while moving too much history because the old upstream boundary was chosen one commit too early.
+
+The same idea appears outside squash merges. You may use `--onto` to move a patch series from a release branch to `main`, to detach an experimental feature from another engineer's abandoned branch, or to recover a stack after the lower layer was replaced by a cleaner implementation. In every case, the operation is safer when you think in sets: commits reachable from the branch, minus commits reachable from the old upstream, replayed onto the new base. That set-based model is more dependable than memorizing a command shape.
+
+## Patterns & Anti-Patterns
+
+Interactive rebase scales well when teams treat it as a private-branch polishing step with explicit review goals. The best pattern is to commit freely while developing, then rewrite only the commits that explain the final change. In Kubernetes curriculum or platform work, that often means one commit for workload manifests, one for service exposure, one for policy or RBAC, and one for tests or documentation. Each commit should represent a meaningful unit that can be reviewed, bisected, or reverted without dragging along unrelated edits.
+
+A second strong pattern is to preserve buildability across the rewritten sequence. The `exec` command can run a fast test, linter, or manifest validation command after selected commits, stopping the rebase when a commit breaks the repository. That makes history more than pretty; it makes history useful for future debugging. If every commit builds, a future `git bisect` session can identify regressions without landing on half-assembled checkpoints.
+
+A third pattern is to pair history rewriting with credential discipline. If a secret was committed locally, rewrite the branch so the secret never appears in any surviving commit, then rotate the secret anyway if it was ever pushed, copied, logged, or exposed to a remote scanner. History rewriting changes repository evidence; it does not prove the credential was never observed. Mature teams combine rebasing, secret scanning, token rotation, and post-incident review rather than treating Git cleanup as the entire fix.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+| :--- | :--- | :--- | :--- |
+| Private polish before PR | Your branch has not been pulled by collaborators. | Reviewers see purposeful commits rather than development noise. | Coordinate before force-pushing if CI or preview environments already track the branch. |
+| Fixup-driven cleanup | Follow-up commits only repair or complete an earlier idea. | The final commit contains the complete concept with one message. | Keep related fixups adjacent so reviewers can inspect the final patch cleanly. |
+| `edit` for commit surgery | One historical commit contains unrelated changes or a local secret. | You can amend, split, or replace the commit at its original position. | Use a clean working tree and check `git status` at each pause. |
+| `exec` for buildable history | Each commit should pass a fast validation command. | Rebase stops at the first broken step instead of hiding breakage in the middle. | Choose quick checks; slow full suites make interactive editing painful. |
+
+The dangerous anti-pattern is treating rebase as a magic cleanup button after work is already shared. A force-push to a branch another engineer has pulled can invalidate their local base, duplicate commits, and create conflicts that appear unrelated to the original change. Another anti-pattern is squashing everything into one commit by habit. A single commit can be appropriate for a tiny change, but it becomes a liability when reviewers need to evaluate independent decisions or when operators may later need to revert one part without losing another.
+
+A subtler anti-pattern is using `drop` or line deletion as a casual cleanup mechanism. Dropping an experiment is fine when you truly want it gone, but accidentally deleting a line in the instruction sheet removes the commit from the rewritten branch. If you complete the rebase and notice missing work, use the reflog promptly to find the pre-rebase branch tip. The old commits are usually recoverable for a while, but recovery is easier when you stop immediately instead of piling new changes onto the rewritten branch.
+
+Another anti-pattern is polishing history so aggressively that the review loses useful context. If a commit changes a Deployment probe because production traffic showed slow startup, the message should say why the threshold changed. Hiding that reasoning inside a giant squash commit may make the log shorter, but it makes operations harder later. The goal is not the fewest possible commits; the goal is the most useful sequence of commits for review, rollback, and diagnosis.
+
+Teams should also avoid making rebase policy implicit. Some teams welcome force-pushed updates to draft pull requests, while others treat any remote branch as shared once CI has built it. Both policies can work if they are stated clearly. Trouble starts when one engineer assumes a remote branch is private and another engineer assumes it is safe to base follow-up work on it. A short team convention such as "interactive rebase before review, no history rewrite after review starts" prevents most of that confusion.
+
+## Decision Framework
+
+Choose the history operation by asking who depends on the branch, what shape the reviewer needs, and whether the problem is content, order, or base topology. If the branch is public and actively used, prefer merge or revert because those operations add history instead of replacing it. If the branch is private and the final pull request would be easier to review with cleaner commits, use interactive rebase. If the branch depends on an old base that was squashed or replaced, use `git rebase --onto` after confirming the old upstream boundary.
+
+```mermaid
+flowchart TD
+    A["Need to change branch history?"] --> B{"Has anyone else based work on it?"}
+    B -- "Yes" --> C["Prefer merge, revert, or explicit team coordination."]
+    B -- "No" --> D{"Is the final file state wrong?"}
+    D -- "Yes" --> E["Fix files normally, then consider rebase for cleanup."]
+    D -- "No" --> F{"Is the commit story noisy or unsafe?"}
+    F -- "Yes" --> G["Use interactive rebase: reword, fixup, squash, edit, or drop."]
+    F -- "No" --> H{"Did the old base get squashed or replaced?"}
+    H -- "Yes" --> I["Use git rebase --onto with a verified old upstream boundary."]
+    H -- "No" --> J["Leave history alone or run a normal rebase to update from main."]
 ```
 
-When this happens, you are in a detached HEAD state at the specific step of the rebase that failed. 
+| Situation | Recommended Operation | Why | Check Before Proceeding |
+| :--- | :--- | :--- | :--- |
+| Private branch has noisy WIP commits | `git rebase -i main` | Produces reviewable commits before sharing. | Confirm no teammate has pulled the branch. |
+| Shared branch needs upstream changes | `git merge main` or coordinated rebase | Avoids surprising collaborators with new SHAs. | Ask whether CI, preview deploys, or teammates depend on the current tip. |
+| Old commit contains a local-only secret | `git rebase -i`, mark commit `edit`, amend | Removes the secret from surviving branch history. | Rotate the credential if exposure could have happened outside your machine. |
+| Dependent branch follows a squashed base | `git rebase --onto main old-base branch` | Moves only dependent commits onto the new base. | Inspect the graph and identify the exact old upstream. |
+| One commit mixes unrelated changes | `edit`, `git reset HEAD~1`, recommit pieces | Replaces one confusing commit with several logical commits. | Verify each new commit builds or at least has a coherent patch. |
 
-1. Open the conflicting files and resolve the merge markers (`<<<<<<<`, `=======`, `>>>>>>>`).
-2. Stage the resolved files using `git add deployment.yaml`.
-3. Do **not** run `git commit`. The rebase engine is managing the commits.
-4. Tell the engine to proceed by running `git rebase --continue`.
+Which approach would you choose here and why: your feature branch has ten messy commits, CI has run on the remote branch, but no teammate has pulled it and the PR is still a draft? A coordinated interactive rebase is reasonable if your team accepts force-push updates to draft PRs, but you should still mention the rewrite in the PR conversation. The key decision is not whether the branch exists remotely; it is whether anyone or anything important depends on the current commit identities.
 
-> **Stop and think**: Why do you use `git rebase --continue` instead of `git commit` after resolving a conflict?
-> 
-> *Answer: The rebase engine is in the middle of a loop, constructing the commit for you based on the rebase plan. If you manually run `git commit`, you create a new commit outside of that plan, which can break the sequence and lead to duplicated or tangled history. `git rebase --continue` tells the engine you have resolved the issue so it can finalize the commit it was currently working on.*
-
-If you realize the rebase was a mistake and you are hopelessly lost in conflicts, you can always bail out safely:
-
-```bash
-git rebase --abort
-```
-This command instantly terminates the rebase operation and returns your branch to exactly the state it was in before you typed `git rebase -i`.
+When the decision involves sensitive data, add one more question: has the value escaped the local repository? If the answer is definitely no, interactive rebase can be the right repository cleanup. If the answer is yes or unknown, formulate a safe strategy that includes rotation, notification, and audit steps in addition to rewriting unpublished commits. This layered response keeps the Git technique in its proper place. History editing can remove evidence from the branch you will submit, but security recovery must assume copied credentials remain usable until they are revoked.
 
 ## Did You Know?
 
-- The Linux kernel project strictly forbids merge commits from contributors. All patches submitted to the kernel must be rebased by the author to maintain a perfectly linear history, which ensures the `git bisect` tool can efficiently hunt down regressions.
-- The `fixup` command was introduced in Git version 1.7.0 specifically because developers were tired of the repetitive manual labor of deleting commit messages in the text editor every time they used the `squash` command.
-- You can configure Git to automatically set up rebasing whenever you pull from a remote repository by executing `git config --global pull.rebase true`. This saves you from accidentally creating unnecessary merge commits when syncing your local feature branch with upstream changes.
-- The `exec` command in interactive rebase allows you to run a shell command (like a syntax linter or a unit test suite) after every single commit is applied. If the test fails, the rebase pauses, allowing you to fix the broken commit immediately, ensuring your history is buildable at every step.
+- Git 1.7.0, released in 2010, added autosquash support with `--fixup` and `--squash` workflows that later became central to fast interactive cleanup.
+- Git stores rewritten commits as new objects, and the default reflog expiration policy often keeps reachable reflog entries for 90 days, giving you a recovery window after many local mistakes.
+- The Linux kernel workflow strongly favors linear, reviewable patch series from contributors, which is one reason rebasing and patch cleanup are treated as everyday engineering skills in that ecosystem.
+- `git rebase --exec` can run a command after each replayed commit, so a fast manifest check can catch the exact commit that first breaks a Kubernetes 1.35+ deployment example.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
 | :--- | :--- | :--- |
-| **Force pushing a shared branch** | You rebased a branch that others are already working on, rewriting the history they depend on. | Communicate immediately. If others haven't done much work, they can `git fetch` and `git reset --hard origin/branch`. If they have, you may need to revert the force push via the reflog. |
-| **Using squash when fixup was intended** | Misunderstanding the difference. You end up in an editor screen cluttered with five different "fixed typo" messages that you have to manually delete. | Close the editor, abort the rebase (`git rebase --abort`), and restart using `fixup` (or `f`) instead. |
-| **Getting stuck in an edit loop** | Using the `edit` command, making changes, but running `git commit` instead of `git commit --amend`. This adds a new commit rather than modifying the paused one. | Use `git reset HEAD~1` to unstage the erroneous commit, make your changes, run `git commit --amend`, and then `git rebase --continue`. |
-| **Resolving the same conflict iteratively** | Multiple commits touch the same file in a way that conflicts with the new base. You have to resolve the exact same block of code 3 times. | Enable `git rerere` (Reuse Recorded Resolution). Run `git config --global rerere.enabled true`. Git will remember how you solved the conflict the first time and automatically apply it. |
-| **Dropping commits unintentionally** | Deleting a line in the interactive rebase text editor thinking it only deletes the message, not realizing it drops the entire commit. | Abort the rebase if caught immediately. If completed, use `git reflog` to find the SHA of the branch before the rebase and `git reset --hard` back to it. |
-| **Rebasing in the wrong direction** | Running `git rebase feature-branch` while checked out on `main`, instead of the other way around. | Abort immediately. If completed, use `git reflog` to reset `main` back to its original state. |
+| **Force pushing a shared branch** | You rebased a branch that others are already working on, rewriting the history they depend on. | Communicate immediately. If others have no local work, they can fetch and reset deliberately. If they do, coordinate a recovery plan instead of pushing again. |
+| **Using squash when fixup was intended** | Misunderstanding the difference leaves you in an editor full of low-value messages such as "fixed typo" and "try again". | Abort if you are still early, restart with `fixup`, or carefully edit the combined message so only the meaningful explanation remains. |
+| **Getting stuck in an edit loop** | You mark a commit with `edit`, make changes, and create new commits without replacing the paused commit. | Use `git reset HEAD~1` when splitting, or `git commit --amend` when changing the paused commit, then continue the rebase. |
+| **Resolving the same conflict repeatedly** | Several commits touch the same lines that changed on the new base, so each replay step conflicts. | Consider enabling `git rerere`, but also ask whether those commits should be squashed before rebasing to reduce repeated conflict surfaces. |
+| **Dropping commits unintentionally** | Deleting a line in the instruction sheet feels like deleting text, but it removes that commit from the replay. | Abort immediately if still in progress. If completed, inspect `git reflog` and recover the pre-rebase branch tip before doing more work. |
+| **Rebasing in the wrong direction** | You run a rebase while checked out on the wrong branch, moving `main` or another base instead of your feature branch. | Stop, inspect `git status` and `git branch --show-current`, then abort or recover with the reflog if the operation already completed. |
+| **Treating secret cleanup as incident response** | Rewriting local history feels decisive, so teams forget that exposed credentials may already be copied elsewhere. | Rewrite unpublished history for cleanliness, but rotate the credential and follow the security process if the secret ever left your machine. |
 
 ## Quiz
 
-<details>
-<summary>Question 1: You are rebasing a feature branch onto main. Midway through, Git pauses and reports a conflict in `service.yaml`. You open the file, resolve the conflict, and save it. What is your exact next step to resume the rebase?</summary>
-The correct next steps are to stage the resolved file using `git add service.yaml`, and then immediately execute `git rebase --continue`. You must explicitly avoid running `git commit` in this situation, because the interactive rebase engine is already actively managing the commit construction process on your behalf. Running a manual commit command will prematurely finalize the current state of the detached HEAD, creating a new commit outside of the planned rebase sequence. This manual intervention disrupts the automated playback of commits, inevitably leading to a tangled, duplicated history. By using `--continue`, you hand control back to the rebase engine so it can correctly package your resolved changes into the commit it was currently applying.
+<details><summary>Question 1: Your team is reviewing a private branch with six commits: a Deployment, an indentation fix, probes, a Service, a ConfigMap with a temporary password, and a password removal. How would you reconstruct the history so the reviewer sees the final intent and the password never appears in a surviving commit?</summary>
+Use interactive rebase and group each repair directly under the commit it completes. The Deployment should be marked `reword`, with the indentation fix and probe commit marked `fixup` below it so the final Deployment commit is coherent. The ConfigMap password addition and removal should be adjacent, with the removal fixed up into the addition so the net surviving commit never contains the password. This tests whether you can reconstruct fragmented commit history into a logical narrative while preserving the secure final state.
 </details>
 
-<details>
-<summary>Question 2: You are preparing a PR for a new microservice. Your local branch has three sequential commits: Commit A (Add base Deployment manifest), Commit B (WIP testing resource limits), and Commit C (Fix memory limits in Deployment). You want to combine all three into a single cohesive commit with a brand new, detailed message. Which sequence of interactive rebase commands should you use in the instruction sheet?</summary>
-You should set the instruction for Commit A to `reword`, and set both Commit B and Commit C to `fixup`. The `reword` instruction tells Git to apply the initial base commit but pause execution to open your text editor, allowing you to write a brand new, comprehensive commit message. Meanwhile, the `fixup` commands instruct the rebase engine to meld the subsequent file changes from B and C directly into the modified Commit A. Crucially, `fixup` automatically discards the useless 'WIP' and 'Fix' commit messages rather than appending them. This sequence leaves you with a single, clean commit that contains all the structural modifications seamlessly integrated under your newly drafted message.
+<details><summary>Question 2: Midway through a rebase, Git reports a conflict in `service.yaml`. You resolve the markers and save the file. What should you do next, and why should you avoid a normal commit?</summary>
+Stage the resolved file with `git add service.yaml`, check `git status`, and run `git rebase --continue`. A normal `git commit` is wrong because the rebase engine is already in the middle of creating the replacement commit for the failed replay step. Manual commits can add an extra commit outside the planned sequence, which makes the rewritten history harder to reason about. `--continue` tells Git that the index now contains the resolved version for the commit it was applying.
 </details>
 
-<details>
-<summary>Question 3: While working on a feature branch, you accidentally committed a production API token in Commit 2. You are currently on Commit 6 and haven't pushed yet. You start an interactive rebase, change Commit 2's instruction to `edit`, and Git pauses the rebase at that exact point in time. What sequence of commands do you run to permanently remove the token from this commit and safely resume?</summary>
-First, open the file containing the sensitive token, securely delete the credential, and save the changes to disk. Next, stage this corrected file using `git add <filename>` so that Git tracks the removal. Then, you must forcefully modify the currently paused commit by executing `git commit --amend`, which physically replaces the vulnerable commit with your newly sanitized version rather than creating an extraneous new commit on top of it. Modifying the commit in place ensures the credential is fully eradicated from that point in the branch's timeline. Finally, instruct the rebase engine to replay the remainder of your history based on this new, clean commit by running `git rebase --continue`.
+<details><summary>Question 3: A local-only commit three steps back introduced an API token, and a later commit removed it. How do you formulate a safe strategy for removing accidentally committed sensitive data from this unpublished branch?</summary>
+Leaving both commits preserves the token in the earlier snapshot, even though the final file no longer contains it. Fixing up the removal into the addition makes the rewritten commit represent the secure net result, so the token is absent from surviving branch history. Because the branch has not been pushed, rewriting the commits does not disrupt collaborators, but the strategy is only safe if you also ask whether the sensitive data escaped through logs, remotes, screenshots, or CI. If there is any chance the token left your machine, rotate it because Git cleanup does not undo external exposure.
 </details>
 
-<details>
-<summary>Question 4: You are halfway through a complex interactive rebase involving a dozen commits. During a particularly nasty conflict resolution involving a 500-line Kubernetes StatefulSet, you realize you've accidentally deleted critical sections and the files are a mess. You want to completely bail out and return to the exact state before you ever typed the rebase command. What do you do?</summary>
-You should execute the `git rebase --abort` command to safely and immediately terminate the ongoing operation. This command acts as an emergency escape hatch when you become overwhelmed by complex merge conflicts or realize you made a fundamental error in your rebase instruction sheet. By executing this abort sequence, Git decisively halts the rebase engine and clears out all temporary state files it was tracking. It then cleanly resets your working directory, index, and branch pointer back to the exact state they were in immediately before you initiated the rebase. This ensures that absolutely no data or historical context is lost due to a botched rebase attempt.
+<details><summary>Question 4: You marked a large "service and ingress" commit with `edit`, and Git stopped at that commit. You want two commits instead of one. What sequence replaces the original commit without duplicating it?</summary>
+Run `git reset HEAD~1` so the large commit is undone while its file changes remain in the working tree. Then stage only the Service files and commit them with a focused message, stage only the Ingress files and commit them with a separate focused message, and run `git rebase --continue`. This replaces the paused commit with two better commits at the same historical position. If you skip the reset, the original large commit remains and your new commits merely add more history after it.
 </details>
 
-<details>
-<summary>Question 5: You pushed your `feature-auth` branch to the remote repository yesterday, and your colleague pulled it to help test some authentication flows locally. Today, looking at your commit history, you realize it is full of messy 'WIP' commits. Should you run an interactive rebase to clean up your local history before opening the Pull Request?</summary>
-No, you should never run an interactive rebase on a branch that has already been shared and pulled by collaborators. Doing so directly violates the Golden Rule of rebasing, which explicitly forbids rewriting history that exists outside your personal local repository. Because your colleague has already pulled the `feature-auth` branch, rewriting your local history and force-pushing it will cause their local repository state to diverge catastrophically from the updated remote. When they attempt to pull or push again, Git will fail to reconcile the divergent timelines, resulting in an unmanageable web of duplicate commits and merge conflicts. To resolve this cleanly, you must either strictly coordinate with them to delete their local branch and pull your newly rebased version, or simply accept the messy history and proceed with standard merge commits.
+<details><summary>Question 5: Your colleague pulled your branch yesterday to test authentication flows. Today you want to clean up five WIP commits before opening the pull request. Should you interactive rebase and force-push?</summary>
+Not without explicit coordination. Once your colleague has based work on the branch, rewriting the commit SHAs will make their local history diverge from the remote branch. The safer default is to keep the shared history and use a merge or follow the team's agreed recovery process. If the team decides the cleanup is worth it, coordinate a planned force-push and tell your colleague exactly how to reset or rebase their local work.
 </details>
 
-<details>
-<summary>Question 6: Your engineering team uses a strict 'Squash and Merge' policy for all Pull Requests. You recently branched `backend-v2` off of another feature branch, `backend-v1`. The `backend-v1` branch was just approved, squashed, and merged into `main`. You now need to update `backend-v2` with the latest changes from `main`. Why is executing a standard `git rebase main` a bad idea in this specific scenario?</summary>
-A standard `git rebase main` is highly problematic here because the original sequential commits of `backend-v1` were squashed upon merging, meaning their distinct cryptographic SHAs no longer exist anywhere on the main branch. Instead, those historical commits were entirely replaced by a single, monolithic commit bearing a completely different SHA. If you perform a standard rebase, Git will fail to recognize that the changes are already present and will attempt to blindly replay your original `backend-v1` commits—which are still lingering in `backend-v2`'s local history—directly onto main. This redundant application guarantees massive, complex merge conflicts, because main already contains those exact code changes in a condensed structural form. To safely maneuver around this, you must use the `git rebase --onto` command to surgically sever the history and transplant only the specific `v2` commits onto the new base branch.
+<details><summary>Question 6: A dependent branch was based on `feature-db-migration`, but that base branch was squash-merged into `main`. A normal `git rebase main` now tries to replay old database commits and creates conflicts. Which operation should you use?</summary>
+Use `git rebase --onto main feature-db-migration feature-api-update`, substituting the real branch names from your repository. The old upstream argument marks the commits that should be excluded from the replay, while `main` is the new base. This moves only the commits unique to the dependent branch onto the squashed result. The command is correct because it compares reachability boundaries rather than assuming the old commit SHAs still exist on `main`.
+</details>
+
+<details><summary>Question 7: During a complex rebase, you realize the instruction sheet selected the wrong range and conflict resolution is becoming unsafe. What is the safest recovery action, and what should you inspect before trying again?</summary>
+Run `git rebase --abort` to return the branch, index, and working tree to the state they had before the rebase started. After aborting, inspect `git status`, confirm the current branch, and review the intended range with a log command such as `git log --oneline main..HEAD`. That inspection helps you identify whether the problem was the wrong base, the wrong branch, or an overly large rewrite. Retrying after a clean abort is much safer than improvising through conflicts you no longer trust.
 </details>
 
 ## Hands-On Exercise
 
-In this exercise, you will create a messy commit history containing Kubernetes manifests and a leaked secret, and then use interactive rebasing to sculpt it into a clean, professional history.
+In this exercise, you will create a messy commit history containing Kubernetes manifests and a leaked secret, then use interactive rebasing to sculpt it into a clean, professional history. Work in a safe empty directory because the lab intentionally creates and rewrites commits. The manifests are deliberately small so you can focus on Git behavior instead of Kubernetes syntax, but the workflow mirrors real Kubernetes 1.35+ pull request cleanup.
 
 ### Setup
 
@@ -416,27 +454,26 @@ git add service.yaml && git commit -m "finish service ports"
 
 ### Tasks
 
-You currently have 6 messy commits on the `feature-web-app` branch. Your goal is to use `git rebase -i main` to reduce this history to exactly two clean commits.
+You currently have six messy commits on the `feature-web-app` branch. Your goal is to use `git rebase -i main` to reduce this history to exactly two clean commits after the initial README commit. The first clean commit should contain the Deployment with its label repair, and the second clean commit should contain the Service plus the ConfigMap in its secure final state.
 
-1. **Start the Rebase**: Initiate an interactive rebase against the `main` branch.
-2. **Consolidate the Deployment**: Reorder the instructions so the deployment typo fix (Commit 3) immediately follows the initial deployment commit (Commit 1). Use `fixup` to meld them.
-3. **Consolidate the Service**: Reorder the instructions so the service port addition (Commit 6) immediately follows the initial service commit (Commit 4). Use `fixup` to meld them.
-4. **Purge the Secret**: Reorder the ConfigMap commits so the removal (Commit 5) immediately follows the addition (Commit 2). Use `fixup` to meld the removal into the addition. This ensures the plaintext password never exists in the final history.
-5. **Rename the Commits**: Use the `reword` command on the remaining primary commits to give them professional, descriptive messages.
-   - Commit 1 should be named: `feat: Add Web Application Deployment`
-   - Commit 2 should be named: `feat: Configure Application Services and Environment` (You can squash/fixup the service and configmap commits together).
+1. **Start the Rebase**: Initiate an interactive rebase against the `main` branch and confirm the editor shows the six feature commits in oldest-to-newest order.
+2. **Consolidate the Deployment**: Reorder the instructions so the deployment typo fix immediately follows the initial deployment commit, then use `fixup` to meld it into the Deployment commit.
+3. **Consolidate the Service**: Reorder the instructions so the service port addition immediately follows the initial service commit, then use `fixup` to meld it into the Service commit.
+4. **Purge the Secret**: Reorder the ConfigMap commits so the removal immediately follows the addition, then use `fixup` so the plaintext password never appears in the final rewritten history.
+5. **Rename the Commits**: Use `reword` on the remaining primary commits so the two surviving feature messages are `feat: Add Web Application Deployment` and `feat: Configure Application Services and Environment`.
 
 ### Success Criteria
 
 - [ ] Run `git log --oneline`. You should see exactly three commits total: the initial README commit, the Deployment commit, and the Service/ConfigMap commit.
 - [ ] Run `git log -p`. Verify that the string `super-secret-admin-pass` does not appear anywhere in the diff history.
 - [ ] There should be no commits containing the messages "fix typo", "wip", or "finish service".
+- [ ] `git status` should report a clean working tree on `feature-web-app`.
 
-<details>
-<summary>Solution Guide</summary>
+<details><summary>Solution Guide</summary>
 
 1. Run `git rebase -i main`.
-2. The initial text editor will look like this (abbreviated hashes):
+2. The initial text editor will look like this, with abbreviated hashes:
+
 ```text
 pick 1111111 add deployment
 pick 2222222 wip: add configmap for db
@@ -445,7 +482,9 @@ pick 4444444 add service
 pick 5555555 remove password from configmap
 pick 6666666 finish service ports
 ```
+
 3. Edit the file to reorder and change commands. Move related items together. Use `reword` for the base items and `fixup` for the modifications.
+
 ```text
 reword 1111111 add deployment
 fixup 3333333 fix typo in deployment labels
@@ -454,7 +493,9 @@ fixup 6666666 finish service ports
 pick 2222222 wip: add configmap for db
 fixup 5555555 remove password from configmap
 ```
-*(Note: To combine the Service and ConfigMap into one commit as requested in the final step, you could change the `pick` on the configmap to a `fixup` attached to the service).*
+
+To combine the Service and ConfigMap into one commit as requested, change the `pick` on the ConfigMap to a `fixup` attached to the service commit.
+
 ```text
 reword 1111111 add deployment
 fixup 3333333 fix typo in deployment labels
@@ -463,13 +504,28 @@ fixup 6666666 finish service ports
 fixup 2222222 wip: add configmap for db
 fixup 5555555 remove password from configmap
 ```
+
 4. Save and close the editor.
 5. Git will pause twice to let you edit the commit messages for the two items you marked with `reword`.
-6. Enter `feat: Add Web Application Deployment` for the first, and `feat: Configure Application Services and Environment` for the second.
-7. Verify success with `git log -p`.
+6. Enter `feat: Add Web Application Deployment` for the first message and `feat: Configure Application Services and Environment` for the second.
+7. Verify success with `git log --oneline`, `git log -p`, and `git status`.
 
 </details>
 
+## Sources
+
+- [Git documentation: git-rebase](https://git-scm.com/docs/git-rebase)
+- [Git documentation: git-commit](https://git-scm.com/docs/git-commit)
+- [Git documentation: git-reset](https://git-scm.com/docs/git-reset)
+- [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog)
+- [Git documentation: git-config, rerere.enabled](https://git-scm.com/docs/git-config)
+- [Git book: Rewriting History](https://git-scm.com/book/en/v2/Git-Tools-Rewriting-History)
+- [GitHub Docs: About pull request merges](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/about-merge-methods-on-github)
+- [GitHub Docs: Removing sensitive data from a repository](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
+- [Kubernetes Docs: ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
+- [Kubernetes Docs: Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+- [Kubernetes Docs: Configure liveness, readiness, and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
+
 ## Next Module
 
-Now that you can sculpt a perfect history, it is time to learn how to recover when things go horribly wrong in [Module 4: The Safety Net](../module-4-undo-recovery/).
+Now that you can sculpt a perfect history, it is time to learn how to recover when things go wrong in [Module 4: The Safety Net](../module-4-undo-recovery/).
