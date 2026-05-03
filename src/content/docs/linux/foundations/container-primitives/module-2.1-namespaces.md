@@ -486,7 +486,7 @@ flowchart TD
 
 The mount namespace story is different. Containers in a pod usually have separate root filesystems because each container comes from its own image. They share files only through volumes that Kubernetes mounts into both containers. This is why a logging sidecar cannot read an application file merely because it is in the same pod. Both containers need a shared volume mounted at agreed paths.
 
-The Kubernetes examples in this module target Kubernetes 1.35 and newer behavior unless a cluster distribution documents a different runtime default. If you adapt the manifests into a live lab, define the usual shell shortcut with `alias k=kubectl` first and use `k` for cluster commands, while keeping Linux namespace inspection commands as plain host commands.
+The Kubernetes examples in this module target Kubernetes 1.35 and newer API behavior unless a cluster distribution documents a different runtime default. Linux namespace inspection commands still run as host commands.
 
 ```yaml
 apiVersion: v1
@@ -612,57 +612,89 @@ This sequence is slower than guessing for the first five minutes and faster for 
 
 ## Quiz
 
+### Question 1
+
+Your team deploys a web container that normally shuts down cleanly on a developer laptop. In Kubernetes, rolling updates wait for the grace period and then kill the container. Inside the container, `ps` shows the application process as PID 1. What namespace-related behavior should you investigate, and what change would you recommend?
+
 <details>
-<summary>Your team deploys a web container that normally shuts down cleanly on a developer laptop. In Kubernetes, rolling updates wait for the grace period and then kill the container. Inside the container, `ps` shows the application process as PID 1. What namespace-related behavior should you investigate, and what change would you recommend?</summary>
+<summary>Show answer</summary>
 
 The process is running as PID 1 inside its PID namespace, so it has init-like responsibilities and special signal behavior. The investigation should check whether the application handles `SIGTERM` and reaps child processes correctly when it is PID 1. A practical fix is to add a minimal init such as `tini` or `dumb-init`, or to update the application entrypoint so it handles termination and children correctly. This recommendation aligns the Kubernetes shutdown path with Linux PID namespace behavior instead of simply increasing the grace period.
 
 </details>
 
+### Question 2
+
+A database listens on `127.0.0.1:5432` on a node. A container on that node tries to connect to `127.0.0.1:5432` and gets connection refused. A teammate says the node firewall must be blocking loopback traffic. What namespace concept should you apply before changing firewall rules?
+
 <details>
-<summary>A database listens on `127.0.0.1:5432` on a node. A container on that node tries to connect to `127.0.0.1:5432` and gets connection refused. A teammate says the node firewall must be blocking loopback traffic. What namespace concept should you apply before changing firewall rules?</summary>
+<summary>Show answer</summary>
 
 Apply the network namespace concept. `127.0.0.1` refers to loopback inside the caller's current network namespace, not to the physical node in every context. If the container is in its own network namespace, it is connecting to its own loopback interface, not the node's loopback listener. You should inspect the container's network namespace with `nsenter -t <pid> -n` or a container exec command, then choose a real reachable address, Service, host gateway pattern, or deliberate `hostNetwork` design if justified.
 
 </details>
 
+### Question 3
+
+An application container writes `/var/log/app/current.log`. A sidecar in the same pod tails `/var/log/app/current.log` but reports that the file does not exist. Both containers share the same pod IP. Which assumption is wrong, and how would you fix the pod design?
+
 <details>
-<summary>An application container writes `/var/log/app/current.log`. A sidecar in the same pod tails `/var/log/app/current.log` but reports that the file does not exist. Both containers share the same pod IP. Which assumption is wrong, and how would you fix the pod design?</summary>
+<summary>Show answer</summary>
 
 The wrong assumption is that same-pod containers automatically share their filesystem view. They share the pod network namespace, but they usually have separate mount namespaces and separate image filesystems. The fix is to define a Kubernetes volume, such as `emptyDir`, mount it into the application at the path where logs are written, and mount the same volume into the sidecar at the path it tails. That makes file sharing explicit instead of relying on network namespace sharing.
 
 </details>
 
+### Question 4
+
+A minimal production image has no `ip`, `ss`, `tcpdump`, package manager, or useful shell. The service cannot connect to an upstream endpoint, and rebuilding the image would take too long. How can you inspect the container's routes and sockets without modifying the image?
+
 <details>
-<summary>A minimal production image has no `ip`, `ss`, `tcpdump`, package manager, or useful shell. The service cannot connect to an upstream endpoint, and rebuilding the image would take too long. How can you inspect the container's routes and sockets without modifying the image?</summary>
+<summary>Show answer</summary>
 
 Find the host PID of the container's main process, then use `nsenter` to enter only its network namespace while running host-installed tools. For example, `sudo nsenter -t "$PID" -n ip route` and `sudo nsenter -t "$PID" -n ss -lntp` use the host binaries against the target network namespace. This preserves the running workload and avoids installing packages in the image. If the route table or socket state differs from the host, you have evidence that the issue is namespace-local.
 
 </details>
 
+### Question 5
+
+A security review finds that a compromised process is UID `0` inside a container. However, when it tries to read a host-mounted file owned by real host root, the kernel denies access. What should the reviewer inspect before concluding the denial is accidental?
+
 <details>
-<summary>A security review finds that a compromised process is UID `0` inside a container. However, when it tries to read a host-mounted file owned by real host root, the kernel denies access. What should the reviewer inspect before concluding the denial is accidental?</summary>
+<summary>Show answer</summary>
 
 The reviewer should inspect the container process's user namespace mapping, especially `/proc/<pid>/uid_map` and `/proc/<pid>/gid_map`. With user namespaces, UID `0` inside the container can map to an unprivileged host UID outside the container. Host filesystem permission checks use the mapped outside identity, so access to files owned by host root can be denied even though the process appears as root inside. The reviewer should also check capabilities and mount configuration before making a complete security judgment.
 
 </details>
 
+### Question 6
+
+A node-level monitoring agent needs to see host processes and network interfaces. An engineer suggests running it as a normal pod and mounting `/proc` from the host. Another engineer suggests enabling both `hostPID` and `hostNetwork`. How would you evaluate these options?
+
 <details>
-<summary>A node-level monitoring agent needs to see host processes and network interfaces. An engineer suggests running it as a normal pod and mounting `/proc` from the host. Another engineer suggests enabling both `hostPID` and `hostNetwork`. How would you evaluate these options?</summary>
+<summary>Show answer</summary>
 
 The requirement maps to PID and network namespace visibility, so `hostPID` and possibly `hostNetwork` may be justified for a node-level agent. Mounting host `/proc` alone can create a misleading or partial view if the process namespace and `/proc` mount do not match the tool's expectations. However, host namespace sharing weakens isolation and should be limited to trusted system agents with appropriate security controls. The evaluation should state the exact observations the agent needs, enable only the required host namespaces, and document the security trade-off.
 
 </details>
 
+### Question 7
+
+You run `unshare --pid bash` expecting the shell to become PID 1, but the process view does not look isolated. A teammate says PID namespaces are disabled on the machine. What should you check about the command before accepting that conclusion?
+
 <details>
-<summary>You run `unshare --pid bash` expecting the shell to become PID 1, but the process view does not look isolated. A teammate says PID namespaces are disabled on the machine. What should you check about the command before accepting that conclusion?</summary>
+<summary>Show answer</summary>
 
 Check whether the command used `--fork` and whether `/proc` was remounted for the new PID namespace. With `unshare --pid`, the new PID namespace applies to child processes, so `--fork` is needed for the shell to start inside it as the first process. Tools such as `ps` also read `/proc`, so `--mount-proc` is often needed to make the process listing match the new PID namespace. A better test is `sudo unshare --pid --fork --mount-proc bash`, followed by `ps -ef` and `echo $$`.
 
 </details>
 
+### Question 8
+
+A team enables `hostNetwork: true` on an application pod because it fixes a connection problem during a deadline. The next deployment fails because another pod on the same node already uses the required port. What namespace lesson should guide the rollback and permanent fix?
+
 <details>
-<summary>A team enables `hostNetwork: true` on an application pod because it fixes a connection problem during a deadline. The next deployment fails because another pod on the same node already uses the required port. What namespace lesson should guide the rollback and permanent fix?</summary>
+<summary>Show answer</summary>
 
 `hostNetwork: true` moved the pod into the node's network namespace, so the pod now shares the node's port space instead of getting an isolated pod network namespace. The port conflict is an expected consequence of removing network isolation. The rollback should restore normal pod networking if the application does not truly need host networking. The permanent fix should diagnose the original connection problem inside the pod network namespace, then correct DNS, routing, NetworkPolicy, Service configuration, or application target addresses.
 
@@ -747,7 +779,7 @@ sudo ip netns exec kd-lab-net ip addr show lo
 sudo ip netns exec kd-lab-net ping -c 1 8.8.8.8
 ```
 
-Clean up the named namespace when the observation is complete, then confirm that it no longer appears in the list so a later lab does not inherit stale state from this experiment.
+Clean up the named namespace. Confirm it no longer appears in the list.
 
 ```bash
 sudo ip netns delete kd-lab-net
@@ -768,7 +800,7 @@ Create a mount namespace and mount a temporary filesystem. This demonstrates tha
 sudo unshare --mount bash
 ```
 
-Inside the namespace, create and inspect the mount, then read the file through that mount table so the observation is tied to namespace visibility rather than only to a directory path.
+Inside the namespace, create and inspect the mount. Read the file through that mount table.
 
 ```bash
 mkdir -p /tmp/kd-mnt-lab
