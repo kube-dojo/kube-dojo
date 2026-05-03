@@ -1,41 +1,42 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 1.1: Infrastructure as Code"
 slug: prerequisites/modern-devops/module-1.1-infrastructure-as-code
 sidebar:
   order: 2
 ---
-> **Complexity**: `[MEDIUM]` - Foundational concept
+
+> **Complexity**: `[MEDIUM]` - Foundational concept.
 >
-> **Time to Complete**: 30-35 minutes
+> **Time to Complete**: 35-40 minutes.
 >
-> **Prerequisites**: Basic command line skills
+> **Prerequisites**: Basic command line skills, Git basics, and enough YAML familiarity to read indentation.
 
 ---
 
 ## What You'll Be Able to Do
 
 After this module, you will be able to:
-- **Explain** what Infrastructure as Code means and why it replaced manual server configuration
-- **Compare** IaC tools (Terraform, Ansible, Pulumi) and explain when to use each
-- **Write** a simple declarative configuration and explain how it differs from a script
-- **Identify** IaC anti-patterns (clickops, imperative scripts for declarative problems, configuration drift)
 
----
+- **Compare** declarative and imperative infrastructure workflows, including the operational consequences of each choice.
+- **Design** an Infrastructure as Code repository layout that separates environments while still reusing shared modules.
+- **Implement** a Kubernetes declarative change with the standard `k` CLI alias, then verify idempotent reconciliation.
+- **Diagnose** configuration drift by tracing whether production state came from code, a manual change, or a pipeline run.
+- **Evaluate** Terraform, OpenTofu, Ansible, Pulumi, and Kubernetes-native tools for a realistic provisioning or configuration problem.
 
 ## Why This Module Matters
 
-In 2012, Knight Capital Group lost $460 million in just 45 minutes. Why? A technician manually deployed new software to 7 of their 8 servers, forgetting the 8th. The mismatch caused the system to aggressively buy high and sell low. A single manual configuration error destroyed a multi-billion dollar company.
+In 2012, Knight Capital Group lost about $460 million in roughly 45 minutes after new trading software reached only part of its production fleet. A technician manually deployed the change to 7 of 8 servers, leaving one machine with old behavior that activated in the worst possible way. The company was not destroyed by a new algorithm alone; it was destroyed by a release process that allowed supposedly identical servers to become different while everyone believed they were the same.
 
-Before Infrastructure as Code (IaC), setting up servers was manual, error-prone, and impossible to reproduce. "It works on my machine" was everyone's excuse. IaC changed everything—infrastructure became versionable, testable, and repeatable. Understanding IaC is essential because Kubernetes itself is an IaC system.
+That incident is the harsh version of a problem every operations team eventually meets. A database timeout is changed during an outage, a firewall rule is added from a cloud console, or a package is installed by hand on the one machine that seemed urgent at the time. The change solves the immediate problem, but it also creates a hidden branch of reality that no repository, review, or automated rebuild can explain later.
 
-> **Stop and think**: How does your current organization track infrastructure changes? If your primary data center vanished today, could you rebuild it from a repository, or would you rely on someone's memory?
+Infrastructure as Code, usually shortened to IaC, exists to close that gap between intention and reality. Instead of treating servers, networks, clusters, and policies as things people remember how to build, IaC treats them as files that can be reviewed, tested, versioned, and replayed. Kubernetes matters in this course because it is built on the same idea: you submit a desired state, and controllers keep working until the actual state matches it.
 
----
+> **Stop and think**: If your primary environment vanished today, would your team rebuild it from a repository, or would the recovery plan depend on screenshots, old tickets, and someone's memory of which checkbox they clicked last quarter?
 
-## The Old Way: ClickOps
+## The Problem IaC Replaced: ClickOps and Memory
 
-Picture this: It's 2005. You need to set up a web server.
+Before cloud APIs, virtual machines, and Kubernetes controllers became normal, infrastructure work often meant a person performing a sequence of actions directly on a machine. That person might have been careful, experienced, and well intentioned, but the system still depended on memory. If the setup required a package, a kernel setting, a firewall rule, and a hand-edited config file, then the real infrastructure definition lived partly in the machine and partly in someone's head.
 
 ```text
 Manual Process:
@@ -49,17 +50,17 @@ Manual Process:
 Documentation: "Ask Dave, he set it up"
 ```
 
-**Problems**:
-- No record of what was done
-- Can't reproduce the setup
-- Different "identical" servers behave differently
-- Dave goes on vacation; everything breaks
+The old process was not foolish for its time, because teams had fewer automation primitives and slower infrastructure cycles. The problem was that every manual step created an opportunity for undocumented variation. Two web servers could start from the same installation guide, but one might get a newer package mirror, a different file permission, or a missing restart command. The machines looked identical on the architecture diagram while behaving differently under load.
 
----
+ClickOps is the modern version of that same risk. A cloud console is useful for exploration, and a graphical interface can make unfamiliar services less intimidating, but console actions do not automatically become peer-reviewed design decisions. A subnet created by clicking through a wizard may work today, yet the team still has to ask who created it, why it has that CIDR range, whether staging matches it, and how to recreate it after a regional failure.
 
-## Infrastructure as Code
+The practical danger is not that every manual action breaks production immediately. The practical danger is that manual actions break the chain of evidence. When an incident happens, the on-call engineer needs to know what changed, which version introduced it, what the intended state should be, and whether rolling back is safe. A manually edited system can answer those questions only if the human who edited it left perfect records, and production systems should not rely on perfect human memory.
 
-IaC means **describing infrastructure in files that can be versioned, shared, and executed**.
+> **Pause and predict**: Imagine two production web servers built from the same checklist. One receives a manual OpenSSL patch during an incident, and the other does not. What kind of failure would you expect during the next certificate renewal or load balancer health check?
+
+## Infrastructure as Code: Desired State in Version Control
+
+Infrastructure as Code means describing infrastructure in files that can be versioned, shared, reviewed, executed, and used as the source of truth for an environment. The exact file format depends on the tool. Terraform and OpenTofu use HCL, Ansible usually uses YAML playbooks, Pulumi uses general-purpose programming languages, and Kubernetes commonly uses YAML manifests. The shared idea is that the desired shape of the system is written down before the system is changed.
 
 ```mermaid
 flowchart LR
@@ -74,11 +75,15 @@ flowchart LR
     end
 ```
 
----
+The most important shift is that the file becomes more important than the successful one-time action. If a network is created from a reviewed Terraform module, the team can inspect the module, compare revisions, open a pull request for changes, and rebuild the same network in another account. If a Deployment is created from a Kubernetes manifest, the team can see why it has 3 replicas, which image it should run, and whether the running cluster has drifted away from that intent.
 
-## Key Principles
+This is similar to a recipe, but the analogy only goes so far. A human recipe tells a cook what to do, and the cook must notice if the oven is already hot or the pan already contains oil. A good IaC tool reads the current state, compares it with the desired state, and calculates the smallest safe set of actions needed to close the difference. That comparison is what makes IaC operationally different from a shell script that blindly repeats steps.
 
-### 1. Declarative vs Imperative
+The file also creates a social boundary. Infrastructure changes become ordinary code changes, which means they can go through pull requests, review comments, automated checks, and approvals. That process may feel slower than clicking a console button, but it gives the team a shared record of intent. The next engineer does not need to ask whether the current setting is accidental or deliberate, because the answer should be visible in history.
+
+## Declarative, Imperative, and Idempotent Thinking
+
+The first concept to separate is imperative versus declarative work. An imperative instruction tells the system how to perform a sequence of steps. A declarative instruction tells the system what final condition should be true. Both styles can be useful, but infrastructure usually becomes safer when stable resources are described declaratively and the tool is responsible for converging reality toward that description.
 
 ```text
 Imperative (How):
@@ -89,11 +94,9 @@ Declarative (What):
 "I want nginx running with this configuration"
 ```
 
-Declarative is preferred—you describe the desired state, the tool figures out how to get there.
+Imperative scripts are tempting because they mirror the way a human troubleshoots. If nginx is missing, install it; if the file is old, replace it; if the service is stopped, start it. The weakness is that the script author must predict every possible starting state, including partial failures. After enough conditions are added, the script becomes a fragile local controller that only one team member fully trusts.
 
-### 2. Idempotency
-
-Running the same code multiple times produces the same result:
+Declarative systems put that state comparison at the center of the tool. A Terraform plan compares configuration with stored state and provider APIs, then proposes creates, updates, and deletes. Ansible modules are usually written to be idempotent, so asking for a package with `state: present` should not reinstall it on every run. Kubernetes controllers continuously compare desired objects with actual cluster state and keep reconciling after the first apply.
 
 ```bash
 # Running this 10 times creates 10 servers (BAD)
@@ -103,9 +106,11 @@ create_server web-1
 ensure_server_exists web-1
 ```
 
-> **Pause and predict**: If you run an imperative bash script that creates a user twice, it will likely throw a fatal error the second time because the user already exists. What will an idempotent declarative system do?
+Idempotency is the property that makes repeated runs safe. If an operation is idempotent, running it again has the same final effect as running it once. That does not mean nothing happens internally, and it does not mean every change is harmless. It means the tool is designed around the final desired state rather than around blindly replaying an action history.
 
-### 3. Version Control
+> **Pause and predict**: If an imperative bash script creates a Linux user and the pipeline crashes just after the user is created, what happens when the pipeline retries from the beginning? What would an idempotent configuration tool try to prove before making another change?
+
+Version control completes the model because it records the evolution of intent. A plan file or Kubernetes manifest sitting on one laptop is better than memory, but it is still not a team system. Once infrastructure definitions live in Git, ordinary engineering tools become available: pull requests for review, commit history for audit, tags for releases, and diffs for incident investigation.
 
 ```bash
 git log --oneline infrastructure/
@@ -116,9 +121,17 @@ ghi789 Initial infrastructure setup
 # "Who changed production?" - Just check git blame
 ```
 
----
+The operational promise is simple: if production changed, the team should be able to point to the commit, review, pipeline run, or emergency exception that changed it. When that promise is true, infrastructure becomes easier to reason about during stress. When that promise is false, the team is back to detective work across terminals, chat messages, and console history.
 
-## IaC Tools Landscape
+State is the part of this promise that beginners often underestimate. A tool cannot compare desired and actual infrastructure unless it has a way to identify the resources it owns and the attributes it last observed. Terraform and OpenTofu commonly store that knowledge in state, Kubernetes stores desired objects in the API server, and configuration tools often infer state from the target machine during each run. The implementation differs, but the operational question is the same: how does the tool know whether it should create, update, leave alone, or delete something?
+
+This is also why IaC should not be treated as a collection of clever text files. The files, state, provider APIs, credentials, and pipeline permissions form one system. If the files are reviewed but the state is writable from a laptop, the workflow still has a weak point. If the state is locked but the cloud console remains open for routine production edits, the tool will keep discovering surprises. Mature IaC design includes both the code and the control plane around the code.
+
+## The IaC Tool Landscape
+
+IaC is not one tool, and choosing badly can create a new kind of complexity. Some tools are strongest at provisioning infrastructure that exists outside a machine, such as VPCs, subnets, databases, buckets, and load balancers. Some tools are strongest at configuring operating systems after machines exist. Kubernetes-native tools manage cluster objects, package Kubernetes applications, or use Kubernetes itself as the control plane for external infrastructure.
+
+For Kubernetes commands later in this module, define alias k=kubectl in your shell; after that, examples use `k` because it is the standard short form many operators use during daily work. The alias does not change the API call or the safety model. It simply makes repeated commands easier to read while keeping the lesson focused on declarative files, reviewable changes, and reconciliation.
 
 ```mermaid
 flowchart LR
@@ -144,13 +157,7 @@ flowchart LR
     K8s --> Cross["Crossplane (provisions cloud via K8s)"]
 ```
 
----
-
-## Terraform: The Industry Standard
-
-Terraform by HashiCorp (now part of IBM) is the most widely used IaC tool. It uses HCL (HashiCorp Configuration Language), a declarative syntax that natively describes infrastructure.
-
-*Note: In 2023, HashiCorp moved Terraform from an open-source license to a Business Source License (BSL 1.1). In response, the community created **OpenTofu**, an open-source (MPL 2.0) CNCF Sandbox fork that maintains compatibility with Terraform configurations.*
+Terraform became the default mental model for cloud provisioning because it offered a readable declarative language, a provider ecosystem, and a plan/apply workflow across many platforms. In 2023, HashiCorp moved Terraform to the Business Source License, and the community created OpenTofu as an MPL 2.0 fork intended to preserve an open-source path for compatible workflows. In practice, many teams evaluate both Terraform and OpenTofu through the same architectural lens: provider support, state handling, module quality, and governance requirements.
 
 ```hcl
 # main.tf - Terraform configuration
@@ -177,6 +184,10 @@ output "public_ip" {
 }
 ```
 
+The Terraform-style workflow matters because it separates preview from mutation. `init` downloads providers and prepares the working directory, `plan` shows the proposed difference, `apply` changes the environment, and `destroy` removes managed resources. That workflow gives reviewers something concrete to discuss before a pipeline changes production, but it also creates a new responsibility: the state file must be protected, locked, backed up, and treated as sensitive operational data.
+
+State management deserves that caution because state can contain resource identifiers, attributes, dependency relationships, and sometimes sensitive values returned by providers. A local state file on one engineer's laptop might be acceptable for a throwaway experiment, but it is not acceptable for shared production infrastructure. Teams normally move state to a remote backend with locking so two applies cannot race each other. They also restrict access because the state often reveals more about the environment than the source files do.
+
 ```bash
 # Terraform workflow
 terraform init      # Download providers
@@ -184,8 +195,6 @@ terraform plan      # Preview changes
 terraform apply     # Create infrastructure
 terraform destroy   # Tear it all down
 ```
-
-### Why Terraform Wins
 
 | Feature | Terraform / OpenTofu | CloudFormation |
 |---------|----------------------|----------------|
@@ -195,11 +204,9 @@ terraform destroy   # Tear it all down
 | Learning curve | Moderate | AWS-specific |
 | Community | Huge ecosystem | AWS-limited |
 
----
+Ansible solves a different problem. If Terraform creates a virtual machine, security group, and load balancer, Ansible can configure packages, templates, users, services, and application files on the machine. It is agentless by default, which means it can operate over SSH without installing a long-running daemon on each host. That makes it approachable, but it also means inventory accuracy, SSH access, privilege escalation, and playbook idempotency all become part of the reliability story.
 
-## Ansible: Configuration Made Simple
-
-Ansible (backed by Red Hat/IBM) uses YAML "playbooks" to configure machines. It is agentless and executes modules remotely over SSH.
+The boundary between provisioning and configuration is not always clean, and that is where design judgment matters. Terraform can run provisioners, and Ansible can create cloud resources through modules, but using a tool outside its strength can make reviews harder. A good default is to let provisioning tools own long-lived external resources and let configuration tools own what happens inside machines. When there is overlap, choose the tool whose plan, state model, and failure behavior the team can explain during an incident.
 
 ```yaml
 # playbook.yml - Ansible playbook
@@ -239,13 +246,28 @@ Ansible (backed by Red Hat/IBM) uses YAML "playbooks" to configure machines. It 
 ansible-playbook -i inventory.ini playbook.yml
 ```
 
-**Key advantage**: Agentless. Just needs SSH access.
+Pulumi takes another path by letting teams define infrastructure in languages such as TypeScript, Python, Go, Java, and .NET. That can be powerful when infrastructure definitions need loops, reusable libraries, tests, and familiar language tooling. The tradeoff is that ordinary programming abstractions can hide resource graphs if teams are not disciplined, and reviewers may need to understand both the cloud model and the application language style.
 
----
+No tool removes the need for design judgment. A single cloud provider shop may accept CloudFormation or Azure Resource Manager templates because the native integration is worth the platform lock-in. A platform team building self-service infrastructure may choose Crossplane because it wants Kubernetes custom resources to represent cloud services. A small team may start with plain Kubernetes YAML and Kustomize before introducing Helm or a GitOps controller. The right answer depends on the resource lifecycle, the team's skill, and the failure mode the team most needs to control.
 
-## IaC for Kubernetes
+Tool choice also affects who can safely contribute. A central platform team may be comfortable with a complex module system because a small group reviews every infrastructure change. A product team that owns its own service may need simpler manifests and guardrails because many developers will touch the files. The best IaC setup is not the most feature-rich one; it is the one that lets the right people make the right changes with enough review context to avoid accidental damage.
 
-Kubernetes IS Infrastructure as Code:
+Licensing and ecosystem stability are part of evaluation, not trivia. Terraform's license change pushed some organizations to review whether their governance model required OpenTofu, while others stayed with Terraform because their vendor support, modules, or managed workflow already fit. That decision should be explicit. Infrastructure code tends to live for years, so the team should understand upgrade paths, provider compatibility, and what happens if a vendor changes terms or deprecates a service.
+
+One practical way to compare tools is to ask what a new teammate must learn before making a safe one-line change. If they need to understand provider state, cloud quotas, IAM permissions, and replacement behavior, the change belongs behind a deliberate review workflow. If they need to understand an application value in a ConfigMap, the workflow can be lighter but still should be reviewable. IaC does not mean every change has identical ceremony; it means the ceremony matches the risk.
+
+> **Which approach would you choose here and why?** Your team needs to create cloud networks, managed databases, and Kubernetes namespaces for every new customer environment. Would you keep all of that in one Terraform/OpenTofu project, split cluster objects into Kubernetes-native manifests, or expose a Crossplane-backed API to application teams?
+
+## Kubernetes as Infrastructure as Code
+
+Kubernetes is not just a place where IaC tools deploy applications; Kubernetes itself is an IaC system. You send objects to the API server, and controllers reconcile desired state with actual state. A Deployment does not merely start pods once. It declares a rollout strategy, a replica count, a selector, and a pod template, then the Deployment controller and ReplicaSet controller keep working to maintain that state.
+
+For the rest of this module, use the standard shortcut `alias k=kubectl` so commands stay readable while still targeting the Kubernetes CLI. The course target is Kubernetes 1.35+, but the basic declarative workflow shown here is stable across modern clusters. The important habit is to keep manifests in files and use `k apply` for desired state, rather than relying on one-off imperative commands that vanish from review history.
+
+```bash
+alias k=kubectl
+k version --client
+```
 
 ```yaml
 # deployment.yaml - Desired state
@@ -270,33 +292,25 @@ spec:
 
 ```bash
 # Apply desired state
-kubectl apply -f deployment.yaml
+k apply -f deployment.yaml
 
 # Kubernetes reconciles actual state to match desired state
-# This is IaC in action!
+# This is IaC in action.
 ```
 
-> **Stop and think**: Notice how we don't tell Kubernetes *how* to run the container. We just state *what* we want (3 replicas of nginx:1.27), and Kubernetes figures out the rest.
+Notice what the manifest does not say. It does not tell Kubernetes which node should run each pod, which exact ReplicaSet name to create, or which internal sequence of API updates should happen first. It states that the desired world contains a Deployment named `web` with 3 replicas of `nginx:1.27`, and Kubernetes calculates the work needed to make the cluster match.
 
-The connection: **Kubernetes uses the same declarative, idempotent principles as Terraform and Ansible.**
+That distinction becomes useful during failure. If a node dies, the desired state still says 3 replicas should exist, so Kubernetes schedules replacement pods. If someone deletes a pod by hand, the controller creates another one because the Deployment still demands it. If you apply the same manifest again, Kubernetes sees that the desired and actual states already match, so the command becomes a safe confirmation rather than a duplicate deployment.
 
----
+Kubernetes can still be used in a non-IaC way. Commands such as `k run`, `k edit`, and direct console changes can be appropriate for learning or emergency diagnosis, but they are dangerous as the normal path to production. The object may exist in the cluster, yet the repository does not explain it. The mature workflow is to convert discoveries into manifests, review those manifests, and let automation apply them consistently.
 
-## Trade-Offs: The Cost of IaC
+There is another Kubernetes-specific reason to prefer files: many objects interact through labels and selectors. A Service finds pods through labels, a Deployment manages pods through selectors, and NetworkPolicies often depend on labels as well. When those relationships are stored in separate hand-entered commands, it is easy to create a resource that looks valid but does not connect to anything. Keeping the objects together in code lets reviewers see the relationships before the cluster has to reveal the mistake.
 
-While IaC is essential for modern engineering, it comes with specific trade-offs:
+Kubernetes also teaches the difference between the declared object and the generated runtime details. A Deployment creates ReplicaSets, ReplicaSets create Pods, and Pods receive names, IPs, node assignments, and status fields that you usually should not hardcode. Beginners sometimes copy a live object from the cluster and commit every field, including status and generated metadata. A cleaner IaC manifest includes the fields the team owns and leaves runtime fields to the control plane, which reduces noisy diffs and accidental conflicts.
 
-- **Speed vs. Structure**: Clicking through a cloud console (ClickOps) is much faster for a quick, one-off experiment. IaC requires writing code, planning, and applying, which introduces overhead for simple tasks.
-- **Learning Curve**: Teams cannot simply provision servers; they must learn domain-specific languages (like HCL for Terraform) and understand state management principles.
-- **State Management Complexity**: Tools like Terraform store the environment's state in a file (`terraform.tfstate`). Managing this state file securely (locking it to prevent concurrent runs, encrypting it to hide secrets) becomes a new operational burden.
+## Repository Layout, Environments, and Drift Control
 
-> **Stop and think**: Why might a startup choose to use ClickOps for their first prototype, even if they know IaC is the industry standard for production?
-
----
-
-## IaC Best Practices
-
-### 1. Everything in Git
+A useful IaC repository is more than a dumping ground for YAML and HCL. It needs to help readers answer three questions quickly: what resources exist, which environment they belong to, and which shared components they reuse. If the layout makes those questions hard, engineers will copy files, patch production directly, or invent local conventions because the official structure feels slower than the console.
 
 ```bash
 infrastructure/
@@ -311,7 +325,9 @@ infrastructure/
     └── playbooks/
 ```
 
-### 2. Use Modules/Reusable Components
+The first baseline is simple: everything that defines infrastructure should be in Git unless there is a deliberate exception with a clear owner. That includes cloud resources, Kubernetes manifests, machine configuration, policy definitions, and the scripts that glue deployment steps together. Secrets should not be committed as plaintext, but the reference to the secret manager, secret name, or sealed secret mechanism should still be represented in code.
+
+Reusable modules solve the next problem, which is duplication disguised as clarity. If every environment has a full copy of every resource definition, staging and production will eventually diverge in accidental ways. A better pattern is to keep shared behavior in modules or bases, then let each environment supply the values that genuinely differ, such as size, replica count, region, or feature flags.
 
 ```hcl
 # Don't repeat yourself
@@ -330,8 +346,6 @@ module "api_server" {
 }
 ```
 
-### 3. Separate Environments
-
 ```bash
 environments/
 ├── dev/
@@ -342,9 +356,15 @@ environments/
     └── main.tf      # Large instances, high availability
 ```
 
-> **Pause and predict**: If you have separate environments like dev, staging, and prod, what is the danger of copying and pasting infrastructure code between them instead of using reusable modules?
+Environment separation should protect production without making lower environments meaningless. Development can be smaller and cheaper, but it should still exercise the same module paths and the same policy assumptions. Staging should be close enough to production that a plan or rollout can reveal mistakes before customers feel them. Production should be different only where the business explicitly needs more scale, durability, isolation, or approval.
 
-### 4. Never Edit Manually
+This is where repository layout becomes an organizational design tool. If the storage team owns database modules and the application team owns Kubernetes manifests, the folder structure should make that ownership visible. If every service team can modify shared network policy, the review process should compensate with CODEOWNERS, policy checks, or a platform API that narrows what can be changed. IaC files are easier to review when the repository mirrors real responsibility instead of hiding ownership behind one shared directory.
+
+Naming also matters more than it first appears. Resource names, module names, workspace names, and environment names become the vocabulary engineers use during incidents. A name like `prod-eu-payments-db` carries more operational context than `database-1`, and a module called `regional_private_cluster` tells reviewers more than `main`. Clear names do not replace documentation, but they reduce the amount of interpretation required when someone is reading a plan under pressure.
+
+> **Pause and predict**: If dev, staging, and prod each contain copied infrastructure files instead of shared modules, which differences will be intentional after six months, and which differences will exist only because someone fixed one environment and forgot the others?
+
+Drift control is the discipline of keeping the real environment aligned with the repository. Drift can come from emergency shell access, console edits, failed pipelines, imported legacy resources, provider defaults, or controllers that mutate objects after creation. The correct response is not to pretend drift never happens. The correct response is to detect it, decide whether the real-world change should become code, and then bring the system back under reviewable control.
 
 ```text
 Golden Rule: If it's not in code, it doesn't exist.
@@ -352,9 +372,13 @@ Golden Rule: If it's not in code, it doesn't exist.
 Manual changes = configuration drift = bugs at 3 AM
 ```
 
----
+There are exceptions during incidents. If a manual change is the fastest way to stop customer damage, a strong team may allow it under an emergency procedure. The important part is what happens next: the fix must be backported into the IaC repository, reviewed, and applied through the normal path. Otherwise the next pipeline run may erase the emergency fix because the code still describes the old broken state.
 
-## The IaC Workflow
+Importing existing infrastructure is the related migration problem. Most organizations do not begin with a clean repository and empty cloud account; they already have resources created by scripts, consoles, and years of local habits. Bringing those resources under IaC usually requires importing them into state, writing configuration that matches reality, and then making small reviewed changes to prove the tool can manage them safely. The first goal is not elegance. The first goal is to avoid destroying something valuable while you establish a trustworthy source of truth.
+
+## The Review and Apply Workflow
+
+An IaC workflow should make dangerous changes visible before they happen. The exact pipeline differs between teams, but the shape is usually the same: write code, review it, test or preview it, approve it, apply it, and monitor the result. This sequence turns infrastructure changes into an engineering process instead of a private session in a cloud console.
 
 ```mermaid
 flowchart LR
@@ -366,73 +390,177 @@ flowchart LR
     M -.-> W
 ```
 
-**Key Guarantees:**
-- All changes go through code review
-- All changes are auditable
-- All changes are reversible
+The review step is not bureaucracy when the plan is meaningful. A reviewer can spot that a database would be replaced instead of modified, that a security group opens more ports than intended, or that a Kubernetes selector change will orphan old pods. The plan output is a contract between the code and the environment, so approving without reading it is almost the same as clicking blindly in a console.
 
----
+A useful review explains intent as well as mechanics. The pull request should say why the change is needed, what risk it introduces, how rollback would work, and which environment receives it first. A tiny network rule can be more dangerous than a large refactor if it exposes a private service. A small Kubernetes selector change can cause more outage risk than a replica-count increase. Review quality comes from understanding blast radius, not from counting lines.
+
+Testing IaC is different from testing application code, but it is still possible. Teams can lint syntax, validate schemas, run policy checks, generate plans, test modules with temporary environments, and use admission control for Kubernetes objects. The goal is not to prove the universe is safe. The goal is to catch the mistakes that automation can catch before a human reviewer has to reason about them under time pressure.
+
+Monitoring closes the loop after apply. A successful command only proves that the tool accepted the change, not that the service behaved well afterward. For cloud resources, that might mean checking health checks, route tables, metrics, and access logs. For Kubernetes, that means checking rollouts, events, readiness, and application signals. IaC gives you a controlled way to change the system, but operations still require observing the consequences.
+
+Rollback should be designed before the first production apply. Sometimes rollback is a Git revert followed by another apply, but that is not always enough. A database migration, certificate rotation, or subnet replacement may require a forward fix, a manual checkpoint, or a staged transition. IaC makes the desired configuration visible, yet it cannot magically make every infrastructure change reversible. Senior engineers treat reversibility as a design constraint, not as a comforting assumption.
+
+Pipeline permissions should follow the same principle of least privilege that application credentials follow. A plan job may need read access to providers and state, while an apply job needs write access and should run only after approval. Production credentials should not be available to arbitrary pull request code from untrusted branches. If the IaC pipeline can mutate production, then the pipeline itself is production infrastructure and deserves the same review, logging, and access control as the systems it changes.
+
+## Patterns & Anti-Patterns
+
+Good IaC patterns share a theme: they make the intended state easier to inspect than the accidental state. That means modules should hide repetition without hiding risk, pipelines should preview changes before applying them, and emergency procedures should route discoveries back into code. These patterns are not about making every workflow slower; they are about making important infrastructure changes explainable when the team is tired.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---------|----------------|--------------|-----------------------|
+| Plan before apply | Any shared or production infrastructure change | Reviewers see the resource delta before mutation | Store plan artifacts for audit when approval matters |
+| Shared modules with environment values | Multiple environments that should stay similar | Common behavior changes once while environments keep explicit differences | Version modules so production can adopt changes deliberately |
+| Git-owned Kubernetes manifests | Workloads, Services, ConfigMaps, policies, and namespaces | Cluster state can be rebuilt and reviewed from files | Add schema validation and admission policy as teams grow |
+| Drift detection runs | Environments where manual access or provider defaults can change state | The team learns when reality diverges from code | Decide who triages drift and how urgent each class is |
+
+Anti-patterns usually start as shortcuts that look reasonable in isolation. A console edit saves a few minutes, a copied module avoids learning variables, and a shell script feels faster than writing declarative configuration. The cost appears later when the team cannot tell which state is real, which differences are intentional, and which changes will be erased by the next pipeline.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|-------------------|
+| ClickOps as the normal production path | Changes bypass review, history, and repeatability | Use console exploration only for discovery, then commit the result as code |
+| One giant root module | Every change risks unrelated resources and slow reviews | Split by lifecycle, ownership, and blast radius |
+| Secrets in IaC files | Repositories and state files become security incidents | Reference a secret manager or sealed secret mechanism instead |
+| Ignoring generated plans | Destructive replacements are approved without understanding | Require reviewers to inspect create, update, replace, and delete actions |
+| Copy-pasted environments | Dev, staging, and prod drift through forgotten edits | Share modules or bases and pass explicit environment values |
+
+## Decision Framework
+
+When choosing an IaC approach, start with the lifecycle of the resource rather than the popularity of a tool. A managed database, a Kubernetes Deployment, and an operating system package all behave differently. The best tool is the one that can model the resource clearly, detect changes safely, and fit the team's review and recovery process.
+
+```text
++-----------------------------+
+| What are you managing?      |
++-------------+---------------+
+              |
+              v
++-------------+---------------+
+| Cloud resources outside K8s?|
++------+------+---------------+
+       | Yes                  | No
+       v                      v
++------+-------------+  +-----+----------------+
+| Terraform/OpenTofu |  | Kubernetes objects?  |
+| or native templates|  +-----+----------------+
++------+-------------+        | Yes
+       |                      v
+       |              +-------+----------------+
+       |              | YAML, Kustomize, Helm, |
+       |              | GitOps, or Crossplane  |
+       |              +-------+----------------+
+       v                      |
++------+-------------+        v
+| Need OS packages   |  +-----+----------------+
+| and machine config?|  | Need app-language    |
++------+-------------+  | abstractions?        |
+       | Yes            +-----+----------------+
+       v                      | Yes
++------+-------------+        v
+| Ansible or another |  +-----+----------------+
+| config tool        |  | Pulumi may fit       |
++--------------------+  +----------------------+
+```
+
+| Situation | Strong Default | Why | Watch Out For |
+|-----------|----------------|-----|---------------|
+| Multi-cloud provisioning | Terraform or OpenTofu | Provider ecosystem and plan/apply workflow | State locking, module governance, provider upgrades |
+| AWS-only infrastructure | CloudFormation or Terraform/OpenTofu | Native AWS integration or broader ecosystem | Portability versus native service coverage |
+| VM package and service setup | Ansible | Agentless SSH configuration and readable playbooks | Inventory drift and non-idempotent shell tasks |
+| Kubernetes workloads | YAML with Kustomize, Helm, or GitOps | Kubernetes already reconciles desired state | Template complexity and unreviewed `k edit` changes |
+| Platform self-service | Crossplane or higher-level modules | Teams request abstractions instead of raw resources | API design, ownership, and policy boundaries |
+| Infrastructure tied to app code abstractions | Pulumi | Real languages and testable libraries | Hidden resource graphs and language-specific complexity |
+
+This framework is deliberately conservative. If a simple manifest and a clear review workflow solve the problem, do not introduce a templating engine just to feel advanced. If a provider-managed service has a tricky lifecycle, do not hide it behind a generic module until the team understands its replacement behavior. IaC should make infrastructure easier to reason about, not merely more abstract.
+
+When the decision is unclear, run a small experiment that includes the full lifecycle rather than only the happy path. Create a resource, update it, detect drift, roll it back, destroy it, and let a teammate review the change without live narration. That exercise reveals whether the tool makes state understandable. It also reveals whether the team can operate the workflow when the original author is unavailable.
+
+Cost should be evaluated across the full life of the system, not only the first deployment. ClickOps often wins the first hour because a console wizard can produce a working demo quickly. IaC wins the tenth rebuild, the second region, the security audit, and the incident review because the steps are recorded and repeatable. The right question is not whether code is always faster than clicking. The right question is when the environment becomes important enough that repeatability, review, and disaster recovery are worth the upfront structure.
+
+Team maturity changes the answer over time. A prototype can tolerate a few manual resources if the team writes down what must be automated before launch. A production platform with customer data cannot rely on future cleanup as a control. Many healthy teams use a ratchet: experiments may begin manually, but anything that survives into shared environments must be captured in IaC before it becomes a dependency. That rule keeps exploration possible without letting temporary shortcuts harden into invisible architecture.
+
+The strongest decision frameworks also include exit criteria. If a module becomes too complex to review, split it. If a templating system hides the generated Kubernetes objects, render the output in CI. If a tool cannot show a useful plan for high-risk resources, add a manual review checklist or choose a different approach. IaC should continuously improve the team's ability to predict changes; when it stops doing that, the design needs another pass.
+
+The final test is whether another engineer can recover your intent without asking you to narrate the system. If they can read the repository, inspect the plan, understand the environment differences, and predict the apply result, the IaC design is doing its job. If they need private context to avoid breaking production, the code is not yet carrying enough operational meaning.
 
 ## Did You Know?
 
-- **NASA uses Terraform** to manage their cloud infrastructure. If it's good enough for space, it's good enough for your startup.
-- **Ansible's name** comes from Ursula K. Le Guin's sci-fi novels, where an "ansible" is a device for instantaneous communication across space.
-- **"Cattle, not pets"** is an IaC principle. Treat servers like cattle (replaceable, numbered), not pets (named, irreplaceable). You should be able to destroy and recreate any server without worry.
-- **"Configuration Drift"** was originally a systems administration term describing the phenomenon where servers in a cluster become increasingly different over time due to ad-hoc, undocumented manual updates.
-- **Pulumi** is an Apache 2.0 licensed IaC tool that lets you write infrastructure in general-purpose languages like TypeScript, Python, Go, Java, and .NET, compiling them into an infrastructure resource graph at runtime.
-- **Crossplane**, a prominent CNCF project, uses Kubernetes itself to provision cloud resources, allowing you to manage AWS/Azure/GCP infrastructure using native Kubernetes YAML.
-
----
+- **Knight Capital's 2012 incident** produced an estimated $460 million loss in about 45 minutes, showing how a partial deployment can become a company-level event when fleet consistency is assumed but not enforced.
+- **Terraform's license changed in 2023**, and OpenTofu was created as an MPL 2.0 fork so teams could keep a community-governed open-source workflow compatible with Terraform-style configuration.
+- **Ansible's name** comes from science fiction, where an ansible is a device for instantaneous communication across distance, which fits a tool designed to coordinate many machines from one control point.
+- **Kubernetes is a reconciliation system**, so applying the same manifest repeatedly is not a duplicate action; it is a request for the control plane to make actual state match declared state.
 
 ## Common Mistakes
 
-| Mistake | Why It Hurts | Solution |
-|---------|--------------|----------|
-| Manual changes after IaC deploy | Configuration drift | Redeploy from code |
-| Not using version control | No audit trail, no rollback | Git everything |
-| Hardcoding secrets | Security breach | Use secret managers |
-| Monolithic configs | Hard to maintain | Use modules |
-| No state backup | Lost infrastructure state | Remote state storage |
-| Not testing IaC in CI before apply | Broken syntax takes down production | Lint and run `plan` in CI/CD |
-| Ignoring plan output | Accidentally deleting resources | Always read the diff before approving |
-| Environment-specific hardcoding | Code can't be reused for staging/prod | Use variables for environment differences |
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Manual changes after an IaC deploy | An incident creates pressure to fix production quickly, and the manual patch never returns to the repository | Backport every emergency change into code, review it, and reapply through the normal pipeline |
+| Not using version control for infrastructure | Early experiments start on a laptop and become production before anyone formalizes ownership | Put infrastructure definitions in Git before the environment matters, then require pull requests for shared resources |
+| Hardcoding secrets in HCL, YAML, or stateful outputs | Examples often show simple strings, and teams copy that style into real environments | Store secret values in a secret manager and commit only references, policies, or sealed representations |
+| Building monolithic configurations | It feels easier to keep everything in one root until reviews become slow and risky | Split code by lifecycle, ownership, and blast radius, then use modules for repeated resource shapes |
+| Running without remote state backup and locking | Local state seems harmless while one person owns the project | Use a remote backend with locking, encryption, backups, and access controls before multiple people can apply |
+| Ignoring plan output in CI | The pipeline becomes a checkbox, so reviewers approve the job rather than the resource diff | Make destructive actions visible and require humans to inspect replacements, deletes, and security-sensitive updates |
+| Copying environment files instead of sharing modules | Copy-paste produces quick progress, but later fixes reach only the environment that hurt most recently | Keep common behavior in modules or bases, then pass explicit values for environment differences |
 
----
+## Quiz
 
-## Mini-Workshop: IaC with kubectl
+<details><summary>1. Your team applies a Terraform change and the plan says a managed database will be replaced, not updated. How do you evaluate the change before approving it?</summary>
 
-Before you practice, let's walk through a worked example of Kubernetes IaC.
+Do not approve the change just because the syntax is valid. A replacement means the provider believes the current resource cannot be modified in place, so you need to inspect which argument forced replacement, whether data will be lost, and whether the module should be redesigned. This scenario tests your ability to evaluate Terraform or OpenTofu plan output instead of treating IaC as a blind automation button. A safe response may include changing the design, adding migration steps, scheduling downtime, or rejecting the pull request until the blast radius is explicit.
 
-**The Goal**: Create a declarative configuration for a simple pod.
+</details>
 
-**Step 1: The Code (Desired State)**
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: my-web-pod
-spec:
-  containers:
-  - name: nginx
-    image: nginx:alpine
-```
+<details><summary>2. A developer says Kubernetes cannot satisfy the audit rule because they use `k run` and `k edit` during normal releases. How do you correct the workflow?</summary>
 
-**Step 2: The Action (Apply)**
-Instead of running `kubectl run my-web-pod --image=nginx:alpine` (imperative), we apply the file (declarative):
-```bash
-kubectl apply -f pod.yaml
-```
+The problem is not Kubernetes; the problem is using imperative commands as the release mechanism. Kubernetes supports declarative Infrastructure as Code when Deployments, Services, ConfigMaps, and policies are stored as manifests and applied through a reviewed pipeline. The corrected workflow is to implement Kubernetes changes in files, review them in Git, apply them with `k apply`, and verify the rollout. That gives the organization a durable audit trail and makes the cluster rebuildable from code.
 
-**Step 3: The Reconciliation (Idempotency)**
-If we run `kubectl apply -f pod.yaml` again, Kubernetes compares the desired state (our file) with the actual state running in the cluster. Since they exactly match, it does nothing.
+</details>
 
----
+<details><summary>3. Production has a timeout value that differs from the repository, and nobody can find a commit that changed it. How do you diagnose configuration drift?</summary>
+
+Start by treating the mismatch as drift until proven otherwise. Compare the live setting with the desired state in Git, review recent pipeline runs, and check whether an emergency manual change or console edit occurred during an incident. If the live value is correct, commit it back into the IaC source and apply through the normal workflow so the repository becomes true again. If the live value is wrong, let the IaC pipeline restore the declared state and add controls that make similar drift easier to detect.
+
+</details>
+
+<details><summary>4. Your organization needs VPCs, managed databases, load balancers, VM package configuration, and Kubernetes workloads. How do you compare the tool choices?</summary>
+
+Use the resource lifecycle to split the decision. Terraform or OpenTofu is a strong fit for cloud provisioning such as networks, databases, and load balancers because the plan/apply model handles external APIs well. Ansible is a better fit for OS package and service configuration on VMs because it is designed for machine configuration over SSH. Kubernetes workloads should usually be represented as manifests, Kustomize overlays, Helm charts, or GitOps-managed objects because the cluster already reconciles those resources.
+
+</details>
+
+<details><summary>5. A pipeline crashes halfway through a run, and the retry finishes without creating duplicate resources. Which design property made that possible?</summary>
+
+The key property is idempotency, usually combined with a declarative desired state model. The tool checks what already exists, compares it with the desired configuration, and performs only the remaining work needed to converge the environment. This is safer than an imperative script that blindly repeats creation steps after a partial failure. Idempotency is why retries can be a normal recovery action rather than a new incident risk.
+
+</details>
+
+<details><summary>6. Dev, staging, and prod began as copied folders. Six months later, staging has a firewall rule that production lacks, and nobody knows whether the difference is intentional. How do you design the repository differently?</summary>
+
+Move shared behavior into modules or bases, then pass explicit environment values for the differences that should exist. This design makes common behavior change in one place while still allowing production to have larger sizes, more replicas, or stricter policies. The important part is that differences become named inputs rather than accidental edits in copied files. That structure also makes code review more focused because reviewers can see whether a change affects all environments or only one.
+
+</details>
+
+<details><summary>7. During an incident, an engineer manually changes a production setting and fixes the outage. What should happen after the incident is stable?</summary>
+
+The manual change should be treated as an emergency exception, not as the new normal process. After the incident is stable, the team should translate the fix into the IaC repository, review it, apply it through the standard path, and verify that the live environment still has the intended value. If that backport does not happen, the next pipeline run may erase the manual fix because the repository still describes the old state. This is how teams preserve both incident speed and long-term auditability.
+
+</details>
 
 ## Hands-On Exercise
 
-**Task**: Experience IaC principles with Kubernetes resources.
+In this exercise, you will implement a small Kubernetes IaC workflow with declarative files, repeated applies, a controlled change, and a drift check. You need access to any Kubernetes 1.35+ compatible practice cluster, such as a local cluster or a shared training namespace where you are allowed to create Deployments and ConfigMaps. Use the `k` alias introduced earlier so your commands match the rest of the module.
 
-**Step 1. Create a deployment declaratively**
+### Setup
+
+```bash
+alias k=kubectl
+k get namespace default
+mkdir -p iac-demo
+cd iac-demo
+```
+
+### Task 1. Create a deployment declaratively
+
+Write the desired state into `deployment.yaml` and apply it. This is intentionally close to the worked example so you can focus on the workflow before adding your own changes.
+
 ```bash
 cat << 'EOF' > deployment.yaml
 apiVersion: apps/v1
@@ -454,36 +582,39 @@ spec:
         image: nginx:1.27
 EOF
 
-kubectl apply -f deployment.yaml
-
-# Verify the deployment was created successfully
-kubectl rollout status deployment/iac-demo
+k apply -f deployment.yaml
+k rollout status deployment/iac-demo
 ```
 
-**Step 2. Test idempotency and modification**
+<details><summary>Solution notes for Task 1</summary>
+
+The important result is not only that the Deployment exists. You should also be able to point to the file that defines the Deployment, explain why the replica count is 2, and rerun the apply command without creating a second Deployment. If rollout status does not complete, use `k describe deployment iac-demo` and `k get pods -l app=iac-demo` to inspect scheduling, image pull, or readiness problems.
+
+</details>
+
+### Task 2. Test idempotency and modification
+
+Apply the same file again, then change the replica count from 2 to 4 in the file and apply the updated desired state. You are proving that the file, not your terminal history, controls the target shape.
+
 ```bash
-# 1. Apply again (idempotency)
-kubectl apply -f deployment.yaml
-# Notice the output says "deployment.apps/iac-demo unchanged"
-
-# 2. Modify the code
+k apply -f deployment.yaml
 sed 's/replicas: 2/replicas: 4/' deployment.yaml > temp.yaml && mv temp.yaml deployment.yaml
-
-# 3. Apply change
-kubectl apply -f deployment.yaml
-
-# 4. Verify change
-kubectl get deployment iac-demo
-# Now shows 4 replicas
+k apply -f deployment.yaml
+k get deployment iac-demo
 ```
 
-**Step 3. Write from scratch**
-Now, without copying from above, write a new file called `config.yaml` that creates a Kubernetes `ConfigMap` named `app-settings` with a key `theme` set to `"dark"`. Then apply it declaratively.
+<details><summary>Solution notes for Task 2</summary>
 
-<details>
-<summary>Solution for Step 3</summary>
+The first apply should report that the Deployment is unchanged or otherwise show no meaningful mutation, because the declared and actual states already match. After editing the file, Kubernetes should scale the Deployment toward 4 replicas because the desired state changed. If the output still shows 2 desired replicas, inspect the file first; in IaC workflows, the source file is the first suspect when reality does not match your expectation.
 
-1. Create the declarative file:
+</details>
+
+### Task 3. Create a ConfigMap from scratch
+
+Create a new file called `config.yaml` that defines a ConfigMap named `app-settings` with the key `theme` set to `"dark"`. Apply it declaratively, then verify that Kubernetes stores the value you declared.
+
+<details><summary>Solution for Task 3</summary>
+
 ```bash
 cat << 'EOF' > config.yaml
 apiVersion: v1
@@ -493,97 +624,72 @@ metadata:
 data:
   theme: "dark"
 EOF
+
+k apply -f config.yaml
+k get configmap app-settings -o yaml
 ```
 
-2. Apply it using IaC principles:
-```bash
-kubectl apply -f config.yaml
+This solution keeps the configuration in a file rather than creating it with a one-off imperative command. The `k get` command is for verification, not for making the change. If you changed the value to `"light"` in the file and applied again, Kubernetes would update the object to match the new desired state.
 
-# Verify the ConfigMap exists
-kubectl get configmap app-settings
-```
-
-3. Clean up the exercise resources:
-```bash
-kubectl delete -f deployment.yaml
-kubectl delete -f config.yaml
-rm deployment.yaml config.yaml
-```
 </details>
 
----
+### Task 4. Simulate drift and repair it from code
 
-## Quiz
+Patch the live ConfigMap to a different value, then use the file to restore the declared value. This reproduces a small version of a production console edit that must be brought back under IaC control.
 
-1. **You are running a deployment script for a critical database. The pipeline crashes halfway through. You trigger the pipeline again. Instead of creating a duplicate database, the tool recognizes the first one and simply finishes the configuration. What principle is at work here?**
-   <details>
-   <summary>Answer</summary>
-   This scenario demonstrates the principle of **idempotency** in Infrastructure as Code. Running an idempotent operation multiple times has the exact same effect as running it once, preventing duplicate resource creation. The tooling actively checks the current state of the infrastructure against your desired state and only executes the necessary delta. This safety mechanism is why declarative systems can effortlessly recover from pipeline failures without causing destructive side effects.
-   </details>
+```bash
+k patch configmap app-settings --type merge -p '{"data":{"theme":"light"}}'
+k get configmap app-settings -o jsonpath='{.data.theme}'; echo
+k apply -f config.yaml
+k get configmap app-settings -o jsonpath='{.data.theme}'; echo
+```
 
-2. **Your team needs to spin up 50 AWS EC2 instances, configure a VPC, and set up load balancers. Once the VMs are running, they need complex OS-level user configurations and specific application binaries installed. Which combination of tools is most appropriate?**
-   <details>
-   <summary>Answer</summary>
-   Using **Terraform** (or OpenTofu) for the infrastructure provisioning and **Ansible** for the configuration is the most appropriate approach for this scenario. Terraform excels at creating and managing cloud resources like VPCs and EC2 instances declaratively, but it is not designed for deep OS-level configuration. Ansible is an agentless configuration management tool that excels at configuring operating systems and installing software over SSH after the machines are provisioned. Combining these tools leverages their specific strengths, covering the entire infrastructure lifecycle seamlessly from hardware provisioning to software readiness.
-   </details>
+<details><summary>Solution notes for Task 4</summary>
 
-3. **A junior engineer writes a bash script with 15 `if/else` statements to check if Nginx is installed, installing it if missing, then starting the service if stopped. You suggest replacing it with a 5-line Kubernetes YAML file. Why is the YAML approach fundamentally different and safer?**
-   <details>
-   <summary>Answer</summary>
-   The bash script is an **imperative** approach, meaning it dictates the exact step-by-step instructions and attempts to handle every possible starting state manually. The Kubernetes YAML represents a **declarative** approach, simply describing the desired end state without specifying the sequence of actions required to get there. Declarative approaches are inherently safer because they rely on a continuous control loop (like Kubernetes) to reliably reconcile the actual state with the desired state. This eliminates brittle conditional logic, handles unexpected system states automatically, and drastically reduces the surface area for human error.
-   </details>
+The patch changes the live object without changing `config.yaml`, so the cluster temporarily drifts from the repository. Applying the file restores `"dark"` because the file still declares that value. In a real incident, the team would decide whether the live value was a valid emergency fix. If it was valid, the correct long-term repair would be to update `config.yaml`, review the change, and apply it through the normal workflow.
 
-4. **During an incident, an engineer SSHs into a production server and manually edits a configuration file to increase a timeout value. The issue is resolved. Two weeks later, the team deploys a new version of the app via their IaC pipeline, and the timeout issue immediately returns. What happened?**
-   <details>
-   <summary>Answer</summary>
-   This scenario is a classic example of **configuration drift** caused by out-of-band manual interventions. The manual change made during the incident was never recorded in the declarative IaC repository, creating a hidden mismatch between the real world and the source code. When the IaC pipeline ran two weeks later, it faithfully enforced the configuration defined in version control, which did not include the timeout fix. This overwrote the manual adjustment, demonstrating exactly why all emergency fixes must be backported into the infrastructure codebase to ensure long-term stability.
-   </details>
+</details>
 
-5. **A critical production bug occurs at 3 AM. The on-call engineer discovers the database connection string was changed on the application server. Nobody knows who changed it or when. How does Infrastructure as Code solve this exact problem?**
-   <details>
-   <summary>Answer</summary>
-   Infrastructure as Code solves this problem by enforcing **version control** (like Git) as the strict single source of truth for all environment configurations. If all infrastructure changes are exclusively applied through IaC pipelines, untracked manual edits on servers are either prevented entirely or quickly overwritten. Because every change exists as a commit, an engineer can simply use commands like `git log` or `git blame` to see exactly who modified the connection string and when it occurred. Furthermore, they can review the associated pull request to understand the context and rationale behind the modification, providing a complete audit trail.
-   </details>
+### Task 5. Clean up from the same files
 
-6. **Your organization mandates that all infrastructure changes must be auditable, reversible, and reviewed by a peer before applying. A developer complains that Kubernetes makes this impossible because they have to use `kubectl run` commands all day. How do you correct this misunderstanding?**
-   <details>
-   <summary>Answer</summary>
-   The developer's complaint stems from using Kubernetes **imperatively** via the CLI, which circumvents IaC principles entirely. Kubernetes functions as a native IaC system when its desired state is defined using declarative YAML manifest files rather than imperative commands. By defining cluster resources in YAML and committing those files to a Git repository, the organization can easily enforce mandatory peer reviews through pull requests. Applying these manifests via an automated CI/CD pipeline ensures that Kubernetes fully supports auditable, reversible, and highly collaborative infrastructure management. This entirely replaces the need for manual, unreviewed CLI commands.
-   </details>
+Remove the resources using the manifests you created, then remove the local exercise directory. Cleanup is still part of the IaC habit because the same files that created the resources can identify what should be removed.
 
-7. **You apply a Kubernetes Deployment YAML file to a cluster, creating 3 replicas of a web app. Ten minutes later, you accidentally hit "Up" and "Enter" in your terminal, running the exact same `kubectl apply -f deployment.yaml` command again. What will the cluster do?**
-   <details>
-   <summary>Answer</summary>
-   The cluster will do absolutely **nothing** to the running workloads because the `apply` command is fundamentally idempotent. Kubernetes actively compares the desired state declared in your YAML file with the current actual state running in the cluster. Seeing that 3 replicas of the web app are already running with the exact correct configuration, the control plane realizes no modifications are required. It will simply report that the resource is unchanged, safely avoiding any downtime, errors, or duplicate deployments that might occur in an imperative system.
-   </details>
+```bash
+k delete -f deployment.yaml
+k delete -f config.yaml
+cd ..
+rm -rf iac-demo
+```
 
----
+<details><summary>Solution notes for Task 5</summary>
 
-## Summary
+Deleting from the files makes the cleanup explicit and reduces the chance of removing the wrong resource by name. If a delete command says a resource is not found, inspect whether you already deleted it or whether you are pointed at the wrong namespace. The same discipline matters in production: know which state file, manifest, workspace, account, and namespace your command targets before applying or deleting anything.
 
-**Infrastructure as Code** transforms infrastructure management:
+</details>
 
-**Core principles**:
-- Declarative over imperative
-- Idempotent operations
-- Version controlled
-- Reviewable changes
+### Success criteria
 
-**Key tools**:
-- Terraform / OpenTofu: Provision cloud resources
-- Ansible: Configure machines
-- Kubernetes: Container orchestration (IaC built-in)
+- [ ] You implemented Kubernetes declarative changes with `k apply -f deployment.yaml` and `k apply -f config.yaml`.
+- [ ] You verified idempotent reconciliation by applying an unchanged manifest and observing that no duplicate resource was created.
+- [ ] You changed the Deployment replica count in code first, then verified the cluster followed the declared state.
+- [ ] You diagnosed configuration drift by patching a live ConfigMap and repairing it from the manifest.
+- [ ] You cleaned up the Deployment and ConfigMap using the same files that created them.
 
-**Why it matters**:
-- Reproducible environments
-- Audit trail for all changes
-- Disaster recovery (rebuild from code)
-- Collaboration through code review
+## Sources
 
-**Kubernetes connection**: Everything you do in Kubernetes follows IaC principles. YAML files are your infrastructure code.
-
----
+- [U.S. SEC press release on Knight Capital enforcement action](https://www.sec.gov/news/press-release/2013-222)
+- [Terraform language documentation](https://developer.hashicorp.com/terraform/language)
+- [Terraform CLI workflow documentation](https://developer.hashicorp.com/terraform/cli)
+- [OpenTofu project documentation](https://opentofu.org/docs/)
+- [Ansible documentation](https://docs.ansible.com/)
+- [Pulumi concepts documentation](https://www.pulumi.com/docs/iac/concepts/)
+- [AWS CloudFormation user guide](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html)
+- [Azure Resource Manager templates overview](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/overview)
+- [Kubernetes declarative object management](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/)
+- [Kubernetes Deployments documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+- [Kustomize documentation in Kubernetes](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
+- [Crossplane documentation](https://docs.crossplane.io/)
 
 ## Next Module
 
-[Module 1.2: GitOps](../module-1.2-gitops/) - Using Git as the source of truth for infrastructure.
+[Module 1.2: GitOps](../module-1.2-gitops/) - Next, you will connect these IaC habits to Git-driven reconciliation, where commits become the durable source of truth for infrastructure changes, reviews, and automated cluster updates.
