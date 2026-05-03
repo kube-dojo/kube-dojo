@@ -3,6 +3,7 @@ title: "Module 1.2: kubectl Basics"
 slug: prerequisites/kubernetes-basics/module-1.2-kubectl-basics
 sidebar:
   order: 3
+revision_pending: false
 lab:
   id: "prereq-k8s-1.2-kubectl"
   url: "https://killercoda.com/kubedojo/scenario/prereq-k8s-1.2-kubectl"
@@ -10,13 +11,25 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
+# Module 1.2: kubectl Basics
+
 > **Complexity**: `[MEDIUM]` - Essential commands to master
 >
 > **Time to Complete**: 60-75 minutes
 >
-> **Prerequisites**: Module 1.1 (a working kind or minikube cluster), basic familiarity with the Linux shell, and a `kubectl` binary on your `$PATH` matching your cluster within one minor version.
+> **Prerequisites**: Module 1.1 (a working kind or minikube cluster), basic familiarity with the Linux shell, and a `kubectl` binary on your `$PATH` matching your Kubernetes 1.35+ cluster within one minor version.
 
----
+This module uses `kubectl` in full until the productivity section installs `alias k=kubectl`; after that point, `k get pods` and similar short commands mean exactly the same API calls with less typing.
+
+## Learning Outcomes
+
+After completing this module, you will be able to debug, compare, design, evaluate, and implement `kubectl` workflows against a Kubernetes 1.35+ cluster:
+
+- **Debug** a non-running pod end-to-end by chaining `kubectl get`, `kubectl describe`, and `kubectl logs --previous` to isolate whether the failure is at scheduling, image pull, or runtime.
+- **Compare** imperative (`kubectl run`, `kubectl create`) and declarative (`kubectl apply`) workflows and **justify** which to use for a given situation, including when Server-Side Apply is the right escalation.
+- **Design** a safe context-management workflow that prevents the cross-cluster destruction described above, including current-context checks, named contexts per environment, and `--dry-run=server` previews.
+- **Evaluate** the output of `kubectl get -o jsonpath` and `kubectl get -o custom-columns` to extract precisely the data needed for automation, monitoring scripts, or certification exam tasks.
+- **Implement** a productivity-boosting shell environment with the `k` alias, autocomplete, and a small library of inspection one-liners that you can reproduce on any new machine in under five minutes.
 
 ## Why This Module Matters
 
@@ -25,18 +38,6 @@ It is 03:00 on a Saturday, and a pager has just shattered the silence in an SRE'
 This is the unglamorous truth about Kubernetes: every operator, every developer, and every platform engineer talks to the cluster through the same single command. `kubectl` is not a CLI in the way `ls` is a CLI. It is a typed, schema-aware HTTPS client that translates your shell commands into REST calls against the Kubernetes API server, and it is the universal adapter through which all human intent reaches the control plane. CI/CD pipelines wrap it. GitOps controllers re-implement its behavior. Helm and Kustomize generate manifests that you ultimately apply with it. Even when you are using a fancy dashboard, somewhere underneath, a `kubectl`-equivalent API call is being issued. Mastering it is therefore not optional polish — it is the load-bearing skill on top of which every other Kubernetes competency is built.
 
 A real incident from 2019 illustrates the cost of mediocrity. A senior engineer at a well-known FinTech intended to delete a stale namespace called `payments` from a staging cluster. They ran `kubectl delete namespace payments`. The command succeeded instantly, and only as the alerts began firing did they realize their `kubectl` context was still pointing at production. The payments routing layer was gone, recovery from backups took roughly forty-five minutes, and the company estimated the lost transaction revenue at one hundred and twenty thousand dollars. There was no bug in Kubernetes. The system did exactly what it was told. The lesson is that `kubectl` rewards precision and punishes haste, and that the muscle memory you build in this module — checking your context, using `--dry-run=client`, preferring declarative `apply` over imperative `delete` — is the difference between a senior operator and a liability.
-
-## Learning Outcomes
-
-After completing this module, you will be able to:
-
-- **Debug** a non-running pod end-to-end by chaining `kubectl get`, `kubectl describe`, and `kubectl logs --previous` to isolate whether the failure is at scheduling, image pull, or runtime.
-- **Compare** imperative (`kubectl run`, `kubectl create`) and declarative (`kubectl apply`) workflows and **justify** which to use for a given situation, including when Server-Side Apply is the right escalation.
-- **Design** a safe context-management workflow that prevents the cross-cluster destruction described above, including current-context checks, named contexts per environment, and `--dry-run=server` previews.
-- **Evaluate** the output of `kubectl get -o jsonpath` and `kubectl get -o custom-columns` to extract precisely the data needed for automation, monitoring scripts, or certification exam tasks.
-- **Implement** a productivity-boosting shell environment with the `k` alias, autocomplete, and a small library of inspection one-liners that you can reproduce on any new machine in under five minutes.
-
----
 
 ## The Mental Model: kubectl Is a Typed API Client
 
@@ -57,8 +58,6 @@ The diagram above is the most important picture in this module. Print it, tape i
 
 > **Stop and think**: If `kubectl` is just an HTTPS client, what would happen if you used `curl` against the API server directly with your kubeconfig credentials? (You can — and `kubectl --v=8` will print the exact `curl`-equivalent request it is making, which is one of the best debugging tricks in the Kubernetes universe. Try `kubectl get pods --v=8 2>&1 | grep curl` after this module.)
 
----
-
 ## The kubectl Command Anatomy
 
 Every `kubectl` command follows the same four-part structure: `kubectl [VERB] [TYPE] [NAME] [FLAGS]`. The verb is what you want to do — `get`, `describe`, `apply`, `delete`, `exec`, `logs`. The type is the resource kind, written either in full (`pods`, `deployments`, `services`) or in a short name (`po`, `deploy`, `svc`). The name is optional; omit it to operate on all resources of that type, or supply it to target one. Flags modify behavior — namespace selection, output format, label filters, dry-run mode, and so on. Once you see the four-part structure, every command in the documentation snaps into place.
@@ -77,8 +76,6 @@ Short names matter once you start running these commands hundreds of times a day
 Flags follow standard Unix conventions. Single-letter flags are prefixed with one dash and can be combined: `-it` for interactive TTY in `kubectl exec`. Long-form flags use two dashes: `--namespace=web`, `--output=yaml`. The `=` is optional but recommended for clarity, especially in shell scripts where a missing `=` can cause a flag to consume the next argument. `kubectl` is generally forgiving about flag ordering, but it is not promised behavior — when scripting, always put the verb and type first and flags last.
 
 > **Pause and predict**: What do you think `kubectl get all -n kube-system` returns? Will it return literally every resource in `kube-system`, including Secrets and ConfigMaps? (Answer: no — `all` is a curated alias that expands to roughly Pods, ReplicaSets, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, and Services. It does NOT include Secrets, ConfigMaps, Roles, ServiceAccounts, or any CRDs. This is one of the most-misunderstood pieces of `kubectl` behavior, and a frequent source of "I deleted everything but the namespace is not empty" confusion.)
-
----
 
 ## Reading the Cluster: get, describe, explain
 
@@ -106,8 +103,6 @@ The killer feature of `kubectl describe` is the Events section at the bottom. Wh
 The `kubectl explain` command is the one most beginners never discover, and it is genuinely transformative once you do. Instead of switching to a browser and searching the Kubernetes documentation site for the structure of a `PodSpec`, you can stay in your terminal: `kubectl explain pod.spec.containers.livenessProbe`. The output is the canonical schema, sourced from the same OpenAPI definition the API server uses to validate your YAML, which means it is always exactly correct for your cluster's version. Pair it with `--recursive` when you want to see every nested field at once, and you have a perfect cheat sheet for writing manifests by hand without ever consulting external docs.
 
 > **Stop and think**: A junior engineer says "`kubectl describe pod` does not show me the container exit code when a container has crashed." Are they right or wrong? (They are wrong — `describe` does show it, in the `Last State` block under each container, with fields like `Reason`, `Exit Code`, and `Started`/`Finished`. They probably ran `describe` while the pod was still running fine, before the crash. Run it again the next time the pod is in `CrashLoopBackOff`.)
-
----
 
 ## Output Formats and Why They Matter
 
@@ -141,8 +136,6 @@ For certification exams (CKA, CKAD, CKS), `-o jsonpath` and `-o custom-columns` 
 
 > **Pause and predict**: What does `kubectl get pods -o jsonpath='{.items[?(@.status.phase=="Failed")].metadata.name}'` return on a cluster where two pods have failed? (It returns the names of those two pods, space-separated on one line. The `[?(...)]` is a JSONPath filter expression — `kubectl`'s JSONPath supports a subset of these. For richer filtering, prefer `--field-selector=status.phase=Failed` because the API server does the work for you.)
 
----
-
 ## Imperative vs Declarative: The Most Important Choice
 
 You can create a Kubernetes resource in two fundamentally different ways, and choosing between them is one of the first real engineering decisions you will make as an operator. Imperative commands like `kubectl run nginx --image=nginx` and `kubectl create deployment web --image=httpd:2.4` tell the cluster directly to do something. Declarative commands like `kubectl apply -f deployment.yaml` describe the desired state and let the cluster figure out how to reach it. Both produce running workloads, but they have radically different operational consequences.
@@ -172,8 +165,6 @@ The third pattern — `--dry-run=client -o yaml` — is the single most useful t
 Server-Side Apply (`--server-side`) is the modern evolution of the declarative pattern and worth understanding even at the beginner stage. Classical client-side `apply` computes the diff between your manifest and the live object on your laptop, then sends a patch. This breaks down when multiple actors — a human, a controller, an admission webhook — all want to write to the same resource, because the client has no way to know which fields it owns. Server-Side Apply moves the merge logic into the API server, which tracks ownership of each field per actor (`fieldManager`). When two actors set conflicting values, you get a clear conflict error instead of silent overwrites. New code should default to `--server-side`; existing code can be migrated incrementally.
 
 > **Stop and think**: You ran `kubectl scale deployment web --replicas=5` during an incident, and an hour later the GitOps controller re-applies the manifest from Git, which says `replicas: 3`. What happens? (The controller wins — it sets replicas back to 3 and your imperative scale-up is lost. This is exactly why mixing imperative changes with a declarative GitOps workflow is dangerous. The fix is to update the YAML in Git, not to type a `kubectl scale` and hope nobody notices.)
-
----
 
 ## Modifying and Deleting Resources Safely
 
@@ -217,8 +208,6 @@ The `--grace-period=0 --force` combination is dangerous because it tells the API
 
 A subtler trap is deleting the wrong layer of the Kubernetes hierarchy. If you delete a Pod that is owned by a Deployment, the ReplicaSet controller will recreate it within seconds, and you will be left wondering why deletion "did not work." The fix is to delete the owning Deployment, which cascades through the ReplicaSet and removes its Pods. The general rule is: delete the highest-level resource you control. If you created it with `kubectl run`, delete the Pod; if you created it with `kubectl create deployment`, delete the Deployment.
 
----
-
 ## Namespaces, Contexts, and the Multi-Cluster Reality
 
 Namespaces are Kubernetes's primary tenancy boundary inside a single cluster, and `kubectl` defaults to the namespace called `default` unless you tell it otherwise. Almost every real cluster has dozens of namespaces — `kube-system` for control-plane components, `kube-public` for cluster-wide info, plus per-team or per-environment namespaces like `payments-prod`, `payments-staging`, `observability`, `cert-manager`. Forgetting to specify a namespace is the single most common newbie mistake; you run `kubectl get pods`, see nothing, and assume the cluster is empty when in reality you are looking at the empty `default` namespace and your workloads are in `web`.
@@ -242,8 +231,6 @@ Contexts are the layer above namespaces. A context is a named bundle of `(cluste
 A more advanced pattern is to set `KUBECONFIG` as an environment variable per shell, so that each terminal tab is bound to a specific cluster and switching clusters means opening a new tab rather than running `use-context` and hoping nothing else mutates the file. Many production-grade engineers keep one kubeconfig per cluster, version-controlled in their dotfiles or fetched via `aws eks update-kubeconfig` / `gcloud container clusters get-credentials`, and never touch the merged `~/.kube/config`. This is the pattern you should adopt before you have your first cross-cluster incident, not after.
 
 > **Pause and predict**: After running `kubectl config set-context --current --namespace=kube-system`, what does `kubectl get pods` return? (It returns the system pods — kube-apiserver, etcd, kube-controller-manager, kube-scheduler, kube-proxy, CoreDNS — without needing the `-n kube-system` flag. The setting persists in your kubeconfig file, so it survives terminal restarts. Don't forget to switch back, or your next `kubectl run` will create a pod in `kube-system` where it doesn't belong.)
-
----
 
 ## Debugging Workflow: logs, exec, port-forward
 
@@ -278,8 +265,6 @@ kubectl port-forward deploy/web 8080:80     # picks one healthy pod from the dep
 `kubectl port-forward` deserves a moment of explanation because it is one of the strongest reasons Kubernetes feels easier than its predecessors. There is no firewall to punch, no SSH tunnel to set up, no LoadBalancer to provision; you just say "give me localhost:8080 mapped to pod's port 80" and the API server proxies the connection through the cluster's existing TLS-secured channel. This is how you point a local browser at an internal admin dashboard, how you connect a database GUI to a Postgres pod, and how you quickly verify that a service is responding before exposing it externally. The tunnel dies when you Ctrl-C the command, so it is also entirely safe — there is nothing to forget to clean up.
 
 > **Stop and think**: A pod is in `CrashLoopBackOff` and `kubectl logs nginx` returns nothing. What two commands do you run, in what order, and why? (First `kubectl describe pod nginx` to read the Events block at the bottom — this catches image-pull failures, OOM kills, and admission rejections, none of which produce app logs. Then `kubectl logs nginx --previous` to see the dead container's stdout/stderr. If both come up empty, the container is being killed by the kubelet before it produces output, which usually means a failed liveness probe or a missing required environment variable.)
-
----
 
 ## Productivity Boosters: Aliases, Autocomplete, and `--v=8`
 
@@ -321,15 +306,13 @@ kubectl apply -f deployment.yaml --dry-run=server    # full admission, rolled ba
 kubectl get pods --v=8 2>&1 | grep -E 'curl|http'    # see the actual HTTP call
 ```
 
----
-
 ## Worked Example: Diagnosing a Stuck Deployment
 
 Reading a list of commands is not the same as knowing how to use them. The following worked example walks through a realistic incident, step by step, in the order a senior engineer would actually attack it. Read it once now; come back to it as a template the next time something is broken on your own cluster. The goal of a worked example is to expose the *reasoning chain* — what you check, why you check it, what each result rules in or out — not just the commands.
 
 **Scenario.** A teammate Slacks you: "Hey, I deployed `web-frontend` to the `staging` namespace ten minutes ago and the service is not responding. Can you take a look?" You have never seen this Deployment before. Your job is to find the failure and either fix it or explain it.
 
-**Step 1: Confirm you're talking to the right cluster.** Always. Always. Always.
+### Step 1: Confirm you're talking to the right cluster
 
 ```bash
 $ kubectl config current-context
@@ -338,7 +321,7 @@ kind-staging
 
 Good — you are on the staging cluster, not production. If this returned `prod-east-1`, you would stop and switch contexts before doing anything else. This single habit would have prevented the 2019 FinTech outage at the start of this module.
 
-**Step 2: Establish the lay of the land with `get`, not `describe`.** Get the high-level picture first, then drill in.
+### Step 2: Establish the lay of the land with `get`, not `describe`
 
 ```bash
 $ kubectl get pods,deploy,svc -n staging -l app=web-frontend
@@ -356,7 +339,7 @@ service/web-frontend    ClusterIP   10.96.142.18    <none>        80/TCP
 
 The `get` already tells you the headline: all three pods are in `ImagePullBackOff`, the Deployment shows `0/3 AVAILABLE`, and the Service exists but has no healthy endpoints behind it. You now know the Service is not the problem; you do not need to look at it further. The Deployment is correctly creating pods, so the Deployment is not the problem either. The pods are failing at image pull. That is where you go next.
 
-**Step 3: Drill into one failing pod with `describe`.** Read the Events at the bottom — that is where the answer always lives.
+### Step 3: Drill into one failing pod with `describe`
 
 ```bash
 $ kubectl describe pod web-frontend-6c5f9b7d8-2xqpk -n staging
@@ -374,7 +357,7 @@ Events:
 
 This is decisive. The image tag `v2.1.0` does not exist in the registry. The pod was scheduled fine; the kubelet found the node; the registry was reachable (it returned `NotFound`, not `connection refused`); the tag is simply missing. Now you know the problem is not Kubernetes — it is on the registry side or in the manifest.
 
-**Step 4: Confirm what tag the manifest actually requested.** Read the source of truth, the live Deployment object.
+### Step 4: Confirm what tag the manifest actually requested
 
 ```bash
 $ kubectl get deployment web-frontend -n staging -o jsonpath='{.spec.template.spec.containers[*].image}'
@@ -383,7 +366,9 @@ myregistry.local/web-frontend:v2.1.0
 
 The Deployment is asking for `v2.1.0`. Either the build pipeline did not push that tag, or your teammate typed the wrong version. A quick check of the registry (or a Slack message to the build pipeline channel) confirms the latest pushed tag is `v2.0.9`. The build pipeline ran on a branch that was never merged.
 
-**Step 5: Apply the fix declaratively.** Update the manifest in Git, not via `kubectl edit`. The fastest way to test the fix in front of you, before the PR merges, is `kubectl set image` — but you must follow up with a Git commit, or the next GitOps reconcile will revert your change.
+### Step 5: Apply the fix declaratively
+
+Update the manifest in Git, not via `kubectl edit`. The fastest way to test the fix in front of you, before the PR merges, is `kubectl set image`, but you must follow up with a Git commit, or the next GitOps reconcile will revert your change.
 
 ```bash
 $ kubectl set image deployment/web-frontend -n staging web-frontend=myregistry.local/web-frontend:v2.0.9
@@ -400,11 +385,63 @@ web-frontend-7d4c8f6b9-def34      1/1     Running   0          40s
 web-frontend-7d4c8f6b9-ghi56      1/1     Running   0          35s
 ```
 
-**Step 6: Update the manifest in Git.** Open a PR with `image: myregistry.local/web-frontend:v2.0.9`, mention the incident in the description, and merge after review. Without this step, the next GitOps sync will set the image back to `v2.1.0` and the outage returns. Your teammate posts in Slack: "Fixed, it was a typo in the tag, PR #1138 has the correction." Total time from page to fix: under five minutes. That is what fluency in `kubectl` looks like in practice.
+### Step 6: Update the manifest in Git
+
+Open a PR with `image: myregistry.local/web-frontend:v2.0.9`, mention the incident in the description, and merge after review. Without this step, the next GitOps sync will set the image back to `v2.1.0` and the outage returns. Your teammate posts in Slack: "Fixed, it was a typo in the tag, PR #1138 has the correction." Total time from page to fix: under five minutes. That is what fluency in `kubectl` looks like in practice.
 
 **The reasoning chain to remember.** Notice that the worked example walked the cluster from the outside in: cluster → namespace → resource type → specific resource → specific field. At each step you asked a question and let the answer narrow the search. You did not run `kubectl describe` against every pod in the cluster; you used `get` with a label selector to scope the problem, then `describe` once to read events. This top-down funnel is how every senior operator debugs, and it is the pattern you are practicing every time you triage a ticket.
 
----
+## Patterns & Anti-Patterns
+
+`kubectl` fluency is less about memorizing every verb and more about choosing stable operating patterns under pressure. A pattern is a small repeatable move that narrows risk: confirm the context before a delete, inspect broad state before detailed state, generate YAML before editing YAML, and prefer server validation when the cluster might mutate or reject your request. The best operators make these moves boring. They do not rely on memory during an incident, because memory is exactly what gets worse when the page arrives at an inconvenient hour.
+
+The first production-grade pattern is the inspect-then-change loop. Start with `get` to establish scope, use `describe` to read events, use `logs --previous` only when the failure mode suggests a crashed container, and delay mutation until you can name the likely cause. This pattern scales from a local kind cluster to a large production cluster because each command reduces uncertainty without altering state. Which approach would you choose here and why: jumping straight to `kubectl edit`, or gathering one more read-only signal first?
+
+| Pattern | Use It When | Why It Works | Scaling Consideration |
+|---|---|---|---|
+| Context-first safety check | Any command can delete, overwrite, or expose a resource. | It catches stale kubeconfig state before the API server obeys the wrong request. | Put the current context and namespace in the shell prompt for every production terminal. |
+| Read-wide, drill-narrow debugging | A workload is unhealthy but the exact layer is unknown. | `get` shows the map, while `describe` and `logs --previous` explain one suspect. | Add label selectors early so large namespaces stay readable and API calls stay cheap. |
+| Generate-then-commit manifests | You need a new Deployment, Service, Job, or ConfigMap. | `--dry-run=client -o yaml` creates valid structure, then Git becomes the reviewable source of truth. | Pair generated manifests with `kubectl diff` or `--dry-run=server` before applying to shared clusters. |
+| Server-side validation before apply | Admission webhooks, quotas, or managed fields may alter the object. | The API server evaluates the same path a real apply would take, then discards the write. | Use Server-Side Apply for shared resources so field ownership conflicts are visible instead of accidental. |
+
+Anti-patterns look efficient because they save keystrokes in the moment, but they usually move cost into the next hour. Force-deleting a pod feels decisive until the finalizer was protecting a volume cleanup. Editing a live Deployment feels faster than opening a PR until the GitOps controller puts the old image back. Grepping default table output works during a demo until a script meets a cluster with enough resources to make the output ambiguous.
+
+| Anti-pattern | What Goes Wrong | Better Alternative |
+|---|---|---|
+| Treating `default` as the whole cluster | Workloads vanish from view because they live in another namespace. | Use `-A` for inventory and `kubectl config set-context --current --namespace=...` for focused work. |
+| Grepping human tables in scripts | Column changes, headers, or coincidental text produce false matches. | Use `--field-selector`, `-o jsonpath`, `-o custom-columns`, or `jq` against JSON. |
+| Making live-only fixes on GitOps resources | The controller reconciles back to Git and the incident repeats. | Update the manifest in Git, or suspend reconciliation intentionally with a written rollback plan. |
+| Using `--force --grace-period=0` as a cleanup shortcut | The API object can disappear while the real process or external resource remains. | Read finalizers and node health first, then force only when the risk is known and documented. |
+
+## Decision Framework
+
+When you are choosing a `kubectl` command, ask two questions before you type: am I reading or mutating state, and should this change survive beyond this terminal session? If the answer is "read only," start with `get`, then move to `describe`, `logs`, `exec`, or `port-forward` depending on the evidence. If the answer is "mutating and temporary," use an imperative command only when the risk is contained. If the answer is "mutating and durable," write or update a manifest and make Git the place where the decision is reviewed.
+
+```mermaid
+flowchart TD
+    Start["Need to interact with the cluster"] --> Read{"Read only?"}
+    Read -->|yes| Broad["Start with get<br>scope by namespace and labels"]
+    Broad --> Detail{"Need details?"}
+    Detail -->|events| Describe["describe<br>read Events first"]
+    Detail -->|container output| Logs["logs --previous<br>for crashes"]
+    Detail -->|inside container| Exec["exec or port-forward<br>for live inspection"]
+    Read -->|no| Durable{"Should the change be durable?"}
+    Durable -->|yes| Manifest["Update manifest in Git<br>diff, dry-run=server, apply"]
+    Durable -->|no| Imperative["Use imperative command<br>record what you changed"]
+    Imperative --> Owned{"Controller owns it?"}
+    Owned -->|yes| Git["Move the fix to Git<br>or suspend reconcile deliberately"]
+    Owned -->|no| Verify["Verify rollout and cleanup"]
+```
+
+The decision tree is deliberately conservative because Kubernetes accepts many commands that are syntactically valid and operationally foolish. A production Deployment, a staging namespace, and a local practice Pod all respond to the same verbs, but they do not deserve the same level of ceremony. Use the table below as a quick judgment aid when you are tired, distracted, or working in a cluster you do not know well.
+
+| Situation | Preferred Command Family | Why | Avoid |
+|---|---|---|---|
+| You need inventory across a namespace. | `get` with namespace, labels, `-o wide`, or `-A`. | It is read-only and gives a broad map before detail work. | Starting with `describe` on a guessed resource name. |
+| You need to diagnose a failed rollout. | `get`, `describe`, `rollout status`, and `logs --previous`. | These commands separate scheduling, image, readiness, and runtime failures. | Restarting or deleting pods before reading Events. |
+| You need a new repeatable resource. | `create ... --dry-run=client -o yaml`, then `apply`. | The manifest becomes reviewable and portable. | Hand-writing YAML from memory or copying outdated examples. |
+| You need a production change preview. | `kubectl diff` and `--dry-run=server`. | The API server applies validation and admission without persisting. | Trusting client-only validation when webhooks are involved. |
+| You need emergency debugging access. | `exec` or `port-forward` with a narrow target. | Access ends when the command stops and does not expose a Service publicly. | Creating temporary LoadBalancers for one-person investigations. |
 
 ## Did You Know?
 
@@ -416,11 +453,9 @@ web-frontend-7d4c8f6b9-ghi56      1/1     Running   0          35s
 
 4. **The `kubectl` binary is itself a Kubernetes API client library wrapped in a CLI.** Everything `kubectl` does is implemented on top of `client-go`, the same Go library that custom controllers use. This means anything `kubectl` can do, your own code can do — including watching resources, applying server-side patches, and running port-forwards. The CLI is genuinely just a thin convenience layer over the API, which is part of why the Kubernetes ecosystem has so many alternative clients (`k9s`, `lens`, `kubie`, `stern`, etc.) that all interoperate cleanly.
 
----
-
 ## Common Mistakes
 
-| Mistake | Why It Happens | The Fix |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Running destructive commands in the wrong context. | Stale `current-context` from previous work; no visual prompt indicator. | Run `kubectl config current-context` reflexively before destructive ops; install `kube-ps1` or starship's k8s module so context is always visible. |
 | Forgetting `--namespace` and assuming the cluster is empty. | `kubectl get pods` defaults to `default`, which is rarely where workloads live. | Either use `-n <ns>` explicitly, or set a default per shell with `kubectl config set-context --current --namespace=<ns>`. |
@@ -430,8 +465,6 @@ web-frontend-7d4c8f6b9-ghi56      1/1     Running   0          35s
 | Deleting a Pod that is owned by a Deployment and being surprised it comes back. | The ReplicaSet controller recreates owned pods within seconds. | Delete the highest-level resource you control — the Deployment, not the Pod. Use `kubectl get pod <name> -o yaml | grep ownerReferences` to see who owns a resource. |
 | Using `--force --grace-period=0` as a default. | It feels faster, and senior engineers in tutorials use it without explanation. | Reserve `--force` for confirmed-dead nodes. Otherwise, investigate the stuck finalizer or hung kubelet — forcing a delete can leave orphaned containers running on the node. |
 | Hand-writing YAML manifests from memory. | Beginners assume "real" engineers write YAML by hand. | They don't. Run `kubectl create <kind> <name> ... --dry-run=client -o yaml > file.yaml` to generate a correct skeleton, then edit. |
-
----
 
 ## Quiz
 
@@ -491,8 +524,6 @@ web-frontend-7d4c8f6b9-ghi56      1/1     Running   0          35s
    First, `kubectl config current-context` to find out which cluster you actually just deleted from. If it returns `kind-staging`, you are fine — there was no `test-experiment` deployment in production for you to delete, or there was and it was meant to be deleted. If it returns `prod-east-1`, you have a problem. Second, run `kubectl get deployment -A | grep test-experiment` on both clusters (using `--context=prod-east-1` and `--context=kind-staging` to be explicit) to see whether the resource still exists anywhere. If it is gone from production and you should not have deleted it, your recovery path is your manifest store — re-apply the manifest from Git. This is exactly why the safety habits of running `current-context` *before* destructive commands and managing one kubeconfig per cluster matter more than any technical Kubernetes skill: the system has no undo button, and humans make mistakes. Build the habit before you need it.
    </details>
 
----
-
 ## Hands-On Exercise
 
 **Task.** You will create a namespace, deploy a small workload imperatively, debug it, convert it to a declarative manifest, and clean up. The goal is to exercise every command you have learned in this module against a real cluster, in roughly the same order you would use them during live operations work.
@@ -505,7 +536,7 @@ kubectl config current-context
 # Expected: something like "kind-kind" or "minikube"
 ```
 
-**Step 1: Set up a working namespace and make it your default for this shell.**
+### Step 1: Set up a working namespace and make it your default for this shell
 
 ```bash
 kubectl create namespace kubectl-practice
@@ -514,7 +545,13 @@ kubectl config view --minify | grep namespace:
 # Expected: namespace: kubectl-practice
 ```
 
-**Step 2: Deploy two workloads — one imperatively, one declaratively — and compare.**
+<details>
+<summary>Solution notes</summary>
+
+The namespace should appear in `kubectl get namespaces`, and the minified config view should show `namespace: kubectl-practice`. If the namespace line is missing, repeat the `set-context --current --namespace=kubectl-practice` command and check that you did not switch contexts in another terminal.
+</details>
+
+### Step 2: Deploy two workloads, one imperatively and one declaratively
 
 ```bash
 # Imperative
@@ -529,7 +566,13 @@ kubectl apply -f declarative-web.yaml
 kubectl get deploy,rs,pod -o wide
 ```
 
-**Step 3: Break something on purpose, then debug it.**
+<details>
+<summary>Solution notes</summary>
+
+You should see two Deployments, two ReplicaSets, and four Pods once both rollouts settle. The important comparison is not that both workloads run, but that `declarative-web.yaml` gives you a file you can inspect, edit, commit, and apply again.
+</details>
+
+### Step 3: Break something on purpose, then debug it
 
 ```bash
 # Push a bad image tag — this should fail
@@ -548,7 +591,13 @@ kubectl set image deployment/imperative-web nginx=nginx:1.27.0
 kubectl rollout status deployment/imperative-web
 ```
 
-**Step 4: Practice information extraction.**
+<details>
+<summary>Solution notes</summary>
+
+The failed rollout should produce an `ImagePullBackOff` or `ErrImagePull` event that names the missing image tag. The fix is complete only after `kubectl rollout status` reports success and `kubectl get pods -l app=imperative-web` shows ready pods.
+</details>
+
+### Step 4: Practice information extraction
 
 ```bash
 # Get just pod names, one per line
@@ -561,14 +610,26 @@ kubectl get pods -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,NODE
 kubectl get pods --sort-by=.metadata.creationTimestamp
 ```
 
-**Step 5: Exec into a pod and confirm internal state.**
+<details>
+<summary>Solution notes</summary>
+
+The JSONPath command should print only pod names, one per line, while the custom-columns command should print a compact table with the fields you chose. This is the habit to use in automation instead of grepping the default human table.
+</details>
+
+### Step 5: Exec into a pod and confirm internal state
 
 ```bash
 POD=$(kubectl get pod -l app=imperative-web -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -it $POD -- sh -c 'nginx -v && hostname && cat /etc/hostname'
 ```
 
-**Step 6: Port-forward and verify connectivity from your laptop.**
+<details>
+<summary>Solution notes</summary>
+
+The command should print an nginx version and a hostname that matches the pod's internal hostname. If it fails because the pod is not ready, check the pod status first; if it fails because the shell is missing, the image is too minimal for this particular `exec` example.
+</details>
+
+### Step 6: Port-forward and verify connectivity from your laptop
 
 ```bash
 kubectl port-forward deployment/imperative-web 8080:80 &
@@ -578,7 +639,13 @@ curl -s http://localhost:8080 | head -5
 kill %1
 ```
 
-**Step 7: Clean up.**
+<details>
+<summary>Solution notes</summary>
+
+The `curl` output should start with HTML from nginx, proving that your laptop can reach a pod through the API-server-backed tunnel. Killing the background job closes the tunnel, so there is no Service, Ingress, firewall rule, or cloud resource left behind.
+</details>
+
+### Step 7: Clean up
 
 ```bash
 kubectl config set-context --current --namespace=default
@@ -587,9 +654,16 @@ kubectl delete namespace kubectl-practice
 kubectl get namespace kubectl-practice 2>&1 | grep NotFound
 ```
 
-**Success criteria:**
+<details>
+<summary>Solution notes</summary>
+
+The namespace deletion can take a little time because Kubernetes removes the resources inside it before removing the namespace object. The cleanup is complete when the final command reports `NotFound`, and your current context points back at the `default` namespace.
+</details>
+
+### Success criteria
 
 - [ ] You ran `kubectl config current-context` before doing anything destructive and confirmed you were on a local cluster.
+- [ ] You implemented the productivity-boosting shell environment by adding the `k` alias, enabling autocomplete, and testing at least one inspection one-liner such as `k get pods`.
 - [ ] You created the `kubectl-practice` namespace and set it as the default namespace for your shell.
 - [ ] You deployed `imperative-web` with an imperative `kubectl create deployment` command and `declarative-web` from a generated YAML manifest.
 - [ ] You broke `imperative-web` by setting a non-existent image tag, observed the resulting `ImagePullBackOff`, and used `kubectl describe` Events to confirm the cause.
@@ -599,15 +673,26 @@ kubectl get namespace kubectl-practice 2>&1 | grep NotFound
 - [ ] You used `kubectl port-forward` to access the workload from your laptop on `localhost:8080` and saw a real HTTP response.
 - [ ] You cleaned up by deleting the namespace and confirmed it no longer exists.
 
----
-
 ## Summary
 
 `kubectl` is a typed HTTPS client that turns shell commands into REST calls against the Kubernetes API server. Every operator action — reading state, creating resources, modifying live objects, debugging failures, and cleaning up — flows through the same four-part `[VERB] [TYPE] [NAME] [FLAGS]` structure, and once you internalize that, the rest of the command surface becomes navigable instead of intimidating. The three read verbs (`get`, `describe`, `explain`) each answer a different question and the senior workflow is to start broad with `get`, narrow with `describe`, and consult `explain` for schema. The single most important production discipline is choosing declarative `apply` over imperative `kubectl run`/`kubectl scale`, with `--dry-run=client -o yaml` as the bridge for generating manifests, and Server-Side Apply as the modern default for shared resources. Debugging is a reflex chain — `get`, then `describe` for events, then `logs --previous` for crash output, then `exec` for filesystem inspection — and every senior engineer can walk that chain in their sleep.
 
 The unglamorous habits matter more than the fancy commands. Run `kubectl config current-context` before any destructive operation. Set up the `k` alias and tab completion on every machine you touch. Use `kubectl diff` before any production apply. Treat `--force --grace-period=0` as a last resort, not a default. And remember that the cluster has no undo button — the discipline you build now is what protects you the next time a teammate Slacks you "the checkout service is down" at 03:00 on a Saturday.
 
----
+## Sources
+
+- Kubernetes kubectl command reference: https://kubernetes.io/docs/reference/kubectl/
+- Kubernetes kubectl cheat sheet: https://kubernetes.io/docs/reference/kubectl/cheatsheet/
+- Kubernetes command-line tool overview: https://kubernetes.io/docs/reference/kubectl/kubectl/
+- Kubernetes API concepts: https://kubernetes.io/docs/reference/using-api/api-concepts/
+- Kubernetes OpenAPI service reference: https://kubernetes.io/docs/concepts/overview/kubernetes-api/
+- Kubernetes resource management with kubectl: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/
+- Kubernetes imperative object management: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/imperative-command/
+- Kubernetes declarative object management: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/
+- Kubernetes Server-Side Apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/
+- Kubernetes JSONPath support: https://kubernetes.io/docs/reference/kubectl/jsonpath/
+- Kubernetes debug running pods: https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/
+- Kubernetes debug services: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
 
 ## Next Module
 
