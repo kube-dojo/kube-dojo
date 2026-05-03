@@ -623,6 +623,97 @@ def test_api_schema_advertises_new_endpoints() -> None:
     assert "errors" in schema["conventions"]
 
 
+def test_388_batches_reconciles_held_prs_merged_on_main(tmp_path: Path, monkeypatch) -> None:
+    _init_repo(tmp_path)
+    _write(
+        tmp_path / "logs/388_batch.jsonl",
+        "\n".join(
+            [
+                json.dumps({"event": "pilot_start", "ts": 10, "count": 3, "input": "batch.txt"}),
+                json.dumps({"event": "merged", "ts": 20, "pr": 100, "module": "a"}),
+                json.dumps(
+                    {
+                        "event": "merge_held",
+                        "ts": 30,
+                        "pr": 101,
+                        "module": "b",
+                        "verdict": "NEEDS_CHANGES",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "merge_held_nits",
+                        "ts": 40,
+                        "pr": 102,
+                        "module": "c",
+                        "verdict": "APPROVE_WITH_NITS",
+                    }
+                ),
+                json.dumps({"event": "pilot_done", "ts": 50}),
+            ]
+        )
+        + "\n",
+    )
+    _write(tmp_path / "README.md", "merged\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "feat(388): rewrite module b (#101)")
+    monkeypatch.setattr(local_api, "_fetch_388_pr_states", lambda: {})
+
+    status_code, payload, _ = local_api.route_request(tmp_path, "/api/388/batches")
+
+    assert status_code == 200
+    batch = payload["batches"][0]
+    assert batch["event_counts"]["merged"] == 1
+    assert batch["event_counts"]["merge_held"] == 1
+    assert batch["counts"]["merged"] == 2
+    assert batch["counts"]["merge_held"] == 0
+    assert batch["counts"]["merge_held_nits"] == 1
+    assert batch["held_rollup"] == {
+        "total": 2,
+        "open": 0,
+        "merged": 1,
+        "closed": 0,
+        "unknown": 1,
+        "resolved": 1,
+        "resolution_source": "git_log",
+    }
+
+
+def test_388_batch_detail_uses_github_pr_state_when_available(tmp_path: Path, monkeypatch) -> None:
+    _write(
+        tmp_path / "logs/388_batch.jsonl",
+        "\n".join(
+            [
+                json.dumps({"event": "pilot_start", "ts": 10, "count": 2, "input": "batch.txt"}),
+                json.dumps({"event": "merge_held", "ts": 20, "pr": 201, "module": "a"}),
+                json.dumps({"event": "merge_held_nits", "ts": 30, "pr": 202, "module": "b"}),
+                json.dumps({"event": "pilot_done", "ts": 40}),
+            ]
+        )
+        + "\n",
+    )
+    monkeypatch.setattr(
+        local_api,
+        "_fetch_388_pr_states",
+        lambda: {
+            201: {"state": "MERGED", "merged_at": "2026-05-03T18:00:00Z", "url": "https://x/201"},
+            202: {"state": "CLOSED", "merged_at": None, "url": "https://x/202"},
+        },
+    )
+
+    status_code, payload, _ = local_api.route_request(tmp_path, "/api/388/batch/388_batch")
+
+    assert status_code == 200
+    assert payload["counts"]["merged"] == 1
+    assert payload["counts"]["merge_held"] == 0
+    assert payload["counts"]["merge_held_nits"] == 0
+    assert payload["event_counts"]["merge_held"] == 1
+    assert payload["event_counts"]["merge_held_nits"] == 1
+    assert payload["held_rollup"]["resolved"] == 2
+    assert payload["held_rollup"]["resolution_source"] == "github"
+    assert [pr["resolution_status"] for pr in payload["held_prs"]] == ["merged", "closed"]
+
+
 def test_weak_etag_stable_for_identical_bytes() -> None:
     a = local_api._weak_etag(b"hello world")
     b = local_api._weak_etag(b"hello world")
