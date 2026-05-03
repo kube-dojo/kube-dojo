@@ -5,17 +5,17 @@ slug: prerequisites/cloud-native-101/module-1.5-monolith-to-microservices
 sidebar:
   order: 6
 ---
+> **Complexity**: `[QUICK]` - Architectural concepts
+>
+> **Time to Complete**: 40-55 minutes
+>
+> **Prerequisites**: Module 1.3 (What Is Kubernetes?)
+>
+> **Kubernetes target**: 1.35+
 
-# Module 1.5: From Monolith to Microservices
+---
 
-| Metadata | Value |
-|---|---|
-| Complexity | `[QUICK]` - Architectural concepts |
-| Time to Complete | 40-55 minutes |
-| Prerequisites | Module 1.3 (What Is Kubernetes?) |
-| Kubernetes target | 1.35+ |
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After this module, you will be able to:
 

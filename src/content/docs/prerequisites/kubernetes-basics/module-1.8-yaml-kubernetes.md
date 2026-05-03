@@ -5,15 +5,17 @@ sidebar:
   order: 9
 revision_pending: false
 ---
+> **Complexity**: [MEDIUM]
+>
+> **Time to Complete**: 60-75 minutes
+>
+> **Prerequisites**: Modules 1.1-1.7, including basic Kubernetes resources, pods, services, deployments, labels, and the `kubectl` workflow
+>
+> **Command convention**: This module uses the short alias `k` for `kubectl`; set it once with `alias k=kubectl` before running the examples.
 
-# Module 1.8: YAML for Kubernetes
+---
 
-**Complexity:** [MEDIUM]  
-**Time to Complete:** 60-75 minutes
-**Prerequisites:** Modules 1.1-1.7, including basic Kubernetes resources, pods, services, deployments, labels, and the `kubectl` workflow
-**Command convention:** This module uses the short alias `k` for `kubectl`; set it once with `alias k=kubectl` before running the examples.
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
 
@@ -31,7 +33,7 @@ That kind of incident feels unfair until you remember what YAML does in Kubernet
 
 There is another class of failure that is even quieter. In 2019, a European financial institution rotated a TLS certificate through a Kubernetes Secret and used YAML's folded block scalar by mistake. The file was valid YAML, the Secret was created, and the rollout continued, but the folded scalar replaced certificate newlines with spaces. The ingress controller received a malformed PEM payload, failed to load its certificate, and repeatedly restarted while external banking APIs were unavailable. A single character, `>` instead of `|`, did not break YAML syntax; it changed the application data that YAML carried.
 
-This module teaches YAML as an operational interface, not as decorative syntax. You will learn the three YAML shapes that appear in every manifest, the four root fields Kubernetes uses to route objects, the schema tools that prevent guessing, and the validation workflow that turns manifest review into an engineering practice. The goal is not memorizing every field in Kubernetes 1.35; the goal is knowing how to reason from structure to schema to controller behavior when the cluster is about to act on your file.
+This module teaches YAML as an operational interface, not as decorative syntax. You will learn the three YAML shapes that appear in every manifest, the four root fields Kubernetes uses to route objects, the schema tools that prevent guessing, and the validation workflow that turns manifest review into an engineering practice. The goal is not memorizing every field in Kubernetes 1.35; the goal is knowing how to reason from structure to schema to controller behavior when the cluster is about to act on your file. That reasoning gives reviewers something better than visual confidence: a repeatable path from text to API behavior.
 
 ## 1. YAML Fundamentals for Infrastructure
 

@@ -11,12 +11,13 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
+> **Complexity**: [MEDIUM]
+>
+> **Time to Complete**: 45-60 minutes
+>
+> **Prerequisites**: Docker installed, Cloud Native 101 completed
 
-# Module 1.1: Your First Cluster
-
-**Complexity:** [MEDIUM]
-**Time to Complete:** 45-60 minutes
-**Prerequisites:** Docker installed, Cloud Native 101 completed
+---
 
 Throughout this module, `kubectl` is the official Kubernetes command-line client, and we will use the common short alias `k` after defining it once. The alias matters because Kubernetes work involves many repeated inspection commands, and the shorter form keeps examples readable without changing what is executed.
 
@@ -24,7 +25,7 @@ Throughout this module, `kubectl` is the official Kubernetes command-line client
 alias k=kubectl
 ```
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
 - Construct and verify a Kubernetes 1.35+ local cluster with `kind`, Docker, and the `k` command-line workflow.
 - Compare local cluster tools and design a topology that matches the development or testing problem in front of you.

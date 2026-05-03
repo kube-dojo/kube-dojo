@@ -5,9 +5,6 @@ slug: prerequisites/cloud-native-101/module-1.2-docker-fundamentals
 sidebar:
   order: 3
 ---
-
-# Module 1.2: Docker Fundamentals
-
 > **Complexity**: `[MEDIUM]` - Hands-on practice required
 >
 > **Time to Complete**: 50-60 minutes
@@ -15,6 +12,8 @@ sidebar:
 > **Prerequisites**: Module 1.1: What Are Containers?
 >
 > **Environment**: A workstation with Docker Engine or Docker Desktop, a terminal, and permission to run local containers.
+
+---
 
 ## What You'll Be Able to Do
 

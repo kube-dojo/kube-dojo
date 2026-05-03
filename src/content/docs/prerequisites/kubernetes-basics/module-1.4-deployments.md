@@ -11,12 +11,15 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
+> **Complexity**: `[MEDIUM]` - Core workload management.
+>
+> **Time to Complete**: 40-45 minutes.
+>
+> **Prerequisites**: Module 3, Pods. This module assumes a Kubernetes 1.35 or newer cluster and a working shell. To keep commands short during practice, set `alias k=kubectl` before you begin, then read `k` as the same client command you already used in earlier modules.
 
-# Module 1.4: Deployments - Managing Applications
+---
 
-**Complexity**: `[MEDIUM]` - Core workload management. **Time to Complete**: 40-45 minutes. **Prerequisites**: Module 3, Pods. This module assumes a Kubernetes 1.35 or newer cluster and a working shell. To keep commands short during practice, set `alias k=kubectl` before you begin, then read `k` as the same client command you already used in earlier modules.
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 

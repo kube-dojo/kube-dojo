@@ -11,17 +11,15 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
-# Module 1.2: kubectl Basics
-
-> **Complexity**: `[MEDIUM]` - Essential commands to master
+> **Complexity**: `[MEDIUM]` - Essential commands to master.
 >
-> **Time to Complete**: 60-75 minutes
+> **Time to Complete**: 60-75 minutes.
 >
 > **Prerequisites**: Module 1.1 (a working kind or minikube cluster), basic familiarity with the Linux shell, and a `kubectl` binary on your `$PATH` matching your Kubernetes 1.35+ cluster within one minor version.
 
-This module uses `kubectl` in full until the productivity section installs `alias k=kubectl`; after that point, `k get pods` and similar short commands mean exactly the same API calls with less typing.
+---
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After completing this module, you will be able to debug, compare, design, evaluate, and implement `kubectl` workflows against a Kubernetes 1.35+ cluster:
 
@@ -30,6 +28,8 @@ After completing this module, you will be able to debug, compare, design, evalua
 - **Design** a safe context-management workflow that prevents the cross-cluster destruction described above, including current-context checks, named contexts per environment, and `--dry-run=server` previews.
 - **Evaluate** the output of `kubectl get -o jsonpath` and `kubectl get -o custom-columns` to extract precisely the data needed for automation, monitoring scripts, or certification exam tasks.
 - **Implement** a productivity-boosting shell environment with the `k` alias, autocomplete, and a small library of inspection one-liners that you can reproduce on any new machine in under five minutes.
+
+This module uses `kubectl` in full until the productivity section installs `alias k=kubectl`; after that point, `k get pods` and similar short commands mean exactly the same API calls with less typing.
 
 ## Why This Module Matters
 

@@ -5,18 +5,17 @@ revision_pending: false
 sidebar:
   order: 7
 ---
-
-# Module 1.6: ConfigMaps and Secrets
-
 > **Complexity**: `[MEDIUM]` - Essential configuration management
 >
 > **Time to Complete**: 35-40 minutes
 >
 > **Prerequisites**: Module 1.3 (Pods)
 
+---
+
 Throughout this module, commands use the short alias `k` for `kubectl`. If your shell does not already define it, run `alias k=kubectl` before starting the hands-on work. The examples target Kubernetes 1.35 and focus on behavior that matters when configuration, credentials, and rollout operations meet in a real cluster.
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 

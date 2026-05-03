@@ -180,6 +180,7 @@ def extract_body_paragraphs(text: str) -> list[str]:
     in_sources = False
     in_list = False
     in_table = False
+    seen_heading = False
 
     for idx, line in enumerate(lines):
         stripped = line.strip()
@@ -194,12 +195,17 @@ def extract_body_paragraphs(text: str) -> list[str]:
             continue
 
         heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", stripped)
+        if heading:
+            seen_heading = True
         if heading and len(heading.group(1)) <= 2:
             in_sources = _heading_matches(heading.group(2), SOURCES_HEADINGS)
         if in_sources:
             kept.append("")
             continue
 
+        if not seen_heading and stripped.startswith(">"):
+            kept.append("")
+            continue
         if in_html:
             if f"</{in_html}" in lower:
                 in_html = None
@@ -216,6 +222,9 @@ def extract_body_paragraphs(text: str) -> list[str]:
         if not stripped:
             in_list = False
             in_table = False
+            kept.append("")
+            continue
+        if re.fullmatch(r"-{3,}", stripped):
             kept.append("")
             continue
 
@@ -549,27 +558,41 @@ def anti_leak_metrics(text: str) -> dict[str, object]:
     lowered = body_no_code.lower()
     forbidden = [token for token in FORBIDDEN_TOKENS if token.lower() in lowered]
     has_k_shortcut = bool(KUBECTL_COMMAND_RE.search(body_no_code))
-    first_kubectl = re.search(r"\bkubectl\b", body_no_code, re.IGNORECASE)
     if not has_k_shortcut:
         kubectl_alias_introduced = True
-    elif first_kubectl:
-        # Search the original body (with code blocks) — `alias k=kubectl` is
-        # almost always defined inside a fenced bash snippet, so stripping
-        # code first would miss legitimate aliases. Anchor the proximity
-        # window on the same `kubectl` mention located in `body`.
-        first_kubectl_in_body = re.search(r"\bkubectl\b", body, re.IGNORECASE)
-        anchor = first_kubectl_in_body or first_kubectl
-        start = max(0, anchor.start() - 1000)
-        end = min(len(body), anchor.end() + 1000)
-        kubectl_alias_introduced = bool(ALIAS_RE.search(body[start:end]))
     else:
-        kubectl_alias_introduced = False
+        # Search the original body because alias definitions normally live
+        # inside fenced bash snippets. The alias only needs to appear before
+        # the first shorthand command, not before every long-form kubectl
+        # mention in explanatory prose.
+        first_shortcut = KUBECTL_COMMAND_RE.search(body)
+        alias = ALIAS_RE.search(body)
+        kubectl_alias_introduced = bool(
+            first_shortcut and alias and alias.start() < first_shortcut.start()
+        )
     return {
         "forbidden_tokens": forbidden,
         "has_emoji": bool(EMOJI_RE.search(body_no_code)),
         "has_47": bool(re.search(r"(?<!\d)47(?!\d)", body_no_code)),
         "kubectl_alias_introduced": kubectl_alias_introduced,
     }
+
+
+def _strip_top_metadata(body: str) -> str:
+    """Drop canonical metadata blockquotes before prose checks."""
+    lines = body.splitlines()
+    start = 0
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    while start < len(lines) and lines[start].strip().startswith(">"):
+        start += 1
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    if start < len(lines) and re.fullmatch(r"-{3,}", lines[start].strip()):
+        start += 1
+    while start < len(lines) and not lines[start].strip():
+        start += 1
+    return "\n".join(lines[start:])
 
 
 def protected_assets(text: str) -> dict[str, int]:

@@ -5,14 +5,13 @@ slug: prerequisites/cloud-native-101/module-1.3-what-is-kubernetes
 sidebar:
   order: 4
 ---
-
-# Module 1.3: What Is Kubernetes?
-
 > **Complexity**: `[QUICK]` - High-level overview
 >
 > **Time to Complete**: 30-35 minutes
 >
 > **Prerequisites**: Module 1 (Containers), Module 2 (Docker). This lesson assumes you can explain why teams package applications as containers and can recognize a basic Docker image or container command, but it does not assume previous Kubernetes experience.
+
+---
 
 ## What You'll Be Able to Do
 

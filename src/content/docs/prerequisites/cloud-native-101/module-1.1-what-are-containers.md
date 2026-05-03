@@ -5,9 +5,13 @@ slug: prerequisites/cloud-native-101/module-1.1-what-are-containers
 sidebar:
   order: 2
 ---
-# Module 1.1: What Are Containers?
+> **Complexity**: `[QUICK]` - Foundational concepts.
+>
+> **Time to Complete**: 30-35 minutes.
+>
+> **Prerequisites**: none beyond a terminal for the optional Docker lab and curiosity about why deployment environments drift.
 
-**Complexity**: `[QUICK]` - Foundational concepts. **Time to Complete**: 30-35 minutes. **Prerequisites**: none beyond a terminal for the optional Docker lab and curiosity about why deployment environments drift.
+---
 
 ## What You'll Be Able to Do
 

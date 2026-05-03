@@ -5,17 +5,17 @@ slug: prerequisites/cloud-native-101/module-1.4-cloud-native-ecosystem
 sidebar:
   order: 5
 ---
+> **Complexity**: `[QUICK]` - Orientation, not deep dives
+>
+> **Time to Complete**: 40-55 minutes
+>
+> **Prerequisites**: Module 1.3 (What Is Kubernetes?)
+>
+> **Kubernetes target**: 1.35+
 
-# Module 1.4: The Cloud Native Ecosystem
+---
 
-| Metadata | Value |
-|---|---|
-| Complexity | `[QUICK]` - Orientation, not deep dives |
-| Time to Complete | 40-55 minutes |
-| Prerequisites | Module 1.3 (What Is Kubernetes?) |
-| Kubernetes target | 1.35+ |
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After this module, you will be able to:
 

@@ -46,6 +46,9 @@ paths:
 - NEVER remove or simplify existing visual aids during rewrites — they are protected assets
 
 ## Content Rules
+- Do NOT add a Markdown `# Module ...` heading after frontmatter. Starlight renders the page H1 from `title:` frontmatter, so a source H1 creates a duplicate visible title.
+- The top-of-module metadata must be a blockquote immediately after frontmatter:
+  `> **Complexity**: ...`, blank quoted line, `> **Time to Complete**: ...`, blank quoted line, `> **Prerequisites**: ...`, then `---`, then `## What You'll Be Able to Do`.
 - 600-800+ lines of CONTENT minimum (250+ for KCNA theory modules). Visual aids (ASCII diagrams, code blocks for illustration) do NOT count toward the minimum — they supplement teaching, not substitute for it.
 - Explain "why" before "what"
 - All code must be runnable (not pseudocode)

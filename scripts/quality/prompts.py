@@ -94,6 +94,8 @@ Produce a complete, replacement module that teaches the topic from beginner to s
 
 Mandatory:
 - Preserve the `title:` and `sidebar.order:` from existing frontmatter.
+- Do NOT add a Markdown `# Module ...` heading after frontmatter. Starlight renders the visible page H1 from `title:` frontmatter, so a source H1 creates a duplicate title in the rendered page.
+- Put top metadata immediately after frontmatter as blockquote lines: `> **Complexity**: ...`, `> **Time to Complete**: ...`, and `> **Prerequisites**: ...`; then add `---`; then use `## What You'll Be Able to Do` for the learning outcomes section.
 - Do NOT preserve `revision_pending:` if present in input frontmatter — drop it from output. The banner is a queue marker that the merge step removes; carrying it through into a fresh rewrite would leave a "queued for revision" banner on a freshly-shipped module.
 - **Visual-aid preservation is COUNT-BASED, not "best-effort"**: count the input's ` ```mermaid ` fenced blocks, ` ```ascii ` blocks, and `|---|` table rows. Your output MUST contain AT LEAST as many of each. Dropping any is a hard fail that bounces the module back to you.
 - **NEVER replace an ` ```ascii ` or ` ```text ` block with a Markdown table.** If a table reads better in your judgment, **add the table next to the ASCII block** — do not remove the ASCII. The same applies to Mermaid: never replace ASCII with Mermaid; keep both. The visual-aid count is checked PER TYPE (mermaid count, ascii count, table count) — substituting one type for another is detected and rejected.
@@ -232,6 +234,7 @@ Rules:
 - Ignore the `## Sources` section for scoring — citation insertion runs in a SEPARATE downstream stage (`scripts/citation_backfill.py`), so neither the rubric's "Citation Gate" nor the absence of a Sources section should reduce the score here. The writer was instructed to preserve any pre-existing Sources verbatim and not add a new one; verify that instruction was honored (do not flag absence as a must-fix).
 - For track=structural: verify existing content was PRESERVED verbatim (zero edits to pre-existing lines). If any existing line was modified, verdict must be changes_requested.
 - For track=rewrite: verify narrative flow (not a bullet list), worked examples present before learner is asked to solve similar, at least 2 inline active-learning prompts.
+- Verify the top-of-module format: no source-level `# Module ...` heading after frontmatter, blockquote metadata for complexity/time/prerequisites, separator, then `## What You'll Be Able to Do`. Flag duplicate H1 or inline metadata as a must-fix.
 - Preserved visual aids (ASCII, Mermaid, tables): must be present and not removed.
 
 Return the JSON object at the END of your response. Nothing after it.

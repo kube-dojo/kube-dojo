@@ -5,14 +5,15 @@ revision_pending: false
 sidebar:
   order: 8
 ---
+> **Complexity**: [MEDIUM]
+>
+> **Time to Complete**: 50-60 minutes
+>
+> **Prerequisites**: [Module 1.4: Deployments](/prerequisites/kubernetes-basics/module-1.4-deployments/), [Module 1.5: Services](/prerequisites/kubernetes-basics/module-1.5-services/)
 
-# Module 1.7: Namespaces and Labels
+---
 
-**Complexity:** [MEDIUM]
-**Time to Complete:** 50-60 minutes
-**Prerequisites:** [Module 1.4: Deployments](/prerequisites/kubernetes-basics/module-1.4-deployments/), [Module 1.5: Services](/prerequisites/kubernetes-basics/module-1.5-services/)
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
@@ -28,7 +29,7 @@ At 2:00 AM on a Friday, a platform engineer at a busy online retailer is paged b
 
 The outage is not really about one careless command. It is about a cluster that has grown past the point where memory, discipline, and naming conventions can protect it. A single physical Kubernetes cluster is attractive because it centralizes capacity, networking, observability, and operational skill, but that same centralization creates a shared fate unless the cluster is divided into understandable operating zones. Without namespaces, teams collide over names and permissions; without labels, controllers and humans cannot reliably find the objects they mean to affect; without quotas and defaults, one tenant can unintentionally starve another.
 
-This module teaches the two organizational primitives that make Kubernetes usable beyond toy demos. Namespaces divide the API into logical rooms, while labels attach structured identity to the objects inside those rooms. You will learn what those boundaries actually isolate, what they absolutely do not isolate, how selectors allow decoupled controllers to cooperate, and how namespace-level policy turns a shared cluster into a platform that can survive normal human mistakes.
+This module teaches the two organizational primitives that make Kubernetes usable beyond toy demos. Namespaces divide the API into logical rooms, while labels attach structured identity to the objects inside those rooms. You will learn what those boundaries actually isolate, what they absolutely do not isolate, how selectors allow decoupled controllers to cooperate, and how namespace-level policy turns a shared cluster into a platform that can survive normal human mistakes. That shared vocabulary also makes incident review faster because ownership, blast radius, and cleanup scope become visible in ordinary commands.
 
 Throughout the commands, this module uses `k` as the local alias for `kubectl`; if your shell does not already define it, run `alias k=kubectl` before practicing. The Kubernetes examples target version 1.35 or newer behavior, and the concepts are stable across modern clusters even when individual cloud distributions add their own admission policies or default labels.
 

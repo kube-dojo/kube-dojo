@@ -11,13 +11,15 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
+> **Complexity**: [MEDIUM]
+>
+> **Time to Complete**: 60-75 minutes
+>
+> **Prerequisites**: Module 1.2 (kubectl Basics; define `alias k=kubectl` before using shorthand)
 
-# Module 1.3: Pods - The Atomic Unit
-**Complexity**: [MEDIUM]
-**Time to Complete**: 60-75 minutes
-**Prerequisites**: Module 1.2 (kubectl Basics; define `alias k=kubectl` before using shorthand)
+---
 
-## Learning Outcomes
+## What You'll Be Able to Do
 - Diagnose Pod lifecycle failures, including `Pending`, `ImagePullBackOff`, `CreateContainerConfigError`, `CrashLoopBackOff`, and `OOMKilled`, by combining events, logs, exit codes, and native `k` inspection commands.
 - Design multi-container Pods that use sidecar, ambassador, adapter, init container, ephemeral container, shared `emptyDir`, and `localhost` communication patterns without turning the Pod into a small virtual machine.
 - Evaluate requests, limits, Quality of Service classes, CFS throttling, OOM killer behavior, taints, tolerations, affinity, and anti-affinity when predicting how Pods schedule and survive resource pressure.

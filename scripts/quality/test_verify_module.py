@@ -63,6 +63,92 @@ Hidden prose should not appear.
     ]
 
 
+def test_body_prose_extraction_skips_top_metadata_blockquote() -> None:
+    text = """---
+title: Demo
+---
+> **Complexity**: [MEDIUM]
+>
+> **Time to Complete**: 45-60 minutes
+>
+> **Prerequisites**: Prior module
+
+---
+
+## What You'll Be Able to Do
+
+This teaching paragraph remains with enough words to count as prose after the metadata block.
+"""
+    assert verify_module.extract_body_paragraphs(text) == [
+        "This teaching paragraph remains with enough words to count as prose after the metadata block."
+    ]
+
+
+def test_body_prose_extraction_skips_horizontal_rules() -> None:
+    text = """---
+title: Demo
+---
+## What You'll Be Able to Do
+
+This first teaching paragraph has enough words to count as prose before the separator.
+
+---
+
+This second teaching paragraph also remains after the separator without counting the rule itself.
+"""
+    assert verify_module.extract_body_paragraphs(text) == [
+        "This first teaching paragraph has enough words to count as prose before the separator.",
+        "This second teaching paragraph also remains after the separator without counting the rule itself.",
+    ]
+
+
+def test_anti_leak_ignores_top_metadata_for_kubectl_alias_order() -> None:
+    text = """---
+title: Demo
+---
+> **Prerequisites**: Have a `kubectl` binary installed.
+
+---
+
+Set the alias before using shorthand commands:
+
+```bash
+alias k=kubectl
+k get pods
+```
+"""
+    assert verify_module.anti_leak_metrics(text)["kubectl_alias_introduced"] is True
+
+
+def test_anti_leak_allows_longform_kubectl_before_alias() -> None:
+    text = """---
+title: Demo
+---
+Use `kubectl` in full while explaining the API client.
+
+Define the shorthand before the first shorthand command:
+
+```bash
+alias k=kubectl
+k get pods
+```
+"""
+    assert verify_module.anti_leak_metrics(text)["kubectl_alias_introduced"] is True
+
+
+def test_anti_leak_rejects_shorthand_before_alias() -> None:
+    text = """---
+title: Demo
+---
+Run `k get pods` before defining the alias.
+
+```bash
+alias k=kubectl
+```
+"""
+    assert verify_module.anti_leak_metrics(text)["kubectl_alias_introduced"] is False
+
+
 def test_density_metrics_on_synthetic_short_module_fail() -> None:
     metrics = verify_module.density_metrics("Tiny.\n\nShort too.\n")
     gates = verify_module.gate_results(

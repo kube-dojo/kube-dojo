@@ -11,18 +11,17 @@ lab:
   difficulty: "beginner"
   environment: "kubernetes"
 ---
-
-# Module 1.5: Services - Stable Networking
-
 > **Complexity**: `[MEDIUM]` - Essential networking concept for every application that runs behind a controller
 >
 > **Time to Complete**: 35-40 minutes of reading and lab work, with extra practice time if you intentionally break selectors
 >
 > **Prerequisites**: Module 4 (Deployments), especially labels, replicas, rollout behavior, and why pods are replaceable
 
+---
+
 This module uses the common shell alias `alias k=kubectl` so the examples stay readable once the commands become repetitive. Run that alias in your terminal before the hands-on section, and read commands such as `k get svc` as normal Kubernetes CLI calls through `kubectl`. The examples target Kubernetes 1.35 and focus on the built-in Service API rather than higher-level routing systems such as Ingress or Gateway API.
 
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After this module, you will be able to perform the work below in a real cluster rather than only define the vocabulary. Each outcome is reflected again in the troubleshooting narrative, quiz scenarios, and lab checks, because Services are best learned by following traffic from a stable name to the selected pods behind it.
 
