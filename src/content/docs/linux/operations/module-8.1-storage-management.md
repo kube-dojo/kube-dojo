@@ -1,6 +1,7 @@
 ---
 title: "Module 8.1: Storage Management"
 slug: linux/operations/module-8.1-storage-management
+revision_pending: false
 sidebar:
   order: 1
 lab:
@@ -10,57 +11,37 @@ lab:
   difficulty: intermediate
   environment: ubuntu
 ---
-> **Operations — LFCS** | Complexity: `[COMPLEX]` | Time: 45-55 min
+
+# Module 8.1: Storage Management
+
+> **Operations - LFCS** | Complexity: `[COMPLEX]` | Time: 45-55 min. This module treats storage as a production responsibility, so every command is connected to verification, reboot safety, and failure diagnosis.
 
 ## Prerequisites
 
-Before starting this module:
+Before starting this module, make sure you can already explain where Linux mounts filesystems, how the kernel exposes block devices, and how basic performance tools report I/O pressure.
 - **Required**: [Module 1.3: Filesystem Hierarchy](/linux/foundations/system-essentials/module-1.3-filesystem-hierarchy/) for understanding mount points and inodes
 - **Required**: [Module 1.1: Kernel Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/) for understanding kernel/userspace boundary
 - **Helpful**: [Module 5.4: I/O Performance](/linux/operations/performance/module-5.4-io-performance/) for storage monitoring context
 
----
+## Learning Outcomes
 
-## What You'll Be Able to Do
-
-After this module, you will be able to:
-- **Configure** disk partitions, filesystems, and mount points using fdisk, mkfs, and fstab
-- **Manage** LVM volumes (create, extend, snapshot) for flexible storage allocation
-- **Diagnose** disk space issues using df, du, and lsblk and explain inode exhaustion
-- **Implement** a storage strategy appropriate for Kubernetes node storage requirements
-
----
+After this module, you will be able to perform the following operational tasks and explain the safety checks that make each task suitable for production systems:
+- **Configure** disk partitions, filesystems, and mount points using `fdisk`, `mkfs`, UUIDs, and `/etc/fstab`
+- **Manage** LVM physical volumes, volume groups, logical volumes, online expansion, and snapshots for flexible storage allocation
+- **Diagnose** block space, inode, I/O, RAID, NFS, and mount failures using `df`, `du`, `lsblk`, `findmnt`, `mdadm`, and LVM inspection tools
+- **Design** a Kubernetes 1.35+ node storage strategy that separates ephemeral node data from persistent application data
 
 ## Why This Module Matters
 
-Storage management is one of those skills that separates "I can use Linux" from "I can run Linux in production." When a disk fills up at 3 AM, when a database needs more space without downtime, when teams need shared storage across servers — that's when LVM, NFS, and filesystem skills become critical.
+A payments company once lost an entire morning of order processing because a database host rebooted after a kernel update and came back with an empty-looking data directory. The data was still on disk, but the LVM filesystem that normally mounted at the database path was missing from `/etc/fstab`, so the service started against a plain directory on the root filesystem. By the time an engineer noticed the mount error, the application had written new files in the wrong place, replication lag had climbed, and the recovery plan had to untangle real data from misplaced startup artifacts.
 
-Understanding storage helps you:
+Storage failures feel different from ordinary service bugs because they often arrive as contradictions. `df -h` says space is available, yet the system reports "No space left on device." A logical volume grew by 50 GB, yet the application still sees the old filesystem size. An NFS share works from one host but blocks boot on another. A Kubernetes node has plenty of total disk, yet pods are evicted because image layers and `emptyDir` usage consumed the filesystem that kubelet depends on.
 
-- **Resize volumes without downtime** — LVM lets you grow filesystems while they're mounted
-- **Share data across servers** — NFS is still the backbone of shared storage in many environments
-- **Prevent disasters** — Proper fstab configuration prevents boot failures
-- **Pass the LFCS exam** — Storage is 20% of the exam weight
+This module teaches storage as an operational system rather than a bag of commands. You will start with the physical layout, then add filesystems, LVM, persistent mounts, NFS, swap, RAID, autofs, monitoring, and Kubernetes node design. The goal is not memorizing a perfect command sequence; the goal is being able to look at a server under pressure, identify which layer is failing, and make the smallest safe change that restores service without creating a boot-time surprise later.
 
-If you've ever run `df -h`, panicked at 100% usage, and didn't know what to do next — this module fixes that.
+## Disk Layout, Partitions, and Filesystems
 
----
-
-## Did You Know?
-
-- **LVM was invented in 1998** by Heinz Mauelshagen for Linux. Before LVM, resizing a partition meant backing up data, deleting the partition, recreating it larger, then restoring. LVM made this a one-command operation.
-
-- **NFS v4 is 20+ years old** — Released in 2003, NFSv4 added strong security (Kerberos), stateful operation, and compound operations. Yet many production systems still accidentally run NFSv3.
-
-- **A bad fstab entry can prevent boot** — If you add an NFS mount to `/etc/fstab` without the `nofail` option, your server won't boot if the NFS server is unreachable. This has caused more outages than anyone wants to admit.
-
----
-
-## Partitions and Filesystems
-
-### Disk Layout Basics
-
-Before we touch LVM, understand what's underneath:
+Storage begins with a layered mental model. The kernel discovers a block device, the partition table divides that device into regions, a filesystem organizes one of those regions into files and directories, and a mount operation attaches that filesystem into the single Linux directory tree. LVM adds another layer between partitions and filesystems, which sounds like complexity until you need to grow a filesystem online while a production service is still writing to it.
 
 ```mermaid
 graph TD
@@ -77,7 +58,7 @@ graph TD
     K --> L[swap]
 ```
 
-### Listing Disks and Partitions
+Read the diagram from top to bottom when diagnosing a problem. If `lsblk` does not show the disk, the issue is below the filesystem layer, so `mkfs` and `mount` are the wrong tools. If the disk and partition exist but no filesystem UUID appears in `blkid`, the mount cannot be made durable yet. If the filesystem exists but is not visible at the expected directory, focus on `findmnt`, `/etc/fstab`, and the mount options rather than repartitioning anything.
 
 ```bash
 # List all block devices
@@ -99,7 +80,7 @@ fdisk -l /dev/sda
 blkid
 ```
 
-### Creating Partitions
+`lsblk` is usually your first view because it connects devices, partitions, LVM mappings, sizes, and mount points in one tree. `fdisk -l` is better when you need partition table detail, while `blkid` confirms whether a filesystem or swap signature already exists. That distinction matters because formatting the wrong device destroys data, and many storage incidents begin when an operator treats "unmounted" as if it meant "unused."
 
 ```bash
 # Interactive partitioning with fdisk
@@ -119,7 +100,7 @@ echo -e "n\np\n1\n\n\nt\n8e\nw" | sudo fdisk /dev/sdb
 sudo partprobe /dev/sdb
 ```
 
-### Creating Filesystems
+Partitioning tools edit metadata that tells the kernel where usable regions begin and end. The `w` command in `fdisk` is the point of no return, so print the table before writing and confirm you are targeting the new disk rather than the boot disk. `partprobe` asks the kernel to reread partition metadata, which is useful after changing a disk on a running system, but it is not a magic override if mounted filesystems or busy devices prevent a clean reread.
 
 ```bash
 # Create ext4 filesystem
@@ -138,7 +119,7 @@ blkid /dev/sdb1
 # /dev/sdb1: UUID="a1b2c3..." TYPE="ext4" LABEL="data_vol"
 ```
 
-### ext4 vs XFS — When to Use Which
+Creating a filesystem is a destructive operation because it writes new filesystem structures onto the target device. The `-L` label helps humans, while the UUID helps machines, especially when device names shift after a reboot or hardware change. The ext4 reserved-block setting is also an operational choice: reserving less space can make sense on a large data volume, but root filesystems still benefit from reserved blocks because they give administrators room to log in and recover when ordinary users fill the disk.
 
 | Feature | ext4 | XFS |
 |---------|------|-----|
@@ -148,13 +129,13 @@ blkid /dev/sdb1
 | Default on | Ubuntu, Debian | RHEL, Rocky |
 | LFCS exam | Know both | Know both |
 
----
+The ext4 versus XFS decision is not about one filesystem being universally better. ext4 is flexible and familiar, including offline shrink support, which can matter in lab environments and smaller general-purpose systems. XFS is excellent for large filesystems and sustained throughput, but it can only grow, so a careless over-allocation may require backup, recreation, and restore if you later need to shrink it.
 
-## LVM (Logical Volume Manager)
+Pause and predict: if you run `lvextend` on a logical volume but skip the filesystem resize step, which tool will show the new size first, `lvs` or `df -h`? The right answer reveals the boundary between block-device capacity and filesystem capacity, and that boundary is the reason LVM changes can look successful while applications still fail with old space limits.
 
-LVM is the single most important storage concept for the LFCS. It adds a layer of abstraction between physical disks and filesystems, giving you flexibility that raw partitions can't provide.
+## LVM: Flexible Storage Without Repartitioning
 
-### LVM Architecture
+LVM is the single most important storage abstraction for Linux operations because it turns fixed disks into an allocatable pool. A physical volume contributes extents, a volume group collects those extents, and a logical volume consumes extents as a block device that can be formatted and mounted. This model lets you add a new disk to the pool and grow an existing filesystem without moving the application to a new path or taking a long maintenance window.
 
 ```mermaid
 graph TD
@@ -166,9 +147,7 @@ graph TD
     LV2 --> LogsMount[/var/log (xfs)]
 ```
 
-**Key insight**: Logical volumes can span multiple physical disks, and you can add more physical disks to a volume group at any time. This is why LVM is standard in production.
-
-### Step 1: Create Physical Volumes
+The key insight is that the filesystem does not need to know which physical disk provided the extents. That separation is powerful, but it also creates a responsibility to inspect every layer before changing anything. On a busy server, verify the physical volume, volume group, logical volume, filesystem type, mount point, and backup posture before resizing, because a correct command against the wrong LV is still an outage.
 
 ```bash
 # Mark a partition (or whole disk) as an LVM physical volume
@@ -187,7 +166,7 @@ sudo pvs
 sudo pvdisplay /dev/sdb1
 ```
 
-### Step 2: Create Volume Groups
+Using a whole disk as a physical volume is common in controlled environments, while creating a partition first can make ownership clearer to tools and humans that expect partition tables. Either way, `pvcreate` writes an LVM label, so it must only be used on devices that you have positively identified as empty or intentionally repurposed. When in doubt, compare `lsblk -f`, `blkid`, and any cloud or hypervisor attachment data before initializing the device.
 
 ```bash
 # Create a volume group from one or more PVs
@@ -208,7 +187,7 @@ sudo vgs
 sudo vgdisplay vg_storage
 ```
 
-### Step 3: Create Logical Volumes
+Volume groups are where capacity planning starts to become visible. `vgs` shows total and free space, while `vgdisplay` gives more detail about extents and allocation. If the volume group has no free extents, `lvextend` cannot help until you add a new physical volume, remove unused logical volumes, or migrate data elsewhere.
 
 ```bash
 # Create a logical volume with specific size
@@ -230,7 +209,7 @@ ls -la /dev/vg_storage/lv_data
 # This is a symlink to /dev/dm-X
 ```
 
-### Step 4: Format and Mount
+Logical volumes should be named for the service or mount point they support, not for the disk that happened to back them on day one. A name such as `lv_data` is acceptable in a lab, but production names like `lv_postgres`, `lv_registry`, or `lv_containerd` make incident response faster. The `/dev/vg_name/lv_name` path is also easier for humans than `/dev/dm-3`, even though both refer to the same mapped device.
 
 ```bash
 # Create filesystem on the logical volume
@@ -248,9 +227,7 @@ sudo mount /dev/vg_storage/lv_logs /var/log/app
 df -h /data /var/log/app
 ```
 
-### Extending Logical Volumes (The Money Skill)
-
-This is what makes LVM worth it — growing storage without downtime:
+Formatting and mounting an LV is the point where storage becomes visible to applications. Use `df -h` to confirm the mounted filesystem size, but also run `findmnt /data` when the mount point matters, because `df` alone can hide the difference between a correctly mounted filesystem and a plain directory on another filesystem. That difference is exactly how services accidentally write critical data into the root filesystem.
 
 ```bash
 # Extend the logical volume by 5G
@@ -271,9 +248,7 @@ sudo lvextend -L +5G -r /dev/vg_storage/lv_data
 sudo lvextend -l +100%FREE -r /dev/vg_storage/lv_data
 ```
 
-> **Exam tip**: Always use `lvextend -r` to resize the filesystem in the same step. Forgetting to resize the filesystem after extending the LV is a classic mistake — the LV is bigger but the filesystem doesn't know it.
-
-### Common Mistakes with LVM
+The `-r` flag is the habit to build because it keeps the logical volume resize and filesystem resize in the same operation. Without it, `lvs` may show the additional capacity while `df -h` still reports the previous filesystem size. Notice also the plus sign in `+5G`; without the plus, `-L 5G` means "set the total size to 5 GB," which is a very different instruction from "add 5 GB."
 
 | Mistake | What Happens | Fix |
 |---------|-------------|-----|
@@ -283,13 +258,11 @@ sudo lvextend -l +100%FREE -r /dev/vg_storage/lv_data
 | Shrinking XFS | XFS cannot be shrunk, only grown | Use ext4 if shrinking may be needed |
 | Not updating fstab | Mount lost on reboot | Add entry to `/etc/fstab` |
 
-> **Stop and think**: You have a `vg_webservers` volume group with two physical volumes. You need to expand `/var/www/html` which is on `lv_html` within `vg_webservers`. You just added a new physical disk `/dev/sde`. What's the *most efficient* sequence of commands to expand the filesystem without downtime? Think about which LVM commands are needed and how to handle the filesystem resizing.
+Stop and think: you have a `vg_webservers` volume group with two physical volumes, and you need to expand `/var/www/html` on `lv_html` after adding `/dev/sde`. The efficient online sequence is to initialize the new disk as a PV, extend the existing VG, then use `lvextend -r` against the LV, because the application should keep using the same mount point while capacity grows under it.
 
----
+## Mounting, `/etc/fstab`, and Boot Safety
 
-## Filesystem Mounting and fstab
-
-### Manual Mounting
+Mounting is the act of attaching a filesystem to a directory in the Linux tree. Manual mounts are useful for testing, rescue work, and temporary media, but production storage needs a durable declaration in `/etc/fstab`. That file is small, but it has outsized blast radius because a bad entry can delay boot, drop the system into emergency mode, or hide application data behind an unmounted directory.
 
 ```bash
 # Basic mount
@@ -310,7 +283,7 @@ findmnt --real
 sudo umount /data
 ```
 
-### Persistent Mounts with /etc/fstab
+Mount options express policy. `noatime` reduces metadata writes for read-heavy workloads, `noexec` can reduce risk on directories that should not run binaries, and UUID mounts survive device-name changes. The tradeoff is that options can also break assumptions, so apply them because a workload needs them, not because they look hardened in a checklist.
 
 ```bash
 # Find the UUID of a device
@@ -321,21 +294,15 @@ blkid /dev/vg_storage/lv_data
 sudo vi /etc/fstab
 ```
 
-The fstab format:
+The fstab format is compact, so read it as a contract between device identity, mount location, filesystem type, mount policy, and boot-time checking behavior:
 
-```
+```fstab
 # <device>                                 <mountpoint>  <type>  <options>       <dump> <pass>
 UUID=a1b2c3d4-5678-90ab-cdef-1234567890ab  /data         ext4    defaults        0      2
 /dev/vg_storage/lv_logs                    /var/log/app  xfs     defaults,noatime 0     2
 ```
 
-**Field breakdown**:
-- **device**: UUID (preferred) or device path
-- **mountpoint**: Where to mount
-- **type**: ext4, xfs, nfs, swap, etc.
-- **options**: `defaults` = rw,suid,dev,exec,auto,nouser,async
-- **dump**: 0 = don't backup (almost always 0)
-- **pass**: fsck order (0 = skip, 1 = root, 2 = other)
+The six fields are device, mount point, filesystem type, mount options, dump flag, and filesystem check order. Use UUIDs for most local filesystems because they describe the filesystem identity rather than the kernel's current device enumeration. For the final field, root is usually `1`, other local filesystems are often `2`, and network filesystems or pseudo-filesystems usually use `0`.
 
 ```bash
 # CRITICAL: Test fstab before rebooting!
@@ -346,17 +313,13 @@ sudo mount -a
 df -h
 ```
 
-> **War story**: A junior sysadmin added an NFS mount to fstab without the `nofail` option. The NFS server went down for maintenance over the weekend. On Monday, every server that had been rebooted (for kernel updates) was stuck in emergency mode because they couldn't mount the NFS share during boot. Forty servers, all needing console access to fix a single line in fstab. The fix took 3 hours. The lesson took 3 seconds: always use `nofail` for network mounts, and always run `mount -a` to test.
+A practical war story makes this concrete. A junior sysadmin added an NFS mount to fstab without `nofail`; when the NFS server went down for weekend maintenance, every patched host that rebooted stopped in emergency mode waiting for a network dependency that was not needed to boot the operating system. The repair was one line per server, but the outage consumed hours because each host needed console access before ordinary SSH was available.
 
-> **Pause and predict**: Your production database server unexpectedly rebooted after a routine kernel update. When it came back online, the `/var/lib/postgresql/data` directory, which is a critical XFS filesystem on an LVM logical volume, was empty. Upon investigation, you discover the `fstab` entry for this mount point was missing. What immediate steps would you take to restore access to the data, and how would you prevent this from happening again?
+Pause and predict: your database server reboots, and `/var/lib/postgresql/data` appears empty because its XFS filesystem did not mount. Before starting or restarting the database, what should you verify with `findmnt`, `blkid`, and `journalctl -b`? The safe path is to confirm the LV and filesystem are intact, mount the correct UUID at the correct directory, and only then let the service touch the data path.
 
----
+## NFS, autofs, Swap, and RAID in Daily Operations
 
-## NFS (Network File System)
-
-NFS allows you to share directories over the network. It's old, it's simple, it works.
-
-### NFS Server Setup
+NFS remains common because it provides a straightforward way to share directories across Linux systems. Its simplicity is also why it is easy to misconfigure: a client mount can hang application threads, a missing `_netdev` can race the network at boot, and an overly permissive export can grant more access than intended. Treat NFS as production storage with network failure modes, not as a local directory that happens to live somewhere else.
 
 ```bash
 # Install NFS server
@@ -371,9 +334,9 @@ sudo chmod 755 /srv/nfs/shared
 sudo vi /etc/exports
 ```
 
-The `/etc/exports` file:
+The `/etc/exports` file describes which directories are shared, which clients may reach them, and which server-side safety choices apply to each export:
 
-```
+```exports
 # Format: <directory> <client>(options)
 
 # Share with specific network
@@ -386,12 +349,7 @@ The `/etc/exports` file:
 /srv/nfs/backup    backup-server.local(rw,sync,no_subtree_check)
 ```
 
-**Key options**:
-- `rw` / `ro`: Read-write or read-only
-- `sync`: Write to disk before responding (safer, slower)
-- `no_subtree_check`: Improves reliability
-- `no_root_squash`: Remote root acts as root (dangerous but sometimes needed)
-- `root_squash`: Remote root mapped to nobody (default, safer)
+The options in an export define both safety and performance. `sync` waits for storage commitment before replying, which is safer and slower than asynchronous behavior. `root_squash` is the safer default because remote root becomes an unprivileged user, while `no_root_squash` should be reserved for narrow cases where the operational requirement is explicit and documented.
 
 ```bash
 # Apply export changes
@@ -407,7 +365,7 @@ sudo systemctl enable --now nfs-kernel-server
 sudo ss -tlnp | grep -E '(2049|111)'
 ```
 
-### NFS Client Setup
+Server-side verification should include both export state and listening services. `exportfs -v` confirms the kernel export table, while `ss` confirms whether the expected ports are active. If a client cannot mount, do not debug only from the client; confirm the server export, firewall, name resolution, protocol version, and path all agree.
 
 ```bash
 # Install NFS client
@@ -428,20 +386,11 @@ mount | grep nfs
 echo "192.168.1.10:/srv/nfs/shared  /mnt/nfs/shared  nfs  defaults,nofail,_netdev  0  0" | sudo tee -a /etc/fstab
 ```
 
-**Important fstab options for NFS**:
-- `nofail`: Don't halt boot if mount fails
-- `_netdev`: Wait for network before mounting
-- `bg`: Retry in background if server unreachable at boot
+For client mounts, `nofail` and `_netdev` are boot-safety options, not performance tuning. `nofail` allows the system to continue booting if the share is unavailable, while `_netdev` tells the boot process that the mount depends on networking. For application behavior, choose hard or soft mounts deliberately; hard mounts protect data integrity for many write workloads, while soft mounts can return errors sooner but may surprise applications that are not built for partial storage failures.
 
-> **Stop and think**: You're configuring a new web server that needs to access user-uploaded content stored on a central NFS server. The content should be read-only for the web server, and the web server should not crash if the NFS server is temporarily unavailable during boot. What `/etc/fstab` entry would you create for `/var/www/uploads` (assuming the NFS export is `nfs.example.com:/srv/webuploads`)? Explain your choice of options.
+Stop and think: a web server needs read-only uploaded content from `nfs.example.com:/srv/webuploads` at `/var/www/uploads`, and it should not block boot when the NFS server is down. A durable entry would use `ro,nofail,_netdev` and an explicit NFS version if your environment requires it, because the web tier should fail gracefully instead of turning a shared-content outage into a host boot outage.
 
----
-
-## Swap Space
-
-Swap provides overflow space when physical RAM is full. On modern systems with plenty of RAM, swap is less critical but still expected on the LFCS exam.
-
-### Creating Swap from a Partition
+Swap is also a storage feature, even though it is usually discussed with memory. It gives the kernel a place to move inactive memory pages when RAM pressure rises, which can protect small systems from immediate process death. The tradeoff is latency and predictability: swapping a hot workload to disk can make a server look alive while it is too slow to meet its service objective.
 
 ```bash
 # Create swap on a partition
@@ -460,7 +409,7 @@ sudo swapon --show
 echo "UUID=$(blkid -s UUID -o value /dev/sdb2)  none  swap  sw  0  0" | sudo tee -a /etc/fstab
 ```
 
-### Creating Swap from a File
+Swap partitions are simple and durable, but they consume fixed disk layout. Swap files are easier to add later and are common on cloud instances or lab systems. Both need correct permissions and a persistent fstab entry if the swap should survive a reboot.
 
 ```bash
 # Create a 2GB swap file
@@ -482,7 +431,7 @@ echo "/swapfile  none  swap  sw  0  0" | sudo tee -a /etc/fstab
 free -h
 ```
 
-### Managing Swap
+Kubernetes changes the swap decision. In Kubernetes 1.35+ clusters, node memory behavior should be designed around kubelet configuration, pod requests, pod limits, eviction thresholds, and workload right-sizing rather than hidden paging. This module uses the `k` shortcut for cluster inspection after introducing it with `alias k=kubectl`; when you are correlating node pressure with Linux storage, commands such as `k describe node <node-name>` and `k get pods -A -o wide` help connect kernel symptoms to scheduled workloads.
 
 ```bash
 # Show all swap spaces
@@ -506,13 +455,7 @@ echo "vm.swappiness=10" | sudo tee -a /etc/sysctl.d/99-swap.conf
 sudo sysctl -p /etc/sysctl.d/99-swap.conf
 ```
 
----
-
-## RAID Management
-
-RAID (Redundant Array of Independent Disks) combines multiple physical disks into a single logical unit for redundancy, performance, or both. On Linux, software RAID is managed with `mdadm`.
-
-### RAID Levels Quick Reference
+RAID addresses a different question: what happens when a disk fails, or when one disk cannot provide enough throughput. Linux software RAID with `mdadm` can mirror, stripe, or combine parity across disks, but it is not a substitute for backups. RAID protects availability for some hardware failures; it does not protect against deletion, filesystem corruption, ransomware, or an operator formatting the wrong array.
 
 | Level | Minimum Disks | Redundancy | Use Case |
 |-------|--------------|------------|----------|
@@ -521,7 +464,7 @@ RAID (Redundant Array of Independent Disks) combines multiple physical disks int
 | RAID 5 | 3 | Single parity (1 disk can fail) | General purpose, good balance |
 | RAID 10 | 4 | Mirror + stripe | Databases, high performance + safety |
 
-### Creating RAID Arrays
+Choose a RAID level by failure model and workload, not by habit. RAID 0 improves performance but increases risk because any disk loss breaks the array. RAID 1 is straightforward and useful for boot or small critical volumes, while RAID 10 is often favored for write-heavy databases because it combines mirroring with striping and avoids parity-write penalties.
 
 ```bash
 # Install mdadm
@@ -541,7 +484,7 @@ sudo mdadm --create /dev/md2 --level=10 --raid-devices=4 /dev/sdg /dev/sdh /dev/
 cat /proc/mdstat
 ```
 
-### Saving RAID Configuration
+Creating an array is only the first half of the job. You also need to save the array metadata into the distribution's mdadm configuration and update the initramfs when the array must assemble during boot. If you skip that step, the array may appear fine until the next reboot, which is exactly when storage mistakes are most expensive.
 
 ```bash
 # Scan and save to config (CRITICAL — without this, array won't reassemble on boot)
@@ -555,8 +498,6 @@ sudo update-initramfs -u   # Debian/Ubuntu
 sudo dracut --force        # RHEL/Rocky
 ```
 
-### Using the RAID Array
-
 ```bash
 # Create filesystem on the array
 sudo mkfs.ext4 /dev/md0
@@ -569,7 +510,7 @@ sudo mount /dev/md0 /mnt/raid
 echo "UUID=$(blkid -s UUID -o value /dev/md0)  /mnt/raid  ext4  defaults  0  2" | sudo tee -a /etc/fstab
 ```
 
-### Monitoring and Status
+Monitoring RAID should be routine rather than reserved for emergencies. `/proc/mdstat` gives a compact view of array health, and `mdadm --detail` provides enough detail to identify degraded members, rebuild status, and active devices. Email monitoring is old-fashioned but still useful when paired with modern alerting, because a silent degraded mirror is one disk failure away from data loss.
 
 ```bash
 # Check status of all arrays
@@ -586,8 +527,6 @@ sudo mdadm --examine /dev/sdb
 # Then start the monitor
 sudo mdadm --monitor --daemonise --mail=admin@example.com /dev/md0
 ```
-
-### Recovery — Replacing a Failed Disk
 
 ```bash
 # 1. Identify the failed disk
@@ -607,15 +546,7 @@ sudo mdadm /dev/md0 --add /dev/sdk
 watch cat /proc/mdstat
 ```
 
-> **Exam tip**: The LFCS may ask you to create a RAID array, add it to the config, and verify it survives a reboot. Always remember: `mdadm --detail --scan >> /etc/mdadm/mdadm.conf` and `update-initramfs -u`.
-
----
-
-## Automount with autofs
-
-Autofs mounts filesystems on demand (when accessed) and unmounts them after a timeout. This is useful for NFS shares that aren't always needed.
-
-### Setting Up autofs
+Autofs solves a different operational problem: not every remote filesystem should be mounted all the time. On-demand mounting is useful for user home directories, shared documentation, backup paths, and occasionally used NFS shares. It also reduces boot coupling because the mount is attempted when a path is accessed rather than when the host starts.
 
 ```bash
 # Install autofs
@@ -625,17 +556,17 @@ sudo apt install -y autofs
 sudo vi /etc/auto.master
 ```
 
-The master map (`/etc/auto.master`):
+The master map (`/etc/auto.master`) connects a parent directory to a map file and a timeout, which lets autofs defer remote mounts until a user or process actually enters the path:
 
-```
+```text
 # Format: <mount-point-parent>  <map-file>  [options]
 
 /mnt/nfs    /etc/auto.nfs    --timeout=60
 ```
 
-The map file (`/etc/auto.nfs`):
+The map file (`/etc/auto.nfs`) then maps each child name under that parent to the remote export and per-mount options that should be used when the path is accessed:
 
-```
+```text
 # Format: <key>  [options]  <location>
 
 # When someone accesses /mnt/nfs/shared, autofs mounts NFS
@@ -661,8 +592,6 @@ df -h /mnt/nfs/shared
 # After 60 seconds of inactivity, it auto-unmounts
 ```
 
-### Wildcard Maps
-
 ```bash
 # Mount any subdirectory from NFS server automatically
 # In /etc/auto.nfs:
@@ -671,11 +600,11 @@ df -h /mnt/nfs/shared
 # Now /mnt/nfs/anything will mount 192.168.1.10:/srv/nfs/anything
 ```
 
----
+Before running this in a shared environment, ask yourself which failure is acceptable: an application receiving an I/O error, or an application waiting until storage returns. That answer determines whether a soft NFS mount is tolerable, whether autofs should be used, and whether the application needs its own retry logic above the filesystem.
 
-## Storage Monitoring
+## Storage Monitoring and Failure Diagnosis
 
-### Disk Space
+Effective storage diagnosis starts by separating block capacity, inode capacity, mount state, and I/O latency. A server can have free gigabytes and still be unable to create files if it has exhausted inodes. A filesystem can be mounted correctly and still be unusable because every write waits behind a saturated device. A path can exist and still be wrong because it is an ordinary directory where a filesystem failed to mount.
 
 ```bash
 # Filesystem usage
@@ -702,7 +631,7 @@ find / -xdev -type f -size +100M -exec ls -lh {} \; 2>/dev/null
 du -h --max-depth=1 | sort -rh
 ```
 
-### I/O Monitoring
+`df -h` answers "how full is the mounted filesystem," while `du` answers "which directory tree accounts for visible files." Those answers may differ when deleted files remain open by processes, because the directory entry is gone but the disk blocks stay allocated until the process closes the file. In that case, `lsof +L1` is often the missing tool, especially after log rotation or a service that writes large temporary files.
 
 ```bash
 # Real-time I/O stats per device
@@ -717,7 +646,7 @@ sudo iotop -o
 sudo smartctl -a /dev/sda
 ```
 
-### LVM Monitoring
+I/O metrics explain why "the disk is not full" is not enough evidence. High `%util` and rising `await` indicate that requests are queueing or taking too long, which can make databases, container runtimes, and package managers appear frozen. `iotop` connects the pressure to processes, and SMART data can reveal failing hardware signals that ordinary filesystem tools cannot see.
 
 ```bash
 # Quick summary of all LVM components
@@ -734,179 +663,266 @@ sudo lvdisplay
 sudo vgs -o +vg_free
 ```
 
----
+LVM monitoring completes the layer map. `pvs` tells you which devices contribute capacity, `vgs` tells you whether the pool has free extents, and `lvs` tells you which logical volumes exist and how large they are. When a filesystem is full and the VG has free space, the path to recovery may be an online `lvextend -r`; when the VG is also full, you need new physical capacity or a cleanup plan.
 
-## Kubernetes Node Storage Strategy
+A useful incident workflow is to state the failing layer before touching it. If writes fail because inodes are exhausted, deleting a few large files is low value; you need to remove many tiny files or rebuild with a different inode ratio. If a path is missing data because a mount failed, copying files into the directory may make recovery harder. If I/O latency is the problem, extending a filesystem may not help unless the underlying capacity change also improves performance.
 
-When managing storage for Kubernetes nodes, the approach differs significantly from traditional server storage. Kubernetes introduces concepts like Pods, Persistent Volumes (PVs), Persistent Volume Claims (PVCs), and StorageClasses, which abstract away the underlying storage details.
+### Worked Example: Triage a Full Service Filesystem
 
-**Key considerations for Kubernetes node storage:**
+Imagine an on-call engineer receives an alert that `/srv/registry` is at 98% usage on a host that backs an internal container registry. The first instinct might be to delete old blobs, but the safer first move is to identify whether the alert refers to the filesystem mounted at that path, the LVM logical volume under it, or the volume group behind that LV. Running `findmnt /srv/registry`, `df -h /srv/registry`, and `lvs` gives three views of the same stack before any cleanup or expansion begins.
 
-1.  **Ephemeral vs. Persistent Storage**:
-    *   **Ephemeral**: Data that is not expected to persist beyond the life of a Pod. `emptyDir` volumes are a good example, often mounted as local directories for temporary data, caches, or logs.
-    *   **Persistent**: Data that needs to survive Pod restarts, node failures, or Pod migrations. This requires Persistent Volumes (PVs) backed by network storage (e.g., NFS, iSCSI, cloud block storage) or local persistent storage options.
+If `findmnt` shows that `/srv/registry` is mounted from `/dev/vg_registry/lv_data`, the engineer can trust that the service is using the intended filesystem. If `findmnt` returns nothing, the path may be an ordinary directory on the root filesystem, and deleting data from it may remove misplaced files rather than fixing the intended storage. That distinction is important because the recovery action for a missing mount is to restore the correct mount, not to expand the root disk.
 
-2.  **Local vs. Network Storage**:
-    *   **Local Storage**: Disks directly attached to the Kubernetes node. Can be used for `hostPath` volumes (often discouraged for production due to portability issues), or as local PVs (with careful management) for high-performance, low-latency applications that are resilient to node failures.
-    *   **Network Storage**: Storage provided by a central storage system (e.g., NFS, GlusterFS, Ceph, cloud providers' block/file storage). This is typically preferred for persistent storage as it allows Pods to be moved between nodes without data loss.
+Next, compare `df -h` and `df -i`. If both block usage and inode usage are high, the registry may be accumulating many layers and many tiny metadata files. If block usage is high but inode usage is healthy, cleanup by size is likely useful. If inode usage is high while block usage is not, deleting a few large files will not restore service, and the team should target directories with the largest file counts instead.
 
-3.  **Storage Provisioning**:
-    *   **Static Provisioning**: An administrator manually creates PVs, which Pods then claim via PVCs.
-    *   **Dynamic Provisioning**: StorageClasses are used to dynamically provision PVs on demand when a PVC is created. For most production Kubernetes deployments (including current v1.35+ releases), this typically relies on Container Storage Interface (CSI) drivers specific to the storage system (e.g., `aws-ebs`, `azure-disk`, `nfs-subdir-external-provisioner`).
+The volume group view answers a different question: can the filesystem be expanded safely without adding hardware right now? If `vgs` shows free extents in `vg_registry`, an online `lvextend -r` may be the fastest path to restore headroom while a cleanup plan runs afterward. If the VG has no free extents, the incident becomes a capacity acquisition or data-reduction problem, and pretending that LVM can create space from nothing only wastes recovery time.
 
-4.  **Swap on Kubernetes Nodes**:
-    *   Kubernetes generally recommends **disabling swap** on worker nodes. The Kubelet (the agent that runs on each node) has a configuration option `failSwapOn` which defaults to true, meaning if swap is enabled, the Kubelet will fail to start. This is because swap can lead to unpredictable performance, especially for memory-sensitive applications, and can interfere with Kubernetes' memory management and scheduling decisions. While it can be manually disabled, it's generally best practice to design applications to run within their allocated memory limits.
+Good triage also checks whether the service is holding deleted files open. A registry, database, or log-heavy application may keep writing to a file after the directory entry is removed by rotation or cleanup. In that case, `du` can suggest that the visible tree is small while `df` still shows the filesystem as full. Restarting or signaling the owning process may release the blocks, but do that only after confirming the service impact.
 
-Choosing the right storage strategy involves balancing performance, cost, redundancy, and portability for your specific workloads. For most production Kubernetes deployments, dynamic provisioning with network-attached storage via CSI drivers is the standard.
+When expansion is the chosen recovery action, the engineer should still record the pre-change state. Capture `pvs`, `vgs`, `lvs`, `df -h`, `df -i`, and `findmnt` output in the incident notes or ticket. This is not ceremony; it creates a rollback and review trail that proves which layer changed. It also helps another engineer spot a typo before a command targets a similarly named LV.
 
----
+After `lvextend -r`, verification should repeat the same checks rather than relying on the command's success message. `lvs` should show the new logical volume size, `df -h` should show the larger filesystem, and application health checks should confirm that the service resumed normal writes. If only `lvs` changed, the filesystem did not grow, and the incident is not over.
+
+Finally, the team should convert the incident into a prevention change. For a registry, that may mean retention policies, image garbage collection, a larger VG reserve, separate storage for logs, and alerts on both block and inode consumption. The root lesson is that emergency expansion can be correct, but it is not a substitute for understanding why the capacity curve surprised the team.
+
+### Worked Example: Recover from a Missing Mount
+
+Now consider a host where `/data/app` is expected to contain application files, but after a reboot the directory contains only a fresh `lost+found` or a small set of startup files. The risky reaction is to copy backups into the path immediately. A safer reaction is to assume that a mount may be missing until proven otherwise, because writing restored data into the wrong filesystem can create a second recovery problem.
+
+Start with `findmnt /data/app` and `lsblk -f`. If the expected UUID exists on an LV but is not mounted, check `/etc/fstab` for a missing, mistyped, or commented entry. Then inspect `journalctl -b` for mount errors from the current boot. These steps tell you whether the mount failed because the device was absent, the filesystem check failed, the mount point was wrong, or the fstab syntax was invalid.
+
+Before mounting over a nonempty directory, inspect the directory carefully. Files written while the mount was absent may need to be moved aside before the correct filesystem is attached. Mounting over them hides them from ordinary path access, which can confuse later forensic work. A common recovery pattern is to stop the service, move misplaced files to a quarantine directory on the root filesystem, mount the correct filesystem, verify expected data, and then decide whether any misplaced files need to be merged.
+
+The durable fix is an fstab entry that uses the filesystem UUID and a test with `mount -a`. If the filesystem is required for the service but not for the operating system to boot, pair the mount declaration with a service dependency rather than hoping boot order works by accident. For network storage, add boot-safe options such as `_netdev` and `nofail` only when the host can genuinely operate without that mount during startup.
+
+This scenario is also why service unit design matters. A systemd service that starts before its required mount can create directories and files in the wrong place. When a service depends on a mount, use the mount point as an explicit dependency or configure the service to fail fast when the expected filesystem is absent. Storage correctness is partly command-line skill and partly boot orchestration discipline.
+
+### Worked Example: Decide Between Cleanup and Expansion
+
+The hardest storage decision is often not technical but operational: should you delete data, expand storage, or stop the service while investigating. Expansion is attractive because it is fast and non-disruptive with LVM, but it can hide runaway growth. Cleanup is attractive because it addresses waste, but it can be dangerous if no one knows which files are safe to remove. Stopping the service protects data integrity but may violate availability goals.
+
+A practical decision rule is to separate emergency restoration from root-cause cleanup. If the filesystem is blocking writes for a critical service and the VG has free extents, expanding by a measured amount can restore service while preserving time for analysis. If the service is filling space because of a bug, the expansion should be paired with a temporary cap, log-level change, or retention adjustment so the new space does not disappear in the next hour.
+
+Cleanup should be based on ownership, age, and recoverability. Package caches, old container images, rotated logs, and build artifacts often have clear cleanup commands. Database files, application uploads, and registry blobs usually require application-aware cleanup because deleting files directly can corrupt indexes or metadata. When the tool that created the data provides a prune, vacuum, or retention command, prefer that over manual file deletion.
+
+Expansion should be based on the layer that is actually constrained. If the filesystem is full and the LV has no free space but the VG does, `lvextend -r` is direct. If the VG is full and a new disk is attached, `pvcreate` plus `vgextend` prepares the pool first. If the physical host has no capacity and the workload is portable, moving data to network storage or a CSI-backed volume may be the more sustainable design.
+
+A good post-incident note includes the exact symptom, the constrained layer, the command used, and the verification output. It should also name the next preventive action, such as adding inode alerts, setting registry retention, separating container runtime storage from root, or documenting the fstab entry. That note turns one stressful incident into shared team knowledge.
+
+## Kubernetes 1.35+ Node Storage Strategy
+
+Kubernetes makes Linux storage more abstract, but it does not make Linux storage disappear. The kubelet, container runtime, image store, pod logs, writable layers, `emptyDir` volumes, and CSI-mounted persistent volumes all land on real filesystems with real capacity and inode limits. When a node reports disk pressure, the control plane sees a scheduling and eviction signal, but the operator still needs Linux tools to identify which path and workload caused the pressure.
+
+For Kubernetes 1.35+ operations, start with a clean division between node-local ephemeral data and application persistent data. Ephemeral data includes image layers, container writable layers, pod logs, and `emptyDir`; it can be recreated, but if it fills the node it can evict unrelated pods. Persistent application data should normally be provided through PersistentVolumes and PersistentVolumeClaims backed by a CSI driver, because the storage lifecycle should follow the workload contract rather than a particular node directory.
+
+```bash
+alias k=kubectl
+k get storageclass
+k get pv,pvc -A
+k describe node <node-name>
+```
+
+Local storage still has valid uses. High-throughput databases, cache systems, and data-processing jobs may benefit from local PVs or dedicated node disks, but those workloads must tolerate node affinity and failure behavior. `hostPath` is rarely the right production interface because it couples a pod to a node's directory layout and bypasses many of the guardrails that make Kubernetes portable.
+
+The storage provisioning decision is also a team boundary. Static provisioning gives administrators tight control and is useful for scarce or manually prepared storage, but it slows delivery because every claim needs an existing PV. Dynamic provisioning through StorageClasses and CSI drivers is the normal production path because developers request storage through PVCs while the platform owns the backend, reclaim policy, expansion policy, and access modes.
+
+Swap deserves special attention on Kubernetes nodes. Traditional Linux guidance may allow swap with tuned swappiness, but Kubernetes scheduling and eviction depend on predictable memory accounting. If swap is enabled without an intentional kubelet configuration, memory pressure can become slower and harder to reason about, which is why many clusters disable swap and manage memory with requests, limits, and eviction thresholds instead.
+
+Which approach would you choose here and why: a StatefulSet needs low-latency storage for a write-heavy database, and the team can tolerate manual failover but not silent cross-node data movement. A local PV may be appropriate if the recovery model is explicit, while a network block CSI driver may be safer if automated rescheduling matters more than the last slice of latency.
+
+## Patterns & Anti-Patterns
+
+Storage operations are safer when the team follows repeatable patterns that reflect the layer model. The point is not to slow every change with paperwork; the point is to make high-risk storage actions boring enough that a tired operator can still execute them correctly. Good patterns also give reviewers something concrete to check before a change reaches production.
+
+| Pattern | When to Use | Why It Works | Scaling Consideration |
+|---------|-------------|--------------|-----------------------|
+| UUID-based persistent mounts | Local filesystems that must survive reboot | UUIDs follow the filesystem rather than kernel device order | Maintain a mount inventory so stale UUIDs are removed after migrations |
+| LVM-backed service volumes | Services that need online growth or planned snapshots | LVM separates capacity pools from mounted filesystems | Monitor VG free space before every extension request |
+| Dynamic CSI provisioning | Kubernetes workloads that need portable persistent volumes | PVCs express storage intent while the platform owns implementation | Standardize StorageClasses by performance, reclaim policy, and expansion support |
+| Boot-safe network mounts | NFS paths that are useful but not required for host boot | `nofail` and `_netdev` prevent network storage from blocking startup | Pair with application health checks so missing mounts are visible |
+
+Anti-patterns usually come from treating a symptom as the layer below it. Teams see "No space left on device" and delete large files when inodes are exhausted. They add capacity to a logical volume but forget the filesystem. They mount a share manually during an incident and forget to persist it, so the fix disappears on reboot. Each mistake is understandable, but each becomes preventable when the diagnosis names the exact layer.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Mounting by `/dev/sdX` in fstab | Device names can change after reboot or attachment changes | Use UUIDs for local filesystems and verify with `mount -a` |
+| Using `hostPath` for durable app data | Pods become tied to one node and may lose data after rescheduling | Use PVCs backed by an appropriate CSI driver or explicit local PVs |
+| Expanding only the LV | The block device grows but the filesystem stays the same size | Use `lvextend -r` or run the filesystem grow command immediately |
+| Treating RAID as backup | Deletion and corruption are mirrored just as quickly as good writes | Keep separate backups with restore tests |
+
+## Decision Framework
+
+Use the storage layer as the first decision point. If the problem is capacity inside an existing filesystem and the LV has free backing storage, grow the LV and filesystem. If the problem is remote sharing, choose NFS only after deciding how clients should behave during network failure. If the problem is Kubernetes persistence, start with PVC semantics and work backward to the Linux devices that support the chosen StorageClass.
+
+```text
++------------------------------+
+| What storage problem exists? |
++---------------+--------------+
+                |
+        +-------+--------+
+        | Local capacity |
+        +-------+--------+
+                |
+        Is it LVM backed?
+          /             \
+        yes              no
+        |                |
+  lvextend -r      add disk, partition,
+  then verify      or migrate to LVM
+
+        +----------------+
+        | Shared access? |
+        +-------+--------+
+                |
+          NFS or CSI file
+          with boot-safe
+          client options
+
+        +----------------------+
+        | Kubernetes workload? |
+        +----------+-----------+
+                   |
+           PVC + StorageClass
+           unless local PV is
+           an explicit design
+```
+
+| Situation | Prefer | Avoid | Reason |
+|-----------|--------|-------|--------|
+| Online growth for a service path | LVM plus filesystem grow | Repartitioning mounted disks by hand | LVM changes are scoped and reversible through inspection |
+| Shared read-mostly web assets | NFS with read-only client options | Copying files manually to every node | Centralized sharing reduces drift and simplifies updates |
+| Durable Kubernetes application data | PVC through a CSI StorageClass | `hostPath` tied to one node | PVCs preserve the workload contract across scheduling events |
+| Boot-critical local filesystem | UUID fstab entry tested with `mount -a` | Manual mount commands saved in shell history | Boot behavior must be declared and testable |
+| High write performance with node affinity accepted | Local PV or dedicated node disk | Unlabeled generic network storage | The scheduling constraint should be visible in the design |
+
+This framework is intentionally conservative. The fastest command is not always the safest operational change, and storage changes are costly to undo after applications write data. A good storage decision names the failure mode it accepts, the failure mode it refuses, and the command that verifies the system is in the expected state afterward.
+
+## Did You Know?
+
+- **LVM was introduced for Linux in 1998** by Heinz Mauelshagen, giving administrators a practical way to grow and reorganize storage without the old backup-delete-recreate-restore cycle for many common changes.
+- **NFSv4 arrived in 2003** with stateful operation, stronger security options, and compound procedures, yet many outages still trace back to simple client mount choices such as missing `_netdev` or `nofail`.
+- **ext4 normally reserves 5% of blocks for privileged use**, which can be valuable on root filesystems but surprisingly expensive on very large data volumes unless you tune the reservation deliberately.
+- **Kubernetes 1.35+ storage still depends on Linux node filesystems**, because kubelet eviction, image garbage collection, pod logs, and CSI mounts all map back to capacity, inode, and I/O behavior on real hosts.
+
+## Common Mistakes
+
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Growing an LV without growing the filesystem | Operators stop after `lvs` shows the new size and forget that `df` reads filesystem capacity | Use `lvextend -r` for online growth, then verify with both `lvs` and `df -h` |
+| Adding an fstab entry and rebooting without a test | The entry looks syntactically simple, so the boot impact is underestimated | Run `sudo mount -a`, inspect `findmnt`, and keep `nofail,_netdev` for noncritical network mounts |
+| Diagnosing every space error with `df -h` only | Block usage is familiar, while inode exhaustion is less visible | Check `df -i`, find directories with huge file counts, and clean small-file caches appropriately |
+| Using `/dev/sdb1` in long-lived configuration | Device order appears stable in one boot and gets treated as identity | Use filesystem UUIDs or stable LVM paths, then document the mount in `/etc/fstab` |
+| Treating NFS like local disk | Applications hide network latency until a server outage causes hangs or boot delays | Choose hard, soft, timeout, `_netdev`, and `nofail` options based on workload failure behavior |
+| Leaving Kubernetes node ephemeral data on an undersized root filesystem | Image layers, pod logs, and `emptyDir` usage grow outside the application team's normal view | Size and monitor node filesystems, configure garbage collection, and use PVCs for durable data |
+| Assuming RAID replaces backups | Mirroring and parity protect availability for some disk failures, not data history | Keep independent backups and run restore tests before relying on any array design |
 
 ## Quiz
 
-Test your storage management knowledge:
+<details><summary>Question 1: A web application on `/var/www/html` is running out of space, and the path is an ext4 filesystem on `/dev/vg_web/lv_data`. You attached `/dev/sdc` and need to add 50 GB without downtime. What sequence do you use, and why?</summary>
 
-**Question 1**: A new application server requires a 50GB filesystem at `/appdata`. Your server currently has a single 200GB disk (`/dev/sda`) with `/dev/sda1` mounted as `/` (20GB) and the remaining space unpartitioned. You also have an unused 100GB disk (`/dev/sdb`). Describe the commands you would use to create the `/appdata` filesystem using LVM, ensuring it's resilient to future growth, and mount it persistently.
+The safe sequence is to add the disk to LVM, extend the existing volume group, and grow the logical volume plus filesystem in one operation. Use `sudo pvcreate /dev/sdc`, `sudo vgextend vg_web /dev/sdc`, and `sudo lvextend -L +50G -r /dev/vg_web/lv_data`. The plus sign matters because it adds capacity rather than setting the total size, and `-r` matters because the application reads filesystem capacity, not just LV capacity. Verify with `lvs`, `df -h /var/www/html`, and `findmnt /var/www/html`.
 
-<details>
-<summary>Show Answer</summary>
+```bash
+sudo pvcreate /dev/sdc
+```
 
-The most flexible approach is to incorporate both available storage chunks into LVM. By using LVM across both the unused disk (`/dev/sdb`) and the unpartitioned space on the active disk (`/dev/sda`), we pool the available storage into a single Volume Group. This abstract layer allows the logical volume to span physical devices and makes it trivial to expand the filesystem later if the 50GB requirement grows. Creating an LVM partition on `/dev/sda` rather than using the raw disk ensures the partition table accurately reflects the disk's usage to other tools. Finally, using the UUID in `/etc/fstab` guarantees the mount survives reboots even if the kernel reassigns device names (like `/dev/sdc` instead of `/dev/sdb`).
+```bash
+sudo vgextend vg_web /dev/sdc
+```
 
-1.  **Initialize `/dev/sdb` as a Physical Volume (PV)**:
-    ```bash
-    sudo pvcreate /dev/sdb
-    ```
-2.  **Create a new partition on `/dev/sda` for LVM**:
-    *   Use `fdisk` to create a new partition on `/dev/sda` using the unpartitioned space, setting its type to LVM (type `8e`).
-    *   Inform the kernel of the changes: `sudo partprobe /dev/sda`
-3.  **Initialize the new partition on `/dev/sda` as a PV**:
-    ```bash
-    sudo pvcreate /dev/sda2 # Assuming the new partition is sda2
-    ```
-4.  **Create a Volume Group (VG) incorporating both PVs**:
-    ```bash
-    sudo vgcreate vg_appdata /dev/sdb /dev/sda2
-    ```
-5.  **Create a Logical Volume (LV) for `/appdata`**:
-    ```bash
-    sudo lvcreate -n lv_appdata -L 50G vg_appdata
-    ```
-6.  **Create an ext4 filesystem on the Logical Volume**:
-    ```bash
-    sudo mkfs.ext4 /dev/vg_appdata/lv_appdata
-    ```
-7.  **Create the mount point and mount the filesystem**:
-    ```bash
-    sudo mkdir -p /appdata
-    sudo mount /dev/vg_appdata/lv_appdata /appdata
-    ```
-8.  **Add an entry to `/etc/fstab` for persistent mounting**:
-    ```bash
-    UUID=$(sudo blkid -s UUID -o value /dev/vg_appdata/lv_appdata)
-    echo "UUID=$UUID  /appdata  ext4  defaults  0  2" | sudo tee -a /etc/fstab
-    ```
+```bash
+sudo lvextend -L +50G -r /dev/vg_web/lv_data
+```
 
-</details>
+The following complete app-data example uses the same LVM pattern with a new logical volume, an ext4 filesystem, a mount point, and a persistent UUID entry:
 
-**Question 2**: You're monitoring a build server, and `df -h` shows plenty of disk space free (e.g., 70% used), but `df -i` reports 100% inode usage on `/var/lib/docker`. Suddenly, new Docker images cannot be pulled, and builds start failing with "No space left on device" errors. Explain why this is happening and what initial steps you would take to diagnose and resolve it.
+```bash
+sudo pvcreate /dev/sdb
+```
 
-<details>
-<summary>Show Answer</summary>
+```bash
+sudo pvcreate /dev/sda2 # Assuming the new partition is sda2
+```
 
-This scenario is a classic case of inode exhaustion. An inode is a data structure on a Unix-style filesystem that stores information about a file or a directory, such as its ownership, permissions, and location on the disk. Every single file and directory, no matter how tiny, consumes exactly one inode from the filesystem's fixed pool. When this pool is depleted, the filesystem cannot create new file entries, leading to "No space left on device" errors even if gigabytes of block space remain. This frequently happens on build servers or container hosts that generate millions of very small cache files, image layers, or artifacts.
+```bash
+sudo vgcreate vg_appdata /dev/sdb /dev/sda2
+```
 
-**Initial steps to diagnose and resolve**:
+```bash
+sudo lvcreate -n lv_appdata -L 50G vg_appdata
+```
 
-1.  **Verify Inode Usage**: Confirm the `df -i` output and compare it with `df -h`. This clearly shows if inodes are the bottleneck, not disk space.
-2.  **Identify Inode Consumers**: Use `find` and `du` to locate directories containing a large number of files.
-    *   `sudo find /var/lib/docker -xdev -printf '%h\n' | sort | uniq -c | sort -rh | head -10` identifies directories with the most files.
-3.  **Clean Up Unnecessary Files**:
-    *   For Docker, prune old images, containers, and build caches: `sudo docker system prune -a` (use with caution in production).
-4.  **Consider Filesystem Re-creation (long term)**:
-    *   If inode exhaustion is a recurring problem, back up data and re-create the filesystem with a higher inode-to-block ratio (e.g., `mkfs.ext4 -i 16384`).
+```bash
+sudo mkfs.ext4 /dev/vg_appdata/lv_appdata
+```
+
+```bash
+sudo mkdir -p /appdata
+sudo mount /dev/vg_appdata/lv_appdata /appdata
+```
+
+```bash
+UUID=$(sudo blkid -s UUID -o value /dev/vg_appdata/lv_appdata)
+echo "UUID=$UUID  /appdata  ext4  defaults  0  2" | sudo tee -a /etc/fstab
+```
 
 </details>
 
-**Question 3**: Your development team reports that their applications, which rely on a network share mounted via NFS, are occasionally experiencing slow file operations and sometimes even hanging. The NFS server is located in a different data center with varying network latency. What `fstab` options would you add or modify to improve the client-side experience, mitigating the impact of network issues, and explain why each option is beneficial?
+<details><summary>Question 2: A build host reports 70% block usage in `df -h`, but Docker pulls fail with "No space left on device" and `df -i` shows the container filesystem at 100%. What is happening, and what do you check first?</summary>
 
-<details>
-<summary>Show Answer</summary>
-
-For NFS mounts in environments with potentially unreliable or high-latency networks, modifying `fstab` options is critical to prevent client-side application hangs. By default, NFS uses a `hard` mount, meaning processes will hang indefinitely waiting for a downed server to respond, which can freeze the entire client system. Switching to a `soft` mount ensures that after a specified number of retries (`retrans`), the client will return an error to the application instead of hanging. Additionally, adjusting the `timeo` (timeout) value allows you to tune how quickly the client detects a failure, while setting `actimeo=0` prevents the client from using stale cached file attributes. Together, these options allow the web server to fail gracefully and recover when the network stabilizes.
-
-Assuming a base entry like: `nfs.example.com:/data  /mnt/data  nfs  defaults,nofail,_netdev  0  0`
-
-Here are the key additions:
-*   **`soft`**: Prevents indefinite hanging if the server becomes unresponsive.
-*   **`timeo=14`**: Sets the timeout for RPC responses, allowing faster failure detection.
-*   **`retrans=3`**: Specifies the number of retries before reporting an error on a soft mount.
-*   **`actimeo=0`**: Disables client-side attribute caching to prevent serving stale data in volatile environments.
-*   **`vers=4.2`**: Explicitly specifies the highest supported NFS version for better performance and stateful operations.
-
-**Example `fstab` entry**:
-`nfs.example.com:/data  /mnt/data  nfs  defaults,nofail,_netdev,soft,timeo=14,retrans=3,actimeo=0,vers=4.2  0  0`
+This is inode exhaustion, not block exhaustion. The filesystem still has data blocks available, but it has no remaining inode records for new files or directories, which commonly happens with container layers, build caches, and many tiny artifacts. Start by confirming `df -i`, then identify directories with the highest file counts under the affected mount, such as with `find /var/lib/docker -xdev -printf '%h\n' | sort | uniq -c | sort -rh | head -10`. Remove safe caches or old images first, then consider a filesystem layout with more inodes if the workload repeatedly creates tiny files.
 
 </details>
 
-**Question 4**: Your Kubernetes cluster is experiencing node instability. You notice that some worker nodes, especially those running memory-intensive workloads, occasionally become "NotReady" and Pods are evicted. Upon investigation, you find that swap space is enabled on these nodes. Why does Kubernetes typically recommend disabling swap on worker nodes, and how would you permanently disable swap on a Linux node to comply with Kubernetes best practices?
+<details><summary>Question 3: After a reboot, a database directory appears empty, but `lsblk -f` shows the expected XFS filesystem on an LVM logical volume. What should you do before starting the database?</summary>
 
-<details>
-<summary>Show Answer</summary>
-
-Kubernetes strongly recommends disabling swap because its scheduler makes placement decisions based on strict CPU and memory limits. When swap is enabled, the operating system can seamlessly page memory to disk, effectively hiding actual memory pressure from the Kubelet. This leads to unpredictable performance degradation, as disk I/O is orders of magnitude slower than RAM, causing "noisy neighbor" problems across the node. Furthermore, swap interferes with the Out-Of-Memory (OOM) killer's ability to swiftly terminate misbehaving Pods, prolonging node instability. Disabling swap ensures that when a Pod exceeds its memory limit, it is predictably and immediately OOM-killed, maintaining the overall health of the cluster.
-
-**How to permanently disable swap on a Linux node**:
-
-1.  **Disable swap for the current session**:
-    ```bash
-    sudo swapoff -a
-    ```
-2.  **Remove swap entries from `/etc/fstab`**:
-    *   Edit the `/etc/fstab` file:
-        ```bash
-        sudo vi /etc/fstab
-        ```
-    *   Locate and comment out (or delete) any lines that specify `swap` as the filesystem type.
-    *   Change `UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx none swap sw 0 0` to `# UUID=xxxxxxxx...`
+Do not start the database until you prove whether the correct filesystem is mounted at the data path. Use `findmnt /var/lib/postgresql/data`, `blkid`, and the boot journal to confirm whether the fstab entry failed or was missing. If the filesystem is intact, mount it by UUID at the expected directory, verify ownership and contents, and only then start the service. Starting the database too early can create new files in the underlying directory and complicate recovery.
 
 </details>
 
-**Question 5**: A critical web application is deployed on an LVM logical volume `/dev/vg_web/lv_data` mounted at `/var/www/html`. This filesystem is running low on space. You've just added a new 100GB physical disk `/dev/sdc` to the server. What is the most efficient and safest way to expand `/var/www/html` by 50GB without taking the web application offline? Provide the exact commands and briefly explain each step.
+<details><summary>Question 4: A team wants to add an NFS mount for web uploads, but the application can run in degraded mode when the share is unavailable. Which fstab behavior should you design for?</summary>
 
-<details>
-<summary>Show Answer</summary>
-
-Expanding an LVM logical volume online is safe and efficient because the Logical Volume Manager abstracts the physical storage from the filesystem. By first adding the new physical disk to the existing Volume Group, you increase the pool of available storage blocks without touching the active logical volumes. Using the `lvextend` command with the `-r` (resize) flag is crucial because it coordinates the block device expansion with the filesystem resizing operation in a single step. Modern filesystems like ext4 and XFS support online resizing, meaning the kernel can expand the filesystem structures into the newly allocated blocks while the disk is actively mounted and serving read/write requests. This entirely eliminates the need for maintenance windows or application downtime.
-
-1.  **Initialize the new disk as a Physical Volume (PV)**:
-    ```bash
-    sudo pvcreate /dev/sdc
-    ```
-    Marks `/dev/sdc` for use by LVM.
-
-2.  **Extend the existing Volume Group (VG) with the new PV**:
-    ```bash
-    sudo vgextend vg_web /dev/sdc
-    ```
-    Adds the newly created physical volume to the `vg_web` pool.
-
-3.  **Extend the Logical Volume (LV) and resize the filesystem in one command**:
-    ```bash
-    sudo lvextend -L +50G -r /dev/vg_web/lv_data
-    ```
-    The `+50G` flag adds exactly 50GB to the logical volume, and the crucial `-r` flag instructs LVM to automatically grow the underlying ext4 or XFS filesystem to fill the newly available block space without requiring a manual unmount.
+The host should not fail boot just because the upload share is unavailable, so the entry should include `nofail` and `_netdev`, with read-only or read-write access chosen from the application requirement. If the web tier only serves uploaded content, `ro` is usually safer than `rw`. You should also decide deliberately between hard and soft behavior based on how the application handles I/O errors. The final design must include monitoring, because boot safety should not turn a missing share into a silent user-facing failure.
 
 </details>
 
----
+<details><summary>Question 5: A Kubernetes worker has swap enabled and kubelet behavior is inconsistent with the team's memory model. How do you disable swap now and make the change durable?</summary>
+
+Disable active swap with `swapoff -a`, then remove or comment swap entries in `/etc/fstab` so the setting does not return after reboot. This matters because Kubernetes node memory behavior should be explicit through kubelet configuration, pod requests, pod limits, and eviction policy rather than accidental paging. After editing fstab, verify with `swapon --show` and reboot testing during a controlled window. If the cluster intentionally supports swap through kubelet configuration, document that exception instead of leaving the node in an ambiguous state.
+
+```bash
+sudo swapoff -a
+```
+
+```bash
+sudo vi /etc/fstab
+```
+
+</details>
+
+<details><summary>Question 6: A Kubernetes 1.35+ node is repeatedly evicting pods for disk pressure, but the attached data disk for one application has space. What Linux and Kubernetes layers do you inspect?</summary>
+
+The available application disk does not prove that kubelet's working filesystems are healthy. Inspect node paths for image layers, container writable layers, pod logs, and `emptyDir` usage with Linux tools such as `df -h`, `df -i`, and `du`, then connect the symptom to cluster state with `k describe node <node-name>` and pod placement. Persistent application data should be checked through PVCs and StorageClasses, while node ephemeral pressure usually requires cleanup, sizing, log control, or container runtime garbage collection. The fix depends on which filesystem actually triggered the eviction signal.
+
+</details>
+
+<details><summary>Question 7: You created a RAID 1 array and mounted it successfully, but a reviewer blocks the change before reboot. What did they probably notice?</summary>
+
+They probably noticed that the mdadm configuration and initramfs update were missing. A manually created array can look healthy until the next boot, when the system may not reassemble it early enough or under the expected name. Save the array metadata with `mdadm --detail --scan` into the correct distribution config file, then update initramfs with `update-initramfs -u` or `dracut --force`. After that, test the fstab entry and confirm the array identity by UUID.
+
+</details>
+
+<details><summary>Question 8: A team asks for a persistent Kubernetes volume and suggests `hostPath` because it is quick. How do you evaluate that request?</summary>
+
+Start by asking whether the data must survive pod rescheduling, node replacement, and ordinary maintenance. If the answer is yes, `hostPath` is usually the wrong abstraction because it ties the pod to one node's directory layout and hides storage lifecycle from Kubernetes. A PVC backed by a CSI StorageClass is the normal answer for portable persistence, while a local PV can be justified for workloads that explicitly accept node affinity and have a recovery plan. The design should make the failure mode visible instead of relying on a path that only works on one host.
+
+</details>
 
 ## Hands-On Exercise: Build a Complete LVM Storage Stack
 
-**Objective**: Create an LVM setup from scratch, mount it persistently, and extend it.
+The exercise builds the same operational path you would use on a server, but it uses loopback devices so you can practice without spare disks. You will create physical volumes, a volume group, a logical volume, a filesystem, a persistent mount, and an online expansion. The important habit is verifying each layer before moving to the next one.
 
-**Environment**: A Linux VM with at least two unused disks (or use loopback devices).
-
-### Setup (Using Loopback Devices as Practice Disks)
+### Setup: Using Loopback Devices as Practice Disks
 
 ```bash
 # Create two virtual "disks" (100MB each — small for practice)
@@ -923,7 +939,13 @@ lsblk | grep loop1
 
 ### Tasks
 
-**Task 1**: Create an LVM stack
+- [ ] Create the initial LVM stack on `/dev/loop10`, format it with ext4, mount it at `/mnt/exercise`, and verify the mount with `df -h` and `findmnt`.
+- [ ] Write test data to the mounted filesystem, record a checksum, extend the volume group with `/dev/loop11`, grow the logical volume with `lvextend -r`, and verify the checksum still matches.
+- [ ] Configure a UUID-based `/etc/fstab` entry for `/mnt/exercise`, unmount the filesystem, run `sudo mount -a`, and confirm the persistent mount works.
+- [ ] Diagnose the stack with `pvs`, `vgs`, `lvs`, `lsblk -f`, and `df -i`, then explain which command answers each storage-layer question.
+- [ ] Clean up the mount, LVM objects, loop devices, temporary disk images, and the fstab line you added.
+
+### Task 1: Create an LVM stack
 
 ```bash
 # Create physical volumes
@@ -943,7 +965,9 @@ sudo mkdir -p /mnt/exercise
 sudo mount /dev/vg_practice/lv_exercise /mnt/exercise
 ```
 
-**Task 2**: Write data and extend
+The first task proves that the layers line up. After mounting, `lsblk` should show the loop device, LVM mapping, and mount point, while `df -h /mnt/exercise` should report the filesystem size. If those two views disagree, stop and diagnose before writing data, because the exercise is designed to build verification habits as much as command memory.
+
+### Task 2: Write data and extend
 
 ```bash
 # Write some test data
@@ -961,7 +985,9 @@ df -h /mnt/exercise
 md5sum /mnt/exercise/testfile
 ```
 
-**Task 3**: Add persistent fstab entry
+The second task is the production skill in miniature. You are not moving the application path, unmounting the filesystem, or recreating data. You are adding capacity to the backing pool and letting LVM coordinate the filesystem growth, then proving that the old data survived the online change.
+
+### Task 3: Add persistent fstab entry
 
 ```bash
 # Get UUID
@@ -976,6 +1002,8 @@ sudo mount -a
 df -h /mnt/exercise
 ```
 
+The third task closes the boot-safety loop. A manual mount proves only that the command worked once; an fstab entry tested with `mount -a` proves that the host can reproduce the mount declaration. In a real change, this is where you would also check service dependencies and decide whether the mount should be required for boot.
+
 ### Success Criteria
 
 - [ ] Physical volumes created with `pvcreate`
@@ -983,6 +1011,14 @@ df -h /mnt/exercise
 - [ ] Logical volume created and extended with `lvcreate`/`lvextend`
 - [ ] Filesystem created, mounted, and data survived extension
 - [ ] Persistent mount in `/etc/fstab` tested with `mount -a`
+
+### Solutions
+
+<details><summary>Show the expected verification flow</summary>
+
+Run `lsblk -f` after Task 1 and confirm that `/dev/vg_practice/lv_exercise` has an ext4 filesystem mounted at `/mnt/exercise`. Run `pvs`, `vgs`, and `lvs` after Task 2 and confirm that both loop devices are physical volumes, the volume group consumed the second device, and the logical volume grew. Run `findmnt /mnt/exercise` after Task 3 and confirm the source is the LVM device or its UUID-backed mapping, not a plain directory on the root filesystem. If `mount -a` reports an error, fix `/etc/fstab` before cleanup or reboot.
+
+</details>
 
 ### Cleanup
 
@@ -997,7 +1033,20 @@ rm /tmp/disk1.img /tmp/disk2.img
 sudo sed -i '/vg_practice/d' /etc/fstab
 ```
 
----
+## Sources
+
+- [Linux kernel documentation: The ext4 filesystem](https://docs.kernel.org/filesystems/ext4/)
+- [Linux kernel documentation: XFS filesystem](https://docs.kernel.org/filesystems/xfs.html)
+- [man7.org: fdisk(8)](https://man7.org/linux/man-pages/man8/fdisk.8.html)
+- [man7.org: mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)
+- [man7.org: fstab(5)](https://man7.org/linux/man-pages/man5/fstab.5.html)
+- [man7.org: swapon(8)](https://man7.org/linux/man-pages/man8/swapon.8.html)
+- [LVM2 upstream manual pages](https://man7.org/linux/man-pages/man8/lvm.8.html)
+- [Ubuntu Server documentation: Network File System](https://documentation.ubuntu.com/server/how-to/networking/install-nfs/)
+- [man7.org: mdadm(8)](https://man7.org/linux/man-pages/man8/mdadm.8.html)
+- [Kubernetes documentation: Storage](https://kubernetes.io/docs/concepts/storage/)
+- [Kubernetes documentation: Local Persistent Volumes](https://kubernetes.io/docs/concepts/storage/volumes/#local)
+- [Kubernetes documentation: Node-pressure eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/)
 
 ## Next Module
 
