@@ -7,16 +7,18 @@ timeToComplete: "75 minutes"
 complexity: "MEDIUM"
 prerequisites: ["Module 1 (Git Internals)"]
 nextModule: "[Module 3: History as a Choice](../module-3-interactive-rebasing/)"
+revision_pending: false
 ---
 
 # Module 2: The Art of the Branch — Advanced Merging
 
+**Complexity:** MEDIUM. **Time to complete:** 75 minutes. **Prerequisites:** Module 1, Git Internals. This module assumes you can read a commit graph, create branches, and commit small changes, but it does not assume you have already handled a production-grade Kubernetes merge conflict under pressure.
+
 ## Learning Outcomes
 - **Diagnose** the root cause of complex merge conflicts within Kubernetes manifest files by analyzing the merge base and divergent commit histories.
-- **Implement** three-way and fast-forward merges strategically to maintain a clean, navigable project history.
+- **Implement** fast-forward, three-way, and octopus merges strategically to maintain a clean, navigable project history.
 - **Resolve** intricate multi-file conflicts during infrastructure-as-code integration without introducing YAML syntax errors or regression bugs.
 - **Evaluate** different branching strategies (Trunk-based, GitFlow, GitHub Flow) to select the optimal workflow for a high-velocity Kubernetes platform team.
-- **Execute** octopus merges to integrate multiple independent feature branches into a single integration or release branch simultaneously.
 - **Compare** the internal diff algorithms of the modern `ort` and legacy `recursive` merge strategies to understand how Git handles file renames and complex tree integrations.
 
 ## Why This Module Matters
@@ -57,7 +59,7 @@ git checkout main
 git merge feature/add-metadata
 ```
 
-Output of the merge:
+The command output is intentionally boring, and that boredom is the entire point of a fast-forward integration. Git reports that it updated one commit range to another, then shows only the file-level change summary because no second parent and no merge commit were needed.
 ```text
 Updating a1b2c3d..e4f5g6h
 Fast-forward
@@ -261,7 +263,7 @@ git commit -m "Merge redis-auth, resolving multi-file replicas, image, and secre
 
 **War Story:** A junior DevOps engineer once attempted to resolve a shockingly similar multi-file conflict. They perfectly fixed the core Deployment YAML file manually but, feeling overwhelmed, accidentally ran `git checkout --ours kustomization.yaml` to blindly bypass the second, more confusing conflict. Git accepted this command and completed the merge. As a result, the Deployment strictly expected a password secret that the Kustomization file was no longer generating. The Redis pods crash-looped instantly upon deployment in production, causing a complete and total loss of cache availability for the entire user base. You must always resolve and thoroughly validate multi-file infrastructure conflicts holistically.
 
-To aid in visualizing these complex situations, you can utilize `git mergetool`, which launches a specialized external visual diffing tool presenting the BASE, LOCAL, and REMOTE versions side-by-side, and then automatically writes your final resolved result directly to the MERGED file. You can also significantly alter how Git presents conflicts natively in your editor. Three distinct merge conflict styles are available via the `merge.conflictStyle` configuration: `merge` (the default, showing only the two diverging sides), `diff3` (which adds a `|||||||` block showing the original ancestor code to provide critical context on *why* the conflict happened), and `zdiff3` (which is functionally identical to diff3 but aggressively trims matching, unchanged lines from the outer edges of the conflict block to reduce visual noise). The highly efficient `zdiff3` conflict style was introduced in Git 2.35.0.
+To aid in visualizing these complex situations, you can utilize `git mergetool`, which launches a specialized external visual diffing tool presenting the BASE, LOCAL, and REMOTE versions side-by-side, and then automatically writes your final resolved result directly to the MERGED file. You can also significantly alter how Git presents conflicts natively in your editor. Three distinct merge conflict styles are available via the `merge.conflictStyle` configuration: `merge` shows only the two diverging sides, `diff3` adds a `|||||||` block showing the original ancestor code to provide critical context on why the conflict happened, and `zdiff3` is functionally identical to diff3 but trims matching, unchanged lines from the outer edges of the conflict block to reduce visual noise. The highly efficient `zdiff3` conflict style was introduced in Git 2.35.0.
 
 If your team constantly encounters the exact same identical conflicts repeatedly due to long-lived branches, Git's `rerere` (Reuse Recorded Resolution) feature is an absolute lifesaver. It is globally enabled by setting the configuration `rerere.enabled = true`. When enabled, Git mathematically fingerprints the conflict and observes your manual resolution, storing the mapping in a hidden cache. If that exact conflict ever arises again during a future merge or rebase, Git automatically applies your previous resolution without halting.
 
@@ -269,7 +271,7 @@ If your team constantly encounters the exact same identical conflicts repeatedly
 
 To deeply understand how Git's context windows operate, it is highly instructive to look at a legacy exercise. In earlier versions of this course, students were given the following exact sequence of commands to intentionally create a merge conflict.
 
-Step 1: Setup
+The first part of the legacy exercise created a tiny repository and a Kubernetes Deployment that was deliberately small enough for students to inspect by eye. Notice that the `k` alias is introduced before any Kubernetes validation commands appear; the rest of this module uses `k` as shorthand for `kubectl`, which matches the convention used throughout KubeDojo.
 ```bash
 mkdir k8s-merge-lab && cd k8s-merge-lab
 git init --initial-branch=main
@@ -299,7 +301,7 @@ git add deployment.yaml
 git commit -m "chore: initial api deployment"
 ```
 
-Step 2: Creating the diverging branches
+The second part created two diverging branches that changed different fields in the same Deployment. One branch changed desired capacity, while the other changed the container image, and the teaching intent was to make those independent intentions collide inside one manifest.
 ```bash
 git checkout -b feature/scale-up
 sed -i.bak 's/replicas: 2/replicas: 5/g' deployment.yaml && rm deployment.yaml.bak
@@ -314,14 +316,14 @@ git add deployment.yaml
 git commit -m "chore: update nginx to 1.27.1"
 ```
 
-Step 3: Executing the merge
+The third part asked students to merge the image branch into the scale branch and observe the result. In the original classroom version, the expectation was a visible conflict, which made the next resolution step easy to explain and easy to grade.
 ```bash
 git checkout feature/scale-up
 git merge feature/update-image
 # Output will show CONFLICT (content)
 ```
 
-The strict pedagogical expectation was that this sequence would produce the following dramatic conflict markers in the file:
+The strict pedagogical expectation was that this sequence would produce the following dramatic conflict markers in the file, because the older exercise treated nearby edits in the same YAML object as though they would always overlap:
 ```text
 apiVersion: apps/v1
 kind: Deployment
@@ -357,7 +359,7 @@ spec:
 >>>>>>> feature/update-image
 ```
 
-Which the student would then manually resolve to this final state:
+The student would then manually resolve the file to this final state, preserving the scale decision from one branch and the patched image decision from the other branch:
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -378,7 +380,7 @@ spec:
         image: nginx:1.27.1
 ```
 
-And validate before committing:
+The exercise then required validation before committing, because a syntactically broken Deployment is still a failed merge even when the Git conflict markers have been removed:
 ```bash
 k apply -f deployment.yaml --dry-run=client
 # Expect output: deployment.apps/api-server created (dry run)
@@ -388,7 +390,7 @@ git add deployment.yaml
 git commit -m "Merge branch 'feature/update-image' into feature/scale-up resolving replicas and image"
 ```
 
-And the legacy solution key provided to students looked exactly like this:
+The legacy solution key provided to students looked exactly like this, and it is worth preserving because it shows the intended operational sequence even though modern Git usually handles this particular example automatically:
 <details>
 <summary>View Solutions</summary>
 
@@ -527,7 +529,7 @@ git merge feature/ingress feature/autoscaling feature/network-policies
 
 Before integrating branches, many high-performing platform teams require developers to surgically clean up their messy, WIP-filled commit histories. 
 
-The `git rebase --interactive` command is the ultimate tool for historical surgery. It supports a wide array of powerful commit-editing commands, including `pick`, `edit`, `reword` (to change a message without altering code), `drop` (to erase a commit entirely), `squash` (to meld a commit into the previous one while combining messages), `fixup`, `fixup -c/-C`, `break`, and `exec` (which runs a shell script against every commit to ensure tests pass). By default, `git rebase --interactive` strictly excludes merge commits from the generated todo list to flatten the history.
+The `git rebase --interactive` command is the ultimate tool for historical surgery. It supports a wide array of powerful commit-editing commands, including `pick`, `edit`, `reword` (to change a message without altering code), `drop` (to erase a commit entirely), `squash` (to meld a commit into the previous one while combining messages), `fixup`, `fixup -c/-C`, `break`, and `exec` (which runs a shell script against every commit to ensure tests pass). By default, `git rebase --interactive` strictly excludes merge commits from the generated instruction list to flatten the history.
 
 Additionally, you can use `git rebase --onto <newbase>` to physically transplant a sequence of commits onto a completely different base than their original upstream, allowing a topic branch to be detached and moved to a different parent entirely.
 
@@ -589,15 +591,56 @@ GitHub offers three distinct pull request merge methods: 'Create a merge commit'
 
 GitLab similarly offers three formal merge request methods: 'Merge commit' (the `--no-ff` equivalent), 'Merge commit with semi-linear history', and 'Fast-forward merge'. As platforms evolve to enforce Trunk-based principles more heavily, they introduce new guardrails; for example, GitLab added a highly requested automatic rebase before merge feature for both the semi-linear and fast-forward methods starting in GitLab 18.0.
 
+## Patterns & Anti-Patterns
+
+Advanced merging becomes safer when a team treats every integration as a design decision instead of a keyboard shortcut. The Git command is only the last visible action; the real work is deciding whether the branch is fresh enough to merge, whether the affected files are schema-sensitive, whether the review surface can be understood by another engineer, and whether the resulting history will help the next incident responder reconstruct intent. A platform repository is not a scrapbook of commits, because every merge can become an input to a controller, an audit trail for a production incident, or a rollback boundary during a failed release.
+
+The most reliable pattern is small, frequent integration against a protected trunk. A developer can still use a short-lived branch for review, but the branch should be measured in hours or a small number of days rather than weeks. This cadence keeps the merge base close to current reality, which means Git compares each branch against a recent ancestor and produces smaller, more intelligible conflict regions. For Kubernetes manifests, that difference is practical rather than aesthetic: a small conflict might ask whether `replicas` should be three or five, while a stale branch may force the resolver to reconcile probes, selectors, container names, generated Secrets, and network policy labels all at once.
+
+Another durable pattern is schema-aware validation immediately after conflict resolution. Git knows that two lines of YAML text differ, but it does not know whether a `secretKeyRef` points at a Secret that Kustomize still generates, whether a selector matches the labels inside a Pod template, or whether an API field is valid in Kubernetes 1.35. The resolver therefore has to move from text reconciliation to platform reconciliation. Running `k apply --dry-run=client`, `kustomize build`, or an admission-style validation tool is the engineering step that converts "Git accepted the file" into "this configuration still represents a coherent cluster object."
+
+A third pattern is reviewable merge commits. When a merge commit exists only because two timelines were joined, it should contain only the conflict synthesis required to join them. That discipline makes `git show <merge-commit>` useful during review because the combined diff can focus on the lines changed differently from both parents. If the resolver also folds in refactors, formatting changes, or unrelated policy edits, the merge commit becomes an opaque bundle, and reviewers lose the ability to distinguish conflict resolution from opportunistic feature work. This is how teams accidentally bless an "evil merge" that introduces behavior neither parent branch intended.
+
+| Pattern | Use When | Why It Works | Scaling Consideration |
+| :--- | :--- | :--- | :--- |
+| **Short-lived integration branches** | Platform engineers need review but still deploy frequently from `main`. | The merge base stays recent, conflict regions stay small, and rollback boundaries remain clear. | Requires automated tests and feature flags so unfinished work can be hidden safely. |
+| **Schema-aware conflict validation** | The merge touches Kubernetes YAML, Helm output, Kustomize overlays, or policy-as-code. | Git validates text ancestry, while Kubernetes tooling validates object shape and API compatibility. | Validation must be fast enough to run locally and in CI, or engineers will skip it under pressure. |
+| **Resolution-only merge commits** | A three-way merge needed manual synthesis. | Reviewers can audit the combined diff and see exactly what the human resolver changed. | Teams need a norm that unrelated cleanup waits for a separate commit. |
+| **Recorded recurring resolutions** | The same branch family repeatedly conflicts during release preparation. | `rerere` can reuse a previously accepted resolution, reducing repeated manual work. | The cache should be trusted only after the team has validated the first resolution carefully. |
+
+The corresponding anti-patterns usually arise from understandable pressure. A release is late, an environment is unhealthy, or a senior engineer is away, so someone chooses the fastest-looking button in an IDE. The problem is that Git conflict tools optimize for completing the merge operation, while production safety depends on preserving both branches' intent. Accepting "ours" across an entire file may remove conflict markers quickly, but it also discards the incoming branch's design without forcing the resolver to state that decision explicitly. If a security branch added a NetworkPolicy and the release branch changed only image tags, a blind "ours" resolution can silently erase the control that mattered most.
+
+Long-lived release branches are the second common trap. They feel safe because they isolate instability away from production, but they also accumulate distance from the source of truth. In a GitOps repository, every day of isolation increases the gap between the branch's mental model and the cluster model that controllers are actually applying. Teams often discover the cost only at the end, when the release branch must absorb weeks of hotfixes, controller annotation changes, chart updates, and policy exceptions in one intimidating merge. At that point the conflict is no longer a local text issue; it is a delayed architecture review with deployment pressure attached.
+
+The third anti-pattern is treating automatic merge success as proof of semantic correctness. The auto-merge case study above demonstrates why this is dangerous. Modern `ort` can correctly combine far-apart hunks, and that is usually a benefit, but a clean merge can still produce a Deployment whose labels no longer match its selector or an overlay whose generated Secret name changed while the consuming environment variable stayed fixed. Before running this in your own repository, pause and predict: if Git reports "Automatic merge went well" on a Kubernetes manifest, what separate validations would prove that the cluster object is still meaningful rather than merely parseable?
+
+## Decision Framework
+
+Choosing a merge approach starts with the shape of the graph, but it should not end there. First ask whether your current branch tip is an ancestor of the incoming branch tip. If it is, a fast-forward or `--ff-only` merge preserves the cleanest history and avoids inventing a merge commit that does not carry extra information. If the graph has diverged, ask whether the branch is fresh enough for a normal three-way merge and whether the files are simple enough for line-based resolution. If the branch is stale, the safer move may be to abandon the old branch shape, inspect its intent with `git diff <merge-base>..branch`, and transplant selected commits onto a fresh branch.
+
+The next decision is whether history shape or review shape matters more for this change. A merge commit preserves the fact that a feature branch existed and can make release audits easier when a branch represents a coherent body of work. Squash merge creates a cleaner linear history, but it erases internal commit boundaries and can make `git bisect` less precise if the squashed branch mixed unrelated changes. Rebase and merge creates a linear story with individual commits preserved, yet it rewrites commit identities and can confuse collaborators who have based work on the old branch. None of these choices is universally correct; the right answer depends on how your team debugs incidents, reviews changes, and rolls back failed releases.
+
+Use the following decision matrix as a practical guide when you are under pressure. It deliberately combines graph facts with operational facts, because a Kubernetes platform repository is judged by the behavior it produces after merge, not by the elegance of its commit graph alone.
+
+| Situation | Preferred Move | Why | Validation Before Commit |
+| :--- | :--- | :--- | :--- |
+| Current branch is behind and has no unique commits | `git merge --ff-only incoming` | The branch pointer can move without creating a synthetic merge commit. | Run the relevant tests or render manifests if the incoming branch was not already validated. |
+| Two fresh branches touched different files | Normal three-way merge with `ort` | Git can synthesize independent file changes cleanly while preserving both parents. | Review the merge commit and run targeted CI for changed areas. |
+| Two branches touched the same Kubernetes manifest | Manual conflict resolution with schema validation | Human intent matters more than text adjacency when selectors, probes, and generated resources interact. | Run `k apply --dry-run=client`, `kustomize build`, and any policy checks your repo requires. |
+| Several independent branches need one release branch | Octopus merge only if conflicts are unlikely | The history stays compact, but the operation refuses manual conflicts. | Pre-merge each branch against trunk and retry only when every pair is clean. |
+| Old branch has a stale merge base | Recreate from current `main` and cherry-pick intent | The old graph encodes obsolete assumptions about the platform. | Test each selected commit after replay, especially migrations and API changes. |
+| Pull request contains noisy local commits | Interactive rebase before review | Reviewers see a coherent story instead of temporary savepoints. | Re-run tests after rewriting and force-push only to branches you own. |
+
+There is one final question that experienced maintainers ask before approving any non-trivial merge: "Could I explain this result to the on-call engineer at 3 a.m.?" If the answer is no, the branch is too large, the resolution is too clever, or the validation evidence is too thin. That question is especially useful for GitOps work because the repository is both documentation and control plane input. A reviewer who can trace the merge base, the conflicting intent, the chosen resolution, and the validation command has enough context to trust the change or reject it with specifics.
+
+For day-to-day work, a compact flow helps prevent panic decisions. Start with `git status` to make sure your workspace is clean, inspect the graph with `git log --oneline --graph --decorate --all`, identify the merge base when the branch has been alive for more than a short review cycle, then choose the least surprising integration method that preserves the information your team will need later. After resolution, validate the rendered platform object and inspect the merge commit rather than only the final file. This sequence is slower than clicking a button, but it is much faster than debugging a cluster that accepted a syntactically valid yet semantically broken configuration.
+
 ## Did You Know?
 
-1. *Note: While Git 2.53.0 is widely reported as the current stable release as of April 2026, this remains unverified against the authoritative fact ledger. Always check the official Git documentation for the latest release tags before upgrading your CI/CD pipelines.*
-2. The `ort` merge strategy (Ostensibly Recursive's Twin) was introduced in Git 2.33 to mathematically process large renames up to 500x faster. It officially became the default engine for all two-branch merges in Git 2.34.0 (November 2021) and defaults to using the highly optimized `diff-algorithm=histogram` internally.
-3. Running the maintenance command `git rerere gc` systematically prunes unresolved conflict records that are older than 15 days, and clears out successfully resolved records older than 60 days, preventing cache bloat.
-4. *Note: Community sources report that GitLab added a powerful automatic rebase before merge feature for semi-linear and fast-forward repository methods beginning in the major GitLab 18.0 release. As this is unverified by the internal fact ledger, platform engineers should test this feature in a non-production repository before relying on it for trunk-based enforcement.*
-5. Linus Torvalds originally designed Git's octopus merge specifically because he grew frustrated merging dozens of separate Linux kernel subsystem maintainer branches sequentially.
-6. The conflict marker symbols (`<<<<<<<`, `=======`, `>>>>>>>`) predate Git by decades. They were established by the `merge` program developed at Bell Labs in the late 1980s for the RCS version control system.
-7. Git allows you to configure specific merge drivers for different file types via `.gitattributes`. You could theoretically write a custom merge driver specifically designed to intelligently merge Kubernetes YAML files without breaking indentation, though maintaining it is notoriously difficult.
+1. The `ort` merge strategy, short for Ostensibly Recursive's Twin, became the default two-head merge engine in Git 2.34.0 in November 2021 and uses the histogram diff algorithm internally for many merge comparisons.
+2. Running the maintenance command `git rerere gc` prunes unresolved conflict records older than 15 days and resolved conflict records older than 60 days, which keeps repeated-resolution caches from growing without bound.
+3. Linus Torvalds designed Git's octopus merge for the Linux kernel workflow, where subsystem maintainer branches often needed to be joined into a single integration history without a long sequence of two-parent merge commits.
+4. The conflict marker symbols (`<<<<<<<`, `=======`, `>>>>>>>`) predate Git by decades and were established by earlier merge tooling in the RCS era, which is why they appear familiar across many version control systems.
 
 ## Common Mistakes
 
@@ -643,3 +686,176 @@ This combination will fail because GitFlow isolates infrastructure changes in lo
 <summary>Question 6: You are tasked with taking over a legacy `feature/database-migration` branch that was abandoned by a former employee. Before attempting to integrate it, you run `git merge-base main feature/database-migration` and find that the common ancestor is a commit from over a year ago. What is the safest sequence of actions to rescue this work without breaking the current cluster state, and why?</summary>
 Attempting a direct three-way merge with a year-old base is extremely dangerous, as Git will try to mathematically reconcile hundreds of conflicting architectural changes simultaneously. Instead, you should first examine the original intent by running `git diff <merge-base-hash>..feature/database-migration` to isolate exactly what the former employee changed. Once the isolated logic is understood, the safest approach is to create a fresh branch off the current `main` and use `git cherry-pick` to selectively bring over only the relevant database migration commits. This strategy completely abandons the deeply diverged history and ensures you are manually adapting the legacy logic to the modern, real-time state of the infrastructure.
 </details>
+
+## Hands-On Exercise
+
+In this lab you will create a small Kubernetes manifest repository, force a real conflict that modern Git cannot safely auto-merge, inspect the merge base, resolve the conflict by synthesizing intent, and validate the final object before committing. The exercise uses a Deployment and a ConfigMap because they reveal the two failure modes you will see in platform work: one conflict is about competing runtime behavior, while the other is about a dependency between files. The goal is not to memorize conflict markers; the goal is to practice slowing down enough to identify what each branch was trying to accomplish.
+
+Work in a scratch directory outside any production repository. The commands below assume a Unix-like shell and Git with the default `ort` merge engine. They also assume `kubectl` is installed; the lab defines `alias k=kubectl` and uses `k` for validation so the command style matches the rest of the module. If you do not have a live cluster context, `--dry-run=client` still validates local object structure, which is enough for this exercise.
+
+- [ ] Create the repository, add the baseline Deployment and ConfigMap, and commit the initial state.
+- [ ] Create `feature/harden-api` to add a health probe and stricter ConfigMap setting.
+- [ ] Create `feature/scale-api` to change replicas and a competing ConfigMap setting.
+- [ ] Merge `feature/scale-api` into `feature/harden-api`, inspect the merge base, and resolve both conflicted files.
+- [ ] Validate the resolved manifests with `k apply --dry-run=client` before committing the merge.
+- [ ] Inspect the final merge commit with `git show` and explain which lines were human conflict resolutions.
+
+<details>
+<summary>Setup and task solutions</summary>
+
+Create the repository and baseline files:
+
+```bash
+mkdir k8s-advanced-merge-lab
+cd k8s-advanced-merge-lab
+git init --initial-branch=main
+alias k=kubectl
+```
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-settings
+data:
+  LOG_LEVEL: "info"
+  FEATURE_MODE: "standard"
+```
+
+Save that YAML as `configmap.yaml`, then create the Deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: nginx:1.27.1
+        envFrom:
+        - configMapRef:
+            name: api-settings
+```
+
+Save that YAML as `deployment.yaml`, then commit:
+
+```bash
+git add configmap.yaml deployment.yaml
+git commit -m "chore: add baseline api manifests"
+```
+
+Create the hardening branch:
+
+```bash
+git checkout -b feature/harden-api
+perl -0pi -e 's/FEATURE_MODE: "standard"/FEATURE_MODE: "strict"/' configmap.yaml
+perl -0pi -e 's/image: nginx:1.27.1/image: nginx:1.27.1\n        readinessProbe:\n          httpGet:\n            path: \\/\n            port: 80\n          initialDelaySeconds: 5\n          periodSeconds: 10/' deployment.yaml
+git add configmap.yaml deployment.yaml
+git commit -m "feat: harden api readiness behavior"
+```
+
+Create the scale branch from `main`:
+
+```bash
+git checkout main
+git checkout -b feature/scale-api
+perl -0pi -e 's/replicas: 2/replicas: 5/' deployment.yaml
+perl -0pi -e 's/FEATURE_MODE: "standard"/FEATURE_MODE: "burst"/' configmap.yaml
+git add configmap.yaml deployment.yaml
+git commit -m "feat: scale api for burst traffic"
+```
+
+Merge and inspect the merge base:
+
+```bash
+git checkout feature/harden-api
+git merge-base main feature/scale-api
+git merge feature/scale-api
+git status
+```
+
+Resolve `deployment.yaml` by keeping both the readiness probe and the scaled replica count:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+      - name: api
+        image: nginx:1.27.1
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: api-settings
+```
+
+Resolve `configmap.yaml` by making an explicit product decision. In this example, the release owner chooses strict mode because hardening matters more than burst behavior until the feature flag is redesigned:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-settings
+data:
+  LOG_LEVEL: "info"
+  FEATURE_MODE: "strict"
+```
+
+Validate and commit:
+
+```bash
+k apply -f configmap.yaml --dry-run=client
+k apply -f deployment.yaml --dry-run=client
+git add configmap.yaml deployment.yaml
+git commit -m "Merge scale-api into harden-api resolving replicas and feature mode"
+git show --stat --summary HEAD
+git show HEAD
+```
+
+</details>
+
+The success criteria are intentionally broader than "Git says the merge is complete." You should be able to point to the merge base, describe each branch's intent, explain why one ConfigMap value survived, show that the Deployment still references an existing ConfigMap, and demonstrate that Kubernetes 1.35-compatible client validation accepts both objects. If you cannot explain those facts from the final commit, the merge may be mechanically complete but operationally unreviewable.
+
+## Sources
+
+- [Git merge documentation](https://git-scm.com/docs/git-merge)
+- [Git merge-base documentation](https://git-scm.com/docs/git-merge-base)
+- [Git rerere documentation](https://git-scm.com/docs/git-rerere)
+- [Git rebase documentation](https://git-scm.com/docs/git-rebase)
+- [Git cherry-pick documentation](https://git-scm.com/docs/git-cherry-pick)
+- [Git log documentation](https://git-scm.com/docs/git-log)
+- [Git attributes documentation for merge drivers](https://git-scm.com/docs/gitattributes)
+- [Kubernetes kubectl apply reference](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/)
+- [Kubernetes Kustomize documentation](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
+- [GitHub pull request merge methods](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/about-merge-methods-on-github)
+- [GitLab merge request methods](https://docs.gitlab.com/user/project/merge_requests/methods/)
+
+## Next Module
+
+Continue to [Module 3: History as a Choice](../module-3-interactive-rebasing/) to practice interactive rebasing, commit surgery, and deliberate history design before changes reach shared branches.
