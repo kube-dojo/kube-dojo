@@ -1821,7 +1821,7 @@ def _safe_review_path_for_module_key(repo_root: Path, module_key: str) -> Path |
     try:
         path = (reviews_dir / filename).resolve()
         path.relative_to(reviews_dir)
-    except ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
     return path
 
