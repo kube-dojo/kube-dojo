@@ -773,10 +773,10 @@ A strong review would reject the current flow for production because it cannot r
 ## Sources
 
 - Kubernetes documentation: Images - https://kubernetes.io/docs/concepts/containers/images/
-- Kubernetes documentation: Software supply chain security - https://kubernetes.io/docs/concepts/security/software-supply-chain-security/
+- Kubernetes documentation: Security overview - https://kubernetes.io/docs/concepts/security/
 - Kubernetes documentation: Admission controllers - https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
 - Kubernetes documentation: Dynamic admission control - https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
-- Sigstore documentation: Cosign overview - https://docs.sigstore.dev/cosign/overview/
+- Sigstore documentation: Cosign signing overview - https://docs.sigstore.dev/cosign/signing/overview/
 - Sigstore documentation: Fulcio overview - https://docs.sigstore.dev/certificate_authority/overview/
 - Sigstore documentation: Rekor overview - https://docs.sigstore.dev/logging/overview/
 - SLSA specification - https://slsa.dev/spec/v1.1/
