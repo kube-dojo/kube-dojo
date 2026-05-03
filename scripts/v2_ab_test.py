@@ -6,7 +6,6 @@ import os
 import random
 import re
 import subprocess
-import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -24,6 +23,7 @@ from v1_pipeline import find_module_path, review_audit_path_for_key
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+VENV_PYTHON = str((REPO_ROOT / ".venv" / "bin" / "python").resolve())
 DEFAULT_COUNT = 50
 MODEL_ESTIMATED_USD = {
     WRITE_MODEL: WRITE_ESTIMATED_USD,
@@ -246,7 +246,7 @@ def run_v1_trial(item: SelectedModule, *, state_path: Path) -> TrialResult:
     )
     try:
         completed = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "scripts" / "v1_pipeline.py"), "run", item.raw_key],
+            [VENV_PYTHON, str(REPO_ROOT / "scripts" / "v1_pipeline.py"), "run", item.raw_key],
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,

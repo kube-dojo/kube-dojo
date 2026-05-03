@@ -41,7 +41,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -50,6 +49,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+VENV_PYTHON = str((REPO_ROOT / ".venv" / "bin" / "python").resolve())
 
 from dispatch import GEMINI_WRITER_MODEL, dispatch_gemini_with_retry  # type: ignore  # noqa: E402
 
@@ -365,7 +365,7 @@ def dispatch_writer(prompt: str, writer_model: str) -> tuple[bool, str]:
         return True, extract_section_from_codex_output(result.stdout)
     if writer_model.startswith("claude"):
         cmd = [
-            sys.executable, str(REPO_ROOT / "scripts" / "dispatch.py"),
+            VENV_PYTHON, str(REPO_ROOT / "scripts" / "dispatch.py"),
             "claude", "-", "--model", writer_model,
         ]
         try:
@@ -442,7 +442,7 @@ def write_module(m: dict, idx: int, total: int, writer: str,
 
         output = output.strip()
         if not output.startswith("---"):
-            log(f"  ❌ INVALID: response does not start with frontmatter delimiter")
+            log("  ❌ INVALID: response does not start with frontmatter delimiter")
             log(f"     First 200 chars: {output[:200]}")
             return False
 
@@ -454,7 +454,7 @@ def write_module(m: dict, idx: int, total: int, writer: str,
         md_path.write_text(output, encoding="utf-8")
         log(f"  ✓ writer wrote {len(output)} chars in {elapsed:.0f}s")
     else:
-        log(f"  SKIP writer: existing content fresh")
+        log("  SKIP writer: existing content fresh")
 
     # Step 2: fact-check (always runs unless --skip-factcheck)
     if needs_factcheck:
@@ -476,7 +476,7 @@ def write_module(m: dict, idx: int, total: int, writer: str,
         if isinstance(hallucinated, int) and hallucinated > 0:
             log(f"  ⚠ {hallucinated} HALLUCINATED claims — review priority HIGH")
     else:
-        log(f"  SKIP fact-check: existing ledger fresh")
+        log("  SKIP fact-check: existing ledger fresh")
 
     return True
 
@@ -507,7 +507,7 @@ def main() -> int:
         indices = list(range(len(MODULES)))
 
     log("="*70)
-    log(f"Phase 2 write-only batch starting")
+    log("Phase 2 write-only batch starting")
     log(f"  Modules: {len(indices)}")
     log(f"  Writer: {writer}")
     log(f"  Fact-checker: {FACT_CHECKER}{' (SKIPPED)' if skip_factcheck else ''}")
@@ -548,7 +548,7 @@ def main() -> int:
     if high_halluc:
         for k, h in sorted(high_halluc, key=lambda x: -x[1]):
             log(f"    - {k}: {h} hallucinated claim(s)")
-    log(f"  Run 'npm run build' before reviewing.")
+    log("  Run 'npm run build' before reviewing.")
 
     return 0 if not failed else 1
 
