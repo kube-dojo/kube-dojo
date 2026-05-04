@@ -189,10 +189,14 @@ Final worktree count: **2** (primary main + claude-codex-routing-holding).
 **DROP / RESOLVE:**
 
 - "Apply codex's NEEDS CHANGES fix to `_summarize_388_events`" (from session 5) — DONE between sessions, verified via live `/api/388/batches` endpoint at session start.
-- "Investigate the 8 module_skip events from KCNA bucket" (from session 5) — UNRESOLVED but no longer urgent; queue is dry, codex-out makes it un-actionable for now.
+- "Triage held PRs from KCNA batch" (from session 5 TODO) — DONE between sessions. `/api/388/batches` shows `held_rollup: {merged: 16, total: 16, open: 0, resolved: 16}` for the 2026-05-02 KCNA batch — all 7 held PRs (5 nits + 1 NEEDS CHANGES + 1 ERROR) were triaged and merged before this session began.
+- "Generalize cleanup script to accept `--input PATH.txt`" (from session 5 TODO) — DONE in session 5 itself, commit `ff116a40` (`fix(388): generalize cleanup script + pre-build KCSA bucket-2`). Was a duplicate carry-over.
+- "Investigate the 8 module_skip events from KCNA bucket" (from session 5) — UNRESOLVED but no longer urgent; queue is dry, codex-out makes it un-actionable for now. Re-queued in this session's TODO.
 - "Investigate codex-344, codex-394-coverage-schema, fix-pipeline-v4-tech-debt worktrees" (from session 5) — ALL DONE this session: tech-debt salvaged + shipped (#875), codex-394 pruned as superseded, codex-344 salvaged + shipped (#876).
 - "Audit the 3 unknown worktrees" (today's earlier intra-session item) — DONE.
 - "Open all pending PRs and dispatch Gemini reviews while quota fresh" — DONE.
+- "PR #567 review + merge" (from STATUS.md Background) — RESOLVED. PR #567 was CLOSED (superseded by PR #595, merged earlier).
+- "#344 (citation-residuals resolver work in `codex/issue-344` worktree)" (from STATUS.md Background) — RESOLVED. Shipped as PR #876 today; Issue #344 auto-closed.
 
 ## Blockers
 
