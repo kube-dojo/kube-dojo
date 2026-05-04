@@ -235,7 +235,7 @@ Same strategy as CKA, security-focused:
 
 - **The biggest CKS challenge isn't Kubernetes**—it's Linux security concepts like AppArmor and seccomp that many candidates haven't used before.
 
-- **Supply chain security became critical** after attacks like SolarWinds and Log4Shell. CKS heavily tests this domain.
+- **Supply chain security became critical** as a heavily tested CKS domain. The track covers two canonical incidents in depth: a [build-system compromise that pushed signed-but-malicious updates to thousands of downstream customers](/prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> and a [transitive Java logging library vulnerability that exposed any application accepting attacker-controlled input strings](/platform/disciplines/reliability-security/devsecops/module-4.4-supply-chain-security/) <!-- incident-xref: log4shell -->.
 
 ---
 

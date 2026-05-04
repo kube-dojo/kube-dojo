@@ -32,7 +32,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2018, Tesla's Kubernetes administrative console was left exposed without authentication. But the real danger often lies in what's *inside* the cluster. Consider the devastating cryptojacking attacks where hackers exploited an unpatched vulnerability in an older Kubernetes version to deploy DaemonSets running Monero miners across thousands of nodes. Because the victim clusters were running an unsupported version, the known CVE had never been patched.
+Maintaining a strict patch cadence is a fundamental operational requirement for Kubernetes security. The upstream project actively supports only the three most recent minor versions (currently 1.33, 1.34, and 1.35), delivering critical security patches and bug fixes exclusively to this window. Each minor release resolves specific Common Vulnerabilities and Exposures (CVEs) discovered in the platform's core components — the API server, kubelet, and container runtime interfaces. A cluster that falls two or three releases behind this official support window is, by definition, operating with publicly disclosed, exploitable vulnerabilities. Attackers actively weaponize these known flaws to achieve privilege escalation or container escape. Consistently executing seamless, non-disruptive upgrades is the only reliable strategy to protect the control plane and worker nodes from emerging infrastructure-level threats.
 
 Running outdated Kubernetes versions is a massive security risk. Each release patches vulnerabilities—some critical. The CKS exam expects you to evaluate CVEs, verify versions, and execute upgrades without leaving the cluster vulnerable.
 
