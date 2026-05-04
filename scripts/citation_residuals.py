@@ -7,19 +7,16 @@ candidate URLs, validating each via `fetch_citation`, and appending the
 accepted URL to the module's `## Sources` section. Unresolved findings
 move to `unresolvable_findings[]` so re-runs are idempotent.
 
-See GH #343 for the spec and #341 for the parent epic.
-
-Scope (#343 phase-1):
-    - Processes `needs_citation` findings only.
-    - Does NOT touch `overstated_unfixed`, `off_topic_unfixed`,
-      `overstatement_queued`, `off_topic_delete_queued` — those are #344.
+See GH #343/#344 for the staged resolver specs and #341 for the parent epic.
 """
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import io
 import json
+import random
 import re
 import sys
 import time
@@ -36,6 +33,7 @@ from citation_backfill import (  # noqa: E402
     dispatch_gemini,
     parse_agent_response,
 )
+from dispatch import dispatch_codex as dispatch_codex_cli  # noqa: E402
 from pipeline_common import module_lock  # noqa: E402
 
 HUMAN_REVIEW_DIR = REPO_ROOT / ".pipeline" / "v3" / "human-review"
@@ -58,6 +56,21 @@ GEMINI_PER_FINDING_TIMEOUT = 120
 #: respond faster for structured JSON prompts; 180s gives headroom over
 #: observed 30-60s typical responses without inviting the same trap.
 CLAUDE_PER_FINDING_TIMEOUT = 180
+CODEX_RESIDUAL_MODEL = "gpt-5.5"
+CODEX_RESIDUAL_TIMEOUT = 300
+
+BUCKET_NEEDS_CITATION = "needs_citation"
+BUCKET_OVERSTATED_UNFIXED = "overstated_unfixed"
+BUCKET_OFF_TOPIC_UNFIXED = "off_topic_unfixed"
+BUCKET_OVERSTATEMENT_QUEUED = "overstatement_queued"
+BUCKET_OFF_TOPIC_DELETE_QUEUED = "off_topic_delete_queued"
+QUEUED_BUCKETS = (BUCKET_OVERSTATEMENT_QUEUED, BUCKET_OFF_TOPIC_DELETE_QUEUED)
+PHASE2_BUCKETS = (
+    BUCKET_OVERSTATED_UNFIXED,
+    BUCKET_OFF_TOPIC_UNFIXED,
+    BUCKET_OVERSTATEMENT_QUEUED,
+    BUCKET_OFF_TOPIC_DELETE_QUEUED,
+)
 
 
 def _dispatch_gemini_for_candidate(prompt: str) -> tuple[bool, str]:
@@ -73,6 +86,15 @@ def _dispatch_gemini_for_candidate(prompt: str) -> tuple[bool, str]:
 def _dispatch_claude_for_candidate(prompt: str) -> tuple[bool, str]:
     """dispatch_claude wrapper with the short per-finding timeout."""
     return dispatch_claude(prompt, timeout=CLAUDE_PER_FINDING_TIMEOUT)
+
+
+def _dispatch_codex_for_residual(prompt: str) -> tuple[bool, str]:
+    """Codex wrapper for phase-2 rewrite/delete residuals."""
+    return dispatch_codex_cli(
+        prompt,
+        model=CODEX_RESIDUAL_MODEL,
+        timeout=CODEX_RESIDUAL_TIMEOUT,
+    )
 
 
 CANDIDATE_DISPATCHERS = {
@@ -770,6 +792,410 @@ def resolve_module(
     return stats
 
 
+OVERSTATEMENT_PROMPT = """You are editing one sentence in a Kubernetes/cloud curriculum module.
+
+The auditor flagged the sentence as overstated because it uses an absolute or
+over-broad claim. Propose a drop-in replacement that softens the claim while
+preserving the technical meaning.
+
+Rules:
+- Return exactly one replacement sentence.
+- Do not add citations.
+- Do not add new facts.
+- Keep product names, commands, versions, and exam terminology unchanged.
+- Prefer words like "often", "typically", "can", "may", "in many cases" when accurate.
+
+Trigger: {trigger}
+Original sentence:
+{sentence}
+
+Auditor's suggested rewrite, if present:
+{suggested_rewrite}
+
+Respond with strict JSON only:
+{{"suggested_rewrite": "replacement sentence"}}
+"""
+
+OFF_TOPIC_PROMPT = """You are editing a Kubernetes/cloud curriculum module.
+
+The auditor flagged this paragraph as off-topic. Decide whether the paragraph
+should be deleted from the module. Only approve deletion when the excerpt is
+clearly unrelated to the surrounding curriculum topic or is obvious filler.
+
+Section: {section}
+Reason: {reason}
+Suggested action: {suggested_action}
+Paragraph excerpt:
+{excerpt}
+
+Respond with strict JSON only:
+{{"action": "delete" | "keep", "reason": "one concise reason"}}
+"""
+
+
+def _normalize_overstatement_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    verdict = finding.get("verdict") or {}
+    rewrite = (
+        finding.get("suggested_rewrite")
+        or finding.get("new")
+        or verdict.get("suggested_rewrite")
+    )
+    return {
+        **finding,
+        "sentence": finding.get("sentence") or finding.get("old"),
+        "verdict": {"verdict": "overstated", "suggested_rewrite": rewrite},
+    }
+
+
+def _normalize_off_topic_finding(finding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **finding,
+        "verdict": "off_topic",
+        "suggested_action": finding.get("suggested_action") or "delete paragraph",
+    }
+
+
+def _sentence_count(text: str) -> int:
+    return len(re.findall(r"[.!?](?=\s|$)", text)) or (1 if text.strip() else 0)
+
+
+def _swap_overstatement(
+    body: str,
+    finding: dict[str, Any],
+) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    normalized = _normalize_overstatement_finding(finding)
+    sentence = str(normalized.get("sentence") or "")
+    rewrite = str((normalized.get("verdict") or {}).get("suggested_rewrite") or "")
+    if not sentence or not rewrite:
+        return body, None, {**finding, "queue_reason": "missing_rewrite_or_sentence"}
+    count = body.count(sentence)
+    if count != 1:
+        return body, None, {
+            **finding,
+            "queue_reason": f"sentence_match_count:{count}",
+        }
+    if _sentence_count(rewrite) > _sentence_count(sentence):
+        return body, None, {
+            **finding,
+            "queue_reason": "rewrite_sentence_count_grew",
+        }
+    updated = body.replace(sentence, rewrite, 1)
+    return updated, {
+        "bucket": finding.get("_bucket", BUCKET_OVERSTATEMENT_QUEUED),
+        "action": "softened",
+        "line": finding.get("line"),
+        "trigger": finding.get("trigger"),
+        "old": sentence,
+        "new": rewrite,
+        "resolved_at": _now_iso(),
+    }, None
+
+
+def _paragraph_records(body: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    lines = body.splitlines(keepends=True)
+    start: int | None = None
+    chunk: list[str] = []
+    in_code = False
+
+    def flush(end_index: int) -> None:
+        nonlocal start, chunk
+        if start is not None and chunk:
+            text = "".join(chunk)
+            kind = "code" if "```" in text else "prose"
+            records.append(
+                {
+                    "start": start,
+                    "end": end_index,
+                    "text": text,
+                    "kind": kind,
+                }
+            )
+        start = None
+        chunk = []
+
+    for idx, line in enumerate(lines):
+        if line.startswith("```"):
+            in_code = not in_code
+        if not line.strip() and not in_code:
+            flush(idx)
+            continue
+        if start is None:
+            start = idx
+        chunk.append(line)
+    flush(len(lines))
+    return records
+
+
+def _delete_off_topic(
+    body: str,
+    finding: dict[str, Any],
+) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    normalized = _normalize_off_topic_finding(finding)
+    action = str(normalized.get("suggested_action") or "")
+    if not action.startswith("delete"):
+        return body, None, {**finding, "queue_reason": f"action_not_delete:{action}"}
+    excerpt = str(normalized.get("excerpt") or "").strip().rstrip("…").rstrip()
+    anchor = " ".join(excerpt.split()[:6])
+    if not anchor:
+        return body, None, {**finding, "queue_reason": "missing_excerpt"}
+
+    matches = [
+        p
+        for p in _paragraph_records(body)
+        if anchor in " ".join(p["text"].split())
+    ]
+    if len(matches) != 1:
+        return body, None, {
+            **finding,
+            "queue_reason": f"paragraph_match_count:{len(matches)}",
+        }
+    match = matches[0]
+    if match["kind"] != "prose":
+        return body, None, {**finding, "queue_reason": f"paragraph_kind:{match['kind']}"}
+
+    lines = body.splitlines(keepends=True)
+    end = match["end"]
+    if end < len(lines) and not lines[end].strip():
+        end += 1
+    updated = "".join(lines[: match["start"]] + lines[end:])
+    return updated, {
+        "bucket": finding.get("_bucket", BUCKET_OFF_TOPIC_DELETE_QUEUED),
+        "action": "deleted",
+        "section": finding.get("section"),
+        "excerpt": excerpt[:160],
+        "removed_lines": end - match["start"],
+        "resolved_at": _now_iso(),
+    }, None
+
+
+def request_overstatement_rewrite(
+    finding: dict[str, Any],
+    *,
+    dispatcher=_dispatch_codex_for_residual,
+) -> str | None:
+    prompt = OVERSTATEMENT_PROMPT.format(
+        trigger=finding.get("trigger") or "",
+        sentence=finding.get("sentence") or "",
+        suggested_rewrite=finding.get("suggested_rewrite") or "",
+    )
+    ok, raw = dispatcher(prompt)
+    if not ok:
+        return None
+    try:
+        parsed = parse_agent_response(raw)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    rewrite = str(parsed.get("suggested_rewrite") or "").strip()
+    return rewrite or None
+
+
+def request_offtopic_action(
+    finding: dict[str, Any],
+    *,
+    dispatcher=_dispatch_codex_for_residual,
+) -> str | None:
+    prompt = OFF_TOPIC_PROMPT.format(
+        section=finding.get("section") or "",
+        reason=finding.get("reason") or "",
+        suggested_action=finding.get("suggested_action") or "",
+        excerpt=finding.get("excerpt") or "",
+    )
+    ok, raw = dispatcher(prompt)
+    if not ok:
+        return None
+    try:
+        parsed = parse_agent_response(raw)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    action = str(parsed.get("action") or "").strip().lower()
+    return action or None
+
+
+def _apply_phase2_finding(
+    body: str,
+    bucket: str,
+    finding: dict[str, Any],
+    *,
+    dispatcher=_dispatch_codex_for_residual,
+) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+    working = {**finding, "_bucket": bucket}
+    if bucket == BUCKET_OVERSTATEMENT_QUEUED:
+        return _swap_overstatement(body, working)
+    if bucket == BUCKET_OFF_TOPIC_DELETE_QUEUED:
+        return _delete_off_topic(body, working)
+    if bucket == BUCKET_OVERSTATED_UNFIXED:
+        rewrite = request_overstatement_rewrite(working, dispatcher=dispatcher)
+        if not rewrite:
+            return body, None, {**finding, "queue_reason": "llm_no_rewrite"}
+        working["suggested_rewrite"] = rewrite
+        return _swap_overstatement(body, working)
+    if bucket == BUCKET_OFF_TOPIC_UNFIXED:
+        action = request_offtopic_action(working, dispatcher=dispatcher)
+        if action != "delete":
+            return body, None, {**finding, "queue_reason": f"llm_action:{action}"}
+        working["suggested_action"] = "delete paragraph"
+        return _delete_off_topic(body, working)
+    return body, None, {**finding, "queue_reason": f"unsupported_bucket:{bucket}"}
+
+
+def resolve_phase2_module(
+    queue_path: Path,
+    *,
+    fix_overstatements: bool = False,
+    fix_offtopic: bool = False,
+    apply_queued: bool = False,
+    dry_run: bool = False,
+    dispatcher=_dispatch_codex_for_residual,
+) -> dict[str, Any]:
+    """Resolve #344 phase-2 residual buckets for one module."""
+    data = load_queue_file(queue_path)
+    module_key = data.get("module_key") or queue_path.stem
+    queued = data.setdefault("queued_findings", {})
+    buckets: list[str] = []
+    if fix_overstatements:
+        buckets.append(BUCKET_OVERSTATED_UNFIXED)
+    if fix_offtopic:
+        buckets.append(BUCKET_OFF_TOPIC_UNFIXED)
+    if apply_queued:
+        buckets.extend(QUEUED_BUCKETS)
+
+    module_path = module_path_from_key(module_key)
+    stats = {
+        "module_key": module_key,
+        "considered": 0,
+        "resolved": 0,
+        "unresolvable": 0,
+        "skipped_already_resolved": 0,
+        "module_edited": False,
+    }
+    if not module_path.exists():
+        stats["error"] = "module_not_found"
+        return stats
+
+    module_text = module_path.read_text(encoding="utf-8")
+    resolved_list: list[dict[str, Any]] = list(data.setdefault("resolved_findings", []))
+
+    for bucket in buckets:
+        findings = list(queued.get(bucket) or [])
+        if not findings:
+            continue
+        pending: list[dict[str, Any]] = []
+        for finding in findings:
+            stats["considered"] += 1
+            module_text, applied, leftover = _apply_phase2_finding(
+                module_text,
+                bucket,
+                finding,
+                dispatcher=dispatcher,
+            )
+            if applied is not None:
+                stats["resolved"] += 1
+                resolved_list.append(applied)
+            else:
+                stats["unresolvable"] += 1
+                pending.append(leftover or finding)
+        if not dry_run:
+            queued[bucket] = pending
+
+    if not dry_run:
+        original_text = module_path.read_text(encoding="utf-8")
+        if module_text != original_text:
+            module_path.write_text(module_text, encoding="utf-8")
+            stats["module_edited"] = True
+        data["resolved_findings"] = resolved_list
+        save_queue_file(queue_path, data)
+    else:
+        stats["module_edited"] = module_text != module_path.read_text(encoding="utf-8")
+
+    return stats
+
+
+def _selected_buckets(args: argparse.Namespace) -> list[str]:
+    phase2_selected = args.fix_overstatements or args.fix_offtopic or args.apply_queued
+    buckets: list[str] = []
+    if args.fix_citations or not phase2_selected:
+        buckets.append(BUCKET_NEEDS_CITATION)
+    if args.fix_overstatements:
+        buckets.append(BUCKET_OVERSTATED_UNFIXED)
+    if args.fix_offtopic:
+        buckets.append(BUCKET_OFF_TOPIC_UNFIXED)
+    if args.apply_queued:
+        buckets.extend(QUEUED_BUCKETS)
+    return buckets
+
+
+def _has_selected_findings(queue_path: Path, buckets: list[str]) -> bool:
+    try:
+        data = load_queue_file(queue_path)
+    except Exception:  # noqa: BLE001
+        return False
+    qf = data.get("queued_findings") or {}
+    return any(qf.get(bucket) for bucket in buckets)
+
+
+def _sample_findings(
+    targets: list[Path],
+    buckets: list[str],
+    sample_size: int,
+) -> list[tuple[Path, str, int, dict[str, Any]]]:
+    candidates: list[tuple[Path, str, int, dict[str, Any]]] = []
+    for queue_path in targets:
+        try:
+            data = load_queue_file(queue_path)
+        except Exception:  # noqa: BLE001
+            continue
+        qf = data.get("queued_findings") or {}
+        for bucket in buckets:
+            if bucket == BUCKET_NEEDS_CITATION:
+                continue
+            for idx, finding in enumerate(qf.get(bucket) or []):
+                candidates.append((queue_path, bucket, idx, finding))
+    if sample_size >= len(candidates):
+        return candidates
+    return random.sample(candidates, sample_size)
+
+
+def run_sample(
+    targets: list[Path],
+    buckets: list[str],
+    sample_size: int,
+    *,
+    dispatcher=_dispatch_codex_for_residual,
+) -> int:
+    samples = _sample_findings(targets, buckets, sample_size)
+    if not samples:
+        print("No sampleable phase-2 findings for the selected flags.")
+        return 0
+    for sample_idx, (queue_path, bucket, finding_idx, finding) in enumerate(samples, 1):
+        data = load_queue_file(queue_path)
+        module_key = data.get("module_key") or queue_path.stem
+        module_path = module_path_from_key(module_key)
+        if not module_path.exists():
+            print(f"[sample {sample_idx}] {module_key}: module_not_found")
+            continue
+        before = module_path.read_text(encoding="utf-8")
+        after, applied, leftover = _apply_phase2_finding(
+            before,
+            bucket,
+            finding,
+            dispatcher=dispatcher,
+        )
+        print(f"[sample {sample_idx}] {module_key} {bucket}[{finding_idx}]")
+        print(json.dumps(finding, indent=2, ensure_ascii=False))
+        if applied is None:
+            print(f"not applied: {json.dumps(leftover, ensure_ascii=False)}")
+        diff = difflib.unified_diff(
+            before.splitlines(),
+            after.splitlines(),
+            fromfile=f"{module_key}.before",
+            tofile=f"{module_key}.after",
+            lineterm="",
+        )
+        print("\n".join(diff) or "(no text change)")
+    return 0
+
+
 def _now_iso() -> str:
     import datetime as _dt
 
@@ -794,6 +1220,8 @@ def build_report() -> dict[str, Any]:
         "needs_citation": 0,
         "overstated_unfixed": 0,
         "off_topic_unfixed": 0,
+        "overstatement_queued": 0,
+        "off_topic_delete_queued": 0,
         "resolved_findings": 0,
         "unresolvable_findings": 0,
     }
@@ -807,12 +1235,16 @@ def build_report() -> dict[str, Any]:
         nc = len(qf.get("needs_citation") or [])
         ou = len(qf.get("overstated_unfixed") or [])
         ot = len(qf.get("off_topic_unfixed") or [])
+        oq = len(qf.get("overstatement_queued") or [])
+        odq = len(qf.get("off_topic_delete_queued") or [])
         res = len(data.get("resolved_findings") or [])
         unres = len(data.get("unresolvable_findings") or [])
         totals["files"] += 1
         totals["needs_citation"] += nc
         totals["overstated_unfixed"] += ou
         totals["off_topic_unfixed"] += ot
+        totals["overstatement_queued"] += oq
+        totals["off_topic_delete_queued"] += odq
         totals["resolved_findings"] += res
         totals["unresolvable_findings"] += unres
         per_file.append(
@@ -821,6 +1253,8 @@ def build_report() -> dict[str, Any]:
                 "needs_citation": nc,
                 "overstated_unfixed": ou,
                 "off_topic_unfixed": ot,
+                "overstatement_queued": oq,
+                "off_topic_delete_queued": odq,
                 "resolved": res,
                 "unresolvable": unres,
             }
@@ -864,7 +1298,7 @@ def main(argv: list[str] | None = None) -> int:
     p_report = sub.add_parser("report", help="Summarize the residuals queue")
     p_report.add_argument("--json", action="store_true", help="Emit JSON to stdout")
 
-    p_resolve = sub.add_parser("resolve", help="Resolve needs_citation findings")
+    p_resolve = sub.add_parser("resolve", help="Resolve queued residual findings")
     p_resolve.add_argument(
         "module_key",
         nargs="?",
@@ -907,6 +1341,41 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run",
         action="store_true",
         help="Propose resolutions but do not write to modules or queue JSON",
+    )
+    p_resolve.add_argument(
+        "--fix-citations",
+        action="store_true",
+        help=(
+            "Resolve queued needs_citation findings. This remains the default "
+            "when no phase-2 flags are supplied."
+        ),
+    )
+    p_resolve.add_argument(
+        "--fix-overstatements",
+        action="store_true",
+        help="Use Codex to soften overstated_unfixed findings and apply them.",
+    )
+    p_resolve.add_argument(
+        "--fix-offtopic",
+        action="store_true",
+        help="Use Codex to confirm/delete off_topic_unfixed findings.",
+    )
+    p_resolve.add_argument(
+        "--apply-queued",
+        action="store_true",
+        help=(
+            "Apply pre-composed overstatement_queued swaps and "
+            "off_topic_delete_queued deletions."
+        ),
+    )
+    p_resolve.add_argument(
+        "--sample",
+        type=_positive_int,
+        metavar="N",
+        help=(
+            "Pick N random phase-2 findings from the selected buckets, print "
+            "before/after diffs, and exit without writing files."
+        ),
     )
     p_resolve.add_argument(
         "--worker-id",
@@ -959,8 +1428,10 @@ def main(argv: list[str] | None = None) -> int:
         t = report["totals"]
         print(f"Files: {t['files']}")
         print(f"needs_citation open:   {t['needs_citation']}")
-        print(f"overstated_unfixed:    {t['overstated_unfixed']}  (out of scope for #343)")
-        print(f"off_topic_unfixed:     {t['off_topic_unfixed']}   (out of scope for #343)")
+        print(f"overstated_unfixed:    {t['overstated_unfixed']}")
+        print(f"off_topic_unfixed:     {t['off_topic_unfixed']}")
+        print(f"overstatement_queued:  {t['overstatement_queued']}")
+        print(f"off_topic_delete_queued: {t['off_topic_delete_queued']}")
         print(f"resolved_findings:     {t['resolved_findings']}")
         print(f"unresolvable_findings: {t['unresolvable_findings']}")
         return 0
@@ -973,18 +1444,15 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("resolve requires either <module_key> or --all")
             targets = [_queue_path_for(args.module_key)]
 
-        # Filter out files with no needs_citation entries — cheap early exit.
-        useful_targets = []
-        for t in targets:
-            try:
-                d = load_queue_file(t)
-            except Exception:  # noqa: BLE001
-                continue
-            if (d.get("queued_findings") or {}).get("needs_citation"):
-                useful_targets.append(t)
+        selected_buckets = _selected_buckets(args)
+        if args.sample is not None:
+            return run_sample(targets, selected_buckets, args.sample)
+
+        # Filter out files with no selected entries — cheap early exit.
+        useful_targets = [t for t in targets if _has_selected_findings(t, selected_buckets)]
 
         if not useful_targets:
-            print("No residuals with needs_citation findings.")
+            print("No residuals with selected findings.")
             return 0
 
         if args.all and args.limit_modules is not None:
@@ -1039,13 +1507,38 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     continue
             outcome = "ok"
-            print(f"[{i}/{total_modules}] {canonical_key}: resolving ({args.agent})")
+            print(
+                f"[{i}/{total_modules}] {canonical_key}: resolving "
+                f"({', '.join(selected_buckets)})"
+            )
             try:
-                stats = resolve_module(
-                    qp,
-                    dry_run=args.dry_run,
-                    dispatcher=CANDIDATE_DISPATCHERS[args.agent],
-                )
+                stats = {
+                    "module_key": canonical_key,
+                    "considered": 0,
+                    "resolved": 0,
+                    "unresolvable": 0,
+                    "module_edited": False,
+                }
+                if BUCKET_NEEDS_CITATION in selected_buckets:
+                    stats = resolve_module(
+                        qp,
+                        dry_run=args.dry_run,
+                        dispatcher=CANDIDATE_DISPATCHERS[args.agent],
+                    )
+                if any(bucket in PHASE2_BUCKETS for bucket in selected_buckets):
+                    phase2_stats = resolve_phase2_module(
+                        qp,
+                        fix_overstatements=args.fix_overstatements,
+                        fix_offtopic=args.fix_offtopic,
+                        apply_queued=args.apply_queued,
+                        dry_run=args.dry_run,
+                    )
+                    stats["considered"] += phase2_stats["considered"]
+                    stats["resolved"] += phase2_stats["resolved"]
+                    stats["unresolvable"] += phase2_stats["unresolvable"]
+                    stats["module_edited"] = bool(
+                        stats.get("module_edited") or phase2_stats.get("module_edited")
+                    )
             except DispatcherUnavailable as exc:
                 # Peak-hours guard / budget exhaustion / terminal rate
                 # limit. resolve_module writes the queue file only on
