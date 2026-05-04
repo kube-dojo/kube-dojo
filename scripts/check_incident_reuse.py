@@ -107,6 +107,28 @@ CANONICALS: dict[str, tuple[str, str]] = {
         "src/content/docs/platform/disciplines/core-platform/leadership/module-1.1-platform-team-building.md",
         "Amazon two-pizza teams",
     ),
+    # Catalog incidents claimed by the prereqs sweep (#878 PR sequence). Once a sweep PR claims a
+    # catalog incident, it becomes the canonical for that incident — same one-module rule applies.
+    "github-2018-split-brain": (
+        "src/content/docs/prerequisites/git-deep-dive/module-2-advanced-merging.md",
+        "GitHub October 2018 split-brain",
+    ),
+    "atlassian-2022-deletion": (
+        "src/content/docs/prerequisites/git-deep-dive/module-4-undo-recovery.md",
+        "Atlassian April 2022 data deletion",
+    ),
+    "cloudflare-2022-bgp": (
+        "src/content/docs/prerequisites/modern-devops/module-1.2-gitops.md",
+        "Cloudflare BGP June 2022 policy reorder",
+    ),
+    "cloudflare-2019-regex": (
+        "src/content/docs/prerequisites/modern-devops/module-1.3-cicd-pipelines.md",
+        "Cloudflare 2019 regex outage",
+    ),
+    "github-2021-mysql": (
+        "src/content/docs/prerequisites/modern-devops/module-1.4-observability.md",
+        "GitHub August 2021 MySQL degradation",
+    ),
 }
 
 # Always-forbidden incidents — these have NO canonical and may not appear

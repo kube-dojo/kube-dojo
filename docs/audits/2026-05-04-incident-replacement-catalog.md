@@ -12,7 +12,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 *Alternatives to Knight Capital 2012. Use when the module teaches version consistency across nodes, partial rollout blast-radius, or "some servers got the change, others didn't."*
 
-### Cloudflare BGP policy reorder — June 2022
+### Cloudflare BGP policy reorder — June 2022 [CLAIMED — `prerequisites/modern-devops/module-1.2-gitops.md`]
 
 - **What happened (≤60 words):** Cloudflare deployed BGP community updates that reordered policy terms, placing a `REJECT-THE-REST` rule ahead of site-local advertisement terms. Nineteen data centers — handling ~50% of global traffic — withdrew their routes and became unreachable for ~75 minutes. The change was applied non-atomically; some PoPs received the correct order, others did not.
 - **Lesson it teaches:** A partial, ordered deployment of network policy can leave different nodes in conflicting states, indistinguishable from a full rollout until traffic collapses.
@@ -22,7 +22,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 ---
 
-### GitHub October 2018 database failover — split-brain
+### GitHub October 2018 database failover — split-brain [CLAIMED — `prerequisites/git-deep-dive/module-2-advanced-merging.md`]
 
 - **What happened (≤60 words):** During routine optical hardware maintenance, GitHub lost connectivity between its US-East hub and primary database for 43 seconds. Automated failover triggered, but the two data centers had each accepted writes during the window. The reconciliation took 24 hours; ~200,000 webhook payloads were dropped permanently.
 - **Lesson it teaches:** Automatic failover that fires mid-write creates two partially-advanced states neither of which is canonical — the synchronisation gap is the cost of a partial transition.
@@ -42,7 +42,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 ---
 
-### Cloudflare WAF regex CPU exhaustion — July 2019
+### Cloudflare WAF regex CPU exhaustion — July 2019 [CLAIMED — `prerequisites/modern-devops/module-1.3-cicd-pipelines.md`]
 
 - **What happened (≤60 words):** Cloudflare deployed a new WAF rule containing a backtracking regex that consumed 100% of CPU on every edge node worldwide. The rule was tested but the safeguard that would have caught catastrophic backtracking had been removed weeks earlier in a refactor. Traffic dropped 82% in 27 minutes before the WAF was disabled globally.
 - **Lesson it teaches:** A single misconfigured component deployed uniformly to all nodes fails uniformly — there is no partial success to hide behind; the blast radius equals fleet size.
@@ -383,7 +383,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 *Alternatives to GitLab 2017 db1 (canonical #4). Use when the module teaches backup verification, RTO/RPO, or the failure of recovery assumptions.*
 
-### Atlassian April 2022 cloud data deletion
+### Atlassian April 2022 cloud data deletion [CLAIMED — `prerequisites/git-deep-dive/module-4-undo-recovery.md`]
 
 - **What happened (≤60 words):** Atlassian permanently deleted the cloud sites of approximately 400 enterprise customers during a maintenance operation that ran a "delete script" against the wrong environment. The deletion affected Jira, Confluence, and other products. Full data restoration took up to two weeks for some customers. Atlassian's backup and restore procedures had not been tested at this scale.
 - **Lesson it teaches:** A bulk deletion without environment confirmation and without a tested restore procedure converts a routine maintenance script into a two-week customer emergency.
@@ -420,7 +420,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 *Use when the module teaches alerting, distributed tracing, on-call runbooks, or the cost of poor observability. Also usable: the Cloudflare Byzantine failure (Bucket 5) — its core lesson is that monitoring can lie; the AWS Kinesis cascade (Bucket 3) where CloudWatch alarms entered INSUFFICIENT_DATA during the outage.*
 
-### GitHub August 2021 — MySQL degraded state from bad query
+### GitHub August 2021 — MySQL degraded state from bad query [CLAIMED — `prerequisites/modern-devops/module-1.4-observability.md`]
 
 - **What happened (≤60 words):** An edge case in a high-traffic application generated a poorly-performing query that degraded a MySQL primary. Retry and queuing logic prevented automatic recovery. GitHub's internal tooling, which depended on the same database, also failed — engineers lost the observability instruments they needed to diagnose the problem. Total impact: 1 hour 17 minutes for the first wave, with a second incident 4 hours later.
 - **Lesson it teaches:** When a database failure takes down the monitoring infrastructure that runs on that same database, mean-time-to-diagnose increases non-linearly — observability tooling must be isolated from the systems it observes.

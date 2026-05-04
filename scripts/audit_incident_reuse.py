@@ -82,10 +82,11 @@ INCIDENTS: dict[str, list[str]] = {
         r"WannaCry",
     ],
     "GitLab 2017 db1 incident": [
-        # Widened: catches "2017 GitLab database outage", "Postmortem of database outage of January 31",
-        # "fatigued admin... replication lag", and other variant phrasings.
-        r"GitLab.{0,400}(2017|db1|rm[\s\-]rf|6[\s\-]hour|backup|replication lag|January 31|postmortem of database outage|database outage|production data loss|streamed live)",
-        r"(rm[\s\-]rf|backup failed|replication lag|fatigued.{0,40}admin).{0,400}GitLab",
+        # Tightened 2026-05-04: require a specific GitLab-2017-incident signal, not just GitLab + a
+        # generic word like "backup". Without this, passing references like "push to GitHub or GitLab,
+        # then verify backups" trigger false positives.
+        r"GitLab.{0,400}(2017|db1|rm[\s\-]rf|January 31|postmortem of database outage|database outage|production data loss|streamed live|fatigued.{0,40}admin|replication lag)",
+        r"(rm[\s\-]rf|backup failed|replication lag|fatigued.{0,40}admin|database outage).{0,400}GitLab",
     ],
     "Cloudflare 2019 regex outage": [
         r"Cloudflare.{0,200}(regex|2019|July|backtrack|catastrophic)",
@@ -170,12 +171,33 @@ INCIDENTS: dict[str, list[str]] = {
         r"\b(7|seven) of (8|eight)\s*servers",
     ],
     "Holiday / Black Friday outage trope": [
-        r"Black Friday.{0,80}(outage|down|incident|disaster|peak)",
-        r"holiday.{0,40}(launch|sale).{0,200}(outage|down|broke|crashed)",
+        # Tightened 2026-05-04: require a fabricated-shape incident — Black Friday + outage + invented
+        # dollar figure. Generic pedagogical mentions ("Black Friday traffic spike", "consider a Black
+        # Friday checkout scenario") are NOT flagged. Only "company X lost $Y million during
+        # Black Friday" patterns are caught — those are the actual no-bullshit-bar violations.
+        r"Black Friday.{0,300}(outage|incident|disaster|downtime).{0,200}\$[\d.,]+\s*(million|M\b)",
+        r"\$[\d.,]+\s*(million|M\b).{0,200}Black Friday.{0,80}(outage|incident|disaster|downtime)",
+        r"holiday.{0,40}(sale|launch).{0,200}(outage|incident|broke|crashed).{0,200}\$[\d.,]+\s*(million|M\b)",
     ],
     "Ericsson 2018 certificate expiration": [
         r"Ericsson.{0,200}(certificate|expired|expir|2018)",
         r"(O2|SoftBank).{0,200}(certificate|expir).{0,200}(2018|December)",
+    ],
+    "GitHub October 2018 split-brain": [
+        r"GitHub.{0,400}(October 2018|October 21,\s*2018|optical (hardware|cable)|43[\s\-]second|split[\s\-]brain|US-East.{0,40}(database|primary|hub)|webhook payloads?\s*(were\s*)?(permanently\s*)?dropped)",
+        r"(43[\s\-]second|split[\s\-]brain|optical (hardware|cable)|webhook payloads).{0,400}GitHub",
+    ],
+    "Atlassian April 2022 data deletion": [
+        r"Atlassian.{0,400}(April 2022|April 5,?\s*2022|delete[\s\-]site|delete script|775 customers|14 days|cloud data deletion)",
+        r"(delete[\s\-]site|delete script|775 customers|14 days).{0,200}Atlassian",
+    ],
+    "Cloudflare BGP June 2022 policy reorder": [
+        r"Cloudflare.{0,400}(June 2022|June 21,?\s*2022|policy reorder|REJECT[\s\-]THE[\s\-]REST|nineteen data centers|19 data centers|75 minutes)",
+        r"(REJECT[\s\-]THE[\s\-]REST|policy reorder).{0,400}Cloudflare",
+    ],
+    "GitHub August 2021 MySQL degradation": [
+        r"GitHub.{0,400}(August 2021|August 10,?\s*2021|MySQL primary|degraded|77[\s\-]minute|seventy[\s\-]seven minute|service discovery misconfiguration|dashboards.{0,40}same.{0,40}database)",
+        r"(MySQL primary|degraded.{0,80}database|dashboards.{0,40}down too).{0,200}GitHub",
     ],
     "Fictional / fabricated incident names": [
         # User: "you cannot fool a human" — these are made-up company names with manufactured stats.
