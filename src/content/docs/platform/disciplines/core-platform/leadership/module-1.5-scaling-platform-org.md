@@ -28,7 +28,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A payments company had one of the best platform teams in fintech. Five engineers who built and maintained a deployment platform, a monitoring stack, and a self-service database provisioning system. Developers loved them. Adoption was 95%. The team was a case study in doing platform engineering right.
+Amazon's two-pizza team principle <!-- incident-xref: amazon-two-pizza --> — small teams with clear ownership move faster than large teams with shared scope — explains why platform organizations start strong and then struggle to scale. For the full case study on how Amazon applied this to service ownership and autonomy, see [Building Platform Teams](../module-1.1-platform-team-building/).
 
 Then the company grew from 80 developers to 350 in 18 months.
 
@@ -45,6 +45,7 @@ The company's response was to hire more platform engineers. They went from 5 to 
 > **Dunbar's number** (roughly 150) is the cognitive limit to the number of people with whom one can maintain stable social relationships. When a platform organization exceeds ~8-12 people, informal coordination breaks down and you need explicit processes. Most platform scaling problems happen at exactly this inflection point.
 
 > **Amazon's "two-pizza team" rule** was not about team size — it was about **ownership scope**. Jeff Bezos' insight was that small teams with clear ownership make better decisions and move faster than large teams with shared ownership. This principle applies directly to platform sub-teams.
+<!-- incident-xref: amazon-two-pizza -->
 
 > According to the 2024 Puppet State of Platform Engineering report, organizations with **mature platform governance** (clear SLOs, documented standards, explicit decision-making processes) scale their platform teams **2.4x more efficiently** than organizations that scale by headcount alone.
 

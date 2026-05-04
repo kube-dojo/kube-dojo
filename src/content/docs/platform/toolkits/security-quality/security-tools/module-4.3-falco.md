@@ -446,7 +446,7 @@ spec:
 | `container.image.repository` | Image without tag | `nginx` |
 | `container.image.tag` | Image tag | `1.21` |
 
-> 💡 **Did You Know?** Falco can detect threats across 350+ system calls, but you don't need to know them all. The default rules cover the most common attack patterns, and the community constantly updates them. When the Log4Shell vulnerability hit, Falco community rules were updated within hours to detect exploitation attempts—faster than most signature-based tools.
+> 💡 **Did You Know?** Falco can detect threats across 350+ system calls, but you don't need to know them all. The default rules cover the most common attack patterns, and the community constantly updates them. When the Log4Shell vulnerability hit, <!-- incident-xref: log4shell --> Falco community rules were updated within hours to detect exploitation attempts—faster than most signature-based tools. For the Log4Shell canonical, see [Supply Chain Security](../../../disciplines/reliability-security/devsecops/module-4.4-supply-chain-security/).
 
 ---
 

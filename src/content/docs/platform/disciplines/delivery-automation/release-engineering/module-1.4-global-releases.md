@@ -965,7 +965,7 @@ You have completed this exercise when you can confirm:
 **Articles:**
 - **"Safe Deployments at Scale"** — Azure DevOps Blog (ring deployment at Microsoft)
 - **"Deployment at Scale"** — Google SRE Workbook, Chapter 8
-- **"Understanding the Facebook Outage"** — Cloudflare Blog (2021 BGP analysis)
+- **"Understanding the Facebook Outage"** — Cloudflare Blog (2021 BGP analysis) <!-- incident-xref: cloudflare-2020-bgp --> — for the Cloudflare 2020 BGP canonical, see [BGP & Core Routing](../../../foundations/advanced-networking/module-1.4-bgp-routing/).
 
 **Talks:**
 - **"Multi-Cluster Management with ArgoCD"** — KubeCon (YouTube)

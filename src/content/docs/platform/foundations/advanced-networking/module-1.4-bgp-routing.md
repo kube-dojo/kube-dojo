@@ -1325,7 +1325,7 @@ docker network rm link-as1-as2 link-as1-as3 link-as2-as3
 
 - **"Internet Routing Registries and RPKI" (MANRS)** — The Mutually Agreed Norms for Routing Security initiative provides best practices for network operators.
 
-- **Cloudflare Blog: "How Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline"** — Detailed analysis of the 2019 route leak that shows exactly how BGP incidents propagate.
+- **Cloudflare Blog: "How Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline"** <!-- incident-xref: cloudflare-2019-regex --> — Detailed analysis of the 2019 route leak that shows exactly how BGP incidents propagate. For the canonical treatment of the Cloudflare 2019 regex outage, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 ---
 

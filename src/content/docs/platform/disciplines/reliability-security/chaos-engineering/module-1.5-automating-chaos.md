@@ -27,7 +27,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On October 4, 2021, Facebook experienced a 6-hour global outage that disrupted Facebook, Instagram, and WhatsApp worldwide. [The root cause was a configuration change to their backbone routers](https://blog.cloudflare.com/october-2021-facebook-outage) that disconnected Facebook's data centers from each other. But the real question isn't why it happened — network misconfigurations happen. The question is why it lasted 6 hours.
+In October 2021, a backbone router misconfiguration took Facebook, Instagram, and WhatsApp offline for six hours — and the engineers trying to fix it lost access to their own internal recovery tooling because it ran on the same downed infrastructure. <!-- incident-xref: facebook-2021-bgp --> For the full case study, see [Route 53 & DNS](../../../../cloud/aws-essentials/module-1.5-route53/).
 
 The answer: Facebook's internal tools (including the ones engineers needed to fix the problem) ran on the same infrastructure that was down. Engineers lost access to important internal recovery tooling and faced unusually difficult network and physical access during the outage. The recovery tools were victims of the same failure they were supposed to fix.
 
@@ -1166,6 +1166,7 @@ Key takeaways:
 
 Return to the [Chaos Engineering README]() to review the complete discipline, explore further reading, and find links to related platform engineering tracks.
 
+<!-- incident-xref: facebook-2021-bgp -->
 ## Sources
 
-- [Understanding how Facebook disappeared from the Internet](https://blog.cloudflare.com/october-2021-facebook-outage) — Useful incident analysis for the module's opening Facebook outage example and its network-configuration root cause.
+- [Understanding the October 2021 Facebook Outage](https://blog.cloudflare.com/october-2021-facebook-outage) — Useful incident analysis for the module's opening example and its network-configuration root cause. For the canonical treatment, see [Route 53 & DNS](../../../../cloud/aws-essentials/module-1.5-route53/).

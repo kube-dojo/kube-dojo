@@ -26,7 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2012, Knight Capital Group deployed a new software update to their automated trading system. Because the deployment process relied on manual steps and undocumented "tribal knowledge" rather than a standardized, automated golden path, an engineer missed copying the new code to one of the eight servers. When the market opened, the mismatched server began aggressively buying and selling shares, losing the company $440 million in just 45 minutes and ultimately driving them into bankruptcy.
+The 2012 Knight Capital Group<!-- incident-xref: knight-capital-2012 --> deployment failure — an engineer missed one of eight servers in a manual rollout, and the mismatched node triggered losses that nearly bankrupted the firm in under an hour — is the canonical story of what happens without golden paths. For the full case study, see [Infrastructure as Code](../../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/).
 
 While most organizations won't bankrupt themselves in under an hour, the absence of paved roads creates a silent, compounding tax. Without golden paths, every development team spends weeks reinventing the wheel—researching how to configure CI/CD pipelines, debating database choices, and fighting with security controls. This "shadow IT" leads to a fragmented ecosystem where security patches take months to roll out because every microservice is a unique, bespoke creation. 
 

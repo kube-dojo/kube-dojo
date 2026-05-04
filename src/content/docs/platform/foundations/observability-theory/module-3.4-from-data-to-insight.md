@@ -24,33 +24,15 @@ After completing this module, you will be able to:
 
 ---
 
-## The Team That Had Perfect Data But No Answers
+## The Data-to-Insight Gap
 
-**December 2018. A Major E-commerce Platform. Black Friday Weekend.**
+Instrumentation alone does not prevent long incidents. Teams that invest in metrics, logs, and traces but skip investigation structure — consistent field naming, dashboard hierarchy, SLO-based alerts, and runbooks — routinely spend 40+ minutes finding root causes that their data already contained. The gap between data and insight is an architectural problem, not a tool gap.
 
-The observability team had done everything right. World-class Prometheus deployment with 2.3 million time series. Elasticsearch cluster ingesting 4TB of logs daily. Jaeger storing 500 million spans. Beautiful Grafana dashboards covering every service. They'd spent 18 months building this observability stack.
-
-2:14 AM, Saturday. The worst time for e-commerce—Black Friday shoppers still active, Cyber Monday promotions launching in hours.
-
-Alert: "Checkout error rate exceeded 2%."
-
-The on-call engineer opens Grafana. Error rate: 2.3%. She can see *that* something is wrong. But the dashboard has 47 panels. Which one matters right now? She clicks through each one, looking for anomalies. Five minutes pass.
-
-She opens the logs. Searches for "checkout" and "error." 2.4 million results in the last hour. She adds "level:error"—still 847,000 results. She can't narrow down further because the logs don't have consistent field names. Different services use different conventions.
-
-She switches to tracing. Finds a failing trace. The error is "connection timeout" to the inventory service. Great. But why? The inventory service dashboard shows... nothing wrong. Latency normal. Error rate normal.
-
-**47 minutes**. That's how long it took to find the root cause. The inventory service was fine. The problem was network congestion between the checkout service and inventory service—a firewall rule change made two weeks earlier had introduced a 50ms timeout where there should have been 500ms. Under Black Friday load, retries stacked up and cascaded.
-
-**The fix**: One line of configuration. 30 seconds to apply.
-
-**The cost**: 47 minutes × 2.3% error rate × Black Friday traffic = $2.8 million in abandoned carts. Plus customer support costs. Plus reputation damage.
-
-> **Stop and think**: How would having a defined dashboard hierarchy have changed the on-call engineer's first 5 minutes of investigation?
+> **Stop and think**: If an alert fires right now, could your on-call engineer answer "what service owns this?" and "what do I do next?" within two minutes using your current dashboards?
 
 ### The Data-to-Insight Gap
 
-| What They Had | What They Lacked |
+| What Teams Often Have | What Enables Fast Recovery |
 |---|---|
 | [x] 2.3 million metrics | [ ] Dashboard hierarchy (what matters now?) |
 | [x] 4TB daily logs | [ ] Consistent field names (can't query) |
@@ -61,18 +43,14 @@ She switches to tracing. Finds a failing trace. The error is "connection timeout
 
 **DATA ≠ INSIGHT**
 
-They had all the data to find the problem in 5 minutes.
-They lacked the insight to navigate that data effectively.
-Cost of the gap: $2.8 million.
+The data needed to diagnose most incidents is present within the first minute. The question is whether the team has built the structure to navigate that data quickly. Teams that invest in dashboard hierarchy, consistent field naming, SLO-based alerting, and runbooks resolve incidents in under 10 minutes. Teams without that structure routinely spend 45+ minutes on the same class of problem.
 
-After the incident, they rebuilt their approach:
-- Created dashboard hierarchy (summary → signals → details)
-- Defined consistent field naming across all services
-- Implemented SLO-based alerts with error budgets
-- Wrote runbooks for common failure modes
-- Trained the team on systematic investigation
-
-The next similar incident took 8 minutes to resolve.
+A systematic rebuild typically includes:
+- Dashboard hierarchy (summary → signals → details)
+- Consistent field naming across all services
+- SLO-based alerts with error budgets
+- Runbooks for common failure modes
+- A shared investigation workflow the whole team practices
 
 ---
 

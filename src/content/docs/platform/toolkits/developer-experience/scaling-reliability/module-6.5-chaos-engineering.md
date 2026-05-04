@@ -38,7 +38,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2011, Netflix was preparing to migrate from its own data centers to AWS. The engineering team had a worry that kept them up at night: what happens when an EC2 instance just vanishes? They could test it manually, once, and move on. Instead, they built Chaos Monkey -- a tool that randomly terminated production instances during business hours, every single day. The early results were brutal. Services crashed. Pages fired. Engineers scrambled. But within months, every Netflix team had built retry logic, graceful degradation, and proper health checks into their services. When a real AWS region outage hit in 2012, Netflix stayed up while competitors went down. The chaos had made them antifragile. Analysts estimated that the avoided downtime saved Netflix tens of millions in lost revenue and customer churn.
+Netflix pioneered chaos engineering in 2011 by building <!-- incident-xref: netflix-chaos-monkey -->Chaos Monkey — a tool that randomly terminated production instances daily during business hours, forcing every engineering team to build systems that survived instance death. For the full case study, see [Chaos Principles](../../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/).
 
 The lesson is uncomfortable but clear: the only way to know your system handles failure is to cause failure, deliberately, while you are watching.
 
@@ -46,7 +46,7 @@ The lesson is uncomfortable but clear: the only way to know your system handles 
 
 > **Did You Know?**
 >
-> 1. Netflix's original Chaos Monkey was written in Go and ran exclusively during business hours so that engineers were awake to respond. The team called this "finding weaknesses while the doctors are in the office."
+> 1. Netflix's original <!-- incident-xref: netflix-chaos-monkey -->Chaos Monkey was written in Go and ran exclusively during business hours so that engineers were awake to respond. The team called this "finding weaknesses while the doctors are in the office."
 > 2. The CNCF accepted LitmusChaos as an incubating project in 2022, making it the first chaos engineering project in the CNCF landscape to reach that maturity level.
 > 3. Chaos Mesh was originally developed by PingCAP (the company behind TiDB) to test distributed database resilience. It injects faults at the kernel level using eBPF and ptrace, giving it precision that application-level tools cannot match.
 > 4. According to a 2023 Gremlin State of Chaos Engineering report, 60% of organizations practicing chaos engineering discovered critical bugs that traditional testing missed -- and the median time to detect failures dropped by 40%.

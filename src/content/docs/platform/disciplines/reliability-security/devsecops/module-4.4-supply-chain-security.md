@@ -673,7 +673,7 @@ Finally, SLSA and dependency controls should feed platform policy. If a service 
 
 ## Did You Know?
 
-1. The SolarWinds compromise showed that a trusted software update mechanism can become the delivery path for malicious code when the build process itself is compromised.
+1. The SolarWinds compromise <!-- incident-xref: solarwinds-2020 --> showed that a trusted software update mechanism can become the delivery path for malicious code when the build process itself is compromised. For the full case study, see [CI/CD Pipelines](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 2. SBOMs are most useful when they are generated for released artifacts, because source-only inventories can miss base image packages and build-time additions.
 

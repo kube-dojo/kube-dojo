@@ -27,9 +27,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On March 15, 2017, GitLab suffered a catastrophic data loss incident. An engineer, during routine maintenance, accidentally deleted a production PostgreSQL database directory. That part was bad luck. What made it a disaster was what came next: five out of five backup and recovery mechanisms failed. LVM snapshots hadn't been configured. pg_dump cron jobs had been silently failing for months. The Azure disk snapshots were empty. The S3 backup process had never successfully completed a restore test. The replication lag was too high to recover recent data.
-
-GitLab lost 6 hours of production data. They live-streamed the recovery on YouTube — an extraordinary act of transparency that taught the entire industry a lesson: **untested backups are not backups. Untested failover is not failover. Assumptions about stateful systems are the most dangerous assumptions you can make.**
+In 2017, GitLab lost 6 hours of production data after all five of their backup and recovery mechanisms failed simultaneously — a canonical lesson that untested backups are not backups and untested failover is not failover. <!-- incident-xref: gitlab-2017-db1 --> For the full case study, see [What Is a Terminal](../../../../prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal/).
 
 Stateless services are straightforward to test with chaos — kill a pod, it restarts, traffic reroutes, life goes on. Stateful systems are fundamentally different. When you kill a database pod, you don't just lose compute — you potentially lose data, corrupt indexes, break replication chains, and violate consistency guarantees. The blast radius of stateful chaos is inherently larger and the consequences more severe.
 
@@ -39,7 +37,7 @@ This module teaches you to safely inject chaos into stateful workloads: database
 
 ## Did You Know?
 
-> **Split-brain incidents** (where two database nodes both believe they are the primary and accept writes) have caused data corruption at companies including LinkedIn, GitHub, and multiple financial institutions. The Redis Sentinel documentation explicitly warns about split-brain during network partitions. Yet fewer than 15% of organizations regularly test their database clusters for split-brain resilience, according to a 2023 Percona survey.
+> **Split-brain incidents** (where two database nodes both believe they are the primary and accept writes) have caused data corruption at companies including LinkedIn, GitHub, <!-- incident-xref: github-2018-split-brain --> and multiple financial institutions. The Redis Sentinel documentation explicitly warns about split-brain during network partitions. Yet fewer than 15% of organizations regularly test their database clusters for split-brain resilience, according to a 2023 Percona survey. For the GitHub October 2018 split-brain case study, see [Advanced Merging](../../../../prerequisites/git-deep-dive/module-2-advanced-merging/).
 
 > **IO latency of just 50ms on a database volume** can cause a 40x increase in query execution time for workloads with heavy random reads. This is because database engines like PostgreSQL and InnoDB use buffer pools that assume sub-millisecond storage access. When that assumption breaks, every page fault becomes 50ms instead of 0.1ms, and queries that normally read 200 pages go from 20ms to 10 seconds. IOChaos at even modest levels reveals whether your application handles slow storage gracefully.
 

@@ -23,11 +23,7 @@ After completing this module, you will be able to:
 
 ---
 
-**September 2017. Equifax, one of the three major US credit bureaus, discloses a breach that exposed the personal data of 147 million Americans — Social Security numbers, birth dates, addresses, and driver's license numbers.**
-
-The root cause? An unpatched Apache Struts vulnerability (CVE-2017-5638) that had a public patch available for two months before the breach. An attacker sent a crafted `Content-Type` header containing an OGNL expression that achieved remote code execution. A single malicious HTTP request, buried in normal traffic, compromised one of the largest repositories of personal data in the United States.
-
-A properly configured Web Application Firewall would have blocked that request on day one. The OGNL injection pattern was well-known. The exploit matched signatures that WAF vendors had deployed within days of the CVE disclosure. **Equifax didn't need to patch faster — they needed a layer of defense that bought them time.**
+In 2017, a single unpatched Apache Struts vulnerability exposed the personal data of 147 million Americans in the Equifax breach — a case study in how a WAF layer that blocks known exploit signatures can buy critical time even before a patch is applied. <!-- incident-xref: equifax-2017 --> For the full breakdown, see [Docker Fundamentals](../../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
 
 This is the core promise of WAFs and DDoS mitigation: not perfection, but defense in depth. They don't replace good application security practices, but they catch what slips through — and when the entire internet decides to attack you at once, they're often the only thing standing between your application and total darkness.
 

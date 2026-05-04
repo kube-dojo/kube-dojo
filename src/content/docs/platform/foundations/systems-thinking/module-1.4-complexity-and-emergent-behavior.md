@@ -449,7 +449,7 @@ Chaos Engineering deliberately introduces failures to discover weaknesses before
 
 > **Did You Know?**
 >
-> Netflix's **Chaos Monkey** was one of the first chaos engineering tools (2011). It randomly terminates production instances. The logic: if engineers know their instances will be killed randomly, they design systems that survive instance death. The tool doesn't test resilience—it **forces** resilient design.
+> Netflix's **Chaos Monkey** <!-- incident-xref: netflix-chaos-monkey --> was one of the first chaos engineering tools (2011). It randomly terminates production instances. The logic: if engineers know their instances will be killed randomly, they design systems that survive instance death. The tool doesn't test resilience—it **forces** resilient design. For the full Netflix Chaos Monkey case study, see [Chaos Principles](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/).
 
 ### 4.4 Safety-I vs Safety-II
 

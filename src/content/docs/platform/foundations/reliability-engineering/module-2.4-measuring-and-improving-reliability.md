@@ -25,7 +25,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On August 1, 2012, Knight Capital Group, one of the largest market makers in the United States equities market, deployed a new software update to their high-frequency trading routing system. A dormant, un-tested piece of code was accidentally triggered across their production fleet. Over the next 45 minutes, the system executed millions of erroneous trades, acquiring billions of dollars in unwanted positions.
+The 2012 Knight Capital Group<!-- incident-xref: knight-capital-2012 --> incident demonstrated why reliability must be measured, not assumed — a partial fleet rollout activated dormant code that drove losses across the entire trading floor in under an hour. For the full case study, see [Infrastructure as Code](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/).
 
 The financial impact was catastrophic: the company lost $440 million in less than an hour, nearly bankrupting the firm and forcing an immediate acquisition to survive. This wasn't just a failure of code; it was a fundamental failure of measuring risk, evaluating return on reliability investments, and lacking automated systems to calculate acceptable failure rates before catastrophic saturation. The engineering team had no framework for balancing deployment velocity against the mathematically defined risk of system failure.
 
@@ -510,7 +510,7 @@ When people fear blame, they hide information. When they feel safe, they share w
 - **Google publishes SLOs** for many of their services. GCP has public SLOs that trigger automatic credits if breached. This transparency builds trust and sets industry standards.
 - **The "rule of 10"** in SLO setting: It takes roughly 10x effort to add each nine of reliability. Going from 99% to 99.9% is hard. Going from 99.9% to 99.99% is 10x harder.
 - **SLOs predate software**. The concept comes from manufacturing quality control. Walter Shewhart developed statistical quality control at Bell Labs in the 1920s—the same principles apply today.
-- **Amazon's "two pizza" rule** for team size also applies to SLOs: if a service needs more SLOs than can fit on two pizza boxes, it's probably too complex. Most teams settle on 3-5 SLIs per service—enough to capture user experience, few enough to focus on.
+- **Amazon's "two pizza" rule** <!-- incident-xref: amazon-two-pizza --> for team size also applies to SLOs: if a service needs more SLOs than can fit on two pizza boxes, it's probably too complex. Most teams settle on 3-5 SLIs per service—enough to capture user experience, few enough to focus on.
 
 ---
 
@@ -542,7 +542,7 @@ When people fear blame, they hide information. When they feel safe, they share w
    <details>
    <summary>Answer</summary>
 
-   Setting an internal SLO strictly higher than the external SLA creates a critical safety buffer for your engineering team. If your SLO matches your SLA exactly, any normal operational variance or minor incident that causes you to miss your target will immediately trigger a contract breach and financial penalties. By aiming for 99.9% internally, a drop to 99.8% will deplete your error budget and trigger a feature freeze, forcing the team to focus on reliability. This internal reaction happens well before the 99.5% SLA threshold is reached, protecting the business from legal and financial consequences.
+   Setting an internal SLO strictly higher than the external SLA creates a critical safety buffer for your engineering team. If your SLO matches your SLA exactly, any normal operational variance or minor incident that causes you to miss your target will immediately trigger a contract breach and financial penalties. <!-- incident-xref: target-2013 --> By aiming for 99.9% internally, a drop to 99.8% will deplete your error budget and trigger a feature freeze, forcing the team to focus on reliability. This internal reaction happens well before the 99.5% SLA threshold is reached, protecting the business from legal and financial consequences.
    </details>
 
 3. **The product manager is demanding that the team push a major new checkout flow before Black Friday, but the lead engineer argues the system has been unstable all week and they need to halt feature work. How can implementing an error budget resolve this recurring standoff?**

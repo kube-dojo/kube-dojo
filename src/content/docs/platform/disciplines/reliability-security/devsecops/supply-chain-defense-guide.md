@@ -6,7 +6,7 @@ sidebar:
 ---
 > **Practical Reference** | Applies to any project, any language, any CI/CD platform
 
-This guide distills the lessons from real supply chain attacks -- SolarWinds (2020), Codecov (2021), the Trivy/LiteLLM incident (2026), and dozens of smaller compromises -- into a concrete checklist you can apply today. It is organized by the layer of the supply chain you are defending.
+This guide distills the lessons from real supply chain attacks -- SolarWinds (2020) <!-- incident-xref: solarwinds-2020 -->, Codecov (2021) <!-- incident-xref: codecov-2021 -->, the Trivy/LiteLLM incident (2026), and dozens of smaller compromises -- into a concrete checklist you can apply today. For the SolarWinds case study, see [CI/CD Pipelines](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/); for Codecov, see [DevSecOps](../../../../prerequisites/modern-devops/module-1.6-devsecops/). It is organized by the layer of the supply chain you are defending.
 
 ---
 

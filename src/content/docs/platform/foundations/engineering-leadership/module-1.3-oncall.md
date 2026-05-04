@@ -250,6 +250,7 @@ Engineer's phone: *one page, one runbook link, clear root cause*
 Not all system anomalies deserve a page. A page explicitly states: *"This problem is urgent enough to interrupt a human's life immediately."* If the problem can wait until morning, it is a ticket, not a page.
 
 ### The "Two Pizza Rule" for Pages
+<!-- incident-xref: amazon-two-pizza -->
 
 Before configuring a new alert to page a human, ask three questions:
 1. **If this fires at 3 AM, will the engineer need to take action right now?**

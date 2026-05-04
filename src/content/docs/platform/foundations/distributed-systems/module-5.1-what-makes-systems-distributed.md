@@ -26,7 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On February 28, 2017, Amazon Web Services experienced what would become one of the most costly and educational outages in the history of cloud computing. A simple typo in a command executed by an engineer, intended to remove a small number of servers for an S3 billing subsystem, accidentally removed a much larger set of servers. These servers supported the S3 index and placement systems—the critical metadata layer that tracks where every single object is stored across the massive fleet of hard drives in the US-East-1 region.
+In February 2017, a single mistyped command took the AWS S3 index in US-East-1 offline, <!-- incident-xref: aws-s3-useast1-2017 --> cascading into a four-hour outage across hundreds of internet services. The full breakdown is covered in [Failure Modes and Effects](../reliability-engineering/module-2.2-failure-modes-and-effects/).
 
 For the next four hours, S3 in US-East-1 was essentially offline. However, the true impact of this outage was not just that files couldn't be downloaded; it was the catastrophic cascade of failures across the entire internet. Hundreds of other AWS services depended inherently on S3 to function. Websites couldn't load assets, continuous integration pipelines halted, and IoT devices went dark. Ironically, the AWS Service Health Dashboard itself was hosted on S3 and could not be updated to reflect that S3 was down, leaving customers entirely in the dark. S&P 500 companies collectively lost an estimated $150 million during this single four-hour window.
 

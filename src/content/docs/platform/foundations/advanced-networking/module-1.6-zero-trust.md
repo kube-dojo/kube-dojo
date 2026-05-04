@@ -23,9 +23,7 @@ After completing this module, you will be able to:
 
 ---
 
-**December 2020. The world learns that SolarWinds — widely deployed network management software across private-sector and government environments — [had been compromised for nearly nine months. The attackers, attributed to Russian intelligence (SVR),](https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a) inserted a backdoor into a routine software update that was [distributed to approximately 18,000 organizations](https://www.cisa.gov/news-events/news/joint-statement-federal-bureau-investigation-fbi-cybersecurity-and-infrastructure-security-agency-0).**
-
-Once inside a network, the attackers moved laterally with ease. They accessed email systems, cloud environments, and sensitive data across government agencies including the Department of Homeland Security, the Treasury Department, and the National Nuclear Security Administration. The breach illustrated how broad internal trust and overprivileged internal access can amplify damage after initial compromise. Once past the firewall, everything inside the network was implicitly trusted.
+In 2020, the SolarWinds supply-chain compromise allowed attackers to move laterally across 18,000 customer networks for months — not by breaking firewalls, but by exploiting implicit trust once inside. <!-- incident-xref: solarwinds-2020 --> For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 The SolarWinds breach was not the first time the perimeter model failed catastrophically, but it became the definitive case study for why "trust the network" is a fundamentally broken security model. It accelerated a shift that had been building for years: the move to **Zero Trust**, where no user, device, or network location is inherently trusted, and every access request must be explicitly verified.
 
@@ -89,6 +87,8 @@ flowchart TD
         RemoteUser -- "VPN tunnel extends trusted zone" --> Firewall
     end
 ```
+
+The perimeter failures include two canonical case studies: the [2013 Target breach](../security-principles/module-4.2-defense-in-depth/)<!-- incident-xref: target-2013 --> and the [2017 Equifax breach](../../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/)<!-- incident-xref: equifax-2017 --> — both covered in depth in their canonical modules.
 
 ```text
 WHY THIS FAILS

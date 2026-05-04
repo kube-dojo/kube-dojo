@@ -24,15 +24,7 @@ After completing this module, you will be able to:
 
 ---
 
-**December 2020. A software company's network monitoring tool sits quietly on 18,000 customer networks worldwide.**
-
-A routine software update pushes to customers—government agencies, Fortune 500 companies, critical infrastructure operators. The update contains perfectly valid code, digitally signed by the vendor. It also contains a backdoor, inserted during the build process by nation-state attackers who had been inside the vendor's network for over a year.
-
-> **Stop and think**: If an attacker compromised your CI/CD pipeline right now, what could they push to production without anyone noticing?
-
-The attackers didn't break encryption. They didn't exploit a zero-day. They compromised the software supply chain itself, turning the vendor's own update mechanism into a delivery system for malware. By the time anyone noticed, attackers had access to the networks of the Treasury Department, the Department of Homeland Security, and dozens of other organizations.
-
-**The SolarWinds breach cost over $100 million in direct incident response.** The reputational damage was immeasurable. And it demonstrated a fundamental truth about security: attackers don't have to be smarter than defenders—they just have to find one way in while defenders protect everything.
+The 2020 <!-- incident-xref: solarwinds-2020 -->SolarWinds supply-chain compromise reached 18,000 organizations through a trusted software update, demonstrating that attackers don't need to be smarter than defenders — they just need one way in while defenders protect everything. For the full case study, see [CI/CD Pipelines](../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/).
 
 This module teaches the security mindset—thinking like an attacker to build like a defender.
 
@@ -309,7 +301,7 @@ quadrantChart
 >
 > The attackers exploited a known vulnerability in a web application. The patch had been available for 2 months. The firewall rules that should have contained the breach were swiss cheese.
 >
-> **The Equifax breach cost over $1.4 billion** in settlements, remediation, and lost business. The firewall dashboard showed green the entire time.
+> **The Equifax breach cost over $1.4 billion** in settlements, remediation, and lost business. <!-- incident-xref: equifax-2017 --> The firewall dashboard showed green the entire time. For the full Equifax case study, see [Docker Fundamentals](../../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
 >
 > Real security isn't about having tools. It's about using them correctly.
 

@@ -342,7 +342,7 @@ metadata:
 >
 > **September 2022.** A developer at a healthcare technology company needed to debug a production networking issue. "I'll just run a privileged container real quick to capture network traffic." They deployed with `privileged: true`, fixed the issue, and moved on to the next ticket. The privileged container stayed running.
 >
-> Eight months later, attackers exploited a Log4j vulnerability in a different service running on the same node. Normally, container isolation would have limited the blast radius. But the attacker discovered the privileged container.
+> Eight months later, attackers exploited a Log4j vulnerability <!-- incident-xref: log4shell --> in a different service running on the same node. Normally, container isolation would have limited the blast radius. But the attacker discovered the privileged container. For the Log4Shell canonical, see [Supply Chain Security](../../disciplines/reliability-security/devsecops/module-4.4-supply-chain-security/).
 >
 > **With `privileged: true`, the container had full access to the host.** The attacker escaped the container, accessed the node's filesystem, read Kubernetes secrets for 47 other services, and exfiltrated patient health records for 340,000 individuals.
 >

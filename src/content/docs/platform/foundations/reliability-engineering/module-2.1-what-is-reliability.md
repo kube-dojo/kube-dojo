@@ -55,7 +55,7 @@ flowchart TD
     end
 ```
 
-This is the difference between hoping and engineering. Between luck and reliability.
+<!-- incident-xref: netflix-chaos-monkey --> This is the difference between hoping and engineering. Between luck and reliability.
 
 ---
 
@@ -920,7 +920,7 @@ These are the patterns that look reasonable but lead to unreliable systems:
 | **Not tracking error budget** | No visibility into how much reliability "spend" remains | Can't make informed velocity vs. reliability trade-offs | Implement error budget tracking with clear policy |
 | **Optimizing one component** | Made the database 10x faster but users still see errors | End-to-end reliability is what matters, not component | Measure reliability from user's perspective (synthetic monitoring) |
 | **Treating MTTR as fixed** | "Incidents take 45 minutes to fix, that's just how it is" | Recovery time is controllable; you're leaving improvements on the table | Invest in detection, runbooks, automation; measure MTTD separately |
-| **Confusing SLOs and SLAs** | Internal target = customer promise | No buffer for unexpected issues; breaches become SLA violations | Set internal SLO tighter than external SLA |
+| **Confusing SLOs and SLAs** | Internal target = customer promise <!-- incident-xref: target-2013 --> | No buffer for unexpected issues; breaches become SLA violations | Set internal SLO tighter than external SLA |
 | **Not testing failure modes** | "We have redundancy" but never tested failover | First test of redundancy is during a real incident | Regular game days; chaos engineering |
 
 ---

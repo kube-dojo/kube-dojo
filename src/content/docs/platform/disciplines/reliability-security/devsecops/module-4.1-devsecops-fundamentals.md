@@ -216,7 +216,7 @@ For security vulnerabilities, the multipliers are even higher due to:
 
 ## Did You Know?
 
-1. **The term "DevSecOps" appeared around 2012**, but gained momentum after the 2017 Equifax breach. That breach—caused by an unpatched Apache Struts vulnerability—exposed 147 million people's data and cost over $1.4 billion. The vulnerability had a patch available for two months before the breach.
+1. **The term "DevSecOps" appeared around 2012**, but gained momentum after the 2017 Equifax breach <!-- incident-xref: equifax-2017 -->. That breach—caused by an unpatched Apache Struts vulnerability—exposed 147 million people's data and cost over $1.4 billion. For the full Equifax case study, see [Docker Fundamentals](../../../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
 
 2. **The average time to detect a breach is 207 days** (IBM Cost of a Data Breach Report 2023). DevSecOps aims to find vulnerabilities in minutes, not months. Organizations with fully deployed security AI and automation identified breaches 108 days faster.
 
@@ -270,6 +270,8 @@ For security vulnerabilities, the multipliers are even higher due to:
 | **RASP** | Runtime Application Self-Protection | Protects running application | Runtime |
 
 ### How They Complement Each Other
+
+SCA, for example, is the tool class that would have detected Log4Shell<!-- incident-xref: log4shell --> (CVE-2021-44228) before deployment — see the canonical case study in [Supply Chain Security](../module-4.4-supply-chain-security/).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
