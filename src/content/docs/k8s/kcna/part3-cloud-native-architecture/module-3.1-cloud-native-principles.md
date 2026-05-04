@@ -21,7 +21,7 @@ After completing this module, you will be able to use the following outcomes as 
 
 ## Why This Module Matters
 
-In August 2012, Knight Capital deployed new trading software across eight production servers. Seven servers received the updated code, one server kept an older path active, and the mismatch triggered automated trades that cost the firm about 460 million dollars in roughly 45 minutes. The failure was not simply a bad application bug; it was an architecture and operations failure where mutable infrastructure, manual rollout steps, and weak deployment control allowed production machines that were supposed to be identical to behave differently under real market pressure.
+The textbook case study of cloud native principles is documented in [the modern DevOps track's infrastructure-as-code module](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/) <!-- incident-xref: knight-capital-2012 -->: a 2012 financial-services rollout where new trading software shipped to a production fleet, but a partial deployment left one server on the old code path; the brief mismatch triggered automated trades that cost the firm hundreds of millions of dollars in under an hour. The failure was not simply a bad application bug; it was an architecture and operations failure where mutable infrastructure, manual rollout steps, and weak deployment control allowed production machines that were supposed to be identical to behave differently under real market pressure.
 
 That story matters for Kubernetes learners because cloud native architecture is often reduced to a shallow phrase: "put it in a container." A container can package a broken operating model just as easily as it can package a resilient one. If the application still depends on local disk, hardcoded database addresses, hand-edited servers, or one giant process that fails as a unit, Kubernetes can restart it, but Kubernetes cannot magically make the design scalable, observable, or safe to change.
 
@@ -465,7 +465,7 @@ Health checks are the communication channel between application and platform. A 
 
 Circuit breakers, timeouts, retries, and graceful degradation handle failures beyond the Pod itself. A checkout service calling a payment gateway should not let every request wait indefinitely when the gateway is slow. A timeout bounds waiting, a circuit breaker stops repeated calls for a short interval, retry with backoff avoids hammering a recovering service, and graceful degradation gives the user a reduced but controlled experience.
 
-Netflix popularized Chaos Monkey to randomly terminate production instances during business hours, which sounds reckless until you understand the goal. The point was to force engineers to build services that survive routine loss rather than depend on perfect infrastructure. Kubernetes creates a milder version of that reality every day because scheduling, rescheduling, rolling updates, and node maintenance are ordinary parts of cluster life.
+Deliberate failure injection — randomly terminating production instances during business hours, the textbook case study of which lives in [the chaos engineering canonical](../../../platform/disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/) <!-- incident-xref: netflix-chaos-monkey --> — sounds reckless until you understand the goal. The point is to force engineers to build services that survive routine loss rather than depend on perfect infrastructure. Kubernetes creates a milder version of that reality every day because scheduling, rescheduling, rolling updates, and node maintenance are ordinary parts of cluster life.
 
 The KCNA-level skill is recognizing which layer owns which recovery behavior. Kubernetes can restart a crashed container, stop routing to an unready Pod, and create replacement replicas. Your application still needs safe startup, graceful shutdown, idempotent request handling, bounded dependency calls, and data stored somewhere durable enough for the business requirement.
 
@@ -537,7 +537,7 @@ Use the framework as a conversation tool with application teams. Instead of aski
 - **12-factor started at Heroku in 2011** - The methodology came from operators who had seen many applications fail in similar ways across deployment environments.
 - **Cloud native is older than Kubernetes** - Kubernetes became a CNCF project in 2015, but the architectural ideas behind disposability, automation, and external configuration were already established.
 - **Microservices are a tradeoff, not a badge** - Independent deployment can reduce blast radius, but distributed tracing, contract testing, and data ownership become mandatory engineering concerns.
-- **Netflix made failure testing mainstream** - Chaos Monkey pushed teams to prove that instance loss during business hours did not have to become a customer outage.
+- **Failure testing went mainstream in the early 2010s** - the [chaos engineering canonical](../../../platform/disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/) <!-- incident-xref: netflix-chaos-monkey --> covers the toolkit that pushed teams to prove instance loss during business hours did not have to become a customer outage.
 
 ## Common Mistakes
 

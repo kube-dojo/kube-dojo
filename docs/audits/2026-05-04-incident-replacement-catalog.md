@@ -212,7 +212,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 *Alternatives to SolarWinds 2020 and Codecov 2021. Use when the module teaches CI/CD artifact provenance, build-environment trust, or inserting malicious code upstream.*
 
-### XZ Utils backdoor (CVE-2024-3094) — March 2024
+### XZ Utils backdoor (CVE-2024-3094) — March 2024 [CLAIMED — `k8s/kcsa/part4-threat-model/module-4.4-supply-chain.md`]
 
 - **What happened (≤60 words):** A threat actor using the identity "Jia Tan" spent ~2 years becoming a trusted maintainer of the XZ Utils compression library. They inserted obfuscated code into release tarballs — not the git source — that modified liblzma's dynamic linking to intercept and backdoor SSH authentication. CVE-2024-3094 CVSS 10.0 critical. A Microsoft engineer discovered it by accident via SSH latency anomalies.
 - **Lesson it teaches:** Long-term social engineering of open-source maintainer access is a viable build-environment compromise; tarballs and git sources can diverge without obvious detection.
@@ -444,7 +444,7 @@ Pick the bucket that matches your module's core lesson. Choose any unclaimed inc
 
 *Real Kubernetes-specific incidents — useful for K8s module openers across CKA, CKAD, and CKS tracks. Also usable from other buckets: CVE-2018-1002105 (Bucket 4) and CVE-2022-3294 (Bucket 7).*
 
-### Siloscape — Windows container escape targeting Kubernetes clusters
+### Siloscape — Windows container escape targeting Kubernetes clusters [CLAIMED — `k8s/kcsa/part2-cluster-component-security/module-2.2-node-security.md`]
 
 - **What happened (≤60 words):** Malware named Siloscape was discovered in March 2021 (active since January 2020) that exploited vulnerabilities in Windows containers to escape to the underlying host and move laterally through Kubernetes clusters. It specifically targeted poorly-configured clusters, opening a backdoor to an IRC-based C2 server. 23 active victims were identified at discovery.
 - **Lesson it teaches:** Container escape vulnerabilities are cluster-level threats; a single compromised pod on a poorly-configured cluster becomes a persistent foothold on every node.
