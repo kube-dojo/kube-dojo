@@ -26,9 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On August 1, 2012, Knight Capital Group deployed new trading software across part of its production fleet shortly before the United States market opened. A reused operational flag activated old behavior on some servers, and the platform began sending millions of unintended orders into live markets. The company did not merely have a bad dashboard; it lacked fast ways to connect symptoms, code paths, host state, and business impact while the incident was unfolding. Engineers could see enough to know something was wrong, yet they could not quickly explain which machines were running the wrong behavior or why the order flow had become destructive.
-
-The response window was brutally short. Operators spent about 45 minutes manually digging through fragmented host state and text logs while the trading system continued to lose money. By the time the company stopped the faulty behavior, Knight Capital had lost roughly $460 million and needed emergency financing to survive. The failure is often remembered as a deployment-control disaster, but it is equally useful as an observability lesson: when a system can affect real customers, real markets, or real revenue within minutes, the ability to interrogate that system is not a luxury.
+On August 10, 2021, an edge-case slow query from a high-traffic internal application degraded one of GitHub's primary MySQL databases. The cluster's queuing and retry logic prevented automatic recovery, and engineers opened their dashboards to diagnose the problem — only to find the dashboards down too, because they ran on the same affected database. GitHub spent part of its incident response window diagnosing why it could not see what was broken. The first wave lasted seventy-seven minutes; a second related incident occurred later that day, lasting three hours. When a system's monitoring depends on the system being monitored, mean-time-to-diagnose climbs non-linearly during the worst incidents — observability tooling must be architecturally isolated from the workloads it observes.
 
 Kubernetes v1.35+ platforms make this lesson more urgent because the thing you are operating is rarely a single long-lived server. A request may pass through a cloud load balancer, ingress controller, API gateway, authentication service, feature flag client, message broker, cache, database, and third-party provider before the user sees a response. Every hop is independently deployed, scaled, restarted, and owned. The operational question changes from "is the server up?" to "which part of this request path changed, how much user pain did it create, and what should we do first?"
 
@@ -478,7 +476,7 @@ This framework is intentionally operational. It does not ask which vendor you bo
 
 ## Did You Know?
 
-- **Knight Capital Group** lost about $460 million in roughly 45 minutes on August 1, 2012, after a faulty deployment activated unintended trading behavior.
+- **GitHub published a public availability report** for its August 2021 MySQL incident, naming the secondary-incident root cause (a service-discovery misconfiguration during GitHub Actions setup) — the kind of separately-failing dependency that observability is supposed to surface before users do.
 - **The term "observability"** comes from control theory and is associated with Rudolf E. Kalman's 1960 work on dynamic systems.
 - **Prometheus graduated from the CNCF** on August 9, 2018, becoming one of the foundation's earliest graduated cloud-native projects after Kubernetes.
 - **W3C Trace Context reached Recommendation status** in 2021, giving distributed tracing tools a standard way to propagate trace identifiers across services.
