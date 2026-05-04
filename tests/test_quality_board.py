@@ -116,6 +116,7 @@ def test_quality_board_track_totals_sum_to_modules(tmp_path: Path) -> None:
         "done": 1,
         "needs_rewrite": 1,
         "needs_review": 1,
+        "shipped_unreviewed": 0,
         "both": 0,
         "in_flight": 1,
         "total": 4,

@@ -3724,7 +3724,12 @@ def _quality_board_classify(
     """Apply the precedence ladder from issue #389.
 
     Order is mutually exclusive — first match wins:
-      in_flight > both > needs_review > needs_rewrite > done.
+      in_flight > both > needs_review > shipped_unreviewed > needs_rewrite > done.
+
+    ``shipped_unreviewed`` separates ad-hoc-shipped modules
+    (stage=UNAUDITED + score>=4 + no banner) from active mid-pipeline
+    review queue items so the operator can tell bookkeeping debt apart
+    from in-flight reviews.
     """
     score_val = float(score) if score is not None else 0.0
     needs_deferred_review = auto_approved and in_post_review_queue
@@ -5891,7 +5896,7 @@ def render_dashboard_html(*, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
       qualityBoardData = data;
       const totals = data.totals || {{}};
       const total = totals.total || 0;
-      const needs = (totals.needs_rewrite || 0) + (totals.needs_review || 0) + (totals.both || 0);
+      const needs = (totals.needs_rewrite || 0) + (totals.needs_review || 0) + (totals.shipped_unreviewed || 0) + (totals.both || 0);
       badge.textContent = `${{totals.done || 0}} / ${{total}} done · ${{needs}} left`;
       badge.style.background = needs ? 'var(--amber-muted)' : 'var(--green-muted)';
       badge.style.color = needs ? 'var(--amber)' : 'var(--green)';
