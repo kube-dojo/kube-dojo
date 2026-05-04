@@ -33,6 +33,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+VENV_PYTHON = str((REPO_ROOT / ".venv" / "bin" / "python").resolve())
 from dispatch import GEMINI_WRITER_MODEL  # noqa: E402
 
 OUTPUT_DIR = Path("/tmp/writer-rigorous")
@@ -261,14 +262,14 @@ def dispatch_writer(candidate: dict, prompt: str, timeout: int = 900) -> tuple[b
         ]
     elif family == "gemini":
         cmd = [
-            sys.executable,
+            VENV_PYTHON,
             str(REPO_ROOT / "scripts" / "dispatch.py"),
             "gemini", "-",
             "--model", model,
         ]
     elif family == "anthropic":
         cmd = [
-            sys.executable,
+            VENV_PYTHON,
             str(REPO_ROOT / "scripts" / "dispatch.py"),
             "claude", "-",
             "--model", model,
@@ -389,7 +390,7 @@ def run_one_topic_one_candidate(topic: dict, candidate: dict) -> dict:
 
     section_text = extract_section_from_codex_output(raw)
     if not section_text:
-        log(f"    ❌ writer returned empty section")
+        log("    ❌ writer returned empty section")
         result["errors"].append("writer: empty section")
         return result
 
@@ -411,7 +412,7 @@ def run_one_topic_one_candidate(topic: dict, candidate: dict) -> dict:
     cleaned_fact = extract_section_from_codex_output(raw_fact)
     fact_obj = extract_first_json_object(cleaned_fact)
     if fact_obj is None:
-        log(f"    ❌ fact-check JSON parse failed")
+        log("    ❌ fact-check JSON parse failed")
         result["errors"].append("fact-check: JSON parse failed")
         return result
 
@@ -439,7 +440,7 @@ def main() -> int:
 
     all_results: list[dict] = []
     for topic in TOPICS:
-        log(f"")
+        log("")
         log(f"==== TOPIC {topic['id']}: {topic['label']} ====")
         for candidate in CANDIDATES:
             result = run_one_topic_one_candidate(topic, candidate)

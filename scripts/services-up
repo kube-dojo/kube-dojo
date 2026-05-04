@@ -33,9 +33,6 @@ start_api() {
   nohup "$VENV_PY" scripts/local_api.py --host 127.0.0.1 --port 8768 \
     > logs/api.log 2>&1 &
   echo $! > .pids/api.pid
-  # Age the pid file so local_api's stale-PID heuristic doesn't flag the running
-  # process as reused. See #235 follow-up TODO for a proper fix.
-  touch -t 202604150800 .pids/api.pid
   sleep 1
   if is_alive .pids/api.pid; then
     echo "api: started (pid $(cat .pids/api.pid))"
@@ -56,7 +53,6 @@ start_worker() {
     --worker-id "v2-${role}-01" --sleep-seconds 30 \
     > "logs/pipeline/${role}-worker.log" 2>&1 &
   echo $! > "$pid_file"
-  touch -t 202604150800 "$pid_file"
   sleep 1
   if is_alive "$pid_file"; then
     echo "v2-${role}-worker: started (pid $(cat "$pid_file"))"
