@@ -17,9 +17,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 CODEX_TARGET="${CODEX_TARGET:-worktree}"
 CODEX_ARGS=()
+CODEX_FLAGS=(--dangerously-bypass-approvals-and-sandbox)
+
+if [ "${CODEX_ENABLE_MULTI_AGENT:-1}" != "0" ]; then
+    CODEX_FLAGS+=(--enable multi_agent)
+fi
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --help-wrapper)
+            cat <<'EOF'
+Usage: ./start-codex.sh [--main|--worktree] [codex args...]
+
+KubeDojo Codex launcher:
+  - runs Codex in .worktrees/codex-interactive by default
+  - use --main only when intentionally running in the primary checkout
+  - always adds --dangerously-bypass-approvals-and-sandbox
+  - enables Codex multi-agent support by default
+  - set CODEX_ENABLE_MULTI_AGENT=0 to disable multi-agent support
+  - forwards all other arguments to codex unchanged
+EOF
+            exit 0
+            ;;
         --main)
             CODEX_TARGET="main"
             shift
@@ -146,8 +165,13 @@ fi
 echo ""
 echo "   Handoff doc: .pipeline/codex-handoff.md"
 echo "   First command: cat .pipeline/codex-handoff.md"
+if [ "${CODEX_ENABLE_MULTI_AGENT:-1}" != "0" ]; then
+    echo "   Multi-agent: enabled"
+else
+    echo "   Multi-agent: disabled"
+fi
 echo ""
 
 echo "Launching Codex in $CODEX_TARGET checkout..."
 export CODEX_SESSION=1
-codex --dangerously-bypass-approvals-and-sandbox -C "$TARGET_DIR" "${CODEX_ARGS[@]}"
+codex "${CODEX_FLAGS[@]}" -C "$TARGET_DIR" "${CODEX_ARGS[@]}"
