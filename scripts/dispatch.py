@@ -225,6 +225,80 @@ CLAUDE_TRANSLATION_TOOLS = (
 # Review context now lives in docs/review-protocol.md and is loaded via
 # ai_agent_bridge._prompts.build_review_message() on the dispatch path.
 
+
+def dispatch_gemini_rest(prompt: str, model: str | None = None,
+                         review: bool = False,
+                         timeout: int = 900) -> tuple[bool, str]:
+    """Call Gemini via the public generativelanguage.googleapis.com REST API
+    using the GEMINI_API_KEY env var. Returns (success, output).
+
+    Bypasses the gemini CLI subprocess (which is hardwired to OAuth via
+    ~/.gemini/settings.json `selectedType`). Use this for the API-key path
+    so dispatch_gemini_with_retry can use API as primary and OAuth as
+    fallback per the user's quota constraint (1000 API calls/day, then
+    spill to OAuth Ultra).
+    """
+    import json as _json
+    import urllib.error as _urlerr
+    import urllib.request as _urlreq
+
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return False, "GEMINI_API_KEY not set"
+
+    if model is None:
+        model = GEMINI_REVIEW_MODEL if review else GEMINI_DEFAULT_MODEL
+    full_prompt = build_review_message(prompt) if review else prompt
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    body = _json.dumps({
+        "contents": [{"parts": [{"text": full_prompt}]}],
+    }).encode("utf-8")
+    req = _urlreq.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    t0 = time.time()
+    try:
+        with _urlreq.urlopen(req, timeout=timeout) as resp:
+            payload = _json.loads(resp.read().decode("utf-8"))
+    except _urlerr.HTTPError as e:
+        elapsed = time.time() - t0
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            err_body = ""
+        msg = f"HTTP {e.code}: {err_body[:500]}"
+        _log("gemini-rest", model, full_prompt, "", False, elapsed, msg)
+        return False, msg
+    except (TimeoutError, _urlerr.URLError, OSError) as e:
+        elapsed = time.time() - t0
+        msg = f"network error: {e!s}"
+        _log("gemini-rest", model, full_prompt, "", False, elapsed, msg)
+        return False, msg
+
+    elapsed = time.time() - t0
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        msg = f"no candidates in response: {_json.dumps(payload)[:500]}"
+        _log("gemini-rest", model, full_prompt, "", False, elapsed, msg)
+        return False, msg
+    parts = candidates[0].get("content", {}).get("parts", [])
+    text = "".join(p.get("text", "") for p in parts).strip()
+    if not text:
+        finish = candidates[0].get("finishReason", "")
+        msg = f"empty text (finishReason={finish}): {_json.dumps(payload)[:500]}"
+        _log("gemini-rest", model, full_prompt, "", False, elapsed, msg)
+        return False, msg
+    _log("gemini-rest", model, full_prompt, text, True, elapsed)
+    return True, text
+
+
 def dispatch_gemini(prompt: str, model: str | None = None,
                     review: bool = False, timeout: int = 900,
                     mcp: bool = False,
@@ -321,15 +395,32 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
                                timeout: int = 900, mcp: bool = False) -> tuple[bool, str]:
     """Call Gemini with retry on rate limits + fallback model.
 
-    Auth-path fallback: starts on API key by default. If a 429 / quota error
-    is detected and we haven't already switched, flip to the OAuth/subscription
-    path and retry immediately (no backoff — the two tiers have independent
-    quotas). Only after the subscription path also rate-limits do we apply
-    exponential backoff.
+    Auth-path order: REST API (`GEMINI_API_KEY`, ~1000/day on free tier) is the
+    primary path. On 429 / 5xx / network error, fall back to the gemini CLI
+    subprocess (which uses OAuth Code Assist via ~/.gemini/settings.json,
+    `selectedType=oauth-personal`). The CLI path also auto-flips to
+    subscription mode when API-key inheritance is rate-limited there.
+
+    REST does not support MCP tool injection — when ``mcp=True`` we skip
+    REST and go straight to the CLI path.
     """
     base_delay = 30
     output = ""
     use_subscription = _FORCE_GEMINI_SUBSCRIPTION
+
+    # Primary: REST API key path. Skip if MCP tools requested or no key in env.
+    if not mcp and (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+        ok, output = dispatch_gemini_rest(prompt, model, review, timeout)
+        if ok:
+            return True, output
+        # On REST failure, log and fall through to CLI/OAuth path.
+        if _is_rate_limited(output):
+            print("Gemini REST rate-limited (free-tier 1000/day or quota) — falling back to OAuth via CLI",
+                  file=sys.stderr)
+        else:
+            print(f"Gemini REST failed ({output[:120]}) — falling back to OAuth via CLI",
+                  file=sys.stderr)
+
     for attempt in range(max_retries):
         ok, output = dispatch_gemini(prompt, model, review, timeout, mcp,
                                      use_subscription=use_subscription)
