@@ -7,8 +7,6 @@ revision_pending: false
 ---
 > **Domain:** AI/ML Engineering Track | **Complexity:** `[COMPLEX]` | **Time:** 5-6 hours | **Prerequisites:** Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
 
-# Building with AI Coding Assistants
-
 ## Learning Outcomes
 
 By the end of this module, you will be able to:
