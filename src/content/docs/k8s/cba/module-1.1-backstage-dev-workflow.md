@@ -14,19 +14,9 @@ sidebar:
 
 ---
 
-## Why This Module Matters
-
-In 2012, Knight Capital Group lost $460 million in exactly 45 minutes. The root cause was a manual deployment error where a retired codebase was accidentally reactivated on a single server because an engineer forgot to copy a configuration file. While this was not a Backstage failure, it perfectly illustrates why automated, standardized developer platforms—and rigorous configuration layering—are absolutely non-negotiable in modern engineering environments. When teams manually juggle environment overrides or bypass automated scaffolding, the financial and operational risks are catastrophic.
-
-Backstage is the backbone of the Certified Backstage Associate (CBA) certification. Before you can build custom plugins, design complex software catalogs, or integrate securely with modern Kubernetes v1.35+ clusters, you need to deeply understand how the Backstage project itself works. You must master its monorepo layout, its multi-stage build pipeline, its dependency management system, and its local development loop. Without this foundational knowledge, attempting to extend the platform will inevitably result in broken builds and security vulnerabilities.
-
-Domain 1 accounts for nearly a quarter of the exam. Candidates who skip this foundational section tend to stumble on questions about project structure, dependency version drift, and configuration file precedence—topics that feel deceptively simple until you get them wrong under time pressure. This module ensures you build a bulletproof mental model of the Backstage developer workflow, enabling you to operate confidently in complex, enterprise-grade environments.
-
----
-
 ## What You'll Be Able to Do
 
-After completing this module, you will be able to:
+After completing this module, you will be able to explain and operate the Backstage developer workflow as a complete platform engineering loop: scaffold the app, understand the workspace layout, run and debug local services, build production artifacts, manage dependency alignment, and apply configuration safely across environments.
 
 1. **Design** a Backstage monorepo architecture by correctly structuring workspace packages, plugins, and the application shell.
 2. **Evaluate** multi-stage Docker builds to optimize container image sizes and security profiles for production deployments.
@@ -34,16 +24,22 @@ After completing this module, you will be able to:
 4. **Diagnose** dependency version drift using the Backstage CLI and Yarn workspace protocols to resolve package conflicts.
 5. **Compare** the New Backend System against legacy imperative wiring to understand modern declarative plugin registration.
 
+## Why This Module Matters
+
+In 2012, Knight Capital Group lost $460 million in exactly 45 minutes. The root cause was a manual deployment error where a retired codebase was accidentally reactivated on a single server because an engineer forgot to copy a configuration file. While this was not a Backstage failure, it illustrates why automated, standardized developer platforms and rigorous configuration layering are non-negotiable in modern engineering environments. When teams manually juggle environment overrides or bypass automated scaffolding, operational risks can become expensive very quickly.
+
+Backstage is the backbone of the Certified Backstage Associate certification. Before you can build custom plugins, design complex software catalogs, or integrate securely with modern Kubernetes v1.35 clusters, you need to understand how the Backstage project itself works. You must master its monorepo layout, multi-stage build pipeline, dependency management system, and local development loop. Without this foundation, attempts to extend the platform tend to produce broken builds, insecure configuration, and hard-to-debug plugin behavior.
+
+Domain 1 accounts for nearly a quarter of the exam. Candidates who skip this foundational section tend to stumble on questions about project structure, dependency version drift, and configuration file precedence, which feel deceptively simple until you get them wrong under time pressure. This module builds the mental model you need to work confidently in enterprise-grade Backstage environments where plugins, application shell code, backend services, Docker images, and configuration files all move together.
+
 ---
 
 ## Did You Know?
 
-- Backstage was created by Spotify and open-sourced under the Apache License, Version 2.0 on March 16, 2020. Before being open-sourced, Spotify internally used it to manage 2,000+ backend services, 300+ websites, and 4,000+ data pipelines.
-- It joined the CNCF Sandbox on September 8, 2020, and moved to CNCF Incubating status on March 15, 2022. The project maintains an official roadmap that is updated every 6 months, and its ADOPTERS.md file lists over 150 named organizations.
-- The Backstage framework is primarily written in TypeScript. It requires Node.js Active LTS (Node 22 or 24) and Yarn 4.x, and has a minimum hardware requirement of 20 GB disk space and 6 GB RAM for a standalone installation. It supports Linux, macOS, and Windows (via WSL).
-- The latest stable Backstage release is v1.49.4. The Backstage New Backend System reached stable 1.0 status in 2024, and TechDocs has also reached v1.0 status. 
-- According to the "Backstage Wrapped 2025" report published on December 30, 2025, Backstage boasts over 3,400 adopters, 31,000 GitHub stars, and 1,800 contributors. The Backstage plugin directory lists over 250 open-source plugins.
-- Backstage claims an 89% market share among IDP tools versus SaaS competitors. Note: This statistic is self-reported and originates from a third-party survey cited in Backstage's own blog; the primary survey data is not independently accessible for verification, making this an unverified claim.
+- Backstage was created at Spotify and open-sourced under the Apache License, Version 2.0, which is why many examples still reflect the needs of large internal developer platforms rather than small single-service applications.
+- A generated Backstage app is a monorepo, not a single package. The app shell, backend, plugins, configuration, lockfile, and Docker build all depend on workspace-level coordination.
+- Backstage configuration is layered deliberately. Base config, local developer overrides, production config, and environment substitution are separate mechanisms with different security and review expectations.
+- The New Backend System changes plugin registration from manual imperative wiring toward declarative module registration, so CBA candidates must recognize both patterns when reading real enterprise repositories.
 
 ---
 
@@ -545,6 +541,96 @@ auth:
 
 Beyond basic configurations, be aware of advanced platform integrations. For example, the Backstage Kubernetes plugin consists of two entirely separate packages: `@backstage/plugin-kubernetes` (the UI component) and `@backstage/plugin-kubernetes-backend` (the cluster API connector). Both must be installed and configured independently. Additionally, as of 2025, Backstage natively supports MCP (Model Context Protocol) server integration, facilitating AI tooling connectivity. Finally, when building Software Templates, always ensure your Scaffolder action IDs use strict `camelCase` (e.g., `fetchComponent`); using `kebab-case` causes the template parser to interpret hyphens as subtraction operators, returning fatal `NaN` evaluation errors.
 
+## Exam Design Notes for the Backstage Developer Workflow
+
+The CBA exam treats the developer workflow as the foundation for every later Backstage topic. If you cannot identify where frontend routes live, where backend modules are registered, where plugin code belongs, how configuration is layered, and how dependencies stay aligned, you will struggle with catalog, scaffolder, TechDocs, and Kubernetes plugin questions. Backstage is a platform framework, so its first skill is understanding the repository shape that lets many teams build safely inside one portal.
+
+Begin each scenario by separating the application shell from the plugin. The `packages/app` workspace is the browser-facing shell that composes routes, themes, APIs, and plugin pages. A frontend plugin contributes features, but it does not automatically become visible unless the application shell registers it. This distinction explains many "plugin installed but not visible" failures, because dependency installation and UI composition are separate steps in Backstage development.
+
+Then separate the backend host from backend plugins. The `packages/backend` workspace starts the Node.js backend and loads backend features, but each backend plugin should still own its own package boundaries, dependencies, routes, and services. The New Backend System makes this more declarative, yet the architectural question remains the same: which package owns the feature, and which host process loads it at runtime?
+
+Monorepo structure is not just a convenience. It is the mechanism that lets Backstage upgrades, plugin development, test tooling, and dependency checks happen consistently across the portal. When a team pulls one custom plugin into a separate repository, they may make that plugin's CI faster, but they also create a version-alignment problem that returns during every Backstage upgrade. The exam often frames this as a trade-off between local autonomy and platform consistency.
+
+Yarn workspaces are central because Backstage projects contain many packages that must resolve local dependencies predictably. A plugin can depend on a shared common package through the `workspace:` protocol, and Yarn resolves that dependency to the local package during development. This local linking means changes can be tested together before publishing, which is exactly what an internal developer platform needs when teams evolve shared APIs and UI components.
+
+The lockfile is part of the platform contract. A Backstage app usually has a large transitive dependency tree, and small version drift can produce runtime mismatches that look unrelated to the package that changed. The correct response is not to hand-edit `yarn.lock` or mix package managers. Use the Backstage CLI and Yarn commands so package versions move as a tested set and the repository remains reproducible in CI.
+
+When evaluating dependency drift, look for two separate problems. General JavaScript drift happens when the lockfile and package manifests disagree or when someone uses `npm install` and creates a competing lockfile. Backstage-specific drift happens when one `@backstage/*` package moves ahead of the coordinated release set while others remain behind. The second class is especially dangerous because plugins may compile yet fail through API, schema, or runtime expectations.
+
+Configuration questions are usually security questions disguised as YAML questions. `app-config.yaml` belongs in source control and should contain safe defaults. `app-config.local.yaml` is for developer-specific overrides and should stay out of version control. Production values can come from production config files, command-line `--config` ordering, or environment variables. Secrets should be substituted at runtime, not committed into a file that becomes part of the repository history.
+
+Layering matters because later configuration files override earlier ones. If a production deployment loads files in the wrong order, a safe default may override the intended production value, or a local value may accidentally survive into an environment where it does not belong. A good Backstage operator can explain not only which key is set, but also which file set it and why that file is loaded later than the base config.
+
+Environment variable substitution is powerful, but it does not make every config value safe. The secret itself must come from a secure runtime mechanism such as a deployment platform, Kubernetes Secret, or external secret manager. The config file should contain placeholders like `${POSTGRES_PASSWORD}` rather than literal credentials. During review, ask whether a future reader of the repository can learn a secret from git history. If the answer is yes, the configuration is wrong.
+
+Local development questions tend to test process boundaries. `yarn dev` commonly starts both frontend and backend development services, but the browser still talks to a backend API and the backend still talks to databases, integrations, and plugin services. When something fails locally, first identify whether the failure is in browser routing, frontend compilation, backend startup, configuration loading, database connectivity, or an external integration.
+
+Debugging Backstage is easier when you keep source maps, logs, and service ownership separate. Frontend problems are usually visible in the browser console, React route tree, or compiled bundle. Backend problems are usually visible in Node logs, plugin initialization errors, or failed requests to external systems. Configuration problems often appear early during process startup. Dependency problems often appear during install, build, or plugin registration.
+
+Docker build questions are about build context as much as Dockerfile syntax. The backend Dockerfile often needs files from the repository root, including `package.json`, `yarn.lock`, workspace package manifests, app config, and plugin code. If the build context is `packages/backend`, Docker cannot copy files that live outside that directory. The correct context is the repository root, with the Dockerfile selected explicitly by path.
+
+Multi-stage Docker builds separate tool-heavy compilation from runtime execution. The build stage can include development dependencies, TypeScript compilation, and workspace packaging. The runtime stage should contain only what the backend process needs to start. This pattern reduces image size and attack surface, but only if the final stage avoids unnecessary tools, runs as a non-root user, and receives secrets through runtime configuration rather than baked image layers.
+
+Image-size optimization should not break reproducibility. A smaller image is useful, but not if it silently omits a workspace package or relies on a dependency being present on the builder machine. Use `.dockerignore` to exclude obvious noise, keep the root lockfile available, and verify the container with realistic production config. The exam may describe a failed image build, and the clue is often a missing root-level file.
+
+Backstage CLI commands exist to make the monorepo operable. Package build, lint, test, start, plugin generation, and version-management commands encode project conventions that would be error-prone to reproduce manually. A candidate should recognize when the right answer is to use the CLI instead of manually creating directories, editing generated wiring, or upgrading one package at a time.
+
+Plugin scaffolding is valuable because it creates the expected package boundaries. A generated plugin includes package metadata, source layout, isolated development setup, and test conventions that match Backstage tooling. Hand-building a plugin directory can work, but it increases the chance that package naming, exports, routes, or workspace registration are inconsistent. In a platform team, consistency is a feature because many engineers need to read and maintain plugins.
+
+The New Backend System changes the shape of integration work. Legacy backend code often wires routers imperatively through service factories, Express routers, and manual plugin setup. The newer system favors backend features and modules that declare what they need. In an exam question, the key is not whether you prefer one style; the key is recognizing which style the repository uses and applying the correct registration pattern.
+
+The same comparison applies during migrations. A mixed repository may contain older plugins using legacy router creation alongside newer backend modules. Migration work should proceed deliberately: identify plugin ownership, replace imperative wiring with declarative modules where supported, test configuration and permissions, and avoid changing multiple unrelated plugins in one release. The safest migration is visible, incremental, and backed by dependency checks.
+
+TypeScript is not ornamental in Backstage. API refs, entity types, scaffolder actions, plugin route refs, and service interfaces all use types to make integration boundaries explicit. When a developer bypasses types with `any`, they remove the compiler's ability to detect mismatched API calls between plugins. In platform code, type safety protects many teams from each other's assumptions.
+
+Software Catalog concepts appear early because they define what the portal is organizing. Components, APIs, resources, systems, domains, owners, and relations are not just UI labels. They are the data model that many plugins use to connect documentation, templates, Kubernetes resources, scorecards, and ownership metadata. A developer workflow module should make clear that code structure and catalog metadata eventually meet in production.
+
+Software Templates introduce another workflow boundary. Template authors write YAML and actions, but the generated projects depend on repository integrations, authentication, parameter validation, and action IDs that parse correctly. A small naming mistake can produce a confusing template runtime error. For CBA purposes, remember that scaffolder behavior combines frontend forms, backend actions, catalog registration, and external source-control operations.
+
+TechDocs demonstrates the same platform pattern. Documentation source may live with code, but generated documentation can be stored in local filesystem storage, cloud object storage, or another supported backend depending on the environment. Local filesystem storage is fine for development, while production deployments usually need durable shared storage so multiple backend instances and restarts do not lose generated docs.
+
+Kubernetes integration in Backstage also crosses the frontend/backend boundary. Installing a frontend plugin gives users a page or entity tab, but the backend plugin is what talks to cluster APIs and handles credentials. If the UI shows no data, the missing piece is often backend installation, cluster locator configuration, auth setup, or permissions. The exam may phrase this as a user-facing symptom rather than a package name.
+
+For review practice, read a Backstage change by asking which workspace changed and why. A UI route change belongs in `packages/app` or a frontend plugin. A server-side API integration belongs in `packages/backend` or a backend plugin. A dependency change belongs in the specific workspace that needs it. A production secret belongs outside source control. This ownership map catches many mistakes before you run the code.
+
+For exam pacing, translate each requirement into an ownership boundary. "Add a homepage widget" points to the app shell or frontend plugin registration. "Connect to a Kubernetes cluster" points to backend plugin configuration and credentials. "Fix version mismatch" points to Backstage CLI version checks and coordinated bumps. "Secure production database password" points to environment substitution and deployment-time secret injection.
+
+The most important habit is to avoid solving Backstage problems at the wrong layer. Do not modify the backend package to fix a missing frontend route. Do not commit a local config file to fix a production secret. Do not delete the lockfile to fix a version conflict. Do not split plugins into separate repositories without planning upgrade coordination. Backstage rewards clear ownership because the portal is designed to grow across many teams.
+
+Finally, remember that the developer workflow is not just "how to run the app." It is the set of practices that keep the portal extensible after dozens of plugins, hundreds of catalog entities, and many production integrations exist. The workflow lets platform engineers change the portal without losing reproducibility, security, or team ownership. That is why CBA starts here before moving into deeper catalog and infrastructure topics.
+
+When you evaluate a new plugin request, trace the full delivery path before touching code. A frontend page may need a route in the app shell, an API ref, a backend plugin, configuration keys, authentication provider settings, catalog annotations, and documentation. Writing that path down prevents partial installations where a package exists in `package.json` but no user can reach it or no backend service can supply data.
+
+The same delivery-path thinking applies to upgrades. A Backstage upgrade is not just a package bump; it may touch generated app code, backend registration style, plugin APIs, catalog processors, configuration schema, and Docker image behavior. The safest teams upgrade in small increments, run version checks, read migration notes, and avoid unrelated feature work in the same pull request. That habit keeps platform upgrades boring.
+
+For local development, keep a clean distinction between sample data and production-like behavior. The default catalog, in-memory database, and local filesystem storage are excellent for learning how the portal starts. They are not proof that production integrations are correct. Before shipping, validate PostgreSQL configuration, authentication, external integrations, durable TechDocs storage, and Kubernetes access with the same config layering that production will use.
+
+For Docker work, remember that the image is only one part of the deployment contract. The container also needs runtime configuration, database connectivity, auth provider secrets, base URLs that match the public hostname, and network access to integrations. A container that starts locally with SQLite may still fail in production if `backend.baseUrl`, `app.baseUrl`, or auth callback configuration points to the wrong environment.
+
+For workspace hygiene, avoid installing dependencies at the root unless they truly are shared development tooling. A backend plugin that needs a database driver should declare that dependency in its own workspace package, not in the app shell and not casually at the root. Correct placement keeps package ownership visible, reduces accidental coupling, and makes plugin removal or extraction less risky later.
+
+For configuration review, ask what should be committed and what should be injected. Safe defaults, public URLs, catalog locations, and non-secret feature flags can usually live in versioned config. Tokens, passwords, private keys, OAuth client secrets, and environment-specific credentials should come from runtime secret systems. This question is simple, but it catches many severe Backstage deployment mistakes.
+
+For TypeScript review, watch for boundaries where plugin APIs cross package lines. An API ref should describe a stable interface, while implementation details should remain inside the plugin or backend module that owns them. If a component imports deep internals from another plugin to avoid defining a proper API, it may work today but break during the next plugin refactor or Backstage upgrade.
+
+For catalog-aware development, remember that Backstage features often activate through entity metadata. A plugin may be installed correctly but remain invisible for an entity if the entity lacks the expected annotation, relation, kind, or owner field. Troubleshooting should therefore include both code wiring and catalog data. This is why a developer workflow module belongs before deeper catalog modules in the course sequence.
+
+For templates, validate both the author experience and the generated output. A Software Template can look good in the UI while generating repositories with bad package names, missing catalog metadata, or unsafe default config. The developer workflow mindset asks whether the generated project fits the same workspace, dependency, Docker, and configuration standards as hand-written Backstage code.
+
+For platform governance, treat Backstage changes as shared infrastructure changes. A plugin can affect navigation, identity, catalog ownership, CI templates, Kubernetes visibility, and documentation workflows for many teams. Require clear ownership, focused pull requests, repeatable local verification, and independent review for changes that alter core platform behavior. The portal is most valuable when teams trust it as a stable source of truth.
+
+For certification practice, narrate your answer in the language of ownership. Say which workspace changes, which config layer changes, which command checks versions, which Docker context is correct, and which backend registration style applies. That level of precision turns broad Backstage familiarity into exam-ready reasoning and prevents answers that sound plausible while operating at the wrong layer.
+
+When you inspect a generated Backstage repository, resist the urge to treat every directory as interchangeable TypeScript code. The root package controls the workspace, `packages/app` controls browser composition, `packages/backend` controls server startup, and `plugins` contains extension packages that may have frontend, backend, common, and node-specific pieces. This structure exists so platform teams can reason about ownership before they reason about implementation details.
+
+When you troubleshoot a broken local app, collect evidence in a fixed order. Check the install and lockfile first, then verify which workspace command is running, then inspect configuration loading, then inspect browser or backend logs based on the symptom. A random walk through files wastes time because many Backstage failures look similar at first glance. A fixed order turns broad monorepo complexity into a repeatable debugging workflow.
+
+When you review production readiness, ask whether the same artifact can move through environments without editing source-controlled files. The image should be built from the repository root, the runtime should receive environment-specific config and secrets externally, and the app URLs should match the deployment hostname. This separation is what lets a Backstage portal move from laptop to staging to production without creating hidden forks of the platform.
+
+When you compare old and new backend patterns, focus on the migration surface rather than terminology. Legacy wiring often exposes explicit router creation and manual service passing, while modern backend modules declare features and dependencies for the backend system to load. A team can run both during migration, but each plugin must be understood in its own style before you change registration, permissions, or configuration.
+
+That careful reading habit is the difference between knowing Backstage as a demo app and operating it as a shared engineering platform under real delivery pressure, especially when many teams depend on one portal for reliable daily delivery workflows, secure platform operations, and consistent upgrade paths over time.
+
 ---
 
 ## Common Mistakes
@@ -605,6 +691,8 @@ Run `yarn backstage-cli versions:bump` from the repository root to automatically
 <summary>Show Answer</summary>
 
 They likely forgot to install the `@backstage/plugin-kubernetes-backend` package into the backend workspace. The Backstage Kubernetes plugin architecture strictly requires two separate packages to function properly across the network boundary. The frontend package provides the UI components for the browser, while the backend package securely connects to the Kubernetes cluster APIs to fetch the live metrics. Without the backend connector installed and configured, the frontend UI has no underlying data source to display, resulting in empty or persistent error-state dashboards.
+
+This is also a registration-style question. In older repositories you may see legacy imperative wiring for the backend router, while newer repositories use the New Backend System and modern declarative plugin registration. You must compare the New Backend System against legacy imperative wiring before deciding where and how the Kubernetes backend feature should be loaded.
 </details>
 
 **Q7: A team writes a custom Scaffolder action named `deploy-to-prod`. When they try to reference its output via `${{ steps.deploy-to-prod.output.url }}`, the template engine throws a `NaN` error. Why does this happen and how should it be fixed?**
@@ -755,6 +843,23 @@ cd .. && rm -rf cba-lab
 | Dependencies | Yarn workspaces, `workspace:^` protocol, `--immutable` in CI |
 | Backstage CLI | `versions:bump`, `versions:check`, `package build`, `new` |
 | Configuration | Layered YAML files, `${ENV_VAR}` substitution, `--config` flag ordering |
+
+---
+
+## Sources
+
+- [Backstage Docs: Getting started](https://backstage.io/docs/getting-started/)
+- [Backstage Docs: Create an app](https://backstage.io/docs/getting-started/create-an-app)
+- [Backstage Docs: Configuration](https://backstage.io/docs/conf/)
+- [Backstage Docs: Docker deployment](https://backstage.io/docs/deployment/docker/)
+- [Backstage Docs: Backend system](https://backstage.io/docs/backend-system/)
+- [Backstage Docs: Plugins](https://backstage.io/docs/plugins/)
+- [Backstage Docs: Software Catalog](https://backstage.io/docs/features/software-catalog/)
+- [Backstage Docs: Software Templates](https://backstage.io/docs/features/software-templates/)
+- [Backstage Docs: TechDocs](https://backstage.io/docs/features/techdocs/)
+- [Backstage Docs: CLI build system](https://backstage.io/docs/local-dev/cli-build-system/)
+- [Backstage Docs: Authentication](https://backstage.io/docs/auth/)
+- [Yarn Docs: Workspaces](https://yarnpkg.com/features/workspaces)
 
 ---
 
