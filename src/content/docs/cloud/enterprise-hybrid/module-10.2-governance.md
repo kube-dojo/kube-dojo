@@ -20,7 +20,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2019, Capital One experienced a data breach that exposed over 106 million customer records. The root cause involved a misconfigured Web Application Firewall (WAF) that allowed Server-Side Request Forgery (SSRF). However, the blast radius was massive specifically because the IAM role assigned to the WAF had overly permissive S3 access. Tighter IAM guardrails and workload controls around metadata access can reduce the blast radius of SSRF-style cloud breaches. The breach resulted in an $80 million regulatory fine, a $190 million class-action settlement, and catastrophic reputational damage.
+The 2019 Capital One metadata-service breach (see *Node Metadata Security*) <!-- incident-xref: capital-one-2019 --> shows why cloud governance and Kubernetes controls must be aligned; misaligned guardrails let SSRF-style pivots move from perimeter weakness to broad platform compromise.
 
 This incident highlights a pattern that is alarmingly common across the industry: the cloud governance team and the Kubernetes platform team operating in completely separate, isolated silos. The cloud architecture team might not understand Kubernetes admission control intricacies, while the Kubernetes cluster administrators might lack visibility into overarching organizational SCPs. When these critical governance layers do not align, massive security gaps emerge. An attacker only needs one misconfigured ingress path or one overly permissive service account to compromise the entire system.
 

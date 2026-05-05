@@ -25,11 +25,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-**January 2017. GitLab.**
-
-A database engineer executed a `rm -rf` command on what they believed was a replicated staging database directory. It was the production PostgreSQL data directory. The primary database for GitLab.com was gone. The team immediately looked to their backup systems: five different backup methods were configured. None of them worked. LVM snapshots had never been verified. pg_dump hadn't run successfully in months due to a silent error. Azure disk snapshots were untested. The S3 backup process was only partially configured. The only thing that saved GitLab was a staging database that happened to be a six-hour-old copy of production, created for an unrelated test.
-
-GitLab lost six hours of data: 5,037 merge requests, comments, issues, and snippets. They also lost something harder to quantify: customer trust. The incident became a case study in every disaster recovery talk for the next five years.
+The January 2017 GitLab loss event (see *What is a Terminal*) <!-- incident-xref: gitlab-2017-db1 --> shows that untested recovery procedures and unclear environment context can convert routine maintenance mistakes into high-impact data-loss incidents.
 
 The lesson is not "have backups." Every team has backups. The lesson is: **untested backups are not backups.** And in the Kubernetes world, the situation is even more complex. Your cluster state lives in etcd. Your application state lives in databases, PersistentVolumes, and external services. Your configuration lives in Git repos and Helm releases. A real disaster recovery plan must account for all of these, with tested procedures and clear targets for how fast you recover (RTO) and how much data you can afford to lose (RPO).
 

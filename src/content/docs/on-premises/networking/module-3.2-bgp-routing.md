@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In October 2021, Facebook experienced a catastrophic global outage that erased billions of dollars in market value within hours. A routine maintenance command accidentally severed critical BGP connections between their datacenters, resulting in the abrupt withdrawal of routes to their authoritative DNS servers. As the routes vanished, the entire infrastructure dropped off the internet. The financial impact was staggering, and recovery was severely delayed because engineers were physically locked out of facilities—the badge readers themselves relied on the newly severed network routing. While an extreme example, this incident highlights the unforgiving, mission-critical nature of Border Gateway Protocol (BGP).
+The Facebook 2021 BGP outage (see *Route 53*) <!-- incident-xref: facebook-2021-bgp --> shows that a single routing-control mistake can collapse global reachability, which is why BGP-based cluster designs must keep failure domains explicit and operationally testable.
 
 In a cloud-managed Kubernetes service, pod networking is abstracted away and "just works." AWS VPC CNI assigns ENI IPs directly, GKE leverages Dataplane V2, and Azure CNI plugs seamlessly into the native VNet. However, on bare metal or on-premises infrastructure, there is no underlying magical cloud network. You must architect the integration of your Kubernetes pod networking with the physical datacenter switching fabric. 
 

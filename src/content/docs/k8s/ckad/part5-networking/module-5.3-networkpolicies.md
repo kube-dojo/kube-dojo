@@ -13,7 +13,7 @@ sidebar:
 
 ## Why This Module Matters
 
-In early 2018, attackers compromised the cloud infrastructure of Tesla, leading to significant financial losses due to unauthorized cryptocurrency mining compute costs. The attackers initially gained a foothold through an unsecured Kubernetes dashboard. However, the true catastrophic failure was not just the exposed dashboard—it was the completely flat internal network topology of the cluster. Once the attackers could execute code inside a single pod, they could seamlessly move laterally to any other pod and service in the cluster. Without internal boundaries, they effortlessly extracted AWS credentials from the metadata service and deployed malicious workers cluster-wide. A single point of compromised entry escalated into total infrastructure exploitation.
+The 2018 Tesla cryptojacking incident (see *GUI Security*) <!-- incident-xref: tesla-2018-cryptojacking --> shows that flat pod networking without boundaries converts one workload compromise into a full-cluster privilege explosion.
 
 By default, Kubernetes implements a flat network model. Every pod can communicate with every other pod across all namespaces without any restrictions. While this model simplifies initial development and service discovery, it is a massive security vulnerability in production environments. An attacker who breaches your frontend web server immediately has unrestricted network access to your backend APIs, your databases, and your external network interfaces. 
 

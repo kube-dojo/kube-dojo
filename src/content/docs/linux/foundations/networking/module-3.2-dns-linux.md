@@ -33,7 +33,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2021, Meta lost access to Facebook, Instagram, WhatsApp, Messenger, and internal operational tooling for nearly six hours after a network configuration change disconnected its data centers from the rest of the internet. Public reporting and Meta's own engineering account described a cascading failure where BGP withdrawal made authoritative DNS names unreachable, which meant users and even employees could not find the services that still existed behind the names. Outside estimates put the revenue impact around one hundred million dollars, but the more important lesson for operators was sharper: when name resolution collapses, every other layer looks broken at once.
+The Facebook 2021 BGP outage (see *Route 53*) <!-- incident-xref: facebook-2021-bgp --> showed how DNS and routing failures can appear as separate symptoms while actually forming part of one incident, and why troubleshooting should trace failures from resolver behavior through routing topology.
 
 The same pattern appears at smaller scale inside Linux fleets and Kubernetes clusters. A database migration succeeds, the new service IP is healthy, and the application still connects to the old address because a local cache ignored the intended TTL. A pod can reach `8.8.8.8` by IP, yet it fails every request to `api.partner.example` because the resolver burns time trying cluster search suffixes first. A developer proves that `dig` returns the right answer, but the application keeps using a stale `/etc/hosts` override because applications do not necessarily resolve names the same way diagnostic DNS tools do.
 

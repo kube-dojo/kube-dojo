@@ -435,7 +435,7 @@ curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta
 curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/MyInstanceRole
 ```
 
-**Security note**: Always enforce IMDSv2 (token-based) and disable IMDSv1. The older IMDSv1 is vulnerable to Server-Side Request Forgery (SSRF) attacks, which is exactly how the 2019 Capital One breach occurred. An attacker exploited a misconfigured WAF to query the metadata service and steal IAM role credentials.
+**Security note**: The 2019 Capital One metadata-service breach (see *Node Metadata Security*) <!-- incident-xref: capital-one-2019 --> shows how SSRF protections and scoped IAM permissions around metadata are inseparable controls on any production AWS account.
 
 ```bash
 # Enforce IMDSv2 on an existing instance
