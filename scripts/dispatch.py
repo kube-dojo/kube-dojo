@@ -1022,6 +1022,8 @@ def main():
         )
         if ok and args.github:
             post_to_github(args.github, output, chosen_model)
+        if ok:
+            print(output)
         sys.exit(0 if ok else 1)
 
     elif args.agent == "claude":
