@@ -508,6 +508,116 @@ When they removed the configuration block in panic, the entities remained. They 
 
 **The Lesson:** Always scope discovery providers using repository topic tags or explicit path exclusions to prevent digital hoarding.
 
+## Exam Design Notes for Catalog and Infrastructure Scenarios
+
+The CBA exam combines catalog and infrastructure topics because Backstage's catalog is not just a list of services. It is a graph backed by a database, refreshed by processing loops, extended by providers, queried through APIs, and rendered through plugins. When a question mentions ownership, dependencies, APIs, systems, domains, orphan entities, database behavior, or config layering, it is usually testing whether you can connect catalog modeling to operational infrastructure.
+
+Start every catalog scenario by asking what the entity represents. A `Component` is software that can be owned and operated. An `API` is a contract that components provide or consume. A `Resource` is infrastructure that software depends on. A `System` groups related components, APIs, and resources into a product boundary. A `Domain` groups systems around a business area. `User` and `Group` entities model ownership, while `Location` entities tell the catalog where other descriptors come from.
+
+Good catalog taxonomy makes incident response faster because it turns vague service names into explicit ownership and dependency paths. If a checkout service depends on a database, consumes a pricing API, provides an orders API, and belongs to a commerce system, responders can move from symptom to owner and dependency much faster. The exam may present this as a business problem, but the technical answer is usually the correct entity kind and relationship.
+
+Descriptor quality matters more than descriptor quantity. A repository with a `catalog-info.yaml` that names an owner, lifecycle, system, APIs, and dependencies is more useful than many repositories with only a component name. The catalog graph becomes valuable when descriptors are complete enough for plugins to attach documentation, Kubernetes resources, CI jobs, alerts, and ownership workflows to the same entity.
+
+Annotations are plugin contracts. A GitHub annotation tells a plugin where source code lives, a TechDocs annotation tells TechDocs where documentation source lives, and Kubernetes annotations can help connect an entity to cluster resources. Treat annotations as integration points, not decorative metadata. If an entity page has missing tabs or empty plugin panels, check whether the expected annotation exists and whether the referenced external system is reachable.
+
+Manual registration is useful for controlled onboarding, examples, and small teams. Static `catalog.locations` entries give platform teams clear review over what enters the catalog, and a Location entity can group related descriptor targets. The trade-off is maintenance: every new repository or descriptor location may require config or catalog changes unless automation is added. Manual registration favors precision over scale.
+
+Automated discovery providers favor scale, but they must be constrained. A provider that scans every repository in a large organization can ingest archived experiments, personal sandboxes, templates, test fixtures, and incomplete descriptors. Use filters, rules, ownership conventions, and CI validation so discovery produces a trustworthy graph rather than a noisy inventory. The correct exam answer often includes governance, not just enabling the provider.
+
+Processors are where raw entity data becomes validated catalog state. A provider or location supplies data, processors read and validate that data, and stitching creates relations that the catalog API can serve. When ingestion fails, identify whether the failure happened while reading the source, parsing YAML, validating schema, applying rules, resolving relations, or stitching the final graph. Each stage has a different owner and fix.
+
+Orphan entities require careful reasoning. If a source Location disappears or stops emitting an entity, Backstage may retain an orphaned entity for visibility instead of silently deleting it. That behavior protects operators from losing context without warning, but it also means catalog cleanup needs process. You must understand whether an entity is actively managed, orphaned by a missing location, or incorrectly duplicated by multiple providers.
+
+Relationship mismatches often come from reference syntax. Entity refs include kind, namespace, and name, with defaults that can hide mistakes. A component depending on `resource:orders-db` is not the same as depending on a resource in another namespace unless the namespace is included. If the UI does not show the expected relationship, inspect the normalized refs and the target entity's namespace before blaming the plugin.
+
+The catalog REST API is the operational inspection tool for large installations. UI pages are excellent for humans, but API queries reveal entity refs, relations, filters, fields, and pagination behavior precisely. Cursor-based pagination matters because large catalogs cannot safely return every entity in one response. If a question mentions missing entities at scale, think about filters, fields, limits, and cursors as well as provider configuration.
+
+Database choice is not a minor deployment detail. SQLite is convenient for local development because it requires little setup, but it is not the right foundation for resilient multi-user production Backstage. PostgreSQL gives production deployments a real database service for catalog state, plugin storage, migrations, and operational backup. The exam often phrases this as a scaling problem, but the answer starts with choosing the correct database architecture.
+
+Production database scaling must consider writers and readers. Catalog processing writes and updates entity state, while users and plugins read catalog data continuously. Running too many processing replicas can cause duplicate work or database contention unless leader election or a dedicated processing topology is used. Scaling the web/API side of Backstage does not automatically mean every replica should perform the same background processing work.
+
+Configuration layering controls how infrastructure settings move between environments. Base config can describe safe defaults, while production config can add real hostnames, database clients, authentication providers, and proxy targets. Environment variables can inject secrets and environment-specific values at runtime. If a deployment behaves differently than expected, inspect which config files were loaded and in what order.
+
+Backstage config is loaded as a sequence, and later values override earlier values. That means a correct key in `app-config.production.yaml` can still lose if the process starts with a different config order. Conversely, a local override can hide a production problem during development. A strong answer explains not only which YAML key should exist but also how the process receives the correct config stack.
+
+The proxy system exists because browser code should not hold secrets or bypass backend policy. Frontend plugins can call the Backstage backend, and the backend proxy can attach credentials, enforce allowlists, and route to external APIs. A proxy endpoint should be treated like backend integration code: review the target, headers, path handling, auth requirements, and whether the browser is allowed to reach the external service indirectly.
+
+Kubernetes integration connects catalog metadata to runtime resources. A component can be mapped to workloads through annotations, labels, or configured locators, and the backend plugin talks to clusters on behalf of the portal. Empty Kubernetes tabs are often catalog or backend configuration problems, not UI rendering problems. Check entity metadata, cluster locator settings, credentials, and backend plugin installation in that order.
+
+TechDocs also depends on catalog metadata and infrastructure. The catalog entity tells Backstage where documentation source lives, the TechDocs builder generates the site, and storage configuration determines where generated docs are served from. Local filesystem storage can work for development, while production systems usually need shared object storage so docs survive restarts and can be served consistently across backend replicas.
+
+When modeling infrastructure as `Resource` entities, keep the abstraction useful. A database, message topic, bucket, cache, or cluster can be a resource if teams need to understand ownership and dependencies. Do not create resource entities for every low-level object if that floods the graph with noise. A good catalog abstracts infrastructure at the level where ownership, reliability, cost, and incident response decisions happen.
+
+When modeling APIs, include the contract and ownership. An API entity should describe the boundary that other components depend on, not just a vague interface name. OpenAPI, AsyncAPI, GraphQL, and gRPC definitions can make the contract inspectable. Accurate `providesApi` and `consumesApi` relations help teams understand blast radius before changing an endpoint or deprecating a version.
+
+When modeling systems and domains, avoid using them as decorative folders. A `System` should represent a product or technical boundary with meaningful components and APIs. A `Domain` should represent a broader business or platform area that groups systems. If every team invents its own grouping rules, the catalog graph becomes inconsistent. Platform teams should publish taxonomy guidance and review changes that create new high-level groupings.
+
+Governance is part of catalog engineering. CI should validate descriptor syntax, required fields, owner refs, lifecycle values, allowed entity kinds, and annotation formats before descriptors reach the catalog. Runtime ingestion should not be the first place obvious descriptor errors are discovered. The exam may ask how to prevent broken catalog data, and the best answer often includes both CI validation and catalog processing diagnostics.
+
+Large catalogs require search and filtering discipline. Users need to find services by owner, lifecycle, system, domain, tags, type, and relation. If descriptors omit those fields, the UI may still list entities, but the portal will not answer operational questions. Catalog quality therefore depends on both platform tooling and team habits. A catalog full of unnamed owners and experimental lifecycles is technically populated but operationally weak.
+
+Incident scenarios often combine catalog and infrastructure failures. A missing owner field slows escalation, a broken provider stops updates, a database bottleneck delays processing, and a misordered config file points plugins at the wrong endpoint. Practice decomposing the story into graph modeling, ingestion, storage, and runtime configuration. That decomposition prevents one-size-fits-all fixes such as "restart Backstage" when the real problem is bad metadata or database contention.
+
+For exam pacing, translate symptoms into catalog layers. "The entity never appears" points to provider, location, rules, parsing, or processor errors. "The entity appears but relationships are missing" points to refs, namespaces, or stitching. "The UI tab is empty" points to annotations, backend plugin config, or external credentials. "Pagination misses records" points to API query shape and cursor handling. Each symptom has a layer.
+
+The strongest mental model is that Backstage turns infrastructure and software ownership into a queryable graph. Descriptors define nodes, relations define edges, providers and processors keep the graph fresh, PostgreSQL stores the state, APIs expose the data, and plugins render useful operational views. Once you can place each problem in that pipeline, catalog and infrastructure questions become much more predictable.
+
+When you review a catalog descriptor, read it as a contract between the service team and the platform team. The service team is declaring what the thing is, who owns it, what lifecycle it is in, what system it belongs to, what APIs it provides, and what infrastructure it depends on. The platform team is promising that plugins, search, ownership views, documentation, and operational integrations will use that information consistently.
+
+When descriptors are incomplete, Backstage still accepts some entities, but the platform value drops sharply. A component with no owner cannot route accountability. A component with no system cannot show product context. A component with no API relations cannot reveal consumers. A component with no documentation annotation cannot attach TechDocs. The catalog is only as strong as the metadata teams maintain.
+
+When automated discovery is introduced, start with a small blast radius. Scan one group, one topic, or one repository pattern first, inspect the resulting graph, and only then widen coverage. Large organizations often have years of abandoned repositories and inconsistent naming. Discovery turns that history into catalog data unless you add filters. Controlled expansion is an engineering practice, not a lack of ambition.
+
+When processors reject an entity, the fix should happen at the source of truth whenever possible. Editing catalog database rows manually may clear a symptom, but it does not repair the repository descriptor that will be processed again later. A durable fix updates the `catalog-info.yaml`, provider filter, entity reference, or processor rule that produced the bad state. The catalog should converge from source-controlled truth.
+
+When comparing SQLite and PostgreSQL, focus on operational characteristics instead of brand names. SQLite is embedded, simple, and useful for a laptop. PostgreSQL is a networked database service with durability, backup, connection management, and production concurrency characteristics. Backstage plugins store real platform state, so production deployments need database behavior that survives restarts, multiple users, and continuous background processing.
+
+When scaling the backend, separate request-serving capacity from background work. More replicas can help with web and API traffic, but background catalog processing can duplicate work if every replica processes the same providers without coordination. A mature deployment may use leader election, a dedicated worker-style topology, or explicit operational guidance so scaling improves availability without creating write contention.
+
+When proxy endpoints are reviewed, check whether they accidentally expose a general-purpose tunnel. A narrowly scoped proxy endpoint with a fixed target and controlled headers is much safer than a broad endpoint that allows arbitrary paths or hosts. The backend proxy is powerful because it can hold credentials, so it must be configured with the same care as any other privileged backend integration.
+
+When Kubernetes resources are shown in Backstage, the catalog entity is the bridge between human ownership and cluster state. A deployment, service, or pod in Kubernetes usually does not know the full business context. Backstage can add that context if the entity metadata and cluster labels align. That is why catalog accuracy matters for platform operations, not just for pretty service pages.
+
+When TechDocs fails in production, investigate build mode, storage, and entity annotations together. The entity may point to the wrong docs directory, the builder may not have generated content, or the storage backend may not be shared across replicas. A local demo can hide these issues because one process can generate and read from a local filesystem. Production needs a durable documentation path.
+
+When using the catalog API, avoid pulling the entire world just to answer a narrow question. Filters, fields, and pagination reduce database load and make automation safer. A script that loops through every entity without cursor handling can miss data or overload the backend. API discipline is part of catalog operations because the catalog often becomes a central integration point for many internal tools.
+
+When cleaning orphan entities, preserve auditability. An orphan may represent a genuinely retired service, a moved repository, a temporary provider outage, or a misconfigured location. Deleting immediately can remove useful incident context. A better cleanup process identifies the origin, confirms ownership, records why the source disappeared, and then removes stale entities deliberately through supported UI or API paths.
+
+When teams argue about taxonomy, use operational questions to decide. Who owns this thing? What fails if it is down? Which users depend on it? Which system does it support? Which APIs does it expose? Which resources does it consume? Those questions produce better entity models than debates about whether every repository deserves its own page. The catalog should optimize for decision-making.
+
+When configuration layering breaks, print or inspect the effective config rather than staring at one YAML file. The value Backstage uses is the result of loaded files, order, environment substitution, and deployment command flags. Many incidents happen because everyone reviews the correct production file while the process is actually started with only the base file. The effective config is the truth at runtime.
+
+When teaching catalog modeling, start with one complete service and expand outward. Define the component, owner group, system, API, database resource, and TechDocs annotation for one service. Then add another component that consumes the API. This small graph teaches relations more clearly than a giant import of hundreds of partial entities. Quality of relations matters more than quantity of nodes.
+
+When designing CI validation, enforce the fields that your organization relies on operationally. If on-call routing depends on `spec.owner`, make it required. If service grouping depends on `spec.system`, validate it. If documentation is expected for production services, validate the TechDocs annotation. CI should encode local platform policy, not merely check that YAML parses.
+
+When an exam answer includes "just use Backstage," it is probably incomplete. Backstage is the framework, but the correct answer usually names the catalog entity kind, provider, processor, config layer, database choice, proxy pattern, or plugin boundary that addresses the scenario. Precise nouns matter because Backstage has many moving parts, and each one owns a different failure mode.
+
+When you operate Backstage as a platform, treat the catalog as shared infrastructure data. Teams should not make arbitrary taxonomy changes without review, but the platform team should also avoid becoming a bottleneck for every descriptor edit. The healthiest model combines clear standards, automated validation, self-service registration, and visible cleanup processes for exceptions.
+
+The catalog and infrastructure domains are ultimately about reducing ambiguity. A good Backstage deployment answers who owns a service, what it depends on, where its docs live, which APIs it exposes, which runtime resources belong to it, and how the portal itself is configured and scaled. That is why these domains carry so much exam weight and so much practical value.
+
+When a catalog grows, the cost of ambiguity compounds. One missing owner field is annoying; hundreds of missing owner fields make the portal unreliable during incidents. One loose discovery provider is convenient; many loose providers create stale data that teams stop trusting. Backstage succeeds when every entity has enough metadata for another team to make a decision without opening a chat thread.
+
+When you model dependencies, prefer relationships that describe operational reality. If a service cannot function without a database, that database should appear as a resource dependency. If an API is consumed by several components, that contract should be visible before a breaking change is merged. The graph should help teams predict blast radius, not merely document repository names after the fact.
+
+When building automation around the catalog API, write scripts as if the catalog is large even when today's instance is small. Use filters, requested fields, pagination cursors, and cautious delete workflows. Scripts that work only against a small demo catalog often become dangerous when copied into production. The CBA exam expects you to recognize that operational scale changes how APIs should be consumed.
+
+When a production Backstage instance feels slow, separate catalog data problems from infrastructure problems. Too many noisy entities, missing indexes, excessive provider scans, slow external APIs, and underpowered PostgreSQL instances can all appear as a sluggish catalog. Restarting the backend may briefly hide symptoms, but durable fixes require finding the layer that is actually producing latency or write pressure.
+
+When you choose ownership conventions, make them match the organization that will respond to incidents. A component owned by a vague group such as `engineering` is not actionable. A component owned by a real team with an escalation path is actionable. Backstage can show ownership beautifully, but it cannot compensate for a taxonomy that avoids real accountability.
+
+When teaching teams to write descriptors, give them examples for common patterns: a service with an API, a website consuming an API, a database resource, a system grouping several components, and a domain grouping related systems. Clear examples reduce drift more effectively than abstract policy documents. Teams copy working patterns, so the platform team should make the right pattern easy to copy.
+
+When all of these practices come together, Backstage becomes more than a portal UI. It becomes an operational map that links source repositories, runtime infrastructure, documentation, ownership, dependency contracts, and production configuration. That is the practical reason catalog and infrastructure knowledge matters: it helps platform teams turn scattered engineering facts into a dependable shared control plane.
+
+For the exam, do not memorize these topics as separate flashcards. Practice reading a scenario and naming the layer first: entity model, descriptor syntax, annotation contract, provider configuration, processor behavior, catalog API query, database architecture, config loading, proxy boundary, Kubernetes integration, or TechDocs storage. Once the layer is clear, the correct Backstage feature usually follows naturally. That habit is also how experienced platform engineers debug real portals without making broad, risky changes.
+
+For real delivery work, keep feedback loops close to the source. Descriptor validation belongs near repositories, provider filters belong near platform config, database alarms belong near the production deployment, and cleanup reports belong where service owners can act. Backstage centralizes visibility, but responsibility still lives with the teams and platform controls that maintain the graph.
+
+This is why catalog work should be treated as ongoing platform maintenance rather than a one-time import project with no owner, review loop, validation policy, cleanup routine, operational accountability, measurable quality bar, service-level expectation, durable funding, or roadmap.
+
 ---
 
 ## Common Mistakes
@@ -536,16 +646,7 @@ You should use the **API** kind. The API kind represents a contract or boundary 
 
 </details>
 
-**Q2: What is the default refresh interval for catalog entity processing?**
-> **Scenario**: Your team just pushed a commit updating the `catalog-info.yaml` file to add a new tag. A developer checks Backstage immediately but does not see the new tag. Assuming no errors occurred, why is this happening and when should they expect to see the change automatically?
-<details>
-<summary>Answer</summary>
-
-The update is not instantly reflected because Backstage relies on a background processing loop that has a default refresh interval of approximately **100-200 seconds**. The catalog processing loop continuously cycles through all registered entities, fetching their latest state from the source location. Because there is no guarantee of instant updates, developers must either wait for the next cycle to complete or manually trigger a refresh via `POST /api/catalog/refresh` with the `entityRef`. This asynchronous approach prevents the backend from being overwhelmed by simultaneous source repository updates, ensuring stable performance across the platform.
-
-</details>
-
-**Q3: How do you inject secrets into app-config.yaml?**
+**Q2: How do you inject secrets into app-config.yaml?**
 > **Scenario**: You are deploying Backstage to a production environment and need to configure the GitHub integration to read repository data. You have a `GITHUB_TOKEN` that must be kept secure. How should you provide this secret to the `app-config.yaml` file without hardcoding it?
 <details>
 <summary>Answer</summary>
@@ -554,7 +655,7 @@ You must use **environment variable substitution** with the `${VARIABLE_NAME}` s
 
 </details>
 
-**Q4: What is the purpose of the Backstage proxy plugin?**
+**Q3: What is the purpose of the Backstage proxy plugin?**
 > **Scenario**: Your Backstage frontend needs to display real-time incident data from PagerDuty. However, querying the PagerDuty API directly from the browser would expose your organization's API token to the client. How does Backstage securely handle this request?
 <details>
 <summary>Answer</summary>
@@ -563,7 +664,7 @@ Backstage securely handles this by using the **proxy plugin** (`/api/proxy`), wh
 
 </details>
 
-**Q5: Name two ways entities can be registered in the catalog.**
+**Q4: Name two ways entities can be registered in the catalog.**
 > **Scenario**: A new team is onboarding into your organization and wants their existing microservices to appear in the Backstage catalog. They can either add their services one-by-one or have them automatically picked up. What are the two primary mechanisms provided by Backstage to achieve this?
 <details>
 <summary>Answer</summary>
@@ -572,7 +673,7 @@ Entities can be registered through **manual registration** or **automated discov
 
 </details>
 
-**Q6: What database should be used for a production Backstage deployment?**
+**Q5: What database should be used for a production Backstage deployment?**
 > **Scenario**: You have successfully tested Backstage locally using its default in-memory database and are now writing the deployment manifests for a production Kubernetes cluster. To ensure high availability and data persistence, which database backend must you configure?
 <details>
 <summary>Answer</summary>
@@ -581,7 +682,7 @@ You must use **PostgreSQL** for a production deployment. The default SQLite (or 
 
 </details>
 
-**Q7: What happens to entities when their source Location is deleted?**
+**Q6: What happens to entities when their source Location is deleted?**
 > **Scenario**: A developer accidentally deletes a repository containing the `catalog-info.yaml` for a deprecated service. The repository was originally ingested via a static Location entry in Backstage. What will be the state of this entity in the Backstage catalog?
 <details>
 <summary>Answer</summary>
@@ -590,7 +691,7 @@ The entity will become an **orphaned entity**. It remains in the catalog databas
 
 </details>
 
-**Q8: How does configuration layering work in Backstage?**
+**Q7: How does configuration layering work in Backstage?**
 > **Scenario**: You want to run Backstage locally but need to override some of the base configuration settings with production-specific values when deploying to your Kubernetes cluster. How does Backstage process multiple configuration files to achieve this?
 <details>
 <summary>Answer</summary>
@@ -599,16 +700,7 @@ Backstage achieves this through **configuration layering**, where you pass multi
 
 </details>
 
-**Q9: Which annotation links a Backstage entity to its GitHub repository?**
-> **Scenario**: You have registered a new Component in Backstage and want the GitHub plugin to display its recent pull requests, CI status, and code owners on the entity's overview page. Which specific metadata field must you add to your `catalog-info.yaml` to enable this?
-<details>
-<summary>Answer</summary>
-
-You must add the **`github.com/project-slug`** annotation with the value formatted as `org/repo-name`. For example, specifying `github.com/project-slug: myorg/payments-service` tells Backstage exactly where the source code resides. This annotation acts as the crucial linkage that allows GitHub-related plugins to fetch and surface repository-level telemetry directly in the UI. Without it, the plugins lack the context needed to associate the catalog entity with its upstream source repository, leaving your component page devoid of valuable integration data.
-
-</details>
-
-**Q10: In a production Kubernetes deployment of Backstage, why should catalog processing run on a single replica?**
+**Q8: In a production Kubernetes deployment of Backstage, why should catalog processing run on a single replica?**
 > **Scenario**: You are scaling your Backstage backend deployment to 3 replicas to handle increased API traffic. However, you notice unexpected database lock errors and duplicate processing cycles in the logs. What architectural consideration regarding catalog processing was missed?
 <details>
 <summary>Answer</summary>
@@ -781,6 +873,21 @@ curl http://localhost:7007/api/proxy/jsonplaceholder/todos/1
 | app-config.yaml | Layered config; `${ENV_VAR}` for secrets; `--config` flag for overrides |
 | Proxy | `/api/proxy/*` forwards frontend requests through backend to external APIs |
 | Production | PostgreSQL, HTTPS (via ingress), authentication required, single processing replica |
+
+## Sources
+
+- [Backstage Docs: Software Catalog](https://backstage.io/docs/features/software-catalog/)
+- [Backstage Docs: System model](https://backstage.io/docs/features/software-catalog/system-model/)
+- [Backstage Docs: Descriptor format](https://backstage.io/docs/features/software-catalog/descriptor-format/)
+- [Backstage Docs: Configuration](https://backstage.io/docs/conf/)
+- [Backstage Docs: Backend system](https://backstage.io/docs/backend-system/)
+- [Backstage Docs: Proxying](https://backstage.io/docs/plugins/proxying/)
+- [Backstage Docs: Kubernetes plugin](https://backstage.io/docs/features/kubernetes/)
+- [Backstage Docs: TechDocs](https://backstage.io/docs/features/techdocs/)
+- [Backstage Docs: TechDocs architecture](https://backstage.io/docs/features/techdocs/architecture/)
+- [Backstage Docs: Discovery and integration](https://backstage.io/docs/integrations/)
+- [Backstage Docs: Authentication](https://backstage.io/docs/auth/)
+- [Backstage Docs: Docker deployment](https://backstage.io/docs/deployment/docker/)
 
 ## Next Module
 
