@@ -105,9 +105,12 @@ INCIDENTS: dict[str, list[str]] = {
         r"Cloudflare.{0,200}(BGP|2020|configuration push)",
     ],
     "Facebook 2021 BGP outage": [
-        # Require Facebook + outage-specific phrasing (not just "Facebook" + "BGP" — too many false positives in MetalLB/Cilium context).
-        r"(Facebook|Meta).{0,400}(October 2021|2021.{0,40}outage|disappeared from the internet|disconnected.{0,40}data center|six[\s\-]hour outage|locked out)",
-        r"(October 2021|disappeared from the internet|six[\s\-]hour outage).{0,400}(Facebook|Meta)",
+        # Require Facebook + outage-specific phrasing (not just "Facebook" + "BGP" — too many
+        # false positives in MetalLB/Cilium context). Word boundaries on "Meta" (matches inside
+        # "metadata") and on "locked out" (matches inside "blocked outbound") — both surfaced by
+        # the kcsa/4.5 false positive 2026-05-04.
+        r"(Facebook|\bMeta\b).{0,400}(October 2021|2021.{0,40}outage|disappeared from the internet|disconnected.{0,40}data center|six[\s\-]hour outage|\blocked out\b)",
+        r"(October 2021|disappeared from the internet|six[\s\-]hour outage|\blocked out\b).{0,400}(Facebook|\bMeta\b)",
     ],
     "AWS S3 us-east-1 2017": [
         r"AWS.{0,80}S3.{0,80}us-east-1",
@@ -211,6 +214,18 @@ INCIDENTS: dict[str, list[str]] = {
     "GitHub August 2021 MySQL degradation": [
         r"GitHub.{0,400}(August 2021|August 10,?\s*2021|MySQL primary|degraded|77[\s\-]minute|seventy[\s\-]seven minute|service discovery misconfiguration|dashboards.{0,40}same.{0,40}database)",
         r"(MySQL primary|degraded.{0,80}database|dashboards.{0,40}down too).{0,200}GitHub",
+    ],
+    "Siloscape 2021 Windows container escape": [
+        # Distinctive malware name — bare match is safe (no other product/CVE shares the name).
+        r"\bSiloscape\b",
+    ],
+    "XZ Utils backdoor CVE-2024-3094": [
+        # Distinctive name + CVE; allow either signal. liblzma alone is too generic (compression
+        # library mentions in unrelated tutorials), so require backdoor/CVE context.
+        r"\bXZ Utils\b",
+        r"CVE-2024-3094",
+        r"liblzma.{0,80}(backdoor|CVE-2024-3094)",
+        r"(backdoor|obfuscated).{0,80}liblzma",
     ],
     "Fictional / fabricated incident names": [
         # User: "you cannot fool a human" — these are made-up company names with manufactured stats.

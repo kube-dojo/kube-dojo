@@ -21,7 +21,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2020, investigators found that a trusted software update had carried a backdoor into thousands of organizations, including government agencies and major enterprises. The compromise did not begin with a noisy exploit against a public service; it began upstream, inside the process that produced software everyone already trusted. By the time customers installed the update, perimeter controls saw an expected vendor binary, endpoint tools saw a familiar product, and many teams had no immediate way to prove which internal systems had been exposed.
+In March 2024, a Microsoft engineer noticed that SSH logins on his Debian workstation were 500 milliseconds slower than usual. He traced the latency to liblzma, a compression library, and found obfuscated machine code embedded in the XZ Utils release tarball — code not present in the project's git repository. The maintainer who had landed the change had spent two years patiently earning the trust required to commit it; the backdoor was designed to intercept SSH authentication at the dynamic linker level before any application code ran. The compromise did not begin with a noisy exploit against a public service; it began upstream, inside the process that produced software everyone already trusted.
 
 Kubernetes makes that pattern more dangerous because clusters are designed to turn artifacts into running workloads quickly. A deployment controller does not ask whether an image tag moved last night, whether a package manager resolved an internal dependency from a public registry, or whether the CI runner that signed the artifact was isolated from untrusted pull requests. It sees a Pod specification, asks the registry for bytes, and schedules the workload if policy allows it. Supply chain security is the discipline of making those bytes explain where they came from before the cluster gives them CPU, network, secrets, and service account identity.
 
@@ -162,8 +162,8 @@ CI/CD pipeline attacks sit in the middle of the chain, where attackers can turn 
 │  ├── Secret injection                                      │
 │  └── Configuration modification                            │
 │                                                             │
-│  REAL-WORLD: SolarWinds (build system compromise)          │
-│  REAL-WORLD: Codecov (bash uploader tampering)             │
+│  REAL-WORLD: Build pipeline compromise                     │
+│  REAL-WORLD: CI tool tampering                             │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -309,8 +309,8 @@ An SBOM, or Software Bill of Materials, answers a different question: what compo
 │  • Dependency tracking                                     │
 │  • Incident response                                       │
 │                                                             │
-│  EXAMPLE: Log4Shell response                              │
-│  With SBOM: Query "which images have log4j?"              │
+│  EXAMPLE: Critical-CVE response in transitive dep         │
+│  With SBOM: Query "which images have <vulnerable lib>?"   │
 │  Without SBOM: Manual scanning of all images              │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -609,7 +609,7 @@ The review is complete only when the normal path and the failure path are both b
 
 ## Did You Know?
 
-- **The SolarWinds attack** affected roughly 18,000 customers through a trusted software update path, which is why build systems are now treated as high-value production assets rather than background automation.
+- **The 2020 trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
 
 - **Dependency confusion became a board-level issue in 2021** after public research showed that package resolution rules could pull attacker-controlled packages when private names were not scoped or routed correctly.
 

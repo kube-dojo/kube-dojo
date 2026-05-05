@@ -24,7 +24,7 @@ After completing this module, you will be able to apply threat modeling as an en
 
 ## Why This Module Matters
 
-In December 2020, a FireEye security investigation exposed a terrifying pattern: attackers had reached thousands of organizations through a trusted SolarWinds software update. The update did not arrive as a suspicious binary from an unknown server, and it did not ask defenders to ignore obvious warnings. It arrived through an expected vendor channel, carried the appearance of normal delivery, and moved through environments that had already decided to trust that vendor's software.
+In December 2020, a major security investigation exposed a terrifying pattern that the curriculum's [supply-chain canonical](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> covers in full: attackers had reached thousands of organizations — including government agencies and major enterprises — through a trusted vendor's signed software update. The update did not arrive as a suspicious binary from an unknown server, and it did not ask defenders to ignore obvious warnings. It arrived through an expected vendor channel, carried the appearance of normal delivery, and moved through environments that had already decided to trust that vendor's software.
 
 That pattern is exactly why supply chain threat modeling matters for Kubernetes. A platform can require a private registry, scan images, and enforce Pod Security Standards, yet still run attacker-controlled code if the build path itself has been compromised. The cluster may see an approved image name, a familiar service account, and a deployment created through the normal release process. If the dangerous decision happened earlier, runtime controls may only see ordinary workload behavior until data is gone or credentials have been abused.
 
@@ -512,7 +512,7 @@ When two mitigations compete for the same sprint, prefer the one that closes the
 
 ## Did You Know?
 
-- **SolarWinds showed the leverage of build compromise**: attackers reached many downstream environments because the trusted update path became the delivery mechanism, which is exactly why supply chain modeling focuses on trust boundaries before runtime.
+- **Trusted-update backdoors show the leverage of build compromise**: attackers can reach many downstream environments because a signed update path itself becomes the delivery mechanism — see the [2020 SolarWinds case study](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 -->. This is exactly why supply chain modeling focuses on trust boundaries before runtime.
 
 - **SLSA focuses on build integrity**: the framework helps teams reason about tamper resistance, provenance, and build platform trust, which are central questions when admission policy depends on artifact evidence.
 

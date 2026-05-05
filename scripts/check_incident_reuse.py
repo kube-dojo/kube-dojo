@@ -129,6 +129,15 @@ CANONICALS: dict[str, tuple[str, str]] = {
         "src/content/docs/prerequisites/modern-devops/module-1.4-observability.md",
         "GitHub August 2021 MySQL degradation",
     ),
+    # Catalog incidents claimed by the KCSA + KCNA sweep (#878 PR sequence).
+    "siloscape-2021": (
+        "src/content/docs/k8s/kcsa/part2-cluster-component-security/module-2.2-node-security.md",
+        "Siloscape 2021 Windows container escape",
+    ),
+    "xz-utils-2024": (
+        "src/content/docs/k8s/kcsa/part4-threat-model/module-4.4-supply-chain.md",
+        "XZ Utils backdoor CVE-2024-3094",
+    ),
 }
 
 # Always-forbidden incidents — these have NO canonical and may not appear
