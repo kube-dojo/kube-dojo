@@ -7,8 +7,6 @@ sidebar:
   order: 9
 ---
 
-# Anomaly Detection & Novelty Detection
-
 > Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
 > Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
 > Environment note: the worked examples are Python and scikit-learn focused; when this scoring logic is later deployed on Kubernetes 1.35 or newer, this curriculum uses `k` as the kubectl alias after `alias k=kubectl`, but this module does not require cluster access.
