@@ -19,7 +19,7 @@ Bayesian networks gave AI a disciplined infrastructure for reasoning under uncer
 | Steffen L. Lauritzen | — | Statistician; co-author of the 1988 local-computation paper on graphical probabilistic structures and their application to expert systems. |
 | David J. Spiegelhalter | 1953– | Statistician; co-author with Lauritzen (1988); helped broaden the graphical-model framework beyond Pearl's AI context. |
 | Gregory F. Cooper | — | AI researcher whose 1990 complexity result clarified the computational bounds of Bayesian-network inference. |
-| Eugene Charniak | 1946– | AI researcher; wrote the 1991 *AI Magazine* tutorial "Bayesian Networks without Tears," making the framework accessible to a broad audience. |
+| Eugene Charniak | 1946–2023 | AI researcher; wrote the 1991 *AI Magazine* tutorial "Bayesian Networks without Tears," making the framework accessible to a broad audience. |
 
 </details>
 
