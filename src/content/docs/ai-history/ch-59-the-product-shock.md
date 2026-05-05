@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a chat box wrapping a GPT-3.5 model fine-tuned with RLHF on Azure supercomputing. The break was not new science but packaging: conversational turn-taking turned model behaviour into consumer habit. Record-breaking consumer adoption forced institutions, competitors, and users to react, while Microsoft's Bing and Google's Bard launched within ten days of each other.
+On November 30, 2022 OpenAI launched ChatGPT as a free research preview — a chat box wrapping a GPT-3.5 model fine-tuned with RLHF on Azure supercomputing. The break was not new science but packaging: conversational turn-taking turned model behaviour into consumer habit. Record-breaking consumer adoption forced institutions, competitors, and users to react, while Microsoft's Bing and Google's Bard launched within a day of each other.
 :::
 
 <details>
