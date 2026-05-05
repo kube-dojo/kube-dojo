@@ -38,7 +38,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-On August 1, 2012, Knight Capital Group deployed new trading software into production using a process that still depended on a technician copying files across eight production servers. Seven servers received the update, one server did not, and the old code path on the missed machine began sending unintended orders when the market opened. In about 45 minutes, the firm accumulated a pre-tax loss of 460 million dollars, sought emergency financing the next day, and became a lasting example of how partial automation can be more dangerous than honest manual work.
+The *Infrastructure as Code* module’s Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference is the canonical example that motivates this module: partial automation without strong state checks can make manual procedures slower, riskier, and much more expensive than intended.
 
 The important lesson is not that shell scripts magically prevent incidents. A bad script can repeat a mistake faster than a person can type it, and a script without state checks can create a clean-looking audit trail while the platform is already broken. The lesson is that well-designed automation turns an operational procedure into something reviewable, repeatable, and testable. If the Knight deployment had required every server to report the expected version before trading traffic resumed, the missing machine would have been detected before the financial blast radius expanded.
 
@@ -803,7 +803,7 @@ One useful rule of thumb is to keep the first implementation close to the operat
 
 - The Bourne shell appeared in Version 7 Unix in 1979, and many of its error-handling defaults still influence modern Bash scripts used in CI/CD systems.
 - Kubernetes JSONPath support lets `kubectl` extract nested object fields without external tools, but `jq` remains stronger for filtering, restructuring, and calculating reports from full JSON documents.
-- The 2012 Knight Capital incident produced a 460 million dollar pre-tax loss in roughly 45 minutes, making deployment consistency a board-level risk rather than a scripting style preference.
+- The *Infrastructure as Code* module’s Knight Capital 2012 reference is where this class of blast-radius risk is taught with production stakes. <!-- incident-xref: knight-capital-2012 -->
 - The DORA research program has repeatedly linked elite software delivery performance with automation practices such as reliable deployments, fast recovery, and repeatable change validation.
 
 ## Common Mistakes

@@ -406,7 +406,7 @@ k get pod multi -o jsonpath='{range .status.containerStatuses[*]}{.name}{"\t"}{.
 - **The ambassador pattern predates service meshes.** Before Istio and Linkerd, developers used ambassador containers to handle cross-cutting concerns. Now service meshes automate sidecar injection.
 - The SidecarContainers feature was introduced as alpha in Kubernetes v1.28 on August 25, 2023, and officially graduated to stable (GA) in v1.33 on April 23, 2025.
 - Ephemeral containers, heavily relied upon for debugging stripped-down multi-container pods, became a stable (GA) feature in Kubernetes v1.25.
-- In 2012, Knight Capital lost $460 million in just 45 minutes—while pre-Kubernetes, this scale of rapid failure highlights why robust lifecycle controls (like Init containers preventing premature main container startup) are so deeply critical.
+- In *Infrastructure as Code*, the canonical Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> cross-reference shows why lifecycle controls are essential when partial rollout and execution ordering become coupled to operational speed and reliability.
 - Kubernetes v1.29 enabled native sidecar containers by default, definitively solving the infamous race condition where a proxy sidecar would shut down before the main application had finished processing its final in-flight requests.
 
 ---

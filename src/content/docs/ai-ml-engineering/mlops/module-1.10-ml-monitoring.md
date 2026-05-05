@@ -106,7 +106,7 @@ flowchart TD
     AL --> V
 ```
 
-> **Did You Know?** In 2012, Knight Capital Group lost $440 million in exactly 45 minutes due to an automated algorithmic malfunction. The system lacked comprehensive boundary monitoring, and by the time human operators diagnosed the erratic trading volume, the company was fundamentally crippled. This event remains a foundational cautionary tale for algorithmic boundary enforcement.
+> **Did You Know?** The canonical Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> incident in *Infrastructure as Code* is the reference point here: when boundary monitoring is incomplete and operators lack fast signal quality, automation can drift into runaway impact quickly.
 
 ## Diagnosing Drift Types
 

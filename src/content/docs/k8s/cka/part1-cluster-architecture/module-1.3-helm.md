@@ -31,9 +31,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In 2012, Knight Capital Group suffered a catastrophic deployment failure, resulting in a staggering $460 million loss and the company's subsequent bankruptcy in under an hour. Their engineers deployed new trading algorithms but failed to properly manage the configuration flags across their entire fleet of servers. This misalignment between the deployed codebase and the required configuration flags caused the system to execute millions of erroneous trades in just 45 minutes.
+Like the canonical Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> example in *Infrastructure as Code*, this module focuses on preventing mixed-version rollout states by managing multi-component applications as a versioned Kubernetes release artifact.
 
-While Knight Capital predates Kubernetes, the core problem—managing complex, multi-component deployments consistently—is exactly why Helm was created. When managing microservices on Kubernetes, a single application might require Deployments, Services, Ingress rules, ConfigMaps, Secrets, and RBAC bindings. Manually applying dozens of individual YAML files invites human error, configuration drift, and exactly the kind of catastrophic outages that destroy companies.
+The core problem—managing complex, multi-component deployments consistently—is exactly why Helm was created. When managing microservices on Kubernetes, a single application might require Deployments, Services, Ingress rules, ConfigMaps, Secrets, and RBAC bindings. Manually applying dozens of individual YAML files invites human error, configuration drift, and exactly the kind of operational outages that become expensive at scale.
 
 Helm prevents this chaos by packaging all necessary Kubernetes resources into a single, versioned artifact called a "chart." This ensures repeatable, idempotent deployments across development, staging, and production environments. The CKA 2025 curriculum strictly tests your ability to leverage Helm for these scenarios. You must prove you can orchestrate complex applications securely, override configurations deterministically, and roll back instantly when disaster strikes. 
 

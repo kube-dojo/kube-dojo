@@ -21,7 +21,7 @@ After completing this module, you will be able to use the following outcomes as 
 
 ## Why This Module Matters
 
-The textbook case study of cloud native principles is documented in [the modern DevOps track's infrastructure-as-code module](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/) <!-- incident-xref: knight-capital-2012 -->: a 2012 financial-services rollout where new trading software shipped to a production fleet, but a partial deployment left one server on the old code path; the brief mismatch triggered automated trades that cost the firm hundreds of millions of dollars in under an hour. The failure was not simply a bad application bug; it was an architecture and operations failure where mutable infrastructure, manual rollout steps, and weak deployment control allowed production machines that were supposed to be identical to behave differently under real market pressure.
+The core reference point here is the Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> walkthrough in [the modern DevOps track's infrastructure-as-code module](../../../prerequisites/modern-devops/module-1.1-infrastructure-as-code/), which is the canonical case for why cloud-native control loops and declarative rollout state matter when fleets must remain uniform.
 
 That story matters for Kubernetes learners because cloud native architecture is often reduced to a shallow phrase: "put it in a container." A container can package a broken operating model just as easily as it can package a resilient one. If the application still depends on local disk, hardcoded database addresses, hand-edited servers, or one giant process that fails as a unit, Kubernetes can restart it, but Kubernetes cannot magically make the design scalable, observable, or safe to change.
 
@@ -344,7 +344,7 @@ Cloud native systems prefer replacement because replacement is testable and reve
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Knight Capital is a severe example of what happens when production units diverge. One missed server was enough to run old behavior beside new behavior, and the system had no safe automated reconciliation loop to force uniform state. Kubernetes does not eliminate every deployment risk, but a Deployment controller gives you a stronger primitive: desired image, desired replicas, rollout status, and rollback history are all visible through the API.
+A severe production risk pattern is a fleet that diverges because rollout state is not uniformly enforced. A single missed unit can leave mixed versions in the wild, and Kubernetes does not erase that risk unless the control plane defines and observes desired state consistently through Deployment controllers, replica intent, rollout status, and rollback history.
 
 Declarative operation is the partner of immutability. Imperative commands describe steps: run this, scale that, expose this port, patch that field. Declarative configuration describes the desired end state: this Deployment should exist, it should run this image, it should have three replicas, and it should expose these labels and probes. The controller then keeps comparing actual state to desired state.
 

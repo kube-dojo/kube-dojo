@@ -21,11 +21,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In August 2012, Knight Capital Group lost exactly $460 million in exactly 45 minutes. While not explicitly a Kubernetes story, the underlying cause was a manual deployment failure on a single repurposed bare-metal server out of eight. An engineer missed copying new code to one machine, leaving outdated flag-handling logic active. When the market opened, that single misconfigured bare-metal server initiated millions of erroneous trades. The financial impact was devastating and absolute, forcing the company into a fire sale to stay solvent. 
+The *Infrastructure as Code* module’s Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference is the canonical illustration of why bare-metal and cluster onboarding must be declarative: a single node out of sync can still collapse the reliability of a broader estate.
 
 Modern infrastructure relies on consistency. A financial services company managing multiple Kubernetes clusters across two datacenters using procedural configuration management and shell scripts faces similar risks. Traditionally, it took days to spin up a single cluster: time spent finding servers in an outdated spreadsheet, executing manual PXE boots, running installation binaries, and verifying networking. Decommissioning was equally dangerous, as engineers hesitated to wipe disks without absolute certainty about the server's state, leading to massive resource waste and security vulnerabilities. Every manual step in a provisioning pipeline introduces the potential for human error, turning what should be a deterministic process into a game of chance.
 
-Cluster API fundamentally changes this narrative. By extending Kubernetes to manage its own infrastructure, you can define a physical server cluster in YAML, apply it, and the system provisions hardware, installs the OS, bootstraps Kubernetes, and joins nodes—all declaratively, auditable, and fully version-controlled in Git. No manual steps. No spreadsheets. No single point of failure during deployment. By shifting from imperative scripts to declarative state, you eliminate the entire class of configuration drift errors that took down Knight Capital Group, replacing brittle human execution with relentless, automated reconciliation.
+Cluster API fundamentally changes this narrative. By extending Kubernetes to manage its own infrastructure, you can define a physical server cluster in YAML, apply it, and the system provisions hardware, installs the OS, bootstraps Kubernetes, and joins nodes—all declaratively, auditable, and fully version-controlled in Git. No manual steps. No spreadsheets. No single point of failure during deployment. By shifting from imperative scripts to declarative state, you eliminate the configuration drift class of outages at scale.
 
 > **The Vending Machine Analogy**
 >
@@ -454,7 +454,7 @@ When performing upgrades, changing the version initiates a carefully orchestrate
 
 ## Did You Know?
 
-1. In August 2012, Knight Capital Group lost exactly $460 million in 45 minutes due to manual bare-metal provisioning errors causing a catastrophic misconfiguration on a single server.
+1. See the Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference in *Infrastructure as Code* for the canonical bare-metal-level lesson on why fleet consistency has to be declarative.
 2. The Metal3 project was officially accepted into the CNCF sandbox on 2020-09-08 and officially promoted to CNCF incubation status on 2025-08-14. Metal3 stands for "Metal Kubed" (Metal^3). It was created by Red Hat and is the bare metal infrastructure provider used by OpenShift's Assisted Installer for on-premises deployments.
 3. Cluster API release 1.12.0 fundamentally changed node lifecycle management by officially introducing in-place updates and chained upgrades.
 4. As of the version 1.13.0 pre-release, Cluster API officially supports Kubernetes workload clusters running versions 1.29.x through 1.35.x.
