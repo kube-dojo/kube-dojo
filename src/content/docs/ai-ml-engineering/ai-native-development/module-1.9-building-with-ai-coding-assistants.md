@@ -3,10 +3,17 @@ title: "Building with AI Coding Assistants"
 slug: ai-ml-engineering/ai-native-development/module-1.9-building-with-ai-coding-assistants
 sidebar:
   order: 210
+revision_pending: false
 ---
-> **Domain:** AI/ML Engineering Track | **Complexity:** `[COMPLEX]` | **Time:** 5-6 hours | **Prerequisites:** Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: 5-6 hours
+>
+> **Prerequisites**: Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
 
-## Learning Outcomes
+---
+
+## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
 
@@ -26,6 +33,8 @@ That failure was not caused by using AI. It was caused by using AI without a wor
 
 This module teaches AI-assisted development as an engineering discipline rather than a collection of productivity tricks. You will start with the smallest useful workflow, then add context management, multi-tool routing, security controls, cost optimization, and independent practice. By the end, you should be able to look at a coding task and choose not only what prompt to write, but also which assistant should receive it, what evidence it needs, what output you will reject, and how you will prove the result is production-ready.
 
+The examples in this module are intentionally ordinary: API routes, tests, caches, prompts, and review loops. That is where most teams either gain real leverage or quietly accumulate risk. You will not learn a magic incantation that makes an assistant reliable; you will learn how to surround probabilistic generation with deterministic evidence. When Kubernetes appears in later practice, assume Kubernetes 1.35 or newer and define the standard shortcut with `alias k=kubectl` before using `k` in commands, but the main lesson here is broader than any one platform.
+
 ## 1. The Mental Model: Assistants Are Different Tools, Not One Tool
 
 The first mistake many teams make is treating every AI coding assistant as a smarter version of autocomplete. That mental model hides the important differences between tools. Some assistants are optimized for fast local suggestions, some for codebase-wide editing, some for terminal-native patching, and some for long-context reasoning. A senior workflow does not ask, "Which assistant is best?" It asks, "Which assistant matches this task, this risk level, and this review budget?"
@@ -37,6 +46,8 @@ IDE-native assistants such as Cursor and Windsurf are strongest when the develop
 Terminal or agentic assistants such as Claude Code and Aider are strongest when work spans files, commands, tests, and Git. They can read files, make patches, run checks, inspect failures, and iterate. Their weakness is that they are powerful enough to change too much when the task is vague. A good user narrows their scope, names constraints, and reviews the diff before trusting the result.
 
 General chat assistants such as ChatGPT, Claude, and Gemini are useful for explanation, architecture comparison, log analysis, and large-context exploration when connected to the right context. Their weakness is that pasted code loses project affordances such as tests, file boundaries, lint rules, and local conventions. They are often excellent reasoning partners, but the final implementation still needs to be grounded in the repository.
+
+This distinction matters because tool choice changes the shape of the evidence you can collect. Autocomplete gives you immediate local suggestions, but it does not know whether a staging incident is tied to a recent migration. An IDE assistant may know the open repository, but it may not run the database-backed test that proves a contract still holds. A terminal agent can run commands, yet it may infer too much from a failing test unless the task brief tells it which behavior is intentional. Treat each assistant as a specialized instrument, the way a mechanic treats a socket wrench, torque wrench, and diagnostic scanner as different tools for different stages of the same repair.
 
 ```mermaid
 flowchart TD
@@ -54,6 +65,8 @@ flowchart TD
 
 The diagram is intentionally simple because routing should start simple. First identify whether the task is local, contextual, or architectural. Then identify the risk level. A low-risk documentation cleanup and a high-risk authentication refactor do not deserve the same assistant, the same prompt, or the same validation budget.
 
+Real teams often skip the routing step because it feels slower than asking the nearest assistant for code. The cost shows up later as review fatigue. A broad agentic patch may solve the visible issue while changing nearby behavior, and the reviewer then has to reconstruct the assistant's reasoning from the diff. A routing decision made before generation keeps the task legible: this is a local pattern completion, this is a multi-file implementation, or this is a design question that should be settled before any tool edits files.
+
 > **Check for understanding:** You need to add three tests that follow an existing pattern in one file. Which tool class should you try first, and what would make you escalate to a stronger reasoning tool?
 
 A useful rule is to spend the least reasoning power that can responsibly solve the problem. That does not mean choosing the cheapest model blindly. It means matching model capability to risk. Using a large reasoning model to generate a repetitive test fixture may waste money and time. Using a lightweight autocomplete suggestion to redesign authorization boundaries may save seconds while creating weeks of damage.
@@ -70,6 +83,8 @@ A useful rule is to spend the least reasoning power that can responsibly solve t
 
 This routing table is not a law. It is a starting point for disciplined judgment. The table becomes useful when you treat each row as a hypothesis: "This tool should be enough because the task has these properties." If the hypothesis fails, you escalate deliberately instead of thrashing between assistants.
 
+That escalation should be explicit in your notes or pull request summary. If a simple autocomplete-generated test exposed an unclear contract, say that the work moved from local generation to codebase reasoning because the contract was ambiguous. If a terminal agent proposed a dependency that violated your supply-chain policy, say that implementation stopped until the dependency decision was reviewed. These small records make AI-assisted work auditable, and they help the next engineer understand whether the assistant was used as a shortcut, a reviewer, or a reasoning partner.
+
 ## 2. Context Control: Give Enough, Not Everything
 
 AI coding assistants are highly sensitive to context. Too little context produces generic output that ignores your codebase. Too much context raises cost, slows the workflow, and can distract the model with irrelevant patterns. The practical skill is to provide the smallest context bundle that contains the task, the constraints, the examples, and the validation signal.
@@ -77,6 +92,8 @@ AI coding assistants are highly sensitive to context. Too little context produce
 A strong prompt usually has four parts. First, it states the goal in operational terms, such as "add pagination to the task list endpoint without changing the response schema." Second, it provides the relevant files or snippets. Third, it names constraints such as language version, framework conventions, security requirements, and dependency limits. Fourth, it defines how success will be checked, such as passing a specific test file or preserving a particular API contract.
 
 A weak prompt often asks for an outcome without boundaries. "Make this better" can produce style changes, dependency additions, unrelated refactors, and hidden behavior changes. A stronger prompt says what "better" means: lower latency, fewer queries, safer error handling, clearer types, smaller memory use, or more predictable tests. The assistant cannot optimize for your actual goal unless you name it.
+
+Context is not only a quantity problem; it is a relevance problem. A model can receive thousands of lines and still miss the single invariant that matters, such as "collaborators can edit titles but cannot delete projects." Conversely, a compact bundle that includes the failing test, the route, the service method, and the authorization helper may be enough for a precise fix. Before you paste more code, ask what decision the assistant needs to make and what evidence would distinguish a good answer from a plausible answer.
 
 Here is a worked example. A developer sees a slow FastAPI endpoint and wants help. A poor assistant interaction would paste the endpoint alone and ask for optimization. A better interaction includes logs, the query, the data size, the existing tests, and the deployment constraint that schema changes require a migration review.
 
@@ -127,6 +144,8 @@ def list_tasks(
 
 This answer still needs review. The route may have a declared response model that expects full Task objects. The ORM projection may return row tuples instead of the schema shape the API currently emits. Pagination parameters may need validation with FastAPI `Query`. The point is not that the assistant is done; the point is that the context led it toward a small, testable solution instead of a sprawling rewrite.
 
+The review should follow the same context discipline as the prompt. Do not ask the reviewer, human or AI, to inspect every possible quality dimension at once if the main risk is response compatibility. Start with the contract that users observe, then move to performance, then to edge cases such as negative limits or unusually large offsets. This ordering keeps the validation loop honest because a faster endpoint is still a regression if clients receive a different shape.
+
 > **Check for understanding:** Before accepting the optimized endpoint above, what contract would you inspect first: database performance, response shape, authentication, or logging? Explain why your choice changes the validation order.
 
 Context control also protects privacy. Developers often paste more than the assistant needs, including secrets, customer records, or proprietary algorithms. You should classify code before sharing it with a remote assistant. Public examples and open-source patterns are low risk. Internal business logic may require enterprise controls. Customer data, secrets, private keys, and regulated records should not be pasted into general tools. Redaction is not a bureaucratic ritual; it is part of engineering the workflow.
@@ -143,6 +162,8 @@ Context control also protects privacy. Developers often paste more than the assi
 ```
 
 The safest context is often synthetic. Instead of sharing a real customer payload, create a small representative example with fake values. Instead of pasting an entire private algorithm, describe the interface, constraints, and failure mode. If the assistant can solve the problem from structure and tests, it does not need the sensitive data.
+
+Synthetic context works best when it preserves the property that caused the failure. If a parser fails because a field is sometimes missing, the synthetic payload must omit that field. If a scheduler fails because timestamps cross a daylight-saving boundary, the example must include dates that exercise that boundary. Redaction that removes the important shape is just as unhelpful as raw data sharing is risky. The mature habit is to reduce sensitive context without reducing the technical signal.
 
 ## 3. Tool Workflows: From Simple Completion to Agentic Development
 
@@ -175,6 +196,8 @@ def test_create_project_rejects_empty_name(client, auth_headers):
 
 The assistant can continue with other tests, but you remain responsible for coverage quality. It may generate happy paths while missing authorization boundaries, duplicate names, Unicode input, race conditions, or tenant isolation. The professional move is to use the assistant for speed, then ask yourself what risk category the generated tests did not cover.
 
+One practical technique is to separate "pattern completion" from "risk discovery." Let the assistant fill in the obvious cases after you provide one strong example, then run a second pass where you ask what inputs would break the implementation or expose a trust boundary. This prevents a familiar trap: generated tests that look numerous but all test the same easy path. The number of tests matters less than whether they challenge the assumptions that would hurt users in production.
+
 Move to an IDE assistant when you need to edit selected code with surrounding context. Cursor-style quick edits are excellent for adding type hints, extracting a helper, improving error handling, or refactoring a function for dependency injection. The constraint is that you should select a small region and describe the exact transformation. Small scope produces reviewable diffs.
 
 ```python
@@ -200,6 +223,8 @@ aider src/routes/projects.py src/services/projects.py tests/test_projects.py
 
 The boundaries are doing real work here. Without them, an assistant might decide to add a model field, change route naming, rewrite unrelated service code, or update fixtures outside the task. When you specify "do not modify database models," you force the assistant to solve within the current data model or explain why it cannot.
 
+Boundaries are also how you make agentic work reviewable. A reviewer can reason about three named files and a stated non-goal much faster than a repository-wide patch with mixed cleanup, feature work, and fixture churn. When an agent says it needs to cross a boundary, treat that as a design signal rather than an annoyance. It may be correct, but the decision should happen before the diff expands, not after the assistant has already rewritten half the feature area.
+
 Move to a long-context reasoning tool when you need architectural comparison, incident analysis, or codebase explanation. In those cases, ask the assistant to produce hypotheses before fixes. A debugging prompt should include evidence and request reasoning: logs, recent changes, failing tests, metrics, and the exact symptom. The output you want is not "try this patch." The output you want is a ranked explanation of likely causes, evidence for each, and a validation plan.
 
 ```text
@@ -217,9 +242,11 @@ Please analyze:
 
 That prompt gives the assistant a debugging role instead of a patch-generation role. If it immediately produces code without connecting evidence to hypotheses, push it back. A good assistant interaction can and should be iterative.
 
+The iteration should become more specific each time. If the first answer says connection pool exhaustion may be caused by slow recommendation calls, the next prompt should ask which metric would separate slow calls from leaked sessions. If the answer says to add a timeout, ask where the timeout should live and what user-visible failure mode is acceptable. Debugging with assistants works when each exchange reduces uncertainty; it fails when each exchange merely produces another patch to try.
+
 > **Check for understanding:** Your assistant suggests increasing a database connection pool from 20 to 100. What evidence would tell you whether that is a fix, a temporary mitigation, or a dangerous distraction?
 
-## 4. Worked Example: Debugging an AI-Introduced Bug
+## 4. Worked Example: Diagnose and Debug an AI-Introduced Bug
 
 Now we will walk through a complete example before you practice independently later. The scenario is common: an assistant added caching to fix latency, tests passed, and production later showed memory growth. The goal is to debug the assistant's change using a repeatable validation loop.
 
@@ -242,9 +269,13 @@ def get_flags(user_id: int, db) -> dict[str, Any]:
 
 The bug is subtle only if you focus on the immediate latency problem. Once you ask operational questions, the risk becomes obvious. The cache has no time-to-live, no maximum size, no invalidation when flags change, no tenant boundary beyond user ID, and no metrics. It also stores mutable dictionaries, so a caller can accidentally mutate the cached value for future callers.
 
+This is the difference between debugging a symptom and diagnosing a system. The symptom is latency, and the assistant addressed it with reuse. The system includes traffic volume, process lifetime, memory limits, data freshness, mutability, deployment topology, and observability. A human reviewer who only asks whether the benchmark improved will miss the defect, while a reviewer who asks what assumption the cache makes can see the failure before production traffic amplifies it.
+
 A rigorous assistant prompt after noticing memory growth should not be "fix the cache." It should request diagnosis and constraints: "This cache was AI-generated to reduce repeated database reads. Production memory grows over time. Feature flags can change during the day. The service runs multiple worker processes. Diagnose the risks in this implementation, then propose the smallest safe replacement with tests for expiration and mutation isolation."
 
 A strong answer would explain that an in-process cache may still be acceptable if the risk is bounded. For example, a small TTL cache with copy-on-read behavior may solve repeated reads inside short windows without pretending to be a distributed source of truth. If flag freshness is strict, the answer should recommend Redis or a request-scoped cache instead. The correct solution depends on the freshness requirement.
+
+Pause and predict: if the service runs six worker processes behind a load balancer, what does an in-process cache guarantee about consistency across requests? It guarantees less than many developers assume. Each worker has its own memory, so one process may serve a cached flag while another has already fetched a newer value. That does not automatically make the design wrong, but it means the freshness contract must be stated honestly before the cache is accepted.
 
 ```python
 # flags.py
@@ -286,6 +317,8 @@ def test_get_flags_cache_has_bounded_size():
 ```
 
 This worked example demonstrates the validation loop you should use throughout AI-assisted development. Identify the assistant's assumption, connect it to an operational risk, constrain the replacement, and test the behavior that matters. Do not only test that the new code runs. Test that it fails safely under the condition that made the original code dangerous.
+
+Notice how the tests encode a diagnosis rather than a preference. The copy test says cached values must not be mutated by callers, which is the specific hidden risk in the original dictionary cache. The size test says the cache cannot grow without a bound, which connects directly to the memory incident. You may still need integration tests or load tests for a real service, but even these small unit tests force the implementation to respect the operational lesson.
 
 ```mermaid
 flowchart LR
@@ -334,6 +367,8 @@ For example, writing five validation tests that match an existing pattern is a g
 
 Token discipline is part of cost discipline. Do not paste an entire repository when three files and one failing test are enough. Do not include logs spanning days when the relevant error window is ten minutes. Do not ask for a full tutorial when you need a two-option trade-off. Clear prompts are not only better pedagogy; they are cheaper operations.
 
+Review discipline belongs in the same budget. A team that saves model tokens by using a weaker assistant for risky work may spend more senior-engineer time untangling the result. A team that uses the strongest model for tiny edits may preserve review time but waste direct spend and slow the feedback loop. Responsible routing looks at the whole system: model cost, context size, failure probability, blast radius, and the cost of proving correctness afterward.
+
 A useful prompt pattern is "design with expensive model, implement with bounded tool." In the first step, ask a strong model to compare approaches, state risks, and choose a design. In the second step, give a terminal or IDE assistant the chosen design and exact files. In the third step, use tests and review to decide whether the implementation matches the design.
 
 ```text
@@ -354,11 +389,15 @@ Run the targeted tests, inspect the diff, and check whether the implementation f
 
 Cost optimization must never become an excuse to weaken review. The goal is not to make AI usage as cheap as possible. The goal is to buy the right amount of reasoning for the risk at hand, then keep the rest of the workflow disciplined. Cheap automation is useful only when the validation loop is strong enough to catch what it misses.
 
+For teams operating at scale, the policy should be simple enough to remember during normal work. One useful default is to route repetitive local generation to fast tools, route cross-file implementation to tools that can run checks, and route ambiguous or security-sensitive decisions to stronger reasoning before implementation begins. Exceptions are allowed, but they should be explained. The explanation is often more valuable than the rule because it reveals whether the engineer understood the risk or merely followed a price table.
+
 ## 6. Security, Privacy, and Compliance Boundaries
 
 AI coding assistants introduce two categories of security risk. The first is output risk: the assistant may generate vulnerable code, unsafe defaults, missing authorization checks, weak cryptography, shell injection, SQL injection, or insecure dependency usage. The second is input risk: the developer may send sensitive code, secrets, customer records, or regulated data to a tool that is not approved for that exposure.
 
 Output risk should be handled like any other code risk, but with extra skepticism around familiar-looking snippets. Assistants frequently produce plausible code that has one missing security property. A SQL query may look clean but interpolate input. A JWT implementation may validate signatures but skip expiration. A file upload handler may check extension but not content type or size. Your review should ask what an attacker controls and what trust boundary the code crosses.
+
+The extra skepticism is justified because assistants are trained to produce conventional-looking code, and insecure code often looks conventional at a glance. A reviewer scanning for formatting or naming problems may miss the single line where user input crosses into SQL, shell execution, template rendering, or filesystem access. When AI generated the diff, slow down at boundaries where data changes trust level. Those boundaries include request bodies, headers, webhooks, background jobs, uploaded files, environment variables, and responses from external services.
 
 ```python
 # Unsafe assistant suggestion:
@@ -390,6 +429,8 @@ Input risk requires policy before tooling. A team should decide which repositori
 
 Dependency suggestions deserve special attention. Assistants often introduce libraries because it makes the generated code shorter. A senior developer treats every new dependency as a supply-chain decision. Before accepting it, check whether the project already has an equivalent library, whether the dependency is maintained, whether its license fits, whether it increases attack surface, and whether the functionality is small enough to implement with the standard library.
 
+This does not mean every new dependency is wrong. It means the assistant does not get to make the dependency decision silently. If a package solves a hard problem such as parsing, cryptography, caching, or retries, using a maintained library may be safer than improvising. If a package saves six lines of ordinary code, the maintenance and supply-chain cost may not be worth it. The review standard is not "no dependencies"; it is "every dependency has an explicit reason."
+
 > **Check for understanding:** An assistant fixes a bug by adding a package you have never used. What checks should happen before that package appears in a commit?
 
 Security prompts should be explicit. Instead of asking "review this," ask for specific threat classes: injection, authorization bypass, secret handling, unsafe deserialization, path traversal, race conditions, and dependency risk. Specific focus produces better findings and makes the assistant less likely to spend its attention on style comments.
@@ -407,6 +448,8 @@ Do not comment on formatting unless it affects security.
 ```
 
 That prompt narrows the review and improves signal. It also gives you a structure for your own human review. The assistant is not the authority; it is a second pass that may catch what you missed.
+
+Input controls should be written down before incidents happen. A practical policy can classify repositories by sensitivity, define which assistants are approved for each class, and describe how to create synthetic examples for debugging. The policy should also say what to do if a secret or customer record is pasted into the wrong tool, because hesitation after exposure makes the incident worse. Good AI adoption does not avoid security process; it makes the process clear enough that developers can still move quickly.
 
 ## 7. Building a Multi-Tool Workflow
 
@@ -428,6 +471,8 @@ The workflow below is a practical default for feature work. First, use a reasoni
 ```
 
 For a small task, this workflow may take minutes. For a risky task, it may take hours. The important habit is not ceremony; it is alignment. The same outcome should appear in the learning objective, the prompt, the code change, the test, and the review summary. If those artifacts do not match, the workflow is drifting.
+
+Alignment is easy to lose when assistants make work feel fluid. A developer begins by asking for pagination, then accepts a serializer cleanup, then adds a cache, then changes fixture factories because a test failed. Each step may look reasonable in isolation, but the final diff no longer answers the original task. A mature workflow keeps returning to the acceptance criteria: what user-visible behavior should change, what must remain stable, and what evidence will convince us.
 
 A feature example makes this concrete. Suppose you need to add owner-only deletion to a project API. The task touches authorization, route behavior, tests, and documentation. It is not a good candidate for blind autocomplete because a missing ownership check is a security bug. It is also not large enough for an architecture committee. A balanced workflow would use a reasoning prompt to identify risks, then a bounded terminal agent to implement, then a security-focused review prompt.
 
@@ -457,6 +502,34 @@ Check whether error codes reveal information beyond existing behavior.
 
 The structure prevents two common problems. It prevents under-scoping, where the assistant edits only the route and misses service-level reuse. It also prevents over-scoping, where the assistant redesigns the permission model. A good workflow keeps the assistant boxed into the right problem.
 
+Before running the implementation prompt, pause and predict what files should change if the design is truly owner-only deletion. You would expect route or controller logic, service authorization checks, and tests that prove owner success plus non-owner rejection. You would not expect migrations, unrelated formatting, notification systems, or a new permission framework. Making that prediction before the assistant runs gives you a concrete diff review checklist afterward.
+
+The same workflow applies outside application code. Documentation updates should be checked against the implementation they describe. Infrastructure changes should be checked against the cluster version, operational runbooks, and rollback path. If you ask an assistant for Kubernetes command examples, use current Kubernetes 1.35+ semantics and introduce `alias k=kubectl` before shorthand commands. The principle stays the same: the assistant can draft, but the environment and validation gates decide whether the draft is acceptable.
+
+## Patterns & Anti-Patterns
+
+The strongest pattern is the bounded task brief. Use it when the assistant has enough room to help but not enough room to redefine the work. A good brief names the goal, allowed files, read-only context, non-goals, validation command, and review focus. It works because it turns a vague request into an engineering contract, and it scales because reviewers can compare the final diff against the same contract.
+
+Another reliable pattern is design-before-generation for risky work. Use a stronger reasoning assistant to compare approaches when the task involves security, data contracts, migration behavior, concurrency, or production incidents. Once the design is selected, hand a much narrower implementation request to the editor or terminal agent. This pattern keeps expensive reasoning concentrated on the decision and prevents implementation tools from inventing architecture while they are supposed to be editing code.
+
+A third pattern is evidence-driven review. Instead of asking whether the assistant's answer looks good, ask what evidence would prove the behavior. For a performance change, that evidence may include query count, response shape, benchmark notes, and targeted tests. For an authorization change, it should include tests for allowed and rejected actors, plus a diff review at every trust boundary. The pattern works because it judges the output by externally visible behavior rather than by the confidence of the generated prose.
+
+The most damaging anti-pattern is prompt drift. A developer starts with a specific request, then follows every assistant suggestion until the task grows into a mixed refactor. Teams fall into it because each incremental suggestion feels helpful, especially when the assistant explains it clearly. The better alternative is to stop when a suggestion crosses the original boundary, record it as a follow-up, and finish the narrow change with clean evidence.
+
+Another common anti-pattern is using AI review as approval. An assistant can provide useful second-pass analysis, but it does not know every organizational policy, customer contract, incident history, or deployment constraint. Teams fall into this when an AI review sounds authoritative and the diff is tiring to read. The better alternative is to use AI review as an input to human judgment, then require project-specific checks before merge.
+
+A final anti-pattern is hiding cost inside context. Long prompts, broad file attachments, and repeated vague retries can make a cheap subscription feel free while consuming time, attention, and review capacity. Teams fall into this when they only measure the visible API or subscription charge. The better alternative is to track when an assistant produced oversized diffs, stale assumptions, or repeated corrections, because those are cost signals too.
+
+## Decision Framework
+
+When choosing an assistant workflow, begin with the risk of being wrong rather than the convenience of generation. Ask whether the task can harm users, expose data, break a public contract, corrupt state, increase operational cost, or hide a security boundary. If the answer is yes, the first assistant interaction should usually be reasoning or review, not code generation. If the answer is no and the pattern is local, a faster tool is often enough.
+
+Next, classify the context shape. A local task has the relevant pattern in one file and can be reviewed line by line. A contextual task needs neighboring files, tests, or framework conventions. An architectural task needs trade-offs, constraints, and a decision record before implementation. This classification tells you whether to use autocomplete, editor chat, terminal agents, or long-context reasoning, and it also tells you how much validation evidence to require.
+
+Then define the validation gate before the assistant writes code. A low-risk generated test may only need a targeted test run and a human scan. A multi-file feature needs focused tests, linting, and diff review against allowed files. A security-sensitive change needs threat-focused review and enough negative tests to prove that forbidden actors are rejected. If you cannot name the validation gate, the task is not ready for agentic implementation.
+
+Finally, decide how you will stop. Good AI workflows have exit criteria: the tests pass, the diff matches the brief, no unrelated files changed, the review questions are answered, and any new dependency or policy exception is documented. Without exit criteria, the assistant can keep improving, rephrasing, expanding, and refactoring indefinitely. Shipping reliable software requires knowing when the generated output has enough evidence behind it and when further AI activity is only adding noise.
+
 ## Did You Know?
 
 1. Early code completion tools were mostly syntax-aware, but modern assistants infer intent from names, comments, types, tests, and neighboring files. This means your code style directly changes assistant quality.
@@ -469,7 +542,7 @@ The structure prevents two common problems. It prevents under-scoping, where the
 
 ## Common Mistakes
 
-| Mistake | Why It Fails | Better Practice |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Accepting autocomplete because it compiles | Compilers do not check authorization, cost, privacy, or product intent | Review generated code against the risk category before accepting |
 | Pasting an entire repository into a long-context tool | Irrelevant context increases cost and may distract the model | Provide the smallest bundle of files, logs, tests, and constraints that explains the task |
@@ -584,6 +657,21 @@ Success criteria:
 - [ ] You can point to at least one generated suggestion you rejected or modified, and explain why.
 
 If you complete the exercise well, you should have more than working code. You should have an audit trail that shows how the work was framed, how the tool was selected, how the assistant was constrained, how the result was validated, and how human judgment remained in control.
+
+## Sources
+
+- [GitHub Copilot documentation](https://docs.github.com/en/copilot)
+- [GitHub Copilot responsible use guidance](https://docs.github.com/en/copilot/responsible-use-of-github-copilot-features)
+- [Visual Studio Code Copilot overview](https://code.visualstudio.com/docs/copilot/overview)
+- [Cursor codebase indexing documentation](https://docs.cursor.com/context/codebase-indexing)
+- [Anthropic Claude Code overview](https://docs.anthropic.com/en/docs/claude-code/overview)
+- [Anthropic prompt engineering overview](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview)
+- [Aider documentation](https://aider.chat/docs/)
+- [OpenAI model optimization workflow](https://developers.openai.com/api/docs/guides/model-optimization)
+- [OpenAI Codex documentation](https://developers.openai.com/codex/)
+- [Kubernetes kubectl reference](https://kubernetes.io/docs/reference/kubectl/)
+- [OWASP Top 10 for Large Language Model Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
+- [NIST AI Risk Management Framework](https://www.nist.gov/itl/ai-risk-management-framework)
 
 ## Next Module
 
