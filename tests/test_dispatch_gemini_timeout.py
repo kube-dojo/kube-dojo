@@ -221,3 +221,95 @@ def test_gemini_with_retry_double_429_falls_back_to_subscription_backoff():
     # backoff sleep → subscription (success)
     assert [c["use_subscription"] for c in calls] == [False, True, True]
     sleep_mock.assert_called_once()  # exactly one backoff between the two subscription attempts
+
+
+def test_gemini_with_retry_falls_back_to_review_fallback_model_on_exhaust():
+    """When every retry on the primary review model returns rate-limit, the
+    last-ditch dispatch must hit GEMINI_REVIEW_FALLBACK_MODEL on subscription
+    once before giving up. This covers the gemini-3.1-pro-preview capacity-out
+    case from PR #891 / #892 (2026-05-05)."""
+    calls: list[dict] = []
+
+    def fake_dispatch(prompt, model, review, timeout, mcp, use_subscription=None):
+        calls.append({"model": model, "review": review,
+                      "use_subscription": use_subscription})
+        # Every primary-model attempt rate-limits; the fallback model succeeds.
+        if model == dispatch.GEMINI_REVIEW_FALLBACK_MODEL:
+            return True, "fallback-model verdict"
+        return False, "429 rate limit"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch("dispatch.dispatch_gemini_rest", return_value=(False, "REST not used in this test")), \
+         patch("dispatch.time.sleep"), \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", False):
+        ok, output = dispatch.dispatch_gemini_with_retry(
+            "review this", model=dispatch.GEMINI_REVIEW_MODEL,
+            review=True, max_retries=2,
+        )
+
+    assert ok is True
+    assert output == "fallback-model verdict"
+    # Final call must be the review fallback model on subscription.
+    assert calls[-1]["model"] == dispatch.GEMINI_REVIEW_FALLBACK_MODEL
+    assert calls[-1]["use_subscription"] is True
+    assert calls[-1]["review"] is True
+
+
+def test_gemini_with_retry_no_fallback_when_already_on_fallback_model():
+    """Recursion guard: if the caller already passed the fallback model and
+    every retry rate-limits, we must NOT re-dispatch on the same model — that
+    would double the burn for nothing. Just return the failure.
+
+    Uses review=False so dispatch.py:423's auto-promote-to-Pro doesn't fire
+    (that branch only triggers when model == GEMINI_DEFAULT_MODEL).
+    """
+    calls: list[dict] = []
+
+    def fake_dispatch(prompt, model, review, timeout, mcp, use_subscription=None):
+        calls.append({"model": model, "use_subscription": use_subscription})
+        return False, "429 rate limit"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch("dispatch.dispatch_gemini_rest", return_value=(False, "REST not used in this test")), \
+         patch("dispatch.time.sleep"), \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", False):
+        ok, output = dispatch.dispatch_gemini_with_retry(
+            "draft this", model=dispatch.GEMINI_FALLBACK_MODEL,
+            review=False, max_retries=2,
+        )
+
+    assert ok is False
+    assert "429" in output
+    # No dispatch call should be on a different model — recursion guard works.
+    assert all(c["model"] == dispatch.GEMINI_FALLBACK_MODEL for c in calls)
+
+
+def test_gemini_with_retry_non_review_uses_auto_fallback():
+    """Non-review (writer) calls use GEMINI_FALLBACK_MODEL ("auto"), not the
+    review-specific pin. This keeps the auto-pick latitude for cheap writer
+    work while reserving the explicit pin for verdict-publishing reviews."""
+    calls: list[dict] = []
+
+    def fake_dispatch(prompt, model, review, timeout, mcp, use_subscription=None):
+        calls.append({"model": model, "review": review})
+        if model == dispatch.GEMINI_FALLBACK_MODEL:
+            return True, "auto verdict"
+        return False, "429 rate limit"
+
+    # Use a non-default writer model so dispatch.py:423 auto-promote doesn't
+    # silently swap us to GEMINI_REVIEW_MODEL.
+    primary = "gemini-3-flash-preview-experimental"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch("dispatch.dispatch_gemini_rest", return_value=(False, "REST not used in this test")), \
+         patch("dispatch.time.sleep"), \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", False):
+        ok, output = dispatch.dispatch_gemini_with_retry(
+            "draft this", model=primary,
+            review=False, max_retries=2,
+        )
+
+    assert ok is True
+    # Final call must be auto fallback (not the review-specific one).
+    assert calls[-1]["model"] == dispatch.GEMINI_FALLBACK_MODEL
+    assert calls[-1]["review"] is False

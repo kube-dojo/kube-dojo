@@ -91,6 +91,12 @@ GEMINI_WRITER_MODEL = "gemini-3.1-pro-preview"
 GEMINI_DEFAULT_MODEL = "gemini-3-flash-preview"
 GEMINI_REVIEW_MODEL = "gemini-3.1-pro-preview"  # Pro for reviews — hallucinations on Flash cost real iteration time
 GEMINI_FALLBACK_MODEL = "auto"
+# Last-ditch fallback when the review model is rate-limited on every tier.
+# Pinned to gemini-3-flash-preview rather than "auto" because auto can pick
+# gemini-2.5-flash which hallucinates on review tasks (per memory
+# feedback_gemini_models.md). Flash-3 misses some Pro nuance but is the agreed
+# "good enough to publish a verdict" floor when Pro is capacity-out.
+GEMINI_REVIEW_FALLBACK_MODEL = "gemini-3-flash-preview"
 CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6"
 CODEX_DEFAULT_MODEL = "codex"  # lets codex CLI pick the default model
 CODEX_REVIEW_DEFAULT_MODEL = "codex"
@@ -471,11 +477,14 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
                 continue
             # All retries exhausted on the primary model — last-ditch try the
             # fallback model on subscription. If gemini-3.1-pro-preview is
-            # capacity-out, gemini-3-flash-preview / auto often still answers.
-            if model != GEMINI_FALLBACK_MODEL:
-                print(f"Rate-limit retries exhausted on {model} — last-ditch on fallback model {GEMINI_FALLBACK_MODEL} (subscription)",
+            # capacity-out, gemini-3-flash-preview often still answers.
+            # Reviews use GEMINI_REVIEW_FALLBACK_MODEL (explicit, never "auto")
+            # to avoid silently picking gemini-2.5-flash for verdicts.
+            fallback = GEMINI_REVIEW_FALLBACK_MODEL if review else GEMINI_FALLBACK_MODEL
+            if model != fallback:
+                print(f"Rate-limit retries exhausted on {model} — last-ditch on fallback model {fallback} (subscription)",
                       file=sys.stderr)
-                ok, output = dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp,
+                ok, output = dispatch_gemini(prompt, fallback, review, timeout, mcp,
                                              use_subscription=True)
                 if ok:
                     return True, output
