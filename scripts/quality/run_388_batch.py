@@ -62,6 +62,7 @@ API_BASE = "http://127.0.0.1:8768"
 CRITICAL_THRESHOLD = 2.0  # rubric score below this = critical (mirrors API definition)
 
 sys.path.insert(0, str(REPO / "scripts"))
+from quality.dispatch_388_pilot import slugify  # noqa: E402
 
 
 # Top-level aliases → list of filesystem prefixes the alias covers.
@@ -120,7 +121,15 @@ def fetch_active_pilot_branches() -> dict[str, str]:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
+        print("[batch] WARNING: failed to fetch remote pilot branches; skip-by-branch is disabled this run", file=sys.stderr)
+        print(f"[batch] WARNING:   error: {exc}", file=sys.stderr)
+        print("[batch] WARNING:   to skip duplicate codex burn, abort and re-run when network is healthy", file=sys.stderr)
+        return {}
+    except Exception as exc:
+        print("[batch] WARNING: failed to fetch remote pilot branches; skip-by-branch is disabled this run", file=sys.stderr)
+        print(f"[batch] WARNING:   error: {exc}", file=sys.stderr)
+        print("[batch] WARNING:   to skip duplicate codex burn, abort and re-run when network is healthy", file=sys.stderr)
         return {}
     active: dict[str, str] = {}
     for line in result.stdout.splitlines():
@@ -214,15 +223,17 @@ def select_modules(
     for m in candidates:
         api_path = m["path"]
         repo_path = f"src/content/docs/{api_path}"
-        slug = Path(api_path).name
+        b = board.get(api_path, {})
+        if b.get("status") == "done" or (
+            b.get("revision_pending") is False and (b.get("score", 0) or 0) >= 4.0
+        ):
+            reasons.append(f"  skip [done]      {api_path}")
+            continue
+        slug = slugify(api_path)
         if slug in pilot_map:
             reason = f"[skip] {slug}: active remote branch {pilot_map[slug]}"
             reasons.append(reason)
             print(reason)
-            continue
-        b = board.get(api_path, {})
-        if b.get("status") == "done" or b.get("revision_pending") is False and (b.get("score", 0) or 0) >= 4.0:
-            reasons.append(f"  skip [done]      {api_path}")
             continue
         if api_path in leases or repo_path in leases:
             reasons.append(f"  skip [leased]    {api_path}")
