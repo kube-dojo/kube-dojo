@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Benchmarks began as scientific instruments and became market signals. In 2020 MMLU compressed 57 academic subjects into one score. BIG-bench (2022) and HELM (2022) pushed for breadth and multi-metric depth. The March 2023 GPT-4 Technical Report turned benchmark tables into release evidence and shipped OpenAI Evals. June 2023 brought MT-Bench and Chatbot Arena's pairwise preference. October 2023 brought SWE-bench's real GitHub issues. Contamination, Goodhart effects, and time-sensitive scores turned evaluation into governance infrastructure.
+Benchmarks began as scientific instruments and became market signals. In 2020 MMLU compressed 57 academic and professional subjects into one score. BIG-bench (2022) and HELM (2022) pushed for breadth and multi-metric depth. The March 2023 GPT-4 Technical Report turned benchmark tables into release evidence and shipped OpenAI Evals. June 2023 brought MT-Bench and Chatbot Arena's pairwise preference. October 2023 brought SWE-bench's real GitHub issues. Contamination, Goodhart effects, and time-sensitive scores turned evaluation into governance infrastructure.
 :::
 
 <details>
@@ -19,7 +19,7 @@ Benchmarks began as scientific instruments and became market signals. In 2020 MM
 | Stanford CRFM / HELM authors (Percy Liang et al.) | — | Authored Holistic Evaluation of Language Models (2022) — transparency, multi-metric measurement, and standardized comparison instead of single-score rankings |
 | OpenAI GPT-4 / Evals teams | — | Released the GPT-4 Technical Report (March 2023) — benchmark tables as release evidence, contamination disclosure, and OpenAI Evals as deployment infrastructure |
 | Lianmin Zheng et al. (MT-Bench / Chatbot Arena, LMSYS) | — | Introduced MT-Bench and Chatbot Arena (June 2023) — pairwise preference arenas and LLM-as-judge methodology |
-| Jimenez et al. (SWE-bench authors) | — | Introduced SWE-bench (October 2023) — 2,294 real GitHub issues across 12 Python repositories with execution-tested evaluation |
+| Jimenez et al. (SWE-bench authors) | — | Introduced SWE-bench (October 2023) — 2,294 software engineering problems from real GitHub issues and pull requests across 12 Python repositories with execution-tested evaluation |
 
 </details>
 

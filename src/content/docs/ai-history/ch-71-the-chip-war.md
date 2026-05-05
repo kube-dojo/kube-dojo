@@ -15,7 +15,7 @@ In 2022 the United States began treating advanced AI accelerators as instruments
 | Name | Lifespan | Role |
 |---|---|---|
 | Gina Raimondo (BIS / U.S. Commerce) | — | Public face of the 2023/2024 export-control announcements |
-| Alan Estevez / Thea Rozman Kendler / Jeffery Kessler (BIS) | — | BIS leadership voices through the 2025 policy pivot |
+| Alan Estevez / Thea Rozman Kendler / Jeffrey Kessler (BIS) | — | BIS leadership voices through the 2025 policy pivot |
 | Jensen Huang (NVIDIA) | — | Company-side witness to product-threshold adaptation |
 | C.C. Wei (TSMC) | — | Annual-report voice for advanced-node and CoWoS packaging capacity |
 | ASML management / investor relations | — | Institutional witness for EUV/DUV and export-control exposure |
