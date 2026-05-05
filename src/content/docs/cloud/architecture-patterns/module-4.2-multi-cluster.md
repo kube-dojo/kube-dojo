@@ -26,15 +26,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-**October 4, 2021. Facebook (now Meta).**
-
-At 15:39 UTC, a routine maintenance command issued to Facebook's backbone routers went wrong. The command was intended to assess the capacity of the backbone network. Instead, it disconnected every Facebook data center from the internet simultaneously. Not gradually. Not region by region. All at once.
-
-BGP routes for Facebook, Instagram, WhatsApp, and Oculus were withdrawn from the global routing table. DNS servers, now unreachable, started returning SERVFAIL. Within minutes, 3.5 billion people lost access to the services they used for communication, business, and (in some countries) emergency coordination. Facebook's own engineers couldn't access internal tools to diagnose the problem because those tools ran on the same infrastructure. They had to physically drive to data centers and manually reconfigure routers.
-
-The outage lasted for hours and had substantial business and operational impact well beyond Meta itself.
-
-The root cause wasn't a hardware failure or a cyberattack. It was a single-cluster, single-plane-of-control architecture where one bad command could reach every region simultaneously. There was no blast radius containment. No regional isolation. No independent failure domain that could keep operating while the rest recovered.
+The Facebook 2021 backbone-routing outage (see *Route 53*) <!-- incident-xref: facebook-2021-bgp --> demonstrates how a single routing-control plane mistake can erase connectivity at scale when failure domains are not separated.
 
 This module teaches you how to design architectures where that can't happen. You'll learn to think in failure domains, route traffic across regions, manage state across distance, and build systems where the worst-case scenario is a regional degradation -- not a global outage.
 

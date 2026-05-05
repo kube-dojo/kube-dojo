@@ -33,9 +33,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In early 2018, hackers successfully infiltrated Tesla's Amazon Web Services (AWS) environment to secretly mine cryptocurrency. They did not achieve this by cracking complex edge firewalls or executing sophisticated zero-day exploits against the kernel. Instead, they simply found an exposed Kubernetes dashboard that did not require proper external authentication. Because this dashboard pod was running with a highly privileged, auto-mounted ServiceAccount token, the attackers immediately possessed administrative rights over the entire cluster infrastructure. They used this access to retrieve sensitive AWS credentials, deploy malicious cryptocurrency mining pods, and run up massive compute bills. 
-
-The financial impact of cryptojacking incidents can run into hundreds of thousands of dollars in stolen compute resources, not to mention the immense cost of incident response, forensic auditing, and the severe reputational damage associated with a public security breach. This incident perfectly illustrates why pod identity is a tier-one security concern in modern cloud-native architectures. ServiceAccounts are the fundamental bedrock of how workloads authenticate to the Kubernetes API. When your application needs to list pods, read ConfigMaps, or provision new resources, it proves its identity using a ServiceAccount token. 
+The 2018 Tesla cryptojacking incident (see *GUI Security*) <!-- incident-xref: tesla-2018-cryptojacking --> shows that auto-mounted credentials on weakly authenticated entry points can give attackers persistent control-path access.
 
 By default, Kubernetes mounts a credential token into every single pod, giving every container a potential pathway to the API server. For the CKAD exam and real-world platform engineering, mastering ServiceAccounts means understanding the principle of least privilege. You must know how to mint specific identities, bind them to scoped roles, securely project short-lived tokens, and—crucially—cut off API access entirely for the vast majority of applications that simply do not require cluster interaction.
 

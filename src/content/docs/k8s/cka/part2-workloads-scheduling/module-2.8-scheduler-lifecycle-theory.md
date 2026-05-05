@@ -23,9 +23,7 @@ lab:
 
 ## Why This Module Matters
 
-In late 2024, a leading global payment processor experienced a catastrophic 53-minute outage during a Black Friday event, costing the business an estimated $2.4 million in dropped transactions. A payments team deployed a new fraud-detection service with `requests.cpu: 4` and `requests.memory: 8Gi` but forgot to set a PriorityClass. During a routine node upgrade, the cluster autoscaler drained two massive nodes. Every remaining node was instantly packed tight with lower-priority batch jobs generating daily reports. 
-
-The critical fraud service's pods sat Pending for 53 minutes because no single node had enough allocatable resources. Without a PriorityClass, the scheduler had no authority to preempt the batch workloads. During those 53 minutes, the payment pipeline processed transactions blindly without fraud checks, leading to massive chargebacks and regulatory scrutiny. The post-incident review revealed three fundamental gaps in their architecture: no PriorityClass hierarchy, no PodDisruptionBudget on the fraud service, and QoS class BestEffort on the batch jobs that should have been evicted first.
+During peak traffic conditions, unclassified critical workloads can sit Pending if scheduling constraints are mis-modeled and preemption policy is incomplete. Even short-lived resource pressure becomes a customer-visible outage if PriorityClasses, PDBs, and workload QoS are not aligned with business criticality.
 
 This module matters because Kubernetes scheduling and eviction are not abstract background processes—they are the direct arbiters of your application's reliability under stress. You will learn to design resilience through PriorityClasses, configure guaranteed QoS for critical components, and evaluate eviction signals before they trigger outages. These concepts determine whether your critical pods run or sit Pending, whether evictions hit the right targets, and whether your stateful services shut down gracefully.
 

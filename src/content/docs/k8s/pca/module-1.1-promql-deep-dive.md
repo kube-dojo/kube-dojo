@@ -28,31 +28,13 @@ After completing this module, you will be able to:
 
 ---
 
-It was 2:00 AM on Black Friday at one of Europe's largest e-commerce platforms. Traffic was 12x normal. The platform team had dashboards everywhere — CPU, memory, pod counts, request rates. Everything looked green.
-
-Then customer support started reporting: "Users say checkout is slow." The dashboard showed average latency at 200ms. Well within SLA. The on-call engineer almost went back to sleep.
-
-But something nagged him. He opened Prometheus and typed:
-
-```promql
-histogram_quantile(0.99,
-  sum by (le)(rate(http_request_duration_seconds_bucket{service="checkout"}[5m]))
-)
-```
-
-The P99 was **14 seconds**. Average was fine because 95% of requests were fast — but 5% of users were waiting 14 seconds for checkout. On Black Friday. With millions of users, that "5%" was 50,000 people per hour abandoning carts.
-
-He dug deeper:
+At traffic spikes, averages can stay inside SLOs while percentile latency and selected request cohorts degrade badly. PromQL tail-analysis is the first step to discovering which labels are carrying the pain and why. Keep the investigation explicit and label-specific to catch bottlenecks that aggregate graphs hide.
 
 ```promql
 histogram_quantile(0.99,
   sum by (le, payment_method)(rate(http_request_duration_seconds_bucket{service="checkout"}[5m]))
 )
 ```
-
-The P99 for `payment_method="credit_card"` was 200ms. For `payment_method="paypal"`, it was 14 seconds. A PayPal integration timeout was cascading into retries, holding connections, and starving the connection pool for everyone.
-
-The average hid the problem. PromQL revealed it. That single query saved an estimated $2.1 million in abandoned carts that night.
 
 ---
 
