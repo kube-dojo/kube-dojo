@@ -280,7 +280,9 @@ echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
 # Expected output: kubectl: OK
 ```
 
-> **War Story: The Codecov breach of 2021.** Attackers modified the Codecov bash uploader used by many CI/CD pipelines. The lesson for everyday operations is direct: a download command followed by immediate execution gives the remote endpoint enormous power. Checksum verification is not ceremony; it is a cheap mathematical test that can stop a bad artifact before it becomes a privileged process.
+The Security and reliability implications of artifact trust are treated in Modern DevOps 1.6 (*DevSecOps*). Use the same checksum-first workflow here, and keep the implementation lesson anchored there for narrative context.
+<!-- incident-xref: codecov-2021-bash-uploader -->
+<!-- incident-xref: codecov-2021 -->
 
 ## Local Socket Evidence with `ss`
 

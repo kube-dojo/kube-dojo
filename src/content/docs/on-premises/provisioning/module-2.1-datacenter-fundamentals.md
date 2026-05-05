@@ -440,7 +440,10 @@ For a production Kubernetes platform, set hard gates before any price comparison
 
 ### SLA Clauses That Actually Matter
 
-When negotiating the contract, push on these items explicitly because the standard boilerplate will paper over all of them. A "99.99% uptime" promise on the front page is meaningless if the credits are capped at one month of fees and the response times for remote hands are buried in an appendix as "commercially reasonable efforts." The clauses worth the negotiation effort are: the power availability target and what credits apply when an A or B feed is unavailable; cooling availability, including whether the SLA covers HVAC failure or only total-site outages; the guaranteed response time for urgent after-hours remote hands; the notice period required before UPS, generator, or network maintenance; cross-connect delivery times and credits for missed dates; the cadence of incident communications during an outage; and the terms for expansion, contraction, and early termination.
+When negotiating the contract, push on these items explicitly because the standard boilerplate will paper over all of them. A "99.99% uptime" promise on the front page is meaningless if the credits are capped at one month of fees and the response times for remote hands are buried in an appendix as "commercially reasonable efforts."
+These clauses keep procurement accountable: power continuity commitments, cooling outage coverage, emergency response guarantees, maintenance notice windows, cross-connect delivery timelines, outage communication cadence, and expansion or exit terms.
+The concrete incident context for this section is covered in [Defense in Depth](../../platform/foundations/security-principles/module-4.2-defense-in-depth/).
+<!-- incident-xref: target-2013 -->
 
 ### Practical Negotiation Rule
 
