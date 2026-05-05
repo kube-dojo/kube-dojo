@@ -59,7 +59,11 @@ TASK: Write a complete KubeDojo educational module.
     - 4-6 progressive tasks (easy → challenging)
     - Solutions in `<details>` tags
     - Clear success criteria checklist using `- [ ]` format
-11. **Next Module** — Link to the next module with a one-line teaser
+11. **Sources** — Required final module section before `## Next Module`, with at least 3 citations to primary/vendor docs.
+    - Each citation is either a bare URL (`- https://...`) or `[title](url)` markdown link.
+    - At least 3 entries are required.
+    - The deterministic verifier counts links inside the Sources section only — citations elsewhere don't count.
+12. **Next Module** — Link to the next module with a one-line teaser
 
 **TONE**:
 - Conversational but authoritative — like a senior engineer mentoring you

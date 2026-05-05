@@ -54,9 +54,13 @@ All must pass before commit. The deterministic verifier (`scripts/quality/verify
 7. >= 2 inline active-learning prompts in core content (not just in the final hands-on)
 8. Each Learning Outcome maps to >= 1 core section AND >= 1 quiz item OR lab task
 9. Quiz answers explain reasoning (not just name the fix)
-10. Sources >= 10, all reaching primary/vendor docs (not marketing fluff or dead redirects), URL uniqueness preserved
+10. `## Sources` is required as the last section before `## Next Module`, with at least 3 citations.
+   Acceptable citation formats are bare URLs (`- https://...`) or markdown links (`- [title](https://...)`).
+11. Sources >= 10, all reaching primary/vendor docs (not marketing fluff or dead redirects), URL uniqueness preserved
 
 Plus the structural gates from `module-writer.md`: section presence + order, exactly 4 DYK, 6-8 Common Mistakes rows, 6-8 scenario quiz with `<details>`, Hands-On with `- [ ]` checkboxes, no emojis, no number 47, kubectl alias `k`, K8s 1.35+, no anti-leak tokens.
+
+The deterministic verifier counts links inside the Sources section only — citations elsewhere don't count.
 
 ## TIER ROUTING
 
