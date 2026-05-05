@@ -1038,7 +1038,7 @@ A large share of production ML work goes into data, infrastructure, deployment, 
 
 Kubernetes predates today's ML-on-Kubernetes stack, and many ML-specific needs such as artifact handling, distributed training workflows, and specialized serving layers are addressed by tools built on top of it.
 
-**The $440 Million Lesson**: Knight Capital's 2012 trading disaster (where a software deployment error caused $440 million in losses in 45 minutes) is studied in ML platform engineering. The parallel is clear: deploying a broken model to production can be just as catastrophic as deploying broken trading code. Canary deployments and gradual rollouts aren't just nice-to-haves—they're risk management.
+**The $440 Million Lesson**: In *Infrastructure as Code*, the Knight Capital 2012 case is the canonical reference for why deployment consistency and gradual rollouts matter before any model reaches production. <!-- incident-xref: knight-capital-2012 --> The parallel is clear: canary deployments and staged rollouts are risk management, not process theater.
 
 ---
 

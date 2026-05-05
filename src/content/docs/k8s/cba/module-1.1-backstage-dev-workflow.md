@@ -26,7 +26,7 @@ After completing this module, you will be able to explain and operate the Backst
 
 ## Why This Module Matters
 
-In 2012, Knight Capital Group lost $460 million in exactly 45 minutes. The root cause was a manual deployment error where a retired codebase was accidentally reactivated on a single server because an engineer forgot to copy a configuration file. While this was not a Backstage failure, it illustrates why automated, standardized developer platforms and rigorous configuration layering are non-negotiable in modern engineering environments. When teams manually juggle environment overrides or bypass automated scaffolding, operational risks can become expensive very quickly.
+Like the Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference in *Infrastructure as Code*, this module’s first point is that stale or inconsistent configuration can silently reintroduce retired behavior at runtime, so automation and layer discipline are not optional in developer platforms.
 
 Backstage is the backbone of the Certified Backstage Associate certification. Before you can build custom plugins, design complex software catalogs, or integrate securely with modern Kubernetes v1.35 clusters, you need to understand how the Backstage project itself works. You must master its monorepo layout, multi-stage build pipeline, dependency management system, and local development loop. Without this foundation, attempts to extend the platform tend to produce broken builds, insecure configuration, and hard-to-debug plugin behavior.
 

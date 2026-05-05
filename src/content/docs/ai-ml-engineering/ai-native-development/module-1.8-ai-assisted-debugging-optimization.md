@@ -20,7 +20,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-At 9:30 AM on August 1, 2012, Knight Capital Group deployed trading software that contained a dormant code path tied to an old flag. Within minutes, the system began sending unintended orders into the market, and engineers had to reason about a live production incident while money was disappearing in real time. By 10:15 AM, the company had lost $460 million, not because a computer lacked speed, but because humans lacked a fast enough path from symptom to root cause.
+The same risk pattern is covered in *Infrastructure as Code*: the canonical *Knight Capital 2012* incident shows how partial rollouts and weak feature-flag controls can turn a production release into an availability crisis. <!-- incident-xref: knight-capital-2012 -->
 
 That story matters because modern debugging rarely looks like a tidy compiler error. A user reports a slow checkout, a Kubernetes Pod restarts with no obvious message, a tool call silently omits a field, or a model-generated patch fixes the visible exception while corrupting an edge case. The pressure pushes teams toward guessing, and guessing is expensive because every unverified change creates a second incident inside the first one.
 
@@ -979,7 +979,7 @@ This prompt is different from a normal debugging prompt because it prioritizes s
 
 - The word “debugging” became famous in computing culture partly because engineers documented a real moth found in the Harvard Mark II, but software faults existed long before that anecdote.
 - The Therac-25 accidents showed that software defects, weak interfaces, and inadequate safety engineering can combine into catastrophic real-world harm.
-- Knight Capital’s 2012 trading incident demonstrates why rollback design, feature-flag hygiene, and fast diagnosis are business-critical engineering practices.
+- See *Infrastructure as Code* for the Knight Capital 2012 incident, where rollout safety, rollback strategy, and feature-flag hygiene are taught as production-first debugging fundamentals. <!-- incident-xref: knight-capital-2012 -->
 - The Mars Climate Orbiter loss remains a classic reminder that interface contracts must include units, assumptions, and validation, not just field names.
 
 ## Common Mistakes

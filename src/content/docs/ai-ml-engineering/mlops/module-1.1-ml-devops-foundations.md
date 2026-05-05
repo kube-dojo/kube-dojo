@@ -20,7 +20,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-Knight Capital Group did not fail because one engineer lacked intelligence or because one server was unusually unreliable. On August 1, 2012, a deployment process allowed old behavior and new behavior to coexist inside one production system, and the market saw the result within minutes. A technician updated some production servers but missed another, a repurposed flag activated obsolete trading code, and the firm lost hundreds of millions of dollars before the team could regain control.
+The *Infrastructure as Code* module’s Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> cross-reference is the canonical warning for this module: if ML artifacts, configurations, and environments diverge across production, reproducibility collapses and incident scale explodes.
 
 That story matters to ML engineers because machine learning systems have more moving parts than ordinary application deployments. A web service usually fails because code, configuration, dependency resolution, infrastructure, or traffic changed. An ML service can also fail because training data changed, a feature definition drifted, labels were corrected, a random seed moved, a tokenizer version changed, a model checkpoint was overwritten, or evaluation accidentally used examples that leaked from training.
 

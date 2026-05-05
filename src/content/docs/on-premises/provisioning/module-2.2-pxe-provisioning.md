@@ -11,9 +11,9 @@ sidebar:
 
 ## Why This Module Matters
 
-In August 2012, Knight Capital Group deployed a new software update to their SMARS high-frequency trading servers. Because the deployment and configuration process involved manual steps instead of an automated, strictly declarative provisioning pipeline, a technician missed one of the eight core servers. The stale code on that single server went rogue, causing erratic trading behavior that resulted in a staggering loss of $460 million in just 45 minutes, leading directly to the subsequent bankruptcy of the firm. 
+The *Infrastructure as Code* module’s Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference is the canonical case for why provisioning and deployment consistency must stay machine-enforced, not operator-dependent, when you scale bare-metal fleets.
 
-While Knight Capital's failure manifested at the application layer, the root cause—manual, inconsistent server configuration—plagues infrastructure teams daily. When you purchase 20 bare-metal servers for a Kubernetes v1.35 cluster, they arrive as completely blank hardware. On-premises, you must solve the fundamental bootstrapping problem: how do you install an operating system on 20 servers that have no OS, ensuring absolute consistency across the entire fleet?
+This operational risk still appears at the infrastructure layer: manual, inconsistent server configuration creates expensive drift, and when you purchase 20 bare-metal servers for a Kubernetes v1.35 cluster, they arrive as completely blank hardware requiring deterministic provisioning.
 
 You could walk to each server with a bootable USB stick. For three servers, this is annoying but workable. For 20 servers, it is a full day of repetitive, error-prone work. For 200 servers, it is impossible. Furthermore, every time you need to reprovision a node—after a hardware failure, a security incident, or a major Kubernetes version upgrade—you would need to perform this manual process again. 
 
