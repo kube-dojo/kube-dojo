@@ -12,7 +12,7 @@ sidebar:
 >
 > **Prerequisites**: Module 0.3 (Security Tools), basic Kubernetes v1.35 administration
 
-# Module 1.2: CIS Benchmarks and kube-bench
+---
 
 ## Learning Outcomes
 
