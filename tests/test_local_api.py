@@ -2049,6 +2049,202 @@ def test_build_quality_scores_counts_quiz_aliases(tmp_path: Path) -> None:
     assert module["primary_issue"] == "thin, no diagram"
 
 
+def test_quality_scores_accepts_bare_urls_in_sources(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.1-bare-urls.md",
+        "\n".join(
+            [
+                "---",
+                'title: "Bare URL Sources"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(120)],
+                "",
+                "## Quick Quiz",
+                "",
+                "- Question",
+                "",
+                "## Hands-On",
+                "",
+                "1. Do thing",
+                "",
+                "## Sources",
+                "",
+                "- https://example.com/docs",
+                "- https://reference.example.org/guide",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(
+        item for item in quality["modules"] if item["path"] == "ai/open-models/module-1.1-bare-urls.md"
+    )
+
+    assert module["score"] > 1.5
+    assert not module["primary_issue"].startswith("no citations")
+
+
+def test_quality_scores_accepts_markdown_sources_links(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.2-markdown-link-only.md",
+        "\n".join(
+            [
+                "---",
+                'title: "Markdown Link Sources"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(120)],
+                "",
+                "## Quick Quiz",
+                "",
+                "- Question",
+                "",
+                "## Hands-On",
+                "",
+                "1. Do thing",
+                "",
+                "## Sources",
+                "",
+                "- [Docs](https://example.com/docs)",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(
+        item for item in quality["modules"] if item["path"] == "ai/open-models/module-1.2-markdown-link-only.md"
+    )
+
+    assert module["score"] > 1.5
+    assert not module["primary_issue"].startswith("no citations")
+
+
+def test_quality_scores_accepts_mixed_sources_citations(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.3-mixed-links.md",
+        "\n".join(
+            [
+                "---",
+                'title: "Mixed Source Citations"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(120)],
+                "",
+                "## Quick Quiz",
+                "",
+                "- Question",
+                "",
+                "## Hands-On",
+                "",
+                "1. Do thing",
+                "",
+                "## Sources",
+                "",
+                "- [Docs](https://example.com/docs)",
+                "- https://reference.example.org/guide",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(
+        item for item in quality["modules"] if item["path"] == "ai/open-models/module-1.3-mixed-links.md"
+    )
+
+    assert module["score"] > 1.5
+    assert not module["primary_issue"].startswith("no citations")
+
+
+def test_quality_scores_caps_score_without_sources_heading(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.4-no-sources-heading.md",
+        "\n".join(
+            [
+                "---",
+                'title: "No Sources Heading"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(120)],
+                "",
+                "## Quick Quiz",
+                "",
+                "- Question",
+                "",
+                "## Hands-On",
+                "",
+                "1. Do thing",
+                "",
+                "https://example.com/no-heading",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(
+        item
+        for item in quality["modules"]
+        if item["path"] == "ai/open-models/module-1.4-no-sources-heading.md"
+    )
+
+    assert module["score"] == 1.5
+    assert module["primary_issue"].startswith("no citations")
+
+
+def test_quality_scores_ignores_links_outside_sources_section(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "src/content/docs/ai/open-models/module-1.5-outside-sources.md",
+        "\n".join(
+            [
+                "---",
+                'title: "Links Outside Sources"',
+                "---",
+                "",
+                "## Overview",
+                "",
+                *[f"Line {i}" for i in range(120)],
+                "",
+                "## Sources",
+                "",
+                "",
+                "## Hands-On",
+                "[run kind](https://kind.sigs.k8s.io/)",
+            ]
+        )
+        + "\n",
+    )
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+    quality = local_api.build_quality_scores(tmp_path)
+    module = next(
+        item for item in quality["modules"] if item["path"] == "ai/open-models/module-1.5-outside-sources.md"
+    )
+
+    assert module["score"] == 1.5
+    assert module["primary_issue"].startswith("no citations")
+
+
 def test_rubric_diagnostics_cka_does_not_match_ckad(tmp_path: Path) -> None:
     """Codex round-3 bug: raw substring ``'cka' in 'CKAD'`` is True,
     letting a CKAD audit row attach to a CKA module path. Matcher
