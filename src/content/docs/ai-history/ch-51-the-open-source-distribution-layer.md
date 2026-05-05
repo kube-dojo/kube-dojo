@@ -14,7 +14,7 @@ Modern AI did not spread through papers alone. By the late 2010s a distribution 
 
 | Name | Lifespan | Role |
 |---|---|---|
-| Paul Ginsparg | — | Cornell physicist; founded arXiv in 1991 as a curated, no-fee, moderated preprint server |
+| Paul Ginsparg | — | Los Alamos physicist; founded arXiv in 1991 as a curated, no-fee, moderated preprint server |
 | Google TensorFlow team | — | Institutional actor; opened a major corporate ML framework to public use in 2015 |
 | PyTorch maintainers (Meta/Facebook AI) | — | Institutional actor; made dynamic deep-learning workflows central to research and deployment |
 | Hugging Face | — | Institutional actor; created the `huggingface/transformers` GitHub repository on 2018-10-29 (detailed model-hub treatment belongs to Chapter 54) |

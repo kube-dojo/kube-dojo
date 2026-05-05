@@ -18,7 +18,7 @@ In January 2020, Kaplan, McCandlish, and OpenAI colleagues published "Scaling La
 | Sam McCandlish | — | Equal-contribution lead author of Kaplan et al. 2020 |
 | Tom B. Brown | — | Kaplan paper coauthor; later GPT-3 lead author (Ch53) |
 | Dario Amodei | — | Kaplan paper coauthor (project guidance); later Anthropic co-founder |
-| Richard S. Sutton | 1959– | Author of "The Bitter Lesson" (2019); philosophical backdrop to the scaling-law era |
+| Richard S. Sutton | 1957– | Author of "The Bitter Lesson" (2019); philosophical backdrop to the scaling-law era |
 | Jordan Hoffmann | — | DeepMind lead author of "Training Compute-Optimal Large Language Models" (2022) |
 
 </details>
@@ -198,5 +198,5 @@ The honest ending is narrow and large at the same time. Kaplan et al. measured e
 That was enough to reshape modern AI. Once researchers believed they could forecast returns to scale, the race moved toward the systems capable of buying those returns: bigger datasets, larger models, longer runs, faster interconnects, better schedulers, and clusters designed around training. The next chapter is the story of that machine.
 
 :::note[Why this still matters today]
-Every modern frontier model release card cites parameter count, training-token count, and a Chinchilla-aware ratio. The Chinchilla recipe (equal model/data scaling) is the empirical default for Llama, Mistral, DeepSeek, Qwen, and most academic LLMs. Scaling-law thinking still drives the largest compute decisions — what a 1B-parameter Chinchilla-scale Llama 3 needs in tokens, why Anthropic, OpenAI, and Google plan training runs years in advance, and why the 2024–2026 "data exhaustion" debate (Ch69) directly threatens further scaling. The curve is still the planning instrument.
+Every modern frontier model release card cites parameter count, training-token count, and a Chinchilla-aware ratio. Chinchilla's insight — that model size and training tokens should scale together — shaped Llama, Mistral, DeepSeek, Qwen, and most academic LLMs, though most now train well beyond Chinchilla-optimal token counts. Scaling-law thinking still drives the largest compute decisions — what a 1B-parameter Chinchilla-scale Llama 3 needs in tokens, why Anthropic, OpenAI, and Google plan training runs years in advance, and why the 2024–2026 "data exhaustion" debate (Ch69) directly threatens further scaling. The curve is still the planning instrument.
 :::

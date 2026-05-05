@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-BERT, published in October 2018 by Devlin, Chang, Lee, and Toutanova at Google AI, turned the Transformer encoder into a reusable bidirectional checkpoint. It used masked-token pre-training and sentence-pair training on large unlabeled text, then released weights that could be fine-tuned across many NLP tasks. The reusable artifact stopped being an algorithm and became a set of trained parameters.
+BERT, published in October 2018 by Devlin, Chang, Lee, and Toutanova at Google AI Language, turned the Transformer encoder into a reusable bidirectional checkpoint. It used masked-token pre-training and sentence-pair training on large unlabeled text, then released weights that could be fine-tuned across many NLP tasks. The reusable artifact stopped being an algorithm and became a set of trained parameters.
 :::
 
 <details>
