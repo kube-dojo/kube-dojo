@@ -7,9 +7,23 @@ sidebar:
   order: 9
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
-> Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
-> Environment note: the worked examples are Python and scikit-learn focused; when this scoring logic is later deployed on Kubernetes 1.35 or newer, this curriculum uses `k` as the kubectl alias after `alias k=kubectl`, but this module does not require cluster access.
+> **Complexity**: Intermediate
+>
+> **Time to Complete**: 75-90 minutes
+>
+> **Prerequisites**: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
+
+---
+
+## What You'll Be Able to Do
+
+- Compare IsolationForest, LOF, OneClassSVM, and EllipticEnvelope tradeoffs for anomaly and novelty workflows.
+- Diagnose representation, scaling, threshold, and mode-confusion failures by inspecting `score_samples()`, `predict()` labels, and detector disagreement.
+- Design threshold calibration with partial labels, precision at `k`, review budget, and contamination policy instead of default binary labels.
+- Implement LOF anomaly versus novelty workflows without misusing training-data prediction or leaking preprocessing across reference and future samples.
+- Justify replacing anomaly detection with supervised classification, clustering, time-series forecasting, or monitoring when the operational question demands another tool.
+
+## Why This Module Matters
 
 Modern ML teams spend a great deal of time dealing with data that is
 rare, surprising, malformed, or operationally suspicious, yet only a
@@ -27,22 +41,12 @@ Choosing a detector is inseparable from deciding what training data
 means, what score semantics mean, what threshold means, and what kinds
 of errors the surrounding workflow can tolerate.
 
-The previous modules already built the foundations needed for this.
-[Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/)
-covered estimator interfaces and composition.
-[Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/)
-established the habit of asking whether an apparent signal is actually
-trustworthy.
-[Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/)
-made scaling, encoding, and leakage control explicit.
-[Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/)
-showed why distance and kernel methods care deeply about representation.
-[Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/)
-showed that density, neighborhoods, and cluster structure can be useful
-even before labels exist.
+This module builds directly on the prerequisite ideas without simply
+restating them with a new vocabulary. The worked examples are Python
+and scikit-learn focused. When this scoring logic is later deployed on
+Kubernetes 1.35 or newer, this curriculum uses `k` as the kubectl alias
+after `alias k=kubectl`, but this module does not require cluster access.
 
-This module builds directly on those ideas, but it does not simply
-restate them with a new vocabulary.
 Anomaly detection introduces a harder epistemic problem:
 the detector can always produce a ranking, but the ranking is not the
 same thing as verified abnormality.
@@ -65,16 +69,6 @@ What is the model assuming about the data?
 What does the output actually mean?
 What action will someone take because of that output?
 Those questions are more valuable than memorizing any single default.
-
-## Learning Outcomes
-
-- Compare IsolationForest, LOF, OneClassSVM, and EllipticEnvelope tradeoffs for anomaly and novelty workflows.
-- Diagnose representation, scaling, threshold, and mode-confusion failures by inspecting `score_samples()`, `predict()` labels, and detector disagreement.
-- Design threshold calibration with partial labels, precision at `k`, review budget, and contamination policy instead of default binary labels.
-- Implement LOF anomaly versus novelty workflows without misusing training-data prediction or leaking preprocessing across reference and future samples.
-- Justify replacing anomaly detection with supervised classification, clustering, time-series forecasting, or monitoring when the operational question demands another tool.
-
-## Why This Module Matters
 
 The scikit-learn user guide on outlier and novelty detection begins the
 conversation from an engineering reality rather than a marketing slogan:
