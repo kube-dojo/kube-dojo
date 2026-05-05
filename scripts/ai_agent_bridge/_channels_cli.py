@@ -807,9 +807,15 @@ def _handle_discuss(args) -> int:
          it off to every agent in parallel through
          ``agent_runtime.runner.invoke``. Each response lands back in
          the channel as a reply with ``parent_id`` set to the root.
-      3. If all agents end their response with ``[AGREE]``, treat the
-         round as converged and stop early. Otherwise continue until
-         ``max_rounds`` is hit (capped at 4 regardless of caller).
+      3. From round 2 onward, if all agents end their response with
+         ``[AGREE]``, treat the round as converged and stop early.
+         Round 1 is parallel fan-out — agents have not seen each
+         other's replies — so round-1 ``[AGREE]`` cannot mean cross-
+         agent assent and is explicitly ignored for convergence (the
+         protocol always runs at least 2 rounds; ``--max-rounds`` is
+         clamped to a minimum of 2 for the same reason). Otherwise
+         continue until ``max_rounds`` is hit (capped at 4 regardless
+         of caller).
       4. Print a one-line transcript summary at the end so the user
          can tail the thread for the full conversation.
 
@@ -858,12 +864,26 @@ def _handle_discuss(args) -> int:
         )
         return 1
 
+    # Round 1 is parallel fan-out (agents haven't seen each other yet),
+    # so the convergence guard at line ~1115 disallows round-1 short-
+    # circuit. Setting `max_rounds = 1` would let the loop exit before
+    # round 2 ever runs — agents would print "Forcing round 2" and then
+    # immediately hit the `round_idx == max_rounds` break. Clamp the
+    # floor to 2 so the round-1-cannot-converge invariant is actually
+    # enforceable. Caught by codex review of PR #889.
     MAX_ROUNDS_CAP = 4
-    max_rounds = min(max(1, args.max_rounds), MAX_ROUNDS_CAP)
+    MAX_ROUNDS_FLOOR = 2
+    max_rounds = min(max(MAX_ROUNDS_FLOOR, args.max_rounds), MAX_ROUNDS_CAP)
     if args.max_rounds > MAX_ROUNDS_CAP:
         print(
             f"ℹ️  clamping --max-rounds {args.max_rounds} to {MAX_ROUNDS_CAP} "
             f"(hard cap — escalate to a human if 4 rounds don't converge)"
+        )
+    elif args.max_rounds < MAX_ROUNDS_FLOOR:
+        print(
+            f"ℹ️  clamping --max-rounds {args.max_rounds} to {MAX_ROUNDS_FLOOR} "
+            f"(round 1 is parallel fan-out and cannot converge by design — "
+            f"see _handle_discuss docstring)"
         )
 
     if _channels.get_channel(args.channel) is None:
