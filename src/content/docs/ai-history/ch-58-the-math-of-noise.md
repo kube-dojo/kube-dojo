@@ -101,7 +101,7 @@ flowchart LR
     DEC --> OUT["Output pixel image"]
 ```
 
-The frozen autoencoder is what makes latent diffusion cheap; the U-Net with cross-attention is where text conditioning enters at every layer; the schedule $\{\beta_t\}$ is fixed at training time and reused at sampling.
+The frozen autoencoder is what makes latent diffusion cheap; the U-Net with cross-attention is where text conditioning enters at each resolution level (in the SpatialTransformer blocks distributed through the U-Net, not at every convolutional layer); the schedule $\{\beta_t\}$ is fixed at training time and reused at sampling.
 
 </details>
 
@@ -218,5 +218,5 @@ The pairing matters. Text models made machines conversational. Diffusion models 
 Noise had become a medium, not merely a defect, and that changed image generation permanently for everyone watching closely.
 
 :::note[Why this still matters today]
-Every modern image-generation model — Stable Diffusion 3, FLUX, DALL·E 3, Midjourney, Imagen, video models like Sora — descends from this stack: latent diffusion + classifier-free guidance + cross-attention on a text encoder. The DDPM noise-prediction loss is still the dominant training objective; latent autoencoders make the cost tractable; CFG is the prompt-strength knob users adjust without knowing it. The 2022 Stable Diffusion open release also opened the unresolved fights of the next part: artist consent, training-data copyright, deepfake misuse, and the open-weights vs API divide that Ch65–Ch68 trace.
+Modern image-generation systems still inherit the structural pieces this chapter assembled: latent operation, classifier-free guidance, and cross-attention on a text encoder. The training objective has continued to evolve — frontier 2024-2025 systems such as Stable Diffusion 3 and FLUX have moved from DDPM-style noise prediction to rectified-flow / flow-matching objectives, while the latent-autoencoder + CFG + text-conditioning scaffolding remains. The 2022 Stable Diffusion open release also opened the unresolved fights of the next part: artist consent, training-data copyright, deepfake misuse, and the open-weights vs API divide that Ch65–Ch68 trace.
 :::
