@@ -153,16 +153,26 @@ def test_discuss_replies_create_delivered_reply_deliveries(mock_invoke, monkeypa
 
     mock_invoke.side_effect = _discuss_result
 
+    # Round 1 cannot short-circuit (round 1 is parallel fan-out, agents
+    # haven't seen each other's replies yet, so [AGREE] in round 1 means
+    # "I'm done with my answer" not cross-agent assent). Convergence
+    # requires ≥ round 2, so use --max-rounds 2 here. Pre-protocol-fix
+    # this test passed with --max-rounds 1; updated to match the round-1
+    # short-circuit block ported from learn-ukrainian commit 872d8376b0.
     exit_code = _run_cli(
-        ["discuss", "shared", "topic", "--with", "claude,codex", "--max-rounds", "1"]
+        ["discuss", "shared", "topic", "--with", "claude,codex", "--max-rounds", "2"]
     )
 
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "✅ converged at round 1" in captured.out
+    assert "✅ converged at round 2" in captured.out
 
+    # Each round produces N*(N-1) reply deliveries (each agent's reply is
+    # delivered to every OTHER agent). With 2 agents × 2 rounds = 4 deliveries.
     reply_deliveries = _reply_deliveries()
-    assert len(reply_deliveries) == 2
+    assert len(reply_deliveries) == 4
+    # Set collapses duplicates across rounds — still just 2 distinct
+    # (from, to, status) tuples for the 2-agent case.
     assert {
         (row["from_agent"], row["to_agent"], row["status"])
         for row in reply_deliveries

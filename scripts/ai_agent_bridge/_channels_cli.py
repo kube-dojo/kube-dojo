@@ -944,19 +944,69 @@ def _handle_discuss(args) -> int:
         # Every agent sees the full channel history (pinned context +
         # monitor state + recent posts including the root). The per-
         # round directive tells them what to produce.
-        directive = (
-            f"You are participating in a bounded multi-agent discussion "
-            f"on #{args.channel}. This is round {round_idx} of at most "
-            f"{max_rounds}. Read the history above, then respond with "
-            f"your position on the root question.\n\n"
-            f"- Be concise but substantive. Cite file:line when relevant.\n"
-            f"- Push back on any other agent's claim you disagree with.\n"
-            f"- End your response with one of:\n"
-            f"    [AGREE]     — you are satisfied with the current direction\n"
-            f"    [DISAGREE]  — you still have open objections\n"
-            f"- If every agent ends with [AGREE], the discussion "
-            f"short-circuits and stops before round {max_rounds}."
-        )
+        #
+        # Round-1 vs round-2+ semantics differ structurally:
+        #
+        # - Round 1 is parallel fan-out — every agent answers the root
+        #   question independently, NONE of them have seen any other
+        #   agent's reply yet. So `[AGREE]` in round 1 cannot mean
+        #   "I agree with the other agents" (no replies to agree with).
+        #   It can only mean "I'm satisfied with my own first take."
+        #   The convergence check below explicitly disallows round-1
+        #   short-circuit because of this — see comment there.
+        #
+        # - Round 2+ is where agents see each other's round-1 (and
+        #   later) replies via the channel history, and `[AGREE]` /
+        #   `[DISAGREE]` becomes meaningful as cross-agent assent or
+        #   pushback.
+        #
+        # This was originally a single uniform directive; that produced
+        # false convergence in the собака-gender deliberation 2026-05-05
+        # in the learn-ukrainian project (3 agents disagreed substantively
+        # but all signed [AGREE] in round 1, short-circuiting before any
+        # agent saw the disagreements). Ported to kubedojo from learn-
+        # ukrainian commit 872d8376b0.
+        if round_idx == 1:
+            directive = (
+                f"You are participating in a bounded multi-agent discussion "
+                f"on #{args.channel}. This is round 1 of at most "
+                f"{max_rounds}. The other participants are answering this "
+                f"same root question in parallel right now — you have NOT "
+                f"seen their replies. Produce your independent first take.\n\n"
+                f"- Be concise but substantive. Cite file:line when relevant.\n"
+                f"- Quote authoritative sources with specific entries; do "
+                f"not paraphrase from memory.\n"
+                f"- End your response with one of:\n"
+                f"    [DISAGREE]  — your default in round 1; you have a "
+                f"substantive position and want round 2 to compare it "
+                f"against the other agents' first takes.\n"
+                f"    [AGREE]     — only if your reading of the channel "
+                f"context (pinned rules) makes the question trivially "
+                f"resolved before any cross-agent comparison is needed. "
+                f"Rare; default is [DISAGREE] in round 1.\n"
+                f"- Even if all agents sign [AGREE] in round 1, the "
+                f"protocol will NOT short-circuit until round 2+ — round 2 "
+                f"is where you read each other and either confirm or push back."
+            )
+        else:
+            directive = (
+                f"You are participating in a bounded multi-agent discussion "
+                f"on #{args.channel}. This is round {round_idx} of at most "
+                f"{max_rounds}. Read the prior-round replies in the history "
+                f"above (they are posted as replies to the root). Compare "
+                f"them to your own prior position and decide.\n\n"
+                f"- Be concise but substantive. Cite file:line when relevant.\n"
+                f"- Push back on any other agent's claim you disagree with — "
+                f"name the agent, quote the claim, give the counter-evidence.\n"
+                f"- End your response with one of:\n"
+                f"    [AGREE]     — you have read the other agents' prior "
+                f"replies and you accept the converging position (or yours "
+                f"is unchanged and the others now match it).\n"
+                f"    [DISAGREE]  — you still have open substantive objections "
+                f"after reading the others.\n"
+                f"- If every agent ends with [AGREE], the discussion "
+                f"short-circuits and stops before round {max_rounds}."
+            )
 
         # history_tail must be big enough to preserve the root
         # question across every round. `tail` truncates from the
@@ -1044,14 +1094,35 @@ def _handle_discuss(args) -> int:
         # response with the literal `[AGREE]` token at the tail.
         # Strict endswith() — substring match would false-positive on
         # "I don't [AGREE] with that. [DISAGREE]".
+        #
+        # CRITICAL: round 1 cannot short-circuit, even if every agent
+        # signs [AGREE]. Round 1 is parallel fan-out — no agent has
+        # seen any other agent's reply yet, so [AGREE] in round 1 is
+        # an "I'm done with my own answer" signal, not cross-agent
+        # assent. Forcing round 2 ensures at least one pass where
+        # agents read each other's first takes and can surface
+        # disagreement. Discovered 2026-05-05 in the собака-gender
+        # deliberation in learn-ukrainian: Gemini hallucinated a
+        # claim, Claude and Codex contradicted it, but all three
+        # signed [AGREE] in round 1 and the protocol short-circuited
+        # without any cross-agent comparison. Hallucination would have
+        # shipped to curriculum if the transcript were taken at face
+        # value. Ported from learn-ukrainian commit 872d8376b0.
         all_ok = all(ok for (_, ok) in responses.values())
         all_agreed = all_ok and all(
             text.strip().endswith("[AGREE]") for (text, _) in responses.values()
         )
-        if all_agreed:
+        if all_agreed and round_idx >= 2:
             print()
             print(f"✅ converged at round {round_idx} — all agents signed off [AGREE]")
             break
+        elif all_agreed and round_idx == 1:
+            print()
+            print(
+                "ℹ️  all agents signed [AGREE] in round 1, but round 1 cannot "
+                "short-circuit (parallel fan-out — agents have not seen each "
+                "other's replies). Forcing round 2 for cross-agent comparison."
+            )
 
         if round_idx == max_rounds:
             # Tell the caller WHY we stopped so escalation is obvious.
