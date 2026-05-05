@@ -430,7 +430,10 @@ def _path_mtime(p: Path) -> float:
 
 
 def _venv_python_for_repo(repo_root: Path) -> str:
-    for candidate in (repo_root / ".venv" / "bin" / "python", REPO_ROOT / ".venv" / "bin" / "python"):
+    # Candidate roots intentionally include ancestry to cope with
+    # git worktree layouts (module under .worktrees/<branch>/).
+    for base in (repo_root, *repo_root.parents, REPO_ROOT, *REPO_ROOT.parents):
+        candidate = base / ".venv" / "bin" / "python"
         if candidate.exists():
             return str(candidate)
     return ".venv/bin/python"
