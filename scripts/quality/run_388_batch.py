@@ -50,6 +50,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -61,6 +62,7 @@ API_BASE = "http://127.0.0.1:8768"
 CRITICAL_THRESHOLD = 2.0  # rubric score below this = critical (mirrors API definition)
 
 sys.path.insert(0, str(REPO / "scripts"))
+from quality.dispatch_388_pilot import slugify  # noqa: E402
 
 
 # Top-level aliases → list of filesystem prefixes the alias covers.
@@ -105,6 +107,50 @@ def fetch_active_leases() -> set[str]:
     return paths
 
 
+def fetch_active_pilot_branches() -> dict[str, str]:
+    """Read active remote `codex/388-pilot-*` and `claude/388-pilot-*` branches once."""
+    cmd = [
+        "git",
+        "-C",
+        str(REPO),
+        "ls-remote",
+        "--heads",
+        "origin",
+        "codex/388-pilot-*",
+        "claude/388-pilot-*",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as exc:
+        print("[batch] WARNING: failed to fetch remote pilot branches; skip-by-branch is disabled this run", file=sys.stderr)
+        print(f"[batch] WARNING:   error: {exc}", file=sys.stderr)
+        print("[batch] WARNING:   to skip duplicate codex burn, abort and re-run when network is healthy", file=sys.stderr)
+        return {}
+    except Exception as exc:
+        print("[batch] WARNING: failed to fetch remote pilot branches; skip-by-branch is disabled this run", file=sys.stderr)
+        print(f"[batch] WARNING:   error: {exc}", file=sys.stderr)
+        print("[batch] WARNING:   to skip duplicate codex burn, abort and re-run when network is healthy", file=sys.stderr)
+        return {}
+    active: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        ref = parts[1]
+        if not ref.startswith("refs/heads/"):
+            continue
+        branch = ref.removeprefix("refs/heads/")
+        if branch.startswith("codex/388-pilot-"):
+            slug = branch.removeprefix("codex/388-pilot-")
+            if slug and slug not in active:
+                active[slug] = branch
+        elif branch.startswith("claude/388-pilot-"):
+            slug = branch.removeprefix("claude/388-pilot-")
+            if slug and slug not in active:
+                active[slug] = branch
+    return active
+
+
 def list_tracks(plan: dict) -> None:
     print(f"Total critical (<{CRITICAL_THRESHOLD}) modules: {plan.get('needs_upgrade_count', '?')}")
     print()
@@ -130,7 +176,13 @@ def list_tracks(plan: dict) -> None:
         print(f"  {alias:24s} → {' + '.join(prefixes)}")
 
 
-def select_modules(track_arg: str, plan: dict, board: dict, leases: set[str]) -> tuple[list[str], list[str]]:
+def select_modules(
+    track_arg: str,
+    plan: dict,
+    board: dict,
+    leases: set[str],
+    active_pilot_branches: dict[str, str] | None = None,
+) -> tuple[list[str], list[str]]:
     """Resolve --track to a filtered list of repo-relative paths.
 
     Returns (selected_paths, skip_reasons) — selected_paths are
@@ -167,12 +219,21 @@ def select_modules(track_arg: str, plan: dict, board: dict, leases: set[str]) ->
     # Filter: skip modules that the board says are already done OR currently leased
     selected: list[str] = []
     reasons: list[str] = []
+    pilot_map = active_pilot_branches or {}
     for m in candidates:
         api_path = m["path"]
         repo_path = f"src/content/docs/{api_path}"
         b = board.get(api_path, {})
-        if b.get("status") == "done" or b.get("revision_pending") is False and (b.get("score", 0) or 0) >= 4.0:
+        if b.get("status") == "done" or (
+            b.get("revision_pending") is False and (b.get("score", 0) or 0) >= 4.0
+        ):
             reasons.append(f"  skip [done]      {api_path}")
+            continue
+        slug = slugify(api_path)
+        if slug in pilot_map:
+            reason = f"[skip] {slug}: active remote branch {pilot_map[slug]}"
+            reasons.append(reason)
+            print(reason)
             continue
         if api_path in leases or repo_path in leases:
             reasons.append(f"  skip [leased]    {api_path}")
@@ -295,6 +356,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--dry", action="store_true", help="Print the plan; do not dispatch or clean up.")
     p.add_argument("--no-cleanup", action="store_true", help="Skip the post-dispatch cleanup step.")
     p.add_argument("--max", "-n", type=int, default=0, help="Stop after N modules (passed through to dispatcher).")
+    p.add_argument(
+        "--no-skip-active-branches",
+        action="store_true",
+        help="Do not skip modules with active codex/claude 388-pilot remote branches.",
+    )
     return p.parse_args(argv)
 
 
@@ -317,9 +383,10 @@ def main(argv: list[str] | None = None) -> int:
         plan = fetch_upgrade_plan()
         board = fetch_quality_board()
         leases = fetch_active_leases()
+        active_branches = {} if args.no_skip_active_branches else fetch_active_pilot_branches()
         if leases:
             print(f"[batch] {len(leases)} active pipeline lease(s) — those modules will be skipped")
-        queue, _ = select_modules(args.track, plan, board, leases)
+        queue, _ = select_modules(args.track, plan, board, leases, active_branches)
         if not queue:
             print("❌ no modules to dispatch (all filtered out).", file=sys.stderr)
             return 1

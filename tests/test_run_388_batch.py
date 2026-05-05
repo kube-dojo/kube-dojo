@@ -1,0 +1,110 @@
+"""Unit tests for #388 batch remote-branch skip behavior."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from scripts.quality import run_388_batch
+
+
+def _build_plan() -> dict:
+    return {
+        "tracks": [
+            {
+                "track": "platform",
+                "modules": [
+                    {"path": "platform/module-1.9-foo.md"},
+                    {"path": "platform/module-1.9-bar.md"},
+                ],
+            }
+        ]
+    }
+
+
+def test_select_modules_skips_matching_remote_pilot_branches() -> None:
+    selected, reasons = run_388_batch.select_modules(
+        "platform",
+        _build_plan(),
+        {},
+        set(),
+        {"module-1-9-foo": "codex/388-pilot-module-1-9-foo"},
+    )
+    assert selected == ["src/content/docs/platform/module-1.9-bar.md"]
+    assert any(
+        "[skip] module-1-9-foo: active remote branch codex/388-pilot-module-1-9-foo" in r
+        for r in reasons
+    )
+
+
+def test_select_modules_keeps_module_without_matching_remote_branch() -> None:
+    selected, reasons = run_388_batch.select_modules("platform", _build_plan(), {}, set(), {})
+    assert len(selected) == 2
+    assert selected == [
+        "src/content/docs/platform/module-1.9-foo.md",
+        "src/content/docs/platform/module-1.9-bar.md",
+    ]
+    assert not reasons
+
+
+def test_select_modules_skips_done_before_active_pilot_branch() -> None:
+    board = {
+        "platform/module-1.9-foo.md": {
+            "status": "done",
+            "revision_pending": False,
+            "score": 4.7,
+        }
+    }
+    selected, reasons = run_388_batch.select_modules(
+        "platform",
+        _build_plan(),
+        board,
+        set(),
+        {"module-1-9-foo": "codex/388-pilot-module-1-9-foo"},
+    )
+
+    assert selected == ["src/content/docs/platform/module-1.9-bar.md"]
+    assert any("  skip [done]      platform/module-1.9-foo.md" in r for r in reasons)
+    assert not any("[skip] module-1-9-foo" in r for r in reasons)
+
+
+def test_main_no_skip_active_branches_overrides_bucket_skip(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    monkeypatch.setattr(run_388_batch, "fetch_upgrade_plan", _build_plan)
+    monkeypatch.setattr(run_388_batch, "fetch_quality_board", lambda: {})
+    monkeypatch.setattr(run_388_batch, "fetch_active_leases", lambda: set())
+    monkeypatch.setattr(
+        run_388_batch,
+        "fetch_active_pilot_branches",
+        lambda: {"module-1-9-foo": "codex/388-pilot-module-1-9-foo"},
+    )
+
+    rc = run_388_batch.main(["--track", "platform", "--dry", "--no-skip-active-branches"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[skip] module-1-9-foo: active remote branch" not in out
+    assert "platform/module-1.9-foo.md" in out
+
+
+def test_main_skips_module_with_active_pilot_branch_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    monkeypatch.setattr(run_388_batch, "fetch_upgrade_plan", _build_plan)
+    monkeypatch.setattr(run_388_batch, "fetch_quality_board", lambda: {})
+    monkeypatch.setattr(run_388_batch, "fetch_active_leases", lambda: set())
+    monkeypatch.setattr(
+        run_388_batch,
+        "fetch_active_pilot_branches",
+        lambda: {"module-1-9-foo": "codex/388-pilot-module-1-9-foo"},
+    )
+
+    rc = run_388_batch.main(["--track", "platform", "--dry"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert "[skip] module-1-9-foo: active remote branch codex/388-pilot-module-1-9-foo" in out
+    assert "platform/module-1.9-bar.md" in out
