@@ -2313,6 +2313,7 @@ _CITATION_STATUS_CACHE_LOCK = threading.Lock()
 _QUALITY_TITLE_RE = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
 _QUALITY_SOURCES_HEADING_RE = re.compile(r"^##\s+Sources\s*$", re.MULTILINE)
 _QUALITY_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+_QUALITY_BARE_URL_RE = re.compile(r"^\s*[-*]?\s*(https?://\S+)", re.MULTILINE)
 _QUALITY_TRACK_LABELS = {
     "ai": "AI",
     "ai-ml-engineering": "AI/ML Engineering",
@@ -2410,8 +2411,15 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
         has_exercise = bool(re.search(r"^##+\s+(exercise|hands-on|practice|lab)\b", text, re.IGNORECASE | re.MULTILINE))
         has_diagram = "```mermaid" in text or "<details>" in text
         sources_match = _QUALITY_SOURCES_HEADING_RE.search(text)
-        sources_block = text[sources_match.end():] if sources_match else ""
-        has_citations = bool(sources_match) and bool(_QUALITY_MARKDOWN_LINK_RE.search(sources_block))
+        if sources_match:
+            after_sources = text[sources_match.end():]
+            next_h2 = re.search(r"^##\s+", after_sources, re.MULTILINE)
+            sources_block = after_sources[: next_h2.start()] if next_h2 else after_sources
+        else:
+            sources_block = ""
+        has_citations = bool(sources_match) and (
+            bool(_QUALITY_MARKDOWN_LINK_RE.search(sources_block)) or bool(_QUALITY_BARE_URL_RE.search(sources_block))
+        )
         base = 0.4 if lines_count < 60 else 0.9 if lines_count < 120 else 1.4 if lines_count < 220 else 1.8 if lines_count < 300 else 2.1
         score = min(5.0, round(base + (0.6 if has_title else 0.0) + (0.8 if has_quiz else 0.0) + (0.8 if has_exercise else 0.0) + (0.7 if has_diagram else 0.0), 1))
         if not has_citations:
