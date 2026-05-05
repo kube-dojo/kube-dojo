@@ -46,8 +46,16 @@ def _branch(repo: Path, name: str) -> None:
     _git(repo, ["checkout", "-b", name])
 
 
-def _run_gate(repo: Path, *, base: str = "main", mode: str = "delta", emit_json: bool = True) -> subprocess.CompletedProcess[str]:
-    cmd = [PYTHON_BIN, str(repo / "scripts/quality/incident_dedup_gate.py"), "--base", base, "--mode", mode]
+def _run_gate(
+    repo: Path,
+    *,
+    base: str = "main",
+    mode: str | None = None,
+    emit_json: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    cmd = [PYTHON_BIN, str(repo / "scripts/quality/incident_dedup_gate.py"), "--base", base]
+    if mode is not None:
+        cmd.extend(["--mode", mode])
     if emit_json:
         cmd.append("--json")
     return subprocess.run(
@@ -133,6 +141,21 @@ def test_absolute_mode_fails_when_any_after_violation_exists(tmp_path: Path) -> 
     _commit(repo, "src/content/docs/new/module.md", VIOLATION_UBER, "add violation")
 
     result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 1
+    assert payload["status"] == "fail"
+    assert payload["mode"] == "absolute"
+    assert payload["after_count"] == 1
+
+
+def test_default_mode_is_absolute(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "default-absolute")
+    _commit(repo, "src/content/docs/new/module.md", VIOLATION_UBER, "add violation")
+
+    result = _run_gate(repo, base="main", emit_json=True)
     payload = _parse_gate_payload(result)
     assert result.returncode == 1
     assert payload["status"] == "fail"

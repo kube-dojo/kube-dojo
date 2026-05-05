@@ -280,7 +280,7 @@ echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
 # Expected output: kubectl: OK
 ```
 
-The Security and reliability implications of artifact trust are treated in Modern DevOps 1.6 (*DevSecOps*). Use the same checksum-first workflow here, and keep the implementation lesson anchored there for narrative context.
+The security and reliability implications of artifact trust are further analyzed in Modern DevOps 1.6 (*DevSecOps*).
 <!-- incident-xref: codecov-2021-bash-uploader -->
 <!-- incident-xref: codecov-2021 -->
 

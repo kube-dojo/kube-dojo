@@ -39,7 +39,7 @@ After this module, you will be able to perform these operational tasks in a way 
 ## Why This Module Matters
 
 This module is the package-and-account hygiene playbook for emergency response: package inventory, patch posture, and least-privilege operations become operationally critical when incidents arrive.
-For the named incident framing and full narrative context, use the canonical lesson in [Docker Fundamentals](../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
+For a real-world analysis of these failure modes, see [Docker Fundamentals](../../prerequisites/cloud-native-101/module-1.2-docker-fundamentals/).
 <!-- incident-xref: equifax-2017 -->
 
 A similar pattern appears in smaller incidents that never make headlines. A team inherits an Ubuntu host where `nginx` was installed from a vendor repository, a contractor still has password login months after leaving, and the only deployment user has broad passwordless sudo because nobody wanted to debug a narrow rule. Nothing looks broken during normal operations, but the first security advisory or failed deploy reveals that the server has no clear owner, no reversible change trail, and no dependable way to explain what changed.

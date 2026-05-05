@@ -39,7 +39,7 @@ jobs:
         id: incident-dedup-gate
         run: |
           set -euo pipefail
-          if ! output="$(python scripts/quality/incident_dedup_gate.py --base origin/main 2>&1 | tee gate.log)"; then
+          if ! output="$(python scripts/quality/incident_dedup_gate.py --mode absolute --base origin/main 2>&1 | tee gate.log)"; then
             echo "$output"
             {
               echo "## Incident dedup gate failed"
