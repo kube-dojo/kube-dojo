@@ -2,12 +2,28 @@
 title: "Anomaly Detection & Novelty Detection"
 description: "Learn how to choose, fit, and evaluate anomaly and novelty detectors when you have no labels. This module covers IsolationForest, LocalOutlierFactor, OneClassSVM, and EllipticEnvelope, the contamination parameter, the anomaly/novelty distinction, and honest threshold calibration."
 slug: ai-ml-engineering/machine-learning/module-1.9-anomaly-detection-and-novelty-detection
+revision_pending: false
 sidebar:
   order: 9
 ---
 
-> Track: AI/ML Engineering | Complexity: Intermediate | Time: 75-90 minutes
-> Prerequisites: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
+> **Complexity**: Intermediate
+>
+> **Time to Complete**: 75-90 minutes
+>
+> **Prerequisites**: [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/), [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/), [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/), [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/), and [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
+
+---
+
+## What You'll Be Able to Do
+
+- Compare IsolationForest, LOF, OneClassSVM, and EllipticEnvelope tradeoffs for anomaly and novelty workflows.
+- Diagnose representation, scaling, threshold, and mode-confusion failures by inspecting `score_samples()`, `predict()` labels, and detector disagreement.
+- Design threshold calibration with partial labels, precision at `k`, review budget, and contamination policy instead of default binary labels.
+- Implement LOF anomaly versus novelty workflows without misusing training-data prediction or leaking preprocessing across reference and future samples.
+- Justify replacing anomaly detection with supervised classification, clustering, time-series forecasting, or monitoring when the operational question demands another tool.
+
+## Why This Module Matters
 
 Modern ML teams spend a great deal of time dealing with data that is
 rare, surprising, malformed, or operationally suspicious, yet only a
@@ -25,22 +41,12 @@ Choosing a detector is inseparable from deciding what training data
 means, what score semantics mean, what threshold means, and what kinds
 of errors the surrounding workflow can tolerate.
 
-The previous modules already built the foundations needed for this.
-[Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/)
-covered estimator interfaces and composition.
-[Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/)
-established the habit of asking whether an apparent signal is actually
-trustworthy.
-[Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/)
-made scaling, encoding, and leakage control explicit.
-[Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/)
-showed why distance and kernel methods care deeply about representation.
-[Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/)
-showed that density, neighborhoods, and cluster structure can be useful
-even before labels exist.
+This module builds directly on the prerequisite ideas without simply
+restating them with a new vocabulary. The worked examples are Python
+and scikit-learn focused. When this scoring logic is later deployed on
+Kubernetes 1.35 or newer, this curriculum uses `k` as the kubectl alias
+after `alias k=kubectl`, but this module does not require cluster access.
 
-This module builds directly on those ideas, but it does not simply
-restate them with a new vocabulary.
 Anomaly detection introduces a harder epistemic problem:
 the detector can always produce a ranking, but the ranking is not the
 same thing as verified abnormality.
@@ -63,41 +69,6 @@ What is the model assuming about the data?
 What does the output actually mean?
 What action will someone take because of that output?
 Those questions are more valuable than memorizing any single default.
-
-## Learning Outcomes
-
-- Choose an appropriate anomaly or novelty detector by matching score
-  geometry, scaling needs, and API behavior to the data and workflow,
-  using lessons from
-  [Module 1.1: Scikit-learn API & Pipelines](../module-1.1-scikit-learn-api-and-pipelines/)
-  and
-  [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/).
-- Diagnose whether poor detector behavior comes from representation,
-  thresholding, or mode confusion, with special attention to
-  preprocessing discipline from
-  [Module 1.4: Feature Engineering & Preprocessing](../module-1.4-feature-engineering-and-preprocessing/)
-  and scaling-sensitive methods from
-  [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/).
-- Design an evaluation and threshold-calibration workflow that uses
-  ranking metrics, partial labels, and operating constraints instead of
-  wishful thinking, extending the practices from
-  [Module 1.3: Model Evaluation, Validation, Leakage & Calibration](../module-1.3-model-evaluation-validation-leakage-and-calibration/).
-- Evaluate tradeoffs among tree-based, density-based, kernel-based, and
-  covariance-based detectors, while connecting them to the model-family
-  intuitions from
-  [Module 1.5: Decision Trees & Random Forests](../module-1.5-decision-trees-and-random-forests/)
-  and
-  [Module 1.7: Naive Bayes, k-NN & SVMs](../module-1.7-naive-bayes-knn-and-svms/).
-- Justify when anomaly detection should be replaced by supervised
-  classification, clustering, monitoring, or future time-series methods,
-  linking back to
-  [Module 1.6: XGBoost & Gradient Boosting](../module-1.6-xgboost-gradient-boosting/),
-  [Module 1.8: Unsupervised Learning: Clustering](../module-1.8-unsupervised-learning-clustering/),
-  [Module 1.12: Time-Series Forecasting](../module-1.12-time-series-forecasting/),
-  and
-  [Module 1.10: ML Monitoring](../../mlops/module-1.10-ml-monitoring/).
-
-## Why This Module Matters
 
 The scikit-learn user guide on outlier and novelty detection begins the
 conversation from an engineering reality rather than a marketing slogan:
@@ -1217,6 +1188,30 @@ Anomaly detection handles only some of them.
 Asking that question early is usually a sign of technical maturity.
 It prevents a detector from being used as a vague substitute for several
 distinct modeling and monitoring responsibilities.
+
+## Patterns & Anti-Patterns
+
+The most reliable anomaly-detection pattern is to keep score production separate from operational action. Fit the detector to produce a continuous ranking, store `score_samples()` or an equivalent score with enough feature context to audit later, and then make the escalation threshold a documented policy decision. This pattern works because it preserves information that hard labels discard, allows threshold calibration to evolve as review capacity changes, and makes it possible to compare detector families without confusing ranking quality with alert volume.
+
+A second strong pattern is mode-first design. Before choosing an estimator, write one sentence that says whether abnormal examples are expected inside the fitted sample or only in future data, then let that sentence determine anomaly versus novelty behavior. This is especially important for LOF because the API changes materially between `novelty=False` and `novelty=True`, but the same reasoning applies to every detector in this module. The pattern scales well because it turns an ambiguous modeling discussion into a testable data contract: which dataset defines normality, which dataset is being scored, and which mistakes count as model failures rather than policy disagreements.
+
+A third pattern is detector-family triangulation. Start with a practical baseline such as `IsolationForest`, add one contrasting family such as LOF or `OneClassSVM`, and inspect cases where the models agree or disagree before tuning deeply. Agreement across isolation, density, and kernel views is not proof, but it is useful evidence that the suspiciousness signal is not merely an artifact of one geometry. Disagreement is also valuable because it points the team toward the assumption under pressure: scaling, locality, covariance shape, dense novel clusters, or threshold policy.
+
+The strongest anti-pattern is treating `predict()` as the final truth because it returns neat `+1` and `-1` values. Teams fall into this because binary flags are easy to count, easy to route, and easy to show on dashboards, but those flags hide the threshold decision that often dominates production behavior. The better alternative is to inspect continuous scores first, choose a threshold using partial labels or review budget, and write down the expected false-positive cost before automating any high-impact action.
+
+Another common anti-pattern is using anomaly detection as a dignified name for missing product requirements. If stakeholders cannot say whether they need rare-point detection, new-segment discovery, temporal-deviation detection, or drift monitoring, the model will inherit that confusion and return confident-looking output for a poorly defined job. The fix is not more hyperparameter search. The fix is a short decision review that names the operational action, the evidence available for calibration, and the point at which supervised classification, clustering, forecasting, or monitoring would become the better tool.
+
+The final anti-pattern is allowing preprocessing to drift away from detector semantics. Distance-based and kernel-based detectors need a meaningful metric space, novelty detection needs identical transformations for reference and future samples, and covariance methods need dimensionality discipline before their geometry can be trusted. Teams often skip this because the estimator accepts a NumPy array without complaint, but the absence of an exception is not evidence that the feature space is meaningful. A pipeline that owns scaling, encoding, and score export is boring in the best possible way: it makes the detector's assumptions inspectable.
+
+## Decision Framework
+
+Use this framework as a pre-flight review before committing to a detector. First, decide whether the fitted data contains the suspicious cases you want to rank. If yes, you are doing anomaly detection inside a contaminated sample, so LOF anomaly mode or `IsolationForest` may be sensible first candidates. If no, and you have a clean reference window for future scoring, you are doing novelty detection, so LOF novelty mode, `OneClassSVM`, or another support-learning approach becomes easier to defend. If the team cannot answer this first question, pause the modeling work because the API semantics are not yet defined.
+
+Second, match the detector to the geometry you are willing to believe. Choose `IsolationForest` when the data is tabular, the sample is medium or large, and quick isolation through random partitions is a plausible suspiciousness signal. Choose LOF when local density contrast matters more than global shape and the feature space has been scaled carefully. Choose `OneClassSVM` when the reference data is clean enough for novelty detection, the sample is moderate, and a smooth non-linear support boundary is plausible. Choose `EllipticEnvelope` only when a robust single-ellipse story is honest enough to be useful, because its transparency is valuable only when its assumptions resemble the data.
+
+Third, decide how the score will become an action. For discovery work, a wide review bucket may be acceptable because the goal is learning. For analyst triage, precision near the top of the ranking and review capacity usually matter more than global accuracy. For automated blocking or quarantine, the threshold must be conservative, auditable, and monitored because false positives now cause direct user or system harm. This step is where `contamination` stops being a tutorial parameter and becomes an operational promise.
+
+Finally, define the retirement criteria before the detector ships. A detector should be replaced by supervised classification when reliable labels become plentiful, by clustering when the supposed anomalies are actually new ordinary groups, by time-series methods when sequence context defines abnormality, and by monitoring when the concern is distribution movement rather than point-level suspicion. This exit plan protects the system from becoming an all-purpose alert generator that nobody trusts but everybody is afraid to remove.
 
 ## Did You Know?
 
