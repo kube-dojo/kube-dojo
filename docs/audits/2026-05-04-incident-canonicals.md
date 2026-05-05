@@ -6,6 +6,8 @@
 
 ## Lock table
 
+**FROZEN until #878 closes. No canonical reassignments allowed. Adding new canonicals is allowed only when claiming a catalog replacement in a Phase 1+ sweep PR.**
+
 | # | Incident | Canonical module | Lesson it owns |
 |---|---|---|---|
 | 1 | Knight Capital 2012 | `prerequisites/modern-devops/module-1.1-infrastructure-as-code.md` | Fleet drift / partial deployment / "7 of 8 servers" |

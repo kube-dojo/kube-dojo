@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: incident-dedup-gate
+        name: incident dedup delta gate
+        entry: .venv/bin/python scripts/quality/incident_dedup_gate.py --mode delta --base origin/main
+        language: system
+        pass_filenames: false
+        always_run: true
