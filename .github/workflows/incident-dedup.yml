@@ -1,0 +1,52 @@
+name: Incident dedup delta gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  incident-dedup-gate:
+    name: Incident dedup gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Fetch origin/main
+        run: git fetch origin main --depth=1
+
+      - name: Run incident dedup delta gate
+        id: incident-dedup-gate
+        run: |
+          set -euo pipefail
+          if ! output="$(python scripts/quality/incident_dedup_gate.py --base origin/main 2>&1 | tee gate.log)"; then
+            echo "$output"
+            {
+              echo "## Incident dedup gate failed"
+              echo ""
+              echo "New incident triples introduced:"
+              cat gate.log
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "$output"
