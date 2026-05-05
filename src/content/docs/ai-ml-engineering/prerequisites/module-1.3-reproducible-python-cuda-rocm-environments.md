@@ -4,23 +4,19 @@ slug: ai-ml-engineering/prerequisites/module-1.3-reproducible-python-cuda-rocm-e
 sidebar:
   order: 103
 ---
-> **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
-
-**Reading Time**: 2-3 hours
-
-**Prerequisites**: Modules 1.1 and 1.2 complete, basic command-line navigation, and comfort editing small text files
+> **Complexity**: Intermediate
+>
+> **Time to Complete**: 2-3 hours
+>
+> **Prerequisites**: [Module 1.1: Prerequisites & Environment Setup](./module-1.1-prerequisites-environment-setup/), [Module 1.2: Home AI Workstation Fundamentals](./module-1.2-home-ai-workstation-fundamentals/), basic command-line navigation, and comfort editing small text files.
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to design a project-local Python environment that another learner can recreate without relying on your shell history or global package state.
-
-You will be able to debug environment failures by separating Python interpreter problems, package-resolution problems, GPU driver problems, and framework-runtime compatibility problems.
-
-You will be able to compare plain virtual environments, higher-level environment managers, and containers, then justify which one fits a learning project, team workstation, or deployment-bound prototype.
-
-You will be able to evaluate whether a CUDA or ROCm setup is internally compatible before installing a deep learning framework, instead of discovering incompatibility through runtime errors.
-
-You will be able to build and run a smoke test that proves the environment imports the expected packages, uses the expected interpreter, and sees the intended CPU, CUDA, or ROCm backend.
+- **Design** a project-local Python environment that another learner can recreate without relying on your shell history or global package state.
+- **Debug** environment failures by separating Python interpreter problems, package-resolution problems, GPU driver problems, and framework-runtime compatibility problems.
+- **Compare** plain virtual environments, higher-level environment managers, and containers, then justify which one fits a learning project, team workstation, or deployment-bound prototype.
+- **Evaluate** whether a CUDA or ROCm setup is internally compatible before installing a deep learning framework, instead of discovering incompatibility through runtime errors.
+- **Build** and run a smoke test that proves the environment imports the expected packages, uses the expected interpreter, and sees the intended CPU, CUDA, or ROCm backend.
 
 ## Why This Module Matters
 
@@ -452,6 +448,48 @@ Symptom triage map
 
 A senior practitioner also records the triage result. If the fix was "select the correct notebook kernel," put that in the README. If the fix was "install the CUDA-enabled framework wheel, not the CPU wheel," update the installation section. Every environment incident is an opportunity to remove one future mystery.
 
+## Reproducibility as a Team Contract
+
+A reproducible environment is not only a local convenience. It is a contract between the person who writes the model code, the person who reviews it, the person who runs it on another machine, and the person who eventually has to debug it when an experiment or demo fails. The contract says which interpreter is expected, which packages are intentionally installed, which hardware path was verified, which command proves basic health, and which files should be ignored because they are local artifacts. Without that contract, every teammate has to rediscover setup through trial and error.
+
+The contract should be small enough to keep current. A long setup guide full of optional branches can decay faster than a short guide with a reliable smoke test. For this track, a useful environment contract normally contains a Python version expectation, a command that creates the local environment, a command that installs dependencies, a command that verifies the environment, and a short note about CPU, CUDA, or ROCm expectations. If the project later gains containers, the contract can add a container build and run path, but the same questions still apply.
+
+Reviewers should treat environment changes as meaningful code changes. A requirements update can alter numerical behavior, available kernels, tokenizer output, serialization compatibility, or GPU runtime behavior. A Dockerfile base-image change can alter system libraries. A notebook kernel change can make a result impossible to reproduce. When reviewing an ML pull request, ask whether the dependency or environment change is intentional, documented, and covered by the smoke test. This is especially important when the code diff is small but the environment diff is large.
+
+The same contract helps incident response. Suppose a scheduled training job starts failing after a package refresh. A useful environment record lets the team compare the last known-good dependency set, Python version, framework build, and backend visibility. Without that record, the team may spend hours debating whether the data changed, the model changed, the GPU driver changed, or the notebook used a different kernel. Reproducibility does not prevent every failure, but it narrows the search space when failures happen.
+
+## Upgrade and Migration Discipline
+
+Environment upgrades should be handled as migrations, not as casual cleanup. Upgrading Python, NumPy, PyTorch, TensorFlow, CUDA, ROCm, or a container base image can change build compatibility, binary extension behavior, numerical kernels, and hardware support. A safe migration starts with the current smoke test passing, changes one boundary at a time when possible, and records the new evidence after the change. If several layers change together, the team loses the ability to tell which layer caused a new failure.
+
+The safest sequence is usually to preserve the working environment, create a fresh environment, install the proposed dependency set there, and run the smoke test before deleting anything. That approach costs disk space, but it protects the last known-good setup. For GPU workstations, it is also wise to record driver-tool output before and after the migration. If `nvidia-smi` or `rocminfo` changes at the same time as Python packages, the migration touched more than one boundary and should be reviewed with extra care.
+
+Pinning does not mean freezing forever. It means choosing when change enters the project. A training project may deliberately upgrade a framework to use a new feature, improve performance, or match a deployment runtime. The difference between disciplined change and accidental drift is that disciplined change updates the dependency record, documents the reason, runs verification, and leaves a clear rollback path. Accidental drift happens when someone installs the newest version globally and the project slowly starts depending on it.
+
+Containers need the same migration discipline. Rebuilding an image from a floating base tag can silently change the operating-system packages underneath a model service. If the image also installs Python packages without a lock or constraints file, two builds from the same Dockerfile may not be equivalent. Prefer explicit base tags, reviewed dependency records, and smoke tests that run inside the image. A container is only reproducible when its build inputs are reproducible enough for the risk level of the project.
+
+## CI and Documentation Hooks
+
+Even when GPU verification must happen locally, continuous integration can still catch many environment mistakes. A CPU-only CI job can create the virtual environment, install dependencies, run `pip check`, import core packages, execute unit tests, and run the CPU path of `verify_env.py`. This does not prove CUDA or ROCm health, but it catches broken dependency records, missing files, syntax errors, incompatible Python versions, and accidental reliance on global packages. CI should make the cheap checks automatic so humans can focus on hardware-specific evidence.
+
+Documentation should show commands that can be copied exactly. Avoid instructions such as "activate your environment and install the usual packages" because they hide the interpreter and dependency source. Prefer path-explicit commands such as `.venv/bin/python -m pip install -r requirements.txt` and `.venv/bin/python verify_env.py`. If Windows support matters, provide the equivalent PowerShell path rather than relying on learners to translate. Good setup documentation is not verbose; it is precise about the boundaries that often fail.
+
+The README should also say what success looks like. A smoke test that prints many lines is helpful only if the learner knows which lines matter. For a CPU-only path, success may mean the interpreter points into `.venv`, `numpy` imports, and the backend line clearly says CPU-only. For a CUDA path, success may mean `nvidia-smi` is found, the framework reports a CUDA build, and a tensor operation runs on a CUDA device. For a ROCm path, success may mean the framework reports a HIP build and the backend tensor operation succeeds.
+
+When a project grows, move repeated setup knowledge into scripts. A `scripts/setup-env.sh` file, a `Makefile` target, or a task-runner command can reduce copy-paste errors, but the script should still call the project interpreter explicitly after bootstrap. Scripts should fail loudly when the wrong Python version is used or when dependency checks fail. The goal is not to hide the environment; the goal is to encode the environment contract so every learner and reviewer runs the same steps.
+
+## When Reproducibility Meets Real Hardware
+
+Hardware-backed AI environments are harder than ordinary Python projects because some important state lives outside the repository. The GPU driver, kernel module, device permissions, container runtime integration, and sometimes firmware are properties of the host. A dependency file can recreate Python packages, but it cannot recreate a missing driver or unsupported GPU model. That is why a good environment guide separates project-local setup from host prerequisites. The project can own `.venv`, requirements, smoke tests, and notebook kernels; the workstation owner or platform team usually owns driver installation and hardware support.
+
+This distinction prevents blame loops. If a smoke test says the project interpreter is correct and the package is installed, but the driver tool cannot see the GPU, the project dependency file is not the first suspect. If the driver tool sees the GPU and the framework build reports CPU-only support, the package selection is the likely boundary. If the framework reports CUDA or HIP support and a tensor operation still fails, the next evidence may come from runtime libraries, permissions, or a mismatch documented in the framework's compatibility notes. Each result points to a smaller next question.
+
+Teams should write hardware expectations as testable statements. "Works with GPU" is vague. "Verified on Ubuntu with NVIDIA driver visible through `nvidia-smi`, PyTorch installed from the CUDA build selector, and `verify_env.py` completing a CUDA tensor sum" is actionable. For AMD, the equivalent statement should name ROCm support expectations and the proof command used on that host. These statements help reviewers understand whether a change affects CPU-only learning, local GPU experimentation, or deployment-bound accelerator work.
+
+The same practice helps when learners do not have matching hardware. A CPU-only learner should still be able to complete most environment lessons if the project clearly separates CPU verification from optional accelerator verification. The smoke test can report that no accelerator path is available without failing the entire setup. Later, when the learner gains access to a CUDA or ROCm machine, the same smoke test can prove the additional backend. Reproducibility should make differences explicit, not pretend every machine is identical.
+
+Finally, remember that reproducibility is a habit, not a single file. Every time you add a package, change a Python version, switch a notebook kernel, rebuild a container, or move to different GPU hardware, rerun the verification path and update the project record if the expected output changed. This routine may feel slow during the first week of a project, but it becomes faster than rediscovering the environment from scratch after an unexplained failure. Reliable setup work compounds across every later experiment, review, and deployment.
+
 ## Did You Know?
 
 - **Framework imports are weak evidence**: A deep learning framework can import successfully even when it was installed as a CPU-only build, so a real backend tensor operation is a stronger verification step than `import torch` alone.
@@ -690,3 +728,18 @@ Success criteria:
 - [Notebooks, Scripts, and Project Layouts](./module-1.4-notebooks-scripts-project-layouts/)
 - [PyTorch Fundamentals](../deep-learning/module-1.2-pytorch-fundamentals/)
 - [Home AI Workstation Fundamentals](./module-1.2-home-ai-workstation-fundamentals/)
+
+## Sources
+
+- [Python documentation: venv](https://docs.python.org/3/library/venv.html) — Official reference for creating isolated Python virtual environments.
+- [Python Packaging User Guide: Installing Packages](https://packaging.python.org/en/latest/tutorials/installing-packages/) — Explains package installation workflows and virtual environment usage.
+- [pip documentation: pip check](https://pip.pypa.io/en/stable/cli/pip_check/) — Documents dependency consistency checks used in the module's verification workflow.
+- [pip documentation: requirements file format](https://pip.pypa.io/en/stable/reference/requirements-file-format/) — Defines how `requirements.txt` files are interpreted by pip.
+- [IPython documentation: Installing the IPython kernel](https://ipython.readthedocs.io/en/stable/install/kernel_install.html) — Covers registering a project interpreter as a notebook kernel.
+- [Jupyter documentation: Kernels](https://docs.jupyter.org/en/latest/projects/kernels.html) — Explains how notebooks choose the execution kernel that runs code.
+- [PyTorch: Get Started](https://pytorch.org/get-started/locally/) — Provides official install selectors for CPU, CUDA, and ROCm builds.
+- [PyTorch documentation: CUDA semantics](https://pytorch.org/docs/stable/notes/cuda.html) — Documents PyTorch CUDA behavior and device checks.
+- [NVIDIA documentation: CUDA Compatibility](https://docs.nvidia.com/deploy/cuda-compatibility/) — Explains driver and CUDA runtime compatibility expectations.
+- [AMD ROCm documentation: Compatibility matrix](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) — Lists supported ROCm operating system, hardware, and software combinations.
+- [Docker documentation: Build with Dockerfile](https://docs.docker.com/build/concepts/dockerfile/) — Provides official background for container image build files.
+- [NVIDIA Container Toolkit documentation](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/) — Explains GPU runtime integration for containers on NVIDIA systems.
