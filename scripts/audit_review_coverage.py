@@ -72,10 +72,13 @@ def _lane_from_title(title: str) -> str | None:
     return None
 
 
-def _author_family(chapter_num: int) -> str:
-    # Issue #559 ownership model: Parts 1-2 and Part 3 through Ch15 are
-    # Claude-authored; Ch16 and Parts 4-9 are Codex-authored.
-    if chapter_num <= 15:
+def _research_author_family(chapter_num: int) -> str:
+    # Issue #559 ownership model plus the later Part 6 split:
+    # Parts 1-2 and Part 3 through Ch15 were Claude-authored; Ch32-Ch37
+    # were also Claude-authored research contracts after the 2026-04-28
+    # role split. Other research contracts in this audit use Codex as the
+    # author family.
+    if chapter_num <= 15 or 32 <= chapter_num <= 37:
         return "claude"
     return "codex"
 
@@ -94,7 +97,7 @@ def _expected_lane_fields(chapter_num: int, lane: str) -> set[str]:
     Ch10-Ch15 were reviewed by Claude+Gemini (pre-#421). Both patterns are valid
     cross-family coverage.
     """
-    author = _author_family(chapter_num)
+    author = _research_author_family(chapter_num)
     if lane == "research":
         if author == "claude":
             return {"gemini_gap", "codex_anchor"}

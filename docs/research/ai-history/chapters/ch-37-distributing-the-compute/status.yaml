@@ -138,7 +138,7 @@ reader_aids: landed                                        # none | pr_open | la
 lifecycle_updated: 2026-04-30
 review_coverage:
   research:
-    claude_anchor: pending
+    claude_anchor: n/a
     gemini_gap: done
     codex_anchor: done
   prose:
@@ -146,8 +146,8 @@ review_coverage:
     gemini_prose_quality: done
     codex_prose_quality: n/a
   cross_family_satisfied:
-    research: false
+    research: true
     prose: true
-    overall: false
-  backfill_pending: true
-  last_audited: 2026-05-01
+    overall: true
+  backfill_pending: false
+  last_audited: 2026-05-05
