@@ -469,7 +469,16 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
                       file=sys.stderr)
                 time.sleep(delay)
                 continue
-            # All retries exhausted.
+            # All retries exhausted on the primary model — last-ditch try the
+            # fallback model on subscription. If gemini-3.1-pro-preview is
+            # capacity-out, gemini-3-flash-preview / auto often still answers.
+            if model != GEMINI_FALLBACK_MODEL:
+                print(f"Rate-limit retries exhausted on {model} — last-ditch on fallback model {GEMINI_FALLBACK_MODEL} (subscription)",
+                      file=sys.stderr)
+                ok, output = dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp,
+                                             use_subscription=True)
+                if ok:
+                    return True, output
             return False, output
 
         # Timeout — don't retry, just fail (Gemini is slow, not broken)
