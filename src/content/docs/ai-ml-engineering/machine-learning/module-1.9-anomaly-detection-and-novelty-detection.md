@@ -41,12 +41,6 @@ Choosing a detector is inseparable from deciding what training data
 means, what score semantics mean, what threshold means, and what kinds
 of errors the surrounding workflow can tolerate.
 
-This module builds directly on the prerequisite ideas without simply
-restating them with a new vocabulary. The worked examples are Python
-and scikit-learn focused. When this scoring logic is later deployed on
-Kubernetes 1.35 or newer, this curriculum uses `k` as the kubectl alias
-after `alias k=kubectl`, but this module does not require cluster access.
-
 Anomaly detection introduces a harder epistemic problem:
 the detector can always produce a ranking, but the ranking is not the
 same thing as verified abnormality.
