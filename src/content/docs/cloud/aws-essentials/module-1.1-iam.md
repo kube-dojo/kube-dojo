@@ -217,9 +217,15 @@ ARNs (Amazon Resource Names) are how AWS uniquely identifies every resource. Und
 
 ```text
 arn:partition:service:region:account-id:resource-type/resource-id
+```
 
+Rather than repeat a real-world outage, treat this section as pure technical grounding and point incident learners to the canonical Reliability case study. The same conceptual lesson appears in [Failure Modes and Effects](../../platform/foundations/reliability-engineering/module-2.2-failure-modes-and-effects/).
+<!-- incident-xref: aws-s3-2017-us-east-1 -->
+<!-- incident-xref: aws-s3-useast1-2017 -->
+
+```text
 Examples:
-arn:aws:s3:::my-bucket                       # S3 bucket (no region/account - global)
+arn:aws:s3:::my-bucket                        # S3 bucket (no region/account - global)
 arn:aws:s3:::my-bucket/*                     # All objects IN the bucket
 arn:aws:ec2:us-east-1:123456789012:instance/i-abc123   # Specific EC2 instance
 arn:aws:iam::123456789012:user/alice          # IAM user (no region - global)

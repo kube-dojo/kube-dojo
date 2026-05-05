@@ -24,7 +24,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In October 2018, GitHub experienced a catastrophic 24-hour degradation of service during a stateful workload disruption. The financial impact was severe, with estimated millions in lost productivity and Service Level Agreement penalties across their enterprise customer base. Their core database cluster, which served as the central source of truth for millions of repositories, encountered a split-brain scenario during a routine topology shift. The incident highlighted a fundamental truth of distributed systems: moving stateless compute is trivial, but moving stateful data is fraught with peril.
+Stateful migration exposes a design fault line: if control planes diverge during topology shifts, consistency and write guarantees can become unreliable in minutes. The same lesson is developed in Advanced Merging and is where the canonical incident framing belongs.
+<!-- incident-xref: github-2018-10-split-brain -->
+<!-- incident-xref: github-2018-split-brain -->
 
 A similar scenario unfolded for a major streaming service in late 2022. The engineering team had successfully migrated their stateless microservices from on-premises virtual machines to Kubernetes. The remaining legacy footprint was a 12TB PostgreSQL database, a 3TB Elasticsearch cluster, a Redis cluster with 200GB of hot data, and a media processing service with 50TB of files on local network storage. Every migration attempt was estimated at two weeks of downtime, which the business flatly rejected. The database was simply too large for a standard dump-and-restore within the allowed maintenance window. 
 

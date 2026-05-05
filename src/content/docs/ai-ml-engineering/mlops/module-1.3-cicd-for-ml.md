@@ -1180,7 +1180,9 @@ ls -l .github/workflows/pr-check.yml
 </details>
 
 ### Task 2: Implement the Data Quality Gate
-Write a simple `pytest` script that fails if the dataset drops below a predefined sample threshold, preventing degraded training operations.
+Write a simple `pytest` script that fails if the dataset drops below a predefined sample threshold, so low-quality data is stopped before it reaches a downstream model pipeline.
+The same quality-control lesson is developed in [Observability](../../prerequisites/modern-devops/module-1.4-observability/).
+<!-- incident-xref: github-2021-08-mysql -->
 
 <details>
 <summary>Solution & Commands</summary>
