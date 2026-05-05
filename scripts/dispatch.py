@@ -494,10 +494,13 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         if output == "TIMEOUT":
             return False, output
 
-        # Non-rate-limit, non-timeout failure — try fallback model once
-        if model != GEMINI_FALLBACK_MODEL:
-            print(f"Retrying with fallback model: {GEMINI_FALLBACK_MODEL}", file=sys.stderr)
-            return dispatch_gemini(prompt, GEMINI_FALLBACK_MODEL, review, timeout, mcp,
+        # Non-rate-limit, non-timeout failure — try fallback model once.
+        # Reviews use the explicit GEMINI_REVIEW_FALLBACK_MODEL pin to avoid
+        # silently routing verdicts through "auto" (which can pick 2.5-flash).
+        nrl_fallback = GEMINI_REVIEW_FALLBACK_MODEL if review else GEMINI_FALLBACK_MODEL
+        if model != nrl_fallback:
+            print(f"Retrying with fallback model: {nrl_fallback}", file=sys.stderr)
+            return dispatch_gemini(prompt, nrl_fallback, review, timeout, mcp,
                                    use_subscription=use_subscription)
 
         return False, output

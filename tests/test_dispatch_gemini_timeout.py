@@ -284,6 +284,43 @@ def test_gemini_with_retry_no_fallback_when_already_on_fallback_model():
     assert all(c["model"] == dispatch.GEMINI_FALLBACK_MODEL for c in calls)
 
 
+def test_gemini_with_retry_no_fallback_when_review_already_on_review_fallback():
+    """Recursion guard, review variant: if a review caller is already on
+    GEMINI_REVIEW_FALLBACK_MODEL and every retry rate-limits, no extra
+    dispatch must fire. Mirrors the writer-side guard test but on the
+    review path so the explicit-pin branch is also exercised.
+
+    Patches GEMINI_DEFAULT_MODEL to a synthetic value so dispatch.py:423's
+    auto-promote-to-Pro doesn't silently swap our test model: the real
+    GEMINI_DEFAULT_MODEL and GEMINI_REVIEW_FALLBACK_MODEL are both
+    "gemini-3-flash-preview", so passing the latter as the explicit
+    starting model would otherwise trigger the auto-promote branch.
+    """
+    calls: list[dict] = []
+
+    def fake_dispatch(prompt, model, review, timeout, mcp, use_subscription=None):
+        calls.append({"model": model, "review": review,
+                      "use_subscription": use_subscription})
+        return False, "429 rate limit"
+
+    with patch("dispatch.dispatch_gemini", side_effect=fake_dispatch), \
+         patch("dispatch.dispatch_gemini_rest", return_value=(False, "REST not used in this test")), \
+         patch("dispatch.time.sleep"), \
+         patch.object(dispatch, "_FORCE_GEMINI_SUBSCRIPTION", False), \
+         patch.object(dispatch, "GEMINI_DEFAULT_MODEL", "_synthetic-default-not-real"):
+        ok, output = dispatch.dispatch_gemini_with_retry(
+            "review this", model=dispatch.GEMINI_REVIEW_FALLBACK_MODEL,
+            review=True, max_retries=2,
+        )
+
+    assert ok is False
+    assert "429" in output
+    # Every dispatch call stays on the review fallback model — no double-burn
+    # on a different model after exhausting retries.
+    assert all(c["model"] == dispatch.GEMINI_REVIEW_FALLBACK_MODEL for c in calls)
+    assert all(c["review"] is True for c in calls)
+
+
 def test_gemini_with_retry_non_review_uses_auto_fallback():
     """Non-review (writer) calls use GEMINI_FALLBACK_MODEL ("auto"), not the
     review-specific pin. This keeps the auto-pick latitude for cheap writer
