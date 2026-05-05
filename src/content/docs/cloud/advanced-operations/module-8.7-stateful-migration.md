@@ -24,7 +24,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Stateful migration exposes a design fault line: if control planes diverge during topology shifts, consistency and write guarantees can become unreliable in minutes. The same lesson is developed in [Advanced Merging](../../prerequisites/git-deep-dive/module-2-advanced-merging/) and is where the canonical incident framing belongs.
+Stateful migration exposes a design fault line: if control planes diverge during topology shifts, consistency and write guarantees can become unreliable in minutes. This concept is further explored in [Advanced Merging](../../prerequisites/git-deep-dive/module-2-advanced-merging/).
 <!-- incident-xref: github-2018-10-split-brain -->
 <!-- incident-xref: github-2018-split-brain -->
 

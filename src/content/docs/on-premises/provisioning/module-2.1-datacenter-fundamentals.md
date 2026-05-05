@@ -442,7 +442,7 @@ For a production Kubernetes platform, set hard gates before any price comparison
 
 When negotiating the contract, push on these items explicitly because the standard boilerplate will paper over all of them. A "99.99% uptime" promise on the front page is meaningless if the credits are capped at one month of fees and the response times for remote hands are buried in an appendix as "commercially reasonable efforts."
 These clauses keep procurement accountable: power continuity commitments, cooling outage coverage, emergency response guarantees, maintenance notice windows, cross-connect delivery timelines, outage communication cadence, and expansion or exit terms.
-The concrete incident context for this section is covered in [Defense in Depth](../../platform/foundations/security-principles/module-4.2-defense-in-depth/).
+For real-world examples of physical security failures, see [Defense in Depth](../../platform/foundations/security-principles/module-4.2-defense-in-depth/).
 <!-- incident-xref: target-2013 -->
 
 ### Practical Negotiation Rule

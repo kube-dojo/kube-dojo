@@ -219,7 +219,7 @@ ARNs (Amazon Resource Names) are how AWS uniquely identifies every resource. Und
 arn:partition:service:region:account-id:resource-type/resource-id
 ```
 
-Rather than repeat a real-world outage, treat this section as pure technical grounding and point incident learners to the canonical Reliability case study. The same conceptual lesson appears in [Failure Modes and Effects](../../platform/foundations/reliability-engineering/module-2.2-failure-modes-and-effects/).
+For an analysis of how identity failures cascade in distributed systems, see [Failure Modes and Effects](../../platform/foundations/reliability-engineering/module-2.2-failure-modes-and-effects/).
 <!-- incident-xref: aws-s3-2017-us-east-1 -->
 <!-- incident-xref: aws-s3-useast1-2017 -->
 
