@@ -173,9 +173,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     parser.add_argument(
         "--mode",
-        default="delta",
+        # Keep delta as an explicit legacy mode for the #878 sweep PRs.
+        default="absolute",
         choices=("delta", "absolute"),
-        help="Gate mode (delta compares base->current, absolute fails if any violations exist)",
+        help=(
+            "Gate mode (absolute is default and fails if any violations exist). "
+            "Use delta only when you need legacy behavior for historical sweeps."
+        ),
     )
     return parser.parse_args(argv)
 

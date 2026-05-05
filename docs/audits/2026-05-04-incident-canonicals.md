@@ -6,7 +6,7 @@
 
 ## Lock table
 
-**FROZEN until #878 closes. No canonical reassignments allowed. Adding new canonicals is allowed only when claiming a catalog replacement in a Phase 1+ sweep PR.**
+**#878 closed 2026-05-06.** All 33 incident-reuse violations have been resolved. The gate (`scripts/quality/incident_dedup_gate.py`) now runs in `absolute` mode by default and is required on every PR via `.github/workflows/incident-dedup.yml`. New canonical assignments are allowed; new incident additions must be claimed in this doc as part of the introducing PR.
 
 | # | Incident | Canonical module | Lesson it owns |
 |---|---|---|---|
