@@ -5,9 +5,15 @@ sidebar:
   order: 210
 revision_pending: false
 ---
-> **Domain:** AI/ML Engineering Track | **Complexity:** `[COMPLEX]` | **Time:** 5-6 hours | **Prerequisites:** Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
+> **Complexity**: `[COMPLEX]`
+>
+> **Time to Complete**: 5-6 hours
+>
+> **Prerequisites**: Prompt engineering fundamentals, Git workflow, basic testing, secure coding basics, and experience with at least one IDE or terminal workflow
 
-## Learning Outcomes
+---
+
+## What You'll Be Able to Do
 
 By the end of this module, you will be able to:
 
