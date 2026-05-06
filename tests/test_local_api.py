@@ -64,6 +64,28 @@ def _module_frontmatter(*, lab_id: str | None = None) -> str:
     return "\n".join(lines)
 
 
+def test_venv_python_for_repo_cap_stops_after_five_levels(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "a" / "b" / "c" / "d" / "e" / "f" / "g" / "h"
+    repo_root.mkdir(parents=True)
+
+    call_count = {"n": 0}
+    original_exists = local_api.Path.exists
+
+    def exists_and_count(self) -> bool:
+        if self.name == "python" and self.parent.name == "bin" and self.parent.parent.name == ".venv":
+            call_count["n"] += 1
+        return original_exists(self)
+
+    monkeypatch.setattr(local_api.Path, "exists", exists_and_count)
+
+    import pytest
+
+    with pytest.raises(FileNotFoundError, match="Could not locate \\.venv/bin/python"):
+        local_api._venv_python_for_repo(repo_root)
+
+    assert call_count["n"] == 6
+
+
 def _seed_quality_module(
     repo: Path,
     rel: str,

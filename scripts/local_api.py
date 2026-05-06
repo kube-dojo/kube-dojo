@@ -431,12 +431,20 @@ def _path_mtime(p: Path) -> float:
 
 def _venv_python_for_repo(repo_root: Path) -> str:
     # Candidate roots intentionally include ancestry to cope with
-    # git worktree layouts (module under .worktrees/<branch>/).
-    for base in (repo_root, *repo_root.parents, REPO_ROOT, *REPO_ROOT.parents):
+    # git worktree layouts (module under .worktrees/<branch>/),
+    # while preventing runaway traversal toward `/`.
+    max_ancestry = 5
+    base = repo_root
+    for _ in range(max_ancestry + 1):
         candidate = base / ".venv" / "bin" / "python"
         if candidate.exists():
             return str(candidate)
-    return ".venv/bin/python"
+        if base == Path("/") or base == base.parent:
+            break
+        base = base.parent
+    raise FileNotFoundError(
+        f"Could not locate .venv/bin/python within {max_ancestry} parent levels of {repo_root}"
+    )
 
 
 # Persistent read-only sqlite connections keyed by absolute db path.
@@ -4166,8 +4174,8 @@ def build_delivery_status(repo_root: Path) -> dict[str, Any]:
         "up_to_date": bool(dist_files) and newest_dist >= newest_source,
     }
 
-    health_cmd = [_venv_python_for_repo(repo_root), "scripts/check_site_health.py"]
     try:
+        health_cmd = [_venv_python_for_repo(repo_root), "scripts/check_site_health.py"]
         result = subprocess.run(
             health_cmd,
             cwd=repo_root,

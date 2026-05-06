@@ -52,6 +52,13 @@ def test_parse_bare_url_bullet() -> None:
     assert e.claim == "https://example.com/page"
 
 
+def test_parse_numbered_bare_url_bullet() -> None:
+    e = citations._parse_bullet("1. https://example.com/page")
+    assert e is not None
+    assert e.url == "https://example.com/page"
+    assert e.claim == "https://example.com/page"
+
+
 def test_parse_angle_bracketed_url() -> None:
     e = citations._parse_bullet("- [Title](<https://example.com/>) — claim")
     assert e is not None
