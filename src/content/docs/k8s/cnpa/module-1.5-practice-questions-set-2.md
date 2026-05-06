@@ -270,12 +270,14 @@ Finally, review your written explanations for balanced language. If your explana
 
 ### Question 1
 
+Your organization has eight application teams, each with a different deployment script and namespace checklist. Which option best reflects platform engineering?
+
 1. Every team builds its own deployment tooling.
 2. A dedicated team builds reusable internal products and paved paths.
 3. The ops team handles all provisioning requests manually.
 4. Developers may use any workflow, with no standards.
 
-<details><summary>Your organization has eight application teams, each with a different deployment script and namespace checklist. Which option best reflects platform engineering?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -284,12 +286,14 @@ Option 2 is correct because platform engineering reduces duplicated effort by tr
 
 ### Question 2
 
+A GitOps controller keeps reverting a manual change to a Deployment because the repository still declares the previous value. What is the best description of reconciliation in a platform context?
+
 1. A one-time setup step that happens only during deployment.
 2. A loop that compares desired state to actual state and brings them together.
 3. A manual approval process for every change.
 4. A method of hiding drift from developers.
 
-<details><summary>A GitOps controller keeps reverting a manual change to a Deployment because the repository still declares the previous value. What is the best description of reconciliation in a platform context?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -298,12 +302,14 @@ Option 2 is correct because reconciliation is continuous comparison followed by 
 
 ### Question 3
 
+A team is choosing words for a CNPA study card and wants one set that naturally belongs together. Which combination belongs most naturally together?
+
 1. Developer experience, golden paths, internal developer platforms
 2. Ticket queues, tribal knowledge, ad hoc scripts
 3. Monitoring only, no policies, no metrics
 4. Manual approvals, one-off YAML, invisible drift
 
-<details><summary>A team is choosing words for a CNPA study card and wants one set that naturally belongs together. Which combination belongs most naturally together?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 1**
 
@@ -312,12 +318,14 @@ Option 1 is correct because developer experience, golden paths, and internal dev
 
 ### Question 4
 
+A platform team reports that it closed many support tickets, but application teams still wait days for routine environments. Which statement about measurement is most accurate?
+
 1. Platform success is only measured by cost reduction.
 2. A platform should be measured with adoption, reliability, and time-to-value signals.
 3. If the platform team is busy, the platform is healthy.
 4. A platform needs no metrics if users are happy.
 
-<details><summary>A platform team reports that it closed many support tickets, but application teams still wait days for routine environments. Which statement about measurement is most accurate?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -326,12 +334,14 @@ Option 2 is correct because product-oriented platform measurement combines wheth
 
 ### Question 5
 
+A developer portal lets teams request namespaces without waiting for a ticket, but each namespace receives default quotas, labels, RBAC, and audit logging. Which is the best explanation of self-service with guardrails?
+
 1. Developers can do anything they want.
 2. The platform exposes safe paths with policy, limits, and auditability.
 3. The platform team approves every request manually.
 4. Developers never interact with the platform at all.
 
-<details><summary>A developer portal lets teams request namespaces without waiting for a ticket, but each namespace receives default quotas, labels, RBAC, and audit logging. Which is the best explanation of self-service with guardrails?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -340,12 +350,14 @@ Option 2 is correct because guarded self-service gives developers autonomy insid
 
 ### Question 6
 
+A service team avoids the official golden path because policy rejections say only “denied” and provide no owner or remediation. What should the platform team improve first?
+
 1. Remove all policy checks so deployments stop failing.
 2. Keep the policy, but add clear reasons, remediation guidance, and an exception path.
 3. Require the service team to open a ticket for every deployment.
 4. Stop measuring adoption because users are responsible for following standards.
 
-<details><summary>A service team avoids the official golden path because policy rejections say only “denied” and provide no owner or remediation. What should the platform team improve first?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -354,12 +366,14 @@ Option 2 is correct because guardrails should teach users how to succeed while p
 
 ### Question 7
 
+A platform roadmap includes a new workflow for production service creation. Which choice best shows product thinking rather than tool-first implementation?
+
 1. Pick the newest portal framework and announce that the platform is complete.
 2. Start with the developer journey, encode safe defaults, reconcile desired state, and measure time-to-value.
 3. Let each team design a separate workflow so the platform team has fewer decisions to make.
 4. Focus only on reducing cloud spend, because user adoption will follow automatically.
 
-<details><summary>A platform roadmap includes a new workflow for production service creation. Which choice best shows product thinking rather than tool-first implementation?</summary>
+<details><summary>Show answer and explanation</summary>
 
 **Correct answer: 2**
 
@@ -399,7 +413,7 @@ Your answer is ready when it avoids tool-only language, names the user journey, 
 - [Kubernetes documentation: Limit ranges](https://kubernetes.io/docs/concepts/policy/limit-range/)
 - [Kubernetes documentation: Auditing](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 - [CNCF TAG App Delivery: Operator Whitepaper](https://tag-app-delivery.cncf.io/whitepapers/operator/)
-- [CNCF Platforms Working Group: Platform Engineering Maturity Model](https://tag-app-delivery.cncf.io/whitepapers/platform-eng-maturity-model/)
+- [CNCF Platforms Working Group: Platform Engineering Maturity Model](https://tag-app-delivery.cncf.io/whitepapers/platforms/)
 
 ## Next Module
 
