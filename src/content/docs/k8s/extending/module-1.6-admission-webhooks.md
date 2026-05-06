@@ -106,7 +106,7 @@ The API contract between the API server and a webhook is `AdmissionReview`. The 
       "kind": "Pod",
       "metadata": {"name": "my-pod", "namespace": "default"},
       "spec": {
-        "containers": [{"name": "app", "image": "nginx:1.35"}]
+        "containers": [{"name": "app", "image": "nginx:1.27"}]
       }
     },
     "oldObject": null
@@ -1140,7 +1140,7 @@ Create a test namespace, label it for webhook participation, and compare a Pod w
 kubectl create namespace webhook-test
 kubectl label namespace webhook-test webhook=enabled
 
-kubectl run no-inject --image=nginx:1.35 --restart=Never -n webhook-test
+kubectl run no-inject --image=nginx:1.27 --restart=Never -n webhook-test
 kubectl get pod no-inject -n webhook-test -o jsonpath='{.spec.containers[*].name}'
 
 cat << 'EOF' | kubectl apply -f -
@@ -1154,7 +1154,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.35
+    image: nginx:1.27
 EOF
 
 kubectl get pod with-inject -n webhook-test -o jsonpath='{.spec.containers[*].name}'
@@ -1185,7 +1185,7 @@ metadata:
 spec:
   containers:
   - name: app
-    image: nginx:1.35
+    image: nginx:1.27
 EOF
 
 kubectl get pod annotated-but-unmatched -n webhook-unmatched -o jsonpath='{.spec.containers[*].name}'
