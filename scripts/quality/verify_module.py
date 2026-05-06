@@ -71,12 +71,25 @@ STOPWORDS = {
     "troubleshoot",
     "compare",
 }
-KUBECTL_COMMAND_RE = re.compile(
-    r"\bk\s+(?:get|apply|delete|describe|logs|exec|create|edit|scale|rollout|"
-    r"config|cluster-info|version|auth|top|cordon|drain|taint|label|annotate)\b",
+RUNNABLE_SHELL_LANGS = {"bash", "sh", "shell", "zsh"}
+KUBECTL_ALIAS_RE = re.compile(r"(?m)^\s*alias\s+k\s*=\s*['\"]?kubectl['\"]?\s*$")
+KUBECTL_SHORTHAND_RE = re.compile(
+    r"(?m)(?:^|[;&|]\s*)k\s+(get|describe|logs|apply|delete|set|edit|diff|version|exec|"
+    r"port-forward|cp|create|patch|scale|rollout|expose|run|label|annotate|drain|cordon|"
+    r"uncordon|taint|top|wait|api-resources|config|auth)\b"
+)
+UNSOURCED_ANECDOTE_RE = re.compile(
+    r"\bwar story\s*:"
+    r"|\b(?:one|a) (?:team|customer|client|company|organization) (?:I|we) "
+    r"(?:worked with|consulted for|helped|saw)\b"
+    r"|\b(?:a|an) (?:payments|retail|fintech|trading|insurance|telecom|saas|gaming|"
+    r"marketplace|e-commerce|healthcare) (?:company|platform|team|firm|startup|enterprise) "
+    r"(?:once|recently)\b",
     re.IGNORECASE,
 )
-ALIAS_RE = re.compile(r"\balias\s+k=(?:kubectl|'kubectl'|\"kubectl\")\b", re.IGNORECASE)
+SCENARIO_PREFIX_RE = re.compile(r"^(?:[*_#\s]*)(?:Hypothetical scenario|Exercise scenario):", re.IGNORECASE)
+MCQ_OPTION_RE = re.compile(r"(?m)^(?:[-*]\s*)?(?:\*\*)?(?:[A-D]|[1-4])[\).:](?:\*\*)?\s+\S")
+MCQ_REASONING_KEYWORD_RE = re.compile(r"\b(?:wrong|not correct|incorrect|because|why)\b", re.IGNORECASE)
 
 LEARNING_OUTCOME_HEADINGS = (
     "Learning Outcomes",
@@ -133,6 +146,17 @@ def _strip_frontmatter(text: str) -> tuple[dict[str, object], str]:
 
 def _strip_code_blocks(text: str, replacement: str = "") -> str:
     return re.sub(r"```.*?```", replacement, text, flags=re.DOTALL)
+
+
+def _fenced_code_blocks(text: str) -> list[tuple[str, str]]:
+    return [
+        (match.group(1).strip(), match.group(2))
+        for match in re.finditer(r"```([^\n]*)\n(.*?)```", text, re.DOTALL)
+    ]
+
+
+def _fence_language(info: str) -> str:
+    return info.strip().split(maxsplit=1)[0].lower() if info.strip() else ""
 
 
 def _word_count(text: str) -> int:
@@ -421,6 +445,118 @@ def _quiz_items(section: dict[str, object] | None) -> list[tuple[str, str]]:
     return items
 
 
+def _is_practice_question_path(path: Path) -> bool:
+    try:
+        relative = path.resolve().relative_to(REPO_ROOT.resolve())
+    except ValueError:
+        relative = path
+    normalized = relative.as_posix().lower()
+    if "src/content/docs/k8s/" not in normalized:
+        return False
+    return any(
+        marker in normalized
+        for marker in ("practice-questions", "questions", "mock-exam", "cumulative-quiz")
+    )
+
+
+def _practice_question_blocks(text: str) -> list[tuple[str, str, int | None]]:
+    _, body = _strip_frontmatter(text)
+    quiz = _find_matching_h2(body, QUIZ_HEADINGS) or _find_matching_h2(body, QUIZ_PREFIX_HEADINGS, prefix=True)
+    raw_content = str(quiz["content"]) if quiz else body
+    content_start = body.find(raw_content, int(quiz["start"])) if quiz else 0
+    if content_start < 0:
+        content_start = 0
+    content = raw_content
+    content = _strip_code_blocks(content, "\n")
+    details = list(
+        re.finditer(
+            r"<details\b[^>]*>\s*<summary>(.*?)</summary>(.*?)</details>",
+            content,
+            re.IGNORECASE | re.DOTALL,
+        )
+    )
+    if details:
+        blocks: list[tuple[str, str, int | None]] = []
+        previous_end = 0
+        for match in details:
+            visible = f"{content[previous_end:match.start()]}\n{match.group(1)}"
+            blocks.append((visible, match.group(2), None))
+            previous_end = match.end()
+        return blocks
+
+    markers = list(
+        re.finditer(
+            r"(?m)^\s*(?:#{3,6}\s+)?Question\s+\d+\b",
+            content,
+            re.IGNORECASE,
+        )
+    )
+    blocks = []
+    for marker in markers:
+        question_start = marker.start() + len(marker.group(0)) - len(marker.group(0).lstrip())
+        line_number = body[: content_start + question_start].count("\n") + 1
+        blocks.append((content[marker.start() : marker.end()], "", line_number))
+    return blocks
+
+
+def _answer_option_references(answer: str) -> set[str]:
+    references: set[str] = set()
+    patterns = (
+        r"\b(?:options?|choices?|answers?)\s+([A-D1-4](?:\s*(?:,|and|or)\s*[A-D1-4])*)\b",
+        r"\b([A-D1-4])[\).:]\s",
+        r"\b([A-D1-4])\s+(?:is|works|fails|would|does|because)\b",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, answer, re.IGNORECASE):
+            references.update(label.upper() for label in re.findall(r"[A-D1-4]", match.group(1)))
+    return references
+
+
+def practice_mcq_metrics(path: Path, text: str) -> dict[str, object]:
+    if not _is_practice_question_path(path):
+        return {"applies": False, "question_count": 0, "violations": []}
+    blocks = _practice_question_blocks(text)
+    violations: list[dict[str, object]] = []
+    for idx, (visible, answer, missing_details_line) in enumerate(blocks, 1):
+        option_count = len(MCQ_OPTION_RE.findall(visible))
+        if missing_details_line is not None:
+            violations.append(
+                {
+                    "question": idx,
+                    "line": missing_details_line,
+                    "message": f"MCQ at line {missing_details_line} missing `<details>` answer block",
+                    "visible_options": option_count,
+                    "labels_referenced": [],
+                    "has_distractor_reasoning": False,
+                }
+            )
+            continue
+        labels_referenced = _answer_option_references(answer)
+        has_distractor_reasoning = len(labels_referenced) >= 3 and bool(MCQ_REASONING_KEYWORD_RE.search(answer))
+        if option_count < 4 or not has_distractor_reasoning:
+            violations.append(
+                {
+                    "question": idx,
+                    "message": "MCQ needs ≥4 visible MCQ options"
+                    if option_count < 4
+                    else "MCQ answer must explain the correct option and distractors",
+                    "visible_options": option_count,
+                    "labels_referenced": sorted(labels_referenced),
+                    "has_distractor_reasoning": has_distractor_reasoning,
+                }
+            )
+    if not blocks:
+        violations.append(
+            {
+                "question": 0,
+                "visible_options": 0,
+                "labels_referenced": [],
+                "has_distractor_reasoning": False,
+            }
+        )
+    return {"applies": True, "question_count": len(blocks), "violations": violations}
+
+
 def _hands_on_lines(section: dict[str, object] | None) -> list[str]:
     if not section:
         return []
@@ -557,25 +693,37 @@ def anti_leak_metrics(text: str) -> dict[str, object]:
     body_no_code = _strip_code_blocks(body, " ")
     lowered = body_no_code.lower()
     forbidden = [token for token in FORBIDDEN_TOKENS if token.lower() in lowered]
-    has_k_shortcut = bool(KUBECTL_COMMAND_RE.search(body_no_code))
-    if not has_k_shortcut:
-        kubectl_alias_introduced = True
-    else:
-        # Search the original body because alias definitions normally live
-        # inside fenced bash snippets. The alias only needs to appear before
-        # the first shorthand command, not before every long-form kubectl
-        # mention in explanatory prose.
-        first_shortcut = KUBECTL_COMMAND_RE.search(body)
-        alias = ALIAS_RE.search(body)
-        kubectl_alias_introduced = bool(
-            first_shortcut and alias and alias.start() < first_shortcut.start()
-        )
     return {
         "forbidden_tokens": forbidden,
         "has_emoji": bool(EMOJI_RE.search(body_no_code)),
         "has_47": bool(re.search(r"(?<!\d)47(?!\d)", body_no_code)),
-        "kubectl_alias_introduced": kubectl_alias_introduced,
     }
+
+
+def runnable_shell_metrics(text: str) -> dict[str, object]:
+    _, body = _strip_frontmatter(text)
+    violations: list[str] = []
+    for info, code in _fenced_code_blocks(body):
+        if _fence_language(info) not in RUNNABLE_SHELL_LANGS:
+            continue
+        if KUBECTL_ALIAS_RE.search(code):
+            violations.append("alias k=kubectl")
+        for match in KUBECTL_SHORTHAND_RE.finditer(code):
+            violations.append(match.group(0).strip())
+    return {"kubectl_alias_violations": violations}
+
+
+def anti_fabrication_metrics(text: str) -> dict[str, object]:
+    _, body = _strip_frontmatter(text)
+    body_no_code = _strip_code_blocks(body, "\n")
+    violations: list[str] = []
+    for paragraph in re.split(r"\n\s*\n", body_no_code):
+        normalized = " ".join(paragraph.split())
+        if not normalized or SCENARIO_PREFIX_RE.match(normalized):
+            continue
+        for match in UNSOURCED_ANECDOTE_RE.finditer(normalized):
+            violations.append(match.group(0))
+    return {"unsourced_anecdotes": violations}
 
 
 def _strip_top_metadata(body: str) -> str:
@@ -701,6 +849,9 @@ def gate_results(
     structure: dict[str, object],
     sources: dict[str, object],
     anti_leak: dict[str, object],
+    runnable_shell: dict[str, object],
+    anti_fabrication: dict[str, object],
+    practice_mcq: dict[str, object],
     alignment: dict[str, object],
     skip_source_check: bool,
 ) -> dict[str, bool | None]:
@@ -728,8 +879,12 @@ def gate_results(
         else not any(int(sources["url_status"].get(key, 0)) for key in ("404", "fetch_failed")),  # type: ignore[union-attr]
         "anti_leak": not anti_leak["forbidden_tokens"]
         and not anti_leak["has_emoji"]
-        and not anti_leak["has_47"]
-        and bool(anti_leak["kubectl_alias_introduced"]),
+        and not anti_leak["has_47"],
+        "runnable_no_kubectl_alias": not runnable_shell["kubectl_alias_violations"],
+        "anti_fabrication_no_unsourced_anecdote": not anti_fabrication["unsourced_anecdotes"],
+        "practice_mcq_four_options_with_distractors": None
+        if not practice_mcq["applies"]
+        else not practice_mcq["violations"],
         "outcomes_aligned": bool(alignment["all_outcomes_covered"]),
     }
     return gates
@@ -770,8 +925,21 @@ def verify(path: str | Path, skip_source_check: bool = False, max_workers: int =
     sources = sources_metrics(text, skip_source_check, max_workers)
     assets = protected_assets(text)
     anti = anti_leak_metrics(text)
+    runnable_shell = runnable_shell_metrics(text)
+    anti_fabrication = anti_fabrication_metrics(text)
+    practice_mcq = practice_mcq_metrics(module_path, text)
     alignment = alignment_metrics(text)
-    gates = gate_results(metrics, structure, sources, anti, alignment, skip_source_check)
+    gates = gate_results(
+        metrics,
+        structure,
+        sources,
+        anti,
+        runnable_shell,
+        anti_fabrication,
+        practice_mcq,
+        alignment,
+        skip_source_check,
+    )
     tier, reasons = classify_tier(metrics, gates)
     passed = all(value is not False for value in gates.values())
     try:
@@ -788,6 +956,9 @@ def verify(path: str | Path, skip_source_check: bool = False, max_workers: int =
         "sources": sources,
         "protected_assets": assets,
         "anti_leak": anti,
+        "runnable_shell": runnable_shell,
+        "anti_fabrication": anti_fabrication,
+        "practice_mcq": practice_mcq,
         "alignment": alignment,
         "gates": gates,
         "passed": passed,
