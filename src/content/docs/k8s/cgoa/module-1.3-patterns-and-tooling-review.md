@@ -17,11 +17,11 @@ After this module, you will be able to:
 - Compare ArgoCD and Flux operational models when selecting GitOps tooling for Kubernetes 1.35+ clusters.
 - Design repository promotion layouts that separate source of truth, environment overlays, and multi-cluster targets.
 - Diagnose promotion, rollout, and secrets mistakes by separating rendering, reconciliation, and release safety responsibilities.
-- Implement a local review workflow that uses the `k` alias, Helm, Kustomize, and diff commands to inspect generated manifests before reconciliation.
+- Implement a local review workflow that uses `kubectl`, Helm, Kustomize, and diff commands to inspect generated manifests before reconciliation.
 
 ## Why This Module Matters
 
-A payments company once treated GitOps tooling as a naming exercise during an urgent platform migration. The team had clean application code, an experienced release group, and a reasonable Kubernetes baseline, yet a production outage still lasted for hours because a chart change, an environment overlay, and an automatic sync policy all moved at once. The immediate financial impact was measured in failed transactions and emergency support costs, but the deeper damage was operational: nobody could answer whether the cluster was wrong, the repository was wrong, the rendered manifests were wrong, or the promotion process had skipped a control.
+When teams treat GitOps tooling as a naming exercise during an urgent platform migration, a production outage can easily last for hours if a chart change, an environment overlay, and an automatic sync policy all move at once. The deeper damage is operational: nobody can answer whether the cluster was wrong, the repository was wrong, the rendered manifests were wrong, or the promotion process had skipped a control.
 
 That incident is the shape of many GitOps failures. Teams adopt a controller, put manifests in Git, and assume the architecture is solved because the word GitOps appears in a dashboard. The exam will not ask you to memorize every flag in every tool, but it will ask whether you can recognize the operating pattern behind the tool: what is the source of truth, where rendering happens, how promotion is controlled, which component reconciles state, and where humans should inspect risk before the controller applies it.
 
@@ -46,17 +46,16 @@ The easiest way to reason about GitOps tooling is to separate three responsibili
 
 The diagram matters because it gives you a clean way to reject vague exam answers. If an answer says Helm "does GitOps" by itself, it skips the ongoing control loop. If an answer says CI should push rendered YAML directly into every cluster, it may still be automation, but it is not the pull-based reconciliation model that GitOps normally prefers. If an answer says Git should hold only application source code while cluster configuration lives in ticket comments, it has lost the source-of-truth property.
 
-Before running commands, define a shell alias so examples are short and consistent: `alias k=kubectl`. In real practice, the alias is just a convenience, but using it consistently trains you to think in terms of repeatable checks rather than ad hoc manual fixes. A CGOA-style question may show either `kubectl` or `k`; what matters is that the action inspects Kubernetes state and does not secretly bypass the GitOps workflow.
+Before running commands, use explicit commands so examples stay clear and repeatable. A CGOA-style question may show either direct `kubectl` invocations or shorthand; what matters is that the action inspects Kubernetes state and does not secretly bypass the GitOps workflow.
 
 ```bash
-alias k=kubectl
-k version --client
-k get namespaces
+kubectl version --client
+kubectl get namespaces
 ```
 
-The alias command does not make a system GitOps-compliant. It only gives you a concise way to inspect what the controller has already done, which is a different responsibility from changing the desired state. A disciplined operator uses `k` to observe, diagnose, and confirm, then changes Git when the desired state must change, because direct cluster mutation creates drift that the controller may undo or hide.
+Shorthand commands do not make a system GitOps-compliant. They only give you a concise way to inspect what the controller has already done, which is a different responsibility from changing the desired state. A disciplined operator uses `kubectl` to observe, diagnose, and confirm, then changes Git when the desired state must change, because direct cluster mutation creates drift that the controller may undo or hide.
 
-Pause and predict: if a teammate runs `k edit deployment checkout-api` in production while ArgoCD or Flux is reconciling from Git, what state should win after the next reconciliation cycle, and why? The correct reasoning is not "the fastest command wins"; the desired state in Git should win unless the controller is paused, misconfigured, or pointed at the wrong source. This is why GitOps is an operating model, not just a deployment shortcut.
+Pause and predict: if a teammate runs `kubectl edit deployment checkout-api` in production while ArgoCD or Flux is reconciling from Git, what state should win after the next reconciliation cycle, and why? The correct reasoning is not "the fastest command wins"; the desired state in Git should win unless the controller is paused, misconfigured, or pointed at the wrong source. This is why GitOps is an operating model, not just a deployment shortcut.
 
 There are legitimate places for CI/CD in a GitOps system, but CI/CD normally prepares inputs rather than becoming the final authority over cluster state. CI builds images, runs tests, signs artifacts, and may open a pull request that changes an image tag or chart value. The GitOps controller then notices the approved repository change and reconciles the cluster, which keeps deployment history tied to Git review instead of hiding it inside a pipeline log.
 
@@ -203,7 +202,7 @@ ArgoCD and Flux both support Helm and Kustomize workflows, but the integration d
 
 The exam may also mention notifications, observability, and image automation. These are not decorative extras; they decide whether a GitOps system is operable after the first successful sync. A controller that silently fails to fetch a repository or repeatedly applies a broken manifest is still automated, but it is not friendly to humans. Good GitOps design makes reconciliation status, drift, health, and promotion history observable.
 
-War story: a retail platform once adopted a GitOps controller successfully for one cluster, then copied the pattern into regional clusters without deciding who owned notifications. The manifests were technically correct, but failed reconciliations reached only a chat channel that nobody monitored after business hours. The fix was not a new deployment tool; it was assigning ownership, wiring alerts to the right team, and treating failed reconciliation as an operational event rather than a dashboard curiosity.
+A common failure mode occurs when teams adopt a GitOps controller successfully for one cluster, then copy the pattern into regional clusters without deciding who owns notifications. Manifests may be technically correct, but failed reconciliations reach only a chat channel that nobody monitors after business hours. The remedy is not a new deployment tool; it is assigning ownership, wiring alerts to the right team, and treating failed reconciliation as an operational event rather than a dashboard curiosity.
 
 Which approach would you choose here and why: a small product team wants a visible app dashboard for ten services, while a platform team wants tenant teams to own separate Kubernetes resources across many clusters? The first scenario often leans ArgoCD because application visibility matters, and the second often leans Flux because composable controller resources fit delegation. The answer is not a brand preference; it is a match between operational shape and tool model.
 
@@ -233,10 +232,10 @@ Kustomize is useful when the base manifests are already close to what you need a
 
 ```bash
 kustomize build apps/checkout/overlays/prod > /tmp/checkout-kustomize-prod.yaml
-k diff -f /tmp/checkout-kustomize-prod.yaml
+kubectl diff -f /tmp/checkout-kustomize-prod.yaml
 ```
 
-The `k diff` step is a valuable review habit because it compares rendered desired state with live cluster state before an apply. In a GitOps workflow, you may not apply from your terminal, but you can still use diff-style thinking during a review or incident. If the diff shows unexpected deletion of a ServiceAccount, the right response is to fix Git before reconciliation, not to wait for the controller to surprise production.
+The `kubectl diff` step is a valuable review habit because it compares rendered desired state with live cluster state before an apply. In a GitOps workflow, you may not apply from your terminal, but you can still use diff-style thinking during a review or incident. If the diff shows unexpected deletion of a ServiceAccount, the right response is to fix Git before reconciliation, not to wait for the controller to surprise production.
 
 Jsonnet fits when configuration generation needs stronger abstraction than Kustomize patches or Helm templates provide. It can model reusable libraries, computed objects, and shared conventions across large estates. The cost is that it introduces a programming language into the manifest path, so reviewers need enough skill to reason about generated output. For CGOA, the key is to know why teams use Jsonnet, not to memorize its syntax.
 
@@ -329,7 +328,7 @@ Finally, do not confuse a clean repository tree with a clean operating model. A 
 
 The most resilient teams treat GitOps patterns as contracts between people and automation. The repository contract says where desired state lives and who may change it. The rendering contract says how final manifests are produced and validated. The reconciliation contract says which controller applies state and how failures surface. The rollout contract says how users are exposed to change. When those contracts are written down, tool migrations and incident handoffs become less personal and more mechanical.
 
-Anti-patterns usually appear when one of those contracts is implicit. A senior engineer may know that production overlays require an extra review, but a new teammate may only see a folder and a merge button. A platform owner may know that direct cluster edits are overwritten, but an incident responder may treat `k edit` as a normal fix. GitOps reduces hidden state only when teams also reduce hidden process.
+Anti-patterns usually appear when one of those contracts is implicit. A senior engineer may know that production overlays require an extra review, but a new teammate may only see a folder and a merge button. A platform owner may know that direct cluster edits are overwritten, but an incident responder may treat `kubectl edit` as a normal fix. GitOps reduces hidden state only when teams also reduce hidden process.
 
 Scaling adds another source of pressure. The layout that works for three services can become risky for thirty teams if every promotion touches the same shared file or requires the same platform approver. Conversely, a heavily split repository model can become slow if small changes require synchronized pull requests across too many locations. The best pattern is the smallest structure that preserves ownership, reviewability, and traceability at the current scale.
 
@@ -416,7 +415,7 @@ The team should render the final manifests and review the diff before the contro
 
 </details>
 
-<details><summary>An incident responder runs `k edit deployment checkout-api` to hotfix production while ArgoCD automated sync is enabled. The change disappears a few minutes later. What happened?</summary>
+<details><summary>An incident responder runs `kubectl edit deployment checkout-api` to hotfix production while ArgoCD automated sync is enabled. The change disappears a few minutes later. What happened?</summary>
 
 The direct cluster edit created drift from the desired state stored in Git, and the GitOps controller reconciled the live Deployment back to the repository version. That is expected behavior unless the controller is paused or the desired state is changed in Git. The durable fix is to commit the intended state or record the emergency change back into the GitOps source after stabilizing the service. This tests diagnosis of reconciliation behavior.
 
@@ -444,10 +443,9 @@ Replacing the GitOps controller is probably solving the wrong problem. A paused 
 
 In this exercise, you will perform a review workflow without applying a surprise change to a cluster. You can use a local Kubernetes 1.35+ lab cluster if you have one, but the important learning goal is the sequence: render first, diff second, reason about reconciliation third, and only then decide what belongs in Git. The examples use a small checkout service so you can focus on boundaries rather than application complexity.
 
-Start by creating a temporary workspace outside the repository you are editing. This keeps the module source clean while giving you a place to experiment with Helm, Kustomize, and Kubernetes diff commands. The exercise uses the `k` alias after introducing it, so confirm that your shell points `k` at the same kubeconfig context you intend to inspect.
+Start by creating a temporary workspace outside the repository you are editing. This keeps the module source clean while giving you a place to experiment with Helm, Kustomize, and Kubernetes diff commands. Confirm your shell points `kubectl` at the same kubeconfig context you intend to inspect.
 
 ```bash
-alias k=kubectl
 mkdir -p /tmp/cgoa-gitops-review/apps/checkout/base
 mkdir -p /tmp/cgoa-gitops-review/apps/checkout/overlays/prod
 cd /tmp/cgoa-gitops-review
@@ -455,7 +453,7 @@ cd /tmp/cgoa-gitops-review
 
 - [ ] Task 1: Create a base Deployment and Service for `checkout-api`, then explain which fields should be shared across environments and which fields should move into overlays.
 - [ ] Task 2: Create a production Kustomize overlay that changes replicas to 3 and sets an explicit image tag, then render it before thinking about reconciliation.
-- [ ] Task 3: Run a diff-style inspection with `k diff -f` against the rendered manifest, or describe the expected diff if you do not have a live cluster.
+- [ ] Task 3: Run a diff-style inspection with `kubectl diff -f` against the rendered manifest, or describe the expected diff if you do not have a live cluster.
 - [ ] Task 4: Decide whether this layout should be watched by ArgoCD as an Application or by Flux as a Kustomization, and justify the choice using operational needs.
 - [ ] Task 5: Add a short promotion note that states which commit, tag, or overlay change would be reviewed before production reconciliation.
 
