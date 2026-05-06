@@ -1049,6 +1049,7 @@ func (h *RecordHandler) HandleWatch(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
+			// Placeholder: a real implementation would read the next object from a backend change stream.
 			event := map[string]interface{}{
 				"type":   "MODIFIED",
 				"object": record,
@@ -1204,7 +1205,7 @@ Exercise scenario: you will build and deploy an extension API server that serves
 **Setup**:
 
 ```bash
-kind create cluster --name aggregation-lab
+kind create cluster --name aggregation-lab --image kindest/node:v1.35.0
 
 # Install cert-manager.
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
@@ -1227,7 +1228,7 @@ mkdir -p cmd/server pkg/handlers pkg/storage pkg/types manifests
 ```bash
 # Create Dockerfile.
 cat << 'DOCKERFILE' > Dockerfile
-FROM golang:1.25 AS builder
+FROM golang:1.26 AS builder
 WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
@@ -1327,7 +1328,7 @@ kind delete cluster --name aggregation-lab
 - https://github.com/kubernetes/sample-apiserver
 - https://github.com/kubernetes-sigs/metrics-server
 - https://github.com/kubernetes-sigs/custom-metrics-apiserver
-- https://etcd.io/docs/v3.6/dev-guide/limit/
+- https://etcd.io/docs/current/dev-guide/limit/
 - https://cert-manager.io/docs/usage/certificate/
 
 ## Next Module
