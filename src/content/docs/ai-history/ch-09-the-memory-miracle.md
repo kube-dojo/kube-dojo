@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-In 1947, Manchester's Williams tube showed how fragile stored-program memory could be, while mercury delay lines stored data by sending shock-waves down a column of mercury. MIT's Project Whirlwind needed memory that did not forget. Jay Forrester's three-dimensional coincident-current concept first used neon glow tubes that drifted with temperature, then shifted to magnetic materials with rectangular hysteresis. Three parallel inventors — Forrester at MIT, Jan Rajchman at RCA, An Wang at Harvard — converged on magnetic-core memory between 1949 and 1953. SAGE turned MIT's variant into the IBM 704's industrial standard.
+In 1947, Manchester's Williams tube showed how fragile stored-program memory could be, while mercury delay lines sent data as shock-waves through mercury. MIT's Project Whirlwind needed memory that did not forget. Jay Forrester's three-dimensional coincident-current concept used drifting neon glow tubes, then shifted to magnetic materials with rectangular hysteresis. Three inventors — Forrester, Jan Rajchman, An Wang — converged on magnetic-core memory between 1949 and 1953. SAGE turned MIT's variant into the IBM 704's industrial standard.
 :::
 
 <details>

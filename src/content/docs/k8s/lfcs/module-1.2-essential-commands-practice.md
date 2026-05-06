@@ -24,7 +24,7 @@ revision_pending: false
 
 ## Why This Module Matters
 
-In January 2017, GitLab published a detailed post-incident account after a destructive database maintenance command removed production data from the wrong host. The public write-up is valuable for system administrators because the failure was not exotic: the operator was working under pressure, multiple terminals were involved, replication state was confusing, and a dangerous filesystem command reached the primary database before the mistake was stopped. The lesson for LFCS preparation is direct. A shell command is not just syntax; it is an operational decision made against a specific path, host, filesystem, and stream of output.
+This module includes a production-level cautionary case about command sequencing and verification under pressure. It is best read as a reminder that routine commands become high-impact when timing, scope, and assumptions drift. For the canonical incident writeup and full lesson context, see [Module 0.2: What is a Terminal?](/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal/).
 
 The LFCS exam compresses that same style of pressure into a controlled environment. You are not asked to admire Linux commands from a distance; you are asked to alter a live system, preserve what must be preserved, remove only what should be removed, and prove the resulting state. A candidate who can recite `tar` flags but cannot verify where an archive will extract is still gambling. A candidate who knows `grep` but launches it recursively from `/` may waste minutes reading irrelevant data while the real task remains untouched.
 
@@ -542,7 +542,7 @@ The precondition is that the restore directory exists and the archive listing sh
 
 ## Sources
 
-- [GitLab.com database incident overview](https://about.gitlab.com/blog/2017/02/01/gitlab-dot-com-database-incident/)
+- Canonical reference: [Module 0.2: What is a Terminal?](/prerequisites/zero-to-terminal/module-0.2-what-is-a-terminal/) for the production incident walkthrough.
 - [GNU Coreutils manual: cp invocation](https://www.gnu.org/software/coreutils/manual/html_node/cp-invocation.html)
 - [GNU Coreutils manual: mv invocation](https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html)
 - [GNU Coreutils manual: ln invocation](https://www.gnu.org/software/coreutils/manual/html_node/ln-invocation.html)
@@ -553,7 +553,7 @@ The precondition is that the restore directory exists and the archive listing sh
 - [GNU Gawk manual](https://www.gnu.org/software/gawk/manual/gawk.html)
 - [GNU Tar manual](https://www.gnu.org/software/tar/manual/tar.html)
 - [GNU Gzip manual](https://www.gnu.org/software/gzip/manual/gzip.html)
-- [XZ Utils documentation](https://tukaani.org/xz/)
+- Canonical reference: [Module 4.4: Supply Chain Threats](/k8s/kcsa/part4-threat-model/module-4.4-supply-chain/) for the XZ backdoor case context.
 - [GNU Cpio manual](https://www.gnu.org/software/cpio/manual/cpio.html)
 
 ## Next Module
