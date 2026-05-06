@@ -8,7 +8,7 @@ sidebar:
 
 # Module 4.4: Supply Chain Threats
 
-Complexity: `[MEDIUM]` - threat awareness and control design. Time to complete: 55-70 minutes. Prerequisites: [Module 4.3: Container Escape](../module-4.3-container-escape/). All cluster commands assume Kubernetes 1.35+ and the shell alias `alias k=kubectl`.
+Complexity: `[MEDIUM]` - threat awareness and control design. Time to complete: 55-70 minutes. Prerequisites: [Module 4.3: Container Escape](../module-4.3-container-escape/). All cluster commands assume Kubernetes 1.35+ and use the full `kubectl` command name.
 
 ## Learning Outcomes
 
@@ -231,7 +231,7 @@ Image signing adds a cryptographic statement to the artifact lifecycle: a truste
 │  ├── Notary v2 - Content trust                            │
 │  └── Docker Content Trust (DCT)                           │
 │                                                             │
-│  COSIGN WORKFLOW:                                          │
+│  KEYED COSIGN WORKFLOW:                                    │
 │  1. Build image                                            │
 │  2. Sign: cosign sign --key cosign.key myimage:tag        │
 │  3. Push signature to registry                             │
@@ -405,8 +405,7 @@ For Kubernetes teams, GitOps can reduce deployment ambiguity because the desired
 Here is a small inventory command that illustrates the kind of question a platform team should ask regularly. It lists images used by Pods so reviewers can spot tag-based references that need replacement with digests. In a real environment, you would combine this with registry metadata and admission audit logs, but the command is a good first check during a workshop or incident review.
 
 ```bash
-alias k=kubectl
-k get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}'
+kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}'
 ```
 
 If the output contains `:latest` or version tags without `@sha256:`, treat those workloads as investigation targets rather than immediate proof of compromise. Some teams intentionally use tags in lower environments, and some registries enforce immutable tags. Production policy should still prefer digests because the Pod specification then carries the immutable content identity. During an incident, that difference saves time because responders can match running workloads to SBOMs, signatures, attestations, and vulnerability records without reconstructing registry history from memory.
@@ -609,7 +608,7 @@ The review is complete only when the normal path and the failure path are both b
 
 ## Did You Know?
 
-- **The 2020 trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
+- **The 2020 SolarWinds trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
 
 - **Dependency confusion became a board-level issue in 2021** after public research showed that package resolution rules could pull attacker-controlled packages when private names were not scoped or routed correctly.
 
@@ -675,7 +674,7 @@ An SBOM catalog lets responders query component inventories by image digest inst
 
 ## Hands-On Exercise: Supply Chain Risk Assessment
 
-In this exercise, you will review a deliberately weak container build and deployment flow, then rewrite the control plan as if you were preparing a production readiness review. You do not need a live cluster for every step, but if you have a Kubernetes 1.35+ lab cluster, use the `k` alias when checking workloads. Focus on explaining the risk, the evidence you would require, and the admission behavior that should follow.
+In this exercise, you will review a deliberately weak container build and deployment flow, then rewrite the control plan as if you were preparing a production readiness review. You do not need a live cluster for every step, but if you have a Kubernetes 1.35+ lab cluster, use full `kubectl` commands when checking workloads. Focus on explaining the risk, the evidence you would require, and the admission behavior that should follow.
 
 **Scenario**: Review this CI/CD setup and identify supply chain risks:
 
@@ -780,7 +779,7 @@ A strong review would reject the current flow for production because it cannot r
 - Sigstore documentation: Fulcio overview - https://docs.sigstore.dev/certificate_authority/overview/
 - Sigstore documentation: Rekor overview - https://docs.sigstore.dev/logging/overview/
 - SLSA specification - https://slsa.dev/spec/v1.1/
-- SLSA provenance model - https://slsa.dev/spec/v1.0/provenance
+- SLSA provenance model - https://slsa.dev/spec/v1.1/provenance
 - SPDX project - https://spdx.dev/
 - CycloneDX specification overview - https://cyclonedx.org/specification/overview/
 - Kyverno documentation: Verify Images - https://kyverno.io/docs/writing-policies/verify-images/
