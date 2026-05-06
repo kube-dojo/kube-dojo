@@ -8,7 +8,11 @@ sidebar:
 
 # CNPA Practice Questions Set 1
 
-**Complexity**: `[MEDIUM]` | **Time to Complete**: 55-70 minutes | **Prerequisites**: Platform engineering foundations, cloud native architecture basics, Kubernetes API objects, observability basics, and self-service delivery concepts | **Track**: CNPA practice and applied review | **Kubernetes Version Target**: 1.35+
+> **Complexity**: `[MEDIUM]`
+> **Time to Complete**: 55-70 minutes
+> **Prerequisites**: Platform engineering foundations, cloud native architecture basics, Kubernetes API objects, observability basics, and self-service delivery concepts
+> **Track**: CNPA practice and applied review
+> **Kubernetes Version Target**: 1.35+
 
 ## Learning Outcomes
 
@@ -54,7 +58,7 @@ A senior platform engineer looks for evidence before declaring success. If teams
 
 The word "product" also implies a roadmap, not a static template catalog. A platform product improves through user research, support data, incident reviews, adoption metrics, and explicit tradeoff decisions. The team must decide which workflows deserve standardization, which unusual cases deserve documented exceptions, and which requests reveal that a hidden manual step should become part of the interface. Without that loop, the platform may look complete on a slide while remaining incomplete in the developer journey.
 
-Pause and predict: Your organization reports that the platform team closed 300 infrastructure tickets last quarter, but only two product teams use the new deployment workflow without assistance. Would you call the platform adopted? Before reading on, write one sentence that separates platform-team activity from developer outcome.
+> Pause and predict: Your organization reports that the platform team closed 300 infrastructure tickets last quarter, but only two product teams use the new deployment workflow without assistance. Would you call the platform adopted? Before reading on, write one sentence that separates platform-team activity from developer outcome.
 
 The strongest answer is usually no: the platform team may be active, but the platform product has weak adoption for the workflow being measured. Ticket closure can still matter as an operational metric, especially when users are blocked, yet it does not prove that the platform reduced friction. A better investigation asks which workflows still require tickets, which teams avoid the platform, what failure modes cause abandonment, and whether the platform team has a roadmap tied to those findings.
 
@@ -103,8 +107,6 @@ Metric design should also respect service ownership. If the platform team owns o
 
 Before running through answer choices, ask which metric would change if the user workflow actually improved. A commit count might rise when the platform team is busy, and a dashboard count might rise when a compliance review demands visibility, but neither proves that developers complete routine releases independently. A stronger metric would pair routine release completion through the paved path with rollback health, failed deployment rate, or time from merge to verified production availability.
 
-Weak metrics are often attractive because they are easy to collect. Ticket count, meeting count, repository count, template count, and dashboard count usually come from existing systems without extra instrumentation. Outcome metrics require more product thinking because the team must define the workflow, instrument the journey, classify routine versus exceptional work, and decide what success means for users. That effort is worthwhile because the resulting data can guide platform investment instead of merely decorating a status report.
-
 ### 4. Monitoring Checks Known Conditions, Observability Supports New Questions
 
 Monitoring and observability overlap, but they are not identical. Monitoring checks predefined conditions: is the service available, is latency above the threshold, is error rate increasing, is the node running out of disk, or is a pod restarting repeatedly? Observability supports investigation when the failure mode is not fully known in advance. It gives engineers enough telemetry to ask new questions about system behavior without needing to ship new code for every question.
@@ -126,7 +128,7 @@ The practical platform question is not whether a production platform should have
 
 Observability also has a product dimension. A platform can ship a default dashboard and still fail developers if the dashboard cannot answer the questions that arise during deployment, rollback, or tenant-specific incidents. Useful telemetry has enough structure to filter by service, route, deployment version, namespace, customer segment, dependency, and time window when those dimensions are appropriate for the workload. More charts are not the goal; better questions are the goal.
 
-Pause and predict: A service has green uptime checks, but one customer segment reports checkout failures only when a specific payment method is selected. Would you start by adding another uptime check, or by inspecting request-level telemetry? Explain which choice creates a new question rather than only checking a known condition.
+> Pause and predict: A service has green uptime checks, but one customer segment reports checkout failures only when a specific payment method is selected. Would you start by adding another uptime check, or by inspecting request-level telemetry? Explain which choice creates a new question rather than only checking a known condition.
 
 Request-level telemetry is the better starting point because the failure is conditional and specific. An uptime check may still pass because most routes work, and another broad check may only confirm the same shallow availability signal. Useful telemetry would let the team filter by customer segment, payment method, route, dependency call, response code, deployment version, and time window. The platform's golden path should make this kind of investigation routine, not heroic.
 
