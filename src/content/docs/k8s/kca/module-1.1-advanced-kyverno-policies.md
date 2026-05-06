@@ -721,7 +721,7 @@ spec:
               temporary: "true"
   conditions:
     any:
-      - key: "{{ time_since('', '{{ target.metadata.creationTimestamp }}', '') }}"
+      - key: "{{ time_since('', target.metadata.creationTimestamp, '') }}"
         operator: GreaterThan
         value: "24h"
   schedule: "0 */6 * * *"
@@ -1089,6 +1089,8 @@ kind delete cluster --name kyverno-lab
 - https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
 - https://docs.sigstore.dev/cosign/signing/overview/
 - https://notaryproject.dev/docs/
+- https://www.rfc-editor.org/rfc/rfc6902
+- https://github.com/in-toto/attestation/blob/main/spec/README.md
 
 ## Next Module
 
