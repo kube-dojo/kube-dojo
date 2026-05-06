@@ -3,6 +3,7 @@ title: "Module 1.1: OTel API & SDK Deep Dive"
 slug: k8s/otca/module-1.1-otel-sdk-deep-dive
 sidebar:
   order: 2
+revision_pending: false
 ---
 
 > **Complexity**: `[COMPLEX]` - Core domain, 46% of OTCA exam weight
@@ -27,7 +28,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A platform team at a payment company had a familiar observability problem: every service emitted telemetry, but no two services described the same operation the same way.
+Hypothetical scenario: a platform team at a payment company has a familiar observability problem: every service emits telemetry, but no two services describe the same operation the same way.
 The Java checkout service used a vendor-specific tracer, the Python fraud service logged request IDs by hand, and the Go payment gateway exported Prometheus metrics with labels that did not match the trace names.
 When a production incident crossed all three services, the on-call engineer spent more time translating telemetry than debugging the customer-facing failure.
 
@@ -50,6 +51,10 @@ A senior practitioner does not ask only, "Can I emit a span?"
 They ask, "Will this span help the next engineer isolate the failure without reading the source?"
 They also ask whether a metric will aggregate correctly, whether a resource attribute belongs on every signal, whether baggage leaks sensitive data, and whether exporter configuration can change without rebuilding the service.
 That is the level this module targets.
+Although the OTCA exam is not a Kubernetes operations test, most production OpenTelemetry deployments you meet in this curriculum will run beside Kubernetes 1.35+ workloads, collectors, sidecars, gateways, and admission-controlled namespaces.
+That matters because SDK decisions made inside application code become platform behaviors once hundreds of pods inherit the same environment variables and export to the same collector fleet.
+If one service chooses unstable metric attributes or leaks baggage, the damage is not limited to a local library choice; it becomes a cluster-wide cost, privacy, and incident-response problem.
+This module therefore treats the SDK as the first control point in a larger observability system.
 
 ---
 
@@ -981,6 +986,102 @@ The gateway handler span is a server span because it receives a request.
 The outbound payment span is a client span because it calls another service.
 The payment service, if implemented separately, should extract the headers and create its own server span with the extracted context, causing the trace tree to show both sides of the boundary.
 
+## Patterns & Anti-Patterns
+
+The safest OpenTelemetry SDK designs separate three concerns that are often tangled together in early instrumentation efforts: application code describes meaningful work, the SDK pipeline controls collection behavior, and deployment configuration chooses export destinations.
+When those concerns stay separate, a service can keep stable business spans while the platform changes collectors, sampling ratios, or backend vendors through environment configuration.
+When those concerns are mixed, every backend migration becomes an application release, every local debugging choice risks leaking into production, and every service invents a slightly different telemetry dialect.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---|---|---|---|
+| Provider-owned resource identity | Every service, job, worker, and CLI that emits telemetry | One resource attaches shared identity to traces, metrics, and logs | Standardize `service.name`, `service.version`, and `deployment.environment` across Kubernetes 1.35+ workloads |
+| Batch traces, bounded metrics | Production paths with real request volume | Export work moves off the request path while metrics remain aggregatable | Tune queue size, export interval, and metric attributes before adding traffic |
+| Auto plus manual layering | Services with supported frameworks and important business steps | Libraries capture technical boundaries while manual spans capture domain intent | Review traces for duplicate spans after enabling auto-instrumentation |
+| Environment-owned export policy | Multiple environments, collectors, or backends | Applications avoid hard-coded endpoints and protocols | Document precedence between general and signal-specific OTLP variables |
+
+The provider-owned resource pattern looks ordinary, but it removes a surprising amount of operational friction.
+If every service sets `service.name` differently, dashboards fragment even when spans are valid.
+If a deployment writes version information as a span attribute instead of as a resource, metrics and logs may not carry the same release identity as traces.
+A good review asks whether a person could filter every signal from the same pod, rollout, and service without knowing which language SDK produced it.
+
+The batch-traces and bounded-metrics pattern keeps observability from competing with the workload it is supposed to explain.
+Trace export can tolerate asynchronous buffering because the request already finished when a span ends, while metrics need disciplined attributes because every new label combination becomes a new time series.
+This is why a batch processor and an attribute review often belong in the same pull request.
+One protects latency, and the other protects the backend from a cardinality problem that only appears after real traffic arrives.
+
+The auto-plus-manual pattern is the one most teams eventually converge on.
+Auto-instrumentation is excellent at showing inbound HTTP requests, outbound HTTP calls, database queries, and messaging operations, but it cannot name the business decision that matters during an incident.
+Manual instrumentation should add the missing business layer without replacing the library layer.
+If a trace already contains a framework server span named `POST /checkout`, a manual span with the same name is noise; a manual span named `fraud-decision` or `reserve-inventory` is evidence.
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|---|---|---|---|
+| Exporter in business logic | Backend changes require source edits and redeploys | The first demo hard-codes console or vendor exporters | Keep exporter choice in SDK setup and environment variables |
+| Metric attributes copied from logs | Series count grows with users, carts, orders, or request IDs | Engineers want per-request debugging from aggregate data | Use traces and logs for request evidence, metrics for bounded grouping |
+| Baggage as a hidden context bag | Headers carry sensitive or high-cardinality values downstream | Baggage feels like convenient distributed storage | Allow only documented, non-sensitive, low-cardinality baggage keys |
+| Manual spans around every helper | Traces become long, expensive, and hard to read | More spans feel like more observability | Instrument meaningful operations and dependency boundaries |
+
+These anti-patterns share a common mistake: they optimize for the first person writing instrumentation instead of the next person debugging with it.
+The first person may want a quick exporter, every local variable as an attribute, or a span around each function to prove the SDK works.
+The next person needs a trace that tells a coherent story, a metric that aggregates across thousands of requests, and a log that correlates without exposing secrets.
+Good SDK design is therefore a reader-centered discipline.
+
+## Decision Framework
+
+Use this framework when you review an instrumentation change, answer an OTCA scenario, or refactor a reference snippet into a runnable service pattern.
+Start with the signal question, then work outward to pipeline behavior and deployment control.
+That order prevents a common mistake where a team debates exporters before deciding what the telemetry should mean.
+
+```ascii
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         SDK Design Decision Flow                            │
+│                                                                            │
+│  1. What operational question must be answered?                             │
+│        │                                                                    │
+│        ▼                                                                    │
+│  2. Is the evidence per operation, aggregate, or log-like narrative?         │
+│        │                                                                    │
+│        ├── Per operation ─────▶ trace span, event, status, or link           │
+│        ├── Aggregate ────────▶ counter, histogram, observable instrument     │
+│        └── Narrative ────────▶ log bridge with current trace context         │
+│        │                                                                    │
+│        ▼                                                                    │
+│  3. Which attributes are safe, bounded, and semantically consistent?         │
+│        │                                                                    │
+│        ▼                                                                    │
+│  4. Which SDK component controls delivery: processor, reader, exporter?      │
+│        │                                                                    │
+│        ▼                                                                    │
+│  5. Which settings belong in code, and which belong in environment config?   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+The first branch separates traces, metrics, and logs by the job they perform.
+If the question is "which step failed for this checkout request?", a span, event, status, or linked trace context is the right shape because the evidence belongs to one operation.
+If the question is "are failures increasing for the checkout workload?", a counter or histogram is the right shape because the evidence must aggregate across many operations.
+If the question is "what message did the application write while this span was current?", a log bridge with trace correlation is the right shape because the evidence is narrative and timestamped.
+
+| Decision Point | Choose This | When the Scenario Says | Watch For |
+|---|---|---|---|
+| Span processor | `BatchSpanProcessor` | Production service, latency-sensitive path, OTLP export | Shutdown flush and queue overflow behavior |
+| Span processor | `SimpleSpanProcessor` | Local demo, unit test, one-shot script with console output | Do not carry this into high-traffic request paths |
+| Metric instrument | Counter | Count only increases, such as attempts or errors | Avoid current-state values such as queue depth |
+| Metric instrument | Histogram | Distribution matters, especially latency or size | Pick units and attributes that preserve meaning |
+| Propagation design | Parent-child | One operation directly causes the next operation | Same trace ID and correct span kind across boundary |
+| Propagation design | Links | Batch, fan-in, retry, or async work relates to multiple causes | Do not force one arbitrary parent |
+| Configuration location | Environment variables | Endpoint, protocol, sampler, service name differ by deployment | Signal-specific variables may override general variables |
+| Configuration location | Code | Business spans, metric names, and resource defaults are part of the service | Avoid hard-coding backend endpoints |
+
+Pause and predict: if you move `OTEL_EXPORTER_OTLP_ENDPOINT` from the deployment manifest into application code, what happens when a staging collector changes hostnames but the service image is already built?
+The service now needs a new build or a code-specific override, even though the telemetry destination is a deployment concern.
+That is an avoidable coupling between source code and platform routing.
+Keeping export configuration outside the business logic lets a Kubernetes rollout change collector topology without changing the instrumentation that describes checkout behavior.
+
+The same framework helps you refactor reference-style snippets.
+A snippet that only creates a tracer and prints a span is not yet a production pattern because it lacks resource identity, shutdown behavior, error status, and a deployment-owned export path.
+To turn it into a reusable pattern, ask which provider owns the signal, which processor or reader controls delivery, which attributes are safe to query, and which final check proves the signal answers the original operational question.
+That refactoring habit is what makes SDK knowledge useful outside exam flashcards.
+
 ## Did You Know?
 
 - **OpenTelemetry separates API from SDK intentionally.** Libraries can depend on the API to create telemetry without forcing applications to use a specific exporter, processor, sampler, or backend.
@@ -992,7 +1093,7 @@ The payment service, if implemented separately, should extract the headers and c
 
 ## Common Mistakes
 
-| Mistake | Why It Fails in Practice | Better Approach |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Using `SimpleSpanProcessor` in production services | Export happens synchronously and can add backend or console latency to request handling | Use `BatchSpanProcessor` and flush during shutdown |
 | Setting `service.name` as a span attribute | Service identity belongs to the resource and should apply to all emitted telemetry | Set `service.name` on the provider resource or through `OTEL_SERVICE_NAME` |
@@ -1052,9 +1153,9 @@ Investigate the metric reader, exporter, collector conversion, and backend tempo
 </details>
 
 <details>
-<summary><strong>Q8: A platform engineer sees `OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://trace-collector:4317` in the same deployment. Traces are not arriving where the application team expected. How do you reason about the effective destination?</strong></summary>
+<summary><strong>Q8: A teammate copied a reference-style SDK snippet into a service: it creates one span, hard-codes an OTLP endpoint, omits resource attributes, and never shuts down the provider. How would you refactor it into an input-to-solution pattern suitable for this module?</strong></summary>
 
-The trace-specific endpoint should take precedence for traces, so trace data is expected to go to `http://trace-collector:4317` while other OTLP signals may use the general endpoint. This is a configuration-precedence problem, not an instrumentation-code problem. The next checks are whether that collector is reachable and whether its receiver protocol matches the configured exporter protocol.
+Start by writing the operational input: which request, dependency, or business step should the telemetry explain. Then create a provider with resource attributes, use a production-shaped processor or reader, move endpoint and protocol choices to environment configuration, and add shutdown or flush behavior so short-lived processes export data. Finally, add a validation step that inspects trace identity, span kinds, metric names, and bounded attributes, because a refactor is not complete until the output proves it answers the original debugging question.
 </details>
 
 ---
@@ -1163,6 +1264,21 @@ If you put `service.name` on every span manually, move it to the resource and ex
 If you used `SimpleSpanProcessor`, switch to batch processing and explain how request-path export changes latency behavior.
 
 ---
+
+## Sources
+
+- [OpenTelemetry traces concepts](https://opentelemetry.io/docs/concepts/signals/traces/)
+- [OpenTelemetry metrics concepts](https://opentelemetry.io/docs/concepts/signals/metrics/)
+- [OpenTelemetry logs concepts](https://opentelemetry.io/docs/concepts/signals/logs/)
+- [OpenTelemetry context propagation concepts](https://opentelemetry.io/docs/concepts/context-propagation/)
+- [OpenTelemetry baggage concepts](https://opentelemetry.io/docs/concepts/signals/baggage/)
+- [OpenTelemetry SDK environment variable configuration](https://opentelemetry.io/docs/languages/sdk-configuration/)
+- [OpenTelemetry Protocol exporter specification](https://opentelemetry.io/docs/specs/otel/protocol/exporter/)
+- [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/)
+- [OpenTelemetry Python instrumentation](https://opentelemetry.io/docs/languages/python/instrumentation/)
+- [OpenTelemetry Go instrumentation](https://opentelemetry.io/docs/languages/go/instrumentation/)
+- [W3C Trace Context Recommendation](https://www.w3.org/TR/trace-context/)
+- [OpenTelemetry Kubernetes getting started](https://opentelemetry.io/docs/kubernetes/getting-started/)
 
 ## Next Module
 
