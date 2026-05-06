@@ -124,6 +124,8 @@ receivers:
             - role: pod
 ```
 
+Prometheus Kubernetes service discovery also needs Kubernetes API RBAC, typically `get`, `list`, and `watch` on the resource kinds it discovers, such as pods, endpoints, and services in the namespaces it scrapes.
+
 ```yaml
 receivers:
   filelog:
@@ -503,6 +505,8 @@ spec:
 ```
 
 Auto-instrumentation is powerful because the Operator can inject language agents into pods through annotations, but it should be introduced with clear ownership. The application still needs compatible runtimes, predictable resource overhead, and an endpoint that can accept the resulting telemetry. Start with a small namespace or a single workload, then expand after you have verified trace quality, attribute names, and sampling behavior.
+
+Before copying an `Instrumentation` manifest, confirm the CRD versions served by the installed Operator. Some distributions and exam contexts expect a newer served version such as `v1alpha2`, while older and upstream examples may still show `v1alpha1` with conversion support.
 
 ```yaml
 apiVersion: opentelemetry.io/v1alpha1
@@ -1155,7 +1159,7 @@ A production design would usually run node agents for file logs and host metrics
 - [OpenTelemetry Collector tail sampling processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/tailsamplingprocessor)
 - [OpenTelemetry Collector spanmetrics connector](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector)
 - [OpenTelemetry Operator](https://github.com/open-telemetry/opentelemetry-operator)
-- [OpenTelemetry Collector Builder](https://github.com/open-telemetry/opentelemetry-collector-builder)
+- [OpenTelemetry Collector Builder](https://opentelemetry.io/docs/collector/custom-collector/)
 - [Kubernetes DaemonSet documentation](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)
 - [Kubernetes Deployment documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
 
