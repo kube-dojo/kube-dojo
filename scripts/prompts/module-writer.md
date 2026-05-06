@@ -35,14 +35,14 @@ TASK: Write a complete KubeDojo educational module.
 
 1. **Title and metadata** — H1 title, complexity tag, time estimate, prerequisites
 2. **Learning Outcomes** — 3-5 measurable outcomes using Bloom's Taxonomy Level 3+ action verbs: "debug", "design", "evaluate", "compare", "diagnose", "implement". NOT "understand" or "know". Each outcome must be testable by the quiz or exercise.
-3. **Why This Module Matters** — Open with a dramatic, real-world scenario written in third person. A real incident, a real company (anonymized if needed), real financial impact. Make the reader feel why this topic matters viscerally. Then transition to what they will learn. 2-3 paragraphs minimum.
+3. **Why This Module Matters** — Open with a concrete scenario that makes the operational stakes clear, then transition to what the learner will build or diagnose. Use a real incident only when it is sourced and specific enough to verify. Otherwise label it explicitly with `Hypothetical scenario:` or `Exercise scenario:` so the reader never mistakes invented framing for a real event. 2-3 paragraphs minimum.
 4. **Core content sections** (3-6 sections) — Each section should include:
    - **Theory before practice** — explain WHY this approach exists, what problem it solves, and what tradeoffs it makes BEFORE showing the commands. Prose must explain concepts between code blocks — never stack 3 code blocks without explanation.
    - Clear explanations with analogies (treat the reader as a smart beginner)
    - Runnable code blocks (bash, YAML, Go, Python — whatever fits)
    - ASCII diagrams where architecture or flow needs visualization
    - Tables for comparisons, decision matrices, or reference data
-   - "War Story" or practical example within the section
+   - Sourced real incident or clearly labeled hypothetical practical example within the section
    - **At least 2 inline active learning prompts** across all sections: "Pause and predict: what do you think happens if...?", "Before running this, what output do you expect?", or "Which approach would you choose here and why?"
 5. **Patterns & Anti-Patterns** — Required for `[MEDIUM]`, `[COMPLEX]`, `[ADVANCED]`, `[EXPERT]` modules. For `[QUICK]` introductory modules, this can be a single "When This Doesn't Apply" subsection instead of full patterns/anti-patterns.
    - **Patterns**: proven approaches with when to use, why it works, scaling considerations. Minimum 3 for MEDIUM+, 1 for QUICK.
@@ -86,7 +86,7 @@ TASK: Write a complete KubeDojo educational module.
 - All commands must be complete and runnable (not pseudocode)
 - YAML: 2-space indentation, valid syntax
 - Code blocks must specify the language (```bash, ```yaml, ```go, etc.)
-- Use `k` alias for kubectl (after explaining it once)
+- Do NOT rely on shell aliases in runnable Bash examples. Do not define a short alias for `kubectl`, and do not use the `k` shorthand for get/describe/apply-style commands inside fenced ```bash / ```sh / ```shell / ```zsh blocks. Aliases do not expand in non-interactive shells, so use the full `kubectl` binary name in copy-paste examples. Prose like "many engineers use a short kubectl alias interactively" is fine.
 - Kubernetes version: 1.35+
 
 **PEDAGOGICAL REQUIREMENTS** (from `docs/pedagogical-framework.md`):
@@ -108,7 +108,7 @@ TASK: Write a complete KubeDojo educational module.
 
 **WHAT TO AVOID**:
 - Do NOT repeat the number 47 in timestamps, durations, or counts (this is a known LLM pattern — vary your numbers)
-- Do NOT use generic corporate examples — use realistic engineering scenarios
+- Do NOT invent business incidents, client stories, anonymized companies, or anecdotal incident claims. Use sourced real incidents or clearly labeled hypothetical/exercise scenarios.
 - Do NOT write thin outlines — every section needs depth, examples, and explanation
 - Do NOT skip the exercise — it's the most important part for learning
 - Do NOT use emojis

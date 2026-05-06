@@ -41,6 +41,14 @@ Before finalizing, scan every consecutive body-prose paragraph. If three paragra
 
 Target substantial depth: 5,000-7,000 words of original instructional content. Do not satisfy depth by adding short lines, fragmented paragraphs, or decorative structure. Word count is the floor; density gates are the ceiling on how those words can be packaged.
 
+## RUNNABILITY, FABRICATION, AND PRACTICE QUESTIONS
+
+Do NOT rely on shell aliases in runnable Bash examples. Specifically: do NOT write `alias k=kubectl` or use `k <subcommand>` (e.g., `k get`, `k describe`) inside fenced ```bash / ```sh / ```shell / ```zsh blocks. Aliases do not expand in non-interactive shells, so a learner who copies the block into a script will see `command not found`. Always use the full `kubectl` binary name in copy-paste examples. Prose like "many engineers alias kubectl to k for interactive use" is fine; running `k <cmd>` in a code block is not.
+
+Do NOT invent business incidents, client stories, anonymized companies, or "war story" anecdotes. A scenario is allowed only if (a) it is clearly labeled hypothetical with a `Hypothetical scenario:` or `Exercise scenario:` prefix, OR (b) it is a sourced real incident with enough specific detail to verify against the cited source. Do not imply an event happened with phrasing like "a payments company once...", "a team I worked with...", "a customer reported...", "War story:..." unless the incident is real and sourced. The incident-dedup gate only catches catalog matches; this rule catches the rest.
+
+For practice-question / mock-exam modules, preserve exam-style MCQ structure. Each question must include four visible answer options labeled `1-4` or `A-D` (visible in the rendered question, NOT hidden in `<details>`), followed by answer reasoning that explains why the correct option is correct AND why each distractor is wrong. The reasoning may live in `<details>` blocks; the numbered options must remain visible.
+
 ## VERIFICATION GATES (in addition to module-writer.md structural gates)
 
 All must pass before commit. The deterministic verifier (`scripts/quality/verify_module.py`, to be built as Day 1 of #388) computes these:
@@ -56,7 +64,7 @@ All must pass before commit. The deterministic verifier (`scripts/quality/verify
 9. Quiz answers explain reasoning (not just name the fix)
 10. `## Sources` is required as the **last H2** section before `## Next Module`. It must contain at least **10** unique URLs, each in either bare form (`- https://...`) or markdown form (`- [title](https://...)`), and all links must point to primary/vendor docs (not marketing fluff or dead redirects). Verifier counting applies only to links under `## Sources` (it does not count citations elsewhere).
 
-Plus the structural gates from `module-writer.md`: section presence + order, exactly 4 DYK, 6-8 Common Mistakes rows, 6-8 scenario quiz with `<details>`, Hands-On with `- [ ]` checkboxes, no emojis, no number 47, kubectl alias `k`, K8s 1.35+, no anti-leak tokens.
+Plus the structural gates from `module-writer.md`: section presence + order, exactly 4 DYK, 6-8 Common Mistakes rows, 6-8 scenario quiz with `<details>`, Hands-On with `- [ ]` checkboxes, no emojis, no number 47, no runnable `kubectl` alias shorthand, no unsourced anecdote framing, K8s 1.35+, no anti-leak tokens.
 
 The deterministic verifier counts links inside the Sources section only — citations elsewhere don't count.
 
