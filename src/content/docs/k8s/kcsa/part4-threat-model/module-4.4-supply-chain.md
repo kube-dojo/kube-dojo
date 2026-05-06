@@ -231,7 +231,7 @@ Image signing adds a cryptographic statement to the artifact lifecycle: a truste
 │  ├── Notary v2 - Content trust                            │
 │  └── Docker Content Trust (DCT)                           │
 │                                                             │
-│  COSIGN WORKFLOW:                                          │
+│  KEYED COSIGN WORKFLOW:                                    │
 │  1. Build image                                            │
 │  2. Sign: cosign sign --key cosign.key myimage:tag        │
 │  3. Push signature to registry                             │
@@ -608,7 +608,7 @@ The review is complete only when the normal path and the failure path are both b
 
 ## Did You Know?
 
-- **The 2020 trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
+- **The 2020 SolarWinds trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
 
 - **Dependency confusion became a board-level issue in 2021** after public research showed that package resolution rules could pull attacker-controlled packages when private names were not scoped or routed correctly.
 
@@ -779,7 +779,7 @@ A strong review would reject the current flow for production because it cannot r
 - Sigstore documentation: Fulcio overview - https://docs.sigstore.dev/certificate_authority/overview/
 - Sigstore documentation: Rekor overview - https://docs.sigstore.dev/logging/overview/
 - SLSA specification - https://slsa.dev/spec/v1.1/
-- SLSA provenance model - https://slsa.dev/spec/v1.0/provenance
+- SLSA provenance model - https://slsa.dev/spec/v1.1/provenance
 - SPDX project - https://spdx.dev/
 - CycloneDX specification overview - https://cyclonedx.org/specification/overview/
 - Kyverno documentation: Verify Images - https://kyverno.io/docs/writing-policies/verify-images/
