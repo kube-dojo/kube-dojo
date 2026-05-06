@@ -134,6 +134,54 @@ def find_pr_number(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def orchestrator_open_pr(slug: str, module_path: str, codex_response: str) -> int | None:
+    """Fallback: orchestrator opens PR when codex sandbox lacked GH_TOKEN.
+
+    Codex's response (when ok=True) typically includes the branch name,
+    word counts, and verifier metrics. We construct a minimal PR body
+    from the last N chars of the response; the cross-family review
+    will look at the actual diff anyway.
+    """
+    branch = f"codex/388-pilot-{slug}"
+    # Verify the branch is on origin (codex pushes before responding)
+    ls = subprocess.run(
+        ["git", "ls-remote", "origin", branch],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    )
+    if ls.returncode != 0 or not ls.stdout.strip():
+        log({"event": "orchestrator_pr_branch_missing", "slug": slug, "branch": branch})
+        return None
+    title = f"feat(388): rewrite {module_path}"
+    body = (
+        f"## Summary\n\n"
+        f"#388 sweep — rewrite of `{module_path}` for rubric-critical score.\n\n"
+        f"## Codex response excerpt\n\n"
+        f"```\n{(codex_response or '')[-1500:]}\n```\n\n"
+        f"## Test plan\n\n"
+        f"- [ ] Cross-family review per `docs/review-protocol.md`\n"
+        f"- [ ] Verify rubric score >=4.0 post-merge\n\n"
+        f"PR opened by orchestrator (codex sandbox lacks GH_TOKEN by design).\n"
+    )
+    create = subprocess.run(
+        ["gh", "pr", "create", "--base", "main", "--head", branch,
+         "--title", title, "--body", body],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    )
+    if create.returncode != 0:
+        log({
+            "event": "orchestrator_pr_create_failed",
+            "slug": slug, "branch": branch,
+            "stderr": create.stderr[-500:],
+        })
+        return None
+    pr_num = find_pr_number(create.stdout or "")
+    if pr_num is None:
+        log({"event": "orchestrator_pr_no_url", "slug": slug, "stdout": create.stdout[-500:]})
+        return None
+    log({"event": "orchestrator_pr_opened", "slug": slug, "pr": pr_num, "branch": branch})
+    return pr_num
+
+
 def gemini_review_prompt(pr_num: int, module_path: str) -> str:
     return f"""Adversary cross-family review of PR #{pr_num} on KubeDojo.
 
@@ -175,6 +223,28 @@ def dispatch_gemini_review(pr_num: int, module_path: str, slug: str):
         return None, "ERROR"
     text = result.response or ""
     log({"event": "gemini_done", "pr": pr_num, "ok": result.ok, "response_excerpt": text[-2000:]})
+    return text, classify_verdict(text)
+
+
+def dispatch_claude_review(pr_num: int, module_path: str, slug: str):
+    """Fallback when Gemini fails. Headless Claude (sonnet) cross-family review."""
+    log({"event": "claude_review_start", "pr": pr_num, "module": module_path})
+    try:
+        result = invoke(
+            agent_name="claude",
+            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            mode="read-only",
+            cwd=REPO,
+            model="claude-sonnet-4-6",
+            task_id=f"388-pilot-review-claude-{slug}",
+            entrypoint="dispatch",
+            hard_timeout=300,
+        )
+    except Exception as e:  # noqa: BLE001
+        log({"event": "claude_review_error", "pr": pr_num, "error": repr(e)})
+        return None, "ERROR"
+    text = result.response or ""
+    log({"event": "claude_review_done", "pr": pr_num, "ok": result.ok, "response_excerpt": text[-2000:]})
     return text, classify_verdict(text)
 
 
@@ -260,9 +330,16 @@ def main(argv: list[str] | None = None) -> int:
             continue
         pr_num = find_pr_number(codex_result.response or "")
         if pr_num is None:
-            log({"event": "module_skip", "module": module_path, "reason": "no_pr_in_response"})
-            continue
+            # Codex sandbox lacks GH_TOKEN by design — fall back to orchestrator.
+            pr_num = orchestrator_open_pr(slug, module_path, codex_result.response or "")
+            if pr_num is None:
+                log({"event": "module_skip", "module": module_path, "reason": "pr_creation_failed"})
+                continue
         review_text, verdict = dispatch_gemini_review(pr_num, module_path, slug)
+        if verdict in ("ERROR", "UNCLEAR"):
+            # Gemini hung or returned ambiguous output — fall back to Claude.
+            log({"event": "review_fallback_to_claude", "pr": pr_num, "module": module_path})
+            review_text, verdict = dispatch_claude_review(pr_num, module_path, slug)
         if review_text:
             post_review_comment(pr_num, review_text)
         if verdict == "APPROVE":
