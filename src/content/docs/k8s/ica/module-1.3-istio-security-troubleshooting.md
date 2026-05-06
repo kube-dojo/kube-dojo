@@ -378,7 +378,7 @@ Critical security warning: if there are no AuthorizationPolicies defined for a p
 
 ### 3.2 ALLOW Policy Fundamentals
 
-An ALLOW policy explicitly permits selected traffic patterns while defaulting the rest to a denied state for the selected workload. This is the right model for sensitive services because it makes the intended callers visible, but it requires you to think about non-user traffic such as probes, metrics scraping, batch jobs, and administrative endpoints. In reviews, read the selector first, then read the source identities and operations, because a perfect rule on the wrong workload is still the wrong rule.
+An ALLOW policy explicitly permits selected traffic patterns while defaulting the rest to a denied state for the selected workload. This is the right model for sensitive services because it makes the intended callers visible, but it requires you to think about non-user traffic such as probes, metrics scraping, batch jobs, and administrative endpoints. In policy reviews, read the selector first, then read the source identities and operations, because a perfect rule on the wrong workload is still the wrong rule.
 
 ```yaml
 apiVersion: security.istio.io/v1
@@ -1042,8 +1042,8 @@ istioctl install --set profile=demo \
 kubectl label namespace default istio-injection=enabled --overwrite
 
 # Deploy Bookinfo
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
 
 kubectl wait --for=condition=ready pod --all -n default --timeout=120s
 ```
@@ -1232,8 +1232,8 @@ Restore your environment to a pristine baseline when you are done, especially if
 kubectl delete peerauthentication default -n istio-system
 kubectl delete authorizationpolicy deny-all-reviews -n default
 kubectl delete virtualservice reviews-broken -n default
-kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo.yaml
-kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/networking/destination-rule-all.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
 istioctl uninstall --purge -y
 kubectl delete namespace istio-system
 ```
@@ -1253,8 +1253,8 @@ kubectl delete namespace istio-system
 - https://istio.io/latest/docs/ops/diagnostic-tools/istioctl-analyze/
 - https://istio.io/latest/docs/ops/diagnostic-tools/proxy-cmd/
 - https://istio.io/latest/docs/ops/common-problems/security-issues/
-- https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo.yaml
-- https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/networking/destination-rule-all.yaml
+- https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/platform/kube/bookinfo.yaml
+- https://raw.githubusercontent.com/istio/istio/release-1.25/samples/bookinfo/networking/destination-rule-all.yaml
 
 ---
 
