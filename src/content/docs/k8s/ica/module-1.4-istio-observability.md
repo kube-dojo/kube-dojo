@@ -40,7 +40,7 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-Hypothetical scenario: A payments platform team rolls out a new checkout service on Friday afternoon. The deployment looks healthy, the Pods are ready, and the Kubernetes Service has endpoints. Ten minutes later, customer support reports that some orders complete, some time out, and some fail only when traffic comes through a canary route.
+A payments platform team rolls out a new checkout service on Friday afternoon. The deployment looks healthy, the Pods are ready, and the Kubernetes Service has endpoints. Ten minutes later, customer support reports that some orders complete, some time out, and some fail only when traffic comes through a canary route.
 
 The team does not need another command that says the Pods are running. They need to know which service path is failing, whether failures are isolated to one workload version, whether mTLS or routing policy changed, and whether the slow hop is checkout, inventory, payment authorization, or the external fraud API.
 
