@@ -254,13 +254,14 @@ def main() -> int:
         sys.stderr.write("[smart] prompt is empty\n")
         return 2
 
+    if mode == "danger" and not args.worktree:
+        p.error("--mode danger requires --worktree (no override)")
+
     worktree: Path | None = None
     if args.worktree:
         worktree = Path(args.worktree)
         if not worktree.is_absolute():
             worktree = REPO / worktree
-        if mode != "read-only":
-            ensure_worktree(worktree, args.new_branch)
     elif mode != "read-only":
         sys.stderr.write(
             f"[smart] mode={mode} requires --worktree to avoid trampling "
@@ -275,6 +276,9 @@ def main() -> int:
         print(f"[dry-run] task_id={task_id}")
         print(f"[dry-run] prompt_chars={len(prompt)}")
         return 0
+
+    if worktree and mode != "read-only":
+        ensure_worktree(worktree, args.new_branch)
 
     return fire(
         agent=args.agent,
