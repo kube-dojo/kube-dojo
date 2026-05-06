@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 1.4: The Operator Pattern & Kubebuilder"
 slug: k8s/extending/module-1.4-kubebuilder
 sidebar:
@@ -9,58 +9,36 @@ sidebar:
 >
 > **Time to Complete**: 4 hours
 >
-> **Prerequisites**: Module 1.3 (Building Controllers with client-go), Go 1.22+, Docker
+> **Prerequisites**: Module 1.3 (Building Controllers with client-go), Go 1.22+, Docker, access to a Kubernetes 1.35+ cluster
 
 ---
 
-## What You'll Be Able to Do
+# Module 1.4: The Operator Pattern & Kubebuilder
+
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Scaffold** a multi-group operator project with Kubebuilder, including CRD types, controllers, and webhook stubs
-2. **Implement** a Reconciler using controller-runtime that handles create, update, and delete events with proper status reporting
-3. **Generate** RBAC manifests, CRD YAMLs, and webhook configurations from Go markers and deploy them with `make deploy`
-4. **Validate** operator behavior using envtest integration tests that run against a real API Server without a full cluster
-
----
+1. **Compare** Kubebuilder and Operator SDK choices for a Go operator, including when OLM packaging changes the decision.
+2. **Scaffold and generate** a WebApp API with Kubebuilder, controller-gen markers, CRD manifests, RBAC, and deepcopy code.
+3. **Implement and diagnose** a controller-runtime Reconciler that creates child resources, reports status, and handles drift.
+4. **Validate and deploy** operator behavior with local execution, generated manifests, container images, and envtest-oriented checks.
 
 ## Why This Module Matters
 
-In Module 1.3 you built a controller from scratch with raw client-go. It worked, but you wrote a lot of boilerplate: informer setup, workqueue wiring, unstructured-to-typed conversion, event recording plumbing. For one controller that is fine, but for a production operator with multiple CRDs, webhooks, RBAC, and tests, the boilerplate becomes a burden.
+Hypothetical scenario: a platform team owns a shared Kubernetes cluster where application teams can request internal web services through a custom `WebApp` resource. At first the team provides a runbook that tells developers how to create a Deployment, a Service, labels, resource settings, and a status annotation by hand, but the runbook drifts as new conventions appear. When a new Kubernetes 1.35 cluster lands, one namespace uses the new convention, another keeps the old labels, and support tickets start asking why dashboards and scaling tools disagree about what is actually ready.
 
-**Kubebuilder** eliminates this burden. It is the official Kubernetes project for building operators, and it generates the scaffolding while you focus on the business logic. Kubebuilder uses **controller-runtime** under the hood -- the same library powering Operator SDK, Cluster API, and hundreds of production operators. Learning Kubebuilder is not learning "a framework"; it is learning the standard way to build Kubernetes extensions.
+Module 1.3 showed that a controller can close that gap because it continuously compares desired state with observed state and pushes the cluster toward convergence. The raw client-go version was useful because it exposed watches, informers, workqueues, clients, and retry behavior, but it also made you maintain every piece of plumbing yourself. Production operators usually need several APIs, generated CRDs, RBAC, status subresources, admission webhooks, leader election, metrics, health probes, tests, and release manifests, so repeating that plumbing is a poor use of engineering time.
 
-> **The Kitchen Analogy**
->
-> Module 1.3 was like cooking from scratch -- you bought raw ingredients (client-go), built your own stove (informer wiring), and cooked everything yourself. Kubebuilder is like a professional kitchen: the stove is installed, the mise en place is done, and the recipes are templated. You still decide what to cook (your reconciliation logic), but the infrastructure is handled. Knowing how to cook from scratch makes you a better chef, but using a professional kitchen makes you more productive.
+Kubebuilder is the Kubernetes project that turns that controller idea into a productive development workflow. It uses controller-runtime underneath, which means the mental model from Module 1.3 still applies, but the framework supplies project layout, manager setup, shared caches, generator integration, and controller wiring. In this module you will keep the original WebApp operator shape, but you will learn why each generated piece exists, how the markers become cluster-facing YAML, and how to diagnose the common failure modes that appear when an operator is almost correct but not yet reliable.
 
----
+The important shift is ownership of intent. A YAML manifest describes an object at one moment, while an operator describes a policy that should remain true over time, even after users edit child resources, pods roll over, or the controller restarts. Kubebuilder helps you express that policy with less boilerplate, but it does not remove the need for careful API design, idempotent reconciliation, explicit status, and narrow permissions. The framework accelerates the mechanics, while the engineering judgment still belongs to you.
 
-## What You'll Learn
+## Compare Kubebuilder and Operator SDK Before You Scaffold
 
-By the end of this module, you will be able to:
-- Compare Kubebuilder and Operator SDK
-- Scaffold a complete operator project with Kubebuilder v4
-- Define API types with markers for CRD generation
-- Implement a Reconciler with controller-runtime
-- Use RBAC markers for automatic role generation
-- Build, test, and deploy an operator to a cluster
+Kubebuilder and Operator SDK are often mentioned together because they solve overlapping problems, and that overlap can make the first decision feel larger than it really is. For a Go-based operator, both tools now use the Kubebuilder project layout and controller-runtime as the core library, so the Reconciler you write looks very similar in either project. The difference is mostly in distribution features, packaging workflow, and whether you need Operator Lifecycle Manager integration as a first-class path rather than a later release concern.
 
----
-
-## Did You Know?
-
-- **Kubebuilder and Operator SDK share the same core**: Both use controller-runtime. Operator SDK adds features like OLM integration and Ansible/Helm operators, but for Go operators the two are nearly identical. Since 2023, Operator SDK officially recommends the Kubebuilder layout.
-
-- **controller-runtime processes about 50,000 reconciliations per second** on commodity hardware. The framework handles concurrency, caching, and event deduplication so efficiently that most operators are bottlenecked by the API Server, not by controller-runtime.
-
-- **The `//+kubebuilder:` markers are not comments**: They look like Go comments, but controller-gen parses them to generate CRDs, RBAC roles, and webhook configurations. Deleting a marker can break your entire deployment pipeline.
-
----
-
-## Part 1: Kubebuilder vs Operator SDK
-
-### 1.1 Comparison
+If you are learning the operator pattern or building a Go operator for internal platform automation, Kubebuilder is usually the cleaner starting point because it keeps the toolchain close to Kubernetes API machinery. It gives you generated APIs, controllers, markers, manifests, tests, and deployment scaffolding without adding a separate product distribution layer. Operator SDK becomes more attractive when your operator must ship through OLM catalogs, support Ansible or Helm implementations, or use scorecard checks as part of a broader Operator Framework workflow.
 
 | Feature | Kubebuilder | Operator SDK |
 |---------|-------------|--------------|
@@ -72,9 +50,9 @@ By the end of this module, you will be able to:
 | Dependency | controller-runtime | controller-runtime |
 | Best for | Go operators, learning | OLM distribution, multi-language |
 
-**Bottom line**: If you write Go operators, start with Kubebuilder. If you need OLM packaging or Ansible/Helm operators, use Operator SDK (which uses Kubebuilder under the hood).
+The table hides an operational lesson: framework choice should follow the lifecycle you need to support. A team that only runs the operator in its own clusters can keep packaging simple and focus on API correctness, reconciliation, observability, and tests. A team that distributes the operator to many external clusters needs upgrade channels, bundle metadata, compatibility signals, and documentation for administrators, so the extra Operator SDK machinery may pay for itself.
 
-### 1.2 controller-runtime Architecture
+The shared core is controller-runtime, and that is where most day-to-day operator engineering happens. The Manager owns the cache, the client, the controller lifecycle, health and readiness endpoints, metrics, leader election, and webhook server. Each controller registers the primary resource it watches, optionally registers owned resources whose events should map back to the primary resource, and provides a Reconciler function that is called with a namespaced name rather than with a fully loaded object.
 
 ```mermaid
 flowchart TD
@@ -103,11 +81,15 @@ flowchart TD
     end
 ```
 
----
+This architecture matters because it changes where you should look during debugging. If a Reconciler never runs, the problem may be watch registration, cache permissions, scheme registration, or the controller setup path rather than your business logic. If a Reconciler runs but cannot create a child object, the problem may be RBAC markers or generated manifests. If status never changes, the issue may be the status subresource, update conflicts, or an incomplete status write rather than the Deployment itself.
 
-## Part 2: Scaffolding a Project
+The cache also changes how you think about freshness. A Kubernetes controller is not a transaction processor that observes one event, calculates one response, and exits forever. It is an eventually consistent worker that may see repeated requests, delayed cache updates, and child-object events that all map back to the same parent. That is why controller-runtime encourages you to write reconciliation as a full convergence pass. You fetch the current parent, calculate desired children, apply changes, update status, and accept that another request may arrive soon.
 
-### 2.1 Install Kubebuilder
+Pause and predict: if five controllers inside the same manager all need to react to Pods, what changes when they share one cache instead of each opening a separate watch? The answer is not only lower API Server load; it is also a simpler mental model because each controller reads from the same informer-backed view, while the manager centralizes startup, shutdown, health, and leader election behavior.
+
+## Scaffold and Generate the WebApp API
+
+Scaffolding is not a substitute for design, but it is a way to start from a known-good structure instead of assembling a project from memory. Kubebuilder creates a Go module with a `cmd/main.go`, a `PROJECT` metadata file, kustomize bases under `config/`, generated RBAC paths, and an `internal/controller/` package. That layout gives future contributors obvious homes for API types, controller logic, manifests, tests, and release configuration.
 
 ```bash
 # Download latest Kubebuilder (v4+)
@@ -119,7 +101,7 @@ sudo mv kubebuilder /usr/local/bin/
 kubebuilder version
 ```
 
-### 2.2 Initialize the Project
+Installing the CLI is only the first step; the more important choice is the domain and repository path. The domain becomes part of your API group, so `kubedojo.io` combined with group `apps` produces the group `apps.kubedojo.io`. The repository path becomes the Go module path, and changing it later after generated imports exist is possible but tedious enough that you should treat it as part of the API design conversation.
 
 ```bash
 mkdir -p ~/extending-k8s/webapp-operator && cd ~/extending-k8s/webapp-operator
@@ -144,7 +126,9 @@ kubebuilder init --domain kubedojo.io --repo github.com/kubedojo/webapp-operator
 #     └── controller/       # Controller implementations go here
 ```
 
-### 2.3 Create an API (CRD + Controller)
+The generated tree is intentionally split between source code and deployable configuration. The `api/` directory will hold versioned Go types that represent your Kubernetes API, while `internal/controller/` holds the controllers that make those APIs useful. The `config/` tree is not a random pile of YAML; it is a set of kustomize layers that compose CRDs, RBAC, manager Deployment, webhook configuration, metrics resources, and sample manifests.
+
+This split is a useful guardrail when the project grows. API packages should remain focused on versioned types, defaults, validation markers, conversion code, and webhook methods, while controller packages should contain reconciliation logic and helper functions that operate on those types. Generated configuration should be treated as output from the source of truth, but it is still reviewed because it is what reaches the cluster. That separation keeps reviews clearer: an API review asks whether the user contract is right, while a controller review asks whether the behavior converges.
 
 ```bash
 kubebuilder create api --group apps --version v1beta1 --kind WebApp
@@ -165,13 +149,19 @@ kubebuilder create api --group apps --version v1beta1 --kind WebApp
 #         └── webapp_controller_test.go  # Test scaffold
 ```
 
----
+The `create api` command asks two questions because a Kubernetes extension can define a resource without immediately managing it. Answering yes to the resource creates the Go type and CRD generation path; answering yes to the controller creates a Reconciler scaffold and manager registration. In most operator projects you want both, but separating those choices is useful when you define shared API packages consumed by another controller or when you are adding a controller later to an existing API.
 
-## Part 3: Defining API Types
+Scaffolding also gives you a repeatable naming convention, and that convention matters more than it first appears. The group, version, kind, plural name, Go package, CRD filename, sample manifest path, and generated RBAC rules all need to agree. When those names drift, failures can look unrelated: a sample may apply to a different group, a controller may watch a type that was never registered, or a generated ClusterRole may omit permissions because the marker was attached to code that controller-gen did not scan. Keeping the scaffolded structure intact makes those mistakes easier to spot.
 
-### 3.1 The Types File
+Before running this in your own terminal, ask what you expect `kubebuilder create api` to modify. A good prediction is that it changes both Go code and project metadata, because Kubebuilder must register the group/version/kind in the `PROJECT` file so later generators know which APIs exist. If a generated CRD appears to be missing, checking only the Go type is not enough; you also need to confirm the project metadata and generator commands still agree.
 
-This is where you define what your CRD looks like. Every field gets a Go struct tag and optional Kubebuilder markers:
+## Design API Types With Markers Instead of Handwritten CRDs
+
+The API type is the contract your users will live with, so it deserves more care than the controller implementation receives on day one. A field name, default, enum, validation rule, status shape, print column, or scale subresource becomes part of how users script, debug, and automate around your operator. Kubebuilder markers let you keep that contract beside the Go type, then use controller-gen to produce the CRD YAML that the API Server understands.
+
+The `WebAppSpec` below keeps the user-facing surface deliberately small: an image, optional replica count, port, environment variables, resource hints, and optional ingress configuration. The `WebAppStatus` reports ready and available replicas, a phase, conditions, and the observed generation. This split follows the Kubernetes convention that `spec` records desired state from the user and `status` records observed state from the controller, which avoids turning the custom resource into a confusing two-writer document.
+
+The pointer on `Replicas` is not accidental. In Go API types, a pointer can distinguish "the user omitted this field" from "the user explicitly set this field to the zero value," which matters for defaulting and validation. The `Port` field is not a pointer here because the validation minimum makes zero invalid and the default marker gives the API Server a value before the controller relies on it. These small type choices become API behavior, so avoid treating the Go struct as a passive serialization detail.
 
 ```go
 // api/v1beta1/webapp_types.go
@@ -299,7 +289,9 @@ func init() {
 }
 ```
 
-### 3.2 Marker Reference
+Markers look like comments because Go needs to compile the file without knowing anything about Kubebuilder, but controller-gen treats them as structured input. That dual nature is useful and dangerous at the same time. A normal comment can be reworded freely, while a marker has a parser, supported fields, and generated output, so deleting or mistyping one changes the CRD, RBAC, webhook, or generated object code that reaches the cluster.
+
+Status and scale markers are especially important for interoperability. A status subresource lets tools and users reason about controller progress without letting the controller overwrite spec fields, and the scale subresource lets generic Kubernetes tooling adjust replica count without knowing your whole custom schema. Printer columns serve a similar usability goal. They turn `kubectl get` into a useful triage view instead of forcing every user to inspect raw YAML for the image, desired replicas, ready replicas, and phase.
 
 | Marker | Where | Effect |
 |--------|-------|--------|
@@ -319,9 +311,9 @@ func init() {
 | `+kubebuilder:default=...` | Field | Default value |
 | `+optional` | Field | Field is optional |
 
-> **Pause and predict**: If you forget to run `make manifests` after changing a marker like `+kubebuilder:validation:Minimum`, what will happen when a user tries to submit an invalid resource to the cluster?
+Treat generation as part of compilation for a Kubernetes API, not as a release-time chore. When you change a marker, a field tag, or a type used by a CRD, you should regenerate manifests and inspect the diff before you run the controller. The API Server validates requests using the installed CRD, not the Go file in your editor, so stale manifests create a confusing split where your source code says one thing and the cluster enforces another.
 
-### 3.3 Generate CRD and DeepCopy
+Generation also exposes backwards compatibility decisions. Adding an optional field with a clear default is usually low risk, but renaming a field, tightening validation, changing enum values, or removing a printed column can break users and automation. Kubebuilder gives you the mechanics for producing the CRD, but it does not decide whether a `v1beta1` API change is acceptable. Treat every generated CRD diff as a contract review, not just a build artifact.
 
 ```bash
 # Generate deepcopy methods and CRD manifests
@@ -332,13 +324,15 @@ make manifests   # Runs controller-gen rbac:roleName=manager-role crd webhook
 cat config/crd/bases/apps.kubedojo.io_webapps.yaml
 ```
 
----
+Pause and predict: if you forget to run `make manifests` after changing `+kubebuilder:validation:Minimum=1` to a stricter value, what will happen when a user submits the old invalid resource? The API Server will keep enforcing the CRD that is actually installed, so the request may still pass validation until the regenerated and applied manifest reaches the cluster.
 
-## Part 4: Implementing the Reconciler
+## Implement and Diagnose the Reconciler
 
-### 4.1 The Reconcile Function
+The Reconciler is where your policy becomes behavior, but controller-runtime deliberately calls it with only a `ctrl.Request`. That request contains a name and namespace, not the full object, because workqueue events can be coalesced, repeated, or triggered by owned children. The correct first move is to fetch the current primary object, handle NotFound as a successful no-op, and then derive every child object from the current desired state rather than from the event that happened to wake the controller.
 
-This is where your business logic lives. controller-runtime calls this function whenever a watched resource changes:
+The WebApp controller below creates or updates a Deployment and a Service, sets owner references so garbage collection and owned watches work, writes status based on observed Deployment readiness, and requeues while the application is still becoming ready. This is a small operator, but it contains the patterns you will use in larger ones: defaulting defensive values, using deterministic names and labels, updating child resources idempotently, recording observed generation, and separating status updates from spec changes.
+
+The controller also demonstrates why child resources should be named and labeled consistently. A deterministic child name lets the Reconciler fetch exactly the object it owns, while stable labels let Services select the correct Pods and dashboards group related resources. If the controller used random names, it would need an additional lookup strategy and cleanup policy. If it used inconsistent labels, the Service might route to the wrong pods or no pods at all, which would make a successful reconciliation look like an application outage.
 
 ```go
 // internal/controller/webapp_controller.go
@@ -560,11 +554,11 @@ func (r *WebAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 ```
 
-> **Stop and think**: How can a controller efficiently ensure a Deployment's configuration matches the desired state, even if a cluster administrator manually alters the Deployment using kubectl?
+The code is easier to reason about if you read it as a sequence of convergence checks rather than as an event handler. It does not ask whether the event was a create, update, delete, or child-resource notification; it asks what should be true now. That is why the same function can create the Deployment on the first run, repair a manually edited image later, recreate a deleted child object, and refresh status after pods become ready.
 
-### 4.2 Understanding `CreateOrUpdate`
+Handling NotFound correctly is part of that convergence model. When the primary WebApp is deleted, queued requests may still exist because watches are asynchronous and child resources may emit final events. Returning an error in that case teaches the workqueue to retry a resource that should no longer exist. Returning success acknowledges that there is nothing left for this controller to do, while Kubernetes garbage collection handles children that have valid owner references.
 
-The `controllerutil.CreateOrUpdate` function is a powerful helper:
+The `CreateOrUpdate` helper is the compact version of a pattern you would otherwise write repeatedly. It tries to get the object, calls your mutation function, creates the object if it was missing, and updates it if the fetched object differs after mutation. The mutation function must be deterministic and complete enough to express the desired state, because any field you leave unmanaged may keep whatever value a previous writer placed there.
 
 ```mermaid
 flowchart TD
@@ -585,9 +579,9 @@ flowchart TD
     Update --> Ret
 ```
 
-The `mutateFn` is called in both cases. It sets the desired state. If the object exists and the mutated version differs from the current version, an Update is issued. This is the idempotent, declarative pattern in action.
+Idempotency is what keeps this from becoming noisy. If the live Deployment already matches the desired Deployment, controller-runtime does not need to issue an update, which reduces API traffic and avoids triggering unnecessary rollouts. If a user edits a managed field, the next reconciliation sees the difference, applies the mutation again, and updates the child object back to the operator-owned shape.
 
-### 4.3 Understanding Return Values
+There is a subtle design choice inside every mutation function: which fields are truly owned by the operator. In the WebApp example, the operator owns the main container image, port, labels, selector, replica count, and Service shape because those are part of the WebApp abstraction. In a larger platform, you might intentionally preserve annotations injected by policy tools or sidecar configuration added by another controller. Idempotent does not mean overwriting everything; it means repeatedly applying the ownership model you chose.
 
 | Return Value | Meaning |
 |-------------|---------|
@@ -596,11 +590,15 @@ The `mutateFn` is called in both cases. It sets the desired state. If the object
 | `ctrl.Result{RequeueAfter: 10*time.Second}, nil` | Success, requeue after delay |
 | `ctrl.Result{}, err` | Error, requeue with exponential backoff |
 
----
+Return values are a communication contract with the workqueue. A nil error with no requeue means reconciliation reached a stable point and future events can wake it again. A nil error with `RequeueAfter` means nothing failed, but the controller wants to check progress after a delay. A non-nil error means the attempt failed and controller-runtime should retry with its rate limiting behavior, which protects the API Server and external systems from tight retry loops.
 
-## Part 5: Building and Running
+This distinction becomes critical when a controller talks to systems outside Kubernetes. If an external API times out, returning an error is honest because the desired state was not reached and retry backoff is appropriate. If a Deployment is simply waiting for pods to become ready, returning `RequeueAfter` with a nil error is better because nothing failed. Mixing those cases makes logs noisy, hides real faults, and can turn normal rollout delay into a misleading stream of errors.
 
-### 5.1 Local Development
+Stop and think: how can a controller efficiently ensure a Deployment's configuration matches the desired state, even if a cluster administrator manually alters the Deployment using `kubectl`? The controller avoids special-case drift detection by deriving the desired child object on every run and letting `CreateOrUpdate` compare that desired shape to the live object. This is the same declarative idea Kubernetes uses for built-in controllers, applied to your own resource.
+
+## Build, Run, and Deploy the Operator
+
+Running an operator locally is a useful development mode because it removes the container build loop while still talking to a real API Server. The usual sequence is generate code, generate manifests, install CRDs, start `make run`, and then create a sample custom resource from another terminal. This keeps feedback fast while you are still changing API fields, controller logic, and status behavior.
 
 ```bash
 # Generate code and manifests
@@ -614,7 +612,7 @@ make install
 make run
 
 # In another terminal, create a WebApp
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -627,12 +625,14 @@ spec:
 EOF
 
 # Check results
-k get webapp test-app
-k get deployment test-app
-k get svc test-app
+kubectl get webapp test-app
+kubectl get deployment test-app
+kubectl get svc test-app
 ```
 
-### 5.2 Building the Container Image
+Local execution has one important limitation: it proves that the controller can run with your local kubeconfig, not that the in-cluster ServiceAccount has the permissions it needs. That is why RBAC generation and in-cluster deployment remain part of the learning path. A controller that works with your admin kubeconfig but fails in the cluster is often missing a marker, using a stale generated role, or deployed with a ServiceAccount that does not match the generated binding.
+
+Local mode is still valuable because it shortens the edit-run-observe loop while you are shaping the API and Reconciler. You can run with a debugger, add temporary log lines, inspect generated manifests immediately, and reset a kind cluster when the CRD changes too much. The key is to treat local success as one signal rather than as the final proof. Before a change is production-ready, it must run through the same identity, image, flags, probes, and deployment path it will use in the cluster.
 
 ```bash
 # Build the image
@@ -645,11 +645,11 @@ kind load docker-image webapp-operator:v0.1.0
 make deploy IMG=webapp-operator:v0.1.0
 
 # Check the operator is running
-k get pods -n webapp-operator-system
-k logs -n webapp-operator-system -l control-plane=controller-manager -f
+kubectl get pods -n webapp-operator-system
+kubectl logs -n webapp-operator-system -l control-plane=controller-manager -f
 ```
 
-### 5.3 Makefile Targets Reference
+The Makefile targets are wrappers around common generator, kustomize, test, and image commands, so you should read them instead of treating them as magic. In a team setting, these targets become the interface between development, CI, release automation, and documentation. If you add a new API group, webhook, or image tag convention, the Makefile and `config/` overlays are where that change becomes repeatable.
 
 | Target | What It Does |
 |--------|-------------|
@@ -664,15 +664,13 @@ k logs -n webapp-operator-system -l control-plane=controller-manager -f
 | `make undeploy` | Remove the operator from the cluster |
 | `make test` | Run unit and integration tests |
 
----
+Validation should happen at several layers because each layer catches a different class of defect. `make generate` catches broken type generation, `make manifests` catches invalid marker usage, local `make run` catches runtime logic and kubeconfig behavior, in-cluster deployment catches RBAC and manager configuration, and envtest can exercise controller logic against a real API Server without requiring a full cluster. No single check gives complete confidence, but together they make operator changes much less surprising.
 
-## Part 6: The Manager and Main Entry Point
+Envtest deserves a place in that validation story because it sits between unit tests and full cluster tests. It starts API Server and etcd processes for the test, installs your CRDs, and lets the controller use real Kubernetes API behavior without scheduling pods or running kubelet. That makes it a strong fit for testing reconciliation of custom resources, status updates, validation expectations, and owner references. It will not prove that a Deployment's pods become ready, but it can prove that your controller creates the Deployment you intended.
 
-> **Stop and think**: If the manager handles leader election, what happens if you run two instances of your operator simultaneously in the cluster?
+## Configure the Manager as the Operator Runtime
 
-### 6.1 Manager Configuration
-
-Kubebuilder generates the main file, but understanding it is important:
+Kubebuilder's generated `cmd/main.go` is sometimes ignored because it is scaffolded code, but it is the runtime boundary for your operator. The manager is where your scheme is assembled, flags are parsed, metrics and health endpoints are bound, leader election is configured, webhooks are registered, and controllers are attached. If the manager does not know about your API scheme, your client cannot decode the resource; if the controller is not registered, no reconciliation happens.
 
 ```go
 // cmd/main.go (simplified, key sections)
@@ -746,7 +744,9 @@ func main() {
 }
 ```
 
-### 6.2 What the Manager Provides
+The manager's shared cache deserves special attention because it is both a performance feature and a consistency boundary. A controller-runtime client reads many objects from the cache by default, which keeps reads fast and reduces API Server load, but it also means you should understand when cached reads are acceptable and when a direct API read may be needed. For most reconciliation paths, cached reads of Kubernetes objects are exactly what you want because controllers are designed around eventual consistency.
+
+The scheme registration in `init()` is another small block with large consequences. Kubernetes clients need a scheme so they can map Go types to group, version, and kind information when encoding and decoding objects. If you forget to add your API to the scheme, the controller may compile but fail when it tries to work with your custom resource type. This is why Kubebuilder scaffolds scheme registration early and why generated API packages include registration helpers.
 
 | Feature | How |
 |---------|-----|
@@ -757,68 +757,124 @@ func main() {
 | Webhook server | HTTPS server for admission webhooks |
 | Graceful shutdown | SIGTERM handling, drains controllers |
 
----
+Leader election prevents two replicas of the same controller manager from actively reconciling the same resources at the same time. That does not mean your reconciler can be sloppy, because retries, restarts, and delayed events still happen, but it does reduce duplicate active writers during normal high-availability deployment. Health and readiness probes then give Kubernetes a way to restart or hold traffic from the operator process if the manager is not healthy.
+
+Metrics and probes also change how operators are supported after deployment. A manager that exposes readiness can be rolled safely because Kubernetes knows when the new process is ready to lead or serve webhooks. Metrics give you a way to observe reconcile errors, queue behavior, and runtime health over time. Without those surfaces, an operator failure often looks like silent drift until users notice child resources are no longer being repaired.
+
+Stop and think: if the manager handles leader election, what happens if you run two instances of your operator simultaneously in the cluster? One instance should hold the active lease while the other waits, which gives you availability during restarts without letting both replicas race through the same reconciliation loop under normal conditions.
+
+## Patterns & Anti-Patterns
+
+Use the framework as a way to make intent explicit, not as a place to hide complexity. A strong Kubebuilder operator starts with a narrow API, clear ownership of child resources, deterministic reconciliation, and status that tells users what the controller has observed. That combination lets a user inspect one custom resource and understand the desired inputs, the latest controller progress, and the child resources that should exist because of it.
+
+Pattern: design a small custom resource around user intent, then let the controller own the noisy Kubernetes details. The WebApp API does not ask users to write Deployment selectors, Service ports, or owner references because those are implementation details of the platform policy. This pattern scales when the operator owns a stable contract and can evolve its child-resource implementation without forcing every application team to rewrite their manifests.
+
+Pattern: make every reconciliation path idempotent and deterministic. A Reconciler should be comfortable running again after a timeout, a restart, a duplicate event, a child-resource edit, or a stale cache read. Deterministic labels, names, owner references, and mutation functions make that possible because the controller can repeatedly calculate the same desired state from the same primary resource.
+
+Pattern: report status as an operator interface, not as decorative metadata. Conditions, phase, ready replica counts, and observed generation help users and automation decide whether the controller has processed the latest spec. This becomes especially important when a cluster has many custom resources, because `kubectl get` print columns and status fields are the first triage surface most operators and developers will use.
+
+Anti-pattern: hand-editing generated CRDs, RBAC, or deepcopy files to make a quick test pass. Teams fall into this when they are debugging under pressure and the YAML is easier to patch than the marker or Go type that produced it. The better alternative is to fix the source marker, rerun generation, and review the generated diff so source, manifests, and installed API remain aligned.
+
+Anti-pattern: treating `Reconcile` like a create-or-update event callback. Kubernetes controllers receive requests because something may have changed, not because the request contains a complete event history. A better design ignores event type, fetches current state, handles deleted primaries cleanly, and derives desired children every time.
+
+Anti-pattern: asking the operator to own fields that users or other controllers also own without a clear boundary. If the WebApp controller rewrites every field in a Deployment, it may fight with admission controllers, policy injectors, or administrators who are responsible for different settings. A better approach is to define which fields are managed by the operator, preserve intentionally external fields when appropriate, and document the ownership model in the API.
+
+Pattern: keep failure messages and status conditions actionable. A phase like `Failed` is much less helpful than a condition with a type, status, reason, message, and observed generation that tells users what the controller tried to do. Good conditions reduce the need to read controller logs for routine triage. They also make automation safer because another tool can wait for a specific condition instead of parsing informal text from events or logs.
+
+Anti-pattern: using the custom resource as a dumping ground for every possible Kubernetes option. This usually starts with a clean abstraction and slowly grows until the CRD mirrors a Deployment, Service, Ingress, and ConfigMap all at once. The better alternative is to decide which decisions the platform should standardize and which decisions should remain in lower-level resources. A custom API earns its keep when it simplifies repeated intent, not when it rebrands every built-in field.
+
+## Decision Framework
+
+Start by deciding whether you need a custom API at all. If a small number of static resources express the desired state and users can safely own those manifests, a Helm chart, kustomize package, or platform template may be enough. Choose an operator when the desired state must be maintained continuously, when status needs to summarize live cluster behavior, when child resources must be repaired after drift, or when the platform has a workflow that Kubernetes primitives cannot express directly.
+
+Next, decide whether the operator should be built with Kubebuilder, Operator SDK, or lower-level client-go. Choose Kubebuilder for Go operators where you want the standard controller-runtime path, generated CRDs and RBAC, and a clean development layout. Choose Operator SDK when OLM packaging, scorecard checks, or non-Go operator types are part of the product requirement. Choose raw client-go only when you are building infrastructure that needs unusually custom watch behavior or when the framework abstractions get in the way for a specific, defensible reason.
+
+Then decide how wide the API should be. A narrow `WebApp` abstraction is effective when the platform wants to own Deployment and Service conventions, but it would be frustrating if application teams need full control over every pod template detail. The practical test is whether the custom resource reduces repeated operational decisions without hiding choices that users legitimately need to make. If every new request becomes "please add one more field that maps directly to Deployment," the abstraction may be too thin or too broad.
+
+Finally, decide what evidence will prove the operator works. For the WebApp controller, evidence includes generated CRDs that validate bad input, RBAC that allows only the required resources, a local run that creates Deployment and Service children, status that tracks readiness and observed generation, a scale subresource that works with `kubectl scale`, and a deployed manager that survives restarts. A mature project automates as much of that evidence as possible with generator checks, envtest, targeted integration tests, and release validation.
+
+Use the same framework when reviewing an existing operator. Ask whether the API presents a stable user contract, whether generated manifests match source markers, whether reconciliation is idempotent, whether status explains progress, whether permissions are minimal but sufficient, and whether tests cover both happy-path convergence and common failure paths. This review style is more useful than asking whether the operator "uses Kubebuilder correctly" in the abstract. The framework is only successful when the resulting controller is predictable for users and maintainable for the team that owns it.
+
+When the answer is still unclear, reduce the decision to the smallest risky assumption and test that assumption directly. If you are unsure whether the API is too narrow, ask a user to model two real application requests and watch where they need escape hatches. If you are unsure whether reconciliation is safe, write an envtest case that creates the parent, mutates the child, and verifies the controller repairs only the fields it owns. If you are unsure whether deployment is production-ready, run the manager with its generated ServiceAccount and inspect the exact forbidden errors, probes, and logs rather than relying on local administrator credentials. Operator design improves fastest when each uncertainty becomes a concrete check instead of a debate about style. This habit also keeps the team honest about scope, because a failed check points to the next engineering task instead of encouraging a larger and vaguer rewrite.
+
+## Did You Know?
+
+- **Kubebuilder and Operator SDK share the same core**: both use controller-runtime for Go operators, so Reconciler patterns, manager setup, cache behavior, and controller wiring carry across the two tools even when packaging workflows differ.
+- **controller-gen reads marker comments as input**: `//+kubebuilder:` lines are parsed to generate CRDs, RBAC roles, webhook configurations, and object code, which is why a comment-looking typo can become a cluster-facing bug.
+- **The status subresource is a separate write path**: enabling `+kubebuilder:subresource:status` lets the controller update observed state without taking ownership of the user's desired `spec`, which is a core Kubernetes API convention.
+- **Kubernetes leader election commonly uses Lease objects**: controller-runtime can coordinate active manager replicas through the coordination API, giving operators a standard high-availability pattern without custom lock code.
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| Forgetting `make manifests` after changing markers | CRD not updated, RBAC wrong | Run `make manifests` after any marker change |
-| Missing RBAC markers | Controller denied access to resources | Add `+kubebuilder:rbac` for every resource accessed |
-| Not re-fetching before status update | Conflict errors on update | Use `r.Get()` before `r.Status().Update()` |
-| Returning error on NotFound in Reconcile | Infinite retry for deleted objects | Return `nil` when the primary resource is gone |
-| Ignoring `ObservedGeneration` | Controller appears stuck on status | Set `ObservedGeneration` to `obj.Generation` |
-| Not using `controllerutil.SetControllerReference` | Orphaned child resources | Always set owner reference on created resources |
-| Using `r.Update()` instead of `r.Status().Update()` for status | Status changes rejected or lost | Use the status sub-client for status updates |
-| Hardcoded container names in deployment | Breaks when updating existing deployments | Use consistent, deterministic names |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Forgetting `make manifests` after changing markers | The Go source changed, but the installed CRD or RBAC YAML still reflects the old marker set | Run `make manifests` after marker changes and review the generated diff before applying it |
+| Missing RBAC markers | The controller code reads or writes a resource that controller-gen was never told about | Add `+kubebuilder:rbac` markers for every resource and subresource the Reconciler uses |
+| Not re-fetching before status update | The cached object or earlier copy has an outdated resource version, which causes conflicts | Fetch the latest object before `r.Status().Update()` and keep status updates narrow |
+| Returning an error on primary NotFound | Deleted objects naturally produce queued requests, and retrying them creates useless work | Treat `errors.IsNotFound` for the primary resource as a successful no-op |
+| Ignoring `ObservedGeneration` | Users cannot tell whether status describes the latest spec or an older reconciliation | Set `ObservedGeneration` after successfully processing the current object generation |
+| Not using `controllerutil.SetControllerReference` | Child resources are not connected to the parent for garbage collection or owned watches | Set owner references on managed children and register owned resource watches in `SetupWithManager` |
+| Using `r.Update()` instead of `r.Status().Update()` for status | The API Server separates desired spec writes from observed status writes | Use the status sub-client when changing status fields |
+| Hardcoding child-resource assumptions without an ownership model | The operator can fight users, admission plugins, or other controllers over the same fields | Document managed fields and make mutation functions deterministic but intentionally scoped |
 
 ## Quiz
 
-1. **You have written a Reconciler that creates ConfigMaps, but you notice in the operator logs that it keeps failing with a "forbidden: User cannot create resource" error. You check your code and the logic is correct. What did you likely forget to include, and why is this causing the error?**
-   <details>
-   <summary>Answer</summary>
-   You likely forgot to include the `//+kubebuilder:rbac` markers for the ConfigMap resource above your Reconciler function. These markers tell `controller-gen` what RBAC permissions the controller requires to function properly. When you run `make manifests`, the tool parses these markers to automatically generate the correct ClusterRole or Role YAML files in the `config/rbac/` directory. Without the generated RBAC manifests, the operator runs with a service account that has no permissions to interact with ConfigMaps, resulting in the forbidden error.
-   </details>
+<details>
+<summary>Question 1: Your team is starting a Go operator for internal platform automation, but another engineer suggests Operator SDK because it sounds more complete. How do you compare Kubebuilder and Operator SDK for this choice?</summary>
 
-2. **Your controller manages a Deployment and a user accidentally modifies the Deployment's image using `kubectl edit`. On the next reconciliation loop, your operator automatically reverts the change. How does `controllerutil.CreateOrUpdate` handle the underlying mechanics to enforce this desired state and achieve idempotency?**
-   <details>
-   <summary>Answer</summary>
-   `controllerutil.CreateOrUpdate` achieves this by first fetching the current state of the object from the cluster. If the object does not exist, it applies the mutation function you provide to define the desired state and creates it. If the object already exists, it applies your mutation function to the fetched object and compares the result against the current state in the cluster. It will only issue an Update request to the API Server if the mutated object actually differs from the current state, ensuring that the cluster always converges to your desired configuration without making unnecessary API calls.
-   </details>
+For a Go operator, both tools use controller-runtime and the Kubebuilder-style layout, so the Reconciler and API design work will be similar. Kubebuilder is the simpler default when the team wants a Kubernetes-native development workflow without OLM distribution features. Operator SDK becomes more compelling when OLM bundles, scorecard checks, or non-Go operator types are explicit requirements. The decision should follow the release and packaging model, not the assumption that one tool is universally more advanced.
 
-3. **During a reconciliation loop, your controller successfully updates a Custom Resource's status to "Deploying" but needs to check back later to see if the underlying Pods are ready. Another part of your logic encounters a network timeout when talking to an external API. How should your return values differ for these two situations, and why?**
-   <details>
-   <summary>Answer</summary>
-   For the successful status update where you simply need to check back later, you should return `ctrl.Result{Requeue: true}` (or `RequeueAfter`) and a `nil` error. This tells the controller runtime that the reconciliation succeeded but the object should be added back to the workqueue to monitor ongoing progress, avoiding any backoff penalties. For the network timeout, you should return `ctrl.Result{}` alongside the actual `error` object. Returning an error signals to the framework that a failure occurred, which triggers an exponential backoff mechanism to prevent overloading the system while retrying the failed operation.
-   </details>
+</details>
 
-4. **You are designing a complex operator with five different controllers, all of which need to monitor changes to Pod resources in the cluster. If you were writing raw client-go, you might accidentally instantiate five separate informers. Why does the Kubebuilder Manager provide a shared cache for this scenario, and what are the benefits?**
-   <details>
-   <summary>Answer</summary>
-   The Kubebuilder Manager uses a shared cache to heavily optimize resource consumption and reduce load on the Kubernetes API Server. If each controller had its own informer, the operator would open five separate watch connections to the API Server and store five duplicate copies of the Pod data in memory. By using a shared cache, the Manager ensures that only one watch connection is established per GroupVersionKind (GVK), regardless of how many controllers are watching it. This shared approach dramatically reduces memory overhead and ensures all controllers operate from a single, consistent view of the cluster state.
-   </details>
+<details>
+<summary>Question 2: You changed a `+kubebuilder:validation:Maximum` marker, deployed the controller, and users can still create resources with values above the new limit. What do you check first?</summary>
 
-5. **You are investigating a user report that their `WebApp` resource is not scaling up as requested. You inspect the resource and notice the metadata has `generation: 5`, but the status section shows `observedGeneration: 3`. What exactly does this discrepancy indicate about the state of your controller?**
-   <details>
-   <summary>Answer</summary>
-   This discrepancy indicates that your controller has not yet successfully reconciled the latest specification changes made to the resource. The `generation` field is automatically incremented by the Kubernetes API Server every time the resource's `spec` is modified. The `observedGeneration` field, however, is manually set by your controller in the status subresource only after it successfully finishes processing a given generation. A gap between these two numbers means the controller is either currently busy processing a backlog of events, stuck in an error loop with exponential backoff, or completely offline.
-   </details>
+Check whether `make manifests` was run and whether the regenerated CRD was applied to the cluster. The API Server validates custom resources using the installed CRD, not the Go source file in your repository. If the manifest was not regenerated or applied, the old schema is still active and the controller deployment cannot change that by itself. After applying the CRD, test with a rejected invalid resource so you know the validation path is enforcing the new rule.
 
-6. **Your operator creates a Deployment as a child resource of a `WebApp` Custom Resource. To ensure the operator notices if someone deletes this child Deployment, you add `Owns(&appsv1.Deployment{})` to your `SetupWithManager` function. How does this specific configuration wire up the event handling beneath the surface?**
-   <details>
-   <summary>Answer</summary>
-   Calling `Owns` configures the controller runtime to establish a watch on the specified child resource type (in this case, Deployments). When a change occurs to a Deployment, the event handler inspects the object's metadata for an `OwnerReference` pointing back to a parent resource. If the handler finds an `OwnerReference` that matches the GVK of your primary resource (the `WebApp`), it automatically extracts the parent's name and namespace and enqueues a reconciliation request for that specific parent. This is the mechanism that allows your controller to detect drift in child resources and instantly trigger a reconciliation loop to restore the desired state.
-   </details>
+</details>
 
----
+<details>
+<summary>Question 3: Your Reconciler creates Deployments successfully when run locally, but the in-cluster manager logs forbidden errors for Deployments. What likely failed in the generate and deploy path?</summary>
+
+The likely failure is missing or stale RBAC generated from `+kubebuilder:rbac` markers. Local execution often uses your kubeconfig, which may have broad permissions, while the in-cluster manager runs as a ServiceAccount bound to generated roles. Add or fix the Deployment RBAC marker, run `make manifests`, and redeploy the manager manifests so the ServiceAccount receives the correct permissions. The controller logic may be fine even though the deployed identity cannot perform the operation.
+
+</details>
+
+<details>
+<summary>Question 4: A user edits the managed Deployment image by hand, and the operator changes it back on the next reconciliation. Why is that expected, and when might it be a design problem?</summary>
+
+It is expected because the operator derives the desired Deployment from the WebApp spec and uses an idempotent mutation function to enforce managed fields. If the image belongs to the WebApp contract, reverting manual edits is the correct repair behavior. It becomes a design problem if the operator rewrites fields that users reasonably expect to own or that another controller is responsible for injecting. In that case, the API boundary and mutation scope need to be clarified.
+
+</details>
+
+<details>
+<summary>Question 5: A WebApp shows `metadata.generation: 5`, but `status.observedGeneration: 3`. What does that tell you about controller progress?</summary>
+
+The status is not yet known to describe the latest spec because the controller has only reported successful observation through generation 3. The controller may be processing a backlog, failing before the status update, blocked by RBAC, or offline. This is why observed generation is more useful than a phase alone: it lets users distinguish stale status from current status. The next checks should include controller logs, workqueue errors, and whether status updates are succeeding.
+
+</details>
+
+<details>
+<summary>Question 6: Your operator has two replicas after deployment, and you see only one actively reconciling resources. Why is that usually correct?</summary>
+
+Controller-runtime manager deployments commonly use leader election so one replica holds the active lease while another waits as a standby. That avoids normal duplicate reconciliation by multiple managers while still allowing failover during restarts or node disruption. The standby replica is not wasted if availability matters, because it can take over when the leader stops renewing the lease. The Reconciler must still remain idempotent because retries and repeated events can happen even with leader election.
+
+</details>
+
+<details>
+<summary>Question 7: You add `Owns(&appsv1.Deployment{})`, but deleting a child Deployment does not trigger repair. What relationship should you inspect?</summary>
+
+Inspect whether the Deployment has an owner reference pointing to the WebApp with the correct API version, kind, name, and UID. `Owns` watches the child type, but the event handler maps child events back to parent reconciliation requests through owner references. If `SetControllerReference` failed or was never called, the child deletion may not enqueue the parent WebApp. Fix the owner reference path, then verify that deleting the child causes a new reconciliation.
+
+</details>
 
 ## Hands-On Exercise
 
-**Task**: Scaffold and implement a complete operator using Kubebuilder that manages WebApp resources.
+**Task**: Scaffold and implement a complete operator using Kubebuilder that manages WebApp resources, then prove that generation, local reconciliation, scaling, self-healing, and in-cluster deployment all work through observable checks.
 
-**Setup**:
+This exercise keeps the same WebApp operator shape used throughout the lesson, but the goal is not to memorize commands. The goal is to connect each command to a verification point: project scaffolding creates the layout, API generation creates the contract, controller implementation creates the convergence loop, manifest generation produces cluster-facing YAML, local execution tests logic, and in-cluster deployment tests RBAC plus manager configuration. Work in a disposable directory and a disposable kind cluster so you can inspect generated files freely.
+
+### Setup
 ```bash
 kind create cluster --name kubebuilder-lab
 
@@ -827,33 +883,57 @@ curl -L -o kubebuilder "https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go 
 chmod +x kubebuilder && sudo mv kubebuilder /usr/local/bin/
 ```
 
-**Steps**:
+- [ ] **Task 1: Scaffold the WebApp project and API.** Create the Kubebuilder project, add the `apps/v1beta1` WebApp API, and confirm the generated `api/`, `internal/controller/`, and `config/` paths exist.
 
-1. **Scaffold the project**:
 ```bash
 mkdir -p ~/extending-k8s/webapp-operator && cd ~/extending-k8s/webapp-operator
 kubebuilder init --domain kubedojo.io --repo github.com/kubedojo/webapp-operator
 kubebuilder create api --group apps --version v1beta1 --kind WebApp
 ```
 
-2. **Replace the generated types** in `api/v1beta1/webapp_types.go` with the code from Part 3.1
+<details>
+<summary>Solution guidance</summary>
 
-3. **Replace the generated controller** in `internal/controller/webapp_controller.go` with the code from Part 4.1
+Answer yes to both resource and controller generation. Inspect the `PROJECT` file after generation and confirm the group, version, and kind are registered. If the API directory exists but later manifest generation does not include your CRD, the `PROJECT` metadata is one of the first places to inspect.
 
-4. **Generate and install**:
+</details>
+
+- [ ] **Task 2: Replace the generated API types.** Put the WebApp spec, status, validation markers, print columns, status subresource, and scale subresource from the module into `api/v1beta1/webapp_types.go`.
+
 ```bash
 make generate
+make manifests
+```
+
+<details>
+<summary>Solution guidance</summary>
+
+`make generate` should update deepcopy code, and `make manifests` should update the CRD under `config/crd/bases/`. Inspect the generated CRD for the validation fields, print columns, status subresource, and scale subresource. If you only edit Go code and skip generation, the cluster will not enforce the new API contract.
+
+</details>
+
+- [ ] **Task 3: Replace the generated controller.** Put the Reconciler from the module into `internal/controller/webapp_controller.go`, then confirm the RBAC markers cover WebApps, status, finalizers, Deployments, Services, and Events.
+
+```bash
 make manifests
 make install
 ```
 
-5. **Run locally and test**:
+<details>
+<summary>Solution guidance</summary>
+
+Review `config/rbac/role.yaml` after running `make manifests`. You should see permissions for the custom resource, the status subresource, Deployments, Services, and Events. If the local controller later works but the deployed controller fails with forbidden errors, stale RBAC is the likely cause.
+
+</details>
+
+- [ ] **Task 4: Run locally and create a WebApp.** Start the controller outside the cluster, apply a sample WebApp from another terminal, and inspect the custom resource, Deployment, Service, and recent events.
+
 ```bash
 # Terminal 1: Run the operator
 make run
 
 # Terminal 2: Create a WebApp
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -868,28 +948,43 @@ spec:
 EOF
 
 # Verify
-k get webapp kubebuilder-demo
-k get deployment kubebuilder-demo
-k get svc kubebuilder-demo
-k get events --sort-by=.lastTimestamp | tail -10
+kubectl get webapp kubebuilder-demo
+kubectl get deployment kubebuilder-demo
+kubectl get svc kubebuilder-demo
+kubectl get events --sort-by=.lastTimestamp | tail -10
 ```
 
-6. **Test scaling**:
+<details>
+<summary>Solution guidance</summary>
+
+The WebApp should appear with printer columns, and the Deployment and Service should use the deterministic name `kubebuilder-demo`. If the WebApp exists but no children appear, inspect controller logs for RBAC, scheme, validation, or Reconciler errors. If children exist but status is stale, inspect the status update path and check for conflicts or missing status subresource generation.
+
+</details>
+
+- [ ] **Task 5: Test scaling and self-healing.** Use the scale subresource, then delete the child Deployment and verify the operator recreates it.
+
 ```bash
-k scale webapp kubebuilder-demo --replicas=5
+kubectl scale webapp kubebuilder-demo --replicas=5
 sleep 10
-k get webapp kubebuilder-demo
-k get deployment kubebuilder-demo
+kubectl get webapp kubebuilder-demo
+kubectl get deployment kubebuilder-demo
 ```
 
-7. **Test self-healing**:
 ```bash
-k delete deployment kubebuilder-demo
+kubectl delete deployment kubebuilder-demo
 sleep 10
-k get deployment kubebuilder-demo   # Should be recreated
+kubectl get deployment kubebuilder-demo   # Should be recreated
 ```
 
-8. **Build and deploy as container**:
+<details>
+<summary>Solution guidance</summary>
+
+Scaling proves that the CRD scale subresource maps `.spec.replicas` to `.status.readyReplicas`. Deleting the Deployment proves that owner references and `Owns(&appsv1.Deployment{})` are wired correctly enough to trigger repair. If deletion does not trigger repair, check the child object's owner references and the controller setup chain.
+
+</details>
+
+- [ ] **Task 6: Build and deploy the manager.** Build the operator image, load it into kind, deploy the manager, stop the local run, and confirm the in-cluster manager can reconcile with its generated ServiceAccount.
+
 ```bash
 make docker-build IMG=webapp-operator:v0.1.0
 kind load docker-image webapp-operator:v0.1.0 --name kubebuilder-lab
@@ -897,29 +992,49 @@ make deploy IMG=webapp-operator:v0.1.0
 
 # Stop the local run (Ctrl+C in terminal 1)
 # Check the deployed operator
-k get pods -n webapp-operator-system
+kubectl get pods -n webapp-operator-system
 ```
 
-9. **Cleanup**:
+<details>
+<summary>Solution guidance</summary>
+
+After deployment, create or edit a WebApp and confirm the in-cluster manager handles it without your local process. This is the step that catches ServiceAccount and RBAC mistakes that local execution can hide. Use logs from the manager namespace to separate image pull errors, startup errors, and reconciliation errors.
+
+</details>
+
+### Cleanup
 ```bash
 make undeploy
 make uninstall
 kind delete cluster --name kubebuilder-lab
 ```
 
-**Success Criteria**:
+### Success Criteria
 - [ ] Kubebuilder scaffolds the project without errors
 - [ ] `make generate` and `make manifests` complete successfully
-- [ ] CRD installs and `k get webapps` works
-- [ ] Creating a WebApp triggers Deployment + Service creation
+- [ ] CRD installs and `kubectl get webapps` works
+- [ ] Creating a WebApp triggers Deployment and Service creation
 - [ ] Printer columns show correct data
 - [ ] Status subresource updates with readyReplicas and phase
 - [ ] `kubectl scale` works via the scale subresource
-- [ ] Self-healing works (deleted Deployment is recreated)
-- [ ] Operator builds as a Docker image and deploys to cluster
+- [ ] Self-healing works because a deleted Deployment is recreated
+- [ ] Operator builds as a Docker image and deploys to the cluster
 
----
+## Sources
+
+- https://book.kubebuilder.io/
+- https://book.kubebuilder.io/quick-start.html
+- https://book.kubebuilder.io/reference/markers.html
+- https://book.kubebuilder.io/reference/controller-gen.html
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/controller/controllerutil#CreateOrUpdate
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/envtest
+- https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
+- https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
+- https://kubernetes.io/docs/reference/access-authn-authz/rbac/
+- https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+- https://kubernetes.io/docs/concepts/architecture/leases/
 
 ## Next Module
 
-[Module 1.5: Advanced Operator Development](../module-1.5-advanced-operators/) - Add finalizers, status conditions, Kubernetes events, and comprehensive testing with envtest.
+[Module 1.5: Advanced Operator Development](../module-1.5-advanced-operators/) - Continue from this Kubebuilder foundation by adding finalizers, richer status conditions, Kubernetes events, and comprehensive envtest coverage for controllers that manage longer resource lifecycles.
