@@ -1,65 +1,43 @@
 ---
 title: "Module 1.5: Advanced Operator Development"
 slug: k8s/extending/module-1.5-advanced-operators
+revision_pending: false
 sidebar:
   order: 6
 ---
+
+# Module 1.5: Advanced Operator Development
+
 > **Complexity**: `[COMPLEX]` - Production-grade operator patterns
 >
 > **Time to Complete**: 5 hours
 >
-> **Prerequisites**: Module 1.4 (Kubebuilder), Go testing fundamentals
+> **Prerequisites**: Module 1.4 (Kubebuilder), Go testing fundamentals, and a Kubernetes 1.35+ cluster for manual validation
 
 ---
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Implement** finalizers that cleanly remove external resources (DNS records, cloud load balancers) before a custom resource is deleted
-2. **Design** structured status conditions following the Kubernetes API conventions so users can diagnose issues with `kubectl describe`
-3. **Configure** leader election and multi-replica deployments so your operator survives node failures without split-brain
-4. **Construct** envtest integration tests that validate the full reconciliation lifecycle including finalizer cleanup
-
----
+1. **Implement** finalizers that cleanly remove external resources such as DNS records, cloud load balancers, and monitoring objects before a custom resource is deleted.
+2. **Design** structured status conditions that follow Kubernetes API conventions so users can diagnose readiness, generation drift, and reconciliation failures with `kubectl describe`.
+3. **Configure** leader election, owned-resource watches, and event recording so a multi-replica operator remains observable and avoids split-brain reconciliation.
+4. **Construct** envtest integration tests that validate creation, update, status, and finalizer cleanup across the full reconciliation lifecycle.
 
 ## Why This Module Matters
 
-The operator you built in Module 1.4 works, but it is not production-ready. What happens when a user deletes a WebApp that has provisioned external resources (a DNS record, a database, a cloud load balancer)? Without **finalizers**, those resources become orphans. How does a user know *why* their WebApp is not ready? Without **status conditions**, they have to read controller logs. How does an SRE debug a failing reconciliation at 3 AM? Without **Kubernetes Events**, they are blind.
+Hypothetical scenario: your platform team has promoted the WebApp operator from Module 1.4 into a shared development cluster, and teams now rely on it to create Deployments, Services, optional Ingress objects, DNS records, and monitoring dashboards. The first deletion looks harmless: a developer runs `kubectl delete webapp checkout`, the custom resource disappears from their usual listing, and everyone moves on. Later, the DNS name still points to an old endpoint, an external dashboard remains in the monitoring system, and the next deployment fails because the operator never cleaned up resources that Kubernetes itself did not own.
 
-This module adds the pieces that separate a demo operator from a production operator: finalizers for cleanup, structured status conditions, Kubernetes Events for observability, leader election for high availability, and envtest for comprehensive integration testing. These patterns are used by every serious operator in the CNCF ecosystem -- from Cert-Manager to Crossplane to Cluster API.
+That failure is the dividing line between a demo controller and a production operator. Kubernetes garbage collection can remove dependent Kubernetes objects when owner references are correct, but it cannot call your DNS provider, delete a managed database, or remove a dashboard in another API. Finalizers give your controller a deliberate cleanup window before the API server purges the custom resource from etcd, status conditions give users a current diagnosis without forcing them into controller logs, events give a short operational timeline, and leader election prevents two controller replicas from racing over the same desired state.
 
-> **The Moving-Out Analogy**
->
-> Deleting a Kubernetes resource without a finalizer is like moving out of an apartment without cleaning up. You leave, but your furniture, your mail forwarding, and your utility accounts are still there. A finalizer is the "moving-out checklist" -- it tells Kubernetes: "Before you actually delete me, let me clean up my external dependencies first." The resource stays in a `Terminating` state until the controller confirms the cleanup is done.
+This module rewrites the WebApp operator around those production responsibilities. You will keep the reconciliation model from Module 1.4, but you will add deletion handling before normal reconciliation, condition updates after the operator evaluates child resources, event emission at the moments users need an audit trail, high-availability settings for the manager, watch rules for related resources, and envtest coverage that exercises the controller against a real API server and etcd. The aim is not to memorize snippets; the aim is to evaluate where each pattern belongs in the lifecycle and to avoid designs that look correct until the first outage or stuck deletion.
 
----
+## Finalizers: Making Deletion a Reconciliation Path
 
-## What You'll Learn
+Finalizers work because Kubernetes deletion is not a single operation when finalizers are present. When a user deletes an object, the API server sets `metadata.deletionTimestamp`, keeps the object in storage, and waits until every entry in `metadata.finalizers` has been removed. Your controller sees the same object again, but it now represents a cleanup request rather than a normal desired-state request. That means finalizer logic must run before the rest of reconciliation, because creating or updating child resources while the parent is terminating usually creates more work for the cleanup path.
 
-By the end of this module, you will be able to:
-- Implement finalizers for external resource cleanup
-- Use structured status conditions following Kubernetes conventions
-- Emit Kubernetes Events for operational visibility
-- Configure leader election for HA deployments
-- Watch owned resources and react to changes
-- Write comprehensive integration tests with envtest
-
----
-
-## Did You Know?
-
-- **Finalizers are not just for deletion**: While their primary use is cleanup, finalizers also serve as a "hold" mechanism. Kubernetes will not remove the object from etcd until all finalizers are removed. Some operators use this to prevent accidental deletion of critical resources.
-
-- **The Kubernetes conditions API was formalized in KEP-1623**: Before this, every operator invented its own condition format. Now there is a standard: `metav1.Condition` with Type, Status, Reason, Message, ObservedGeneration, and LastTransitionTime. Using it means your CRD works with standard Kubernetes tooling.
-
-- **envtest spins up a real API Server and etcd**: It is not a mock. Your tests talk to an actual API Server binary. This means your integration tests catch real issues like RBAC problems, validation failures, and race conditions that unit tests would miss.
-
----
-
-## Part 1: Finalizers
-
-### 1.1 How Finalizers Work
+The useful mental model is a moving-out checklist. Kubernetes is ready to remove the apartment record, but your controller says, "hold the record until I return the keys, cancel the utilities, and forward the mail." If cleanup succeeds, the controller removes only its own finalizer and lets the API server continue deletion. If cleanup fails, the finalizer stays attached, the object remains in the terminating state, and controller-runtime retries the reconcile request with backoff. That retry behavior is why finalizer cleanup should be idempotent: deleting a missing DNS record should usually be treated as success, while a transient provider error should return an error so the queue tries again.
 
 ```
 User runs: kubectl delete webapp my-app
@@ -87,9 +65,7 @@ API Server sets deletionTimestamp (object is "terminating")
     └─────────────────────────────────────────────────────────────
 ```
 
-### 1.2 Implementation
-
-> **Stop and think**: If the cleanup logic fails and you return an error, the controller will back off and retry. If you instead removed the finalizer *before* executing the cleanup, what would happen to the external resources if the controller crashed during the cleanup process?
+Pause and predict: if the cleanup logic fails and you remove the finalizer anyway, what will Kubernetes do next, and which system will still remember the external resource? The answer is the core safety rule for finalizers. Removing the finalizer is the acknowledgement that cleanup is complete, so it must be the last successful step, not the first hopeful step.
 
 ```go
 // internal/controller/webapp_controller.go
@@ -176,7 +152,7 @@ func (r *WebAppReconciler) cleanupExternalResources(ctx context.Context, webapp 
 }
 ```
 
-### 1.3 Finalizer Best Practices
+The implementation has two intentionally separate branches. The deletion branch handles an object with `DeletionTimestamp` first, because no new desired state should be created while teardown is pending. The normal branch makes sure the finalizer exists before any external resources are created, then returns so the update event triggers a clean second pass. That early return avoids mixing "I changed object metadata" with "I created child resources" in one reconcile call, which makes conflicts and retries easier to reason about.
 
 | Practice | Why |
 |----------|-----|
@@ -187,13 +163,25 @@ func (r *WebAppReconciler) cleanupExternalResources(ctx context.Context, webapp 
 | Handle cleanup errors gracefully | Return error to retry, but avoid infinite loops |
 | Set a timeout on cleanup | External APIs can hang; use context with timeout |
 
----
+Finalizers also change how you think about timeouts and partial failure. A cloud API outage should not cause data loss, so returning an error and keeping the object in `Terminating` is usually the correct behavior. A permanent "not found" response from the external API is different: if the resource is already gone, the cleanup intent has been satisfied, and the controller can remove the finalizer. The operator should make those distinctions explicitly, because deleting a custom resource is often the moment when users have the least patience for ambiguous behavior.
 
-## Part 2: Status Conditions
+Finalizer ownership should also be narrow. Your controller should remove only the finalizer string it owns, leaving other controllers' finalizers intact. That matters when several systems coordinate around one resource, such as a backup controller, a policy controller, and the WebApp operator. If your code overwrites the whole finalizer list, you can accidentally tell the API server that other cleanup work is done when it has not even started. Use helper functions that add or remove a single entry, and treat update conflicts as normal retries rather than exceptional corruption.
 
-### 2.1 The Standard Condition Format
+The most reliable cleanup functions are written like reconciliation functions. They read enough external state to determine whether work remains, take one safe action, and return a precise result. For example, a DNS deletion helper can look up the expected record, return success if the record is already missing, delete it if it exists and matches the WebApp owner metadata, and return an error if the provider cannot answer. That structure makes retries safe and makes logs meaningful, because every retry is another attempt to drive the external system toward the desired "absent" state.
 
-Kubernetes defines a standard condition structure in `metav1.Condition`:
+You should avoid long blocking cleanup inside one reconcile call when the external API has slow operations. If deleting a managed database requires a multi-minute asynchronous operation, the finalizer can initiate deletion, write a condition such as `CleanupPending`, emit a Normal event, and requeue after a short delay to poll progress. The object remains in `Terminating`, but the controller does not hold a goroutine indefinitely or hide progress from users. The important rule is that the finalizer stays present until the external system has reached the safe terminal state.
+
+Finalizers are not a replacement for owner references. For Kubernetes children such as Deployments and Services, owner references allow built-in garbage collection to do the right thing after the parent is deleted. For resources outside the cluster, or resources you intentionally do not own through Kubernetes metadata, finalizers are the hook that lets your controller participate in deletion. Production operators often use both: owner references for in-cluster dependents and finalizers for external systems or cleanup ordering that garbage collection cannot express.
+
+When a deletion becomes stuck, resist the reflex to remove the finalizer manually. Manual removal is sometimes the right emergency action, but it should be treated as an operator override with a known cleanup debt, not as the normal fix. First read the object's events, controller logs, and status conditions to identify whether the cleanup function is failing, timing out, or waiting on a dependency. If you do patch the finalizer away during an incident, record the external resource identifiers so a human can complete cleanup afterward.
+
+There is also a user-experience side to finalizers. A WebApp that sits in `Terminating` with no status update and no event looks broken even when the controller is carefully protecting external resources. A good deletion path sets a condition or phase that names cleanup progress, emits a cleanup-start event, logs the external identifiers being cleaned, and emits a cleanup-complete event before removing the finalizer. Users do not need every internal retry, but they do need enough surface area to distinguish "working as designed" from "stuck forever."
+
+## Status Conditions and Events: Current State Plus Timeline
+
+Status conditions and Kubernetes Events solve related but different observability problems. A condition answers, "what is true about this object right now, and is that statement based on the latest spec generation?" An event answers, "what notable action or warning happened recently?" If you overload conditions with history, status becomes noisy and hard for automation to parse. If you rely only on events, users lose a stable readiness signal because events expire and are not a durable contract for controllers or deployment pipelines.
+
+Kubernetes provides `metav1.Condition` as the standard shape for modern custom resources. The most important fields are not just `Type` and `Status`; `ObservedGeneration` tells users whether the controller has processed the latest spec, `Reason` gives automation a stable CamelCase token, `Message` gives humans enough detail to act, and `LastTransitionTime` marks actual status changes rather than every reconcile loop. When these fields are set carefully, `kubectl describe`, dashboards, and GitOps tools can all answer better questions without scraping logs.
 
 ```go
 type Condition struct {
@@ -217,9 +205,7 @@ type Condition struct {
 }
 ```
 
-### 2.2 Condition Types for Our Operator
-
-Define conditions that cover the key states:
+The WebApp operator needs conditions that mirror the resources it manages and one aggregate condition that users can treat as the primary readiness answer. `DeploymentReady` and `ServiceReady` make it clear which child resource is blocking readiness, while `Ready` summarizes whether the WebApp as a whole is usable. These condition names use positive polarity because positive conditions compose better: `Ready=False` is easier to reason about than `NotReady=True`, especially when automation waits for a condition to become true.
 
 ```go
 const (
@@ -250,9 +236,7 @@ const (
 )
 ```
 
-### 2.3 Setting Conditions
-
-> **Pause and predict**: We set `ObservedGeneration` to `webapp.Generation`. If a user updates the WebApp spec (incrementing its generation), but the controller hasn't processed it yet, how does this field help the user or a CD pipeline understand the current status?
+Before running the next function in your head, pause and predict: if a user changes the WebApp image and `metadata.generation` increments, what should a pipeline infer when `Ready=True` still has the previous `ObservedGeneration`? It should treat that readiness as stale for the new spec. The old application may still be healthy, but the controller has not yet proven the new requested state.
 
 ```go
 func (r *WebAppReconciler) updateConditions(ctx context.Context,
@@ -329,7 +313,7 @@ func (r *WebAppReconciler) updateConditions(ctx context.Context,
 }
 ```
 
-### 2.4 Reading Conditions
+The example uses `meta.SetStatusCondition` instead of appending to the slice because condition arrays are keyed by `Type` in practice. Appending on every reconcile creates duplicates, timestamp churn, and confusing output where one condition says `Ready=True` while a later condition of the same type says `Ready=False`. The helper also protects `LastTransitionTime` semantics by updating the transition time when the status value changes, not merely because the controller recalculated the same state.
 
 ```bash
 # View conditions
@@ -344,8 +328,6 @@ kubectl get webapp my-app -o jsonpath='{range .status.conditions[*]}{.type}{"\t"
 kubectl get webapp my-app -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
 ```
 
-### 2.5 Condition Conventions
-
 | Convention | Rule |
 |-----------|------|
 | Positive polarity | "Ready" not "NotReady", "Available" not "Unavailable" |
@@ -355,17 +337,7 @@ kubectl get webapp my-app -o jsonpath='{.status.conditions[?(@.type=="Ready")].s
 | LastTransitionTime | Only changes when Status changes, not on every update |
 | Unknown status | Use when the controller cannot determine the state |
 
----
-
-## Part 3: Kubernetes Events
-
-### 3.1 Why Events?
-
-Events are the operational log of your operator visible to users via `kubectl describe` and `kubectl get events`. They answer the question: "What happened and when?"
-
-### 3.2 Setting Up the Event Recorder
-
-In Kubebuilder, add the recorder to your reconciler:
+Events fill the gap between stable status and detailed logs. A user who runs `kubectl describe webapp my-app` should see key moments such as a Deployment being created, replicas being scaled, an image being changed, cleanup starting, cleanup completing, or an error blocking reconciliation. Events are intentionally short-lived operational records, so they should not be the only source of truth, but they are often the fastest way for an SRE to see what the operator recently attempted without access to the operator Pod logs.
 
 ```go
 // internal/controller/webapp_controller.go
@@ -376,8 +348,6 @@ type WebAppReconciler struct {
 }
 ```
 
-Register it in `cmd/main.go`:
-
 ```go
 if err = (&controller.WebAppReconciler{
     Client:   mgr.GetClient(),
@@ -387,8 +357,6 @@ if err = (&controller.WebAppReconciler{
     os.Exit(1)
 }
 ```
-
-### 3.3 Emitting Events
 
 ```go
 func (r *WebAppReconciler) reconcileNormal(ctx context.Context,
@@ -426,7 +394,19 @@ func (r *WebAppReconciler) reconcileNormal(ctx context.Context,
 }
 ```
 
-### 3.4 Event Types and When to Use Them
+The event taxonomy should be boring and predictable. Use `Normal` for successful routine operations that explain progress, and use `Warning` when a user may need to act or when an external dependency is preventing convergence. Avoid emitting a new event on every reconcile loop for the same unchanged state, because high-frequency events become noise and can hide the warning that actually matters.
+
+A useful condition set is small enough to understand during an incident. It is tempting to create a condition for every helper function because conditions look structured and easy to query. That usually produces status pages where everything is technically present but nothing is decisive. Prefer conditions that map to user-facing readiness boundaries: the Deployment has enough ready replicas, the Service exists and points at the right selector, the Ingress or route is admitted, cleanup is pending, and the whole WebApp is ready. Internal details belong in logs, metrics, or Events unless a user can act on them directly.
+
+Reason values deserve the same discipline as API field names. They are machine-readable strings that users may place in alerts or dashboards, so avoid embedding counts, object names, or changing text inside the reason. Put stable categories such as `ScalingUp`, `ImageUpdating`, `DeploymentFailed`, or `CleanupPending` in `Reason`, then put the contextual detail in `Message`. That split gives automation a stable branch condition while still giving humans enough information to decide whether to wait, inspect a child resource, or escalate an external dependency.
+
+`ObservedGeneration` is one of the easiest fields to set and one of the easiest to omit. When a user edits the spec, Kubernetes increments `metadata.generation`, but status does not become true for that new generation until the controller observes and reconciles it. A deployment pipeline that waits only for `Ready=True` can be fooled by stale readiness from the previous spec. A pipeline that also checks `Ready.ObservedGeneration == metadata.generation` can distinguish "the old version is healthy" from "the requested version has converged."
+
+Status updates should be separated from spec updates in your mental model and, where possible, in your client calls. The status subresource exists so controllers can update observed state without racing with users editing desired state. When you call `r.Status().Update`, you are saying that the spec is still owned by the user and the status is owned by the controller. That separation is part of the Kubernetes API contract, and it helps avoid accidental writes that overwrite a user's recent spec change.
+
+Events should be emitted at state transitions, not at every observation of the same state. If the Deployment already exists and still has the desired replica count, another "DeploymentCreated" event is misleading. If a reconcile loop observes that replicas changed from two to five and applies the update, an event is useful because it explains a user-visible action. The same rule applies to warnings: emit a warning when an API call fails or reconciliation is blocked, but do not flood the event stream with identical warnings on every quick retry if backoff and logs already carry the details.
+
+Conditions, events, and logs form a layered debugging path. Conditions answer the first question a user asks, Events answer what recently changed, and logs answer why the controller chose a specific internal branch. You do not need to put every log detail into the API object. You do need to make sure the first two layers are enough for someone without cluster-admin log access to decide whether the problem is a missing Deployment, a scaling delay, a Service mismatch, an external cleanup failure, or stale status after a new spec generation.
 
 | Type | When | Example |
 |------|------|---------|
@@ -441,13 +421,11 @@ kubectl describe webapp my-app | grep -A 20 "Events:"
 kubectl get events --sort-by=.lastTimestamp --field-selector involvedObject.kind=WebApp
 ```
 
----
+## Leader Election and Watch Design
 
-## Part 4: Leader Election
+A controller deployment with two replicas is not automatically highly available. Without leader election, both replicas can reconcile the same resource at the same time, each reading stale state, each trying to update child resources, and each writing status. Kubernetes optimistic concurrency will reject some writes, but that is not a design for correctness. Leader election gives the manager a single active controller process while allowing standby replicas to take over after the lease expires.
 
-### 4.1 How Leader Election Works in controller-runtime
-
-> **Stop and think**: If network latency spikes and the leader pod fails to renew its lease within the `RenewDeadline`, the standby pod might take over. What happens to the old leader pod's controllers once it reconnects and realizes it lost the lease?
+The safety tradeoff is a short failover delay. If the leader Pod disappears without releasing the Lease, the standby Pod must wait until the lease duration expires before it can acquire leadership. That pause is intentional because it prevents split-brain reconciliation when a leader is slow, partitioned, or temporarily unable to renew. For an operator that manages external resources, a brief pause is usually much better than two replicas issuing conflicting create and delete calls against an outside API.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -482,9 +460,7 @@ kubectl get events --sort-by=.lastTimestamp --field-selector involvedObject.kind
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Enabling Leader Election
-
-In the Manager configuration, leader election is already supported:
+Think through the failure path before changing lease settings: if network latency spikes and the leader Pod fails to renew within the deadline, the standby can acquire the lease, and the old leader must stop controllers when it realizes the lease was lost. Shorter durations improve failover time but increase sensitivity to API server latency. Longer durations reduce false failovers but lengthen the period where no controller is actively processing work after a hard crash.
 
 ```go
 mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -494,8 +470,6 @@ mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
     LeaderElectionNamespace: "webapp-system",  // Optional: defaults to controller namespace
 })
 ```
-
-Deploy with multiple replicas:
 
 ```yaml
 apiVersion: apps/v1
@@ -516,23 +490,15 @@ spec:
         - --leader-elect=true
 ```
 
-### 4.3 Leader Election Parameters
-
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| LeaderElectionID | Required | Unique ID for the lease resource |
+| LeaderElectionID | `"webapp-operator.kubedojo.io"` (required) | Unique ID for the lease resource |
 | LeaseDuration | 15s | How long a lease lasts |
 | RenewDeadline | 10s | How long the leader has to renew |
 | RetryPeriod | 2s | How often standby pods check |
 | LeaderElectionNamespace | Pod namespace | Where the Lease is created |
 
----
-
-## Part 5: Watching Owned Resources
-
-### 5.1 Advanced Watch Configuration
-
-Beyond the basic `Owns()` from Module 1.4, you can configure more sophisticated watches:
+Watch design is the other half of production reconciliation. `For(&WebApp{})` tells the controller to reconcile when the primary resource changes, while `Owns(&Deployment{})` and `Owns(&Service{})` enqueue the owning WebApp when owned children change. Custom watches are useful when a WebApp depends on a resource it does not own, such as a ConfigMap selected by name. The risk is fan-out: a single ConfigMap update can enqueue many WebApps, so the mapping function should be simple, bounded, and scoped to a namespace unless the operator is intentionally cluster-wide.
 
 ```go
 import (
@@ -595,9 +561,7 @@ func (r *WebAppReconciler) findWebAppsForConfigMap(
 }
 ```
 
-### 5.2 Watch Predicates
-
-Filter which events trigger reconciliation:
+Predicates are filters, not correctness features, and they can easily hide events your controller needs. `GenerationChangedPredicate` is useful on the primary custom resource because status updates do not change generation and should not necessarily trigger another full pass. Applying the same predicate to owned Deployments can be wrong if you expect to react to readiness changes, Pod failures, or other status-driven signals. A good watch strategy filters the noisy event source, not the event source that carries evidence of drift.
 
 ```go
 import "sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -621,8 +585,6 @@ func (r *WebAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 | `AnnotationChangedPredicate` | Only when annotations change |
 | `ResourceVersionChangedPredicate` | Any change (default behavior) |
 
-You can combine predicates:
-
 ```go
 builder.WithPredicates(
     predicate.Or(
@@ -632,19 +594,25 @@ builder.WithPredicates(
 )
 ```
 
----
+Which approach would you choose here and why: filtering WebApp status-only updates, filtering Deployment status updates, or leaving owned-resource watches unfiltered until you measure queue pressure? The safest default is usually to filter the primary resource only, then add narrower predicates after you can prove which events are noisy and which events are required for convergence. Operators fail more painfully when they miss drift than when they reconcile one extra time.
 
-## Part 6: Integration Testing with envtest
+Leader election does not make individual reconciliation code thread-safe; it reduces the number of active managers that run the controller. Inside one manager, `MaxConcurrentReconciles` can still allow several WebApps to reconcile at the same time. That is usually desirable, but it means shared clients for external systems must be safe for concurrent use, and cleanup code should avoid global mutable state. If a provider API has strict rate limits, use per-request context deadlines and explicit throttling rather than assuming leader election serializes all work.
 
-### 6.1 What is envtest?
+The Lease object is also an operational dependency. If your operator loses permission to create or update Leases in its leader election namespace, a multi-replica deployment may start but never run controllers. That failure should be visible in Pod logs and deployment readiness, yet it often surprises teams because RBAC for the custom resource is tested while coordination resources are forgotten. When you enable leader election, review the manager Role or ClusterRole for Lease access in the selected namespace and include that path in deployment validation.
 
-envtest starts a real API Server (and etcd) locally. Your tests talk to a real Kubernetes API, not a mock. This catches:
-- RBAC permission issues
-- CRD validation failures
-- Race conditions between controllers
-- Webhook interaction problems
+Watch mapping functions should be designed for the largest namespace you expect to support, not just the small demo namespace. Listing every WebApp on every ConfigMap update may be fine for a lab, but it becomes expensive when hundreds of WebApps reference different configuration objects. You can reduce work with labels, indexes, or a field relationship recorded in status, depending on the controller-runtime version and project design. The important question is whether the watch mapping scales with relevant dependents or with every object in the namespace.
 
-### 6.2 Test Suite Setup
+Predicates should be reviewed alongside status design. A predicate that drops status updates can be correct when status is purely informational, but it can be wrong when status is the signal that should trigger repair. Deployment readiness changes, Pod availability, and endpoint updates are often status-driven, so owned-resource predicates need more care than primary-resource predicates. If you add a predicate, write down which events it intentionally drops and which reconciliation invariant remains protected without those events.
+
+High availability also changes how you read duplicate-looking logs. During failover, a standby manager may start controllers and reconcile objects that were already queued before the old leader died. That is normal because the queue is an at-least-once mechanism, not exactly-once delivery. The controller code must tolerate repeated requests by reading current state and applying idempotent changes. If a duplicate reconcile causes external resources to be recreated, the bug is in the reconciliation or external idempotency design, not in leader election.
+
+For many operators, the best first tuning value is not a shorter lease duration; it is better observability around leadership. Expose manager metrics, log leadership transitions, and make sure Pod readiness reflects whether the manager is healthy. Then measure how long failover actually takes in your cluster under normal API server latency. Only after that measurement should you tune lease duration, renew deadline, and retry period, because aggressive settings can trade a visible failover pause for intermittent leadership churn that is harder to diagnose.
+
+## Integration Testing with envtest
+
+Unit tests can validate helper functions, but they cannot prove that your CRD schema, scheme registration, status subresource updates, manager startup, ownership links, and asynchronous reconciliation cooperate with the Kubernetes API. `envtest` starts a real API server and etcd locally, then gives your test process a REST config. That makes the tests slower than pure unit tests, but it catches the exact class of bugs that operators often ship: missing RBAC, invalid CRD paths, incorrect status updates, forgotten schemes, and tests that assume reconciliation is synchronous.
+
+The most important testing habit is to assert eventually, not immediately. A controller reacts to watch events, reads from caches, writes through the API server, and may requeue. A direct `Get` immediately after `Create` is a race disguised as a test. Ginkgo's `Eventually` expresses the contract correctly: after the WebApp is created, the Deployment should appear within a reasonable timeout, and the test should poll until the asynchronous system reaches that state or truly fails.
 
 ```go
 // internal/controller/suite_test.go
@@ -685,7 +653,7 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	ctx, cancel = context.WithCancel(context.TODO())
+	ctx, cancel = context.WithCancel(context.Background())
 
 	// Start envtest (real API Server + etcd)
 	testEnv = &envtest.Environment{
@@ -735,7 +703,7 @@ var _ = AfterSuite(func() {
 })
 ```
 
-### 6.3 Writing Tests
+Suite setup is also where many operator tests accidentally become mocks. If you forget to register your API type with the scheme, the client cannot decode your custom resource. If the CRD directory path is wrong and the test does not fail on a missing path, you can run against an API server that has no idea your resource exists. If the manager never starts, assertions against created child objects will never pass because the reconciler is not running. Each line in the setup protects one of those contracts.
 
 ```go
 // internal/controller/webapp_controller_test.go
@@ -949,7 +917,19 @@ var _ = Describe("WebApp Controller", func() {
 })
 ```
 
-### 6.4 Running Tests
+The deletion test is the one many teams skip, and it is the one that catches finalizer mistakes before users find stuck resources. It waits for the finalizer to appear, deletes the WebApp, and then waits until a `Get` returns `IsNotFound`. In a real operator you would usually add a fake external client and assert that cleanup was called before the finalizer disappeared. For this module, the structural test still proves the controller can enter the deletion branch and release the object.
+
+envtest should not become the only testing layer. Helper functions that build Deployment specs, compute labels, or classify external errors are usually faster and clearer as unit tests. envtest is strongest when the behavior depends on Kubernetes API machinery: CRD validation, owner references, status subresource writes, manager startup, finalizer deletion, and asynchronous reconciliation. A balanced test suite keeps pure logic fast while using envtest for the lifecycle paths where a fake client would hide important behavior.
+
+When envtest fails, read the failure through the reconciliation timeline. A missing child Deployment can mean the manager never started, the WebApp type was not registered, the CRD was not installed, RBAC prevented a write, the reconcile loop returned early after adding a finalizer, or the test used the wrong namespace. Each possibility maps to a different setup or controller branch. Adding logs to the test manager and using `Eventually` blocks that return useful errors will save more time than increasing timeouts blindly.
+
+The finalizer test can be made more realistic by injecting a cleanup collaborator. Instead of calling a real cloud API, define an interface for external cleanup and provide a fake implementation in tests. The fake can record calls, return a transient error once, and then succeed on retry. That lets envtest prove the controller keeps the finalizer after a cleanup failure and removes it only after a later success. The lesson is the same as production design: external side effects belong behind interfaces that can be reasoned about under retries.
+
+Status condition tests should check more than the number of conditions. A robust test fetches the WebApp after reconciliation, finds the `Ready` condition by type, verifies the status and reason, and compares `ObservedGeneration` to the WebApp generation. If the test updates the spec, it can first observe stale status and then wait for the condition to catch up to the new generation. That pattern catches a subtle but important class of bugs where the operator reports readiness without proving it processed the latest desired state.
+
+Event tests are possible but should be selective. Events are useful for user experience, yet they are not a durable source of truth, and their storage behavior can vary across clusters. In envtest, you can assert that the recorder is configured or use a fake recorder for unit-level checks around event emission branches. For this module's main integration path, prioritize finalizer behavior, child-resource creation, status, and update handling, because those are durable API contracts that directly affect correctness.
+
+Manual testing after envtest still has value because it exercises packaging and permissions that the local suite may not cover. Installing the CRD into a Kind cluster, running the manager, applying a WebApp, waiting for readiness, reading events, and deleting the resource shows whether manifests, RBAC, leader-election flags, and generated YAML are coherent. Treat manual testing as a packaging smoke test, not as a substitute for automated lifecycle tests. The result you want is confidence from both directions: repeatable tests for behavior and a quick cluster run for deployment wiring.
 
 ```bash
 # Install envtest binaries (API Server and etcd)
@@ -967,75 +947,138 @@ KUBEBUILDER_ASSETS=$($ENVTEST use --print-path latest) \
   go test ./internal/controller/ -v -ginkgo.v
 ```
 
----
+## Patterns & Anti-Patterns
+
+The strongest operator designs keep the reconciliation contract narrow: every pass observes current state, compares it to desired state, makes one bounded set of changes, records status, and exits. Finalizers, conditions, events, leader election, watches, and envtest are not separate decorations around that loop. They are guardrails that keep the loop correct when deletion, outages, user questions, replica failover, child-resource drift, and asynchronous tests enter the system.
+
+| Pattern | When to Use It | Why It Works |
+|---------|----------------|--------------|
+| Idempotent finalizer cleanup | Any operator that creates resources outside Kubernetes garbage collection | Retries become safe because a repeated cleanup call reaches the same final state |
+| Positive, generation-aware conditions | Any custom resource consumed by humans, GitOps tools, or automation | Users can distinguish stale success from current success after a spec change |
+| Event recording at lifecycle transitions | Creation, scaling, image updates, cleanup, and warning paths | The object carries a recent operational timeline visible through standard Kubernetes tools |
+| Leader election with at least two replicas | Operators that must survive node failure or voluntary disruption | One active reconciler prevents split-brain while standby Pods provide failover |
+| envtest coverage around lifecycle behavior | Controllers with CRDs, owner references, status updates, and finalizers | Tests exercise a real API server instead of assuming Kubernetes behavior in mocks |
+
+The main anti-pattern is treating controller code as ordinary CRUD code. A controller is an eventually consistent repair loop, so it must tolerate duplicate requests, stale reads, conflict retries, external API failures, and deleted objects that still exist temporarily because finalizers are holding them. Patterns that work in a request-response service can become dangerous here if they assume one call, one change, and one final answer.
+
+There is a useful review habit for advanced operator work: name the invariant before reviewing the code. For finalizers, the invariant is that external resources are absent before the custom resource is purged. For conditions, the invariant is that status describes the latest observed generation. For leader election, the invariant is that only one active manager reconciles at a time. For envtest, the invariant is that asynchronous controller behavior is observed through the API server. Code is much easier to review when each helper is judged against the invariant it protects.
+
+Another review habit is to separate correctness from convenience. A short predicate, a manual condition append, or a finalizer patch may make a local test pass, but the production question is whether the behavior remains correct under retries, conflicts, and outages. Advanced operator development is mostly about those uncomfortable edges. If you can explain what happens when the API server is slow, the cloud provider returns an error, the leader Pod dies, and the test runs on a slow CI worker, the design is usually on solid ground.
+
+The same standard applies after the first release. Operators become part of the cluster control plane from the user's point of view, so regressions in deletion, readiness, or failover feel like platform failures rather than application bugs. Keep a small runbook beside the code that explains stuck finalizers, stale observed generations, missing events, leader election lease problems, and envtest setup failures. That runbook forces the design to remain explainable, and explainable controllers are much easier to operate during real incidents.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Removing a finalizer before cleanup | The API server deletes the custom resource and the external resource becomes orphaned | Run cleanup first, treat not-found cleanup as success, then remove only your finalizer |
+| Appending conditions manually | Duplicate condition types accumulate and readiness automation reads contradictory state | Use `meta.SetStatusCondition` and maintain one condition per type |
+| Emitting warning events for normal progress | Dashboards and humans learn to ignore warnings that should indicate action | Use `Normal` for expected transitions and `Warning` for blocked reconciliation |
+| Applying aggressive predicates everywhere | Status changes or child-resource drift are filtered out before the controller can repair them | Filter the primary resource carefully and measure owned-resource noise before filtering |
+| Testing reconciliation with immediate assertions | CI becomes flaky because the controller loop is asynchronous | Use `Eventually` around API observations that depend on reconciliation |
+
+## Decision Framework
+
+Use this decision framework when you review an operator change. Start by asking whether the operator manages anything Kubernetes cannot garbage-collect. If it does, add a finalizer before creating that external resource and test deletion explicitly. Then ask whether a user can diagnose current readiness without logs. If they cannot, add structured conditions with `ObservedGeneration`. Next ask whether a user can see the recent action history. If they cannot, emit targeted events for lifecycle transitions and warnings.
+
+```
+Need to add production behavior?
+    │
+    ├── External resource outside owner references?
+    │       └── Add idempotent finalizer cleanup and deletion tests
+    │
+    ├── Users or pipelines need current readiness?
+    │       └── Add positive conditions with ObservedGeneration
+    │
+    ├── Users need a recent action timeline?
+    │       └── Emit Normal and Warning Events at meaningful transitions
+    │
+    ├── Operator needs multiple replicas?
+    │       └── Enable leader election and tune lease settings conservatively
+    │
+    ├── Related resources should trigger repair?
+    │       └── Add owned or mapped watches with cautious predicates
+    │
+    └── Behavior crosses API-server boundaries?
+            └── Cover it with envtest and Eventually assertions
+```
+
+The decision is rarely "turn on every advanced feature." A namespaced toy controller that only creates owned Deployments may not need custom mapped watches, and a single-cluster learning operator may not need tuned lease timings. A production platform operator that provisions external resources, updates status consumed by deployment automation, and runs across nodes needs the full set. The practical skill is matching the feature to the failure mode you are trying to prevent.
+
+| Concern | Minimal Operator | Production Operator | Review Question |
+|---------|------------------|---------------------|-----------------|
+| Cleanup | Owner references only | Finalizers plus idempotent external cleanup | What survives after the custom resource is deleted? |
+| Readiness | Phase string or logs | Standard conditions with observed generation | Can automation tell whether status matches the latest spec? |
+| Observability | Controller logs | Events plus conditions plus logs | Can a user diagnose the object without Pod log access? |
+| Availability | One replica | Multiple replicas with leader election | What happens when the active Pod dies? |
+| Testing | Unit tests for helpers | envtest lifecycle tests | Does the test use the same API machinery as the controller? |
+
+## Did You Know?
+
+- **Finalizers predate many modern operator conventions**: the field is part of Kubernetes object metadata, so it applies broadly to built-in and custom resources rather than being an operator-specific extension.
+- **`metav1.Condition` standardizes six key fields**: `Type`, `Status`, `ObservedGeneration`, `LastTransitionTime`, `Reason`, and `Message` give tools a shared contract for readiness and diagnostics; KEP-1623, Standardize Conditions, is the dig-deeper reference for the standardization story.
+- **controller-runtime leader election uses Lease resources**: the default timing values include a 15 second lease duration, a 10 second renew deadline, and a 2 second retry period unless you configure them differently.
+- **envtest is not a fake client**: it starts real API server and etcd binaries, which is why it can catch CRD validation, scheme registration, status subresource, and reconciliation timing problems.
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| Not removing finalizer on cleanup success | Object stuck in Terminating forever | Always remove finalizer after successful cleanup |
-| Removing finalizer before cleanup | External resources orphaned | Run cleanup first, remove finalizer only on success |
-| Setting LastTransitionTime on every reconcile | Flapping conditions, noisy alerts | Only update time when Status actually changes |
-| Using `EventTypeWarning` for normal operations | Confuses monitoring/alerting | Use Warning only for problems |
-| Not setting ObservedGeneration on conditions | Users cannot tell if condition is current | Always set to `obj.Generation` |
-| Tests without Eventually | Flaky tests due to async reconciliation | Always use `Eventually` for controller state checks |
-| Not testing deletion path | Finalizer bugs found in production | Write explicit deletion tests |
-| Hardcoded timeouts in tests | Tests fail on slow CI, pass locally | Use generous timeouts (30s+) with short poll intervals |
-| Forgetting to register types with scheme | envtest cannot find your CRD | Call `AddToScheme` in `BeforeSuite` |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Not removing finalizer on cleanup success | The code runs cleanup but never acknowledges completion to the API server | Always remove your finalizer after successful cleanup and update the object |
+| Removing finalizer before cleanup | The developer treats finalizer removal as the start of deletion instead of the completion signal | Run cleanup first, handle not-found as success, and remove the finalizer last |
+| Setting `LastTransitionTime` on every reconcile | The controller rebuilds conditions manually and resets timestamps even when status is unchanged | Use `meta.SetStatusCondition` or equivalent logic that updates transition time only on status changes |
+| Using `EventTypeWarning` for normal operations | Every lifecycle event feels important during development, so warnings become noisy | Reserve Warning events for problems and use Normal events for successful transitions |
+| Not setting `ObservedGeneration` on conditions | Status is written without connecting it to the spec generation that produced it | Always set condition and top-level observed generation from `obj.Generation` |
+| Tests without `Eventually` | The test assumes reconciliation is synchronous because the local machine is fast | Poll expected API state with `Eventually` and realistic timeouts |
+| Not testing deletion path | Creation and update paths feel more visible, so finalizer bugs hide until a user deletes a resource | Add an envtest case that waits for the finalizer, deletes the object, and observes final removal |
+| Forgetting to register types with the scheme | envtest starts, but the client cannot encode or decode the custom resource | Call your API package's `AddToScheme` during suite setup before creating the client |
 
 ## Quiz
 
-1. **Scenario**: A user runs `kubectl delete webapp critical-db`. The terminal hangs, and the WebApp remains in a `Terminating` state indefinitely. When you check `kubectl get webapp critical-db -o yaml`, you see a `deletionTimestamp` is set and the `finalizers` list contains `apps.kubedojo.io/finalizer`. As the operator developer, how do you troubleshoot this, and what is the most likely cause within your controller code?
-   <details>
-   <summary>Answer</summary>
-   Since the `deletionTimestamp` is set and the finalizer is present, Kubernetes is waiting for your controller to remove the finalizer before it can purge the object from etcd. The most likely cause is that your controller's cleanup logic (e.g., deleting an external cloud resource) is returning an error or hanging indefinitely, which prevents the code from ever reaching the `RemoveFinalizer` step. To troubleshoot, you should inspect the operator's pod logs for cleanup-related error messages or timeouts. You must also ensure that any network calls made during cleanup utilize a context with a strict timeout to prevent the reconcile loop from blocking forever.
-   </details>
+<details><summary>Scenario: A user runs `kubectl delete webapp critical-db`, and the WebApp remains in `Terminating` with `apps.kubedojo.io/finalizer` still present. What should you inspect first, and what controller behavior is most likely blocking deletion?</summary>
 
-2. **Scenario**: Your team is debating how to manage the `Conditions` array in the `WebApp` status. A developer proposes simply writing `webapp.Status.Conditions = append(webapp.Status.Conditions, newCondition)` to add the `Ready` status, arguing it is simpler and requires fewer dependencies. Why should you reject this proposal and insist on using `meta.SetStatusCondition`?
-   <details>
-   <summary>Answer</summary>
-   You should reject the proposal because simply appending to the slice will quickly lead to duplicate condition types, creating a massive array that breaks Kubernetes API conventions. The `meta.SetStatusCondition` helper function handles the complex logic of finding an existing condition by its `Type` and updating it in-place. Furthermore, it intelligently manages the `LastTransitionTime` field, only updating it when the actual `Status` string changes from "True" to "False" or vice versa. Manually manipulating the slice risks noisy timestamp churn, duplicate entries, and severe bugs in downstream tools that parse these conditions.
-   </details>
+The `deletionTimestamp` plus finalizer means Kubernetes is waiting for your controller to finish cleanup and remove its finalizer. Inspect the operator logs around the cleanup path, then check any external API calls that deletion depends on, such as DNS or load balancer deletion. The likely blocker is that `cleanupExternalResources` is returning an error, hanging without a timeout, or never reaching `controllerutil.RemoveFinalizer`. The correct fix is not to patch the finalizer away blindly; fix or safely bypass the cleanup failure, then let the controller remove the finalizer after cleanup has succeeded or the external resource is confirmed absent.
 
-3. **Scenario**: An SRE pages you at 3 AM because a WebApp is failing to provision. They tell you, "The status conditions say `Ready: False` with reason `Reconciling`, but that doesn't tell me what is actually broken right now." Where should you instruct the SRE to look to find the step-by-step history of what the operator attempted to do, and why is this information not placed in the status conditions?
-   <details>
-   <summary>Answer</summary>
-   You should instruct the SRE to use `kubectl describe webapp <name>` or `kubectl get events` to view the Kubernetes Events associated with the object. Status conditions are designed to represent the current, static state of the resource (e.g., "Is the database ready?"), not the chronological log of actions taken to achieve that state. Events provide a temporal, point-in-time record of operations, such as warning messages about failed API calls or scale events, which are crucial for debugging real-time failures. Mixing historical logs into the status conditions would violate API conventions and bloat the resource object in etcd.
-   </details>
+</details>
 
-4. **Scenario**: You are reviewing a pull request for a new envtest integration test. The author has written a test that creates a `WebApp`, immediately fetches the expected `Deployment`, and uses standard `Expect(err).NotTo(HaveOccurred())` to verify the Deployment exists. The CI pipeline is failing randomly on this test, but the author claims it passes locally. Why is this test fundamentally flawed in the context of controller testing, and how must it be fixed?
-   <details>
-   <summary>Answer</summary>
-   The test is flawed because controller reconciliation happens asynchronously in a separate goroutine, meaning the `Deployment` will not exist the exact millisecond after the `WebApp` is created. When the test runs locally, the machine might be fast enough for the controller to occasionally win the race condition, but in a slower CI environment, the direct assertion fails immediately. The author must fix this by wrapping the fetch and assertion in a Ginkgo `Eventually` block. `Eventually` polls the API server repeatedly over a specified timeout period, correctly accommodating the asynchronous nature of the Kubernetes controller loop until the resource is successfully reconciled.
-   </details>
+<details><summary>Scenario: A developer proposes appending a new `Ready` condition on every reconcile because it is simpler than using `meta.SetStatusCondition`. Why should you reject that design?</summary>
 
-5. **Scenario**: You deploy your operator with two replicas and leader election enabled. A cluster administrator forces a node restart, killing the pod that was actively acting as the leader. The standby pod is healthy on another node, but you notice that new Custom Resources are completely ignored for about 15 seconds before they finally get processed. A junior engineer suggests there is a bug in the operator's failover logic. How do you explain this behavior to them based on leader election mechanics?
-   <details>
-   <summary>Answer</summary>
-   You should explain that this delay is expected and not a bug, as it is a fundamental safety mechanism of leader election. When the leader pod is abruptly killed, it cannot cleanly release its hold on the Lease object in the API server. The standby pod is continuously polling, but it must wait for the leader's `leaseDuration` (which defaults to 15 seconds) to fully expire before it is allowed to acquire the Lease. During this expiration window, the Lease remains locked to prevent a split-brain scenario where two pods reconcile simultaneously. Once the lease expires, the standby pod successfully acquires it, starts its controllers, and begins processing the backlog of Custom Resources.
-   </details>
+Conditions are intended to behave like a keyed set by `Type`, not a historical log. Appending creates duplicate `Ready` entries, leaves stale values in the array, and can confuse users or automation that reads the first matching condition. It also makes `LastTransitionTime` noisy because the code tends to reset timestamps even when the status did not actually transition. `meta.SetStatusCondition` updates the existing condition for the type and preserves Kubernetes condition conventions, so it is the safer design.
 
-6. **Scenario**: Your controller's finalizer calls a function to delete an external cloud load balancer. During a production incident, the cloud provider's API goes down for an hour. A user deletes their `WebApp`, triggering the finalizer, but the cloud API returns a 503 error. What exact action should your reconcile loop take when it receives this error, and what will happen to the `WebApp` object during the outage?
-   <details>
-   <summary>Answer</summary>
-   Your reconcile loop must return the error directly back to the controller manager (`return ctrl.Result{}, err`) and it must absolutely not remove the finalizer. Because the finalizer remains attached, the `WebApp` object will safely stay in the `Terminating` state in etcd for the duration of the outage. By returning the error, you trigger the controller-runtime's exponential backoff queue, which will automatically retry the reconciliation loop later. Once the cloud API recovers, a subsequent retry will successfully delete the load balancer, remove the finalizer, and allow Kubernetes to finally purge the `WebApp`.
-   </details>
+</details>
 
-7. **Scenario**: You configure your controller to watch both the `WebApp` (primary resource) and `Deployment` (owned resource). To optimize performance, you apply the `GenerationChangedPredicate` to all watches. Later, you notice a bug: if a user manually scales down the `Deployment`, your operator fails to scale it back up to the desired state defined in the `WebApp`. Why did your optimization cause this bug, and how should you adjust your watch predicates?
-   <details>
-   <summary>Answer</summary>
-   Applying `GenerationChangedPredicate` to the `Deployment` watch caused the bug because Kubernetes only increments the `metadata.generation` field when a resource's spec changes, not when its status changes. When the `Deployment` status changes (e.g., ready replicas drop due to a pod failure or manual intervention), the generation remains the same, so the predicate silently drops the event and prevents reconciliation. You should only apply `GenerationChangedPredicate` to the primary `WebApp` resource to filter out noisy status updates, while allowing all events (or using more specific label predicates) for the owned `Deployment` resources so your controller can properly react to state deviations.
-   </details>
+<details><summary>Scenario: An SRE sees `Ready=False` with reason `Reconciling`, but they need to know whether the operator created a Deployment, scaled it, or hit an API error. Which signal should they inspect, and why is that not all stored in conditions?</summary>
 
----
+They should inspect Kubernetes Events with `kubectl describe webapp <name>` or `kubectl get events` filtered to the WebApp. Conditions represent current state, while Events represent recent point-in-time actions and warnings. Putting every historical action into conditions would bloat the status object and make readiness harder to parse. The operator should keep a stable condition such as `Ready=False` and use Events to show the timeline that led to the current state.
+
+</details>
+
+<details><summary>Scenario: A PR adds an envtest that creates a WebApp and immediately expects the Deployment to exist with a direct `Get`. The test passes locally but fails randomly in CI. What is the flaw, and how should the test be rewritten?</summary>
+
+The test treats reconciliation as synchronous, but the controller processes events asynchronously through the manager and API server. On a fast laptop the Deployment may appear before the assertion, while a slower CI job exposes the race. The test should wrap the `Get` in `Eventually`, using a timeout and polling interval that give the controller time to observe the WebApp and create the child Deployment. Immediate assertions are still fine for pure object fields after a successful `Get`, but not for state that depends on reconciliation.
+
+</details>
+
+<details><summary>Scenario: You deploy two operator replicas with leader election enabled, then the leader node restarts. New WebApps wait about 15 seconds before reconciliation resumes. Is this a bug, and how do you explain the delay?</summary>
+
+That delay is expected when the old leader disappears without releasing the Lease. The standby Pod must wait until the lease duration expires before acquiring leadership, otherwise a slow or partitioned old leader could overlap with the new leader and create split-brain reconciliation. The default timing favors correctness over instant failover. If the delay is unacceptable, tune leader election settings cautiously and test API server latency, because overly aggressive settings can cause unnecessary leadership churn.
+
+</details>
+
+<details><summary>Scenario: A cloud provider API returns 503 while the finalizer is deleting an external load balancer. What should the reconcile loop return, and what happens to the WebApp during the outage?</summary>
+
+The reconcile loop should return the error and keep the finalizer attached. The WebApp remains in `Terminating`, which is the safe state because Kubernetes will not purge the custom resource while cleanup is incomplete. controller-runtime will retry the request with backoff, giving the provider time to recover. Once cleanup succeeds or the load balancer is confirmed already absent, the controller can remove the finalizer and allow deletion to finish.
+
+</details>
+
+<details><summary>Scenario: You add `GenerationChangedPredicate` to both the WebApp watch and the owned Deployment watch. After a manual Deployment change, the operator does not repair the drift. Why did the predicate cause this, and what should you change?</summary>
+
+`GenerationChangedPredicate` only passes events when `metadata.generation` changes, and that can drop events your controller needs from owned resources. If the operator depends on Deployment status or other updates to detect drift, filtering the owned watch prevents reconciliation from being enqueued. Keep the predicate on the primary WebApp when you want to ignore status-only updates there, but leave the Deployment watch unfiltered or use a narrower predicate that preserves the drift signals you need. Optimization should follow measured queue pressure, not remove correctness signals by default.
+
+</details>
 
 ## Hands-On Exercise
 
-**Task**: Enhance the operator from Module 1.4 with finalizers, status conditions, Kubernetes events, and envtest integration tests.
+Exercise scenario: enhance the WebApp operator from Module 1.4 with finalizers, status conditions, Kubernetes events, leader election, owned-resource watches, and envtest integration tests. Work in a disposable repository or branch, because this exercise touches controller code, manager setup, manifests, and tests. The goal is to prove that the operator can create, update, report, and delete safely rather than only compile.
 
-**Setup**:
 ```bash
 # Use the operator from Module 1.4
 cd ~/extending-k8s/webapp-operator
@@ -1047,36 +1090,20 @@ go mod tidy
 make envtest
 ```
 
-**Steps**:
+Task 1 is to add the finalizer constant and modify `Reconcile` so deletion is handled before normal reconciliation. Add the finalizer before creating external resources, return after the metadata update, and make cleanup idempotent. The success signal is that a new WebApp gains the finalizer and a deleted WebApp does not disappear until cleanup has completed.
 
-1. **Add the finalizer constant and modify the Reconcile function** to handle deletion as shown in Part 1.2
+Task 2 is to add structured conditions by implementing the `updateConditions` function from this module. The conditions should include `DeploymentReady`, `ServiceReady`, and aggregate `Ready`, each with `ObservedGeneration`, a CamelCase reason, and a useful message. The success signal is that `kubectl describe` and JSONPath output show current condition values tied to the latest generation.
 
-2. **Add structured conditions** by implementing the `updateConditions` function from Part 2.3
+Task 3 is to add the `EventRecorder` to the reconciler and emit events for Deployment creation, replica updates, image updates, cleanup start, cleanup completion, and warning paths. Keep events concise and avoid emitting repeated progress events when nothing changed. The success signal is that `kubectl describe webapp advanced-demo` shows a useful recent timeline.
 
-3. **Add the EventRecorder** to the Reconciler struct and emit events for:
-   - Deployment created
-   - Deployment updated (replicas changed)
-   - Image updated
-   - Cleanup started
-   - Cleanup completed
-   - Errors (as Warnings)
+Task 4 is to wire leader election through `cmd/main.go` and the manager deployment. Run two replicas only when the controller is deployed in-cluster, because local `make run` development usually uses a single process. The success signal is that one replica holds the Lease while the other waits, and reconciliation resumes after the leader Pod is removed.
 
-4. **Wire up leader election** in `cmd/main.go` with the `--leader-elect` flag
+Task 5 is to create the envtest suite in `internal/controller/suite_test.go` and write lifecycle tests for creation, replica updates, deletion with a finalizer, and status conditions. Use `Eventually` for every assertion that depends on reconciliation. The success signal is a stable `make test` run that passes repeatedly rather than only on the fastest local attempt.
 
-5. **Create the envtest suite** in `internal/controller/suite_test.go` (Part 6.2)
-
-6. **Write at least 4 integration tests** (Part 6.3):
-   - Creating a WebApp creates Deployment + Service
-   - Updating replicas updates the Deployment
-   - Deleting a WebApp with finalizer works correctly
-   - Status conditions are set properly
-
-7. **Run the tests**:
 ```bash
 make test
 ```
 
-8. **Run the operator and test manually**:
 ```bash
 kind create cluster --name advanced-operator-lab
 make install
@@ -1108,22 +1135,35 @@ kubectl delete webapp advanced-demo
 kubectl get events --sort-by=.lastTimestamp | tail -10
 ```
 
-9. **Cleanup**:
 ```bash
 kind delete cluster --name advanced-operator-lab
 ```
 
-**Success Criteria**:
-- [ ] Finalizer is added on creation
-- [ ] Finalizer prevents immediate deletion; cleanup runs first
-- [ ] Status conditions include DeploymentReady, ServiceReady, and Ready
-- [ ] ObservedGeneration is set correctly
-- [ ] Kubernetes Events are visible in `kubectl describe`
-- [ ] Leader election flag is wired up
-- [ ] All 4 envtest integration tests pass
-- [ ] `make test` exits cleanly
+Success criteria:
 
----
+- [ ] Finalizer is added on creation.
+- [ ] Finalizer prevents immediate deletion and cleanup runs first.
+- [ ] Status conditions include `DeploymentReady`, `ServiceReady`, and `Ready`.
+- [ ] `ObservedGeneration` is set correctly on status and conditions.
+- [ ] Kubernetes Events are visible in `kubectl describe`.
+- [ ] Leader election flag is wired up for multi-replica deployment.
+- [ ] At least four envtest integration tests cover creation, update, deletion, and conditions.
+- [ ] `make test` exits cleanly.
+
+## Sources
+
+- https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/
+- https://kubernetes.io/docs/reference/using-api/api-concepts/
+- https://kubernetes.io/docs/concepts/architecture/garbage-collection/
+- https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/object-meta/
+- https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/event-v1/
+- https://kubernetes.io/docs/reference/kubernetes-api/cluster-resources/lease-v1/
+- https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Condition
+- https://pkg.go.dev/k8s.io/apimachinery/pkg/api/meta#SetStatusCondition
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/envtest
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/manager
+- https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/builder
+- https://book.kubebuilder.io/reference/envtest
 
 ## Next Module
 
