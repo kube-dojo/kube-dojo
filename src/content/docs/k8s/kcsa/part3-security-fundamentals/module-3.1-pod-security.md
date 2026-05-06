@@ -90,11 +90,10 @@ That distinction matters on the KCSA exam and in production reviews because Kube
 
 The `securityContext` field is where Kubernetes lets you set user identity, filesystem behavior, privilege escalation rules, Linux capabilities, and seccomp profile selection. It can appear at the pod level and at the container level. Pod-level settings are convenient defaults, while container-level settings are useful when an init container or sidecar needs something different from the main application.
 
-A hardened container spec usually starts by removing broad permissions before adding narrow exceptions. The following manifest is intentionally small enough to study field by field. It uses `kubectl`, commonly aliased as `k`; after the first command, this module uses `k` in examples to match common exam and operations practice.
+A hardened container spec usually starts by removing broad permissions before adding narrow exceptions. The following manifest is intentionally small enough to study field by field. The command examples use the full `kubectl` binary name so they remain copy-pasteable in non-interactive shells, CI jobs, and lab scripts.
 
 ```bash
 kubectl create namespace pod-security-demo
-alias k=kubectl
 ```
 
 ```yaml
@@ -160,9 +159,9 @@ The writable mounts are also part of the security design, not a convenience adde
 Worked example: suppose a web container fails after you enable `readOnlyRootFilesystem: true`. A weak response would be to turn the control off because "the application needs writes." A stronger response is to find the exact paths the application writes to and mount those paths explicitly. This keeps the immutable application filesystem protected while still giving the process a controlled scratch area.
 
 ```bash
-k apply -f secure-web.yaml
-k -n pod-security-demo describe pod secure-web
-k -n pod-security-demo logs secure-web
+kubectl apply -f secure-web.yaml
+kubectl -n pod-security-demo describe pod secure-web
+kubectl -n pod-security-demo logs secure-web
 ```
 
 If the logs mention a path such as `/var/cache/nginx` or `/var/run`, add an `emptyDir` mount for that path and try again. This is an example of a senior security habit: preserve the control when possible, and make the exception precise enough that it can be reviewed.
@@ -453,7 +452,7 @@ The `latest` version label means the policy follows the current Kubernetes serve
 Pinned versions are a change-management tool, not a way to avoid upgrades forever. If a cluster pins the policy version during a Kubernetes upgrade, the platform team should schedule a follow-up review to compare the pinned profile with the new default profile. Otherwise, the organization can accidentally freeze old assumptions and miss improvements in the standard. For exam purposes, the important pattern is that each mode can have a matching `*-version` label, and the profile name alone is not the whole policy.
 
 ```bash
-k label namespace pod-security-demo \
+kubectl label namespace pod-security-demo \
   pod-security.kubernetes.io/enforce=baseline \
   pod-security.kubernetes.io/enforce-version=latest \
   pod-security.kubernetes.io/warn=restricted \
@@ -478,8 +477,8 @@ This workflow is especially important during incident response or migration work
 Start with a namespace that enforces `baseline`, because this gives you a clear rejection whenever the manifest crosses the minimum application-safety boundary.
 
 ```bash
-k create namespace psa-debug
-k label namespace psa-debug \
+kubectl create namespace psa-debug
+kubectl label namespace psa-debug \
   pod-security.kubernetes.io/enforce=baseline \
   pod-security.kubernetes.io/enforce-version=latest \
   --overwrite
@@ -509,7 +508,7 @@ spec:
 ```
 
 ```bash
-k apply -f blocked-debug.yaml
+kubectl apply -f blocked-debug.yaml
 ```
 
 The exact message can vary by Kubernetes version, but the structure is consistent: it says the pod violates the enforced profile and lists fields such as host namespaces, privileged containers, or forbidden capabilities. Your task is to translate that message into a corrected design. In this case, the pod does not describe a normal application; it asks for host networking, host process visibility, full privilege, and broad capabilities.
