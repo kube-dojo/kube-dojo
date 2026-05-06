@@ -305,6 +305,14 @@ def test_anti_fabrication_no_unsourced_anecdote_allows_hypothetical_prefix() -> 
     assert _gate_results(anti_fabrication=metrics)["anti_fabrication_no_unsourced_anecdote"] is True
 
 
+def test_anti_fabrication_no_unsourced_anecdote_allows_bold_hypothetical_prefix() -> None:
+    metrics = verify_module.anti_fabrication_metrics(
+        "**Hypothetical scenario:** A payments company once would have routed traffic to the wrong cluster."
+    )
+    assert metrics["unsourced_anecdotes"] == []
+    assert _gate_results(anti_fabrication=metrics)["anti_fabrication_no_unsourced_anecdote"] is True
+
+
 def test_learning_outcomes_synonym_is_detected() -> None:
     metrics = verify_module.structure_metrics(
         """
@@ -357,6 +365,83 @@ correct because the alert needs immediate triage.
     metrics = verify_module.practice_mcq_metrics(path, text)
     assert metrics["violations"] == []
     assert _gate_results(practice_mcq=metrics)["practice_mcq_four_options_with_distractors"] is True
+
+
+def test_practice_mcq_four_options_with_plural_distractor_references_passes() -> None:
+    path = verify_module.REPO_ROOT / "src/content/docs/k8s/cgoa/module-1.4-practice-questions-set-1.md"
+    text = """
+## Quiz
+
+### Question 1
+
+What should the operator do first?
+
+1. Inspect the failing Pod events.
+2. Delete every workload in the namespace.
+3. Restart the control plane.
+4. Ignore the alert until the next sync.
+
+<details>
+<summary>Answer</summary>
+
+Option 1 is correct because events show scheduler and admission failures. Options 2 and 3 are incorrect
+because they destroy unrelated state or restart healthy components. Option 4 is wrong because the alert
+needs immediate triage.
+</details>
+"""
+    metrics = verify_module.practice_mcq_metrics(path, text)
+    assert metrics["violations"] == []
+    assert _gate_results(practice_mcq=metrics)["practice_mcq_four_options_with_distractors"] is True
+
+
+def test_practice_mcq_four_options_ignores_embedded_numbered_list() -> None:
+    path = verify_module.REPO_ROOT / "src/content/docs/k8s/cgoa/module-1.4-practice-questions-set-1.md"
+    text = """
+## Quiz
+
+### Question 1
+
+The operator did: 1. Restarted pod 2. Checked logs. What should happen next?
+
+1. Inspect the failing Pod events.
+2. Delete every workload in the namespace.
+3. Restart the control plane.
+4. Ignore the alert until the next sync.
+
+<details>
+<summary>Answer</summary>
+
+Option 1 is correct because events show scheduler and admission failures. Option 2 is wrong because it
+destroys unrelated state. Option 3 is incorrect because the symptom is workload-scoped. Option 4 is not
+correct because the alert needs immediate triage.
+</details>
+"""
+    metrics = verify_module.practice_mcq_metrics(path, text)
+    assert metrics["violations"] == []
+    assert _gate_results(practice_mcq=metrics)["practice_mcq_four_options_with_distractors"] is True
+
+
+def test_practice_mcq_requires_details_answer_block() -> None:
+    path = verify_module.REPO_ROOT / "src/content/docs/k8s/cgoa/module-1.4-practice-questions-set-1.md"
+    text = """
+## Quiz
+
+### Question 1
+
+What should the operator do first?
+
+1. Inspect the failing Pod events.
+2. Delete every workload in the namespace.
+3. Restart the control plane.
+4. Ignore the alert until the next sync.
+
+Answer: Option 1 is correct because events show scheduler and admission failures. Option 2 is wrong
+because it destroys unrelated state. Option 3 is incorrect because the symptom is workload-scoped.
+Option 4 is not correct because the alert needs immediate triage.
+"""
+    metrics = verify_module.practice_mcq_metrics(path, text)
+    assert metrics["violations"][0]["message"] == "MCQ at line 4 missing `<details>` answer block"
+    assert _gate_results(practice_mcq=metrics)["practice_mcq_four_options_with_distractors"] is False
 
 
 def test_practice_mcq_four_options_with_distractors_fails_on_stripped_options() -> None:

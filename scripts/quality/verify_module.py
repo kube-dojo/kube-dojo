@@ -87,8 +87,8 @@ UNSOURCED_ANECDOTE_RE = re.compile(
     r"(?:once|recently)\b",
     re.IGNORECASE,
 )
-SCENARIO_PREFIX_RE = re.compile(r"^(?:Hypothetical scenario|Exercise scenario):", re.IGNORECASE)
-MCQ_OPTION_RE = re.compile(r"(?m)^\s*(?:[-*]\s*)?(?:\*\*)?(?:[A-D]|[1-4])[\).:](?:\*\*)?\s+\S")
+SCENARIO_PREFIX_RE = re.compile(r"^(?:[*_#\s]*)(?:Hypothetical scenario|Exercise scenario):", re.IGNORECASE)
+MCQ_OPTION_RE = re.compile(r"(?m)^(?:[-*]\s*)?(?:\*\*)?(?:[A-D]|[1-4])[\).:](?:\*\*)?\s+\S")
 MCQ_REASONING_KEYWORD_RE = re.compile(r"\b(?:wrong|not correct|incorrect|because|why)\b", re.IGNORECASE)
 
 LEARNING_OUTCOME_HEADINGS = (
@@ -459,10 +459,14 @@ def _is_practice_question_path(path: Path) -> bool:
     )
 
 
-def _practice_question_blocks(text: str) -> list[tuple[str, str]]:
+def _practice_question_blocks(text: str) -> list[tuple[str, str, int | None]]:
     _, body = _strip_frontmatter(text)
     quiz = _find_matching_h2(body, QUIZ_HEADINGS) or _find_matching_h2(body, QUIZ_PREFIX_HEADINGS, prefix=True)
-    content = str(quiz["content"]) if quiz else body
+    raw_content = str(quiz["content"]) if quiz else body
+    content_start = body.find(raw_content, int(quiz["start"])) if quiz else 0
+    if content_start < 0:
+        content_start = 0
+    content = raw_content
     content = _strip_code_blocks(content, "\n")
     details = list(
         re.finditer(
@@ -472,37 +476,39 @@ def _practice_question_blocks(text: str) -> list[tuple[str, str]]:
         )
     )
     if details:
-        blocks: list[tuple[str, str]] = []
+        blocks: list[tuple[str, str, int | None]] = []
         previous_end = 0
         for match in details:
             visible = f"{content[previous_end:match.start()]}\n{match.group(1)}"
-            blocks.append((visible, match.group(2)))
+            blocks.append((visible, match.group(2), None))
             previous_end = match.end()
         return blocks
 
     markers = list(
         re.finditer(
-            r"(?m)^\s*(?:#{3,6}\s+)?(?:Question\s+\d+|\d+[.)]\s+.+)",
+            r"(?m)^\s*(?:#{3,6}\s+)?Question\s+\d+\b",
             content,
             re.IGNORECASE,
         )
     )
     blocks = []
-    for idx, marker in enumerate(markers):
-        end = markers[idx + 1].start() if idx + 1 < len(markers) else len(content)
-        blocks.append((content[marker.start() : end], content[marker.end() : end]))
+    for marker in markers:
+        question_start = marker.start() + len(marker.group(0)) - len(marker.group(0).lstrip())
+        line_number = body[: content_start + question_start].count("\n") + 1
+        blocks.append((content[marker.start() : marker.end()], "", line_number))
     return blocks
 
 
 def _answer_option_references(answer: str) -> set[str]:
     references: set[str] = set()
     patterns = (
-        r"\b(?:option|choice|answer)\s+([A-D1-4])\b",
+        r"\b(?:options?|choices?|answers?)\s+([A-D1-4](?:\s*(?:,|and|or)\s*[A-D1-4])*)\b",
         r"\b([A-D1-4])[\).:]\s",
         r"\b([A-D1-4])\s+(?:is|works|fails|would|does|because)\b",
     )
     for pattern in patterns:
-        references.update(match.group(1).upper() for match in re.finditer(pattern, answer, re.IGNORECASE))
+        for match in re.finditer(pattern, answer, re.IGNORECASE):
+            references.update(label.upper() for label in re.findall(r"[A-D1-4]", match.group(1)))
     return references
 
 
@@ -511,14 +517,29 @@ def practice_mcq_metrics(path: Path, text: str) -> dict[str, object]:
         return {"applies": False, "question_count": 0, "violations": []}
     blocks = _practice_question_blocks(text)
     violations: list[dict[str, object]] = []
-    for idx, (visible, answer) in enumerate(blocks, 1):
+    for idx, (visible, answer, missing_details_line) in enumerate(blocks, 1):
         option_count = len(MCQ_OPTION_RE.findall(visible))
-        labels_referenced = _answer_option_references(answer)
-        has_distractor_reasoning = len(labels_referenced) >= 3 and bool(MCQ_REASONING_KEYWORD_RE.search(answer))
-        if option_count != 4 or not has_distractor_reasoning:
+        if missing_details_line is not None:
             violations.append(
                 {
                     "question": idx,
+                    "line": missing_details_line,
+                    "message": f"MCQ at line {missing_details_line} missing `<details>` answer block",
+                    "visible_options": option_count,
+                    "labels_referenced": [],
+                    "has_distractor_reasoning": False,
+                }
+            )
+            continue
+        labels_referenced = _answer_option_references(answer)
+        has_distractor_reasoning = len(labels_referenced) >= 3 and bool(MCQ_REASONING_KEYWORD_RE.search(answer))
+        if option_count < 4 or not has_distractor_reasoning:
+            violations.append(
+                {
+                    "question": idx,
+                    "message": "MCQ needs ≥4 visible MCQ options"
+                    if option_count < 4
+                    else "MCQ answer must explain the correct option and distractors",
                     "visible_options": option_count,
                     "labels_referenced": sorted(labels_referenced),
                     "has_distractor_reasoning": has_distractor_reasoning,
