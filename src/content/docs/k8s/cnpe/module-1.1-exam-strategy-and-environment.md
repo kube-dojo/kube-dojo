@@ -419,9 +419,9 @@ C. Practice only by reading documentation until every command feels familiar.
 D. Use personal command shortcuts in every script so practice feels faster.
 
 <details>
-<summary>Answer and reasoning for designing a repeatable triage execution verification workflow</summary>
+<summary>Answer and reasoning</summary>
 
-A is correct because it trains the environment controls that matter under time pressure. B overfits to a workstation and may fail when the exam environment differs. C builds recognition but not recall, sequencing, or verification. D can be convenient interactively, but scripts and shared examples should use complete commands so they remain runnable and clear.
+A is correct because it trains the environment controls that matter under time pressure. Together, those controls form a repeatable triage workflow for a performance-based platform exam. B overfits to a workstation and may fail when the exam environment differs. C builds recognition but not recall, sequencing, or verification. D can be convenient interactively, but scripts and shared examples should use complete commands so they remain runnable and clear.
 
 </details>
 
