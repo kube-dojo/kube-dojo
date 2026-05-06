@@ -355,6 +355,8 @@ cat /sys/module/dummy/parameters/numdummies 2>/dev/null
 
 Drill 4, Network Triage, should be practiced as a ladder: verify link state, check IP address assignment, inspect the route table, test DNS resolution, and verify service reachability on the expected port. Drill 5, Static Routes and Network Services at Boot, adds a route to `10.99.0.0/16` through the default gateway, verifies route selection, removes it, then repeats the idea persistently through Netplan or NetworkManager. Drill 6, Kernel Module Practice, uses a safe module such as `dummy` when available, inspects it with `modinfo`, loads it with `modprobe`, confirms it with `lsmod`, removes it, and explains how persistence would work if required.
 
+## SSH and Remote Access
+
 SSH is the bridge between local recovery and remote administration. LFCS can include tasks where you connect to another host, copy a file, or prove that a remote service is reachable. The basic commands are small, but the evidence matters: `ssh -v` can show authentication and host-key progress, `scp` proves file transfer, and the server-side `systemctl` plus `ss` checks prove the service is available. Treat remote access as another service with runtime, network, and persistence dimensions.
 
 Remote access should also change how you think about risk. A local console lets you repair a bad route or target mistake directly, but an SSH session depends on the route, address, firewall, service, and authentication path staying intact. Before applying persistent network changes over SSH, make sure you have a rollback plan or a console path. In an exam lab this may simply mean using temporary route tests first. In production it may mean an out-of-band console, a delayed rollback job, or a maintenance window with a second operator watching the session.
@@ -542,7 +544,7 @@ Success criteria should prove both repair and cleanup, so do not mark the exerci
 - [modules-load.d manual](https://www.freedesktop.org/software/systemd/man/latest/modules-load.d.html)
 - [Netplan YAML reference](https://netplan.readthedocs.io/en/stable/netplan-yaml/)
 - [NetworkManager nmcli manual](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html)
-- [Kubernetes Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/service/)
+- [Kubernetes Nodes](https://kubernetes.io/docs/concepts/architecture/nodes/)
 
 ## Next Module
 
