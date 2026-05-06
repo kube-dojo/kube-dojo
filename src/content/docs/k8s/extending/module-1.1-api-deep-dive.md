@@ -1,6 +1,7 @@
 ---
 title: "Module 1.1: Kubernetes API & Extensibility Architecture"
 slug: k8s/extending/module-1.1-api-deep-dive
+revision_pending: false
 sidebar:
   order: 2
 ---
@@ -8,61 +9,40 @@ sidebar:
 >
 > **Time to Complete**: 3 hours
 >
-> **Prerequisites**: CKA or equivalent Kubernetes experience, Basic Go programming
+> **Prerequisites**: CKA or equivalent Kubernetes experience, basic Go programming, and access to a Kubernetes 1.35+ cluster
 
----
+# Module 1.1: Kubernetes API & Extensibility Architecture
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Trace** a kubectl request through authentication, authorization, and admission control to etcd storage
-2. **Implement** a Go program that creates, watches, and modifies Kubernetes resources using client-go
-3. **Evaluate** which API extensibility hook (CRDs, admission webhooks, aggregation) fits a given use case
-4. **Diagnose** API Server request failures by interpreting audit logs and HTTP response codes
-
----
+1. **Trace** a `kubectl` request through authentication, authorization, admission control, validation, and etcd persistence.
+2. **Implement** a Go program that creates, watches, and modifies Kubernetes resources with client-go informers and workqueues.
+3. **Evaluate** whether CRDs, admission webhooks, ValidatingAdmissionPolicy, or API aggregation fits a given extension requirement.
+4. **Diagnose** API Server request failures by connecting audit log fields, HTTP response codes, resource versions, and server-side apply ownership.
 
 ## Why This Module Matters
 
-Every single thing that happens in a Kubernetes cluster goes through one gateway: the **API Server**. When you run `kubectl apply`, when a controller reconciles state, when the scheduler places a Pod -- every action is an API call. If you want to extend Kubernetes (and you do, that is why you are here), you need to understand this gateway inside and out.
+Hypothetical scenario: your platform team deploys a controller that labels Pods for chargeback, a security team adds an admission policy that blocks risky images, and an application team suddenly cannot create a Deployment that worked yesterday. The Pod never appears, the controller logs are quiet, and `kubectl` returns a short error that mentions forbidden fields. A useful engineer does not start by guessing which component is broken; they trace the request through the API Server pipeline and identify exactly which stage made the decision.
 
-This module takes you from "I can use kubectl" to "I understand what kubectl does under the hood." You will trace a request through the entire API Server pipeline, learn where the extensibility hooks live, and write your first Go program that talks to the Kubernetes API using the official client-go library.
+Kubernetes feels like a collection of components, but operationally it behaves like an API-centered system. The scheduler, kubelet, controllers, `kubectl`, admission webhooks, and custom operators all communicate by reading and writing API objects. If the API Server accepts an object, the rest of the control plane reacts to that stored intent; if the API Server rejects it, nothing downstream can compensate. That makes API literacy the foundation for every extension mechanism you will learn in this track.
 
-> **The Airport Security Analogy**
->
-> Think of the Kubernetes API Server as airport security. Every request (passenger) must go through a strict pipeline: first **Authentication** (show your passport -- who are you?), then **Authorization** (check your boarding pass -- are you allowed on this flight?), then **Admission Control** (security screening -- is your luggage compliant?). Only after passing all three stages does your request board the plane and reach etcd. Just like an airport, each stage can reject you, and there are specific "extensibility points" where you can add your own screening rules.
+This module builds that literacy in layers. First, you will follow a request from client authentication through authorization, admission, validation, persistence, and watches. Then you will interact with the API directly so the REST shape is visible instead of hidden behind `kubectl`. Finally, you will implement the client-go patterns that real controllers use: list, watch, cache, lister, and rate-limited workqueue. The goal is not to memorize every internal package; the goal is to reason clearly when an extension changes the API surface or changes how existing objects are admitted.
 
----
+The airport security analogy is useful, with one important adjustment. The Kubernetes API Server is not merely a guard at the door; it is also the check-in desk, baggage policy engine, boarding scanner, and flight record system. Authentication asks who is making the request, authorization asks whether that identity may attempt the action, admission asks whether the requested object should be changed or rejected, and persistence records the accepted state in etcd. Each stage has its own evidence, failure codes, and extension hooks, so good debugging means knowing which question each stage answers.
 
-## What You'll Learn
+## Core Concept 1: The API Server Request Pipeline
 
-By the end of this module, you will be able to:
-- Trace a request through the full API Server lifecycle
-- Identify all extensibility points in the Kubernetes API
-- Interact with the API using curl and raw HTTP
-- Write Go programs using client-go with Informers, Listers, and Workqueues
-- Explain the difference between polling and watching resources
+When you run `kubectl create deployment nginx --image=nginx`, `kubectl` constructs an HTTP request, signs it using credentials from your kubeconfig, and sends it to the API Server. The API Server does not immediately write the Deployment to etcd. It first turns the network request into a Kubernetes identity and a requested verb, checks whether that identity is allowed to perform that verb on that resource, applies admission logic, validates the resulting object, and only then persists the accepted object.
 
----
+The order matters because each stage receives a different form of the request. Authentication sees credentials and produces user information. Authorization sees the user, verb, API group, resource, namespace, and name. Mutating admission sees the object before final validation and may add defaults or sidecars. Validating admission sees the final candidate object and may accept or reject it, but it cannot rewrite it. Persistence stores the approved state and advances the resource version that watch clients use to stay synchronized.
 
-## Did You Know?
+That sequencing is also why a single user-visible error can mislead you if you skip the pipeline model. A denied Pod create might be caused by missing RBAC, a webhook timeout, a CEL validation rule, a schema error, or an etcd storage problem, and each failure leaves different evidence. The fastest path is to ask what evidence exists for each stage: credential validity for authentication, `kubectl auth can-i` for authorization, admission messages for admission, schema errors for validation, and audit or API Server logs for persistence.
 
-- **The API Server handles roughly 500-2,000 requests per second** in a production cluster of moderate size. Every `kubectl get pods` is a REST call. Every controller reconciliation is a WATCH stream event. The efficiency of this machinery is what makes Kubernetes work at scale.
+The API Server is intentionally stateless with respect to durable cluster data. You can run multiple API Server replicas behind a load balancer because accepted state is stored in etcd, while each API Server process performs request handling, admission calls, conversion, validation, and watch delivery. That stateless design improves availability, but it does not make every request cheap. List requests, watch fan-out, webhook calls, and serialization all consume control-plane capacity, so extension authors have to design as API citizens rather than assuming the server is an unlimited database endpoint.
 
-- **etcd is the only stateful component**: The API Server itself is stateless. You can (and should) run multiple replicas. All state lives in etcd, which is why etcd backup is the single most critical operational task.
-
-- **client-go is older than most Kubernetes operators**: The client-go library dates back to Kubernetes 0.x days. Its Informer pattern -- watch + in-memory cache -- has been copied by controller frameworks in every language. Understanding it means understanding every operator ever written.
-
----
-
-## Part 1: API Server Request Lifecycle
-
-### 1.1 The Full Request Pipeline
-
-When you run `kubectl create deployment nginx --image=nginx`, here is exactly what happens:
-
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    API Server Request Pipeline                       │
 │                                                                     │
@@ -101,7 +81,7 @@ When you run `kubectl create deployment nginx --image=nginx`, here is exactly wh
 │                            ▼                                        │
 │   ┌─────────────────────────────────────────────────────────┐      │
 │   │  4. SCHEMA VALIDATION                                    │      │
-│   │     Is the object structurally valid?                     │      │
+│   │     Is the object structurally valid?                    │      │
 │   │     • OpenAPI schema validation                          │      │
 │   │     • CRD structural schema checks                       │      │
 │   └────────────────────────┬────────────────────────────────┘      │
@@ -109,7 +89,7 @@ When you run `kubectl create deployment nginx --image=nginx`, here is exactly wh
 │                            ▼                                        │
 │   ┌─────────────────────────────────────────────────────────┐      │
 │   │  5. VALIDATING ADMISSION                                 │      │
-│   │     Final policy check — no modifications allowed        │      │
+│   │     Final policy check with no modification allowed      │      │
 │   │     • ValidatingAdmissionWebhooks (YOUR extension point) │      │
 │   │     • ValidatingAdmissionPolicies (CEL-based, in-tree)   │      │
 │   │     → Can only Accept / Reject                           │      │
@@ -127,112 +107,103 @@ When you run `kubectl create deployment nginx --image=nginx`, here is exactly wh
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 Understanding Each Stage
-
-**Authentication** runs multiple authenticators in sequence. The first one that succeeds wins. In most clusters you will encounter:
+Authentication is deliberately pluggable because clusters integrate with many identity systems. A local administrator might use an X.509 client certificate in a kubeconfig, a Pod normally uses a projected ServiceAccount token, and a human user in an enterprise cluster may authenticate through OIDC. The API Server runs configured authenticators until one succeeds, then attaches a username, groups, and optional UID to the request. If no authenticator succeeds, the pipeline stops before Kubernetes even evaluates RBAC.
 
 | Authenticator | How It Works | Common Use |
 |---------------|-------------|------------|
-| X.509 Client Certs | Certificate CN = username, O = group | kubectl (kubeconfig) |
-| Bearer Token | Token in Authorization header | ServiceAccounts |
-| OIDC | JWT token from identity provider | SSO/corporate auth |
-| Authenticating Proxy | Header-based (X-Remote-User) | API gateways |
+| X.509 Client Certs | Certificate CN = username, O = group | kubeconfig for administrators and bootstrap flows |
+| Bearer Token | Token in Authorization header | ServiceAccounts and automation |
+| OIDC | JWT token from an identity provider | Human SSO and corporate identity |
+| Authenticating Proxy | Trusted request headers such as `X-Remote-User` | API gateways and front proxies |
 
-**Authorization** checks whether the authenticated user can perform the requested action. RBAC is the standard:
+Authorization is where many practical failures happen because the identity is valid but the requested verb is not allowed. RBAC evaluates Roles, ClusterRoles, RoleBindings, and ClusterRoleBindings against a request such as "can this ServiceAccount patch Pods in namespace default?" A `403 Forbidden` after successful authentication means the request did not reach admission or storage. That distinction is important when a team blames an admission webhook even though RBAC blocked the request earlier.
 
 ```bash
-# Check if you can create deployments
+# Check whether your current identity can create Deployments.
 kubectl auth can-i create deployments --namespace=default
 
-# Check as a specific user
+# Check as a specific ServiceAccount identity.
 kubectl auth can-i create pods --as=system:serviceaccount:default:my-sa
 
-# List all permissions
+# List the permissions Kubernetes can resolve for the current identity.
 kubectl auth can-i --list
 ```
 
-**Admission Controllers** are the most important extensibility point. They come in two flavors:
-- **Mutating**: Can modify the incoming object (e.g., inject sidecar containers, set defaults)
-- **Validating**: Can only accept or reject (e.g., enforce naming conventions, deny privileged pods)
+Admission is the extension-heavy part of the pipeline. Mutating admission can change an incoming object by adding labels, injecting containers, setting defaults, or normalizing fields. Validating admission evaluates the final object and returns accept or reject. Kubernetes 1.35 clusters can use admission webhooks for external logic and ValidatingAdmissionPolicy for in-tree CEL expressions, so the design choice is no longer "webhook or nothing." Use the simplest mechanism that can express the policy and reserve webhooks for logic that needs external data, complex calls, or mutation.
 
-> **Pause and predict**: If a user has RBAC permissions to create a Pod, but a Validating Admission Webhook is configured to reject Pods using the `latest` image tag, at which exact stage will their request fail, and what HTTP status code will they likely receive?
+Mutation should be used carefully because it changes the object that every later stage sees. A sidecar injector that adds containers can accidentally trigger a validating policy that counts containers, and a defaulting webhook that adds labels can affect selectors, quotas, or controller behavior. Validation is easier to reason about because it does not rewrite the request, but it can still create operational risk if a webhook is slow or unreachable. In production, the admission design includes timeout, failure policy, namespace selection, object selection, and a rollout plan, not just the webhook code.
 
-### 1.3 Extensibility Points Map
+Pause and predict: if a user has RBAC permission to create Pods, but a validating admission webhook rejects Pods that use the `latest` image tag, which exact stage fails and which earlier stages must already have succeeded? The request authenticated successfully, passed authorization, may have passed mutating admission and schema validation, and then failed during validating admission. Depending on the admission response, the user will typically see a forbidden or invalid response with a message from the rejecting policy.
 
-Here is every place you can extend Kubernetes, organized by where it fits in the pipeline:
+The extension map below is a practical way to organize choices. Some hooks live directly inside the request path, which makes them powerful but latency-sensitive. Others create new API types or respond after persistence, which is usually safer for business workflows because a slow controller does not block every create or update request. Treat request-path extensions as admission control and treat post-persistence controllers as reconciliation.
+
+The difference between request-path and post-persistence extensions is the difference between a gate and a worker. A gate has to decide quickly because the user, controller, or kubelet is waiting for the API response. A worker can retry, back off, record status, and continue later because the desired state has already been stored. When a requirement sounds like "this object must never exist," admission is a natural fit; when it sounds like "make the outside world match this object," reconciliation is usually safer.
 
 | Extension Point | Pipeline Stage | Mechanism | Module |
 |----------------|---------------|-----------|--------|
-| Custom authenticator | AuthN | Webhook token review | N/A |
-| Custom authorizer | AuthZ | Webhook authorization | N/A |
-| Mutating webhook | Admission | MutatingAdmissionWebhook | 1.6 |
-| Validating webhook | Admission | ValidatingAdmissionWebhook | 1.6 |
-| Validating policy | Admission | ValidatingAdmissionPolicy (CEL) | 1.6 |
-| Custom resources | API surface | CRD / API Aggregation | 1.2, 1.8 |
-| Custom controllers | Post-persist | Controller pattern | 1.3, 1.4 |
-| Scheduler plugins | Scheduling | Scheduling framework | 1.7 |
-| CNI / CSI / CRI | Node level | Plugin interfaces | Outside scope |
+| Custom authenticator | AuthN | Webhook token review | Outside this track |
+| Custom authorizer | AuthZ | Webhook authorization | Outside this track |
+| Mutating webhook | Admission | MutatingAdmissionWebhook | Module 1.6 |
+| Validating webhook | Admission | ValidatingAdmissionWebhook | Module 1.6 |
+| Validating policy | Admission | ValidatingAdmissionPolicy with CEL | Module 1.6 |
+| Custom resources | API surface | CRD or API Aggregation | Modules 1.2 and 1.8 |
+| Custom controllers | Post-persist | Controller pattern | Modules 1.3 and 1.4 |
+| Scheduler plugins | Scheduling | Scheduling framework | Module 1.7 |
+| CNI / CSI / CRI | Node level | Plugin interfaces | Outside this module |
 
-#### Decision Framework: Which Extensibility Hook to Use?
+## Core Concept 2: Raw API Interaction and Watch Semantics
 
-When extending the API, use this decision tree to choose the right tool:
+`kubectl` is convenient, but it can hide the fact that Kubernetes is a structured HTTP API with discovery endpoints, resource URLs, content negotiation, and streaming watches. Raw API interaction is not something you do every day in production, yet it is one of the fastest ways to debug confusing behavior. When you can inspect the request path directly, you can separate client-side formatting from API behavior and see whether the server returns a list, table, watch event, status object, or admission rejection.
 
-1. **Do you need to store new configuration or state in the cluster?**
-   - **Yes, and it is mostly declarative data**: Use **Custom Resource Definitions (CRDs)**. This is the default for the vast majority of use cases.
-   - **Yes, but it requires custom storage (e.g., a SQL database) or extremely specialized REST semantics**: Use **API Aggregation**.
-2. **Do you need to intercept and modify existing resources (like Pods or Deployments)?**
-   - **Yes, to set defaults or inject sidecars**: Use **Mutating Admission Webhooks**.
-   - **Yes, to enforce security policies or complex validation**: Use **Validating Admission Webhooks** (or Validating Admission Policies).
+Every Kubernetes resource belongs to either the core API group or a named API group. Core resources such as Pods and Services live under `/api/v1`, while named groups such as Deployments use `/apis/apps/v1`. CustomResourceDefinitions live under the `apiextensions.k8s.io` API group, and instances of your custom resources get their own discovered resource paths. The shape is regular enough that dynamic clients can discover resources at runtime and operate on types that were not compiled into the program.
 
----
-
-## Part 2: Raw API Interaction
-
-### 2.1 API Discovery
-
-Every Kubernetes API follows a consistent URL structure:
-
+```text
+/api/v1/namespaces/{namespace}/pods/{name}                  # Core API group
+/apis/apps/v1/namespaces/{namespace}/deployments            # Named API group
+/apis/apiextensions.k8s.io/v1/customresourcedefinitions      # CRD API
 ```
-/api/v1/namespaces/{namespace}/pods/{name}          # Core API group
-/apis/apps/v1/namespaces/{namespace}/deployments     # Named API group
-/apis/apiextensions.k8s.io/v1/customresourcedefinitions  # CRD API
-```
+
+The easiest safe experiment is to start `kubectl proxy`, which listens locally and forwards requests to the API Server using your kubeconfig credentials. In the examples below, `.venv/bin/python` is used only to pretty-print JSON because this repository standardizes on the local virtual environment. The API requests themselves are plain HTTP requests to the proxy. Before running this, what output do you expect from `/apis` compared with `/api/v1`, and why would custom resources appear in one discovery tree but not the other?
+
+Discovery is more than a convenience for command-line tools. Controllers, backup utilities, policy scanners, and dashboards use discovery to understand which resources exist and which verbs are supported. That is why CRDs feel native once installed: they participate in discovery, authorization, watch, and OpenAPI schema publication. If a tool hardcodes only built-in resources, it will miss the custom APIs that operators introduce, which is a serious gap in clusters where CRDs represent databases, certificates, gateways, policies, and application platforms.
 
 ```bash
-# Start a kubectl proxy to handle authentication
-kubectl proxy --port=8080 &
+# Start a kubectl proxy to handle authentication.
+kubectl proxy --address=127.0.0.1 --port=8080 &
 
-# Discover all API groups
-curl -s http://localhost:8080/apis | python3 -m json.tool | head -40
+# Discover all named API groups.
+curl -s http://127.0.0.1:8080/apis | .venv/bin/python -m json.tool | head -40
 
-# List core API resources
-curl -s http://localhost:8080/api/v1 | python3 -m json.tool | head -30
+# List core API resources.
+curl -s http://127.0.0.1:8080/api/v1 | .venv/bin/python -m json.tool | head -30
 
-# List all pods in default namespace
-curl -s http://localhost:8080/api/v1/namespaces/default/pods | python3 -m json.tool
+# List all Pods in the default namespace.
+curl -s http://127.0.0.1:8080/api/v1/namespaces/default/pods | .venv/bin/python -m json.tool
 
-# Get a specific pod
-curl -s http://localhost:8080/api/v1/namespaces/default/pods/my-pod | python3 -m json.tool
+# Get a specific Pod.
+curl -s http://127.0.0.1:8080/api/v1/namespaces/default/pods/my-pod | .venv/bin/python -m json.tool
 
-# Watch pods (streaming)
-curl -s "http://localhost:8080/api/v1/namespaces/default/pods?watch=true"
+# Watch Pods as a streaming API response.
+curl -s "http://127.0.0.1:8080/api/v1/namespaces/default/pods?watch=true"
 ```
 
-### 2.2 Direct API Access (Without Proxy)
+Direct API access without the proxy is useful for understanding ServiceAccount tokens and TLS behavior, but it also demonstrates why client libraries exist. You must find the API Server endpoint, obtain a token, pass the Authorization header, decide how to verify the server certificate, and handle response objects yourself. The `-k` flag below skips certificate verification for a local learning cluster only; production tools should use the cluster CA from kubeconfig or in-cluster configuration.
+
+This direct path also reveals the boundary between authentication and authorization. A valid bearer token proves that the API Server can authenticate the caller, but it does not grant any permissions by itself. The RoleBinding in the example deliberately grants broad edit permissions for a lab namespace so the raw create request can succeed. In a real controller, you would create a narrow ServiceAccount, bind only the verbs and resources required, and test those permissions with `kubectl auth can-i` before debugging client code.
 
 ```bash
-# Grant permission to the default ServiceAccount to manage pods
+# Grant permission to the default ServiceAccount to manage Pods for this lab.
 kubectl create rolebinding default-edit --clusterrole=edit --serviceaccount=default:default
 
-# Get API server URL and token
+# Get the API Server URL and a short-lived ServiceAccount token.
 APISERVER=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
 TOKEN=$(kubectl create token default)
 
-# Direct API call with certificate verification skipped (dev only!)
+# Direct API call with certificate verification skipped for a local dev cluster only.
 curl -s -k -H "Authorization: Bearer $TOKEN" \
-  "$APISERVER/api/v1/namespaces/default/pods" | python3 -m json.tool | head -20
+  "$APISERVER/api/v1/namespaces/default/pods" | .venv/bin/python -m json.tool | head -20
 
-# Create a pod via raw API
+# Create a Pod via the raw API.
 curl -s -k -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -250,68 +221,61 @@ curl -s -k -X POST \
   }'
 ```
 
-### 2.3 Resource Versions and Watches
+The most important field in list and watch workflows is `metadata.resourceVersion`. It is not an application version such as `v1` or `v2`, and you should not compare it as if it were a semantic version. It is an opaque value that identifies a point in Kubernetes storage history for a resource collection. A client lists objects, records the returned resource version, then starts a watch from that point so it receives only the changes that happened after the list.
 
-Every Kubernetes resource has a `resourceVersion` field. This is not a "version" in the semantic sense -- it is an **etcd revision number** that changes on every write. Watches use this to efficiently stream changes:
+The list-and-watch pattern solves a classic synchronization problem. If a client simply lists all Pods and then starts watching with no continuity point, an update can happen between those two operations and never reach the client. By recording the list response's resource version and using it for the watch, the client creates a bridge between the initial snapshot and the event stream. That bridge is what lets a controller maintain a cache that is eventually consistent with the API Server without repeatedly performing full lists.
 
 ```bash
-# Get the current resource version
-RV=$(curl -s http://localhost:8080/api/v1/namespaces/default/pods \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['metadata']['resourceVersion'])")
+# Get the current resource version for the Pod collection.
+RV=$(curl -s http://127.0.0.1:8080/api/v1/namespaces/default/pods \
+  | .venv/bin/python -c "import sys,json; print(json.load(sys.stdin)['metadata']['resourceVersion'])")
 
-# Watch from that point forward (only new changes)
-curl -s "http://localhost:8080/api/v1/namespaces/default/pods?watch=true&resourceVersion=$RV"
+# Watch from that point forward, receiving only new changes.
+curl -s "http://127.0.0.1:8080/api/v1/namespaces/default/pods?watch=true&resourceVersion=$RV"
 ```
 
-Watch events come as newline-delimited JSON:
+Watch events arrive as newline-delimited JSON objects. The event type tells you what happened, and the object contains the full resource state at that moment. A robust watcher must process events in order, remember the latest resource version it has successfully applied, and recover when the server says an old version is no longer available. If the watch is disconnected for long enough that the historical revision has been compacted, the client must perform a new list and rebuild its local cache.
+
+This is where many hand-written watchers become subtly wrong. They handle the happy path of `ADDED`, `MODIFIED`, and `DELETED`, but they do not handle reconnects, expired resource versions, bookmarks, relists, or object decoding failures. A controller with a wrong local cache can be worse than a controller that is obviously down because it makes decisions from stale state. client-go's reflector is not just saving typing; it is encoding years of failure handling around the Kubernetes watch contract.
 
 ```json
-{"type":"ADDED","object":{"kind":"Pod","metadata":{"name":"new-pod",...},...}}
-{"type":"MODIFIED","object":{"kind":"Pod","metadata":{"name":"new-pod",...},...}}
-{"type":"DELETED","object":{"kind":"Pod","metadata":{"name":"new-pod",...},...}}
+{"type":"ADDED","object":{"kind":"Pod","metadata":{"name":"new-pod"},"spec":{},"status":{}}}
+{"type":"MODIFIED","object":{"kind":"Pod","metadata":{"name":"new-pod"},"spec":{},"status":{}}}
+{"type":"DELETED","object":{"kind":"Pod","metadata":{"name":"new-pod"},"spec":{},"status":{}}}
 ```
 
-> **Stop and think**: If your script loses its network connection while watching a resource, what happens if you reconnect and do not provide the `resourceVersion` from the last event you received? How would this affect your local cache state?
+Stop and think: if your script loses its network connection while watching Pods, what happens if it reconnects without the last processed `resourceVersion`? The script can create a gap between its local state and cluster reality because events that happened during the disconnect are not replayed from the correct point. That is why production controllers do not hand-roll this loop casually; they use client-go reflectors and informers, which implement list-and-watch behavior, relist recovery, and cache synchronization.
 
----
+## Core Concept 3: client-go, Informers, Listers, and Workqueues
 
-## Part 3: Introduction to client-go
+You could build a controller by making raw HTTP calls, but every serious controller needs the same hard parts: kubeconfig loading, in-cluster authentication, object decoding, retry behavior, watch reconnection, rate limiting, and a local cache. The official client-go library packages those concerns into patterns used throughout Kubernetes itself. Learning those patterns early prevents the most common controller mistake: treating the API Server like a database to poll instead of a state stream to watch and reconcile.
 
-### 3.1 Why client-go?
+The word "controller" can make this sound more complicated than it is. A controller is a loop that observes current state, compares it with desired state, and takes action to reduce the difference. Kubernetes makes that loop powerful because desired state is expressed as API objects and current state is observed through the same API. client-go supplies the mechanics that let the loop run efficiently: a shared cache for observation, typed clients for writes, and queues for retrying work without blocking event delivery.
 
-You could talk to the Kubernetes API with raw HTTP, but you would have to handle:
-- Authentication (certificates, tokens, kubeconfig parsing)
-- Watch reconnection and resource version bookmarks
-- Rate limiting and backoff
-- Deserialization of Kubernetes objects
-- Caching to avoid hammering the API Server
+The basic `Clientset` gives you typed clients for built-in resources such as Pods, Deployments, and Services. It is excellent when your program knows the resource types at compile time and wants Go structs with field access and compile-time checks. A `DynamicClient`, which appears later in the track, trades that type safety for runtime discovery and unstructured objects. For this module, the typed client is enough because we are watching Pods and using official `corev1.Pod` structs.
 
-**client-go** handles all of this. It is the same library that kubectl, the scheduler, and the controller-manager use internally.
-
-### 3.2 Core client-go Concepts
-
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    client-go Architecture                            │
 │                                                                     │
 │   ┌─────────────┐         ┌───────────────────────────────────┐    │
-│   │  API Server  │◄───────│  Reflector                         │    │
-│   │              │  WATCH  │  • List + Watch resources          │    │
+│   │  API Server │◄───────│  Reflector                         │    │
+│   │             │  WATCH  │  • List + Watch resources          │    │
 │   └─────────────┘         │  • Pushes events to DeltaFIFO      │    │
 │                           └──────────────┬────────────────────┘    │
 │                                          │                          │
 │                                          ▼                          │
 │                           ┌───────────────────────────────────┐    │
 │                           │  DeltaFIFO                         │    │
-│                           │  • Queue of (Added/Updated/Deleted) │   │
-│                           │  • Deduplicates by key              │    │
+│                           │  • Queue of Added/Updated/Deleted  │    │
+│                           │  • Deduplicates by key             │    │
 │                           └──────────────┬────────────────────┘    │
 │                                          │                          │
 │                                          ▼                          │
 │                           ┌───────────────────────────────────┐    │
-│                           │  Indexer (In-Memory Store/Cache)    │    │
-│                           │  • Thread-safe local store          │    │
-│                           │  • Indexed for fast lookups         │    │
+│                           │  Indexer (In-Memory Store/Cache)  │    │
+│                           │  • Thread-safe local store         │    │
+│                           │  • Indexed for fast lookups        │    │
 │                           └──────────────┬────────────────────┘    │
 │                                          │                          │
 │   ┌──────────────────────────────────────┼───────────────────┐     │
@@ -331,27 +295,28 @@ You could talk to the Kubernetes API with raw HTTP, but you would have to handle
 
 | Component | What It Does | Why It Matters |
 |-----------|-------------|----------------|
-| **Reflector** | Lists then watches a resource type | Keeps local cache in sync with API |
-| **DeltaFIFO** | Queues changes with deduplication | Prevents processing stale events |
-| **Indexer** | In-memory store with indexes | Allows fast lookups without API calls |
-| **Informer** | Combines Reflector + DeltaFIFO + Indexer | The standard way to watch resources |
-| **Lister** | Read from the Indexer cache | Enables reads without hitting the API Server |
-| **Workqueue** | Rate-limited queue for processing | Decouples event handling from processing |
+| **Reflector** | Lists then watches a resource type | Keeps a local cache synchronized with the API |
+| **DeltaFIFO** | Queues changes with deduplication | Prevents processing stale intermediate events |
+| **Indexer** | Stores objects in memory with indexes | Allows fast lookups without API calls |
+| **Informer** | Combines Reflector, DeltaFIFO, Indexer, and handlers | Standard way to watch resources in controllers |
+| **Lister** | Reads from the Indexer cache | Reduces API Server load during reconciliation |
+| **Workqueue** | Rate-limited queue for processing keys | Decouples event receipt from slow or retrying work |
 
-### 3.3 Setting Up a Go Project
+Set up the example module with Kubernetes 1.35 client libraries so the code matches the cluster version targeted by this curriculum. The client-go version number uses the `v0.x` module scheme, so Kubernetes 1.35 corresponds to the `v0.35.x` client-go family. In a real project, pin exact patch versions in `go.mod` and update them intentionally; for a lab, the commands below keep the dependency line clear.
 
 ```bash
-mkdir -p ~/extending-k8s/pod-watcher && cd ~/extending-k8s/pod-watcher
+mkdir -p ~/extending-k8s/pod-watcher
+cd ~/extending-k8s/pod-watcher
 
 go mod init github.com/example/pod-watcher
-go get k8s.io/client-go@latest
-go get k8s.io/apimachinery@latest
-go get k8s.io/api@latest
+go get k8s.io/client-go@v0.35.0
+go get k8s.io/apimachinery@v0.35.0
+go get k8s.io/api@v0.35.0
 ```
 
-### 3.4 Basic Client: Listing Pods
+Start with a simple list program before adding informers. Listing is intentionally boring: build a REST config from kubeconfig, create a clientset, call the Pods API, and print the objects. That boring path is valuable because it shows the typed client shape before cache machinery enters the picture. If this program fails, the error is usually kubeconfig loading, authentication, authorization, or cluster reachability rather than informer logic.
 
-Start simple -- connect and list pods:
+The same config-building step changes when code runs inside a Pod. An in-cluster controller normally uses the mounted ServiceAccount token and cluster CA through `rest.InClusterConfig()`, while a local tool normally reads kubeconfig through `clientcmd`. Many examples include a fallback that tries in-cluster configuration first and then kubeconfig for local development. This module keeps the first program simple, but the diagnostic habit is the same: prove the client can authenticate, list a resource, and receive an expected error before adding asynchronous control flow.
 
 ```go
 // main.go
@@ -369,7 +334,7 @@ import (
 )
 
 func main() {
-	// Build config from kubeconfig
+	// Build config from kubeconfig.
 	home, _ := os.UserHomeDir()
 	kubeconfig := filepath.Join(home, ".kube", "config")
 
@@ -379,14 +344,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create the clientset
+	// Create the clientset.
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating clientset: %v\n", err)
 		os.Exit(1)
 	}
 
-	// List pods in all namespaces
+	// List Pods in all namespaces.
 	pods, err := clientset.CoreV1().Pods("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing pods: %v\n", err)
@@ -404,9 +369,9 @@ func main() {
 go run main.go
 ```
 
-### 3.5 Using Informers: Watching Pods
+An informer changes the model from "ask the server every time" to "maintain a synchronized local view." It performs an initial list, opens a watch stream, stores objects in an indexer, and invokes event handlers when objects are added, updated, or deleted. The lister then reads from the cache, which means a reconciliation loop can inspect related objects without repeatedly querying the API Server. This is one reason Kubernetes can support many controllers at once without every controller hammering etcd through the API layer.
 
-The Informer pattern is the efficient way to watch resources. Instead of polling (which hammers the API Server), an Informer establishes a long-lived watch connection and maintains a local cache:
+The cache is not a loophole around correctness; it is a deliberate consistency model. A controller reads from a cache that may be slightly behind the API Server, then writes changes through the API with resource-version-aware semantics. That is acceptable because controllers are level-based: they keep reconciling toward desired state rather than relying on one perfect event. If the cache lags briefly, the next watch event, resync, or queue retry brings the controller back to the latest observable state.
 
 ```go
 // informer-example/main.go
@@ -421,6 +386,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -443,13 +409,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create a shared informer factory with a 30-second resync period
+	// Create a shared informer factory with a 30-second resync period.
 	factory := informers.NewSharedInformerFactory(clientset, 30*time.Second)
 
-	// Get the Pod informer
+	// Get the Pod informer.
 	podInformer := factory.Core().V1().Pods().Informer()
 
-	// Register event handlers
+	// Register event handlers.
 	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
@@ -460,7 +426,7 @@ func main() {
 			oldPod := oldObj.(*corev1.Pod)
 			newPod := newObj.(*corev1.Pod)
 			if oldPod.Status.Phase != newPod.Status.Phase {
-				fmt.Printf("[UPDATED]  %s/%s Phase: %s → %s\n",
+				fmt.Printf("[UPDATED]  %s/%s Phase: %s -> %s\n",
 					newPod.Namespace, newPod.Name,
 					oldPod.Status.Phase, newPod.Status.Phase)
 			}
@@ -471,28 +437,28 @@ func main() {
 		},
 	})
 
-	// Start the informer (runs in background goroutines)
+	// Start the informer in background goroutines.
 	stopCh := make(chan struct{})
 	factory.Start(stopCh)
 
-	// Wait for the initial cache sync
+	// Wait for the initial cache sync.
 	fmt.Println("Waiting for informer cache to sync...")
 	if !cache.WaitForCacheSync(stopCh, podInformer.HasSynced) {
 		fmt.Fprintln(os.Stderr, "Failed to sync informer cache")
 		os.Exit(1)
 	}
-	fmt.Println("Cache synced! Watching for pod changes...\n")
+	fmt.Println("Cache synced! Watching for Pod changes...\n")
 
-	// Use the Lister to read from cache (no API call)
+	// Use the Lister to read from cache, not from the API Server.
 	lister := factory.Core().V1().Pods().Lister()
 	pods, err := lister.List(labels.Everything())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing from cache: %v\n", err)
 	} else {
-		fmt.Printf("Cache contains %d pods\n\n", len(pods))
+		fmt.Printf("Cache contains %d Pods\n\n", len(pods))
 	}
 
-	// Wait for shutdown signal
+	// Wait for shutdown signal.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
@@ -501,190 +467,173 @@ func main() {
 }
 ```
 
-> **Note**: The above example needs the import `"k8s.io/apimachinery/pkg/labels"` for the `labels.Everything()` call. We omitted it from the import block for brevity; your IDE will add it automatically if you use `goimports`.
+Real controllers should not perform slow work inside an informer event handler. The handler runs on the path that drains events from the informer, so long database calls, cloud API calls, or complex reconciliation can delay event processing and cause the controller to fall behind. A workqueue solves this by letting the handler enqueue a stable object key such as `namespace/name` and return immediately. Worker goroutines then process keys with retry and rate limiting, which is a much better failure boundary.
 
-### 3.6 Workqueues: Decoupling Events from Processing
-
-In a real controller, you never process events directly in the event handler. Instead, you enqueue an item key and process it separately. This gives you:
-- **Rate limiting**: Don't overwhelm downstream systems
-- **Retries**: Failed items go back on the queue with exponential backoff
-- **Deduplication**: Multiple events for the same object collapse into one processing
+Enqueuing keys instead of full objects is another small design choice with large consequences. The object you receive in an event may already be stale by the time a worker handles it, especially during rapid updates. A key lets the worker ask the lister for the latest cached object when reconciliation actually begins. If the object was deleted, the lister miss becomes part of the desired behavior, and your controller can clean up external state or simply record that there is nothing left to do.
 
 ```go
 import (
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 )
 
-// Create a rate-limited workqueue
+// Create a rate-limited workqueue.
 queue := workqueue.NewTypedRateLimitingQueue(
 	workqueue.DefaultTypedControllerRateLimiter[string](),
 )
 
-// In event handlers, enqueue the object key
+// In event handlers, enqueue the object key.
 AddFunc: func(obj interface{}) {
-    key, err := cache.MetaNamespaceKeyFunc(obj)
-    if err != nil {
-        return
-    }
-    queue.Add(key)  // key is "namespace/name"
+	key, err := cache.MetaNamespaceKeyFunc(obj)
+	if err != nil {
+		return
+	}
+	queue.Add(key) // key is "namespace/name"
 }
 
-// Process items from the queue
+// Process items from the queue.
 func processNextItem(queue workqueue.TypedRateLimitingInterface[string]) bool {
-    key, shutdown := queue.Get()
-    if shutdown {
-        return false
-    }
-    defer queue.Done(key)
+	key, shutdown := queue.Get()
+	if shutdown {
+		return false
+	}
+	defer queue.Done(key)
 
-    // Your business logic here
-    err := syncHandler(key)
-    if err != nil {
-        // Re-enqueue with rate limiting on failure
-        queue.AddRateLimited(key)
-        return true
-    }
+	// Your reconciliation logic here.
+	err := syncHandler(key)
+	if err != nil {
+		// Re-enqueue with rate limiting on failure.
+		queue.AddRateLimited(key)
+		return true
+	}
 
-    // Tell the queue we processed this item successfully
-    queue.Forget(key)
-    return true
+	// Tell the queue this item was processed successfully.
+	queue.Forget(key)
+	return true
 }
 ```
 
-### 3.7 Creating and Modifying Resources
+Creating and modifying resources still uses the clientset directly. Informers are optimized for reads and event delivery; writes are explicit API operations. When updating an existing object, fetch the latest version first or use retry-on-conflict helpers in a full controller. Kubernetes uses optimistic concurrency through `resourceVersion`, so blindly updating an old object can overwrite someone else's newer intent or be rejected with a conflict.
 
-While Informers and Workqueues handle reading and reacting to state, you will use the `Clientset` directly to create and modify resources. Always fetch the latest version before updating to avoid resource version conflicts:
+Server-side apply is often a better write path for controllers that own a well-defined set of fields. Instead of reading an object, editing a full struct, and sending an update that may include unrelated fields, the controller sends the fields it intends to manage with a field manager name. The API Server tracks that ownership and reports conflicts when another manager owns the same field. That makes conflict resolution explicit and keeps controllers from accidentally taking responsibility for fields they only copied from a previous read.
 
 ```go
-// Create a Pod
+// Create a Pod.
 newPod := &corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{Name: "example-pod"},
-	Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "nginx", Image: "nginx"}}},
+	Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{Name: "nginx", Image: "nginx:1.27"}},
+	},
 }
 _, _ = clientset.CoreV1().Pods("default").Create(context.TODO(), newPod, metav1.CreateOptions{})
 
-// Modify a Pod
+// Modify a Pod after fetching the latest stored version.
 pod, _ := clientset.CoreV1().Pods("default").Get(context.TODO(), "example-pod", metav1.GetOptions{})
 pod.Annotations = map[string]string{"updated": "true"}
 _, _ = clientset.CoreV1().Pods("default").Update(context.TODO(), pod, metav1.UpdateOptions{})
 ```
 
-> **Stop and think**: If your controller's processing logic encounters a temporary network error when talking to an external API, what happens if you return an error to the Workqueue versus acknowledging the item and dropping the error? How does the Workqueue's rate limiter prevent this failure from overwhelming the API Server?
+Stop and think: if your controller's processing logic hits a temporary network error when calling an external API, what happens if you return an error to the workqueue versus acknowledging the item and dropping the error? Returning the error keeps desired state honest because the item is retried with backoff. Dropping the error may make metrics look calm while the external system remains wrong, which is exactly the kind of hidden drift a controller is supposed to repair.
 
----
+## Core Concept 4: API Groups, Versioning, Apply, Fairness, and Audit Evidence
 
-## Part 4: API Server Internals
+Kubernetes API groups and versions let the project evolve without changing every resource at once. The core group contains resources such as Pods, ConfigMaps, and Services, while named groups contain specialized resources such as Deployments under `apps/v1`. Version labels communicate stability expectations: alpha APIs are experimental, beta APIs are closer to complete but still changeable, and stable `v1` APIs carry strong compatibility expectations. Custom resources follow the same pattern when you define served versions in a CRD.
 
-### 4.1 API Groups and Versioning
-
-Kubernetes uses API groups to organize resources and API versioning to evolve them:
+Versioning is not only a documentation label; it is an API contract with storage and conversion implications. A CRD may serve multiple versions while storing one canonical version, and clients may continue using an older served version during a migration. Built-in Kubernetes APIs follow similar compatibility principles, which is why scripts should avoid depending on unstable alpha fields unless the operational risk is intentional. For extension authors, a version change is a promise to users about how safely their manifests and clients will keep working.
 
 | Stage | Meaning | Stability |
 |-------|---------|-----------|
-| `v1alpha1` | Experimental, may be removed | Do not use in production |
-| `v1beta1` | Feature complete, may change | Use with caution |
-| `v1` | Stable, backward compatible | Safe for production |
+| `v1alpha1` | Experimental and may be removed or redesigned | Do not use for durable production APIs |
+| `v1beta1` | Feature complete enough for wider testing | Use carefully and plan migrations |
+| `v1` | Stable with compatibility guarantees | Safe default for production API contracts |
 
 ```bash
-# See all API versions available
+# See all API versions available in the cluster.
 kubectl api-versions
 
-# See all resources and their API groups
+# See all resources and their API groups.
 kubectl api-resources -o wide
 
-# Check specific resource API details
+# Check specific resource API details.
 kubectl explain deployment --api-version=apps/v1
 ```
 
-### 4.2 Content Negotiation
+Content negotiation is another reminder that `kubectl get` is not the API itself. The server can return JSON for general clients, protocol buffers for efficient Kubernetes-native clients, and a Table representation that powers human-friendly `kubectl get` output. When debugging a custom client, check the `Accept` header before assuming the server returned the wrong shape. You may be asking for a representation optimized for a different consumer.
 
-The API Server supports multiple serialization formats:
+The Table representation is especially useful to understand because it explains why `kubectl get` can show concise columns without downloading every detail in the way a YAML dump does. Custom resources can define additional printer columns, and the API Server can present those columns to clients that request the table form. That means a CRD author influences not only validation and storage, but also the day-to-day operator experience of listing and scanning resources during incidents.
 
 ```bash
-# JSON (default)
-curl -s -H "Accept: application/json" http://localhost:8080/api/v1/pods
+# JSON is the default representation.
+curl -s -H "Accept: application/json" http://127.0.0.1:8080/api/v1/pods
 
-# Protocol Buffers (more efficient, used internally)
+# Protocol Buffers are more efficient for Kubernetes-native clients.
 curl -s -H "Accept: application/vnd.kubernetes.protobuf" \
-  http://localhost:8080/api/v1/pods -o pods.pb
+  http://127.0.0.1:8080/api/v1/pods -o pods.pb
 
-# Table format (what kubectl uses for get)
+# Table format is what kubectl uses for get-style output.
 curl -s -H "Accept: application/json;as=Table;g=meta.k8s.io;v=v1" \
-  http://localhost:8080/api/v1/namespaces/default/pods
+  http://127.0.0.1:8080/api/v1/namespaces/default/pods
 ```
 
-### 4.3 Dry Run and Server-Side Apply
+Dry run and server-side apply are API features, not just `kubectl` conveniences. Server-side dry run asks the API Server to run admission and validation without persisting the object, which is useful before enabling a strict policy. Server-side apply asks the API Server to track field ownership in `managedFields`, which lets multiple actors safely manage different parts of the same object. Controllers that use apply can avoid stomping on fields owned by humans or other controllers.
 
-Two powerful API features that are often overlooked:
+Dry run is also a safe way to test admission behavior before a rollout. If a new validating rule would reject existing deployment patterns, a server-side dry run can expose that problem without creating or updating the object. This is more faithful than local YAML validation because the request goes through the API Server's schema, defaulting, and admission chain. It still does not prove that a workload will run correctly after persistence, but it narrows the question to the API acceptance stage.
 
 ```bash
-# Create a deployment manifest
+# Create a deployment manifest locally.
 kubectl create deployment my-app --image=nginx --dry-run=client -o yaml > deployment.yaml
 
-# Dry run: validate without persisting
+# Server-side dry run validates through the API Server without persisting.
 kubectl apply -f deployment.yaml --dry-run=server
 
-# Server-side apply: the API server manages field ownership
+# Server-side apply records field ownership for this manager.
 kubectl apply -f deployment.yaml --server-side --field-manager=my-controller
 
-# View field ownership
+# View field ownership.
 kubectl get deployment my-app -o yaml | head -40
-# Look for managedFields section
+# Look for the managedFields section.
 ```
 
-Server-side apply is crucial for controllers. It prevents conflicts when multiple controllers modify the same resource by tracking which controller owns which fields.
+API Priority and Fairness matters once you write controllers because not all API traffic has the same operational importance. A misbehaving controller that rapidly lists large resources should not starve kubelets, controllers, or human incident responders. APF classifies requests into flow schemas and priority levels, then queues and dispatches them with fairness rules. If your controller sees throttling, that is not just a nuisance; it is a signal that your watch, cache, or retry design may be too expensive.
 
-> **Stop and think**: Why is Server-Side Apply crucial for controllers that manage different fields of the same resource, compared to traditional client-side apply? What specific problem does field ownership solve if two controllers update the same object concurrently?
-
-### 4.4 API Priority and Fairness
-
-Since Kubernetes 1.29+, API Priority and Fairness (APF) replaced the old max-in-flight request limiting:
+Good controllers are polite under failure. They use watches instead of repeated lists, rate-limit retries, avoid unbounded worker pools, and expose metrics that show queue depth and error rates. APF protects the cluster from the worst effects of noisy clients, but it is not a license to generate wasteful traffic. If your controller only works when it can make unlimited API calls, it is not ready for a shared control plane.
 
 ```bash
-# View flow schemas (how requests are classified)
+# View flow schemas that classify requests.
 kubectl get flowschemas
 
-# View priority levels
+# View priority levels used by API Priority and Fairness.
 kubectl get prioritylevelconfigurations
 
-# Check API request metrics (if you have access to API server metrics)
-# These show you if requests are being queued or rejected
+# API Server metrics, when exposed, show whether requests are queued or rejected.
 ```
 
-APF ensures that one misbehaving controller cannot starve the API Server. Requests are classified into priority levels and queued fairly within each level.
+Audit logs are the request pipeline's paper trail. They record who made a request, which verb and resource were targeted, where the request came from, which stage was logged, and what response code was returned. Audit policy determines how much detail is captured, so clusters differ, but the fields below are enough to connect a user-visible failure to a pipeline stage. A `201` response means persistence succeeded; a `403` can mean authorization or admission rejected the request, and the surrounding fields tell you which path is more likely.
 
-### 4.5 Interpreting API Server Audit Logs
-
-Audit logs provide a security-relevant, chronological set of records documenting the sequence of actions in a cluster. The API Server can log requests at different stages (e.g., RequestReceived, ResponseComplete).
-
-To view audit logs (typically found on the control plane node at `/var/log/kubernetes/audit/audit.log`, depending on your distribution), you will see JSON entries like this:
+Audit evidence is strongest when combined with an intentional reproduction. If a user reports that a Deployment cannot be created, reproduce with server-side dry run, check `kubectl auth can-i` for the exact identity and namespace, and then inspect audit events for the request URI and response status. That sequence prevents a common trap where teams read a webhook error from one request and apply it to a different identity, namespace, or API version. The pipeline model keeps the evidence tied to the actual request.
 
 ```json
-{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"1234-abcd","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/pods","verb":"create","user":{"username":"kubernetes-admin","groups":["system:masters","system:authenticated"]},"sourceIPs":["192.168.1.100"],"userAgent":"kubectl/v1.27.0","objectRef":{"resource":"pods","namespace":"default","name":"nginx","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":201}}
+{"kind":"Event","apiVersion":"audit.k8s.io/v1","level":"Metadata","auditID":"1234-abcd","stage":"ResponseComplete","requestURI":"/api/v1/namespaces/default/pods","verb":"create","user":{"username":"kubernetes-admin","groups":["system:masters","system:authenticated"]},"sourceIPs":["192.168.1.100"],"userAgent":"kubectl/v1.35.0","objectRef":{"resource":"pods","namespace":"default","name":"nginx","apiVersion":"v1"},"responseStatus":{"metadata":{},"code":201}}
 ```
 
-**How to interpret this log entry:**
-- **`verb` and `requestURI`**: Tells you exactly what action was attempted (`create` on `/api/v1/namespaces/default/pods`).
-- **`user`**: Identifies who made the request (`kubernetes-admin`).
-- **`stage`**: `ResponseComplete` means the request went through the entire pipeline and a response was sent.
-- **`responseStatus.code`**: A `201` means the pod was successfully created. A `403` would mean Authorization rejected it, and a `400` or `422` might mean an Admission Webhook rejected it.
+Read this audit event like a timeline. The `verb` and `requestURI` show a create request for Pods in the `default` namespace. The `user` object identifies the authenticated identity and groups, while `sourceIPs` and `userAgent` help distinguish human `kubectl` traffic from controller traffic. The `stage` of `ResponseComplete` means a response was sent, and `responseStatus.code` tells you the final outcome. If the same user can create Pods in one namespace but not another, your next stop is RBAC bindings or namespace-scoped admission.
 
----
+## Core Concept 5: Building the Annotation Watcher
 
-## Part 5: Building a Real Informer-Based Application
+The exercise program watches all Pods and reports annotation changes. That may sound small, but it uses the same architecture as more serious controllers: a typed clientset, a shared informer factory, event handlers that enqueue object keys, a lister that reads from cache, and a rate-limited workqueue that processes retries. The domain logic is intentionally simple so you can focus on the control-plane pattern rather than external systems, CRD schemas, or reconciliation side effects.
 
-### 5.1 Project Structure for the Exercise
+Annotation changes are a useful teaching target because they are easy to trigger and easy to observe, yet they still exercise real update semantics. Adding an annotation, overwriting a value, and removing a key all create API updates with new resource versions. The watcher sees those updates through the informer stream, compares old and new annotation maps, and processes only the changes it cares about. This mirrors production controllers that ignore most events but enqueue the subset relevant to their reconciliation contract.
 
-```
+```text
 pod-annotation-watcher/
 ├── go.mod
 ├── go.sum
 └── main.go
 ```
 
-This program watches all Pods and specifically tracks annotation changes, printing a detailed report whenever annotations are added, removed, or modified.
+The complete program below is longer than a minimal example because it keeps the important production habits visible. It waits for cache sync before reading, uses a context for shutdown, handles update events by comparing old and new annotation maps, retries queue items a bounded number of times, and reads objects from the informer lister instead of calling `Get` against the API Server inside the hot path. Those habits scale from this tiny watcher to controllers that reconcile cloud load balancers, certificates, databases, or policy state.
 
-### 5.2 Complete Working Example
+The bounded retry behavior is intentionally conservative. Infinite retries without rate limiting can hide a permanent bug while consuming CPU and log volume, but dropping failures immediately can leave external state broken forever. A real controller usually records errors in metrics and status conditions, then retries with backoff until either the desired state is reached or an operator has enough evidence to intervene. The workqueue gives you the mechanical foundation for that behavior without blocking the informer.
 
 ```go
 // main.go
@@ -711,13 +660,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// AnnotationWatcher watches pods for annotation changes.
+// AnnotationWatcher watches Pods for annotation changes.
 type AnnotationWatcher struct {
-	clientset  kubernetes.Interface
-	informer   cache.SharedIndexInformer
-	lister     cache.GenericLister
-	queue      workqueue.TypedRateLimitingInterface[string]
-	factory    informers.SharedInformerFactory
+	clientset kubernetes.Interface
+	informer  cache.SharedIndexInformer
+	queue     workqueue.TypedRateLimitingInterface[string]
+	factory   informers.SharedInformerFactory
 }
 
 // NewAnnotationWatcher creates a new watcher.
@@ -779,21 +727,21 @@ func (w *AnnotationWatcher) enqueue(obj interface{}) {
 func (w *AnnotationWatcher) Run(ctx context.Context) error {
 	defer w.queue.ShutDown()
 
-	// Start informers
+	// Start informers.
 	w.factory.Start(ctx.Done())
 
-	// Wait for cache sync
+	// Wait for cache sync.
 	klog.Info("Waiting for informer cache to sync...")
 	if !cache.WaitForCacheSync(ctx.Done(), w.informer.HasSynced) {
 		return fmt.Errorf("failed to sync informer cache")
 	}
 	klog.Info("Cache synced successfully!")
 
-	// Report initial state from cache
+	// Report initial state from cache.
 	lister := w.factory.Core().V1().Pods().Lister()
 	pods, err := lister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("listing pods from cache: %w", err)
+		return fmt.Errorf("listing Pods from cache: %w", err)
 	}
 
 	annotatedCount := 0
@@ -802,10 +750,10 @@ func (w *AnnotationWatcher) Run(ctx context.Context) error {
 			annotatedCount++
 		}
 	}
-	klog.Infof("Initial state: %d total pods, %d with annotations",
+	klog.Infof("Initial state: %d total Pods, %d with annotations",
 		len(pods), annotatedCount)
 
-	// Process workqueue
+	// Process workqueue items.
 	klog.Info("Starting workers...")
 	for {
 		select {
@@ -847,27 +795,27 @@ func (w *AnnotationWatcher) handleItem(key string) error {
 		return fmt.Errorf("invalid key %q: %w", key, err)
 	}
 
-	// Read from the cache (not the API server)
+	// Read from the cache, not directly from the API Server.
 	pod, err := w.factory.Core().V1().Pods().Lister().Pods(namespace).Get(name)
 	if err != nil {
 		klog.Infof("[DELETED] %s/%s", namespace, name)
 		return nil
 	}
 
-	// Report annotations
-	fmt.Printf("\n━━━ Pod: %s/%s ━━━\n", pod.Namespace, pod.Name)
+	// Report annotations.
+	fmt.Printf("\n--- Pod: %s/%s ---\n", pod.Namespace, pod.Name)
 	fmt.Printf("    Phase: %s | Node: %s\n", pod.Status.Phase, pod.Spec.NodeName)
 
 	if len(pod.Annotations) == 0 {
 		fmt.Println("    Annotations: (none)")
 	} else {
 		fmt.Printf("    Annotations (%d):\n", len(pod.Annotations))
-		for k, v := range pod.Annotations {
-			display := v
+		for key, value := range pod.Annotations {
+			display := value
 			if len(display) > 80 {
 				display = display[:80] + "..."
 			}
-			fmt.Printf("      %s = %s\n", k, display)
+			fmt.Printf("      %s = %s\n", key, display)
 		}
 	}
 
@@ -879,8 +827,8 @@ func annotationsEqual(a, b map[string]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for k, v := range a {
-		if b[k] != v {
+	for key, value := range a {
+		if b[key] != value {
 			return false
 		}
 	}
@@ -908,7 +856,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle graceful shutdown
+	// Handle graceful shutdown.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -928,142 +876,214 @@ func main() {
 }
 ```
 
----
+Notice the shape of the failure handling. A deleted object is not an error for this watcher because the absence of the Pod is itself the state change being reported. A temporary processing error, however, is returned to the queue so the item can be retried with rate limiting. That distinction between expected state transitions and retryable failures is one of the core design skills in controller development.
+
+## Patterns & Anti-Patterns
+
+The most reliable Kubernetes extensions treat the API Server as a coordination boundary, not as a place to hide arbitrary application logic. They store desired state declaratively, validate input close to the request path, and reconcile side effects after persistence. The patterns below are deliberately phrased as design moves rather than library recipes because the same reasoning applies whether you write a controller with client-go, controller-runtime, Java, Python, or another Kubernetes client.
+
+A useful design review starts by writing down which part of the system owns each decision. The API Server owns authentication, authorization, admission ordering, schema validation, storage, and watch delivery. Your controller owns domain reconciliation after the object exists. Your admission policy owns fast request-time decisions about whether the object is acceptable. When those responsibilities blur, extensions become hard to operate because a failure in one part of the system appears as a mysterious symptom somewhere else.
+
+| Pattern | When to Use It | Why It Works | Scaling Considerations |
+|---------|----------------|--------------|------------------------|
+| List-then-watch with informer cache | Any controller that reacts to Kubernetes objects | Builds a consistent local view and avoids repeated full lists | Watch reconnects and relists are handled by the library, but resyncs still cost CPU |
+| Enqueue keys, not objects | Reconciliation can be slow, retrying, or dependent on external systems | Keeps event handlers fast and lets workers fetch current state | Queue depth and retry metrics become important health signals |
+| Server-side apply with a named field manager | Multiple actors manage different fields of the same object | API Server records ownership and detects conflicts explicitly | Field ownership needs stable manager names and careful conflict handling |
+| Admission for request-time policy | Invalid objects must be blocked before persistence | Users get immediate feedback and bad state never enters storage | Webhooks must be fast, highly available, and failure policy must be chosen carefully |
+
+Anti-patterns usually start as shortcuts that work in a small cluster. Polling every second feels simpler than informers, direct object processing feels simpler than workqueues, and broad admission webhooks feel simpler than precise policies. Those shortcuts become outages when the cluster grows because they turn every controller into a competing API load generator or turn every create request into a dependency on an unreliable external service.
+
+The safer habit is to design for the failure mode before writing the happy path. Ask what happens when the API Server is temporarily throttling, when a webhook is down, when a watch reconnects, when two actors update the same field, and when the external API your controller calls returns an error. If the answer is "the user request blocks" or "the controller silently drops the item," the design needs another boundary. Kubernetes gives you admission, status, events, queues, and managed fields so you can make those boundaries explicit.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Polling large resource lists in a loop | The API Server and etcd spend work sending the same state repeatedly | Use shared informers and listers |
+| Doing slow work inside event handlers | Informer processing backs up and events are delayed | Enqueue keys and process them with workers |
+| Using admission webhooks for post-create side effects | Request latency and availability depend on external systems | Persist intent, then reconcile side effects with a controller |
+| Updating stale objects without conflict handling | Concurrent changes are rejected or overwritten | Fetch latest state and use retry-on-conflict or server-side apply |
+| Treating all `403` responses as RBAC | Admission can also reject with forbidden-style responses | Inspect audit fields, admission messages, and authorization checks together |
+
+## Decision Framework
+
+The fastest way to choose an extension point is to ask what kind of change you are making to the cluster. If you need a new declarative API type, start with a CRD. If you need to reject or default existing resources at request time, use admission. If you need a full custom REST implementation, custom storage, or non-standard API semantics, consider API aggregation only after CRDs prove insufficient. If you need to create real-world side effects, write a controller that watches stored intent and reconciles it.
+
+| Requirement | Prefer | Why | Avoid |
+|-------------|--------|-----|-------|
+| Store new declarative state such as `Database` or `BackupPolicy` | CRD plus controller | Native discovery, validation, RBAC, watches, and status | API aggregation unless CRD semantics are insufficient |
+| Block Pods missing required labels | ValidatingAdmissionPolicy or validating webhook | Rejects invalid state before persistence | Controller-only cleanup after bad objects already exist |
+| Inject sidecars or defaults into Pods | Mutating admission webhook | Mutation must happen before schema validation and persistence | Post-create controller mutation that races workloads |
+| Call a cloud API to create external resources | Controller with workqueue | External calls can retry without blocking API writes | Admission webhook that depends on cloud API availability |
+| Provide custom storage or unusual REST behavior | API aggregation | Lets you serve an API through the Kubernetes aggregation layer | CRD when you need behavior CRDs cannot model |
+
+Use this text flow when you design an extension: first ask whether you need a new resource type, then ask whether the request must be changed or rejected before storage, then ask whether side effects can happen asynchronously after storage. Which approach would you choose here and why: a policy that rejects Deployments without `app.kubernetes.io/name`, a `Database` resource that provisions a managed database, and a sidecar injector for observability? The likely answers are validating policy or webhook, CRD plus controller, and mutating webhook, respectively, because each requirement lives at a different point in the pipeline.
+
+There are edge cases, but the defaults should be conservative. CRDs are the normal path for new declarative state because they let Kubernetes handle discovery, RBAC, validation, storage, and watches. ValidatingAdmissionPolicy is attractive when CEL can express the rule because it avoids an external network dependency in the request path. Webhooks remain necessary for mutation and complex checks, but they deserve production engineering around availability and timeouts. API aggregation is powerful, but it is an advanced choice because you operate a full API server behind the Kubernetes aggregation layer.
+
+## Did You Know?
+
+- **The Kubernetes API is intentionally discoverable.** A client can call discovery endpoints to find groups, versions, and resources at runtime, which is why generic tools can list CRDs installed after the tool was compiled.
+- **Server-side apply became generally available in Kubernetes 1.22.** Its managed field ownership is one of the main reasons modern controllers can cooperate on the same object without relying only on last-writer-wins updates.
+- **API Priority and Fairness has been stable since Kubernetes 1.29.** It replaced simple max-in-flight limits with request classification, queuing, and fairness so important control-plane traffic is less likely to be starved by noisy clients.
+- **client-go uses the same list-watch foundation that Kubernetes controllers rely on internally.** Understanding reflectors, informers, listers, and workqueues prepares you to read higher-level controller frameworks instead of treating them as magic.
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| Polling the API Server in a loop | Creates excessive load, eventually rate-limited | Use Informers with Watch streams |
-| Processing events in the handler | Blocks the Informer, missed events | Enqueue keys, process in workers |
-| Ignoring cache sync | Reading stale or empty data | Always `WaitForCacheSync` before reading |
-| Not handling tombstones | Panics on `DeletedFinalStateUnknown` | Type-assert and handle tombstone objects |
-| Hardcoding kubeconfig path | Breaks in-cluster deployment | Use `rest.InClusterConfig()` with fallback |
-| Using `Clientset.Get()` in hot paths | Hammers the API Server | Use Listers from the Informer cache |
-| Ignoring `resourceVersion` conflicts | Lost updates under concurrency | Use retry loops with `RetryOnConflict` |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Polling the API Server in a tight loop | Polling feels simple and works in a tiny cluster, but it repeatedly serializes full lists and bypasses watch efficiency | Use informers with watch streams and read from listers whenever possible |
+| Processing events directly in the handler | The first prototype has no slow dependency, so the handler becomes a convenient place for business logic | Enqueue `namespace/name` keys and process them in worker goroutines with rate limiting |
+| Reading before cache sync | The lister exists immediately, so it is easy to forget that the initial list may still be running | Always call `WaitForCacheSync` before using informer-backed listers |
+| Treating `resourceVersion` as a semantic version | The name suggests application versioning, but the value is an opaque storage marker | Store and pass it only as an API token for list-watch continuity |
+| Hardcoding kubeconfig-only configuration | Local development uses `~/.kube/config`, so the program fails when deployed as a Pod | Use in-cluster config with a kubeconfig fallback in deployable controllers |
+| Using API calls in hot reconciliation paths | Direct `Get` calls are familiar and appear harmless during testing | Prefer lister reads from the informer cache and reserve direct client calls for writes |
+| Ignoring update conflicts and field ownership | Single-writer tests hide concurrent updates from humans and other controllers | Fetch latest state, use retry-on-conflict, or use server-side apply with a stable field manager |
+| Blaming the wrong pipeline stage | A short `kubectl` error often hides whether RBAC, admission, validation, or storage rejected the request | Combine `kubectl auth can-i`, server-side dry run, audit logs, and admission messages |
 
 ## Quiz
 
-1. **Scenario:** You are troubleshooting a custom controller that keeps receiving `403 Forbidden` errors when trying to patch Pods, even though you verified the ServiceAccount token is valid. Based on the API Server request pipeline, which stage is rejecting the request, and what are the preceding and subsequent stages?
-   <details>
-   <summary>Answer</summary>
-   The request is being rejected at the Authorization (AuthZ) stage, which is the second main stage of the pipeline. Because the ServiceAccount token is valid, the request successfully passed the first stage, Authentication (AuthN). However, the API server determined that the authenticated identity does not have the necessary RBAC permissions to patch Pods. Since it was rejected at Authorization, the request will never reach the third stage, Admission Control (Mutating and Validating), nor will it be persisted to etcd.
-   </details>
+<details>
+<summary>Scenario: A controller receives `403 Forbidden` when patching Pods, but the ServiceAccount token is valid. Which API Server stage should you investigate first, and why?</summary>
 
-2. **Scenario:** A junior engineer on your team proposes writing a quick script that runs `kubectl get pods -o json` in a `while true; do ... sleep 1; done` loop to monitor Pod phases. You need to explain why this architectural approach is dangerous for the cluster and what pattern should be used instead. How do you justify the alternative?
-   <details>
-   <summary>Answer</summary>
-   Polling the API Server in a tight loop places immense load on the control plane, forcing the API Server to query etcd, serialize large JSON payloads, and transmit them over the network every second. In a large cluster, this can quickly lead to rate-limiting or API Server degradation for all users. Instead, the engineer should use the Informer pattern (via client-go), which performs a single initial List followed by a highly efficient, long-lived Watch stream. This stream only pushes incremental delta events (Adds, Updates, Deletes) when actual state changes occur, and the Informer maintains a local in-memory cache allowing instant queries without hitting the API.
-   </details>
+Investigate authorization first because valid authentication only proves the ServiceAccount identity was accepted. A `403` during a patch often means RBAC does not allow the `patch` verb for Pods in the target namespace, so the request never reaches mutating admission, validating admission, or etcd persistence. Confirm with `kubectl auth can-i patch pods --as=system:serviceaccount:<namespace>:<name> --namespace=<namespace>`. If RBAC allows the request, then inspect audit logs and admission messages because admission can also deny a request after authorization succeeds.
+</details>
 
-3. **Scenario:** You are reviewing a custom controller's code and notice the developer is executing long-running database queries directly inside the Informer's `UpdateFunc` event handler. What specific architectural component is missing from this design, and what systemic failures will occur if this code is deployed to production?
-   <details>
-   <summary>Answer</summary>
-   The controller is missing a Workqueue to decouple event reception from event processing. By executing slow operations directly inside the `UpdateFunc`, the developer is blocking the Informer's internal goroutines that are responsible for draining the DeltaFIFO queue. This will cause the controller to fall behind the API Server's watch stream, potentially leading to missed events or memory exhaustion as the internal queues fill up. A Workqueue solves this by allowing the event handler to instantly enqueue a string key and return immediately, while separate worker goroutines safely process the keys at a controlled rate with built-in retries.
-   </details>
+<details>
+<summary>Scenario: A junior engineer proposes `kubectl get pods -o json` every second to monitor Pod phase changes. How do you evaluate that design?</summary>
 
-4. **Scenario:** Your network connection to the API Server is unstable, and your raw HTTP Watch stream (`?watch=true`) drops repeatedly. When you reconnect, you notice your local state is out of sync with the cluster. How does the concept of `resourceVersion` solve this problem, and what specific error must you handle if your disconnected period is too long?
-   <details>
-   <summary>Answer</summary>
-   When a watch connection drops, you lose any events that occur between the disconnect and your subsequent reconnection. To prevent this data loss, you must track the `resourceVersion` of the last event you successfully processed and include it in your next request. This tells the API Server to replay all events that happened after that specific etcd revision, ensuring you don't miss any state changes. However, if you are disconnected for too long and etcd compacts that old revision, the API Server will return a `410 Gone` error, forcing you to perform a full List operation to resync your state from scratch.
-   </details>
+Reject the polling design for anything beyond a quick local experiment because it repeatedly asks the API Server to list and serialize the same collection. The better pattern is an informer, which performs an initial list, opens a watch stream, and maintains a local cache that can be read through a lister. This reduces API Server and etcd load while still delivering changes promptly. The tradeoff is that the program must follow controller patterns such as cache sync, event handlers, and watch recovery instead of a simple loop.
+</details>
 
-5. **Scenario:** You deploy a Mutating Admission Webhook that automatically injects a sidecar container into all Pods. Simultaneously, a security team deploys a Validating Admission Webhook that strictly forbids Pods with more than one container. When a user creates a single-container Pod, what is the exact outcome of the API request, and what does the user see?
-   <details>
-   <summary>Answer</summary>
-   The API request will be completely rejected, and the Pod will not be persisted to etcd. In the API Server pipeline, Mutating Admission always runs before Validating Admission. Therefore, your webhook will first successfully inject the sidecar, modifying the in-flight object to have two containers. Subsequently, the security team's Validating Webhook will inspect this mutated object, see that it violates the single-container policy, and deny the request, returning a `403 Forbidden` to the user.
-   </details>
+<details>
+<summary>Scenario: An informer `UpdateFunc` runs a slow database query before returning. What architectural component is missing, and what failure mode does it create?</summary>
 
-6. **Scenario:** You are tasked with writing a generic cluster backup tool that must iterate over every possible resource in the cluster, including newly installed Custom Resource Definitions (CRDs) that are unknown at compile time. Why would you choose a `DynamicClient` over a standard `Clientset` for this task, and what trade-off are you making?
-   <details>
-   <summary>Answer</summary>
-   You must choose a `DynamicClient` because it operates on unstructured data and can interact with any arbitrary Group-Version-Resource (GVR) discovered at runtime. A standard `Clientset` is strictly typed and its methods are generated at compile time, meaning it fundamentally cannot understand or interact with CRDs that were not compiled into your binary. The major trade-off of using a `DynamicClient` is the complete loss of compile-time type safety. You cannot access fields directly; instead, you must use string-based map lookups, which increases the risk of runtime panics or typos.
-   </details>
+The missing component is a workqueue that decouples event receipt from reconciliation work. Running slow operations inside the event handler blocks the informer path that drains and dispatches events, so the controller can fall behind during bursts or external dependency delays. A workqueue lets the handler enqueue the object key quickly and return, while workers process keys with retry and rate limiting. This also gives you metrics such as queue depth and retry count, which are much easier to operate than hidden handler latency.
+</details>
 
-7. **Scenario:** You are writing a controller that ensures a specific external cloud load balancer is configured to match the state of Kubernetes Services. Even though your controller handles all Update events perfectly, you notice that if the cloud provider's API goes down temporarily, the load balancer sometimes remains in a broken state forever. How does configuring an Informer's "resync period" solve this edge case?
-   <details>
-   <summary>Answer</summary>
-   Configuring a resync period solves this by periodically forcing the Informer to re-evaluate all objects currently held in its local cache. When the resync timer fires, the Informer generates synthetic Update events for every cached object, even if nothing has actually changed in the Kubernetes API. This triggers your controller's event handlers and subsequent Workqueue processing, providing a self-healing mechanism to retry synchronization with the external cloud provider. It guarantees that temporary failures or missed edge cases are eventually reconciled, ensuring the desired state is strictly maintained over time.
-   </details>
+<details>
+<summary>Scenario: A raw watch connection drops, and your local cache misses several Pod updates after reconnecting. How does `resourceVersion` change your recovery strategy?</summary>
 
----
+Track the latest resource version from the last event your program successfully applied, then reconnect the watch from that version so the API Server can send later changes. If the stored revision is too old because compaction removed the history, the server can respond with `410 Gone`, and your client must perform a fresh list before starting a new watch. This is the reason production controllers rely on client-go reflectors rather than ad hoc watch loops. The recovery strategy is list, remember the collection resource version, watch from there, and relist when the watch history is no longer available.
+</details>
+
+<details>
+<summary>Scenario: A mutating webhook injects a sidecar, then a validating policy rejects Pods with more than one container. What happens when a user creates a single-container Pod?</summary>
+
+The request is rejected after mutation because validating admission evaluates the final candidate object, not the original object the user submitted. The mutating webhook first adds the sidecar, which changes the in-flight Pod to contain two containers. The validating policy then sees the two-container object and rejects it, so the Pod is never persisted to etcd. The fix is not to reorder the stages; the teams must align the mutation and validation rules or scope one of them more precisely.
+</details>
+
+<details>
+<summary>Scenario: You need a new `Database` API with desired spec, observed status, RBAC, watches, and `kubectl` discovery. Which extension mechanism should you evaluate first?</summary>
+
+Evaluate a CRD with a controller first because the requirement is a new declarative resource type stored through the Kubernetes API. CRDs give you discovery, schema validation, RBAC integration, watch support, and status subresources without writing a full aggregated API server. API aggregation is worth evaluating only if you need custom storage or REST behavior that CRDs cannot represent. Admission webhooks may still support the design by validating or defaulting the custom resource, but they are not the primary storage mechanism.
+</details>
+
+<details>
+<summary>Scenario: An audit event shows `ResponseComplete`, `verb=create`, a Pod `objectRef`, and response code `201`. What can you conclude, and what can you not conclude?</summary>
+
+You can conclude that the create request completed successfully and the object was accepted through the pipeline and persisted. The authenticated user, request URI, source IPs, and user agent identify who made the request and what they targeted. You cannot conclude that the Pod became Ready, because scheduling, image pulls, kubelet execution, and readiness probes happen after API persistence. To diagnose runtime state, follow the persisted Pod through scheduler and kubelet events rather than staying inside admission and audit evidence.
+</details>
 
 ## Hands-On Exercise
 
-**Task**: Build and run a Go program that uses a client-go Informer to watch Pods across all namespaces and report annotation changes in real time.
+Exercise scenario: you are building a lightweight diagnostic tool for a platform team that wants to see Pod annotation changes as they happen. The tool should not poll the API Server, and it should not perform API reads every time an event arrives. It should use the informer cache for reads, enqueue work by key, and shut down cleanly when interrupted. This exercise is intentionally close to the complete example above so you can focus on running, observing, and modifying the controller pattern.
 
-**Setup**:
+**Task**: Build and run a Go program that uses a client-go informer to watch Pods across all namespaces and report annotation changes in real time.
+
+### Setup
+
 ```bash
-# Ensure you have a running cluster (kind or minikube)
+# Ensure you have a running local cluster.
 kind create cluster --name extending-k8s
 
-# Checkpoint: Verify cluster is running
+# Checkpoint: verify the cluster is reachable.
 kubectl cluster-info
 
-# Create the project
+# Create the project.
 mkdir -p ~/extending-k8s/pod-annotation-watcher
 cd ~/extending-k8s/pod-annotation-watcher
 go mod init github.com/example/pod-annotation-watcher
-go get k8s.io/client-go@latest
-go get k8s.io/apimachinery@latest
-go get k8s.io/api@latest
+go get k8s.io/client-go@v0.35.0
+go get k8s.io/apimachinery@v0.35.0
+go get k8s.io/api@v0.35.0
 go get k8s.io/klog/v2@latest
 ```
 
-**Steps**:
+### Progressive Tasks
 
-1. **Copy the complete example from Part 5.2** into `main.go`
+1. Copy the complete annotation watcher from Core Concept 5 into `main.go`, run `gofmt -w main.go`, and inspect the imports so you can explain why `labels`, `cache`, and `workqueue` are each needed.
 
-2. **Build and run**:
-   ```bash
-   go build -o pod-watcher .
-   ./pod-watcher
-   ```
+2. Build and run the watcher in one terminal. Keep it running so you can observe initial cache sync and later event processing.
 
-3. **In another terminal, create and annotate pods**:
-   ```bash
-   # Create a pod
-   kubectl run test-pod --image=nginx
+```bash
+go build -o pod-watcher .
+./pod-watcher
+```
 
-   # Checkpoint: Wait for pod to be running
-   kubectl wait --for=condition=Ready pod/test-pod
+3. In another terminal, create a Pod, wait for it to become Ready, add annotations, modify an annotation, remove an annotation, and then delete the Pod. Watch the first terminal and connect each printed line to an add, update, or delete event.
 
-   # Add annotations
-   kubectl annotate pod test-pod team=backend priority=high
+```bash
+# Create a Pod.
+kubectl run test-pod --image=nginx
 
-   # Modify an annotation
-   kubectl annotate pod test-pod priority=critical --overwrite
+# Checkpoint: wait for the Pod to be Ready.
+kubectl wait --for=condition=Ready pod/test-pod --timeout=120s
 
-   # Remove an annotation
-   kubectl annotate pod test-pod team-
+# Add annotations.
+kubectl annotate pod test-pod team=backend priority=high
 
-   # Delete the pod
-   kubectl delete pod test-pod
-   ```
+# Modify an annotation.
+kubectl annotate pod test-pod priority=critical --overwrite
 
-4. **Verify the watcher reports each change** in the first terminal
+# Remove an annotation.
+kubectl annotate pod test-pod team-
 
-5. **Test the Lister** -- while the watcher runs, the initial cache report should show all cluster pods without making additional API calls
+# Delete the Pod.
+kubectl delete pod test-pod
+```
 
-6. **Test graceful shutdown** -- press Ctrl+C and verify clean exit
+4. Verify that the initial cache report shows cluster Pods before you create `test-pod`. Explain why that read should come from the informer lister rather than a direct `Clientset.Get` or `Clientset.List` call inside the event path.
 
-7. **Cleanup**:
-   ```bash
-   kind delete cluster --name extending-k8s
-   ```
+5. Change the resync period from `60*time.Second` to a shorter interval for a local experiment, rerun the watcher, and observe whether unchanged Pods are reprocessed. Then restore the original value so the lab does not leave behind a noisy controller.
 
-**Success Criteria**:
-- [ ] Program compiles and runs without errors
-- [ ] Initial cache sync completes and reports pod count
-- [ ] New pod creation is detected (ADDED event)
-- [ ] Annotation changes trigger UPDATE processing
-- [ ] Pod deletion is detected (DELETED event)
-- [ ] Ctrl+C triggers graceful shutdown
-- [ ] No API Server calls during Lister reads (verify by checking API Server audit logs or metrics)
+6. Press Ctrl+C and confirm that the context cancellation path stops the informer and drains the process without a panic. A clean shutdown is part of controller correctness because Kubernetes sends termination signals during rollouts and node maintenance.
 
----
+7. Clean up the local cluster when you are done.
+
+```bash
+kind delete cluster --name extending-k8s
+```
+
+<details>
+<summary>Solution notes</summary>
+
+The watcher should print a cache sync message before reporting annotation changes. Add events with no annotations may not be enqueued because the example only enqueues added Pods when annotations already exist, while update events should be enqueued when annotation maps differ. Delete events are reported when the lister can no longer find the cached object. If the program fails before cache sync, check kubeconfig, cluster reachability, and RBAC before changing informer logic.
+</details>
+
+### Success Criteria
+
+- [ ] Program compiles and runs without errors.
+- [ ] Initial cache sync completes and reports the Pod count.
+- [ ] New Pod creation is observable through the informer event stream.
+- [ ] Annotation additions, modifications, and removals trigger update processing.
+- [ ] Pod deletion is detected and reported without a panic.
+- [ ] Ctrl+C triggers graceful shutdown through context cancellation.
+- [ ] Lister reads come from the informer cache rather than direct hot-path API calls.
+
+## Sources
+
+- https://kubernetes.io/docs/reference/using-api/api-concepts/
+- https://kubernetes.io/docs/reference/access-authn-authz/authentication/
+- https://kubernetes.io/docs/reference/access-authn-authz/authorization/
+- https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
+- https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
+- https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
+- https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/apiserver-aggregation/
+- https://kubernetes.io/docs/reference/using-api/server-side-apply/
+- https://kubernetes.io/docs/concepts/cluster-administration/flow-control/
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+- https://github.com/kubernetes/client-go
+- https://pkg.go.dev/k8s.io/client-go/tools/cache
+- https://pkg.go.dev/k8s.io/client-go/util/workqueue
 
 ## Next Module
 
