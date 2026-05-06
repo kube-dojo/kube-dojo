@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CHAPTERS_DIR = REPO_ROOT / "src" / "content" / "docs" / "ai-history"
-WORD_RE = re.compile(r"[a-z0-9]+(?:'[a-z0-9]+)?")
+WORD_RE = re.compile(r"[\w]+", re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,10 @@ def _blank_reader_aids(lines: list[str]) -> list[str]:
             out.append("")
             continue
         if re.match(r"<details\b", stripped, re.IGNORECASE):
-            in_details = True
+            if re.search(r"</details>", stripped, re.IGNORECASE):
+                pass
+            else:
+                in_details = True
             out.append("")
             continue
         if in_details:
@@ -113,7 +116,14 @@ def _paragraphs_with_lines(path: Path) -> list[tuple[int, str]]:
         if not stripped:
             flush()
             continue
-        if stripped.startswith(("#", "|", ">", "-", "* ")):
+        if stripped.startswith(">"):
+            stripped = stripped[1:].strip()
+        if stripped.startswith(("- ", "* ")):
+            stripped = stripped[2:].strip()
+        if not stripped:
+            flush()
+            continue
+        if stripped.startswith(("#", "|")):
             flush()
             continue
         if not buffer:
@@ -140,9 +150,9 @@ def _excerpt(text: str, limit: int = 180) -> str:
     return text[: limit - 1].rstrip() + "..."
 
 
-def load_paragraphs(min_words: int, shingle_size: int) -> list[Paragraph]:
+def load_paragraphs(min_words: int, shingle_size: int, chapters_dir: Path = CHAPTERS_DIR) -> list[Paragraph]:
     paragraphs: list[Paragraph] = []
-    for path in sorted(CHAPTERS_DIR.glob("ch-*.md")):
+    for path in sorted(chapters_dir.glob("ch-*.md")):
         for start_line, text in _paragraphs_with_lines(path):
             words = _words(text)
             if len(words) < min_words:
@@ -242,9 +252,15 @@ def render_markdown(candidates: list[Candidate], total: int, args: argparse.Name
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "chapter_dir",
+        nargs="?",
+        default=str(CHAPTERS_DIR),
+        help="Directory containing chapter files",
+    )
     parser.add_argument("--threshold", type=float, default=0.55, help="Jaccard threshold")
-    parser.add_argument("--shingle-size", type=int, default=7, help="word n-gram size")
-    parser.add_argument("--min-words", type=int, default=45, help="minimum paragraph length")
+    parser.add_argument("--shingle-size", type=int, default=5, help="word n-gram size")
+    parser.add_argument("--min-words", type=int, default=25, help="minimum paragraph length")
     parser.add_argument("--top", type=int, default=50, help="candidate rows to print")
     parser.add_argument("--json", action="store_true", help="emit JSON instead of Markdown")
     parser.add_argument(
@@ -264,7 +280,10 @@ def main() -> int:
     if args.min_words < args.shingle_size:
         raise SystemExit("--min-words must be >= --shingle-size")
 
-    paragraphs = load_paragraphs(args.min_words, args.shingle_size)
+    chapter_dir = Path(args.chapter_dir).resolve()
+    if not chapter_dir.is_dir():
+        raise SystemExit(f"chapter_dir not found: {args.chapter_dir}")
+    paragraphs = load_paragraphs(args.min_words, args.shingle_size, chapter_dir)
     candidates = find_candidates(paragraphs, args.threshold)
     if args.json:
         print(
