@@ -475,10 +475,6 @@ Declarative files in Git are necessary ingredients in many GitOps systems, but t
 
 ```bash
 mkdir -p cgoa-study
-if command -v kubectl >/dev/null 2>&1; then
-  alias k=kubectl
-  k version --client
-fi
 cat > cgoa-study/exam-decision-sheet.md <<'EOF'
 # CGOA Exam Decision Sheet
 
