@@ -3,6 +3,7 @@ title: "Module 1.4: Istio Observability"
 slug: k8s/ica/module-1.4-istio-observability
 sidebar:
   order: 5
+revision_pending: false
 ---
 
 ## Complexity: `[MEDIUM]`
@@ -39,15 +40,19 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A payments platform team rolls out a new checkout service on Friday afternoon. The deployment looks healthy, the Pods are ready, and the Kubernetes Service has endpoints. Ten minutes later, customer support reports that some orders complete, some time out, and some fail only when traffic comes through a canary route.
+Hypothetical scenario: A payments platform team rolls out a new checkout service on Friday afternoon. The deployment looks healthy, the Pods are ready, and the Kubernetes Service has endpoints. Ten minutes later, customer support reports that some orders complete, some time out, and some fail only when traffic comes through a canary route.
 
 The team does not need another command that says the Pods are running. They need to know which service path is failing, whether failures are isolated to one workload version, whether mTLS or routing policy changed, and whether the slow hop is checkout, inventory, payment authorization, or the external fraud API.
 
 Istio observability is useful because the Envoy sidecars sit on the request path. They see request counts, response codes, latency, byte sizes, mTLS state, routing decisions, and trace identifiers even when application teams did not instrument every service perfectly. That does not remove the need for application telemetry, but it gives platform engineers a common baseline across many languages and teams.
 
+That baseline is especially valuable in a certification or production incident because it gives you a neutral view before every team has explained its own component. Kubernetes readiness tells you whether a Pod should receive traffic; Istio telemetry tells you what happened after traffic actually arrived. When those two views disagree, the disagreement is not noise. It is a clue that the fault may live in routing, policy, retries, endpoints, propagation, or the proxy path rather than in the application process alone.
+
 The ICA exam treats observability as a separate domain because it ties the other domains together. Traffic management creates routes that need to be verified. Security policies create authorization decisions that need to be explained. Troubleshooting starts with symptoms, but it becomes reliable only when you can turn those symptoms into evidence.
 
 A senior operator does not ask, "Which dashboard should I open?" as the first question. They ask, "What kind of evidence would prove or disprove my current theory?" If the theory is that a route sends traffic to the wrong subset, Kiali and destination labels may answer quickly. If the theory is that a backend hop is slow, Prometheus latency histograms and traces are better. If the theory is that only denied or failed calls matter, filtered access logs give the most concrete record.
+
+This module therefore treats observability as an operating method, not as a tour of dashboards. You will learn how to scope Telemetry resources, how to read the labels that make Istio metrics useful, how tracing depends on header propagation, and how access logs reveal proxy-observed request facts. More importantly, you will practice moving between signals without losing the original question, because the fastest investigation is usually the one that keeps narrowing the evidence instead of collecting every possible graph.
 
 > **Mental model**
 >
@@ -94,7 +99,7 @@ The most important beginner mistake is treating metrics, logs, traces, and topol
 
 The diagram shows why Istio can provide a baseline without code changes. The proxies emit telemetry because they are already handling the traffic. This is different from application instrumentation, where each service must explicitly record business metrics or create spans with an SDK.
 
-Baseline does not mean complete. Envoy can tell that `checkout` called `payments` and received a `503`, but it cannot know that the failed payment attempt was a premium subscription renewal unless the application records that domain fact. Envoy can start or continue trace spans, but the application must forward trace headers when it makes outbound calls.
+Baseline does not mean complete. Envoy can tell that `checkout` called `payments` and received a `503`, but it cannot know that the failed payment attempt was a premium subscription renewal unless the application records that domain fact. Envoy can start or continue trace spans, but the application must forward trace headers when it makes outbound calls. This division of responsibility keeps the platform honest: the mesh gives every team the same transport evidence, while application instrumentation explains the business meaning behind that evidence.
 
 > **Pause and predict:** If a request goes from `frontend` to `checkout` to `payments`, but `checkout` does not forward trace headers to `payments`, what will Jaeger show?
 >
@@ -112,6 +117,8 @@ The four observability signals support different operational questions.
 A senior workflow usually starts broad and narrows quickly. First, metrics identify whether the symptom is real and which service owns it. Then topology verifies whether traffic is flowing through the expected route and workload version. Then traces or logs explain one representative request in enough detail to decide the fix.
 
 This order matters because observability tools can mislead you when used in isolation. A single trace may look terrible because it sampled an unusually slow request. A graph may look healthy because traffic volume is low. Logs may be complete but too noisy to read during a high-volume incident.
+
+The same discipline applies when a dashboard already points at a likely cause. If a panel shows errors from `reviews-v2`, resist the temptation to edit the route immediately. First ask whether the query uses the intended reporter, whether the errors are concentrated in one response code, whether Kiali confirms traffic is reaching that workload, and whether logs show Envoy flags that would change your interpretation. Those extra checks turn a plausible theory into a defensible operational decision.
 
 ```ascii
 ┌──────────────────────────────────────────────────────────────────┐
@@ -240,7 +247,7 @@ kubectl get pods -n payments --show-labels
 kubectl get deploy checkout -n payments -o jsonpath='{.spec.template.metadata.labels}'
 ```
 
-After this module introduces `kubectl`, the hands-on section uses `k` as a shorthand alias. Create it in your shell with `alias k=kubectl` if you want to run the shorter commands exactly as shown.
+The distinction between Service labels and Pod template labels is worth slowing down for because it causes many quiet failures. Kubernetes Services select Pods, but Istio workload-scoped Telemetry selects the workload labels on the Pods themselves. If you copy labels from the Service object without checking the Deployment template, you can create a valid Telemetry resource that never affects the proxy you meant to investigate. Always verify the target labels before treating a workload override as active evidence.
 
 The Telemetry API can also add or remove metric tags. Be conservative with custom labels because high-cardinality labels can overload Prometheus. A label like `destination_service` is expected because the number of services is bounded. A label like `user_id` is dangerous because it can create a time series per user.
 
@@ -277,6 +284,8 @@ spec:
 > Do not add `customer_id` to mesh metrics because it creates high-cardinality time series and can harm Prometheus performance. Put request identifiers in logs or traces, then correlate a specific customer investigation through a trace ID, request ID, or application-level event.
 
 The senior skill here is not knowing every Telemetry field by memory. It is matching the scope and cardinality of the configuration to the operational problem. Broad defaults should be cheap and stable. Expensive telemetry should be temporary, targeted, and easy to remove.
+
+Think about Telemetry scope the same way you think about a blast radius for a routing change. A mesh-wide setting should be safe enough to forget about during a busy day, because it affects every injected workload. A namespace setting should align with a team, environment, or investigation boundary. A workload setting should be precise enough that another operator can remove it after the incident without wondering whether it was secretly carrying platform behavior.
 
 ---
 
@@ -415,6 +424,8 @@ A blank result does not always mean telemetry is broken. The workload may not ha
 
 The exam may ask for a metric name, but production asks for judgment. You should be able to explain why a query isolates the symptom, what labels could distort it, and what signal you would inspect next if the result is surprising.
 
+When you review a PromQL expression, read it from the inside out. The selector should name the service, reporter, and response class that match the question. The range window should be long enough to smooth normal jitter but short enough to show a recent change. The aggregation should preserve labels that matter, such as workload version during a canary, while dropping labels that only add noise. That habit catches many dashboard errors before they become incident folklore.
+
 ---
 
 ## 4. Trace Requests Across Service Boundaries
@@ -533,6 +544,8 @@ A useful trace review asks concrete questions. Which span consumes most of the t
 
 The senior habit is correlating traces with other evidence. A trace proves what happened to one sampled request. Metrics prove whether the pattern is common. Access logs can verify exact response codes and flags. Kiali can show whether the trace path matches real service topology.
 
+This correlation is also how you avoid overfitting to a beautiful trace. A trace with a slow `payments` span might represent the main failure pattern, or it might be one unlucky request captured by sampling. Before you escalate the payments team, check whether destination metrics show elevated latency for that workload and whether access logs show matching response codes or flags. The trace gives you the story of one request; the surrounding signals tell you whether that story explains the incident.
+
 ---
 
 ## 5. Filter and Read Envoy Access Logs
@@ -624,6 +637,8 @@ spec:
 Be careful with sensitive data. Proxies can observe headers and paths, and those may include tokens, account identifiers, or personal data if applications use unsafe URL patterns. Logging only error classes does not automatically remove sensitive content, so production teams should review formats, retention, and redaction rules.
 
 Logs are a scalpel when filtered and a flood when enabled without intent. During incidents, prefer a workload-level filter that captures the suspicious condition. After the incident, remove or lower the logging scope so the temporary debugging configuration does not become permanent platform cost.
+
+The privacy angle matters as much as the storage angle. Even if your access log format does not include request bodies, URLs and headers can carry sensitive identifiers when applications put account numbers, session hints, or tokens in unsafe places. Mesh operators should treat access logging as a production data flow with retention and review rules, not as a harmless terminal convenience. That mindset keeps observability useful without turning it into an accidental data exposure path.
 
 ---
 
@@ -729,6 +744,8 @@ An effective incident workflow combines the tools in a deliberate order. Start w
 
 This loop keeps you from guessing. Each tool narrows the problem until a configuration change, rollout fix, policy adjustment, or application bug becomes the most plausible next step.
 
+The loop is intentionally reversible. If Jaeger suggests a backend is slow but Prometheus shows no broad latency increase, you may decide the trace is not representative and return to metrics with a different grouping. If Kiali shows an unexpected edge, you may jump back to access logs to confirm whether traffic is real user traffic, synthetic probes, or a misrouted call. Good operators move between tools because the evidence demands it, not because a fixed checklist says the next dashboard is mandatory.
+
 ---
 
 ## Did You Know?
@@ -745,7 +762,7 @@ This loop keeps you from guessing. Each tool narrows the problem until a configu
 
 ## Common Mistakes
 
-| Mistake | What happens | Better practice |
+| Mistake | Why It Happens | How to Fix It |
 |---|---|---|
 | Setting `100.0` trace sampling mesh-wide in production | Trace storage and collector load can spike across every service | Use low mesh defaults and raise sampling only for targeted namespaces or workloads |
 | Forgetting to propagate trace headers in application code | Jaeger shows disconnected trace fragments even though Envoy creates spans | Forward B3 or W3C trace context headers through every outbound request |
@@ -842,29 +859,27 @@ This exercise uses the Bookinfo sample because it has multiple services and enou
 
 ### Setup
 
-Run the setup commands from a shell with access to your cluster. The first command creates the `k` alias used later in the exercise; if your shell does not persist aliases in scripts, use `kubectl` in place of `k`.
+Run the setup commands from a shell with access to your cluster. The commands use the full `kubectl` binary name so they work when copied into a non-interactive script as well as in an interactive terminal.
 
 ```bash
-alias k=kubectl
-
 istioctl install --set profile=demo -y
 
-k label namespace default istio-injection=enabled --overwrite
+kubectl label namespace default istio-injection=enabled --overwrite
 
-k apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
 
-k wait --for=condition=ready pod -l app=productpage --timeout=180s
+kubectl wait --for=condition=ready pod -l app=productpage --timeout=180s
 
-k wait --for=condition=ready pod -l app=reviews --timeout=180s
+kubectl wait --for=condition=ready pod -l app=reviews --timeout=180s
 
-k wait --for=condition=ready pod -l app=ratings --timeout=180s
+kubectl wait --for=condition=ready pod -l app=ratings --timeout=180s
 ```
 
 Generate baseline traffic before you inspect metrics. Without traffic, many request metrics will be absent or uninteresting.
 
 ```bash
 for i in $(seq 1 30); do
-  k exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
+  kubectl exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
 done
 ```
 
@@ -873,7 +888,7 @@ done
 Apply a mesh-wide Telemetry resource that enables Prometheus metrics, configures tracing at a moderate lab sampling rate, and enables access logging. In production, you would normally use lower tracing and more selective logging, but the lab starts visibly so you can verify the signal path.
 
 ```bash
-k apply -f - <<'EOF'
+kubectl apply -f - <<'EOF'
 apiVersion: telemetry.istio.io/v1
 kind: Telemetry
 metadata:
@@ -896,7 +911,7 @@ EOF
 Verify that the resource exists.
 
 ```bash
-k get telemetry -n istio-system mesh-observability-defaults -o yaml
+kubectl get telemetry -n istio-system mesh-observability-defaults -o yaml
 ```
 
 ### Task 2: Create a Namespace Debug Override
@@ -904,7 +919,7 @@ k get telemetry -n istio-system mesh-observability-defaults -o yaml
 Create a namespace-level tracing override for the `default` namespace. This simulates a temporary investigation where the application team needs more traces for Bookinfo without changing the mesh-wide default.
 
 ```bash
-k apply -f - <<'EOF'
+kubectl apply -f - <<'EOF'
 apiVersion: telemetry.istio.io/v1
 kind: Telemetry
 metadata:
@@ -921,7 +936,7 @@ EOF
 Check that both Telemetry resources exist at their expected scopes.
 
 ```bash
-k get telemetry -A
+kubectl get telemetry -A
 ```
 
 ### Task 3: Filter Productpage Access Logs
@@ -929,11 +944,11 @@ k get telemetry -A
 Apply a workload-level Telemetry resource that logs only errors for `productpage`. Before applying it, inspect the Pod labels so you can confirm the selector matches the workload.
 
 ```bash
-k get pods -l app=productpage --show-labels
+kubectl get pods -l app=productpage --show-labels
 ```
 
 ```bash
-k apply -f - <<'EOF'
+kubectl apply -f - <<'EOF'
 apiVersion: telemetry.istio.io/v1
 kind: Telemetry
 metadata:
@@ -954,15 +969,15 @@ EOF
 Generate one successful request and one missing-page request. The missing-page request should be more likely to appear under the error-only filter.
 
 ```bash
-k exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/productpage
+kubectl exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/productpage
 
-k exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/does-not-exist
+kubectl exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/does-not-exist
 ```
 
 Inspect the productpage sidecar logs.
 
 ```bash
-k logs deploy/productpage-v1 -c istio-proxy --tail=20
+kubectl logs deploy/productpage-v1 -c istio-proxy --tail=20
 ```
 
 ### Task 4: Verify Raw Envoy Metrics
@@ -970,7 +985,7 @@ k logs deploy/productpage-v1 -c istio-proxy --tail=20
 Check the sidecar stats endpoint directly. This tells you whether Envoy is emitting metrics before you debug Prometheus or Grafana.
 
 ```bash
-k exec deploy/productpage-v1 -c istio-proxy -- \
+kubectl exec deploy/productpage-v1 -c istio-proxy -- \
   curl -s 127.0.0.1:15020/stats/prometheus | grep '^istio_requests_total' | head -10
 ```
 
@@ -978,10 +993,10 @@ If the command returns nothing, generate more traffic and retry.
 
 ```bash
 for i in $(seq 1 20); do
-  k exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
+  kubectl exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
 done
 
-k exec deploy/productpage-v1 -c istio-proxy -- \
+kubectl exec deploy/productpage-v1 -c istio-proxy -- \
   curl -s 127.0.0.1:15020/stats/prometheus | grep '^istio_requests_total' | head -10
 ```
 
@@ -990,7 +1005,7 @@ k exec deploy/productpage-v1 -c istio-proxy -- \
 If Prometheus is installed in your Istio system namespace, port-forward it and run the queries in the UI. Use `127.0.0.1` in the browser address.
 
 ```bash
-k port-forward svc/prometheus -n istio-system 9090:9090
+kubectl port-forward svc/prometheus -n istio-system 9090:9090
 ```
 
 Open `http://127.0.0.1:9090` and run a request-rate query for the Bookinfo productpage service.
@@ -1040,7 +1055,7 @@ If a tracing backend is present, open it and look for recent Bookinfo traces. Ge
 
 ```bash
 for i in $(seq 1 40); do
-  k exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
+  kubectl exec deploy/ratings-v1 -- curl -s productpage:9080/productpage > /dev/null
 done
 
 istioctl dashboard jaeger
@@ -1055,13 +1070,13 @@ Create a short failure investigation using the signals you configured. The goal 
 Generate a failed request.
 
 ```bash
-k exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/does-not-exist
+kubectl exec deploy/ratings-v1 -- curl -s -o /dev/null -w '%{http_code}\n' productpage:9080/does-not-exist
 ```
 
 Use access logs to confirm whether the proxy recorded the failed request.
 
 ```bash
-k logs deploy/productpage-v1 -c istio-proxy --tail=30
+kubectl logs deploy/productpage-v1 -c istio-proxy --tail=30
 ```
 
 Use Prometheus or raw Envoy metrics to decide whether the failure affected one request or a broader pattern. Use Kiali to confirm that the service graph still shows expected traffic flow. If tracing is available, look for a sampled request and decide whether it adds useful information beyond the log.
@@ -1083,13 +1098,13 @@ Use Prometheus or raw Envoy metrics to decide whether the failure affected one r
 Remove the Telemetry resources and Bookinfo sample when you finish. The cleanup intentionally names each resource explicitly so you do not delete unrelated observability configuration.
 
 ```bash
-k delete telemetry mesh-observability-defaults -n istio-system
+kubectl delete telemetry mesh-observability-defaults -n istio-system
 
-k delete telemetry default-debug-tracing -n default
+kubectl delete telemetry default-debug-tracing -n default
 
-k delete telemetry productpage-error-logs -n default
+kubectl delete telemetry productpage-error-logs -n default
 
-k delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.27/samples/bookinfo/platform/kube/bookinfo.yaml
 ```
 
 If you installed Istio only for this lab and no other module needs it, you can uninstall it separately.
@@ -1097,8 +1112,25 @@ If you installed Istio only for this lab and no other module needs it, you can u
 ```bash
 istioctl uninstall --purge -y
 
-k delete namespace istio-system
+kubectl delete namespace istio-system
 ```
+
+---
+
+## Sources
+
+- https://istio.io/latest/docs/tasks/observability/
+- https://istio.io/latest/docs/tasks/observability/metrics/
+- https://istio.io/latest/docs/tasks/observability/logs/access-log/
+- https://istio.io/latest/docs/tasks/observability/distributed-tracing/
+- https://istio.io/latest/docs/reference/config/telemetry/
+- https://istio.io/latest/docs/reference/config/metrics/
+- https://istio.io/latest/docs/ops/integrations/prometheus/
+- https://istio.io/latest/docs/ops/integrations/grafana/
+- https://istio.io/latest/docs/ops/integrations/kiali/
+- https://istio.io/latest/docs/ops/integrations/jaeger/
+- https://istio.io/latest/docs/examples/bookinfo/
+- https://prometheus.io/docs/practices/histograms/
 
 ---
 
