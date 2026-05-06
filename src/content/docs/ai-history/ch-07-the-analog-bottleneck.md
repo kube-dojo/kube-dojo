@@ -6,7 +6,7 @@ sidebar:
 ---
 
 :::tip[In one paragraph]
-Between 1948 and 1949, the neurophysiologist W. Grey Walter built two electronic tortoises — Elmer and Elsie — at the Burden Neurological Institute in Bristol. With a tiny set of sensors, tubes, motors, and contacts, they explored, sought light, avoided obstacles, and self-recharged. Walter's *Machina speculatrix* proved life-like behaviour did not require a brain, but behaviour was the wiring; revising it meant rebuilding the circuit. In January 1952, von Neumann's Caltech lectures quantified the scaling wall for reliable machines built from unreliable parts.
+Between 1948 and 1949, neurophysiologist W. Grey Walter built two electronic tortoises — Elmer and Elsie — at the Burden Neurological Institute. With a tiny set of sensors, tubes, motors, and contacts, they explored, sought light, avoided obstacles, and recharged. Walter's *Machina speculatrix* proved life-like behaviour did not require a brain, but behaviour was the wiring; revising it meant rebuilding the circuit. In January 1952, von Neumann's Caltech lectures quantified the scaling wall for reliable machines built from unreliable parts.
 :::
 
 <details>
