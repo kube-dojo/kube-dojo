@@ -1,5 +1,6 @@
 ---
 title: "CNPA Core Platform Fundamentals Review"
+revision_pending: false
 slug: k8s/cnpa/module-1.2-core-platform-fundamentals-review
 sidebar:
   order: 102
@@ -377,11 +378,10 @@ spec:
               memory: "256Mi"
 ```
 
-If you use `kubectl` often, many Kubernetes learners create the alias `k=kubectl` after they understand that it is only a shortcut. In a real cluster, a developer could validate the manifest locally before sending it through the platform workflow. The following command performs a client-side dry run and does not change cluster state.
+If you use `kubectl` often, many Kubernetes learners create a short interactive alias after they understand that it is only a local shell shortcut. Training material and platform documentation should still use the full command because learners copy examples into scripts, CI jobs, and runbooks where aliases may not expand. In a real cluster, a developer could validate the manifest locally before sending it through the platform workflow. The following command performs a client-side dry run and does not change cluster state.
 
 ```bash
-alias k=kubectl
-k apply --dry-run=client -f orders-api.yaml
+kubectl apply --dry-run=client -f orders-api.yaml
 ```
 
 The YAML alone is not a golden path. It becomes part of a golden path when the platform maintains it, documents the intended use, validates important fields, connects it to delivery automation, and helps teams troubleshoot failures. The same is true for Terraform modules, Helm charts, Crossplane compositions, Backstage templates, or any other platform artifact. The artifact is a means to an outcome.
@@ -468,6 +468,95 @@ Use this review map when you need to strengthen a weak area before the exam. The
 - [What is Observability?](../../../platform/foundations/observability-theory/module-3.1-what-is-observability/)
 - [Incident Management](../../../platform/disciplines/core-platform/sre/module-1.5-incident-management/)
 
+## Patterns & Anti-Patterns
+
+The most useful CNPA review habit is to translate every platform claim into a pattern or an anti-pattern. A pattern is not just something that sounds modern; it is a repeatable way of arranging ownership, workflow, automation, and feedback so teams can deliver safely with less unnecessary effort. An anti-pattern is often the same vocabulary used without the operating discipline behind it. A portal can be either a discovery pattern or a ticket-queue anti-pattern depending on what happens after the developer clicks a button.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---|---|---|---|
+| Productized golden path | Many teams create similar services, environments, or delivery pipelines. | It turns repeated expert work into supported defaults that developers can trust. | Version templates, publish migration guidance, and measure adoption by workflow outcome rather than mandate. |
+| Policy-backed self-service | Routine requests need governance but not human review every time. | It makes safe actions fast while preserving ownership, audit, quotas, and remediation. | Keep policies close to the workflow and treat repeated failures as product feedback. |
+| Service catalog with ownership | Teams need to find services, owners, runbooks, and operational signals quickly. | It connects discovery to accountability, incident response, and lifecycle management. | Automate ownership updates where possible because stale catalog data creates false confidence. |
+| Observability by default | New workloads repeatedly launch without useful logs, metrics, traces, or health checks. | It prevents teams from discovering missing signals during incidents. | Standardize baseline signals while allowing workload-specific SLOs and dashboards. |
+
+The productized golden path pattern is strongest when the platform team maintains the path as a living product artifact. That means the template has a release process, ownership, documentation, known compatibility expectations, and a way to tell consuming teams what changed. A template that was copied once and never updated becomes a source of drift. A maintained path can absorb lessons from incidents, security findings, support tickets, and user interviews, which is how the platform improves without asking every application team to rediscover the same lesson.
+
+Policy-backed self-service works because it moves governance from a late human checkpoint into the normal development workflow. The key word is backed, not replaced. A mature workflow still has identity, auditability, limits, approval rules for risky actions, and a clear exception path. The platform team is not surrendering control; it is encoding the routine parts of control so reviewers spend their attention on genuinely unusual risk. That is a better use of expertise than repeatedly checking whether an owner field was filled in.
+
+The service catalog pattern is easy to underestimate because catalog pages can look like simple directories. In platform engineering, the catalog becomes more valuable when it ties ownership data to deployments, SLOs, documentation, cost metadata, and incident context. During a service problem, an accurate catalog can answer who owns the workload, where its dashboards are, which dependencies matter, and how to escalate. During normal delivery, it helps developers discover examples and supported capabilities without wandering through chat history or stale wiki pages.
+
+| Anti-Pattern | What Goes Wrong | Why Teams Fall Into It | Better Alternative |
+|---|---|---|---|
+| Portal as a painted ticket queue | Developers still wait for manual handoffs, so lead time barely changes. | A UI is easier to launch than workflow automation and policy integration. | Start with one high-volume workflow and automate the standard path end to end. |
+| Guardrails as unexplained blockers | Teams see policy as arbitrary and route around the official path. | Rules are implemented from a control perspective without developer feedback. | Return actionable errors, include compliant defaults, and publish remediation examples. |
+| Mandatory adoption before product fit | Dashboards show usage while developer trust declines. | Leaders want visible standardization before the platform has earned confidence. | Improve the workflow, measure friction, and mandate only minimum risk controls. |
+| Platform team as the new operations queue | The team becomes responsible for every routine request and every exception. | Central expertise feels safer than exposing self-service early. | Automate low-risk repeatable work and reserve human review for high-risk exceptions. |
+
+These anti-patterns are attractive because they initially look controlled. A painted ticket queue can be demonstrated in a meeting, unexplained blockers can reduce certain classes of risk, mandatory adoption can produce tidy reporting, and centralized operations can feel orderly. The cost appears later as shadow workflows, support overload, long lead times, and brittle ownership. The CNPA exam often asks you to spot that delayed cost, so do not stop at whether the organization has the right nouns.
+
+Hypothetical scenario: a platform team launches a portal page for Kubernetes namespace requests, but the portal only writes a ticket into the old operations queue. The team announces that self-service exists because developers no longer email operations directly. A stronger analysis says discovery improved, but self-service did not. The better next move is to automate the normal namespace path with required metadata, ResourceQuota defaults, RBAC binding through approved roles, audit logging, and an exception route for unusual network access.
+
+Patterns and anti-patterns can coexist in the same system. An organization may have an excellent service template but weak policy feedback, or a useful catalog with stale ownership data. That is why platform maturity should be evaluated workflow by workflow rather than declared for the whole organization at once. For CNPA questions, identify the specific workflow under stress, name the missing mechanism, and choose the answer that improves developer outcomes while preserving accountability.
+
+## Decision Framework
+
+Use this framework when a CNPA scenario asks what a platform team should do next. Start with the workflow, not the tool. Then decide whether the work is repeated enough to standardize, risky enough to guard, varied enough to need an escape hatch, and important enough to measure. This sequence prevents two common mistakes: building automation for a workflow nobody needs, and blocking a routine workflow with human review because policy was never encoded.
+
+```ascii
++-------------------------------+
+| Start with one painful workflow|
++---------------+---------------+
+                |
+                v
++-------------------------------+
+| Is it repeated across teams?   |
++---------------+---------------+
+        | yes                    | no
+        v                        v
++----------------------+   +---------------------------+
+| Standardize defaults |   | Document or consult first |
++----------+-----------+   +---------------------------+
+           |
+           v
++-------------------------------+
+| Can routine risk be encoded?   |
++---------------+---------------+
+        | yes                    | no
+        v                        v
++----------------------+   +---------------------------+
+| Add policy guardrails|   | Keep reviewed exception   |
++----------+-----------+   +---------------------------+
+           |
+           v
++-------------------------------+
+| Measure adoption, lead time,   |
+| support load, and reliability  |
++-------------------------------+
+```
+
+The first decision is repetition. If only one team has a specialized workload, the platform team may help that team directly or document a supported exception, but it should be cautious about turning that case into a universal standard. Standardizing too early can create a path that fits nobody well. If five or more teams ask for similar namespace provisioning, service scaffolding, deployment evidence, or observability defaults, the repeated pattern is a good candidate for platform product work because the same improvement can remove duplicated effort across many teams.
+
+The second decision is risk. Low-risk, high-volume requests are usually the best candidates for automated self-service because manual review adds delay without much judgment. High-risk requests may still use a platform workflow, but the workflow should include stronger checks, required evidence, or human approval. The senior move is not to treat "manual" as always bad or "automated" as always mature. The mature move is to match the control to the risk and make the routine part predictable.
+
+The third decision is whether the platform should expose implementation detail. Kubernetes 1.35 workloads still need concrete runtime objects, resources, probes, labels, and policies, but most developers should not have to rediscover every low-level decision for every service. A good platform surface lets developers choose meaningful options such as environment, ownership, service type, dependency class, and reliability target. It hides boilerplate while leaving enough transparency that teams can debug failures and understand operational consequences.
+
+| Scenario Clue | Decision Question | Strong Platform Response |
+|---|---|---|
+| Developers wait days for a routine resource request. | Can the standard path be automated with policy and audit? | Build self-service for the common case and route unusual requests through an explicit exception path. |
+| Teams bypass the template after repeated failures. | Is the golden path actually usable and supported? | Fix defaults, validation, docs, and observability before treating bypass behavior as only a compliance issue. |
+| Security blocks deployments late in the pipeline. | Could feedback move earlier with remediation guidance? | Shift policy checks close to authoring and return clear messages that explain what to change. |
+| A portal links to docs but cannot provision anything. | Is this discovery, capability, or both? | Keep the portal as a front door, but prioritize workflow automation behind the highest-volume entry points. |
+| Leadership tracks only features shipped. | Which user outcomes changed? | Measure time to first deploy, adoption quality, support reasons, reliability signals, and developer satisfaction. |
+| A team needs a real exception. | Is the need unique, repeated, or risky? | Review and audit the exception, then promote repeated exceptions into supported variants when justified. |
+
+Pause and predict: if the platform team automates namespace creation but does not attach ownership metadata, what breaks first during cost review or incident response? The answer is usually not the namespace creation itself. The breakage appears when nobody can identify the responsible team, clean up abandoned resources, or route an alert to the right owner. This is why self-service has to include lifecycle data, not just provisioning speed.
+
+The final decision is measurement. A platform team needs enough metrics to learn whether the workflow improved, but not so many that reporting becomes the product. Time to first deploy can reveal whether a golden path really accelerates service creation. Policy failure reasons can reveal whether guardrails teach or confuse. Support ticket themes can reveal where documentation, templates, or automation are incomplete. Reliability and incident patterns can reveal whether defaults work in production rather than only in demos.
+
+Before running a platform improvement, write the expected behavior in one sentence. For example: "A developer can create a development namespace with ownership metadata, quota, default network policy, audit trail, and visible status in less than one working hour without opening a manual operations ticket." That sentence is testable. It also keeps the team honest because a portal form, a wiki page, or a Terraform module alone cannot satisfy the whole promise unless the surrounding workflow works.
+
+When you answer CNPA questions, use the framework as a filtering tool. Reject answers that substitute tool adoption for workflow improvement. Reject answers that maximize autonomy while ignoring governance. Reject answers that maximize control while preserving unnecessary handoffs. Prefer answers that reduce repeated cognitive load, encode proportional guardrails, preserve team accountability, expose operational signals, and measure whether developers actually become more effective.
+
 ## Did You Know?
 
 - **Fact 1**: Many successful platforms begin by improving one painful workflow, such as service creation or environment requests, before expanding into a full developer platform.
@@ -544,12 +633,12 @@ Use this review map when you need to strengthen a weak area before the exam. The
 
    </details>
 
-7. **Platform leadership reports success because twelve platform features shipped this quarter. Developer surveys still show confusion, time to first deployment has not improved, and support tickets increased. How should you evaluate the success claim?**
+7. **You need to diagnose common CNPA exam traps around guardrails, automation, platform maturity, and developer experience. Platform leadership reports success because twelve platform features shipped this quarter, but developer surveys still show confusion, time to first deployment has not improved, and support tickets increased. How should you evaluate the success claim?**
 
    <details>
    <summary>Answer</summary>
 
-   The success claim is weak because feature output is not the same as platform outcome. Platform-as-product thinking measures whether users become more effective, not only whether the platform team shipped work. The team should examine time to first deploy, adoption quality, support ticket reasons, developer satisfaction, reliability impact, and whether workflows reduce cognitive load. The likely conclusion is that the roadmap needs product discovery and workflow improvement, not just more features.
+   The success claim is weak because feature output is not the same as platform outcome. This is a common CNPA exam trap: guardrails, automation, and platform maturity should be diagnosed through developer experience and workflow evidence, not through the count of features shipped. Platform-as-product thinking measures whether users become more effective, not only whether the platform team shipped work. The team should examine time to first deploy, adoption quality, support ticket reasons, developer satisfaction, reliability impact, and whether workflows reduce cognitive load. The likely conclusion is that the roadmap needs product discovery and workflow improvement, not just more features.
 
    </details>
 
@@ -669,11 +758,10 @@ Use this review map when you need to strengthen a weak area before the exam. The
    echo "exercise checks passed"
    ```
 
-6. If you have `kubectl` available, validate the manifest client-side. This uses the `k` alias only after defining it as a shortcut for `kubectl`.
+6. If you have `kubectl` available, validate the manifest client-side. The command uses the full binary name so it remains copy-paste safe in scripts, CI jobs, and shared runbooks.
 
    ```bash
-   alias k=kubectl
-   k apply --dry-run=client -f service-default.yaml
+   kubectl apply --dry-run=client -f service-default.yaml
    ```
 
 **Success Criteria**:
@@ -687,6 +775,21 @@ Use this review map when you need to strengthen a weak area before the exam. The
 - [ ] Your final explanation connects the changes to reduced cognitive load and safer developer autonomy.
 
 **Reflection Prompt**: If a reviewer challenged your design by saying "this is just more automation," explain why the product workflow matters. Your answer should mention the developer journey, supported defaults, policy feedback, operational visibility, and adoption metrics. A strong response shows that platform engineering is not automation for its own sake; it is the productization of repeated delivery capabilities.
+
+## Sources
+
+- https://kubernetes.io/docs/concepts/overview/
+- https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+- https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+- https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+- https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+- https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/
+- https://opentelemetry.io/docs/concepts/
+- https://opentelemetry.io/docs/concepts/signals/
+- https://sre.google/sre-book/service-level-objectives/
+- https://sre.google/workbook/error-budget-policy/
+- https://tag-app-delivery.cncf.io/whitepapers/platforms/
+- https://tag-app-delivery.cncf.io/wgs/platforms/maturity-model/readme/
 
 ## Next Module
 
