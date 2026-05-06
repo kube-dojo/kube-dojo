@@ -1153,9 +1153,9 @@ Investigate the metric reader, exporter, collector conversion, and backend tempo
 </details>
 
 <details>
-<summary><strong>Q8: A teammate copied a reference-style SDK snippet into a service: it creates one span, hard-codes an OTLP endpoint, omits resource attributes, and never shuts down the provider. How would you refactor it into an input-to-solution pattern suitable for this module?</strong></summary>
+<summary><strong>Q8: A teammate copied a reference-style SDK snippet into a service: it creates one span, hard-codes an OTLP endpoint, omits resource attributes, and never shuts down the provider. The deployment also sets `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. How would you refactor the snippet and handle endpoint precedence?</strong></summary>
 
-Start by writing the operational input: which request, dependency, or business step should the telemetry explain. Then create a provider with resource attributes, use a production-shaped processor or reader, move endpoint and protocol choices to environment configuration, and add shutdown or flush behavior so short-lived processes export data. Finally, add a validation step that inspects trace identity, span kinds, metric names, and bounded attributes, because a refactor is not complete until the output proves it answers the original debugging question.
+Start by writing the operational input: which request, dependency, or business step should the telemetry explain. Then create a provider with resource attributes, use a production-shaped processor or reader, move endpoint and protocol choices to environment configuration, and add shutdown or flush behavior so short-lived processes export data. For OTLP traces, the trace-specific endpoint should override the general OTLP endpoint, while other signals can keep the general endpoint unless they also have signal-specific overrides. Finally, add a validation step that inspects trace identity, span kinds, metric names, bounded attributes, and the resolved exporter destination, because a refactor is not complete until the output proves it answers the original debugging question.
 </details>
 
 ---
