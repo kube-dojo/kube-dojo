@@ -1,9 +1,13 @@
 ---
 title: "Module 1.2: Custom Resource Definitions Deep Dive"
 slug: k8s/extending/module-1.2-crds-advanced
+revision_pending: false
 sidebar:
   order: 3
 ---
+
+# Module 1.2: Custom Resource Definitions Deep Dive
+
 > **Complexity**: `[MEDIUM]` - Defining your own Kubernetes APIs
 >
 > **Time to Complete**: 3 hours
@@ -12,54 +16,36 @@ sidebar:
 
 ---
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Design** a CRD schema with structural validation, CEL rules, and default values that reject invalid input at admission time
-2. **Implement** CRD versioning with storage versions and conversion webhooks so v1alpha1 and v1 objects coexist safely
-3. **Configure** subresources (status, scale) and additional printer columns so `kubectl get` displays meaningful operational data
-4. **Diagnose** CRD validation failures and version-skew issues using API discovery and dry-run requests
+1. **Design** a CRD schema with structural validation, CEL rules, and default values that reject invalid input at admission time.
+2. **Implement** CRD versioning with storage versions and conversion webhooks so `v1alpha1` and `v1` style objects coexist safely.
+3. **Configure** subresources, additional printer columns, and scale paths so `kubectl` presents useful operational behavior for custom resources.
+4. **Diagnose** CRD validation failures, pruning surprises, and version-skew issues using API discovery, dry-run requests, and explicit version reads.
 
 ---
 
 ## Why This Module Matters
 
-Custom Resource Definitions (CRDs) are the foundation of every Kubernetes extension. When you install Istio, Argo CD, Prometheus Operator, or Cert-Manager, the first thing they do is register CRDs. These CRDs define new resource types -- `VirtualService`, `Application`, `ServiceMonitor`, `Certificate` -- that extend the Kubernetes API without modifying a single line of API Server code.
+Hypothetical scenario: your platform team publishes a `BackupPolicy` API so application teams can describe backup schedules without learning the backup controller internals. The first few manifests work, but then one team submits a schedule string that the controller can not parse, another team sets retention to a negative number, and an older automation job keeps creating `v1alpha1` resources after you have already taught newer clients about `v1beta1`. None of those mistakes should require a controller crash before anyone notices them.
 
-But most tutorials stop at "apply a basic CRD." In production, you need **validation** (so users cannot submit garbage), **versioning** (so you can evolve your API without breaking clients), **subresources** (so `kubectl get` shows useful columns and `kubectl scale` works), and **conversion webhooks** (so v1alpha1 and v1 objects coexist). This module covers all of that.
+CRDs are how Kubernetes lets you add a new noun to the API without patching the API server itself. When you install systems such as Istio, Argo CD, cert-manager, or the Prometheus Operator, they register resource types such as `VirtualService`, `Application`, `Certificate`, and `ServiceMonitor` so the cluster can store and serve domain-specific objects through the same discovery, authorization, admission, watch, and storage machinery used by built-in resources. That is powerful, but it also means your CRD becomes a public contract the moment other teams start writing YAML against it.
 
-> **The Database Table Analogy**
->
-> A CRD is like a CREATE TABLE statement in a database. It tells Kubernetes: "I have a new kind of thing. Here is its name, its structure, and its validation rules." Once the table exists, anyone with the right permissions can INSERT (create), SELECT (get), UPDATE, and DELETE rows (resources). The API Server handles all the CRUD operations, etcd stores the data, and you just need to define the schema.
+The database table analogy is useful as long as you do not take it too literally. A CRD is like a `CREATE TABLE` statement because it declares the name, group, fields, and validation rules for a new collection of records. Kubernetes then handles create, read, update, delete, watch, authorization, and etcd persistence for those records, while your controller focuses on reconciling desired state into real infrastructure. Unlike a simple table, however, a Kubernetes API also needs version negotiation, defaulting, pruning, subresources, server-side apply semantics, and user-facing discovery output that can survive years of clients.
 
----
-
-## What You'll Learn
-
-By the end of this module, you will be able to:
-- Create CRDs with comprehensive OpenAPI v3 validation
-- Use structural schemas with proper types and constraints
-- Implement CRD versioning with storage versions
-- Configure status and scale subresources
-- Add printer columns for kubectl output
-- Set up conversion webhooks between versions
+This module teaches the shape of that contract. You will begin with the anatomy of a CRD, move into structural OpenAPI validation and CEL rules, then add versioning, conversion, status separation, scale support, and printer columns. The hands-on exercise brings those pieces together in a `BackupPolicy` API that rejects invalid input at admission time and gives operators enough information to diagnose behavior without reading raw JSON.
 
 ---
 
-## Did You Know?
+## Core Content
 
-- **There are over 200 well-known CRDs** in the CNCF ecosystem. The Kubernetes API itself only defines ~60 resource types, but CRDs have expanded the API surface by 3x or more in most production clusters.
+### CRD Anatomy and Naming Contracts
 
-- **CRDs are stored in etcd as JSON**, just like built-in resources. The API Server validates them on the way in and serves them on the way out, with no additional backend required. This is why CRDs are called "level 1" extensions -- they use the existing API Server machinery.
+A CRD begins with naming, and naming is not cosmetic in Kubernetes. The group, kind, plural name, singular name, short names, categories, and scope decide how the resource appears in discovery, REST paths, RBAC rules, and day-to-day `kubectl` workflows. If two vendors both choose the same group and plural name, the cluster has no neutral way to serve both APIs under one path, so reverse-domain naming is a practical collision-avoidance mechanism rather than a style preference.
 
-- **Structural schemas became mandatory in Kubernetes 1.16**. Before that, CRDs had almost no validation, and users could store arbitrary JSON blobs. The switch to structural schemas was one of the most impactful API quality improvements in Kubernetes history.
-
----
-
-## Part 1: CRD Fundamentals Recap
-
-### 1.1 Anatomy of a CRD
+The `metadata.name` of a CRD must be the plural resource name followed by the API group. That gives Kubernetes the stable REST collection path for your objects, such as `/apis/data.kubedojo.io/v1alpha1/namespaces/default/backuppolicies`. The `kind` stays singular and PascalCase because it is the type name users see inside manifests, while `plural` and `singular` are lowercase names used by discovery and command-line clients. Scope is equally important: choose `Namespaced` for resources owned by a team, workload, tenant, or namespace boundary, and reserve `Cluster` for resources that truly represent cluster-wide policy.
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -95,7 +81,7 @@ spec:
                 type: integer
 ```
 
-### 1.2 Naming Conventions
+The example above is intentionally small, but it already shows the highest-leverage decision: you are defining an API, not just a blob of YAML. A `BackupPolicy` belongs to the `data.kubedojo.io` group, so an administrator can write RBAC rules against that group, an admission policy can match that group, and a client can discover the served versions. Even when a controller has not been written yet, the API server can validate, persist, list, watch, and delete objects of this kind.
 
 | Field | Convention | Example |
 |-------|-----------|---------|
@@ -106,23 +92,17 @@ spec:
 | `shortNames` | 1-4 letter abbreviations | `bp` |
 | CRD `metadata.name` | `{plural}.{group}` | `backuppolicies.data.kubedojo.io` |
 
-> **Warning**: Never use `k8s.io`, `kubernetes.io`, or any group you do not own. These are reserved for Kubernetes core. Using them will cause conflicts and is considered bad practice.
+Never use `k8s.io`, `kubernetes.io`, or another group you do not own. Those names are reserved for Kubernetes core APIs or for other owners, and a collision forces users to choose between competing definitions. A reverse-domain group is not a security boundary by itself, but it gives humans and automation a clear ownership signal when they inspect discovery output or review a manifest.
 
-> **Stop and think**: What would happen if two different operators installed on the same cluster both tried to define a CRD with the same `group` and `kind`? How does the reverse-domain naming convention prevent this?
+Pause and predict: what do you think happens if two operators both try to create a CRD whose `metadata.name` is `backuppolicies.data.kubedojo.io` but whose schemas describe different fields? The API server will accept only one object at that name, and every client using that group and plural will be bound to whichever schema won. That is why naming is part of API design, not a paperwork step at the top of the file.
 
----
+### Structural Schemas, Pruning, Defaults, and CEL
 
-## Part 2: OpenAPI v3 Validation
+Kubernetes requires CRDs in `apiextensions.k8s.io/v1` to use structural OpenAPI v3 schemas. Structural means the API server can determine the type and shape of each field without running arbitrary code or resolving ambiguous schema branches. That property lets the API server prune unknown fields, apply defaults, publish OpenAPI for clients, calculate managed fields for server-side apply, and reject invalid data before the object reaches etcd or your controller.
 
-### 2.1 Structural Schema Requirements
+The most common mistake is to treat validation as something the controller can clean up later. That makes every bad manifest a reconciliation problem, and it means invalid state may already be stored and watched by other components before your controller reacts. Strong CRD schemas move as much validation as possible into admission, where users get synchronous errors, automation can fail fast, and controllers can assume a narrower, safer input domain.
 
-Every CRD must have a **structural schema**. This means:
-1. Every field has a declared `type`
-2. No `additionalProperties` at the root (unless explicitly enabled per-field)
-3. All validation keywords (`minimum`, `pattern`, etc.) are within typed fields
-4. No use of `$ref`, `allOf`, `oneOf`, `anyOf`, `not` at the root level
-
-### 2.2 Comprehensive Validation Example
+Every field should have an explicit `type`, and important fields should use `required`, `minimum`, `maximum`, `minLength`, `maxLength`, `pattern`, `enum`, and bounded collection sizes. Defaults are applied before validation, so a rule that references a defaulted field sees the defaulted value. Unknown fields are pruned unless you intentionally preserve them in a specific subtree, which is useful for plugin configuration but dangerous if you use it to avoid modeling your API.
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -289,9 +269,9 @@ spec:
                 description: "Generation observed by the controller."
 ```
 
-> **Pause and predict**: If a user submits a `WebApp` with an environment variable name `1_INVALID`, which specific line in this schema will trigger the rejection, and at what phase of the API request lifecycle will it happen?
+This schema does more than describe documentation for humans. It rejects images that do not match the expected registry and tag pattern, bounds replica counts, sets defaults for common fields, limits collection sizes, and constrains condition status to known values. The API server can return a validation error before the controller sees a malformed object, which reduces controller branches and improves feedback for users writing manifests.
 
-### 2.3 Validation Keywords Reference
+Pause and predict: if a user submits a `WebApp` with an environment variable name `1_INVALID`, which specific schema rule rejects it, and when does the rejection happen? The `pattern` under `spec.env.items.properties.name` rejects the value during API server admission, before the object is persisted. The controller never needs a special case for this malformed environment variable because the invalid object never becomes stored cluster state.
 
 | Keyword | Applies To | Example |
 |---------|-----------|---------|
@@ -307,9 +287,7 @@ spec:
 | `format` | string | `format: date-time` |
 | `nullable` | any | `nullable: true` |
 
-### 2.4 x-kubernetes Validation Extensions
-
-Kubernetes adds its own validation extensions beyond standard OpenAPI:
+Kubernetes also adds extension fields to OpenAPI so custom APIs can behave more like built-in APIs. List and map extensions tell server-side apply whether a collection is atomic, set-like, or map-like, which changes how multiple field managers merge changes. Validation extensions let you attach CEL expressions where simple per-field constraints are not enough, including immutability checks and relationships between sibling fields.
 
 ```yaml
 properties:
@@ -349,9 +327,9 @@ properties:
       message: "field is immutable once set"
 ```
 
-### 2.5 CEL Validation Rules
+The `ports` example is a practical server-side apply decision. Without map semantics, a manager that owns one list item can conflict with or overwrite another manager that owns a different item because the whole list may be treated as one field. With `x-kubernetes-list-type: map` and a stable key, Kubernetes can reason about individual entries, which is closer to how operators expect lists of ports, conditions, and named rules to behave.
 
-Common Expression Language (CEL) rules allow complex cross-field validation directly in the CRD schema:
+CEL rules are best used for relationships that OpenAPI does not express cleanly, such as `minReplicas` being less than or equal to `maxReplicas` or requiring an ingress host when TLS is enabled. Keep CEL rules small, deterministic, and directly tied to the field being validated. If the rule requires network calls, large lookups, or business policy that changes frequently, use an admission webhook or controller logic instead.
 
 ```yaml
 spec:
@@ -380,7 +358,7 @@ spec:
           type: string
 ```
 
-CEL rule reference:
+Before running this, what output do you expect from a server-side dry run when `minReplicas` is larger than `maxReplicas`? You should expect an admission error with the message from the CEL rule, not a stored object that the controller later marks failed. That distinction matters because admission errors are cheap, immediate, and visible to the tool that submitted the manifest.
 
 | Expression | Description |
 |-----------|------------|
@@ -393,15 +371,11 @@ CEL rule reference:
 | `size(self) <= 10` | Collection/string size check |
 | `has(self.optionalField)` | Check if optional field is set |
 
----
+### Versioning, Conversion, and Storage Migration
 
-## Part 3: CRD Versioning
+The first version of a CRD is rarely the final version. Fields get renamed, status grows richer, nested objects replace flat strings, and clients continue to exist after the platform team has moved on. Kubernetes handles this by letting a CRD serve multiple versions while choosing exactly one storage version for etcd. Served versions are the API shapes clients can request, while the storage version is the internal persisted representation.
 
-### 3.1 Why Version Your CRD?
-
-Your CRD's schema will evolve. Fields get added, types change, structures get reorganized. Kubernetes CRD versioning lets you serve multiple versions simultaneously, with automatic conversion between them.
-
-### 3.2 Multiple Versions
+Versioning is not a license to make arbitrary breaking changes and hope clients adapt. A good CRD version plan starts by deciding which changes are additive and which changes require conversion. Adding an optional field is usually easy because older clients can ignore it, but renaming `port` to `ports` or replacing `target: "deployment/web"` with a structured selector changes meaning. When versions are structurally different, the API server needs a conversion webhook that can translate between versions during read and write paths.
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -496,13 +470,9 @@ spec:
                       type: string
 ```
 
-### 3.3 Version Conversion
+In this example, both versions remain served, but only `v1beta1` is stored. A client may create a `v1alpha1` object, but the API server converts it to the storage version before writing it. A client may later request the same object as `v1alpha1`, and the API server converts the stored `v1beta1` form back into the requested version before returning it.
 
-When a client requests a version different from the storage version, the API Server must convert. There are two approaches:
-
-**None Strategy** (no-op): Only works when versions are compatible (additive changes only). New fields in newer versions get default values or are empty in older versions.
-
-**Webhook Strategy**: A webhook server converts between versions. Required when schemas are structurally different.
+There are two conversion strategies. The `None` strategy is effectively a no-op and is only safe when the schemas are compatible enough that the same object can be represented across versions without semantic translation. The `Webhook` strategy sends conversion reviews to a service you operate, and that service must handle every supported version pair correctly enough that old and new clients see stable meaning.
 
 ```yaml
 spec:
@@ -519,35 +489,25 @@ spec:
         caBundle: <base64-encoded-CA-cert>
 ```
 
-### 3.4 Storage Version Migration
+Conversion webhooks sit on a sensitive request path. If the webhook is down, slow, or returns inconsistent objects, reads and writes for affected versions can fail or surprise clients. Treat conversion code like API compatibility code: cover it with tests, keep it deterministic, preserve unknown meaning when possible, and deploy it before flipping storage versions or deprecating older served versions.
 
-When you change the storage version, existing objects in etcd are still stored in the old format. They get converted on the fly when read. To actually migrate the storage:
+Changing the storage version does not rewrite every existing object in etcd immediately. Existing objects remain stored in the older representation until they are rewritten, while reads may convert them on the fly. That lazy behavior avoids an instant cluster-wide rewrite, but it also means you need a deliberate storage migration plan when you want the persisted representation to converge.
 
 ```bash
 # List all objects (triggers conversion on read)
-k get webapps --all-namespaces -o yaml > /dev/null
+kubectl get webapps --all-namespaces -o yaml > /dev/null
 
 # Or use the storage version migrator (kube-storage-version-migrator)
 # This systematically reads and rewrites all objects in the new storage version
 ```
 
-> **Stop and think**: If you have 10,000 `WebApp` resources stored in etcd as `v1alpha1`, and you change the CRD to make `v1beta1` the storage version, do those 10,000 resources instantly get rewritten in etcd? What is the performance implication?
+Pause and predict: if you have 10,000 `WebApp` resources stored as `v1alpha1` and you mark `v1beta1` as storage, do those objects instantly rewrite in etcd? They do not. The API server can serve converted views on demand, but you still need a rewrite or a storage-version migration process if you want the backing data to move to the new storage representation.
 
-### 3.5 Diagnosing Version-Skew and Validation Failures
+Diagnosing version skew starts with discovery. `kubectl api-resources` shows which resources are served and which version appears preferred, while an explicit fully qualified resource request can show what an older client receives. Server-side dry run is equally important because it executes defaulting, validation, and admission without saving bad state, making it the fastest way to test a CRD schema change before you merge it into a platform repository.
 
-When evolving CRDs, you may encounter version-skew issues (e.g., clients using an older API version while the conversion webhook fails) or complex CEL validation errors. Use these techniques to diagnose them without modifying cluster state:
+### Subresources and Operational Interfaces
 
-- **API Discovery**: Run `kubectl api-resources | grep <crd>` to verify which API version is preferred and currently served by the API Server.
-- **Explicit Version Requests**: Fetch a resource using a specific fully-qualified version like `kubectl get webapps.v1alpha1.apps.kubedojo.io my-app -o yaml` to see exactly what older clients receive and test conversion webhook output.
-- **Server-Side Dry Run**: Run `kubectl apply --dry-run=server -f <manifest>` to execute all CEL validation rules and admission webhooks in the API Server. This surfaces validation rejections immediately without saving partial or invalid objects to etcd.
-
----
-
-## Part 4: Subresources
-
-### 4.1 Status Subresource
-
-The status subresource separates the `spec` (desired state, written by users) from `status` (observed state, written by controllers):
+Subresources let your custom API behave like built-in Kubernetes resources. The most important one is `status`, which separates desired state from observed state. Users and GitOps tools write `spec` to describe what they want, while controllers write `status` to describe what the cluster currently has. Without that separation, a normal update to the main resource can overwrite controller-owned status fields, which makes status less trustworthy and can create noisy reconciliation loops.
 
 ```yaml
 versions:
@@ -561,22 +521,18 @@ versions:
       # ... schema here
 ```
 
-With the status subresource enabled:
-- `PUT /apis/apps.kubedojo.io/v1beta1/namespaces/default/webapps/my-app` updates **only spec** (status changes are ignored)
-- `PUT /apis/apps.kubedojo.io/v1beta1/namespaces/default/webapps/my-app/status` updates **only status** (spec changes are ignored)
+With the status subresource enabled, the main resource endpoint ignores `status` updates, and the `/status` endpoint ignores `spec` updates. That sounds simple, but it is a major ownership boundary. RBAC can grant controllers permission to update `webapps/status` without letting them rewrite user intent, while users can update the resource without accidentally claiming the controller has observed something it has not.
 
 ```bash
 # Users update spec
-k patch webapp my-app --type=merge -p '{"spec":{"replicas":5}}'
+kubectl patch webapp my-app --type=merge -p '{"spec":{"replicas":5}}'
 
 # Controllers update status (using client-go)
 # webapp.Status.ReadyReplicas = 5
 # client.Status().Update(ctx, webapp)
 ```
 
-### 4.2 Scale Subresource
-
-The scale subresource lets `kubectl scale` and HPA work with your custom resource:
+The scale subresource is another operational contract. It lets tools such as `kubectl scale` and the Horizontal Pod Autoscaler interact with your custom resource through the standard `scale` interface rather than learning your entire schema. To enable it, you point Kubernetes at the desired replicas field, the observed replicas field, and optionally the label selector field that identifies controlled pods.
 
 ```yaml
 versions:
@@ -591,25 +547,19 @@ versions:
       labelSelectorPath: .status.labelSelector
 ```
 
-Now you can:
+Now standard scaling commands can target the custom resource:
 
 ```bash
 # Scale the custom resource
-k scale webapp my-app --replicas=5
+kubectl scale webapp my-app --replicas=5
 
 # Use HPA
-k autoscale webapp my-app --min=2 --max=10 --cpu-percent=80
+kubectl autoscale webapp my-app --min=2 --max=10 --cpu-percent=80
 ```
 
-> **Pause and predict**: If you configure the HPA to scale your custom resource, but forget to define the `scale` subresource in your CRD, what exact error or behavior will you observe when the HPA attempts to read the current replica count?
+Pause and predict: if you configure HPA for your custom resource but omit the `scale` subresource, what breaks first? The HPA has no standard scale endpoint to read or write for that resource, so it can not reliably determine current replicas or update desired replicas. The fix is not an HPA flag; it is a CRD contract that exposes scale paths with fields your controller actually maintains.
 
----
-
-## Part 5: Printer Columns
-
-### 5.1 Custom kubectl Output
-
-By default, `kubectl get <your-crd>` shows only Name and Age. Printer columns let you display useful fields:
+Printer columns complete the basic operator experience. By default, `kubectl get` for a custom resource shows little more than name and age, which forces users to inspect YAML for every question. Additional printer columns let the API server publish useful JSONPath snippets so clients can show image, desired replicas, ready replicas, phase, schedule, last backup time, or other fields that matter during normal triage.
 
 ```yaml
 versions:
@@ -649,7 +599,7 @@ my-app     nginx:1.27        3          3       True     5m
 frontend   react-app:2.1     2          1       False    2m
 ```
 
-### 5.2 JSONPath Reference for Printer Columns
+Good printer columns answer the first operational question, not every possible question. Use priority zero for the columns most users need on a narrow terminal, and assign higher priorities to fields that help debugging but make default output too wide. If a column requires a complex JSONPath over an array, test it against empty, missing, and multi-item data so the output stays predictable.
 
 | JSONPath Expression | Selects |
 |-------------------|---------|
@@ -659,13 +609,9 @@ frontend   react-app:2.1     2          1       False    2m
 | `.metadata.creationTimestamp` | Standard field (use with `type: date`) |
 | `.metadata.labels.app` | Label value |
 
----
+### A Production-Grade WebApp CRD
 
-## Part 6: Complete Production CRD
-
-### 6.1 Putting It All Together
-
-Here is a production-grade CRD that uses every feature covered in this module. Save this as `webapp-crd.yaml`:
+The following CRD brings the pieces together into one definition. It uses a stable API group, a namespaced resource, a single served storage version, the status and scale subresources, printer columns, bounded fields, list map semantics, default values, and CEL cross-field validation. In a generated operator project this YAML would usually come from Go markers and controller-gen, but reading the expanded CRD helps you see exactly what the API server receives.
 
 ```yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -732,7 +678,7 @@ spec:
             - image
             x-kubernetes-validations:
             - rule: "self.minReplicas <= self.maxReplicas"
-              message: "minReplicas cannot exceed maxReplicas"
+              message: "minReplicas must not exceed maxReplicas"
             - rule: "self.replicas >= self.minReplicas && self.replicas <= self.maxReplicas"
               message: "replicas must be within [minReplicas, maxReplicas]"
             properties:
@@ -876,18 +822,18 @@ spec:
                       format: date-time
 ```
 
-### 6.2 Testing the CRD
+When you test a production CRD, test both the happy path and the rejection paths. A CRD that only accepts valid examples may still be too permissive, and a CRD that rejects one invalid example may still miss a dangerous edge case. Server-side dry run is the right default because it exercises the API server validation stack without leaving a resource behind.
 
 ```bash
 # Apply the CRD
-k apply -f webapp-crd.yaml
+kubectl apply -f webapp-crd.yaml
 
 # Verify it registered and wait for the API server to serve it
-k wait --for=condition=established crd/webapps.apps.kubedojo.io
-k api-resources | grep webapp
+kubectl wait --for=condition=established crd/webapps.apps.kubedojo.io
+kubectl api-resources | grep webapp
 
 # Create a valid WebApp
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -922,11 +868,11 @@ spec:
 EOF
 
 # Check printer columns
-k get webapps
-k get wa            # shortName works
+kubectl get webapps
+kubectl get wa            # shortName works
 
 # Try an invalid resource to diagnose validation failures using server dry-run
-cat << 'EOF' | k apply --dry-run=server -f -
+cat << 'EOF' | kubectl apply --dry-run=server -f -
 apiVersion: apps.kubedojo.io/v1beta1
 kind: WebApp
 metadata:
@@ -940,105 +886,206 @@ EOF
 # Expected: admission error from CEL validation
 
 # Test scale subresource
-k scale webapp my-frontend --replicas=5
-k get webapp my-frontend -o jsonpath='{.spec.replicas}'
+kubectl scale webapp my-frontend --replicas=5
+kubectl get webapp my-frontend -o jsonpath='{.spec.replicas}'
 ```
+
+Which approach would you choose here and why: a broad schema that accepts nearly any field so the controller can decide later, or a stricter schema that rejects unknown and malformed data up front? For platform APIs, the stricter schema usually gives a better operational outcome because every client gets the same contract, and invalid data does not drift through watches, caches, backups, and debugging tools. Use controller logic for reconciliation and external state, not for basic shape validation that admission can enforce.
+
+### Operating and Evolving CRDs Safely
+
+Publishing the first version of a CRD is usually the easy part; operating it after other teams depend on it is the real test. Treat the CRD manifest as an API artifact with the same review standard you would apply to an HTTP endpoint or a shared library. A reviewer should ask whether every required field is truly required, whether optional fields have sensible defaults, whether list merge semantics match user expectations, and whether the status shape gives a controller enough room to explain partial progress instead of only success or failure.
+
+Start every CRD review with stored data in mind. Once an object is accepted, it may be stored in etcd, copied into backups, watched by controllers, indexed by clients, exported by audit tooling, and committed into GitOps repositories. A loose field that slips through admission can therefore become part of the operational record even if the controller later ignores it. Strong schemas are not busywork; they reduce the amount of invalid state that every other component has to tolerate.
+
+The safest schema review pattern is to work backward from bad examples. Write one valid manifest, then write manifests that omit required fields, typo important fields, exceed every maximum, use unsupported enum values, invert cross-field relationships, and create empty arrays or maps where the controller expects content. Run those manifests with server-side dry run and confirm the API server returns useful messages. If a bad manifest is accepted, improve the schema before adding controller code that compensates for it.
+
+Defaulting deserves the same discipline as validation. A default value is not just a convenience for users; it becomes persisted API behavior that clients may learn to rely on. Prefer defaults that are conservative, inexpensive, and safe when a user is new to the API. Avoid defaults that allocate expensive infrastructure, enable public exposure, or hide a policy decision that should be explicit in a manifest reviewed by the owning team.
+
+CRD status design should answer three questions for an operator: what generation did the controller observe, what condition currently blocks progress, and what field or external dependency should be checked next. Conditions are usually more durable than a single phase string because they let you represent multiple truths at once, such as `Ready=False`, `Progressing=True`, and `Degraded=True`. A phase can still be helpful in printer columns, but conditions give automation and humans richer diagnostic structure.
+
+When you add conditions, keep them map-like by condition type so server-side apply and patch behavior stay predictable. A controller that replaces the whole conditions array on every reconcile can fight with other writers and make historical transitions hard to read. A controller that updates one condition type at a time, includes `observedGeneration`, and writes clear reason strings produces status that feels native to Kubernetes. The CRD schema should support that behavior by constraining condition status values and bounding message lengths.
+
+Version planning should begin before the first public release, even if you only serve one version on day one. Decide what counts as compatible for your API: adding optional fields, adding new enum values, changing defaults, tightening validation, and renaming fields have different risk profiles. Tightening validation can break existing manifests that were previously accepted, so it needs the same care as a field removal. If you discover invalid stored objects, migrate them before making a rule stricter.
+
+Deprecation warnings are useful because they meet users where they already are: inside the API request. A warning on a served version tells an old script that it still works today but needs attention before removal. That warning is most valuable when paired with a migration guide, conversion behavior, and a clear date or release target in project documentation. A warning without a migration path only creates noise, while a removal without warning creates avoidable outages.
+
+Conversion webhooks should be boring by design. They should not call cloud APIs, read unrelated cluster state, or make policy decisions that vary by time of day. Their job is to preserve API meaning between versions, and every extra dependency expands the blast radius of reads and writes. If conversion fails, clients may be unable to read objects in a requested version, so test webhook availability, TLS configuration, and version coverage before making older and newer versions depend on it.
+
+A useful conversion test suite includes round-trip checks. Convert an old object to the new version, then convert it back and verify the fields old clients care about are still present with the same meaning. Convert a new object to the old version and decide how unsupported new fields degrade. Sometimes you can preserve data in annotations or status during migration, but sometimes the honest answer is that old versions can only serve a lossy view and should be deprecated quickly.
+
+Storage migration is an operational event, not just a YAML edit. After the storage version changes, reads can convert objects on demand, but the persisted representation may remain mixed until objects are rewritten. That matters for backups, disaster recovery, direct etcd inspection, and performance during large list operations. Plan migrations during a maintenance window appropriate for the number of objects, and measure API server and webhook behavior under list and watch traffic before assuming the change is cheap.
+
+Server-side apply adds another reason to model list and map semantics carefully. If a field represents named entries, such as ports, conditions, notification destinations, or retention policies, atomic list behavior often creates unnecessary conflicts because the whole list acts like one managed field. Map semantics let different field managers own distinct entries when the key is stable. The cost is that you must choose the key carefully and validate enough of the item shape to prevent ambiguous ownership.
+
+Printer columns should be reviewed with real terminal output, not just by reading YAML. A column that looks reasonable in a CRD may wrap badly when names are long or status messages include detailed reasons. The default view should answer the first triage question: is the resource active, what target does it affect, what schedule or image is configured, and is the controller reporting progress? Wider diagnostic fields belong behind `priority: 1` so users can opt into them.
+
+RBAC is part of the CRD contract as soon as teams operate the resource. A user who can update the main resource should not automatically be able to update status, and a controller that updates status should not automatically be able to rewrite spec. Similarly, a team that can create namespaced custom resources should not necessarily be able to modify the CRD definition itself. Separate the cluster-admin responsibility of publishing APIs from the tenant responsibility of using those APIs.
+
+Admission webhooks and CEL rules complement each other, but they solve different problems. CEL is best for local, deterministic checks over the object being admitted. A validating webhook is better when the rule depends on external inventory, organization policy, or complex parsing that would make a CEL expression unreadable. A mutating webhook can fill values that CRD defaulting does not express, but every mutation should be predictable enough that users are not surprised when they read the object back.
+
+Observability for CRDs starts with the API server and continues into the controller. During development, watch API server validation errors, audit events, controller reconcile errors, and status transitions together. If users report that an object was accepted but nothing happened, first ask whether the object matches the schema, whether the controller observed the latest generation, whether status conditions explain the blockage, and whether printer columns surface enough state for a quick answer. That investigation path is much faster when the CRD was designed for diagnosis from the start.
+
+Testing should include upgrade and downgrade paths, not only fresh installs. Apply the old CRD, create old resources, upgrade the CRD, read those resources through each served version, create new resources, and verify older clients get either a compatible view or a clear deprecation path. Then test cleanup and deletion, because finalizers and custom resources can keep a CRD deletion from completing. These tests catch compatibility mistakes that unit tests around controller reconcile loops usually miss.
+
+Documentation should live beside the CRD definition, not only beside the controller. Users need to know which fields are required, which defaults are applied, which versions are deprecated, which status conditions are meaningful, and which printer columns are intended for routine triage. The CRD schema can include descriptions, but descriptions alone rarely explain migration choices or operational expectations. Pair schema comments with examples that show valid resources, rejected resources, and the expected `kubectl get` output.
+
+GitOps workflows make CRD compatibility especially important because manifests may be applied repeatedly by automation that has no memory of a deprecation meeting. A controller upgrade may happen quickly, but repository changes across many teams often take longer. Serving an old version with a warning gives those repositories time to move, while conversion keeps central storage consistent during the transition. If you remove a version before repositories are updated, the failure appears as an apply error in every pipeline still using the old API.
+
+Large clusters also change the cost model for CRD design. A resource that seems harmless with three objects may be expensive with thousands of objects, especially if status is noisy or unbounded fields make each object large. Every status update can trigger watches, cache updates, and downstream reconciles. Bound message sizes, avoid writing status when nothing changed, and keep high-cardinality event-like data out of the custom resource unless it is truly part of the desired or observed state.
+
+Be careful with fields that look like escape hatches. A generic `config` map, a preserved unknown subtree, or an untyped `template` field can be useful when embedding another API, but it also weakens validation and server-side apply ownership. If you need an extension point, name it clearly, bound its size, and document who owns its contents. Do not use an escape hatch to avoid deciding the shape of fields that your controller already depends on.
+
+Deletion semantics belong in the API conversation too. Many custom resources use finalizers so a controller can clean up external resources before the object disappears. That means users need status conditions and events that explain deletion progress, and the schema should include enough identity fields for the controller to clean up reliably. If an API allows users to change those identity fields after creation, deletion may become ambiguous, so consider immutability rules for fields that name external resources.
+
+Field immutability is one of the most useful CEL patterns for CRDs that manage durable infrastructure. A backup target, cloud database identifier, or storage class may be safe to choose at creation time but risky to mutate later. You can compare `self` and `oldSelf` to reject updates that would change such a field, then ask users to create a new resource when they need a different target. That makes disruptive changes explicit instead of hiding them in a normal patch.
+
+Finally, review CRDs from the perspective of the person on call. During an incident, they will not read your controller code first; they will run discovery commands, list resources, inspect status, and look for recent events. If the CRD has clear printer columns, bounded and meaningful status, explicit conditions, and validation messages that point to the bad field, the API itself helps them move quickly. If the CRD is a loose data bag, the on-call engineer has to reverse-engineer intent while the system is already failing.
+
+The practical rule is simple: make invalid states unrepresentable when the API server has enough information to reject them. Let the controller focus on the changing world outside the object, such as pods becoming ready, backups completing, certificates renewing, or cloud resources appearing. A CRD that accepts nearly anything forces the controller to be both API server and reconciler. A CRD with a clear schema, version strategy, subresources, and diagnostic columns lets Kubernetes carry more of the API contract for you.
+
+---
+
+## Patterns & Anti-Patterns
+
+CRD design patterns are really API maintenance patterns. The YAML may look static, but the resource becomes part of user workflows, Git repositories, automation scripts, dashboards, alerts, and RBAC rules. Design choices that feel minor during the first implementation become expensive once clients depend on them, so use the table below as a design review checklist before publishing a new version.
+
+| Pattern | When to Use | Why It Works | Scaling Consideration |
+|---------|-------------|--------------|-----------------------|
+| Structural schema first | Every `apiextensions.k8s.io/v1` CRD | Gives the API server enough information for pruning, validation, defaulting, and server-side apply | Add bounds to strings, arrays, and maps so objects stay within practical limits |
+| Version before breaking shape | Any API that external clients use | Lets old and new clients coexist while you migrate manifests and controllers | Conversion code must be tested as compatibility code, not treated as glue |
+| Status and scale as contracts | Resources reconciled by controllers or autoscalers | Separates user intent from observed state and lets standard tools interact with the resource | Controller RBAC should target `/status`, and HPA needs maintained scale fields |
+| Printer columns for first triage | Resources users inspect during incidents | Makes `kubectl get` useful without forcing every user into raw YAML | Keep default columns narrow and move secondary fields behind `-o wide` |
+
+Anti-patterns usually appear when a team treats a CRD as an internal serialization format instead of a public API. That temptation is understandable because CRDs are easy to apply and change, but the ease is misleading. Once a field exists in live manifests, changing or deleting it has the same compatibility cost as changing any other API field.
+
+| Anti-Pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Controller-only validation | Invalid state reaches etcd and every watcher before the controller reacts | Reject shape, range, enum, and cross-field errors in the CRD schema |
+| Root-level arbitrary objects | Unknown fields bypass the contract and surprise server-side apply | Model known fields explicitly, preserving unknown fields only in named extension subtrees |
+| Silent version removal | Older clients fail suddenly when a served version disappears | Deprecate first, publish warnings, keep conversion working, and migrate clients deliberately |
+| Status in user manifests | Users or GitOps tools overwrite observed state | Enable the status subresource and grant status updates only to controllers |
+
+---
+
+## Decision Framework
+
+Use CRD features according to the kind of compatibility problem you are solving. The safest path is not always the most complicated path; a simple additive schema change may not need a webhook, while a renamed field with changed meaning almost certainly does. The following matrix is a practical way to choose the smallest mechanism that still preserves a clear API contract.
+
+| Situation | Use This | Avoid This | Reasoning |
+|-----------|----------|------------|-----------|
+| A field is required for every useful object | `required` plus a specific type | Controller errors after creation | Admission feedback is faster and prevents bad stored state |
+| A field has a safe common value | `default` in the schema | Mutating controller patches after creation | Defaults become visible and consistent before validation and storage |
+| Two fields must agree | CEL validation | A long controller reconcile branch | Cross-field admission keeps invalid combinations out of etcd |
+| A new optional field is added | Same version or new served version, depending on stability | Immediate storage-version flip | Additive changes do not automatically require conversion |
+| A field is renamed or restructured | New version plus conversion webhook | `None` conversion with incompatible shapes | Clients need stable meaning across requested versions |
+| Operators need quick status | Printer columns and status subresource | Requiring raw YAML inspection | Discovery metadata should support routine triage |
+| Autoscaling should target the CRD | Scale subresource | Custom HPA workarounds | Standard tools expect the Kubernetes scale interface |
+
+An implementation flow helps keep the order straight. Start with the resource contract and schema, then add validation for invalid inputs, then add operational interfaces, and only then make versioning decisions for compatibility. If you start with conversion or controller code before the schema is stable, you risk building complicated machinery around a contract that has not yet been reviewed.
+
+---
+
+## Did You Know?
+
+1. CRDs became available in beta form long before `apiextensions.k8s.io/v1`, but structural schemas became mandatory for v1 CRDs in Kubernetes 1.16, which changed CRDs from mostly flexible JSON storage into much stronger API contracts.
+2. Kubernetes stores custom resources in etcd through the same API server machinery as built-in objects, so a poorly bounded CRD can create real storage and watch pressure even though no custom storage backend was written.
+3. CEL validation for CRDs lets many cross-field checks run directly in API server admission, which avoids deploying a validating admission webhook for simple relationships such as `minReplicas <= maxReplicas`.
+4. A CRD can serve multiple versions while storing only one version, so the version in a user's manifest is not necessarily the representation persisted in etcd.
 
 ---
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| Non-structural schema | CRD rejected on apply | Ensure every field has a `type` |
-| Missing `required` on spec | Users create empty objects | Mark essential fields as required |
-| Regex too permissive | Invalid data gets through | Test patterns with edge cases |
-| No status subresource | Users can overwrite controller status | Always enable status subresource |
-| Changing storage version without migration | Old objects read with wrong schema | Migrate storage or use conversion webhook |
-| Using `additionalProperties: true` at root | Untyped fields bypass validation | Only use on specific map fields |
-| Forgetting printer columns | `kubectl get` shows only Name/Age | Add columns for key spec/status fields |
-| CEL rules too complex | Slow validation, hard to debug | Keep rules simple, test individually |
-| No `maxItems` / `maxLength` | Unbounded data fills etcd | Set reasonable limits on all collections |
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Non-structural schema | Teams copy old examples or leave nested objects untyped | Give every field an explicit type and keep validation keywords inside typed fields |
+| Missing `required` on `spec` | Early examples focus on successful manifests and skip empty-object tests | Mark essential fields as required and test empty or partial resources with server-side dry run |
+| Regex too permissive | The pattern validates one happy-path string but not edge cases | Test valid and invalid examples, then pair patterns with min and max length bounds |
+| No status subresource | The first controller writes status directly and nobody notices the ownership problem | Enable `status: {}` and update status through the `/status` subresource |
+| Changing storage version without migration | Teams expect the storage flag to rewrite old objects immediately | Plan conversion and storage migration, then verify storedVersions and object rewrites |
+| Using arbitrary maps at the root | A flexible data bag feels faster than modeling the API | Keep the root structural and preserve unknown fields only in deliberate extension fields |
+| Forgetting printer columns | Developers test with `kubectl get -o yaml` instead of operator workflows | Add narrow default columns and move secondary diagnostics behind priority fields |
+| CEL rules too complex | Business policy gets pushed into admission because it is convenient | Keep CEL deterministic and local, and use webhooks or controllers for external policy |
 
 ---
 
 ## Quiz
 
-1. **You are reviewing a colleague's CRD pull request. The schema uses `additionalProperties: true` at the root level and lacks explicit `type` declarations for several nested objects. When they try to apply it to a Kubernetes 1.22 cluster, it fails. Why does this happen, and what specific changes are needed to make the schema 'structural'?**
-   <details>
-   <summary>Answer</summary>
-   The API Server rejects the CRD because Kubernetes 1.16+ strictly requires structural schemas for custom resources. A structural schema ensures the API Server can safely perform operations like server-side pruning and server-side apply. To fix this, your colleague must explicitly declare a `type` for every field, remove `additionalProperties` from the root of the schema, avoid references like `$ref`, and ensure all validation keywords are placed inside typed fields. Without these guarantees, the API Server cannot reliably validate or manage the lifecycle of the resource data.
-   </details>
+<details>
+<summary>1. You review a CRD pull request that uses `additionalProperties: true` at the root and omits explicit types from several nested objects. The CRD fails on a modern Kubernetes cluster. What should you change first, and why?</summary>
 
-2. **Your team has deployed a custom `Database` CRD with a `status` field, but without enabling the status subresource. A developer accidentally applies a manifest that overwrites the `status.activeConnections` field, causing your controller to panic. How does enabling the `status` subresource prevent this, and how does it change how the controller updates the status?**
-   <details>
-   <summary>Answer</summary>
-   Without the status subresource, the `status` field is treated like any other field in the `spec`, meaning anyone with update permissions on the resource can modify it directly. Enabling the status subresource creates a strict separation of concerns where the main resource endpoint ignores changes to `status`, and the separate `/status` endpoint ignores changes to `spec`. This prevents users from accidentally or maliciously tampering with the observed state. Your controller will then need to specifically target the `/status` subresource endpoint to update the `activeConnections` metric, ensuring only authorized components manage the state.
-   </details>
+The first fix is to make the schema structural by declaring explicit types for the root object and every modeled nested field. Root-level arbitrary properties prevent the API server from safely pruning, defaulting, and calculating managed fields, so the CRD is rejected before any custom resources can use it. Move flexible maps into specific typed fields if the API truly needs extensibility, and keep validation keywords attached to typed schema nodes. This directly tests the ability to design a CRD schema that admission can enforce.
 
-3. **Your cluster has a `Certificate` CRD installed with `v1alpha1` configured as the storage version and `v1beta1` as a served version. A developer creates a new certificate using the `v1beta1` API. If you inspect the raw data stored in etcd, what version will you see, and how did it get there?**
-   <details>
-   <summary>Answer</summary>
-   You will see the `v1alpha1` representation of the resource in etcd. When the API Server receives the `v1beta1` payload, it must first convert it to the designated storage version (`v1alpha1`) before persisting it. It accomplishes this either through a configured conversion webhook or via a no-op conversion if the strategy allows it. When any client subsequently reads the resource, the API Server will dynamically convert it from the `v1alpha1` storage format back to the version requested by the client on the fly.
-   </details>
+</details>
 
-4. **Users of your `BackupJob` CRD keep entering invalid cron strings like "every day" in the `schedule` field, causing the backend controller to crash. You want to reject these invalid inputs at the API server level before they even reach your controller. Write a CEL validation rule that ensures the `schedule` field contains exactly 5 space-separated fields.**
-   <details>
-   <summary>Answer</summary>
+<details>
+<summary>2. Your team has a `Database` CRD with a `status` field but no status subresource. A developer applies a manifest that overwrites `status.activeConnections`, and the controller reacts to false data. How does the status subresource change the failure mode?</summary>
 
-   ```yaml
-   x-kubernetes-validations:
-   - rule: "self.matches('^(\\\\S+\\\\s+){4}\\\\S+$')"
-     message: "schedule must be a valid cron expression with 5 fields"
-   ```
+With the status subresource enabled, updates to the main resource endpoint ignore `status`, so a user manifest can not accidentally claim observed state. The controller writes status through the separate `/status` endpoint, and RBAC can grant that permission without granting full spec updates. This keeps desired state and observed state under different ownership, which makes controller behavior easier to reason about. It also aligns the CRD with built-in Kubernetes resource conventions.
 
-   By embedding this CEL rule directly into the CRD schema, the API Server evaluates the regular expression during the admission phase. If a user submits an invalid string like "every day", the `matches` function evaluates to false, and the API Server synchronously rejects the request with the provided message. This prevents malformed data from ever being persisted to etcd or processed by your controller, significantly improving the robustness of your system. Note that while this validates the structural format, semantic validation of cron values requires a validating admission webhook.
-   </details>
+</details>
 
-5. **Two different automation scripts are trying to update the `ports` array in your custom `LoadBalancer` resource simultaneously. Script A adds port 80, while Script B adds port 443. Currently, whoever saves last overwrites the other's port. How can you use `x-kubernetes-list-type: map` to solve this race condition?**
-   <details>
-   <summary>Answer</summary>
-   By default, Kubernetes treats arrays as atomic lists, meaning an update will replace the entire array, causing the race condition you observed. By adding the `x-kubernetes-list-type: map` annotation and specifying `x-kubernetes-list-map-keys`, you instruct Server-Side Apply (SSA) to treat the array as a map keyed by a specific field. When Script A and Script B apply their updates, the API Server will merge the items intelligently based on their unique keys rather than replacing the whole list. This allows multiple actors to safely manage distinct elements within the same array without conflict.
-   </details>
+<details>
+<summary>3. A `Certificate` CRD serves `v1alpha1` and `v1beta1`, but `v1alpha1` is still the storage version. A developer creates a `v1beta1` object. What representation is stored, and what must happen during reads?</summary>
 
-6. **You've added `default: 2` to the `replicas` field of your `WebApp` CRD, along with a CEL rule requiring `replicas >= minReplicas`. A user submits a manifest containing `minReplicas: 1` but omits the `replicas` field entirely. Does the resource pass validation, and what exactly happens to the `replicas` field during the request lifecycle?**
-   <details>
-   <summary>Answer</summary>
-   Yes, the resource will pass validation because the defaulting mechanism happens before the validation phase. When the API Server receives the request, the mutating admission phase applies the CRD's defaulting logic, injecting `replicas: 2` into the object. By the time the CEL validation rule evaluates `self.replicas >= self.minReplicas`, the value is 2, satisfying the condition. The resource is then persisted to etcd with the default value explicitly set, even though the user didn't provide it in their original manifest.
-   </details>
+The API server stores the object in the configured storage version, so the persisted representation is `v1alpha1`. On write, the incoming `v1beta1` object is converted to the storage form before it is saved. On read, the API server converts the stored object to whichever served version the client requested. If the versions are structurally different, a conversion webhook must perform that translation correctly or clients will see failures or incorrect data.
 
-7. **Your platform team complains that `kubectl get myresource` outputs too many columns and wraps on smaller terminal screens. You want to hide the `LastBackup` and `StatusReason` columns by default, but still allow power users to view them without outputting raw JSON/YAML. How do you configure the printer columns to achieve this?**
-   <details>
-   <summary>Answer</summary>
-   You achieve this by assigning a `priority: 1` (or higher) to the `LastBackup` and `StatusReason` printer columns, while keeping the essential columns at `priority: 0`. Priority 0 columns are always displayed in the standard `kubectl get` output, keeping the default view clean and concise. Columns with priority 1 or higher are considered extended information and are only revealed when a user explicitly requests them by appending `-o wide` to their command. This provides a better user experience by balancing immediate readability with accessible detail.
-   </details>
+</details>
 
-8. **A developer typos the `image` field as `imgae` in their `DeploymentConfig` custom resource manifest. The CRD uses a strict structural schema. They apply the manifest, receive a success message, but the controller doesn't deploy the new image. When they inspect the resource in the cluster, the `imgae` field is completely missing. Why did this happen?**
-   <details>
-   <summary>Answer</summary>
-   The API Server silently removed the `imgae` field because of a feature called server-side pruning, which is enforced by structural schemas. When the API Server receives a resource containing fields not explicitly defined in the CRD's OpenAPI schema, it drops those unknown fields before validating and persisting the object to etcd. This ensures that the stored data strictly conforms to the declared schema and prevents obsolete or misspelled data from accumulating over time. If you legitimately need to store arbitrary data in a specific sub-tree, you must explicitly configure that field with `x-kubernetes-preserve-unknown-fields: true`.
-   </details>
+<details>
+<summary>4. Users keep entering schedule strings such as `every day` in a `BackupJob` CRD, and the controller rejects them later. How would you reject obviously malformed schedules before storage?</summary>
+
+Add schema validation to the `schedule` field so the API server rejects malformed values during admission. A CEL rule can check that the string has five space-separated fields, while a `minLength` and `maxLength` can keep the field bounded. This will not prove the cron expression is semantically perfect, but it blocks common malformed input before it reaches etcd. More advanced calendar semantics belong in a webhook or controller because they require deeper parsing.
+
+```yaml
+x-kubernetes-validations:
+- rule: "self.matches('^(\\\\S+\\\\s+){4}\\\\S+$')"
+  message: "schedule must be a valid cron expression with 5 fields"
+```
+
+</details>
+
+<details>
+<summary>5. Two automation scripts update different entries in a CRD `ports` array, and the last writer overwrites the other writer's entry. Which schema extension helps, and what key must you choose?</summary>
+
+Use `x-kubernetes-list-type: map` with `x-kubernetes-list-map-keys` so server-side apply can manage individual list entries instead of treating the whole array as one atomic field. The key must be stable and unique for the list, such as `containerPort` or a port `name`, depending on your API semantics. This lets separate field managers own different entries without replacing the entire list. The design still needs validation to prevent duplicate or ambiguous keys.
+
+</details>
+
+<details>
+<summary>6. A user omits `replicas`, but the schema has `default: 2` and a CEL rule requiring `replicas >= minReplicas`. The manifest includes `minReplicas: 1`. Does validation pass, and why?</summary>
+
+Validation passes because CRD defaulting runs before validation. The API server inserts `replicas: 2` into the object, and the CEL rule evaluates against the defaulted object rather than the user's original sparse manifest. The stored resource then contains the explicit default value, which makes later reads and controller behavior consistent. If the default would violate another rule, the request would fail after defaulting.
+
+</details>
+
+<details>
+<summary>7. Operators say `kubectl get backuppolicies` wraps on small terminals, but they still need detailed diagnostic fields sometimes. How should you configure printer columns?</summary>
+
+Keep only the essential fields at priority zero, because those columns are shown in normal `kubectl get` output. Move secondary fields such as detailed reason strings, backup counts, or timestamps to priority one or higher so they appear with `-o wide`. This gives routine triage a compact default view while preserving detail for power users. Test the JSONPath for missing status fields so new objects do not produce confusing output.
+
+</details>
+
+<details>
+<summary>8. A developer writes `imgae` instead of `image` in a strict custom resource manifest. The apply succeeds, but the misspelled field disappears when they read the object back. What happened?</summary>
+
+The API server pruned the unknown field because the CRD has a structural schema that does not include `imgae`. Pruning removes fields outside the declared schema before persistence, which keeps stored objects aligned with the API contract. The apply can still succeed if the required real `image` field is absent only when the schema failed to mark it required. The fix is to require important fields and use server-side dry run tests that include common typos and omissions.
+
+</details>
 
 ---
 
 ## Hands-On Exercise
 
-**Task**: Create a production-grade CRD for a `BackupPolicy` resource with comprehensive validation, multiple versions, printer columns, and subresources.
+Exercise scenario: you are publishing a `BackupPolicy` API for application teams that need scheduled backups for workloads and persistent data. The API starts with a simple `v1alpha1` shape and evolves into a richer `v1beta1` shape with structured retention, target selectors, notifications, status, and printer columns. Your goal is not to build the backup controller yet; your goal is to make the Kubernetes API contract strong enough that a future controller receives valid, bounded, and discoverable objects.
 
-**Requirements**:
+### Task 1: Create the CRD
 
-The `BackupPolicy` CRD should model a backup scheduling system with:
-- **v1alpha1**: Basic fields (schedule, retention days, target)
-- **v1beta1**: Extended fields (schedule, retention with policy, target with selectors, notifications)
-- Validation: cron schedule format, sane retention limits, cross-field validation
-- Status and scale subresources
-- Printer columns showing schedule, retention, last backup time, status
+Apply a CRD that serves both versions, marks `v1beta1` as storage, deprecates `v1alpha1`, enables status, and publishes useful printer columns. Read the manifest before running it and identify which validation rule prevents `retention.maxCount` from being lower than `retention.minCount`.
 
-**Steps**:
-
-1. **Create the CRD** with both versions:
 ```bash
-cat << 'CRDEOF' | k apply -f -
+cat << 'CRDEOF' | kubectl apply -f -
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1238,14 +1285,24 @@ spec:
 CRDEOF
 ```
 
+<details>
+<summary>Solution notes</summary>
+
+The cross-field rule is attached to `spec` in the `v1beta1` schema and compares `self.retention.maxCount` with `self.retention.minCount`. If the CRD applies successfully, Kubernetes has accepted the structural schema and registered the resource path. If the apply fails, inspect the validation error first rather than changing the controller, because the controller is not involved in CRD registration.
+
+</details>
+
 ```bash
 # Wait for the CRD to become established before using it
-k wait --for=condition=established crd/backuppolicies.data.kubedojo.io
+kubectl wait --for=condition=established crd/backuppolicies.data.kubedojo.io
 ```
 
-2. **Create a valid BackupPolicy**:
+### Task 2: Create a Valid BackupPolicy
+
+Create a `v1beta1` resource that exercises schedule, retention, target, and notification fields. The Slack endpoint uses a training value that is clearly not a real credential, because examples should teach structure without teaching learners to paste secrets into repositories.
+
 ```bash
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: data.kubedojo.io/v1beta1
 kind: BackupPolicy
 metadata:
@@ -1262,22 +1319,42 @@ spec:
     name: postgres
   notifications:
   - type: slack
-    endpoint: "https://hooks.slack.com/services/xxx"
+    endpoint: "https://hooks.slack.com/services/YOUR/WEBHOOK/HERE"
     onlyOnFailure: true
 EOF
 ```
 
-3. **Verify printer columns**:
+<details>
+<summary>Solution notes</summary>
+
+This object should be accepted because it includes both required `spec` fields, satisfies the retention relationship, and uses a notification object with the required `type` and `endpoint`. After creation, read the object back and notice that defaults such as `paused` may appear even though you did not provide them. That confirms defaulting happened before storage.
+
+</details>
+
+### Task 3: Verify Discovery and Printer Columns
+
+Use discovery and normal `kubectl get` output to confirm the API is usable by humans and automation. The short name is convenient interactively, but the full command remains readable in scripts and module examples.
+
 ```bash
-k get backuppolicies
-k get bp              # shortName
-k get bp -o wide      # includes priority 1 columns
+kubectl get backuppolicies
+kubectl get bp              # shortName
+kubectl get bp -o wide      # includes priority 1 columns
 ```
 
-4. **Test validation** (these should fail):
+<details>
+<summary>Solution notes</summary>
+
+The default output should include schedule, retention, last backup, status, and age columns. Because no controller is updating status in this exercise, some status columns may be empty, and that is expected. The `-o wide` output should include the priority-one backup count column, which demonstrates how printer column priority controls default width.
+
+</details>
+
+### Task 4: Test Validation Failures
+
+Submit invalid resources with server feedback visible. These examples deliberately use `|| true` so a shell session can continue after the expected failure, but do not interpret a continued shell as a successful Kubernetes request.
+
 ```bash
 # Missing required field
-cat << 'EOF' | k apply -f - 2>&1 || true
+cat << 'EOF' | kubectl apply -f - 2>&1 || true
 apiVersion: data.kubedojo.io/v1beta1
 kind: BackupPolicy
 metadata:
@@ -1287,7 +1364,7 @@ spec:
 EOF
 
 # Invalid retention (minCount > maxCount)
-cat << 'EOF' | k apply -f - 2>&1 || true
+cat << 'EOF' | kubectl apply -f - 2>&1 || true
 apiVersion: data.kubedojo.io/v1beta1
 kind: BackupPolicy
 metadata:
@@ -1303,9 +1380,19 @@ spec:
 EOF
 ```
 
-5. **Test the deprecated v1alpha1**:
+<details>
+<summary>Solution notes</summary>
+
+The first request should fail because `target` is required, and the second should fail because the CEL rule rejects the retention relationship. Both failures happen during admission, before the objects are stored. If an invalid object appears in `kubectl get backuppolicies`, review the schema location of the rule and confirm you applied the latest CRD definition.
+
+</details>
+
+### Task 5: Test the Deprecated Version
+
+Create an object through the deprecated version to observe the deprecation warning and reinforce the difference between served versions and the storage version. This is the kind of compatibility bridge you use while migrating old manifests.
+
 ```bash
-cat << 'EOF' | k apply -f -
+cat << 'EOF' | kubectl apply -f -
 apiVersion: data.kubedojo.io/v1alpha1
 kind: BackupPolicy
 metadata:
@@ -1318,24 +1405,57 @@ EOF
 # You should see a deprecation warning
 ```
 
-6. **Cleanup**:
+<details>
+<summary>Solution notes</summary>
+
+The request should still succeed because `v1alpha1` is served, but the warning tells users which version to adopt. Because `v1beta1` is storage, a complete production system would need conversion behavior if the versions have different shapes. This exercise focuses on the CRD surface, so treat the warning as a prompt to plan conversion before a real migration.
+
+</details>
+
+### Task 6: Cleanup
+
+Delete the resources and the CRD when you are finished. Removing the CRD removes the custom resource endpoint and the stored custom resources, so only run cleanup in a disposable learning cluster.
+
 ```bash
-k delete backuppolicies --all
-k delete crd backuppolicies.data.kubedojo.io
+kubectl delete backuppolicies --all
+kubectl delete crd backuppolicies.data.kubedojo.io
 ```
 
+<details>
+<summary>Solution notes</summary>
+
+After cleanup, `kubectl api-resources | grep backuppolicies` should no longer show the resource. If resources remain, check namespaces and finalizers before assuming the CRD delete failed. A real operator may add finalizers to custom resources, which can delay deletion until cleanup logic completes.
+
+</details>
+
 **Success Criteria**:
-- [ ] CRD registers successfully with both versions
-- [ ] Valid resources create without errors
-- [ ] Invalid resources are rejected with clear error messages
-- [ ] CEL cross-field validation works (minCount <= maxCount)
-- [ ] Printer columns display correctly
-- [ ] ShortName `bp` works
-- [ ] v1alpha1 shows deprecation warning
-- [ ] Status subresource is enabled (verify with `k get crd webapps.apps.kubedojo.io -o yaml`)
+
+- [ ] CRD registers successfully with both versions.
+- [ ] Valid resources create without errors.
+- [ ] Invalid resources are rejected with clear error messages.
+- [ ] CEL cross-field validation works for `minCount <= maxCount`.
+- [ ] Printer columns display correctly in default and wide output.
+- [ ] Short name `bp` works for interactive discovery.
+- [ ] `v1alpha1` shows a deprecation warning.
+- [ ] Status subresource is enabled when you inspect the CRD.
 
 ---
 
+## Sources
+
+- https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
+- https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/
+- https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/
+- https://kubernetes.io/docs/reference/kubernetes-api/extend-resources/custom-resource-definition-v1/
+- https://kubernetes.io/docs/reference/using-api/api-concepts/
+- https://kubernetes.io/docs/reference/using-api/deprecation-policy/
+- https://kubernetes.io/docs/reference/using-api/cel/
+- https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
+- https://kubernetes.io/docs/reference/using-api/server-side-apply/
+- https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/
+- https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
+- https://kubernetes.io/docs/reference/kubectl/jsonpath/
+
 ## Next Module
 
-[Module 1.3: Building Controllers with client-go](../module-1.3-controllers-client-go/) - Write a complete Kubernetes controller from scratch using the patterns you learned in Modules 1.1 and 1.2.
+[Module 1.3: Building Controllers with client-go](./module-1.3-controllers-client-go/) - Write a complete Kubernetes controller from scratch using the API design patterns you practiced in Modules 1.1 and 1.2.
