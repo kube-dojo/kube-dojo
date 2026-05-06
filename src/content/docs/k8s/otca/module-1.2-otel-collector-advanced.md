@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 1.2: OTel Collector Advanced"
 slug: k8s/otca/module-1.2-otel-collector-advanced
 sidebar:
@@ -15,43 +15,29 @@ sidebar:
 
 ---
 
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Design** multi-pipeline Collector configurations that route traces, metrics, and logs through distinct receiver/processor/exporter chains
-2. **Configure** advanced processors (filter, transform, tail-sampling, batch) to reduce volume while preserving critical signals
-3. **Deploy** the Collector as a DaemonSet (agent) and Deployment (gateway) with proper resource limits, health checks, and scaling
-4. **Debug** pipeline issues using the debug exporter, zpages, and Collector internal metrics to identify data loss or bottlenecks
-
----
+1. **Design** multi-pipeline Collector configurations that route traces, metrics, and logs through distinct receiver, processor, connector, and exporter chains.
+2. **Configure** advanced processors, including `memory_limiter`, `filter`, `transform`, `tail_sampling`, and `batch`, to reduce telemetry volume while preserving critical signals.
+3. **Deploy** the Collector as a Kubernetes 1.35 DaemonSet agent and Deployment gateway with resource limits, health checks, and scaling behavior that match the workload.
+4. **Diagnose** Collector pipeline issues using the debug exporter, zpages, and Collector internal metrics to identify bottlenecks, drops, and exporter failures.
+5. **Evaluate** OTLP transports, connectors, and Collector distributions so you can choose between gRPC, HTTP, span-derived metrics, Core, Contrib, and custom builds.
 
 ## Why This Module Matters
 
-The OpenTelemetry Collector is the **backbone of every production observability pipeline**. It receives, processes, and exports telemetry data — traces, metrics, and logs — and it does so at scale, reliably, and vendor-neutrally. Domain 3 accounts for 26% of your OTCA exam. You cannot pass without mastering the Collector.
+Hypothetical scenario: your platform team has just replaced three vendor agents with OpenTelemetry Collectors across a Kubernetes 1.35 cluster. The pods are Ready, the health endpoint returns success, and application teams are already sending OTLP traces, Prometheus-format metrics, and container logs into the new path. On Monday morning, the incident review asks why slow checkout traces are missing while noisy readiness checks still appear in the backend. The Collector did not crash, and Kubernetes did not report a failed rollout; the failure lives in the pipeline logic between receiver, processor, connector, and exporter.
 
-If OpenTelemetry is the universal language of observability, the Collector is the postal service. It picks up signals from your applications, routes them through processing, and delivers them wherever they need to go. Misconfigure it and you get data loss, memory explosions, or a pipeline that silently drops the traces you need most.
+That is the operational reason this module spends so much time on configuration shape. The Collector is not merely a sidecar that forwards whatever it sees. It is a programmable telemetry data plane: it receives data through multiple protocols, applies ordered processors, bridges signals through connectors, sends data to one or more backends, and exposes its own health and debugging surfaces. A configuration can be syntactically valid while still dropping the exact spans you need, duplicating cluster metrics, or making tail-sampling decisions with incomplete traces.
 
-> **War Story: The Silent Pipeline**
->
-> A platform team deployed the OTel Collector to replace their vendor-specific agents. Everything looked green — health checks passed, pods were running. But after two weeks, the on-call engineer noticed zero traces for their payment service. The culprit? A `filter` processor with a regex that accidentally matched the `payment-` service prefix. The Collector was healthy. The pipeline was working. It was just filtering out exactly the data they needed most. Lesson: always validate your pipeline end-to-end with the `debug` exporter before going to production. Trust, but verify.
+For the OTCA exam, Domain 3 matters because it tests whether you can reason about that data plane under constraints, not whether you can memorize a single example file. For real operations, the same skill decides whether observability becomes a reliable troubleshooting tool or another distributed system that needs debugging during an outage. In this lesson, you will build from the Collector's config anatomy to multi-signal production patterns, then practice validating a working pipeline with debug output, zpages, and internal metrics.
 
----
+## Collector Architecture and Configuration Anatomy
 
-## Did You Know?
+The Collector configuration is best read as a wiring diagram rather than as a long YAML file. Receivers describe how telemetry enters, processors describe what happens to it in memory, exporters describe where it leaves, connectors bridge one pipeline into another, extensions expose supporting services, and the `service` section decides which components are actually active. A component definition by itself is only inventory; the pipeline list is the assembly line that makes it run.
 
-- The OTel Collector can process **over 1 million spans per second** on a single instance with proper tuning. Most teams hit config issues long before they hit performance limits.
-- The `spanmetrics` connector can **generate RED metrics (Rate, Errors, Duration) automatically from traces** — meaning you get metrics for free without instrumenting anything twice.
-- The Collector's `transform` processor uses **OTTL (OpenTelemetry Transformation Language)**, a purpose-built language that lets you modify, filter, and route telemetry using SQL-like expressions.
-- There are **three official distributions** of the Collector: Core (minimal), Contrib (batteries-included), and Custom (build your own with `ocb`). The exam expects you to know when to use each.
-
----
-
-## Part 1: Collector Architecture and Config Structure
-
-### 1.1 The config.yaml Anatomy
-
-Every Collector configuration has **five top-level sections**. Think of it as assembling a factory: you define what comes in (receivers), how it gets processed (processors), where it goes out (exporters), and then you wire them together (service/pipelines).
+That distinction prevents a common exam and production mistake. You can declare a `filter` processor, a `debug` exporter, or a `zpages` extension in the right top-level section, but none of those components affects telemetry until the `service` stanza references them. Treat the top-level component blocks like parts on a workbench, then treat `service.pipelines` as the exact order in which those parts are bolted into the machine.
 
 ```yaml
 # The five building blocks of every Collector config
@@ -78,13 +64,7 @@ service:      # Wires everything together into pipelines
       exporters: [otlp/backend]
 ```
 
-**Key rules for the service section:**
-- A component declared in `receivers`/`processors`/`exporters` does **nothing** until it appears in a pipeline under `service`.
-- Processors execute **in the order listed** — order matters.
-- A single receiver/exporter can appear in **multiple pipelines**.
-- Pipeline names under `traces`, `metrics`, and `logs` are the three signal types.
-
-### 1.2 Data Flow
+The most important design rule is that processors execute in the order listed in a pipeline. A `memory_limiter` near the end is less useful because data has already accumulated in earlier processors, while `batch` near the beginning can increase memory pressure before later filters remove unwanted telemetry. The exam often presents this as a simple ordering question, but the deeper lesson is that each processor changes the risk profile of the next component.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -104,15 +84,9 @@ service:      # Wires everything together into pipelines
 └─────────────────────────────────────────────────────────────────┘
 ```
 
----
+Notice that the diagram shows extensions beside the pipeline rather than inside it. Extensions do not transform telemetry records, but they can be essential for operating the Collector safely. Health checks make Kubernetes probes meaningful, zpages help you inspect live pipeline state, pprof supports profiling, and authentication extensions let receivers or exporters enforce basic trust boundaries before telemetry crosses namespace or network edges.
 
-## Part 2: Receivers — Getting Data In
-
-Receivers listen for or pull telemetry data. They are the **entry point** of every pipeline.
-
-### 2.1 OTLP Receiver (The Universal Input)
-
-The `otlp` receiver is the **most important receiver** on the exam. It accepts data over both gRPC (port 4317) and HTTP (port 4318).
+Receivers define the front door of the Collector. The OTLP receiver is the universal input for OpenTelemetry-native traffic, and it commonly listens on gRPC port 4317 and HTTP port 4318. The Prometheus receiver scrapes metrics endpoints, the filelog receiver reads node log files, the hostmetrics receiver collects local system metrics, and the Kubernetes cluster receiver reads cluster-wide state from the API server. Those receivers solve different collection problems, so you should not run all of them everywhere just because the distribution includes them.
 
 ```yaml
 receivers:
@@ -127,7 +101,7 @@ receivers:
           allowed_origins: ["*"]       # For browser-based apps
 ```
 
-**gRPC vs HTTP — when to use each:**
+When you choose between OTLP/gRPC and OTLP/HTTP, think first about the network path rather than the application language. gRPC is efficient for service-to-Collector and Collector-to-Collector traffic when you control HTTP/2 routing, but HTTP is friendlier to browsers, older proxies, and debugging with ordinary tools. If a question says a browser is sending telemetry directly, or a proxy cannot handle HTTP/2 cleanly, OTLP/HTTP is usually the pragmatic answer.
 
 | Aspect | gRPC (:4317) | HTTP (:4318) |
 |--------|-------------|-------------|
@@ -137,11 +111,7 @@ receivers:
 | Browser support | No (needs proxy) | Yes (for web apps) |
 | Best for | Service-to-collector, collector-to-collector | Browser RUM, edge ingestion |
 
-**Exam tip**: Default OTLP ports — **4317 for gRPC, 4318 for HTTP**. These are tested frequently.
-
-### 2.2 Prometheus Receiver
-
-Scrapes Prometheus-format metrics endpoints. Useful when you want the Collector to replace or augment a Prometheus server.
+Prometheus, file, host, and Kubernetes receivers add useful non-OTLP entry points, but they also tie the Collector to a deployment location. A filelog receiver needs node filesystem access, so it belongs on an agent DaemonSet. A `k8s_cluster` receiver reads global Kubernetes state, so running it on every node duplicates metrics and increases API pressure. Before running this, what output do you expect from each receiver if it is moved from an agent to a gateway, and which receivers would simply stop seeing their data source?
 
 ```yaml
 receivers:
@@ -154,9 +124,7 @@ receivers:
             - role: pod
 ```
 
-### 2.3 Filelog Receiver
-
-Reads logs from files on disk — essential for collecting container logs from nodes.
+Prometheus Kubernetes service discovery also needs Kubernetes API RBAC, typically `get`, `list`, and `watch` on the resource kinds it discovers, such as pods, endpoints, and services in the namespaces it scrapes.
 
 ```yaml
 receivers:
@@ -168,10 +136,6 @@ receivers:
           parse_from: attributes.time
           layout: '%Y-%m-%dT%H:%M:%S.%LZ'
 ```
-
-### 2.4 Host Metrics Receiver
-
-Collects system-level metrics (CPU, memory, disk, network) from the host.
 
 ```yaml
 receivers:
@@ -186,10 +150,6 @@ receivers:
       load: {}
 ```
 
-### 2.5 Kubernetes Cluster Receiver
-
-Collects cluster-level metrics from the Kubernetes API server — node count, pod phases, resource quotas.
-
 ```yaml
 receivers:
   k8s_cluster:
@@ -198,17 +158,9 @@ receivers:
     allocatable_types_to_report: [cpu, memory]
 ```
 
-> This receiver needs RBAC access to the Kubernetes API. It typically runs in **gateway mode** (one instance), not on every node.
+The `k8s_cluster` receiver is the clean example of "right component, wrong placement." It needs Kubernetes API permissions, and it observes objects that are already global from the perspective of a namespace. If you run it as a DaemonSet on every node, each agent reports similar cluster-level facts; if you run one gateway instance or one coordinated gateway Deployment, you get the same information with less duplicate work and less RBAC sprawl.
 
----
-
-## Part 3: Processors — Transforming Data In-Flight
-
-Processors modify telemetry between receivers and exporters. **Order matters** — they execute sequentially as listed in the pipeline.
-
-### 3.1 Batch Processor
-
-Groups data into batches before sending. This is **almost always the first processor you should add** — it dramatically reduces export overhead.
+Processors are where the Collector becomes a data shaping system instead of a forwarding proxy. The `memory_limiter` protects the process before buffering grows, `batch` improves exporter efficiency, `filter` removes telemetry you intentionally do not want, `attributes` edits attributes, `transform` applies OTTL statements, and `tail_sampling` delays decisions until it can evaluate a trace. Those processors can all be valid, but the order decides whether they reduce risk or amplify it.
 
 ```yaml
 processors:
@@ -218,9 +170,7 @@ processors:
     timeout: 200ms                # Flush interval even if batch isn't full
 ```
 
-### 3.2 Memory Limiter Processor
-
-Prevents the Collector from running out of memory. **Should be the first processor in every pipeline.**
+The batch processor is almost always present because exporters are more efficient when they send groups of telemetry items rather than one record at a time. Batching reduces request overhead and improves compression, but it also means the Collector briefly holds more data in memory. That tradeoff is why `batch` normally appears late in a pipeline, after processors have limited memory, dropped unwanted data, and redacted fields that should not leave the cluster.
 
 ```yaml
 processors:
@@ -230,11 +180,7 @@ processors:
     spike_limit_mib: 128          # Buffer for spikes
 ```
 
-When memory exceeds `limit_mib - spike_limit_mib` (384 MiB in this example), the processor starts refusing data. When it exceeds `limit_mib`, it force-drops data. This prevents OOM kills.
-
-### 3.3 Filter Processor
-
-Drops telemetry that matches (or doesn't match) conditions. Use it to reduce costs by discarding noisy, low-value data.
+In this memory limiter example, the processor begins refusing data when memory approaches the configured limit minus the spike allowance, and it force-drops under harder pressure. That behavior is not a substitute for correct resource requests and limits, but it gives the Collector a controlled failure mode before the container is killed. It is usually better to lose some telemetry intentionally and visibly than to have Kubernetes restart the entire pipeline without preserving context.
 
 ```yaml
 processors:
@@ -249,9 +195,7 @@ processors:
         - 'name == "http.server.duration" and resource.attributes["service.name"] == "debug-svc"'
 ```
 
-### 3.4 Attributes Processor
-
-Add, update, delete, or hash attributes on spans, metrics, or logs.
+The filter processor should be treated like a firewall rule for observability data. It is powerful because it removes low-value signals close to the source, but a broad condition can silently discard evidence you will need later. Use `error_mode: ignore` so a malformed record does not stop the processor, and validate the filter with the debug exporter before sending traffic only to the long-term backend.
 
 ```yaml
 processors:
@@ -266,9 +210,7 @@ processors:
         action: hash               # Hash PII
 ```
 
-### 3.5 Transform Processor (OTTL)
-
-The most powerful processor. Uses **OTTL (OpenTelemetry Transformation Language)** for arbitrary transformations.
+Attribute processing gives you a predictable way to normalize resource and span metadata before downstream queries depend on it. Adding an `environment` attribute can make dashboards consistent, deleting a password-like attribute prevents accidental exposure, and hashing an email address preserves grouping without retaining the original value. The key operational habit is to make these transformations explicit and reviewed, because observability metadata often becomes part of alerting, retention, and cost controls.
 
 ```yaml
 processors:
@@ -290,11 +232,7 @@ processors:
           - merge_maps(attributes, ParseJSON(body), "insert") where IsMatch(body, "^\\{")
 ```
 
-OTTL is a **high-priority exam topic**. Know these key functions: `set`, `delete`, `truncate_all`, `replace_pattern`, `merge_maps`, `ParseJSON`, `IsMatch`.
-
-### 3.6 Tail Sampling Processor
-
-Makes sampling decisions **after seeing complete traces**. Runs only in gateway mode (needs full traces).
+OTTL, the OpenTelemetry Transformation Language, is a high-leverage exam topic because it appears wherever the Collector needs more expressive changes than simple attribute actions. Functions such as `set`, `delete`, `truncate_all`, `replace_pattern`, `merge_maps`, `ParseJSON`, and `IsMatch` let you alter telemetry based on context. The risk is that expressive rules deserve the same review discipline as application code, especially when they touch URLs, identifiers, or signal names that dashboards rely on.
 
 ```yaml
 processors:
@@ -313,17 +251,11 @@ processors:
         probabilistic: {sampling_percentage: 10}
 ```
 
-This keeps 100% of errors, 100% of slow traces, and 10% of everything else. The `decision_wait` must be long enough for all spans in a trace to arrive.
+Tail sampling is different from head sampling because it waits until enough spans have arrived to judge the trace. That makes policies such as "keep all errors, keep all slow traces, sample the rest" possible, but it also means the Collector must hold traces in memory and route every span for a trace to the same decision point. Pause and predict: what do you think happens if a trace is split across two gateway replicas before tail sampling runs?
 
----
+## Exporters, Connectors, and OTLP Transport Choices
 
-## Part 4: Exporters — Sending Data Out
-
-Exporters send processed telemetry to backends.
-
-### 4.1 OTLP Exporter (gRPC)
-
-The default for Collector-to-Collector or Collector-to-backend communication.
+Exporters are the back door of the Collector, and their behavior often determines whether a healthy-looking pipeline is actually delivering data. An OTLP exporter can send to another Collector or an observability backend, OTLP/HTTP can cross environments where gRPC is awkward, Prometheus can expose a scrape endpoint, debug can print records for validation, and file can write telemetry to disk. Each exporter has reliability and security settings that matter as much as the destination name.
 
 ```yaml
 exporters:
@@ -341,9 +273,7 @@ exporters:
       max_elapsed_time: 300s
 ```
 
-### 4.2 OTLP HTTP Exporter
-
-Same protocol, HTTP transport. Use when gRPC is blocked by firewalls or proxies.
+The OTLP exporter is the default answer for Collector-to-Collector and Collector-to-backend communication because it preserves OpenTelemetry semantics cleanly. TLS and retry settings deserve explicit review: internal cluster traffic may use service mesh or private network controls, while traffic leaving the cluster should have transport security and clear retry limits. Unlimited retry pressure can make a backend outage worse, but no retry can turn a short network interruption into preventable data loss.
 
 ```yaml
 exporters:
@@ -354,9 +284,7 @@ exporters:
       Authorization: "Bearer ${env:API_TOKEN}"
 ```
 
-### 4.3 Prometheus Exporter
-
-Exposes a `/metrics` endpoint that Prometheus can scrape. Converts OTLP metrics to Prometheus format.
+OTLP/HTTP is the practical choice when the network path favors ordinary HTTP handling, but the authentication example also shows why examples should use environment variables and placeholders rather than embedded secrets. A Collector ConfigMap is often visible to several platform roles, and pushing realistic credentials into examples or Git history is both unnecessary and dangerous. Keep sensitive values in Kubernetes Secrets or an external secret manager, then reference them intentionally.
 
 ```yaml
 exporters:
@@ -367,9 +295,7 @@ exporters:
       enabled: true                 # Promote resource attributes to labels
 ```
 
-### 4.4 Debug Exporter
-
-Prints telemetry to stdout. **Essential for development and troubleshooting.**
+The Prometheus exporter flips the usual push pattern into a scrape pattern. That can be useful when Prometheus is already the metrics backend, but promoting resource attributes to labels should be done carefully because label cardinality affects storage, query speed, and cost. A service name and namespace are usually helpful labels; user IDs, raw URLs, or request-specific values are almost always a problem.
 
 ```yaml
 exporters:
@@ -379,9 +305,7 @@ exporters:
     sampling_thereafter: 200       # Then every Nth item
 ```
 
-### 4.5 File Exporter
-
-Writes telemetry to files in JSON format. Useful for audit trails or offline analysis.
+The debug exporter is not a production backend, but it is one of the safest ways to prove a pipeline is working before you depend on it. Add it beside the real exporter during rollout, send a known trace or metric, and confirm that the transformed record looks the way you expect. Remove or reduce verbose debug output after validation because detailed telemetry logs can grow quickly and may include sensitive attributes if redaction is not complete.
 
 ```yaml
 exporters:
@@ -393,15 +317,7 @@ exporters:
       max_backups: 5
 ```
 
----
-
-## Part 5: Connectors — Bridging Pipelines
-
-Connectors are both an **exporter for one pipeline** and a **receiver for another**. They transform one signal type into another.
-
-### 5.1 Span Metrics Connector
-
-Generates **RED metrics from traces** automatically — no additional instrumentation needed.
+Connectors are special because they behave as an exporter in one pipeline and a receiver in another. The spanmetrics connector is the classic example: traces enter the traces pipeline, the connector derives RED-style metrics, and those generated metrics enter the metrics pipeline. This lets you create request rate, error, and duration metrics from trace data, but it also means dimension choices can create high-cardinality metrics if you include fields that vary per request.
 
 ```yaml
 connectors:
@@ -426,11 +342,7 @@ service:
       exporters: [prometheus]
 ```
 
-This is one of the most elegant features in OTel. Traces flow into the `spanmetrics` connector, and metrics flow out — giving you `traces.spanmetrics.calls_total`, `traces.spanmetrics.duration_*`, and error counts.
-
-### 5.2 Count Connector
-
-Counts spans, metrics, or log records and emits the counts as metrics.
+Read that configuration slowly because it teaches the connector mental model better than a definition does. The traces pipeline exports to both Tempo and `spanmetrics`, while the metrics pipeline receives from both ordinary OTLP and `spanmetrics`. If you see a connector in only one side of that relationship, the derived signal will not appear where you expect it.
 
 ```yaml
 connectors:
@@ -445,44 +357,36 @@ connectors:
           description: "Count of log records"
 ```
 
----
+OTLP itself has two common transports, and the right answer depends on constraints rather than preference. gRPC uses HTTP/2 and Protocol Buffers, supports streaming patterns, and is a strong internal default. HTTP can use Protobuf or JSON over request-response paths such as `/v1/traces`, `/v1/metrics`, and `/v1/logs`, which makes it easier to work through proxies and easier to inspect with ordinary HTTP tooling.
 
-## Part 6: Extensions
+| Feature | OTLP/gRPC | OTLP/HTTP |
+|---------|-----------|-----------|
+| Transport | HTTP/2 with Protocol Buffers | HTTP/1.1 with Protobuf or JSON |
+| Port | 4317 | 4318 |
+| Compression | gzip, zstd (built-in) | gzip (via Content-Encoding) |
+| Streaming | Yes (bidirectional) | No (request/response) |
+| Path (traces) | N/A (gRPC service) | `/v1/traces` |
+| Path (metrics) | N/A | `/v1/metrics` |
+| Path (logs) | N/A | `/v1/logs` |
+| Proxy support | Needs HTTP/2-aware proxy | Works with any HTTP proxy |
 
-Extensions provide auxiliary capabilities that are **not part of the data pipeline** but support it.
+Compression should be a deliberate exporter setting in production. Telemetry data contains repeated attribute names, service names, and resource metadata, so compression often provides meaningful bandwidth reduction. zstd can be attractive for internal traffic when supported end to end, while gzip is the more broadly compatible choice for external endpoints and mixed infrastructure.
 
 ```yaml
-extensions:
-  health_check:
-    endpoint: 0.0.0.0:13133       # Liveness/readiness probe target
-
-  zpages:
-    endpoint: 0.0.0.0:55679       # Internal debug UI at /debug/tracez, /debug/pipelinez
-
-  pprof:
-    endpoint: 0.0.0.0:1777        # Go pprof profiling
-
-  bearertokenauth:
-    token: "${env:OTEL_AUTH_TOKEN}"
-
-service:
-  extensions: [health_check, zpages, pprof, bearertokenauth]
+exporters:
+  otlp:
+    endpoint: gateway:4317
+    compression: zstd        # Best ratio for telemetry data
+  otlphttp:
+    endpoint: https://ingest.example.com
+    compression: gzip        # More widely supported
 ```
 
-| Extension | Purpose | Default Port |
-|-----------|---------|-------------|
-| `health_check` | K8s liveness/readiness probes | 13133 |
-| `zpages` | Debug UI: pipeline status, trace samples | 55679 |
-| `pprof` | Performance profiling | 1777 |
-| `bearertokenauth` | Authenticate incoming/outgoing requests | N/A |
+Which approach would you choose here and why: an internal agent-to-gateway path in a cluster you control, or browser-originated telemetry that must cross a corporate proxy? The first case usually favors OTLP/gRPC with efficient compression and service discovery. The second usually favors OTLP/HTTP, CORS-aware ingestion, and stricter attention to authentication and rate limits at the edge.
 
-**Exam tip**: `zpages` at `/debug/pipelinez` shows if pipelines are running. `/debug/tracez` shows sample traces passing through the Collector. This is your first stop when debugging.
+## Kubernetes Deployment Patterns and the Operator
 
----
-
-## Part 7: Deployment Patterns
-
-### 7.1 Agent vs Gateway
+Kubernetes changes the Collector design conversation because placement controls what data the Collector can see. A DaemonSet agent runs one Collector per node, which makes it good for local logs, host metrics, and near-source buffering. A Deployment gateway runs a shared pool, which makes it good for aggregation, tail sampling, routing, and backend-specific export policy. The most common production pattern uses both because neither placement solves every problem alone.
 
 ```
 Agent Mode (DaemonSet)                Gateway Mode (Deployment)
@@ -515,6 +419,8 @@ Agent Mode (DaemonSet)                Gateway Mode (Deployment)
                                     └─────────────────────┘
 ```
 
+The agent and gateway split is also a scaling boundary. Agents scale with nodes and provide backpressure close to workloads, while gateways scale with telemetry volume and export complexity. Tail sampling belongs at the gateway because it needs enough spans from the same trace to make a decision, and host-level collection belongs at the agent because the gateway cannot read every node's local files or system counters.
+
 | Aspect | Agent (DaemonSet) | Gateway (Deployment) |
 |--------|-------------------|---------------------|
 | Deployment | One per node | Shared pool (2+ replicas) |
@@ -525,7 +431,7 @@ Agent Mode (DaemonSet)                Gateway Mode (Deployment)
 | Scaling | Scales with nodes | HPA on CPU/memory |
 | Best for | Collection, basic processing | Aggregation, sampling, routing |
 
-**Production pattern**: Use **both**. Agents on every node collect and forward. A gateway pool handles sampling, enrichment, and export.
+The simple production chain is applications to node agents, agents to gateways, and gateways to one or more backends. That shape lets you keep node-local collection simple while centralizing expensive or policy-heavy processing. It also creates a clear failure model: if a backend is unavailable, gateways can absorb retry behavior without every application or node agent needing full backend-specific logic.
 
 ```
 Apps ──▶ Agent (DaemonSet) ──▶ Gateway (Deployment) ──▶ Backends
@@ -535,9 +441,7 @@ Apps ──▶ Agent (DaemonSet) ──▶ Gateway (Deployment) ──▶ Backen
          - batch                  - export to N backends
 ```
 
-### 7.2 Scaling the Gateway
-
-For horizontal scaling, use the **load balancing exporter** on agents to distribute traces across gateway replicas. This is critical for tail sampling — all spans of a trace must reach the **same gateway** instance.
+Horizontal gateway scaling creates one subtle trace problem: all spans of a trace must reach the same gateway if tail sampling is enabled. Ordinary round-robin load balancing can split a trace across replicas, so each gateway sees an incomplete story and makes a poor decision. The load balancing exporter solves that by routing based on trace ID and discovering gateway instances through a resolver such as DNS.
 
 ```yaml
 # On the Agent
@@ -553,54 +457,7 @@ exporters:
         port: 4317
 ```
 
-The `loadbalancing` exporter uses **trace ID-based routing** — all spans with the same trace ID go to the same gateway. This is what makes tail sampling possible in a scaled deployment.
-
----
-
-## Part 8: OTLP Protocol Deep-Dive
-
-OTLP (OpenTelemetry Protocol) is the **native wire protocol** of OpenTelemetry.
-
-### 8.1 Protocol Comparison
-
-| Feature | OTLP/gRPC | OTLP/HTTP |
-|---------|-----------|-----------|
-| Transport | HTTP/2 with Protocol Buffers | HTTP/1.1 with Protobuf or JSON |
-| Port | 4317 | 4318 |
-| Compression | gzip, zstd (built-in) | gzip (via Content-Encoding) |
-| Streaming | Yes (bidirectional) | No (request/response) |
-| Path (traces) | N/A (gRPC service) | `/v1/traces` |
-| Path (metrics) | N/A | `/v1/metrics` |
-| Path (logs) | N/A | `/v1/logs` |
-| Proxy support | Needs HTTP/2-aware proxy | Works with any HTTP proxy |
-
-**When to choose gRPC**: Internal service-to-collector and collector-to-collector traffic where performance matters and you control the network.
-
-**When to choose HTTP**: Browser telemetry (RUM), crossing firewalls/load balancers that don't support HTTP/2, or when you need JSON-encoded payloads for debugging.
-
-### 8.2 Compression
-
-Always enable compression in production. The difference is significant:
-
-```yaml
-exporters:
-  otlp:
-    endpoint: gateway:4317
-    compression: zstd        # Best ratio for telemetry data
-  otlphttp:
-    endpoint: https://ingest.example.com
-    compression: gzip        # More widely supported
-```
-
-`zstd` offers better compression ratios and speed than `gzip` but is less universally supported. For internal traffic, prefer `zstd`. For external endpoints, use `gzip`.
-
----
-
-## Part 9: OTel Operator for Kubernetes
-
-The **OpenTelemetry Operator** extends Kubernetes to manage Collectors and auto-instrument applications.
-
-### 9.1 Installing the Operator
+The OpenTelemetry Operator adds Kubernetes-native management on top of those deployment modes. Instead of hand-writing every Deployment, DaemonSet, Service, and ConfigMap, you can describe an `OpenTelemetryCollector` custom resource and let the Operator reconcile the underlying objects. It also supports auto-instrumentation through the `Instrumentation` custom resource, which is useful when application teams need a low-friction starting point.
 
 ```bash
 # Install cert-manager first (required dependency)
@@ -610,9 +467,7 @@ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/
 kubectl apply -f https://github.com/open-telemetry/opentelemetry-operator/releases/latest/download/opentelemetry-operator.yaml
 ```
 
-### 9.2 OpenTelemetryCollector CRD
-
-The Operator manages Collector instances via a custom resource:
+Operator-managed Collectors are still Collectors, so the same pipeline reasoning applies. The `mode` field chooses daemonset, deployment, statefulset, or sidecar, while `spec.config` contains the receiver, processor, exporter, connector, extension, and service configuration. Do not let the custom resource abstraction hide the data-flow questions you already learned to ask.
 
 ```yaml
 apiVersion: opentelemetry.io/v1beta1
@@ -649,9 +504,9 @@ spec:
           exporters: [otlp]
 ```
 
-### 9.3 Auto-Instrumentation with the Instrumentation CRD
+Auto-instrumentation is powerful because the Operator can inject language agents into pods through annotations, but it should be introduced with clear ownership. The application still needs compatible runtimes, predictable resource overhead, and an endpoint that can accept the resulting telemetry. Start with a small namespace or a single workload, then expand after you have verified trace quality, attribute names, and sampling behavior.
 
-The Operator can **inject instrumentation into pods automatically** — no code changes required.
+Before copying an `Instrumentation` manifest, confirm the CRD versions served by the installed Operator. Some distributions and exam contexts expect a newer served version such as `v1alpha2`, while older and upstream examples may still show `v1alpha1` with conversion support.
 
 ```yaml
 apiVersion: opentelemetry.io/v1alpha1
@@ -676,8 +531,6 @@ spec:
     image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-nodejs:latest
 ```
 
-Then annotate pods to opt in:
-
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -698,13 +551,7 @@ spec:
           image: my-java-app:latest
 ```
 
-The Operator injects an init container with the instrumentation agent. The application starts with zero code changes and produces traces automatically.
-
----
-
-## Part 10: Collector Distributions
-
-### 10.1 Core vs Contrib vs Custom
+Collector distributions matter more as you move from lab to production. The Core distribution gives you a smaller, project-maintained base; Contrib gives you broad integration coverage; a custom distribution built with the OpenTelemetry Collector Builder includes only the components you select. The exam expects you to know the tradeoff, and production security reviews usually care about it because every unused component is dependency surface.
 
 | Distribution | Components | Use Case |
 |-------------|-----------|----------|
@@ -712,9 +559,7 @@ The Operator injects an init container with the instrumentation agent. The appli
 | **Contrib** (`otel/opentelemetry-collector-contrib`) | 200+ components (all community receivers, processors, exporters) | Development, when you need specific integrations |
 | **Custom** (built with `ocb`) | Exactly what you choose | Production — include only what you use |
 
-### 10.2 Building a Custom Collector
-
-The **OpenTelemetry Collector Builder** (`ocb`) creates purpose-built distributions:
+The Collector Builder configuration is explicit dependency management for your telemetry data plane. You declare the distribution metadata and the exact receiver, processor, and exporter modules you want compiled in. That can reduce binary size, startup time, and audit scope, but it also means you own the build process and must update the selected components as OpenTelemetry releases move forward.
 
 ```yaml
 # builder-config.yaml
@@ -742,17 +587,38 @@ exporters:
 ocb --config builder-config.yaml
 ```
 
-**Why custom?** Smaller binary (50MB vs 200MB+), smaller attack surface, faster startup, only the dependencies you actually audit.
+A custom Collector is not automatically better; it is better when you have a stable component set, a release process, and a reason to reduce footprint or dependency surface. During early experimentation, Contrib is often the faster path because it includes the receiver or exporter you are testing. Once the pipeline stabilizes, a custom distribution lets you remove components that were useful during discovery but unnecessary for long-term operation.
 
----
+## Debugging and Operating a Multi-Signal Pipeline
 
-## Part 11: Debug Pipeline
+Debugging a Collector starts with a basic question: did telemetry enter, change, and leave the pipeline the way you intended? Kubernetes pod health only answers whether the process is alive. The Collector's own telemetry, debug exporter, and zpages answer whether receivers accepted data, processors dropped or transformed it, exporters sent it, and extensions are running. Those signals should be present in every serious rollout plan.
 
-When things go wrong (and they will), here is your debugging toolkit.
+```yaml
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133       # Liveness/readiness probe target
 
-### 11.1 Debug Exporter
+  zpages:
+    endpoint: 0.0.0.0:55679       # Internal debug UI at /debug/tracez, /debug/pipelinez
 
-Add it to any pipeline to see what data is flowing:
+  pprof:
+    endpoint: 0.0.0.0:1777        # Go pprof profiling
+
+  bearertokenauth:
+    token: "${env:OTEL_AUTH_TOKEN}"
+
+service:
+  extensions: [health_check, zpages, pprof, bearertokenauth]
+```
+
+| Extension | Purpose | Default Port |
+|-----------|---------|-------------|
+| `health_check` | K8s liveness/readiness probes | 13133 |
+| `zpages` | Debug UI: pipeline status, trace samples | 55679 |
+| `pprof` | Performance profiling | 1777 |
+| `bearertokenauth` | Authenticate incoming/outgoing requests | N/A |
+
+The debug exporter should be used as a temporary observability mirror. When a filter, transform, or connector is introduced, add `debug` beside the real exporter and send a known test record. If the record appears before a processor but not after it, you have narrowed the failure without guessing about the backend, network policy, or dashboard query.
 
 ```yaml
 exporters:
@@ -767,9 +633,7 @@ service:
       exporters: [otlp/backend, debug]    # Add debug alongside real exporter
 ```
 
-### 11.2 Internal Telemetry
-
-The Collector can report its **own** metrics:
+Internal telemetry is the Collector's dashboard of itself. Receiver accepted counters show whether input is arriving, processor dropped counters show whether filtering or pressure is removing data, exporter sent counters show successful output, and exporter failed counters reveal backend or network problems. These metrics let you distinguish "the app emitted nothing" from "the Collector dropped it" from "the backend rejected it."
 
 ```yaml
 service:
@@ -782,15 +646,7 @@ service:
       address: 0.0.0.0:8888        # Collector's own /metrics endpoint
 ```
 
-Key internal metrics to watch:
-- `otelcol_receiver_accepted_spans` — Are spans arriving?
-- `otelcol_processor_dropped_spans` — Is the filter/sampling dropping too much?
-- `otelcol_exporter_sent_spans` — Are spans leaving?
-- `otelcol_exporter_send_failed_spans` — Is the backend rejecting data?
-
-### 11.3 zpages for Live Debugging
-
-With the `zpages` extension enabled at port 55679:
+The internal metric names are intentionally operational: `otelcol_receiver_accepted_spans` says spans arrived, `otelcol_processor_dropped_spans` says a processor removed spans, `otelcol_exporter_sent_spans` says spans left successfully, and `otelcol_exporter_send_failed_spans` says an exporter could not deliver. When you diagnose Collector pipeline issues, compare those counters by signal and pipeline before changing application instrumentation.
 
 | Endpoint | What It Shows |
 |----------|---------------|
@@ -805,11 +661,7 @@ kubectl port-forward svc/otel-collector 55679:55679
 # Then open http://localhost:55679/debug/pipelinez
 ```
 
----
-
-## Complete Multi-Pipeline Configuration Example
-
-This is a production-grade config with traces, metrics, and logs flowing through separate pipelines, with `spanmetrics` bridging traces to metrics:
+The following complete configuration ties the ideas together. It receives traces, metrics, and logs, scrapes Prometheus and host metrics, filters health checks, redacts sensitive values, generates span metrics, exports to separate backends, enables health and zpages, and exposes internal metrics. It is intentionally richer than a minimal exam answer because production failures usually happen where signals and policy meet.
 
 ```yaml
 receivers:
@@ -913,126 +765,171 @@ service:
       exporters: [otlp/loki, debug]
 ```
 
----
+When reviewing a configuration like this, walk one signal at a time. For traces, OTLP input passes through memory protection, health-check filtering, redaction, batching, Tempo export, spanmetric generation, and debug output. For metrics, OTLP, Prometheus, host, and derived span metrics share a pipeline before Prometheus and debug export. For logs, OTLP and file input share redaction and batching before the Loki-style OTLP endpoint and debug mirror.
+
+That walk-through is the fastest way to find hidden mistakes. If a processor exists but is not in the relevant signal pipeline, it cannot affect that signal. If a connector appears as an exporter but not as a receiver in another pipeline, its output has nowhere useful to go. If debug output is present but backend data is missing, the exporter, backend, authentication, or network path becomes the next investigation target.
+
+### Worked Review: Safely Changing a Collector Pipeline
+
+Imagine that the next change request is to reduce telemetry cost while keeping enough detail for incident response. A weak review would look only for valid YAML and perhaps confirm that the Collector pod restarts cleanly. A strong review follows the trace of data through the pipeline and asks what each component can drop, transform, buffer, or duplicate. That review style is slower on the first few attempts, but it prevents expensive surprises after the Collector becomes the shared path for every team.
+
+Start with receiver intent. If applications send OTLP directly to a gateway, the gateway can receive application spans, but it cannot read each node's container log files unless those files are mounted from the node. If agents scrape pod metrics, they need discovery permissions and a clear label strategy. If a browser sends OTLP/HTTP, CORS and authentication are not optional edge details; they are part of the receiver contract because the receiver is exposed to a different trust boundary.
+
+Next, review processor order as a safety sequence. Memory protection should happen before expensive buffering, broad filtering should happen before backend export, redaction should happen before records cross a boundary, and batching should happen after most per-record work is complete. This order is not just about performance. It also decides which metrics you can use to explain a drop, because a processor can only report work that reaches it.
+
+Then review every filter as if it were a production access rule. Health-check spans are usually safe to drop, but a condition that matches service names, URL prefixes, or status codes can remove evidence from real incidents. Use positive examples and negative examples when testing a filter: one record that should be dropped, one similar record that must survive, and one malformed record that proves `error_mode` behavior. Without those cases, a filter can pass a happy-path demo and still damage observability.
+
+Transform rules deserve the same review because they can rename attributes that dashboards, alerts, and service maps already depend on. A `replace_pattern` that redacts a token is helpful; a broad `set` that overwrites a resource attribute can break grouping across an entire backend. When a transform changes names, write down the downstream query or dashboard that will consume the result, then validate that query against debug output before the change reaches a shared environment.
+
+Sampling policy needs an even stricter placement review. Head sampling can happen near the source because the decision is made before a full trace exists, but tail sampling is a gateway concern because it uses facts discovered later in the trace. A policy that keeps errors and slow requests is only meaningful if all spans for a trace arrive at the same sampling processor. If traffic is balanced randomly across gateways, the policy is still configured but the data it evaluates is incomplete.
+
+Connector review is about both directions of signal flow. When `spanmetrics` appears in a traces pipeline exporter list, it receives spans and creates metrics. When the same connector appears in a metrics pipeline receiver list, those created metrics enter the metrics path and can be exported. If either side is missing, the connector may look present while the derived signal never reaches the intended backend. That is why connector bugs often feel like silent failures.
+
+Cardinality review belongs beside connector review because generated metrics can grow faster than hand-written metrics. The most tempting dimensions are often the most dangerous: raw URLs, user identifiers, pod names in short-lived workloads, or request IDs that change every call. Stable dimensions such as method, status code, route template, service name, and namespace usually preserve useful grouping without creating a new time series for every request.
+
+Exporter review should separate delivery concerns from data-shaping concerns. If debug output shows a record after processing, the Collector produced the right payload. If the backend is missing it, investigate exporter endpoint, TLS, authentication, compression support, retries, network policy, and backend limits. Changing a filter or transform at that point can mask the real problem because the data path has already reached the exporter boundary.
+
+Retry settings are especially easy to overlook because they sound like a reliability improvement by default. Retries help with transient network or backend failures, but they also consume memory and can increase pressure when a backend is already unhealthy. A production gateway should have retry behavior that matches backend expectations, queueing decisions that match memory limits, and alerts that distinguish temporary send failures from sustained exporter failure.
+
+Health checks need similar humility. A successful liveness probe means the Collector process can answer the health extension; it does not mean every receiver is accepting data or every exporter is delivering it. Readiness probes are still important because Kubernetes needs a signal for rollout and restart decisions, but pipeline validation must come from the Collector's own telemetry and from known test records flowing through the configured paths.
+
+Resource sizing should be reviewed with signal volume in mind rather than copied from a sample. A node agent that reads logs can experience spikes during crash loops, while a gateway that performs tail sampling holds trace state until `decision_wait` expires. Memory limits, spike limits, batch sizes, and sampling buffers interact, so a configuration that works for a small namespace may not survive a busy cluster without tuning.
+
+RBAC is another placement clue. A filelog receiver needs hostPath-style access and node scheduling; a Kubernetes cluster receiver needs API permissions; an Operator-managed Collector needs permissions appropriate to the objects it reconciles. If a design grants every Collector instance broad permissions because one receiver needs them, reconsider the placement. Splitting agent and gateway responsibilities often reduces both runtime load and permission scope.
+
+Version review matters because Collector examples age quickly. The structure in this module is stable, but component names, maturity levels, and image versions should be checked against the OpenTelemetry documentation before a production rollout. Kubernetes version 1.35 does not change the core DaemonSet and Deployment reasoning, yet clusters can differ in admission policy, Pod Security settings, and network policy that affect how the Collector is allowed to run.
+
+Finally, write the rollback plan in terms of data flow. If a transform breaks dashboards, you should know whether to remove only that processor, remove it from one signal pipeline, or switch exporter output back to debug for validation. If gateway sampling loses traces, you should know whether the fix is routing affinity, sampling parameters, or temporarily bypassing tail sampling. A Collector rollback that simply redeploys the previous YAML may be enough, but the review should identify the smallest safe reversal.
+
+This review pattern is also how you answer scenario questions under exam pressure. Identify the signal, locate the Collector placement, trace the pipeline order, verify connector direction, then inspect exporter and diagnostic surfaces. The details vary from question to question, but that sequence keeps you from treating a healthy pod as a healthy telemetry path or treating a backend symptom as an application instrumentation bug.
+
+There is one more habit worth practicing before you leave the review: name the evidence that would change your mind. If you believe a filter is dropping spans, the evidence is a processor dropped counter or a debug comparison before and after that processor. If you believe the backend is rejecting data, the evidence is exporter failure metrics or backend-side rejection logs while debug output still shows processed records. Clear evidence targets keep troubleshooting from becoming a sequence of speculative YAML edits.
+
+The same evidence mindset improves change communication. Instead of saying "we added tail sampling," say "we added gateway tail sampling, routed traces by trace ID, kept errors and slow traces, and verified accepted, dropped, sent, and failed counters during rollout." That sentence tells reviewers what changed, where it runs, why it is safe, and how the team checked it. Good Collector operations are often less about clever configuration and more about making every data-flow assumption observable.
+
+## Patterns & Anti-Patterns
+
+Strong Collector designs are usually boring in the best sense: node agents collect what only nodes can see, gateways perform centralized policy, processors are ordered by risk reduction, and debug surfaces stay available during rollout. The patterns below are not decorative architecture rules; they are operational shortcuts that reduce ambiguity when telemetry disappears, duplicates, or overwhelms a backend.
+
+| Pattern | When to Use It | Why It Works | Scaling Consideration |
+|---------|----------------|--------------|-----------------------|
+| Agent plus gateway | Clusters with logs, host metrics, and distributed traces | Agents collect local data while gateways centralize sampling and routing | Scale agents with nodes and gateways with telemetry volume |
+| Memory limiter first, batch last | Almost every traces, metrics, or logs pipeline | The Collector rejects pressure before buffering and exports efficiently after processing | Tune limits against pod memory requests and backend throughput |
+| Debug mirror during rollout | New filters, transforms, connectors, or exporters | You can inspect records before blaming applications or backends | Reduce verbosity after validation to control log volume |
+| Trace-ID-aware gateway routing | Tail sampling with more than one gateway replica | All spans for one trace reach the same sampling decision point | Use a headless Service or resolver strategy that exposes replicas |
+
+Anti-patterns often begin as convenience. A team runs Contrib everywhere because it is easy, places tail sampling on agents because agents are already deployed, or leaves a broad filter untested because the Collector stayed Ready. Those choices are understandable during experiments, but they create confusion when the system becomes part of incident response.
+
+| Anti-pattern | What Goes Wrong | Better Alternative |
+|--------------|-----------------|--------------------|
+| Running global receivers on every agent | Duplicate metrics and unnecessary API server load | Run cluster-wide receivers in a gateway or single coordinated instance |
+| Treating health checks as pipeline validation | The process is alive even when telemetry is dropped | Use debug exporter, zpages, and internal metrics for data-flow validation |
+| Using request-specific dimensions in spanmetrics | Metrics cardinality grows too quickly | Use stable dimensions such as method, status code, service, and route templates |
+| Keeping broad Contrib builds forever | Larger dependency surface and unused components | Build a custom Collector once the production component set stabilizes |
+
+## Decision Framework
+
+Collector decisions become manageable when you separate data source, processing policy, and export constraints. First ask where the telemetry originates and which Collector placement can see it. Then decide whether records need local protection, central aggregation, sampling, redaction, derived metrics, or backend-specific routing. Finally, choose the transport and distribution that fit your network and operational maturity.
+
+| Decision | Choose This | When the Constraints Look Like This |
+|----------|-------------|-------------------------------------|
+| Placement | DaemonSet agent | Node logs, host metrics, node-local buffering, or low-latency collection near workloads |
+| Placement | Deployment gateway | Tail sampling, centralized routing, shared authentication, spanmetrics, or backend fan-out |
+| Transport | OTLP/gRPC | Internal traffic, HTTP/2 support, high throughput, Collector-to-Collector paths |
+| Transport | OTLP/HTTP | Browser telemetry, HTTP-only proxies, JSON debugging, simple edge ingestion |
+| Distribution | Core | Minimal component set and security-sensitive baseline |
+| Distribution | Contrib | Discovery, labs, or integrations not present in Core |
+| Distribution | Custom | Stable production pipeline with explicit dependency control |
+
+Use this mental flow when a scenario question gives you more information than you need. If the problem mentions missing complete traces after scaling gateways, look at trace routing before changing sampling policy. If it mentions duplicated cluster metrics, look at receiver placement before touching Prometheus queries. If it mentions exporter failures while debug output still shows records, focus on transport, credentials, TLS, backend availability, and retry behavior.
+
+```
+Telemetry source?
+  ├─ Node-local files or host metrics ──▶ Agent DaemonSet
+  │                                      └─ Forward to gateway for shared policy
+  ├─ Application OTLP signals ─────────▶ Agent or gateway, based on latency and ownership
+  │                                      └─ Use OTLP/gRPC internally when possible
+  └─ Cluster-wide API metrics ─────────▶ Gateway or single collector instance
+                                         └─ Avoid per-node duplication
+
+Need tail sampling or spanmetrics?
+  ├─ Yes ──▶ Gateway with trace-aware routing and enough memory
+  └─ No ───▶ Keep processing close to source unless backend policy needs centralization
+```
+
+The framework is deliberately compact because real incidents do not wait while you admire a perfect architecture diagram. Start with visibility, then placement, then order, then export. That sequence keeps you from fixing the wrong layer, which is the most common failure mode when a Collector configuration is valid YAML but invalid operations.
+
+## Did You Know?
+
+- OTLP/gRPC and OTLP/HTTP use different default ports: 4317 for gRPC and 4318 for HTTP, and many exam scenarios hinge on recognizing which transport is being described.
+- The `spanmetrics` connector turns trace data into RED-style metrics, so one trace pipeline can also feed request rate, error, and duration metrics into a metrics pipeline.
+- The Collector has Core, Contrib, and custom distribution models; Contrib includes 200+ components, while `ocb` lets production teams compile only the components they use.
+- zpages exposes live debugging paths such as `/debug/pipelinez` and `/debug/tracez` on port 55679 when the extension is enabled.
 
 ## Common Mistakes
 
-| Mistake | What Happens | Fix |
-|---------|-------------|-----|
-| Declaring a component but not adding it to a pipeline | Component is silently ignored | Always check the `service.pipelines` section |
-| Wrong processor order (batch before memory_limiter) | OOM kills under load | `memory_limiter` first, `batch` last |
-| Tail sampling on agents (DaemonSet) | Incomplete traces, bad sampling decisions | Tail sampling only in gateway mode |
-| Using Contrib image in production | 200MB+ image, unused attack surface | Build custom distribution with `ocb` |
-| Forgetting `error_mode: ignore` on filter/transform | One bad record crashes the pipeline | Always set `error_mode: ignore` in production |
-| OTLP exporter with `tls.insecure: false` but no certs | Connection refused, export failures | Set `insecure: true` for internal traffic or provide valid certs |
-| Not enabling compression on exporters | 3-5x more bandwidth usage | Always set `compression: gzip` or `zstd` |
-| Running k8s_cluster receiver on every agent | Duplicate metrics, API server overload | Run k8s_cluster on a single gateway or Deployment |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| Declaring a component but not adding it to a pipeline | The top-level config reads like the component is active, but `service.pipelines` is the real wiring | Always trace the relevant signal through receivers, processors, connectors, and exporters under `service` |
+| Placing `batch` before `memory_limiter` | Batching feels like a universal optimization, so it gets added first | Put `memory_limiter` early and `batch` late so pressure is controlled before buffering grows |
+| Running tail sampling on agents | Agents are already deployed on every node, so sampling seems close to the source | Run tail sampling on gateways and use trace-ID-aware routing across gateway replicas |
+| Running `k8s_cluster` on every node | Teams copy the same receiver set into every Collector mode | Run cluster-wide receivers in one gateway-style placement with the right RBAC |
+| Forgetting `error_mode: ignore` on filter or transform processors | The rule examples work on clean data during testing | Set error handling deliberately and validate malformed or unexpected records with debug output |
+| Promoting unstable attributes to Prometheus labels | Resource-to-telemetry conversion looks convenient for every attribute | Promote only bounded, stable dimensions such as service, namespace, method, and route templates |
+| Treating pod readiness as proof of telemetry delivery | Kubernetes can only tell that the Collector process is responding | Check debug exporter output, zpages, and `otelcol_*` internal metrics for actual data flow |
+| Keeping a broad Contrib image after the pipeline stabilizes | It speeds up early experimentation and never gets revisited | Move to a custom Collector build when component choices and release ownership are mature |
 
 ## Quiz
 
-Test your understanding of Domain 3 content.
-
-**Q1: What are the default OTLP ports for gRPC and HTTP?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 1: Your team designs a multi-pipeline Collector configuration for traces, metrics, and logs, but the new `filter/healthz` processor is not changing trace output. What do you check first?</summary>
 
-gRPC: **4317**, HTTP: **4318**. These are standard across all OTel components.
+Check whether `filter/healthz` is listed under `service.pipelines.traces.processors`, not merely declared under the top-level `processors` block. A Collector component exists only as inventory until a pipeline references it. If the processor is present in the wrong signal pipeline, it still will not affect traces, even though the configuration can load successfully. After confirming pipeline wiring, use the debug exporter to compare records before and after the processor.
 </details>
 
-**Q2: In what order should `memory_limiter` and `batch` appear in a pipeline's processor list?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 2: A gateway Deployment was scaled to several replicas, and tail sampling started missing slow traces. The policy still says to keep slow traces. What design problem is most likely?</summary>
 
-`memory_limiter` should be **first**, `batch` should be **last**. The memory limiter needs to reject data before it accumulates in the batch buffer. The batch processor should be the final step before export to maximize batch efficiency.
+The likely problem is that spans from the same trace are being split across gateway replicas before the `tail_sampling` processor sees them. Tail sampling needs enough of the completed trace to make a correct decision, so the agent-to-gateway path should use trace-ID-aware routing such as the load balancing exporter. Changing the latency threshold would not fix incomplete trace visibility. Adding more replicas can make the issue worse unless routing preserves trace affinity.
 </details>
 
-**Q3: Why can't you run tail sampling on a DaemonSet (agent mode) Collector?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 3: You configure advanced processors to reduce volume, but an exporter reports fewer spans than expected after a transform rollout. Which signals help you diagnose whether data was dropped inside the Collector or rejected by the backend?</summary>
 
-Tail sampling needs to see the **complete trace** before making a sampling decision. In agent mode, spans from different services land on different nodes, so no single agent sees all spans of a distributed trace. Tail sampling must run in **gateway mode** where all spans are forwarded to a central pool, and the `loadbalancing` exporter ensures all spans with the same trace ID reach the same gateway instance.
+Compare Collector internal metrics across the receiver, processor, and exporter stages. `otelcol_receiver_accepted_spans` shows whether spans entered, `otelcol_processor_dropped_spans` shows whether a processor removed them, `otelcol_exporter_sent_spans` shows successful export, and `otelcol_exporter_send_failed_spans` points toward backend or network failure. The debug exporter can also mirror representative records so you can inspect transformed attributes. This approach narrows the failure layer before you change application instrumentation.
 </details>
 
-**Q4: What is the purpose of a connector like `spanmetrics`?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 4: A Kubernetes 1.35 cluster needs container logs, host metrics, spanmetrics, and tail sampling. How would you deploy the Collector, and why?</summary>
 
-A connector acts as both an **exporter** in one pipeline and a **receiver** in another. The `spanmetrics` connector receives traces from the traces pipeline and emits RED metrics (Rate, Errors, Duration) into the metrics pipeline. This lets you generate metrics from traces automatically without double-instrumentation.
+Use a DaemonSet agent for container logs and host metrics because those data sources are node-local, then forward to a gateway Deployment for spanmetrics and tail sampling. The gateway can centralize derived metrics, sampling decisions, routing, and backend authentication. Tail sampling should not run on agents because each agent may see only part of a distributed trace. This split also lets you scale gateways independently from node count.
 </details>
 
-**Q5: What is the difference between Core, Contrib, and Custom Collector distributions?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 5: A browser-based application cannot send OTLP/gRPC through the enterprise proxy, but the team still wants OpenTelemetry-native ingestion. Which OTLP transport do you evaluate, and what tradeoff do you accept?</summary>
 
-- **Core**: Minimal set of ~20 components maintained by the OTel project. Small binary, limited functionality.
-- **Contrib**: Community-maintained, 200+ components. Large binary, everything included.
-- **Custom**: Built with `ocb` (OpenTelemetry Collector Builder) to include only the specific components you need. Best for production — minimal attack surface, optimized size.
+Evaluate OTLP/HTTP on port 4318 because it works through ordinary HTTP infrastructure and supports paths such as `/v1/traces`. The tradeoff is that it may not provide the same internal throughput characteristics as gRPC, and you need to configure edge concerns such as CORS, authentication, compression, and rate limits carefully. For internal Collector-to-Collector traffic, OTLP/gRPC remains a strong default when HTTP/2 is supported. The transport choice follows the network constraint rather than a universal preference.
 </details>
 
-**Q6: How does the `loadbalancing` exporter route data?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 6: Your spanmetrics connector produces far more metrics series than expected after adding request URL as a dimension. What is wrong with the design?</summary>
 
-It routes based on **trace ID** using consistent hashing. All spans belonging to the same trace are sent to the same backend (gateway) instance. This is essential for tail sampling to work correctly in a horizontally scaled gateway deployment. It uses a DNS resolver to discover backend instances via a headless Kubernetes Service.
+The connector is using an unstable, high-cardinality dimension. Raw request URLs can contain IDs, query strings, and other per-request values, so deriving metrics from them can create a large number of time series. Use stable dimensions such as `http.method`, `http.status_code`, service name, and route templates instead. The connector is useful, but it inherits the same cardinality discipline required for any metrics pipeline.
 </details>
 
-**Q7: What annotation would you add to a Java Deployment to enable auto-instrumentation via the OTel Operator?**
-
 <details>
-<summary>Answer</summary>
+<summary>Question 7: A security review asks why production Collectors still use the Contrib distribution even though the pipeline only needs OTLP, filelog, memory limiter, batch, transform, debug, and one OTLP exporter. What should you propose?</summary>
 
-```yaml
-instrumentation.opentelemetry.io/inject-java: "true"
-```
-
-This tells the OTel Operator's webhook to inject an init container with the Java auto-instrumentation agent. The `Instrumentation` CRD must exist in the same namespace (or the annotation must reference a specific one).
+Propose building a custom Collector with `ocb` once the component set and release process are stable. Contrib is useful during discovery because it includes many integrations, but it also ships many components the production pipeline may never use. A custom build reduces binary size and dependency surface while keeping the required receivers, processors, and exporters explicit. The proposal should include upgrade ownership, because a custom distribution must still track OpenTelemetry releases.
 </details>
-
-**Q8: You added a `filter` processor but telemetry is not being filtered. What is the most likely cause?**
-
-<details>
-<summary>Answer</summary>
-
-The filter processor is defined in the `processors` section but **not included in the pipeline** under `service.pipelines`. A component must appear in both its definition section and in a pipeline to be active. Check `service.pipelines.<signal>.processors` to confirm it is listed.
-</details>
-
-**Q9: What zpages endpoint shows the status of active pipelines?**
-
-<details>
-<summary>Answer</summary>
-
-`/debug/pipelinez` — It shows all configured pipelines and their component status (receivers, processors, exporters). Access it by port-forwarding to port **55679** on the Collector.
-</details>
-
-**Q10: When should you use OTLP/HTTP instead of OTLP/gRPC?**
-
-<details>
-<summary>Answer</summary>
-
-Use OTLP/HTTP when:
-- Sending telemetry from **browsers** (gRPC doesn't work in browsers)
-- Crossing **firewalls or proxies** that don't support HTTP/2
-- You need **JSON encoding** for debugging
-- Working with load balancers that only support HTTP/1.1
-
-Use gRPC for internal collector-to-collector and service-to-collector traffic where performance matters.
-</details>
-
----
 
 ## Hands-On Exercise: Build a Multi-Signal Pipeline
 
-**Objective**: Deploy an OTel Collector that receives all three signals, generates spanmetrics, and outputs to debug.
+Exercise scenario: you are preparing a small observability namespace for a team that wants one Collector receiving traces, metrics, and logs through OTLP, generating span-derived metrics, and exposing enough diagnostics to prove the pipeline works before a backend is added. The lab uses debug output instead of a vendor backend so you can focus on Collector behavior. The same validation pattern applies when you later replace `debug` with production exporters.
 
 ### Setup
+
+You need a working Kubernetes cluster, `kubectl`, and the ability to create a namespace. The commands below use kind for a disposable local cluster, but you can skip that first command if you already have a lab cluster. Keep the Collector in an `observability` namespace so later cleanup is straightforward and the Service names match the examples.
 
 ```bash
 # Create a kind cluster (skip if you already have one)
@@ -1042,7 +939,9 @@ kind create cluster --name otel-lab
 kubectl create namespace observability
 ```
 
-### Step 1: Deploy the Collector
+### Task 1: Deploy the Collector
+
+Apply the ConfigMap, Deployment, and Service in one command. The configuration includes OTLP receivers for all signals, `memory_limiter` and `batch` processors, a `spanmetrics` connector, debug exporters, health checks, zpages, and internal metrics. Read the `service.pipelines` section before applying it so you can predict which components are active for each signal.
 
 ```bash
 kubectl apply -n observability -f - <<'EOF'
@@ -1161,7 +1060,15 @@ spec:
 EOF
 ```
 
-### Step 2: Send Test Telemetry
+<details>
+<summary>Solution notes for Task 1</summary>
+
+The Deployment should create one Collector pod, and the readiness probe should pass through the health check extension. If the pod does not become Ready, inspect the logs for configuration parsing errors first because the Collector validates component names and pipeline references during startup. A successful rollout does not yet prove telemetry is flowing; it only proves the process loaded and the health extension responded.
+</details>
+
+### Task 2: Send Test Telemetry
+
+Wait for readiness, port-forward the OTLP/HTTP Service port, and send a minimal trace payload. The payload uses a fixed service name and an HTTP method attribute so the debug exporter and spanmetrics connector have visible data to work with. Before running the curl command, predict where you expect to see the trace and which derived metric pipeline should also receive a signal.
 
 ```bash
 # Wait for the collector to be ready
@@ -1194,7 +1101,15 @@ curl -X POST http://localhost:4318/v1/traces \
   }'
 ```
 
-### Step 3: Verify
+<details>
+<summary>Solution notes for Task 2</summary>
+
+The HTTP request should return a successful response from the Collector receiver. If it fails, check that the port-forward is still running and that the Service exposes port 4318. If the request succeeds but nothing appears in logs, verify that the traces pipeline exports to `debug` and that the Collector pod you are reading is the current Ready pod.
+</details>
+
+### Task 3: Verify Pipeline Behavior
+
+Use three independent checks: debug logs for the trace record, zpages for active pipelines, and internal metrics for accepted spans. This triangulation is more reliable than a single check because each surface answers a different question. Logs show representative payload content, zpages show pipeline structure, and metrics show counters that can be used in alerts.
 
 ```bash
 # Check collector logs — you should see the trace in debug output
@@ -1209,29 +1124,45 @@ kubectl port-forward -n observability svc/otel-collector 8888:8888 &
 curl -s http://localhost:8888/metrics | grep otelcol_receiver_accepted
 ```
 
+<details>
+<summary>Solution notes for Task 3</summary>
+
+You should see the test span in the Collector logs, all three pipelines listed in zpages, and receiver accepted counters in the internal metrics endpoint. If debug logs show the trace but internal metrics do not, make sure the metrics telemetry address is exposed by the pod and port-forwarded correctly. If zpages is unreachable, check that the extension is enabled under `service.extensions`, not just declared under `extensions`.
+</details>
+
+### Task 4: Explain the Production Changes
+
+Write down the changes you would make before moving this lab pattern into production. Consider where you would split agent and gateway responsibilities, whether you would keep Contrib or build a custom Collector, which exporter would replace `debug`, how you would protect credentials, and what metrics would become alerts. This task forces you to connect the working lab to the design framework instead of treating it as a copy-paste manifest.
+
+<details>
+<summary>Solution notes for Task 4</summary>
+
+A production design would usually run node agents for file logs and host metrics, then forward to gateways for sampling, spanmetrics, routing, and backend exports. Debug output would become temporary or sampled, credentials would move into Secrets or external secret management, and internal Collector metrics would feed alerts for accepted, dropped, sent, and failed telemetry. A stable pipeline should also consider a custom Collector distribution rather than keeping a broad Contrib image forever.
+</details>
+
 ### Success Criteria
 
-You should see:
-- The debug exporter printing the trace span with service name `test-service`
-- The `spanmetrics` connector generating metrics (visible in the debug output for the metrics pipeline)
-- `otelcol_receiver_accepted_spans` > 0 in the Collector's own metrics
-- zpages showing all three pipelines active at `/debug/pipelinez`
+- [ ] Design multi-pipeline Collector configurations by tracing the lab's traces, metrics, and logs through the active `service.pipelines` entries.
+- [ ] Configure advanced processors by explaining why `memory_limiter` appears before `batch` and where `filter`, `transform`, or `tail_sampling` would fit.
+- [ ] Deploy Collector workloads in Kubernetes 1.35 and explain when this Deployment should become an agent DaemonSet, a gateway Deployment, or both.
+- [ ] Diagnose Collector pipeline issues by using debug logs, zpages, and `otelcol_*` internal metrics instead of relying only on pod readiness.
+- [ ] Evaluate OTLP transports, connectors, and distributions by choosing a production exporter, a spanmetrics dimension set, and Core, Contrib, or custom Collector packaging.
 
----
+## Sources
 
-## Key Takeaways for the Exam
+- [OpenTelemetry Collector configuration](https://opentelemetry.io/docs/collector/configuration/)
+- [OpenTelemetry Collector deployment](https://opentelemetry.io/docs/collector/deployment/)
+- [OpenTelemetry Protocol specification](https://opentelemetry.io/docs/specs/otlp/)
+- [OpenTelemetry Collector transformation documentation](https://opentelemetry.io/docs/collector/transforming-telemetry/)
+- [OpenTelemetry Collector batch processor](https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor)
+- [OpenTelemetry Collector memory limiter processor](https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor)
+- [OpenTelemetry Collector tail sampling processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/tailsamplingprocessor)
+- [OpenTelemetry Collector spanmetrics connector](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector)
+- [OpenTelemetry Operator](https://github.com/open-telemetry/opentelemetry-operator)
+- [OpenTelemetry Collector Builder](https://opentelemetry.io/docs/collector/custom-collector/)
+- [Kubernetes DaemonSet documentation](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/)
+- [Kubernetes Deployment documentation](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
 
-1. **Config structure**: Five sections (receivers, processors, exporters, connectors, extensions) + service to wire them.
-2. **OTLP ports**: gRPC = 4317, HTTP = 4318. Know these cold.
-3. **Processor order**: `memory_limiter` first, `batch` last.
-4. **Agent vs Gateway**: Agents (DaemonSet) collect, Gateways (Deployment) aggregate and sample.
-5. **Tail sampling**: Gateway-only. Requires `loadbalancing` exporter for horizontal scaling.
-6. **Connectors**: Bridge pipelines. `spanmetrics` generates RED metrics from traces.
-7. **Auto-instrumentation**: OTel Operator + `Instrumentation` CRD + pod annotation.
-8. **Distributions**: Core (minimal), Contrib (everything), Custom via `ocb` (production).
-9. **Debug toolkit**: `debug` exporter, zpages (`/debug/pipelinez`), internal telemetry metrics on `:8888`.
-10. **OTTL**: The transform processor's language — `set`, `delete`, `replace_pattern`, `merge_maps`.
+## Next Module
 
----
-
-> **Next Module**: [OTCA Track Overview]() — Instrument applications using OTel SDKs across multiple languages.
+[OTCA Track Overview]() - Instrument applications using OTel SDKs across multiple languages.
