@@ -118,8 +118,6 @@ When you assemble the practice set, write task prompts that describe outcomes ra
 
 Vary the evidence available in each run. Sometimes provide clear controller status and noisy pod logs. Sometimes provide a helpful event and incomplete metrics. Sometimes make the runbook clue stale so the operations task tests whether the learner can improve it. This variation matters because exam readiness is not the ability to recognize one familiar failure. It is the ability to choose the next trustworthy signal when the surface symptom changes.
 
-Keep practice data realistic but harmless. Use non-production namespaces, sample applications, and disposable claims. Avoid invented secrets, realistic tokens, or external systems that could make the rehearsal unsafe. The mock exam should create cognitive pressure, not operational risk. A learner should be able to reset the environment, rerun the task, and compare results without worrying that a practice mistake damaged shared infrastructure.
-
 After each rehearsal, update the practice set with one small improvement. If the GitOps task was too obvious, add an environment boundary that must be checked. If the platform API task was too vague, improve the status condition so the learner can practice reading it. If the security task encouraged bypassing policy, rewrite the prompt so preserving guardrails is explicit. Practice material should evolve from evidence just like platform systems do.
 
 There is a useful balance between novelty and repetition. Too much novelty turns every rehearsal into exploration, which hides whether core workflow habits are improving. Too much repetition turns the exam into recall, which hides whether the learner can transfer judgment to new symptoms. A practical rotation repeats the same domain mix while changing names, namespaces, failure surfaces, and verification signals. That keeps the pacing workflow familiar while the diagnosis remains real.
@@ -189,7 +187,7 @@ Treat this table as a set of guardrails rather than a script. Real platform work
 - Kubernetes API extension through CustomResourceDefinitions became stable in the `apiextensions.k8s.io/v1` API, which is why modern platform API exams expect you to read schema and status as first-class operational evidence.
 - Argo CD treats Git as the desired state source and continuously compares it with live cluster state, so a delivery task is incomplete until you can explain both sync and health signals.
 - Prometheus graduated from the CNCF in 2018, and its query model is still central to cloud-native incident work because platform operators need time-series evidence rather than isolated snapshots.
-- Kubernetes 1.35+ still rewards careful use of events, conditions, and controller status because those signals explain reconciliation decisions that raw pod listings often hide.
+- Kubernetes 1.35 improves kube-apiserver validation errors for custom resources with CEL validation rules by showing the value that failed validation, which makes CRD contract debugging more exam-relevant.
 
 ## Common Mistakes
 
@@ -342,7 +340,7 @@ A is correct because operations follow-up should make future diagnosis faster an
 
 Exercise scenario: Run a full CNPE rehearsal using one delivery task, one platform API task, one observability or security task, and one operations follow-up from the CNPE track. Use a real timer, keep your notes short, and grade the run with the preserved rubric in this module. The point is not to invent a perfect exam; the point is to create a repeatable pressure test that exposes how you diagnose GitOps delivery drift, evaluate platform API claims, debug guarded runtime failures, manage pacing, and implement a debrief.
 
-Task one is setup. Pick the four tasks, write a one-line expected outcome for each, and set a timer that you will not pause. Your setup is complete when you can point to the exact evidence that would prove each task finished. Do not start solving yet; the first practice move is to define success before pressure narrows your attention.
+Task one is setup. Pick the four tasks, write a one-line expected outcome for each, and set a timer that you will not pause. For example, a platform API prompt might say, "A database claim in `team-a` is accepted but not ready; restore readiness by fixing the claim or contract without bypassing the platform API, then record the Ready condition and composed resource as proof." Your setup is complete when you can point to the exact evidence that would prove each task finished. Do not start solving yet; the first practice move is to define success before pressure narrows your attention.
 
 <details>
 <summary>Suggested setup approach</summary>
@@ -406,7 +404,7 @@ kubectl get all -n <namespace>
 - [Kubernetes service accounts](https://kubernetes.io/docs/concepts/security/service-accounts/)
 - [Argo CD sync options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/)
 - [Argo CD diffing customization](https://argo-cd.readthedocs.io/en/stable/user-guide/diffing/)
-- [Crossplane managed resources](https://docs.crossplane.io/latest/concepts/managed-resources/)
+- [Crossplane managed resources](https://docs.crossplane.io/latest/managed-resources/managed-resources/)
 - [Prometheus querying basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
 - [OpenTelemetry observability primer](https://opentelemetry.io/docs/concepts/observability-primer/)
 
