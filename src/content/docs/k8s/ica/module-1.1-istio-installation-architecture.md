@@ -109,7 +109,7 @@ An installation strategy is a set of decisions, not a single installer preferenc
 
 Profiles are convenient but easy to misuse. The `default` profile is a production-oriented baseline for the control plane. The `demo` profile is for experimentation and includes extra components or settings that make examples easy, not production governance better. The `minimal` profile can be useful when you want tight control over which gateways and add-ons exist. Ambient installs use an ambient-oriented profile and additional data-plane components. Treat a profile as a policy bundle with security, injection, gateway, and resource implications, not as a t-shirt size.
 
-Version pinning belongs in the installation strategy as much as the profile does. Istio publishes supported Kubernetes version ranges, and the current documentation for the 1.29 line includes Kubernetes v1.35 in that tested range. A cluster running v1.35+ should still pin Istio to a reviewed version instead of following "latest" blindly, because mesh upgrades change webhooks, CRDs, proxy images, gateway behavior, and sometimes default analyzer messages. In practice, you want a written compatibility statement before the change and a rollback statement after the change.
+Version pinning belongs in the installation strategy as much as the profile does. Istio publishes supported Kubernetes version ranges for each release, so a cluster running v1.35+ should still pin Istio to a reviewed version instead of following "latest" blindly. Record the checked release pair in the change ticket so reviewers can audit the assumption later. Mesh upgrades change webhooks, CRDs, proxy images, gateway behavior, and sometimes default analyzer messages. In practice, you want a written compatibility statement before the change and a rollback statement after the change.
 
 Gateways deserve a separate installation decision even when the control plane is simple. Many teams install ingress gateways with Istio because examples do, then later discover that gateway ownership, load balancer annotations, certificate automation, and external DNS are controlled by a different platform group. The cleaner pattern is to install the control plane first, decide whether gateways are mesh-owned or platform-owned, and manage gateway charts or manifests as their own release surface. That separation keeps traffic entry points from being accidentally changed during a control-plane experiment.
 
@@ -182,7 +182,7 @@ Classic sidecar injection usually begins with a namespace label. The older label
 ```bash
 kubectl create namespace sample
 kubectl label namespace sample istio-injection=enabled
-kubectl run web -n sample --image=nginx:1.29 --port=80
+kubectl run web -n sample --image=nginx:1.27 --port=80
 kubectl get pod -n sample -l run=web -o jsonpath='{.items[0].spec.containers[*].name}'
 ```
 
@@ -191,7 +191,7 @@ The expected container list should include the application container and `istio-
 Manual injection still matters for controlled demonstrations, disconnected workflows, and debugging. It renders the mutated manifest before it reaches the API server, which makes the sidecar addition visible. Manual injection is not usually the preferred production path because it bakes injection output into workload YAML and can drift from the active control-plane revision. Use it when you need to study or compare the injected pod spec, then return to admission-based injection for normal operations.
 
 ```bash
-kubectl create deployment manual-web -n sample --image=nginx:1.29 --dry-run=client -o yaml > manual-web.yaml
+kubectl create deployment manual-web -n sample --image=nginx:1.27 --dry-run=client -o yaml > manual-web.yaml
 istioctl kube-inject -f manual-web.yaml > manual-web-injected.yaml
 kubectl apply -f manual-web-injected.yaml
 kubectl get pod -n sample -l app=manual-web -o jsonpath='{.items[0].spec.containers[*].name}'
@@ -368,8 +368,8 @@ The framework also helps you explain a design choice to reviewers. "We are using
 ## Did You Know?
 
 - Istio 1.5 consolidated several earlier control-plane components into `istiod`, which is why current installations focus so heavily on one Deployment in `istio-system`.
-- The current Istio 1.29 documentation states compatibility testing through Kubernetes v1.35, making v1.35+ assumptions relevant for modern ICA practice.
-- Kubernetes sidecar containers became stable in Kubernetes v1.33, but Istio's classic Envoy sidecar injection is still managed through Istio admission and pod mutation rather than that feature alone.
+- Current Istio documentation publishes Kubernetes compatibility ranges per release, making explicit compatibility checks relevant for modern ICA practice.
+- Kubernetes has native sidecar container semantics, but Istio's classic Envoy sidecar injection is still managed through Istio admission and pod mutation rather than that feature alone.
 - Istio ambient mode reached general availability in the 1.24 release line, giving operators a supported sidecar-less data-plane option for suitable workloads.
 
 ## Common Mistakes
@@ -457,7 +457,7 @@ istioctl analyze --all-namespaces
 
 kubectl create namespace sample
 kubectl label namespace sample istio-injection=enabled
-kubectl create deployment web -n sample --image=nginx:1.29
+kubectl create deployment web -n sample --image=nginx:1.27
 kubectl rollout status deployment/web -n sample --timeout=180s
 kubectl get pod -n sample -l app=web -o jsonpath='{.items[0].spec.containers[*].name}'
 istioctl proxy-status
