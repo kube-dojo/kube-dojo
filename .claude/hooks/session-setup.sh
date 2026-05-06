@@ -7,6 +7,15 @@ if [ -n "$CLAUDE_NON_INTERACTIVE" ] || [ -n "$KUBEDOJO_PIPELINE" ] || [ -n "$GEM
   exit 0
 fi
 
+REPO_HINT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT=$(git -C "$REPO_HINT" rev-parse --show-toplevel)
+PRIMARY_WORKTREE=$(git -C "$REPO_ROOT" worktree list --porcelain | awk '/^worktree / {print $2; exit}')
+PRIMARY_BRANCH=$(git -C "$PRIMARY_WORKTREE" rev-parse --abbrev-ref HEAD)
+if [ "$PRIMARY_BRANCH" != "main" ]; then
+  printf '%b\n' "\033[31m[session-setup] PRIMARY TREE NOT ON main (currently '${PRIMARY_BRANCH}') — fix with: git -C ${PRIMARY_WORKTREE} checkout main\033[0m" >&2
+  exit 1
+fi
+
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 ISSUES=()
 INFO=()
