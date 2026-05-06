@@ -1,6 +1,7 @@
 ---
 title: "CNPE GitOps and Delivery Lab"
 slug: k8s/cnpe/module-1.2-gitops-and-delivery-lab
+revision_pending: false
 sidebar:
   order: 102
 ---
@@ -45,10 +46,10 @@ The first professional habit is to ask which state you are observing. Desired st
 |------|-------|---------------------|------------------|-------------|
 | Desired state | Git repository and rendering tool | What should exist after reconciliation? | Kustomize overlay sets `replicas: 3` | Assuming a local edit exists in Git before it is committed |
 | Rendered state | Helm, Kustomize, or another generator | What manifests will the controller apply? | `kustomize build overlays/staging` output | Debugging raw templates without checking rendered YAML |
-| Live state | Kubernetes API server | What exists in the cluster right now? | `k get deploy payment-api -n payments -o yaml` | Treating a manual live patch as the new source of truth |
+| Live state | Kubernetes API server | What exists in the cluster right now? | `kubectl get deploy payment-api -n payments -o yaml` | Treating a manual live patch as the new source of truth |
 | Sync state | GitOps controller | Do desired and live match from the controller's view? | Argo CD `Synced`, Flux `Ready=True` | Assuming sync means the application is healthy |
 | Health state | GitOps controller and workload status | Are resources usable after they exist? | Deployment available condition, Pod readiness | Missing a bad readiness probe after sync succeeds |
-| Rollout state | Kubernetes workload controller or rollout controller | Is traffic safely moving to the new revision? | `k rollout status`, Rollout phase, analysis result | Stopping after a ReplicaSet exists without checking availability |
+| Rollout state | Kubernetes workload controller or rollout controller | Is traffic safely moving to the new revision? | `kubectl rollout status`, Rollout phase, analysis result | Stopping after a ReplicaSet exists without checking availability |
 
 When a prompt says "the application did not deploy correctly," do not immediately edit YAML. First classify the failure. If desired state is wrong, fix the repository. If rendered state is wrong, fix the generator input or overlay. If live state differs from desired, inspect the GitOps controller. If sync is clean but health is bad, debug the workload. If health is good but users see mixed behavior, inspect rollout strategy and traffic routing.
 
@@ -75,47 +76,35 @@ The likely answer is that desired and live state match from the controller's per
 
 A second common scenario is the reverse: the application is healthy, but the GitOps controller reports `OutOfSync`. That can happen when a person manually scales a Deployment, when a mutating admission controller adds fields the GitOps tool does not ignore, or when the rendering output changed after a dependency update. Health says the application is currently usable; sync says the operating contract has drifted.
 
-For command examples, this module uses `k` after defining it as a shell function for `kubectl`. A shell function is used instead of a simple alias because it works reliably in script blocks and non-interactive shells. In your own terminal, `alias k=kubectl` is fine once you understand the difference.
+For command examples, this module uses the full `kubectl` command name even though many engineers shorten it interactively in their own shells. That choice is intentional because copied lab blocks should run in non-interactive terminals, CI jobs, and exam scratch scripts without depending on local shell startup files. Reliability in examples matters for GitOps work because the learner should spend attention on reconciliation boundaries, not on a command wrapper that exists only on one workstation.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k version --client
-k get namespaces
+kubectl version --client
+kubectl get namespaces
 ```
 
 Use a consistent inspection order during exam work. Start with the GitOps object, then inspect the workload, then inspect Pods and events. This sequence prevents random-walk troubleshooting because each command answers a different question. If the controller says it cannot render manifests, Pod logs are noise. If Pods are crash-looping after a clean sync, repository structure is probably not the first problem.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
 APP_NAMESPACE="${APP_NAMESPACE:-argocd}"
 APP_NAME="${APP_NAME:-payment-api-staging}"
 WORKLOAD_NAMESPACE="${WORKLOAD_NAMESPACE:-payments}"
 
-k get application "$APP_NAME" -n "$APP_NAMESPACE" -o wide
-k describe application "$APP_NAME" -n "$APP_NAMESPACE"
-k get deploy -n "$WORKLOAD_NAMESPACE"
-k get pods -n "$WORKLOAD_NAMESPACE" -o wide
-k get events -n "$WORKLOAD_NAMESPACE" --sort-by=.lastTimestamp
+kubectl get application "$APP_NAME" -n "$APP_NAMESPACE" -o wide
+kubectl describe application "$APP_NAME" -n "$APP_NAMESPACE"
+kubectl get deploy -n "$WORKLOAD_NAMESPACE"
+kubectl get pods -n "$WORKLOAD_NAMESPACE" -o wide
+kubectl get events -n "$WORKLOAD_NAMESPACE" --sort-by=.lastTimestamp
 ```
 
 If your environment uses Flux rather than Argo CD, the nouns change but the reasoning does not. Flux commonly exposes `GitRepository`, `Kustomization`, `HelmRepository`, and `HelmRelease` objects. Argo CD commonly exposes `Application` objects and may use `ApplicationSet` for generation. Both are reconciliation systems that compare declared intent with live resources.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get applications.argoproj.io -A 2>/dev/null || true
-k get applicationsets.argoproj.io -A 2>/dev/null || true
-k get gitrepositories.source.toolkit.fluxcd.io -A 2>/dev/null || true
-k get kustomizations.kustomize.toolkit.fluxcd.io -A 2>/dev/null || true
-k get helmreleases.helm.toolkit.fluxcd.io -A 2>/dev/null || true
+kubectl get applications.argoproj.io -A 2>/dev/null || true
+kubectl get applicationsets.argoproj.io -A 2>/dev/null || true
+kubectl get gitrepositories.source.toolkit.fluxcd.io -A 2>/dev/null || true
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io -A 2>/dev/null || true
+kubectl get helmreleases.helm.toolkit.fluxcd.io -A 2>/dev/null || true
 ```
 
 The `2>/dev/null || true` pattern is useful in training environments because only one controller family may be installed. It is not a way to hide errors in production automation. In an exam lab, it lets you quickly discover which API types exist without failing the whole command sequence when a CRD is absent.
@@ -272,11 +261,7 @@ kustomize build apps/payment-api/overlays/staging
 If `kustomize` is not installed as a standalone binary, recent Kubernetes clients can render Kustomize directories through `kubectl`. The output should be treated as generated evidence, not as a file to hand-edit. If the rendered output is wrong, fix the overlay or base input that produced it.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k kustomize apps/payment-api/overlays/staging
+kubectl kustomize apps/payment-api/overlays/staging
 ```
 
 A Helm-based repository follows the same operating principles even though the files look different. The chart or dependency defines reusable structure. Environment values define differences. A GitOps object points at the chart and values for the target environment. The most common mistake is hiding environment-specific behavior inside chart templates until reviewers cannot see what promotion changes.
@@ -312,6 +297,8 @@ The choice between Helm and Kustomize should follow the shape of the problem. Ku
 | Exam speed | The prompt asks for a small delivery fix | The prompt provides a chart or HelmRelease | Avoid tool migration unless required |
 
 A clean repository is not perfect because it has no complexity. It is clean because complexity has an address. Base behavior lives in one place, environment differences live in another, and cluster reconciliation objects live where operators expect to find them. When the module later asks you to recover from drift, this structure will make the correct source of truth easier to identify.
+
+The same rule applies when the repository grows beyond one service. Shared platform resources, application manifests, and environment registrations may live in separate directories or even separate repositories, but reviewers still need a predictable path from intent to reconciliation. If a change cannot be traced from a commit to a rendered object and then to a controller-owned live object, the layout is probably optimizing for authorship convenience instead of operational clarity.
 
 ## Part 3: Worked Example A, Bootstrap a Service Through GitOps
 
@@ -421,11 +408,7 @@ YAML
 Render the overlay before creating any GitOps object. This is the first explicit checkpoint in the delivery path. If rendering fails, the controller would fail too, but with more delay and more surrounding noise. If rendering succeeds, inspect the output for namespace, image, labels, Service selector, and replica count.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k kustomize apps/payment-api/overlays/staging | grep -E 'name: payment-api|namespace: payments-staging|replicas:|image:|app.kubernetes.io/name'
+kubectl kustomize apps/payment-api/overlays/staging | grep -E 'name: payment-api|namespace: payments-staging|replicas:|image:|app.kubernetes.io/name'
 ```
 
 A successful render should show the Deployment and Service named `payment-api`, the namespace `payments-staging`, the image `nginx:1.27.5`, and the staging replica count. If the Service selector and Pod template label differ, sync can still succeed while traffic fails. That is why rendering checks should include relationship fields, not only object existence.
@@ -472,12 +455,8 @@ In an exam environment, the Git remote and controller permissions are usually pr
 ```bash
 git push
 
-k() {
-  kubectl "$@"
-}
-
-k get application payment-api-staging -n argocd -o wide
-k describe application payment-api-staging -n argocd
+kubectl get application payment-api-staging -n argocd -o wide
+kubectl describe application payment-api-staging -n argocd
 ```
 
 Read the status fields as a sequence of claims. A sync status of `Synced` means desired and live resources match according to Argo CD. A health status of `Healthy` means Argo CD considers the managed resources usable. A revision field tells you which Git revision was reconciled. If the revision is old, the controller may be healthy but not yet operating on your commit.
@@ -516,25 +495,17 @@ spec:
 After controller sync, verify Kubernetes runtime state. This is where many weak lab answers stop too early. A Deployment can exist before it is available, Pods can exist before readiness passes, and a Service can exist without endpoints. CNPE expects evidence that the workload is actually serving through the intended path.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get namespace payments-staging
-k get deploy payment-api -n payments-staging -o wide
-k rollout status deploy/payment-api -n payments-staging --timeout=120s
-k get rs,pods,svc,endpoints -n payments-staging -l app.kubernetes.io/name=payment-api
+kubectl get namespace payments-staging
+kubectl get deploy payment-api -n payments-staging -o wide
+kubectl rollout status deploy/payment-api -n payments-staging --timeout=120s
+kubectl get rs,pods,svc,endpoints -n payments-staging -l app.kubernetes.io/name=payment-api
 ```
 
 If the Deployment is available but endpoints are empty, compare the Service selector with the Pod labels. This is an instructional example of using the state model. Sync may be correct, live objects may exist, and rollout may be complete, yet traffic fails because object relationships are wrong. The fix belongs in Git because the incorrect relationship came from desired state.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get svc payment-api -n payments-staging -o jsonpath='{.spec.selector}{"\n"}'
-k get pods -n payments-staging -l app.kubernetes.io/name=payment-api --show-labels
+kubectl get svc payment-api -n payments-staging -o jsonpath='{.spec.selector}{"\n"}'
+kubectl get pods -n payments-staging -l app.kubernetes.io/name=payment-api --show-labels
 ```
 
 The final bootstrap checkpoint is rollback readiness. A safe delivery path includes a way back to a known revision. For a newly onboarded service, rollback might mean reverting the commit that introduced the app or changing the overlay back to the previous image. You do not need to perform the rollback every time, but you should know which Git revision would restore the previous state.
@@ -569,11 +540,7 @@ git diff -- apps/payment-api/overlays/staging/patch-image.yaml
 Render the staging overlay again. A promotion should produce a small, explainable rendered difference. If rendering shows changes to labels, namespaces, probes, or Service ports, you have accidentally bundled unrelated changes with the promotion. That is a scope problem, not a GitOps controller problem.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k kustomize apps/payment-api/overlays/staging | grep -E 'image:|replicas:|namespace:'
+kubectl kustomize apps/payment-api/overlays/staging | grep -E 'image:|replicas:|namespace:'
 ```
 
 Commit the promotion with a message that identifies the environment and workload. Git history becomes the audit log of delivery intent, so vague messages such as "fix stuff" harm operations even when the YAML is technically correct. A useful commit message lets a reviewer understand the blast radius before opening the diff.
@@ -587,19 +554,15 @@ git push
 Now watch the controller and workload. The controller evidence should show that staging reconciled the new revision. The workload evidence should show the new image, rollout progress, and available replicas. If the controller reports `Synced` against an old revision, wait or inspect source refresh rather than debugging Pods.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get application payment-api-staging -n argocd -o wide
-k get deploy payment-api -n payments-staging -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-k rollout status deploy/payment-api -n payments-staging --timeout=120s
-k get pods -n payments-staging -l app.kubernetes.io/name=payment-api -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.containers[0].image}{" "}{.status.phase}{"\n"}{end}'
+kubectl get application payment-api-staging -n argocd -o wide
+kubectl get deploy payment-api -n payments-staging -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+kubectl rollout status deploy/payment-api -n payments-staging --timeout=120s
+kubectl get pods -n payments-staging -l app.kubernetes.io/name=payment-api -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.containers[0].image}{" "}{.status.phase}{"\n"}{end}'
 ```
 
 The promotion is complete only when the evidence aligns. Git contains the staging overlay change. The controller has reconciled the commit. Kubernetes shows the intended image. The rollout completed. Pods are ready. If any one of those statements is false, report the exact boundary that failed instead of saying "deployment failed."
 
-> **What would happen if:** You manually run `k set image deploy/payment-api payment-api=nginx:1.27.6 -n payments-staging` while Argo CD self-heal is enabled, but you do not commit the overlay change?
+> **What would happen if:** You manually run `kubectl set image deploy/payment-api payment-api=nginx:1.27.6 -n payments-staging` while Argo CD self-heal is enabled, but you do not commit the overlay change?
 
 The live Deployment may briefly change, but the GitOps controller will detect drift and restore the image from Git. If self-heal is disabled, the live object may remain patched while the controller reports drift. Both outcomes are operationally worse than a clean promotion because the repository no longer explains the cluster.
 
@@ -632,13 +595,9 @@ Start with a concrete incident. A staging Deployment should run three replicas a
 Inspect the live Deployment. The replica count is evidence, but it is not yet a decision. Also inspect annotations, managed fields when needed, events, and controller status. Some controllers or autoscalers may legitimately change fields that GitOps should ignore or own differently.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get deploy payment-api -n payments-staging -o jsonpath='{.spec.replicas}{"\n"}'
-k describe deploy payment-api -n payments-staging
-k get events -n payments-staging --sort-by=.lastTimestamp | tail -n 20
+kubectl get deploy payment-api -n payments-staging -o jsonpath='{.spec.replicas}{"\n"}'
+kubectl describe deploy payment-api -n payments-staging
+kubectl get events -n payments-staging --sort-by=.lastTimestamp | tail -n 20
 ```
 
 Inspect desired state from the repository. If the staging overlay says three replicas, Git intent is clear. If the base says two and the overlay says three, the overlay wins in the rendered output. Always check rendered desired state when patches are involved because reading only one file can mislead you.
@@ -646,22 +605,14 @@ Inspect desired state from the repository. If the staging overlay says three rep
 ```bash
 grep -R "replicas:" apps/payment-api/base apps/payment-api/overlays/staging
 
-k() {
-  kubectl "$@"
-}
-
-k kustomize apps/payment-api/overlays/staging | grep -A 4 -B 2 "replicas:"
+kubectl kustomize apps/payment-api/overlays/staging | grep -A 4 -B 2 "replicas:"
 ```
 
 Now inspect the controller's view. If Argo CD reports `OutOfSync`, the controller sees the difference. If self-heal is enabled, it may automatically restore three replicas. If self-heal is disabled, it may report drift until a sync occurs. If the controller reports `Synced` while live replicas differ, check whether the field is ignored or managed by another controller.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get application payment-api-staging -n argocd -o wide
-k describe application payment-api-staging -n argocd | sed -n '/Status:/,/Events:/p'
+kubectl get application payment-api-staging -n argocd -o wide
+kubectl describe application payment-api-staging -n argocd | sed -n '/Status:/,/Events:/p'
 ```
 
 At this point, choose the source of truth. If five replicas are required because staging load tests need more capacity, update Git and let the controller reconcile that intent. If five replicas are accidental, let GitOps restore three replicas through sync or self-heal. Do not keep patching the live object until the alerts stop because that trains the platform to lie.
@@ -686,34 +637,22 @@ perl -0pi -e 's/replicas: 3/replicas: 5/g' apps/payment-api/overlays/staging/pat
 
 git diff -- apps/payment-api/overlays/staging/patch-replicas.yaml
 
-k() {
-  kubectl "$@"
-}
-
-k kustomize apps/payment-api/overlays/staging | grep -A 2 -B 2 "replicas:"
+kubectl kustomize apps/payment-api/overlays/staging | grep -A 2 -B 2 "replicas:"
 ```
 
 If the live change should be removed, do not edit Git. Instead, let the GitOps controller restore desired state. Depending on controller policy, you may wait for self-heal, trigger a sync, or remove a live patch that another system owns. The exact command depends on the installed tool, but the decision remains the same: Git stays authoritative.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k annotate application payment-api-staging -n argocd argocd.argoproj.io/refresh=normal --overwrite
-k get deploy payment-api -n payments-staging -w
+kubectl annotate application payment-api-staging -n argocd argocd.argoproj.io/refresh=normal --overwrite
+kubectl get deploy payment-api -n payments-staging -w
 ```
 
 If Flux is the controller, you would normally use the Flux CLI for reconciliation when available. Without the CLI, inspect the Flux objects and their conditions through Kubernetes resources. Again, the important part is verifying the source and reconciliation boundary.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get gitrepositories.source.toolkit.fluxcd.io -n flux-system
-k get kustomizations.kustomize.toolkit.fluxcd.io -n flux-system
-k describe kustomization payment-api-staging -n flux-system
+kubectl get gitrepositories.source.toolkit.fluxcd.io -n flux-system
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io -n flux-system
+kubectl describe kustomization payment-api-staging -n flux-system
 ```
 
 Some drift is expected and should be configured intentionally. For example, an HPA may change replica counts, a service mesh injector may add sidecars, and a policy engine may add labels or defaults. Senior GitOps design defines which fields the delivery controller owns and which fields another controller owns. The mistake is not allowing any mutation; the mistake is allowing unexplained mutation.
@@ -807,15 +746,11 @@ The progressive delivery object should still be managed through GitOps. Do not t
 Verification for progressive delivery must include more than Deployment availability. Check the GitOps application, the Rollout phase, the ReplicaSets, and the service or traffic router involved. If analysis is configured, inspect the analysis run and the metric result. A canary that reached the new ReplicaSet but failed analysis should not be described as successful.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get application payment-api-staging -n argocd -o wide
-k get rollout payment-api -n payments-staging -o wide
-k describe rollout payment-api -n payments-staging
-k get rs,pods -n payments-staging -l app.kubernetes.io/name=payment-api
-k get analysisruns -n payments-staging 2>/dev/null || true
+kubectl get application payment-api-staging -n argocd -o wide
+kubectl get rollout payment-api -n payments-staging -o wide
+kubectl describe rollout payment-api -n payments-staging
+kubectl get rs,pods -n payments-staging -l app.kubernetes.io/name=payment-api
+kubectl get analysisruns -n payments-staging 2>/dev/null || true
 ```
 
 When a progressive rollout fails, your first decision is whether to abort the rollout, fix Git, or both. If the new version is bad, aborting protects users quickly, but Git must also be reverted or updated so the GitOps controller does not reintroduce the same bad desired state. If the rollout object is misconfigured, the fix belongs in Git and should be reconciled normally.
@@ -856,26 +791,18 @@ A senior answer also distinguishes emergency response from durable repair. Durin
 Security and access control matter in delivery debugging. A controller may be unable to apply resources because its service account lacks permissions. A repository may be private or use an expired credential. A namespace may be blocked by policy. These are still GitOps failures, but they are not YAML syntax failures. Always read controller events before rewriting manifests.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get events -n argocd --sort-by=.lastTimestamp | tail -n 20
-k get events -n flux-system --sort-by=.lastTimestamp | tail -n 20 2>/dev/null || true
-k auth can-i create deployments --as system:serviceaccount:argocd:argocd-application-controller -n payments-staging
+kubectl get events -n argocd --sort-by=.lastTimestamp | tail -n 20
+kubectl get events -n flux-system --sort-by=.lastTimestamp | tail -n 20 2>/dev/null || true
+kubectl auth can-i create deployments --as system:serviceaccount:argocd:argocd-application-controller -n payments-staging
 ```
 
-The `k auth can-i` example is cluster-dependent because service account names vary by installation. Use it as a pattern: identify the controller identity, ask whether it can perform the required action, and compare the answer with the resource it failed to manage. Permission failures often masquerade as delivery failures until you inspect events.
+The `kubectl auth can-i` example is cluster-dependent because service account names vary by installation. Use it as a pattern: identify the controller identity, ask whether it can perform the required action, and compare the answer with the resource it failed to manage. Permission failures often masquerade as delivery failures until you inspect events.
 
 Another senior habit is verifying negative space. If a Git commit removed a resource, check whether the resource was pruned. If a promotion should affect only staging, check that production did not change. If a rollback should restore the old image, check both current Pods and the desired overlay. Absence and containment are part of delivery evidence.
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
-k get deploy payment-api -n payments-prod -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' 2>/dev/null || true
-k get deploy old-payment-worker -n payments-staging 2>/dev/null || true
+kubectl get deploy payment-api -n payments-prod -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' 2>/dev/null || true
+kubectl get deploy old-payment-worker -n payments-staging 2>/dev/null || true
 git diff --name-only HEAD~1..HEAD
 ```
 
@@ -893,8 +820,8 @@ By the end of a delivery investigation, you should be able to write a short inci
 
 ## Common Mistakes
 
-| Mistake | Problem | Better Approach |
-|---------|---------|-----------------|
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
 | Editing the live cluster first during a normal GitOps change | The cluster may temporarily look fixed while Git still contains the old intent, causing drift or self-heal reversal | Change the repository path the controller reconciles, then verify the controller applied the current revision |
 | Treating `Synced` as proof that users are safe | Sync does not prove Pods are ready, endpoints exist, traffic shifted, or the application behaves correctly | Check sync, health, rollout status, Pods, endpoints, and events before declaring success |
 | Putting environment-specific changes into the shared base | A staging-only promotion can leak into dev or production because every overlay inherits the base | Keep shared intent in base and put environment differences in overlays or release metadata |
@@ -976,7 +903,7 @@ By the end of a delivery investigation, you should be able to write a short inci
 
 **Preparation**: Use an existing lab repository and cluster if your CNPE environment provides one. If no GitOps controller is installed, still complete the repository, render, and reasoning portions, then write down which controller checks would be required in a real environment.
 
-**Steps**:
+### Steps
 
 1. Create or locate a Kustomize or Helm path for a non-production `payment-api` environment.
 
@@ -1002,13 +929,9 @@ By the end of a delivery investigation, you should be able to write a short inci
 
 12. Write a short delivery note that states the boundary you changed, the evidence you collected, and the rollback evidence you found.
 
-**Suggested verification commands**:
+### Suggested verification commands
 
 ```bash
-k() {
-  kubectl "$@"
-}
-
 WORKLOAD_NAMESPACE="${WORKLOAD_NAMESPACE:-payments-staging}"
 APP_NAMESPACE="${APP_NAMESPACE:-argocd}"
 APP_NAME="${APP_NAME:-payment-api-staging}"
@@ -1016,15 +939,15 @@ APP_NAME="${APP_NAME:-payment-api-staging}"
 git status --short
 git diff --stat HEAD~1..HEAD
 
-k get application "$APP_NAME" -n "$APP_NAMESPACE" -o wide 2>/dev/null || true
-k get kustomizations.kustomize.toolkit.fluxcd.io -A 2>/dev/null || true
-k get deploy payment-api -n "$WORKLOAD_NAMESPACE" -o wide
-k rollout status deploy/payment-api -n "$WORKLOAD_NAMESPACE" --timeout=120s
-k get pods,svc,endpoints -n "$WORKLOAD_NAMESPACE" -l app.kubernetes.io/name=payment-api
-k get events -n "$WORKLOAD_NAMESPACE" --sort-by=.lastTimestamp | tail -n 20
+kubectl get application "$APP_NAME" -n "$APP_NAMESPACE" -o wide 2>/dev/null || true
+kubectl get kustomizations.kustomize.toolkit.fluxcd.io -A 2>/dev/null || true
+kubectl get deploy payment-api -n "$WORKLOAD_NAMESPACE" -o wide
+kubectl rollout status deploy/payment-api -n "$WORKLOAD_NAMESPACE" --timeout=120s
+kubectl get pods,svc,endpoints -n "$WORKLOAD_NAMESPACE" -l app.kubernetes.io/name=payment-api
+kubectl get events -n "$WORKLOAD_NAMESPACE" --sort-by=.lastTimestamp | tail -n 20
 ```
 
-**Success Criteria**:
+### Success Criteria
 
 - [ ] You can point to the exact repository file that represents the environment-specific delivery change.
 
@@ -1039,6 +962,19 @@ k get events -n "$WORKLOAD_NAMESPACE" --sort-by=.lastTimestamp | tail -n 20
 - [ ] You identified a rollback path and explained what evidence would prove rollback completed.
 
 - [ ] Your final delivery note distinguishes desired state, live state, sync state, health state, and rollout state.
+
+## Sources
+
+- [Kubernetes documentation: Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+- [Kubernetes documentation: Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/service/)
+- [Kubernetes documentation: kubectl rollout](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/)
+- [Kubernetes documentation: Kustomize](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/kustomization/)
+- [Helm documentation: Charts](https://helm.sh/docs/topics/charts/)
+- [Argo CD documentation: Application specification](https://argo-cd.readthedocs.io/en/stable/user-guide/application-specification/)
+- [Argo CD documentation: Auto Sync](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/)
+- [Flux documentation: GitRepository](https://fluxcd.io/flux/components/source/gitrepositories/)
+- [Flux documentation: Kustomization](https://fluxcd.io/flux/components/kustomize/kustomizations/)
+- [Argo Rollouts documentation: Canary strategy](https://argo-rollouts.readthedocs.io/en/stable/features/canary/)
 
 ## Next Module
 
