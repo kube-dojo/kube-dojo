@@ -25,7 +25,7 @@ By the end of this module, you will be able to:
 
 ## Why This Module Matters
 
-A payments platform at a mid-size retailer once treated its first GitOps incident as a controller outage because the visible symptom looked absurd: an emergency hotfix worked, traffic recovered, and then the cluster quietly reverted to the broken image. The operations channel filled with guesses about cache timing, Helm release history, and a supposedly stuck deployment job, but the actual cause was simpler and more expensive. The incident commander had changed the live Deployment during the outage, Git still declared the old image, and the controller later restored the declared desired state during the next reconciliation cycle. The customer-facing degradation lasted long enough to trigger service credits and a painful executive review, not because Kubernetes was mysterious, but because the team had not agreed where durable production intent lived.
+When a team treats its first GitOps incident as a controller outage because the visible symptom looks absurd — an emergency hotfix works, traffic recovers, then the cluster quietly reverts to the broken image — the operations channel often fills with guesses about cache timing, Helm release history, and a supposedly stuck deployment job. The actual cause may be simpler: an incident commander changed the live Deployment during the outage, Git still declared the old image, and the controller restored the declared desired state during the next reconciliation cycle.
 
 That story is the reason this practice set is not a trivia checkpoint. GitOps questions in CGOA usually hide the important concept inside ordinary operational wording: a pull request merged, a workload drifted, a controller reported out of sync, or a CI job succeeded while the cluster stayed unchanged. A learner who memorizes "GitOps stores YAML in Git" may still choose a wrong answer because the phrase omits the reconciliation loop, the ownership boundary, and the difference between temporary runtime action and durable desired state. The exam is testing whether you can reason through those differences under pressure.
 
@@ -105,10 +105,10 @@ A practical drift investigation starts by asking three questions. First, which o
 kubectl -n shop get deployment checkout -o yaml
 ```
 
-In KubeDojo modules, the `kubectl` command is shortened to `k` after this first explanation. The alias is common in real exam and operations environments, but the full command is shown first so the intent is clear. If you use the alias locally, the same inspection command becomes:
+In KubeDojo modules, commands are shown with the full `kubectl` invocation to match the course style and the anti-alias checks:
 
 ```bash
-k -n shop get deployment checkout -o yaml
+kubectl -n shop get deployment checkout -o yaml
 ```
 
 A worked example makes the distinction clearer. Suppose Git contains `registry.example.com/checkout:v1.8`, but the live Deployment uses `registry.example.com/checkout:v1.9-hotfix`. The team needs to know whether that hotfix was applied directly during an incident, rendered by a newer Helm chart, or produced by an image automation controller that updates manifests through commits. The correct next step is not automatically "roll back" or "force sync"; the correct next step is to identify the owner and origin of the change.
@@ -263,10 +263,10 @@ The following scenario combines the main ideas from this module. A team merges a
 A stronger response starts with the reconciliation chain. Did the desired-state repository receive the correct image tag? Did the controller observe the new commit? Did the manifest render correctly? Did Kubernetes reject the apply because of RBAC, admission policy, missing image pull secret, invalid YAML, or a namespace mismatch? Did the workload apply but fail health checks? The evidence determines whether the failure sits in Git observation, rendering, Kubernetes admission, rollout health, or runtime scheduling.
 
 ```bash
-k -n argocd get applications
-k -n shop get deployment checkout -o wide
-k -n shop describe deployment checkout
-k -n shop get events --sort-by=.lastTimestamp
+kubectl -n argocd get applications
+kubectl -n shop get deployment checkout -o wide
+kubectl -n shop describe deployment checkout
+kubectl -n shop get events --sort-by=.lastTimestamp
 ```
 
 These commands are examples of the kind of evidence an operator would collect. The exact namespace for the GitOps controller may differ, and Flux uses different custom resources from Argo CD, so the commands are not a universal script. The teaching point is the sequence: inspect controller status, inspect the workload, inspect events, and compare live state with declared state. Jumping directly to manual mutation skips diagnosis and can make the next reconciliation cycle harder to interpret.
@@ -360,52 +360,116 @@ The framework also helps compare push-based and pull-based approaches without sl
 
 ## Quiz
 
-<details>
-<summary>1. A developer changes a Deployment image directly with `kubectl set image` during an incident. The GitOps controller later changes it back to the older image from Git. What is the best explanation?</summary>
+**Question 1.** A developer changes a Deployment image directly with `kubectl set image` during an incident. The GitOps controller later changes it back to the older image from Git. What is the best explanation?
 
-The controller reconciled the cluster back to the desired state declared in Git. The direct cluster change created drift because Git still declared the older image, so the controller followed its configured policy. If the hotfix should become durable, the team needs to update Git or intentionally pause reconciliation during the emergency process. The important lesson is that a successful manual fix is not automatically the new GitOps source of truth.
+1. The controller correctly reconciled the cluster back to the desired state declared in Git, which is the durable source of intent.
+2. A manual hotfix is always temporary and therefore automatically discarded by Kubernetes after 10 minutes.
+3. The controller only enforces changes from the CI pipeline and never applies Git history directly.
+4. The Deployment image changed because `kubectl set image` resets `spec.image` to the repository default after every reconcile.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **1**. The direct cluster command changed live state without updating Git, so the controller detected drift against Git and restored the declared image. Option 2 is wrong because Kubernetes does not auto-revert the change on a timer; it persists until another actor corrects it. Option 3 is incorrect because this example relies on Git as the desired-state authority, not on CI as the reconciler. Option 4 is wrong because `kubectl set image` applies exactly what the operator requested, and the reversion came from Git reconciliation, not from `kubectl` defaults.
+
 </details>
 
-<details>
-<summary>2. Your CI pipeline successfully builds and scans an image, then opens a pull request that updates a Helm values file. After the pull request merges, the cluster does not change. Which investigation sequence best matches a GitOps mental model?</summary>
+**Question 2.** Your CI pipeline successfully builds and scans an image, then opens a pull request that updates a Helm values file. After the pull request merges, the cluster does not change. Which investigation sequence best matches a GitOps mental model?
 
-Check whether the controller observed the commit, rendered the desired manifests, and encountered apply or health errors. The failure happened after artifact creation, so rerunning unit tests is unlikely to prove the missing runtime change. A GitOps investigation follows the reconciliation path from repository state to rendered output to Kubernetes apply and workload health. Manual bypasses may hide the actual failure and create more drift.
+1. Re-run the image scan, and if it passes, run `kubectl rollout undo` on the workload.
+2. Verify the controller observed the merge, then validate manifest rendering, apply attempts, admission responses, and workload health in order.
+3. Re-run CI unit tests and assume the merge is wrong if any test fails.
+4. Manually patch the live workload so traffic returns first, then review the incident later.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **2**. A GitOps investigation follows the delivery chain from repository state to rendered manifest to cluster apply and health. Option 1 is wrong because a rollout-undo command addresses symptoms, but it does not verify where the gap between Git and live state began. Option 3 is wrong because CI test status is not the controlling signal after merge; it only covers prior stages of the chain. Option 4 is not correct as a first move because bypassing reconciliation may hide whether the controller is missing the commit or blocked at render/apply stages.
+
 </details>
 
-<details>
-<summary>3. A platform team is deciding between a push-based CI deployment and a pull-based GitOps controller for production. Their main concern is reducing direct production credentials in external systems. Which recommendation is strongest?</summary>
+**Question 3.** A platform team is deciding between a push-based CI deployment and a pull-based GitOps controller for production. Their main concern is reducing direct production credentials in external systems. Which recommendation is strongest?
 
-Use pull-based GitOps so a cluster-side or environment-trusted controller reconciles reviewed desired state with scoped Kubernetes permissions. This does not remove all risk, because the controller still needs RBAC and repository access. It does reduce the need for shared external CI runners to hold direct production mutation credentials. The recommendation is strongest when paired with branch protection, least privilege, and a documented emergency process.
+1. Use push-based CI so builds remain the same and credentials are concentrated in one place.
+2. Use pull-based GitOps so a cluster-trusted controller reconciles reviewed desired state with scoped Kubernetes permissions.
+3. Avoid Git entirely and run all deployments from CI tokens rotated weekly.
+4. Deploy only from Helm and disable Git history to reduce operational overhead.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **2**. Pull-based GitOps moves mutation authority into the target environment with bounded RBAC, which is precisely the requested reduction in externally held production credentials. Option 1 is wrong because concentration of push credentials in CI is the pattern that increases the credential blast radius in this scenario. Option 3 is incorrect because removing Git makes auditability and review weaker, and it still leaves another system needing direct cluster privileges. Option 4 is not correct because Helm is a templating/deployment tool in many workflows, not a standalone security control that replaces Git-based desired-state governance.
+
 </details>
 
-<details>
-<summary>4. Your team sees that a GitOps dashboard marks an application as out of sync, but the workload is healthy. Git declares `replicas: 3`, while the live Deployment has `replicas: 2` because someone scaled it during a traffic drop. What should the team do first?</summary>
+**Question 4.** Your team sees that a GitOps dashboard marks an application as out of sync, but the workload is healthy. Git declares `replicas: 3`, while the live Deployment has `replicas: 2` because someone scaled it during a traffic drop. What should the team do first?
 
-Decide who owns the replica field and whether the temporary live change should be committed, reverted, or handled through an autoscaler. A healthy workload can still be drifted if the live spec differs from Git-owned desired state. If Git owns `spec.replicas`, the durable response is a Git commit, a sync back to Git, or an explicit ownership change such as HPA management. Deleting the Deployment or ignoring the warning would skip the ownership question.
+1. Ignore the warning because the workload is healthy and no immediate action is required.
+2. Delete and recreate the Deployment to force a clean out-of-sync reset.
+3. Identify field ownership first and then update Git or policy before deciding whether to sync or pause.
+4. Scale the Deployment back up with `kubectl scale` to 3 and stop there.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **3**. Out-of-sync is not automatically an emergency action; it is a signal to check ownership and intent first. Option 1 is wrong because a healthy workload can still represent unmanaged drift if durable intent remains in Git. Option 2 is incorrect because deleting resources is unsafe and bypasses the audit trail for a minor discrepancy. Option 4 is not correct as a first action because blindly enforcing one target value skips the policy/ownership decision and can encode a wrong long-term intent.
+
 </details>
 
-<details>
-<summary>5. A practice question asks which pairing is most accurate for common Kubernetes delivery tools. Which option should you choose?</summary>
+**Question 5.** A practice question asks which pairing is most accurate for common Kubernetes delivery tools. Which option should you choose?
 
-Choose the pairing that says Helm templates charts and values, while Kustomize applies overlays and patches to YAML. Those tools commonly produce or customize manifests before reconciliation. Argo CD and Flux are examples of controllers that can watch Git, compare desired and live state, and apply changes. The wrong options usually exaggerate one tool, invent a limitation, or confuse rendering with continuous reconciliation.
+1. Helm reconciles desired state continuously in-cluster, and Argo CD only renders templates.
+2. Kustomize and Git are interchangeable because both are reconciliation controllers.
+3. CI/CD builds artifacts; Helm and Kustomize are no longer needed once GitOps is added.
+4. Helm/Kustomize generate or customize manifests, while Argo CD or Flux reconcile Git to the cluster continuously.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **4**. This option separates generation from reconciliation and aligns with common practice. Option 1 is incorrect because Helm is primarily a packaging/rendering and release tool, not the continuous controller in all setups. Option 2 is wrong because Git is a storage and collaboration mechanism; it does not function as a reconciliation controller by itself. Option 3 is incorrect because removing Helm/Kustomize from the chain is not implied by GitOps and would break many valid packaging customization workflows.
+
 </details>
 
-<details>
-<summary>6. A GitOps controller reports that the desired manifest uses image `payments:v2.3`, but Kubernetes events show the update was denied by an admission policy requiring signed images. What is the best next action?</summary>
+**Question 6.** A GitOps controller reports that the desired manifest uses image `payments:v2.3`, but Kubernetes events show the update was denied by an admission policy requiring signed images. What is the best next action?
 
-Fix the artifact signing or policy compliance issue, then let reconciliation apply the desired state. The repository and render step may be correct, but the cluster rejected the change for a policy reason. Bypassing the controller with a direct command would violate the control that the organization intentionally installed. GitOps and admission control can work together when the delivery chain produces compliant artifacts.
+1. Force `kubectl` to apply the unsigned image anyway using `--force` and continue troubleshooting later.
+2. Fix artifact signature or policy compliance first, then let reconciliation continue.
+3. Edit the desired state in the cluster directly to bypass admission until the next release.
+4. Disable the admission policy temporarily because it blocks deployment.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **2**. The controller and repository may be correct, but Kubernetes policy blocked apply; resolving signature/policy compliance keeps the chain trustworthy. Option 1 is wrong because forcing apply does not bypass admission and it undermines control objectives. Option 3 is not correct because editing live state directly masks the underlying compliance gap and weakens durability. Option 4 is incorrect because disabling policy weakens trust boundaries and does not address why the desired manifest was not compliant.
+
 </details>
 
-<details>
-<summary>7. A team uses CI to build images, update a manifest repository, and then directly apply the same manifests to the cluster while Argo CD also watches the repository. What is the main design risk?</summary>
+**Question 7.** A team uses CI to build images, update a manifest repository, and then directly apply the same manifests to the cluster while Argo CD also watches the repository. What is the main design risk?
 
-There are two systems writing the same runtime state, which can create unclear ownership and confusing drift behavior. CI may apply a change before the controller observes it, while the controller may later overwrite or reinterpret live state from Git. The cleaner design lets CI produce artifacts and desired-state changes, while the GitOps controller owns reconciliation into the cluster. That separation makes audit trails and incident diagnosis much easier.
+1. Increased chance of two writers producing unclear ownership, race conditions, and confusing drift behavior.
+2. Faster incident response because both systems can reconcile simultaneously.
+3. Better auditability, because every change is documented at least once.
+4. No risk, because CI and GitOps are designed to converge without overlap.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **1**. Having CI apply directly while Argo CD observes Git creates two mutation paths for the same runtime intent, which introduces ownership ambiguity and ordering issues. Option 2 is wrong because speed is not a safety property and overlapping writers usually create more confusion, not clarity. Option 3 is incorrect because applying from CI does not inherently improve auditability if policy expects GitOps to be the reconciliation owner. Option 4 is not correct because overlap without strict boundaries is exactly the risk, not a neutral state.
+
 </details>
 
-<details>
-<summary>8. You are debugging a practice question where one option says "GitOps is pull requests," another says "GitOps is Helm charts," and a third says "GitOps is desired state in Git continuously reconciled to the cluster." How should you evaluate the distractors?</summary>
+**Question 8.** You are debugging a practice question where one option says "GitOps is pull requests," another says "GitOps is Helm charts," and a third says "GitOps is desired state in Git continuously reconciled to the cluster." How should you evaluate the distractors?
 
-Choose the third option because it includes the mechanism and the operating boundary. Pull requests are often part of the workflow, but they do not by themselves reconcile anything into Kubernetes. Helm charts can help render manifests, but Helm is not automatically a continuous GitOps controller by itself. The debugging move is to reject answers that are partly true but incomplete, then prefer the option that connects desired state, Git history, and reconciliation.
+1. Choose the shortest option because CGOA likes concise answers.
+2. Accept all three options as equivalent because each appears in delivery workflows.
+3. Select the option that is only about repository operations and ignore reconciliation.
+4. Select the option that explicitly includes desired state, Git review, and continuous reconciliation loop behavior.
+
+<details>
+<summary>Answer + reasoning</summary>
+
+The correct answer is **4**. The strongest response is the one that states the mechanism and boundaries, not just a component. Option 1 is wrong because concision is not a correctness criterion and the shortest option is often incomplete. Option 2 is incorrect because the three descriptions are not equivalent; only one captures GitOps responsibilities end-to-end. Option 3 is not correct because "only repository operations" omits the continuous compare-and-apply loop that makes GitOps materially different from source control alone.
+
 </details>
 
 ## Hands-On Exercise
