@@ -492,7 +492,7 @@ spec:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| LeaderElectionID | Required | Unique ID for the lease resource |
+| LeaderElectionID | `"webapp-operator.kubedojo.io"` (required) | Unique ID for the lease resource |
 | LeaseDuration | 15s | How long a lease lasts |
 | RenewDeadline | 10s | How long the leader has to renew |
 | RetryPeriod | 2s | How often standby pods check |
@@ -1014,7 +1014,7 @@ The decision is rarely "turn on every advanced feature." A namespaced toy contro
 ## Did You Know?
 
 - **Finalizers predate many modern operator conventions**: the field is part of Kubernetes object metadata, so it applies broadly to built-in and custom resources rather than being an operator-specific extension.
-- **`metav1.Condition` standardizes six key fields**: `Type`, `Status`, `ObservedGeneration`, `LastTransitionTime`, `Reason`, and `Message` give tools a shared contract for readiness and diagnostics.
+- **`metav1.Condition` standardizes six key fields**: `Type`, `Status`, `ObservedGeneration`, `LastTransitionTime`, `Reason`, and `Message` give tools a shared contract for readiness and diagnostics; KEP-1623, Standardize Conditions, is the dig-deeper reference for the standardization story.
 - **controller-runtime leader election uses Lease resources**: the default timing values include a 15 second lease duration, a 10 second renew deadline, and a 2 second retry period unless you configure them differently.
 - **envtest is not a fake client**: it starts real API server and etcd binaries, which is why it can catch CRD validation, scheme registration, status subresource, and reconciliation timing problems.
 
