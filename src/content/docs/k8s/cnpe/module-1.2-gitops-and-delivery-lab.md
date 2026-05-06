@@ -820,7 +820,7 @@ By the end of a delivery investigation, you should be able to write a short inci
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | How to Fix It |
+| Mistake | Problem | How to Fix It |
 |---------|----------------|---------------|
 | Editing the live cluster first during a normal GitOps change | The cluster may temporarily look fixed while Git still contains the old intent, causing drift or self-heal reversal | Change the repository path the controller reconciles, then verify the controller applied the current revision |
 | Treating `Synced` as proof that users are safe | Sync does not prove Pods are ready, endpoints exist, traffic shifted, or the application behaves correctly | Check sync, health, rollout status, Pods, endpoints, and events before declaring success |
