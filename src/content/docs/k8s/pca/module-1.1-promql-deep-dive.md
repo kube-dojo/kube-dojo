@@ -7,7 +7,7 @@ sidebar:
 ---
 # Module 1.1: PromQL Deep Dive
 
-> **PCA Track** | Complexity: `[COMPLEX]` | Time: 50-60 min | Kubernetes target: 1.35+ for the lab examples and operational assumptions.
+> **PCA Track** | Complexity: `[COMPLEX]` | Time: 50-60 min | Kubernetes target: 1.35 and newer for the lab examples and operational assumptions.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ Hypothetical scenario: a checkout service is receiving normal total traffic, its
 
 PromQL is the language you use to ask those operational questions under pressure. It is also a major part of the Prometheus Certified Associate exam, because Prometheus without PromQL is mostly a storage engine full of samples you cannot interpret. The important skill is not memorizing isolated functions; it is learning how vector selectors, range selectors, functions, aggregations, and joins compose into answers that can drive a decision during an outage or a design review.
 
-This module builds that skill from the inside out. You will start by selecting the right time series, then turn raw counters into rates, aggregate labels without destroying meaning, compute histogram percentiles, join metrics safely, and decide when an expensive expression should become a recording rule. The examples use Kubernetes and Prometheus conventions current for Kubernetes 1.35+, but the reasoning transfers to any Prometheus-backed system because the evaluation model is the same.
+This module builds that skill from the inside out. You will start by selecting the right time series, then turn raw counters into rates, aggregate labels without destroying meaning, compute histogram percentiles, join metrics safely, and decide when an expensive expression should become a recording rule. The examples use Kubernetes and Prometheus conventions current for Kubernetes 1.35 and newer, but the reasoning transfers to any Prometheus-backed system because the evaluation model is the same.
 
 ## Reading PromQL as a Data Pipeline
 
@@ -529,7 +529,7 @@ Apdex is a compact way to convert a latency distribution into a satisfaction-sty
   sum(rate(http_request_duration_seconds_bucket{le="0.3"}[5m]))
   +
   sum(rate(http_request_duration_seconds_bucket{le="1.2"}[5m]))
-)/ 2
+)/2
 /
 sum(rate(http_request_duration_seconds_count[5m]))
 

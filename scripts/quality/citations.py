@@ -102,7 +102,7 @@ class CitationResult:
 _HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*$")
 _BULLET_RE = re.compile(
     r"""
-    ^\s*-\s+                # bullet dash
+    ^\s*(?:[-*]\s+|\d+\.\s+)  # bullet dash/asterisk or numbered list
     (?:
       \[(?P<text>[^\]]+)\]  # [Title]
       \(\s*<?(?P<url>https?://[^>\s)]+?)>?\s*\)  # (url), tolerate <url> wrap
