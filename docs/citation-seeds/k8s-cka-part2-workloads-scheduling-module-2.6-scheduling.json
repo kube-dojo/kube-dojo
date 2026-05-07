@@ -1,0 +1,323 @@
+{
+  "module_key": "k8s/cka/part2-workloads-scheduling/module-2.6-scheduling",
+  "module_path": "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.6-scheduling.md",
+  "research_run_id": "2026-05-07T05:54:27+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part2-workloads-scheduling.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Without extra constraints, the scheduler can place a Pod on any node that fits it.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared scheduling source covers default scheduler placement and node-selection constraints."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module says the CKA exam frequently tests scheduling constraints and specifically expects nodeSelector, affinity, and taints/tolerations.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CKA exam frequently tests scheduling constraints. You'll need to use nodeSelector, affinity rules, and taints/tolerations.",
+      "suggested_rewrite": "The CKA exam includes scheduling topics such as node selection, affinity rules, and taints and tolerations.",
+      "lesson_point_url": null,
+      "rationale": "The absolute claim about exam frequency is not directly backed by an allowlisted primary source in this wording."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "nodeSelector is the simplest way to constrain Pods to specific nodes.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.1 The Simplest Approach",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source explicitly describes nodeSelector as the simplest recommended form of node selection constraint."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Multiple nodeSelector labels are combined with AND logic.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.3 Common Built-in Labels",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source states that nodeSelector requires each specified label to match."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Node affinity is more expressive than nodeSelector because it supports soft preferences, richer selection logic, and operators such as In and NotIn.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 2.1 Why Node Affinity?",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source directly documents node affinity's extra expressiveness, soft rules, and supported operators."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "IgnoredDuringExecution means a Pod is not rescheduled if node labels change after it is already placed.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 2.2 Affinity Types",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source defines IgnoredDuringExecution in exactly this way."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "The 'Lopsided Cluster' anecdote presents a specific unsourced production story about soft affinity, autoscaling, and CPU starvation.",
+      "claim_class": "war_story",
+      "span_hint": "section: Part 2.4 Preferred Affinity (Soft)",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A team used `preferredDuringSchedulingIgnoredDuringExecution` to attract all CI/CD builder pods to nodes with a `builder=true` label. Because it was only a soft preference, the cluster autoscaler didn't provision new builder nodes when they got full; it just dumped the overflow pods onto general-purpose web nodes. The web applications were starved for CPU by the greedy builder pods. If a workload absolutely requires specific hardware isolation, use hard affinity or taints, not soft affinity.",
+      "suggested_rewrite": "Soft node affinity does not guarantee isolation. If a workload absolutely requires dedicated hardware or nodes, use hard affinity or taints rather than relying on a preference.",
+      "lesson_point_url": null,
+      "rationale": "This is a composite incident-style anecdote without a citable primary source, so the operational lesson should remain while the fabricated specifics are removed."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Pod affinity and anti-affinity let you place Pods relative to other Pods for co-location or separation.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3.1 Why Pod Affinity?",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source covers inter-pod affinity and anti-affinity, including topology-based co-location and separation."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The 'Scheduling Gridlock' anecdote presents a specific unsourced cluster story with replica counts and utilization figures.",
+      "claim_class": "war_story",
+      "span_hint": "section: Part 3.3 Pod Anti-Affinity Example",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In a large multi-tenant cluster, every team started adding required pod anti-affinity to ensure their microservices didn't share nodes with each other. Eventually, to schedule a simple 5-replica deployment, the scheduler had to find 5 completely empty nodes because every node already contained a pod that repelled the new ones. The cluster was only 20% utilized on CPU and memory, but couldn't schedule anything new. Over-constraining causes massive resource waste. Stick to soft constraints unless strictly necessary.",
+      "suggested_rewrite": "Overly strict required pod anti-affinity can leave pods Pending even when aggregate cluster resources look underutilized. Use soft anti-affinity unless strict separation is truly required.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed composite war story with false precision, so it should be reduced to the general scheduling lesson."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Taints are applied to nodes, tolerations are applied to Pods, and NoSchedule, PreferNoSchedule, and NoExecute differ in whether they block placement or evict running Pods.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 4 Taints and Tolerations",
+      "disposition": "supported",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared taints source covers taints on nodes, tolerations on Pods, and the exact semantics of the three taint effects."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "The 'Disappeared Pods' anecdote presents a specific unsourced outage caused by using NoExecute during maintenance.",
+      "claim_class": "war_story",
+      "span_hint": "section: Part 4.6 Common Taint Use Cases",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "An SRE added `NoExecute` taint for maintenance instead of `NoSchedule`. Existing pods were immediately evicted, causing a production outage. Know your taint effects! Use `NoSchedule` to prevent new pods. Use `NoExecute` only when you want to evict running pods.",
+      "suggested_rewrite": "Using `NoExecute` for maintenance evicts existing pods, whereas `NoSchedule` only blocks new placements. Choose the taint effect based on whether you want eviction or just placement control.",
+      "lesson_point_url": null,
+      "rationale": "The incident framing is unsourced, but the taint-effect distinction is supported by the shared taints source."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Topology spread constraints control how Pods are distributed across topology domains such as zones or nodes, and DoNotSchedule versus ScheduleAnyway determines hard versus soft behavior.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 5.1 Why Topology Spread?",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool does not include the topology spread concept page, which is the primary source for this feature and its core fields."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "The 'Un-Scalable Spread' anecdote presents a specific unsourced zone-capacity incident involving maxSkew, DoNotSchedule, and spot capacity in us-east-1c.",
+      "claim_class": "war_story",
+      "span_hint": "section: Part 5.3 Visualization",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S027"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "An engineering team set a strict `maxSkew: 1` with `whenUnsatisfiable: DoNotSchedule` across 3 zones, but their cloud provider ran out of spot instances in `us-east-1c`. The cluster autoscaler couldn't add nodes in zone C. Because of the strict `maxSkew`, the scheduler refused to place pods in zones A and B (which had plenty of capacity) because it would make the skew greater than 1. Their deployment stalled completely. They learned to use `ScheduleAnyway` for soft spreading, or ensure autoscaler and instance types are highly available across all zones.",
+      "suggested_rewrite": "Strict topology spread constraints can leave pods Pending when one topology domain has no capacity. Use `ScheduleAnyway` for softer spreading, or make sure every required domain has enough capacity to satisfy the skew rule.",
+      "lesson_point_url": null,
+      "rationale": "The anecdote is composite and uncited, but the general scheduling lesson is valid once the fabricated incident details are removed."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Spreading heavily communicating Pods across availability zones can incur cross-zone transfer charges from cloud providers.",
+      "claim_class": "pricing",
+      "span_hint": "section: Part 6 Scheduling Decision Flow",
+      "disposition": "soften_to_illustration",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Cross-AZ Network Costs**: Using topology spread across availability zones provides excellent high availability. However, if those pods communicate heavily with each other, cloud providers will charge you for cross-AZ data transfer.",
+      "suggested_rewrite": "- **Cross-AZ Network Costs**: Spreading chatty workloads across availability zones can improve resilience, but in many cloud environments it can also add cross-zone data transfer charges.",
+      "lesson_point_url": "https://docs.aws.amazon.com/cur/latest/userguide/cur-data-transfers-charges.html",
+      "rationale": "The specific pluralized pricing claim is better framed as a general cost trade-off backed by an allowlisted vendor pricing explainer."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The module uses a specific example taint key for spot or preemptible nodes that is not a Kubernetes standard and should be generalized.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Part 7.3 Batch Jobs (Cost Optimization)",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Tolerations**: Tolerate taints like `node.kubernetes.io/lifecycle=spot:NoSchedule`.",
+      "suggested_rewrite": "- **Tolerations**: Tolerate a taint that marks spot or preemptible nodes for batch work.",
+      "lesson_point_url": "https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "rationale": "The teaching point is about reserving special nodes with taints, not about a specific non-standard taint key."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "The module says control plane nodes are tainted by default with node-role.kubernetes.io/control-plane:NoSchedule.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Control plane nodes** are tainted by default with `node-role.kubernetes.io/control-plane:NoSchedule`. That's why regular pods don't run there.",
+      "suggested_rewrite": "- **Control plane nodes** are often tainted with `node-role.kubernetes.io/control-plane:NoSchedule` in kubeadm-managed clusters, which keeps ordinary pods off them unless they tolerate the taint.",
+      "lesson_point_url": null,
+      "rationale": "The allowlisted primary source attributes this taint specifically to kubeadm-managed control plane nodes, so the module's universal wording overstates the default."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "A Pod can define nodeAffinity, podAffinity, and podAntiAffinity together.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared node-assignment source documents these affinity fields as separate parts of the Pod spec and their combined use is standard."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Multiple topologySpreadConstraints are combined with logical AND, so all of them must be satisfied.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This exact behavior is documented on the topology spread constraints concept page, which is outside the shared pool."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "The module says DaemonSets ignore certain taints by default and therefore run on every node.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S006",
+        "S014"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **DaemonSets ignore taints** by default for certain system taints. That's how they run on every node.",
+      "suggested_rewrite": "- **DaemonSets** automatically receive tolerations for several built-in system taints, which helps them continue to run across nodes affected by those conditions.",
+      "lesson_point_url": null,
+      "rationale": "The allowlisted sources support automatic tolerations for specific built-in taints, but not the broader claim that DaemonSets simply ignore taints or run on every node."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+      "title": "Assigning Pods to Nodes",
+      "tier": "standards",
+      "why_relevant": "Primary reference for nodeSelector, node affinity, and inter-pod affinity and anti-affinity."
+    },
+    {
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "title": "Taints and Tolerations",
+      "tier": "standards",
+      "why_relevant": "Primary reference for taint effects, toleration matching, and built-in system taints."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/",
+      "title": "Pod Topology Spread Constraints",
+      "tier": "standards",
+      "why_relevant": "Primary reference for topology domains, maxSkew, whenUnsatisfiable, and how multiple spread constraints combine."
+    }
+  ],
+  "notes": "Skipped tables, diagrams, code blocks, quiz content, and exercise steps per schema rules. The shared pool covers affinity and taints well, but topology spread required an extra upstream Kubernetes docs URL.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

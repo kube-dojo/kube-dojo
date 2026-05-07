@@ -31,13 +31,13 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-By default, the scheduler places pods on any node with available resources. But in production, you need control:
+[By default, the scheduler places pods on any node with available resources.](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) But in production, you need control:
 - Run database pods on nodes with SSDs
 - Keep certain pods apart for high availability
 - Spread workloads across availability zones
 - Reserve nodes for specific workloads
 
-The CKA exam frequently tests scheduling constraints. You'll need to use nodeSelector, affinity rules, and taints/tolerations.
+The CKA exam includes scheduling topics such as node selection, affinity rules, and taints and tolerations.
 
 > **The Event Planner Analogy**
 >
@@ -60,7 +60,7 @@ By the end of this module, you'll be able to:
 
 ### 1.1 The Simplest Approach
 
-nodeSelector is the simplest way to constrain pods to specific nodes:
+[nodeSelector is the simplest way to constrain pods to specific nodes](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/):
 
 ```yaml
 apiVersion: v1
@@ -111,7 +111,7 @@ spec:
 
 > **Did You Know?**
 >
-> You can combine multiple nodeSelector labels. The pod only schedules on nodes that match ALL labels (AND logic).
+> You can combine multiple nodeSelector labels. [The pod only schedules on nodes that match ALL labels (AND logic).](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
 
 ---
 
@@ -121,7 +121,7 @@ spec:
 
 ### 2.1 Why Node Affinity?
 
-Node affinity is more expressive than nodeSelector:
+[Node affinity is more expressive than nodeSelector](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/):
 - **Soft preferences** ("prefer but don't require")
 - **Multiple match options** (OR logic)
 - **Operators** (In, NotIn, Exists, DoesNotExist, Gt, Lt)
@@ -133,7 +133,7 @@ Node affinity is more expressive than nodeSelector:
 | `requiredDuringSchedulingIgnoredDuringExecution` | Hard requirement (like nodeSelector) |
 | `preferredDuringSchedulingIgnoredDuringExecution` | Soft preference |
 
-> **Key Point**: "IgnoredDuringExecution" means if labels change after scheduling, the pod stays. There's no rescheduling.
+> **Key Point**: ["IgnoredDuringExecution" means if labels change after scheduling, the pod stays. There's no rescheduling.](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
 
 ### 2.3 Required Affinity (Hard)
 
@@ -190,7 +190,7 @@ spec:
 
 > **War Story: The Lopsided Cluster**
 >
-> A team used `preferredDuringSchedulingIgnoredDuringExecution` to attract all CI/CD builder pods to nodes with a `builder=true` label. Because it was only a soft preference, the cluster autoscaler didn't provision new builder nodes when they got full; it just dumped the overflow pods onto general-purpose web nodes. The web applications were starved for CPU by the greedy builder pods. If a workload absolutely requires specific hardware isolation, use hard affinity or taints, not soft affinity.
+> Soft node affinity does not guarantee isolation. If a workload absolutely requires dedicated hardware or nodes, use hard affinity or taints rather than relying on a preference.
 
 ### 2.5 Operators
 
@@ -223,7 +223,7 @@ matchExpressions:
 
 ### 3.1 Why Pod Affinity?
 
-Control pod placement relative to other pods:
+[Control pod placement relative to other pods](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/):
 - **Pod Affinity**: "Schedule near pods with label X" (co-location)
 - **Pod Anti-Affinity**: "Don't schedule near pods with label X" (spreading)
 
@@ -275,7 +275,7 @@ spec:
 
 > **War Story: The Scheduling Gridlock**
 >
-> In a large multi-tenant cluster, every team started adding required pod anti-affinity to ensure their microservices didn't share nodes with each other. Eventually, to schedule a simple 5-replica deployment, the scheduler had to find 5 completely empty nodes because every node already contained a pod that repelled the new ones. The cluster was only 20% utilized on CPU and memory, but couldn't schedule anything new. Over-constraining causes massive resource waste. Stick to soft constraints unless strictly necessary.
+> Overly strict required pod anti-affinity can leave pods Pending even when aggregate cluster resources look underutilized. Use soft anti-affinity unless strict separation is truly required.
 
 ### 3.4 Topology Key
 
@@ -316,7 +316,7 @@ The `topologyKey` determines the "zone" for affinity:
 
 ### 4.1 How Taints Work
 
-Taints are applied to **nodes** and repel pods unless the pod has a matching toleration.
+[Taints are applied to **nodes** and repel pods unless the pod has a matching toleration.](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -417,7 +417,7 @@ tolerations:
 
 > **War Story: The Disappeared Pods**
 >
-> An SRE added `NoExecute` taint for maintenance instead of `NoSchedule`. Existing pods were immediately evicted, causing a production outage. Know your taint effects! Use `NoSchedule` to prevent new pods. Use `NoExecute` only when you want to evict running pods.
+> Using `NoExecute` for maintenance evicts existing pods, whereas `NoSchedule` only blocks new placements. Choose the taint effect based on whether you want eviction or just placement control.
 
 ---
 
@@ -427,7 +427,7 @@ tolerations:
 
 ### 5.1 Why Topology Spread?
 
-Distribute pods evenly across failure domains:
+[Distribute pods evenly across failure domains](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/):
 
 ```yaml
 apiVersion: v1
@@ -480,7 +480,7 @@ spec:
 
 > **War Story: The Un-Scalable Spread**
 >
-> An engineering team set a strict `maxSkew: 1` with `whenUnsatisfiable: DoNotSchedule` across 3 zones, but their cloud provider ran out of spot instances in `us-east-1c`. The cluster autoscaler couldn't add nodes in zone C. Because of the strict `maxSkew`, the scheduler refused to place pods in zones A and B (which had plenty of capacity) because it would make the skew greater than 1. Their deployment stalled completely. They learned to use `ScheduleAnyway` for soft spreading, or ensure autoscaler and instance types are highly available across all zones.
+> Strict topology spread constraints can leave pods Pending when one topology domain has no capacity. Use `ScheduleAnyway` for softer spreading, or make sure every required domain has enough capacity to satisfy the skew rule.
 
 ---
 
@@ -519,7 +519,7 @@ spec:
 > **Production Trade-offs: The Cost of Control**
 >
 > - **Hard vs. Soft Affinity**: Hard rules (`required`) guarantee placement but increase the risk of Pending pods and failed deployments if capacity is constrained. Soft rules (`preferred`) maximize scheduling success but can lead to localized hotspots or performance degradation.
-> - **Cross-AZ Network Costs**: Using topology spread across availability zones provides excellent high availability. However, if those pods communicate heavily with each other, cloud providers will charge you for cross-AZ data transfer.
+> - **Cross-AZ Network Costs**: Spreading chatty workloads across availability zones can improve resilience, but in many cloud environments it can also add cross-zone data transfer charges.
 > - **Taint and Toleration Overhead**: At scale, managing dozens of custom taints creates administrative bloat. It becomes difficult to onboard new applications because developers must remember to add a huge list of tolerations just to get their pods to run.
 
 ---
@@ -538,7 +538,7 @@ Web servers need high availability and can run on almost any node.
 
 ### 7.3 Batch Jobs (Cost Optimization)
 Background processing jobs are fault-tolerant and perfect for preemptible or spot instances.
-- **Tolerations**: Tolerate taints like `node.kubernetes.io/lifecycle=spot:NoSchedule`.
+- **Tolerations**: Tolerate a taint that marks spot or preemptible nodes for batch work.
 - **Node Affinity**: Required affinity to strictly run on spot nodes, keeping regular nodes free for critical user-facing services.
 
 ---
@@ -577,13 +577,13 @@ kubectl get pods -o wide  # See where pods landed
 
 ## Did You Know?
 
-- **Control plane nodes** are tainted by default with `node-role.kubernetes.io/control-plane:NoSchedule`. That's why regular pods don't run there.
+- **Control plane nodes** are often tainted with `node-role.kubernetes.io/control-plane:NoSchedule` in kubeadm-managed clusters, which keeps ordinary pods off them unless they tolerate the taint.
 
-- **Affinity can be combined**. You can have nodeAffinity, podAffinity, and podAntiAffinity all on the same pod.
+- **Affinity can be combined**. [You can have nodeAffinity, podAffinity, and podAntiAffinity all on the same pod.](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
 
-- **Multiple topologySpreadConstraints** are ANDed. All constraints must be satisfied.
+- **Multiple topologySpreadConstraints** [are ANDed. All constraints must be satisfied.](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)
 
-- **DaemonSets ignore taints** by default for certain system taints. That's how they run on every node.
+- **DaemonSets** automatically receive tolerations for several built-in system taints, which helps them continue to run across nodes affected by those conditions.
 
 ---
 
@@ -1009,3 +1009,10 @@ kubectl taint nodes $NODE frontend-
 ## Next Module
 
 [Module 2.7: ConfigMaps & Secrets](../module-2.7-configmaps-secrets/) - Application configuration management.
+
+## Sources
+
+- [Assigning Pods to Nodes](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) — Primary source for nodeSelector, node affinity, inter-pod affinity and anti-affinity, built-in topology labels, and the core node-placement model used by the scheduler.
+- [Taints and Tolerations](https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) — Supports claims about NoSchedule, PreferNoSchedule, NoExecute behavior, taint-based repulsion, node-condition taints, and toleration-driven scheduling and eviction interactions.
+- [kubernetes.io: topology spread constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) — The shared pool does not include the topology spread concept page, which is the primary source for this feature and its core fields.
+- [docs.aws.amazon.com: cur data transfers charges.html](https://docs.aws.amazon.com/cur/latest/userguide/cur-data-transfers-charges.html) — General lesson point for an illustrative rewrite.
