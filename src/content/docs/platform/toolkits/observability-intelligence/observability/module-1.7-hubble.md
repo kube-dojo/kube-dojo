@@ -27,7 +27,7 @@ A platform engineer joins an incident bridge because checkout requests are timin
 
 That gap is where Kubernetes network incidents become slow. Traditional troubleshooting often starts with shelling into pods, running `tcpdump`, comparing logs, and hoping the failing request repeats while the right capture is running. Those tools still matter, but they are awkward when the failure depends on labels, namespaces, Services, DNS names, network policies, and short-lived pods that may disappear before the capture begins.
 
-Hubble changes the starting point. Because it is built on Cilium's eBPF datapath, it observes network flows where packet decisions happen, then attaches Kubernetes context such as pod names, namespaces, identities, Services, DNS records, protocols, and policy verdicts. Instead of asking only "did the application log an error," you can ask "did traffic leave the frontend pod, did it resolve the expected service name, did it reach the backend identity, and did any policy deny it?"
+Hubble changes the starting point. Because it is built on Cilium's eBPF datapath, it observes network flows where packet decisions happen, then [attaches Kubernetes context such as pod names, namespaces, identities, Services, DNS records, protocols, and policy verdicts](https://github.com/cilium/cilium). Instead of asking only "did the application log an error," you can ask "did traffic leave the frontend pod, did it resolve the expected service name, did it reach the backend identity, and did any policy deny it?"
 
 This module teaches Hubble as an operational debugging tool, not as a screenshot generator. You will start with the architecture, then install and verify the components, then use flow filters to diagnose increasingly realistic failures. By the end, Hubble should feel less like another dashboard and more like a structured way to test hypotheses about Kubernetes network behavior.
 
@@ -35,7 +35,7 @@ This module teaches Hubble as an operational debugging tool, not as a screenshot
 
 ### 1. Build the Mental Model Before Running Commands
 
-Hubble is not a separate CNI, packet sniffer sidecar, or service mesh. It is the observability layer for Cilium, and Cilium is the component that owns the network datapath. Cilium programs eBPF logic into the Linux kernel so packets can be observed and acted on without bouncing every decision through user-space proxies.
+Hubble is not a separate CNI, packet sniffer sidecar, or service mesh. It is [the observability layer for Cilium](https://github.com/cilium/hubble), and Cilium is the component that owns the network datapath. Cilium programs eBPF logic into the Linux kernel so packets can be observed and acted on without bouncing every decision through user-space proxies.
 
 That detail matters because it explains both Hubble's strength and its boundary. Hubble can show you flow events, identities, DNS visibility, drop reasons, and policy verdicts because Cilium sees those decisions in the datapath. Hubble cannot be dropped into a cluster that uses another CNI and magically observe the same information, because the underlying instrumentation comes from Cilium.
 
@@ -207,7 +207,7 @@ Open `http://127.0.0.1:12000` and generate a few requests between pods if the se
 
 ### 3. Read Flows as Evidence, Not as Noise
 
-The fastest way to make Hubble useless is to run `hubble observe` with no filters in a busy cluster and stare at a scrolling wall of events. Senior operators start with a question, translate that question into a filter, and then change one variable at a time. Hubble is powerful because it can answer precise questions, not because every flow is equally important.
+One of the fastest ways to make Hubble useless is to run `hubble observe` with no filters in a busy cluster and stare at a scrolling wall of events. Senior operators start with a question, translate that question into a filter, and then change one variable at a time. Hubble is powerful because it can answer precise questions, not because every flow is equally important.
 
 Start broad only long enough to prove that the stream works. Then narrow by namespace, pod, service, protocol, verdict, or direction. The goal is to move from "the system is broken" to "this identity sent this protocol to this destination and received this verdict."
 
@@ -378,7 +378,7 @@ api-5f6d9cbb9c-r8k2m       1/1     Running   0          12m   app=api,pod-templa
 
 The policy and pod labels do not align. You have two defensible fixes. You can change the workload to include `role: api` if that label is part of the platform's identity standard, or you can change the policy selector to match `app: api` if that is the correct label contract for this application. Do not choose by habit; choose by the label standard your organization uses.
 
-Here is the policy-side fix when `app: api` is the intended selector. It preserves the namespace selector so a pod named `api` in another namespace is not accidentally allowed.
+Here is the policy-side fix when `app: api` is the intended selector. It [preserves the namespace selector so a pod named `api` in another namespace is not accidentally allowed](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -484,7 +484,7 @@ Be selective when enabling metrics categories. DNS, drop, TCP, flow, ICMP, and H
 | TCP flags | Investigate connection reset or handshake patterns | Alert without a baseline for the workload's normal behavior |
 | ICMP | Debug reachability and network diagnostics in controlled environments | Enable broadly without knowing whether teams use ICMP meaningfully |
 
-The UI is most useful when humans need to form or challenge a mental model quickly. During an incident, a service map can reveal an unexpected dependency or a missing edge faster than a terminal can. During a design review, it can show whether actual runtime communication matches the architecture diagram.
+The UI is most useful when humans need to form or challenge a mental model quickly. During an incident, [a service map can reveal an unexpected dependency or a missing edge](https://github.com/cilium/hubble-ui) faster than a terminal can. During a design review, it can show whether actual runtime communication matches the architecture diagram.
 
 The CLI is better when you need precision, repeatability, and copyable evidence. A senior troubleshooting habit is to use the UI to orient and the CLI to prove. The UI helps you ask a better question; the CLI gives you the exact flow record that belongs in the incident timeline.
 
@@ -876,3 +876,11 @@ k delete namespace frontend backend database
 ## Next Module
 
 Continue to [Module 1.8: Coroot](../module-1.8-coroot/) to learn how correlation-focused observability platforms connect metrics, logs, traces, and topology into service-level diagnosis, or move to [Module 4.5: Tetragon](/platform/toolkits/security-quality/security-tools/module-4.5-tetragon/) to explore eBPF-based runtime security.
+
+## Sources
+
+- [github.com: hubble](https://github.com/cilium/hubble) — The upstream Hubble README directly states that Hubble is built on top of Cilium and eBPF.
+- [github.com: cilium](https://github.com/cilium/cilium) — The upstream Cilium README describes Hubble as integrated observability with service maps, identity and label metadata, DNS-aware filtering, and drop-reason visibility.
+- [github.com: hubble ui](https://github.com/cilium/hubble-ui) — The upstream Hubble UI README explicitly describes automatic service-dependency discovery and service-map visualization at L3/L4 and L7.
+- [kubernetes.io: network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) — The Kubernetes NetworkPolicy documentation directly explains the semantics of combined `namespaceSelector` and `podSelector` entries.
+- [Prometheus Overview](https://prometheus.io/docs/introduction/overview/) — Useful background for understanding how exported Hubble metrics fit into pull-based time-series monitoring.

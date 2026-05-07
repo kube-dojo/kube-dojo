@@ -1,0 +1,144 @@
+{
+  "module_key": "platform/toolkits/observability-intelligence/observability/module-1.7-hubble",
+  "module_path": "src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.7-hubble.md",
+  "research_run_id": "2026-05-07T04:13:26+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-observability-intelligence-observability.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Hubble is built on top of Cilium and eBPF as Cilium’s observability layer.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 1. Build the Mental Model Before Running Commands | opening paragraphs",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/cilium/hubble",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Hubble README directly states that Hubble is built on top of Cilium and eBPF."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Hubble provides Kubernetes-aware flow visibility, including service dependencies, DNS activity, protocol-level visibility, and policy-blocked traffic with identity or label context.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Why This Module Matters paragraph 3; section: 3. Read Flows as Evidence, Not as Noise; repeated in Did You Know bullet 1",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/cilium/cilium",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Cilium README describes Hubble as integrated observability with service maps, identity and label metadata, DNS-aware filtering, and drop-reason visibility."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "By default Hubble visibility is node-local, while Hubble Relay provides a cluster-wide query path that Hubble CLI and Hubble UI can use.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 1. Build the Mental Model Before Running Commands | architecture paragraphs after the diagram; repeated in Did You Know bullet 2",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.cilium.io/en/stable/observability/hubble/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The exact node-local versus Relay-backed cluster-wide behavior is documented in Cilium’s primary Hubble docs, but that host is off the current allowlist."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Hubble UI provides a graphical service map or dependency graph at L3/L4 and L7 for visualizing flows.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Install Hubble With a Verification-First Habit | UI paragraphs and service-map discussion; section: 5. UI comparison table",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/cilium/hubble-ui",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Hubble UI README explicitly describes automatic service-dependency discovery and service-map visualization at L3/L4 and L7."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The Hubble CLI supports filtered flow inspection via `hubble observe`, including pod, protocol, and verdict filtering plus structured output for deeper inspection.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Read Flows as Evidence, Not as Noise",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.cilium.io/en/latest/observability/hubble/hubble-cli/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The exact filter and inspection workflow is shown in Cilium’s primary Hubble CLI guide, which is off-allowlist."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Kubernetes NetworkPolicy `from` and `to` rules can combine `namespaceSelector` and `podSelector` to match particular Pods within particular namespaces.",
+      "claim_class": "standard",
+      "span_hint": "section: 4. Debug Network Policy With a Worked Example | selector-mismatch explanation",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes NetworkPolicy documentation directly explains the semantics of combined `namespaceSelector` and `podSelector` entries."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Hubble Layer 7 visibility is not automatic: default monitoring gives L3/L4 visibility, while L7 details require L7 proxy support and explicit L7 visibility configuration or policy.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Use L7 Visibility, Metrics, and the UI Deliberately | opening paragraphs; repeated in Did You Know bullet 3",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.cilium.io/en/stable/observability/visibility/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Cilium’s Layer 7 visibility docs state that default datapath monitoring is L3/L4 and that L7 visibility requires explicit support and configuration, but the host is off-allowlist."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Hubble can export Prometheus metrics through configurable metric families such as DNS, drop, TCP, flow, and ICMP, and HTTP metrics depend on Layer 7 visibility.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Use L7 Visibility, Metrics, and the UI Deliberately | metrics paragraphs; Common Mistakes row on enabling every metric category",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.cilium.io/en/stable/observability/metrics.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Cilium’s metrics docs are the primary source for Hubble metric families and the L7-visibility caveat, but docs.cilium.io is off-allowlist."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://github.com/cilium/hubble",
+      "title": "Hubble README",
+      "tier": "upstream",
+      "why_relevant": "Best upstream overview of what Hubble is, what questions it answers, and how its flow visibility works."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+      "title": "Kubernetes Network Policies",
+      "tier": "standards",
+      "why_relevant": "Canonical reference for the selector semantics used in the module’s policy-debugging examples."
+    },
+    {
+      "url": "https://prometheus.io/docs/introduction/overview/",
+      "title": "Prometheus Overview",
+      "tier": "upstream",
+      "why_relevant": "Useful background for understanding how exported Hubble metrics fit into pull-based time-series monitoring."
+    }
+  ],
+  "notes": "Excluded purely pedagogical framing, hypothetical incident setup, diagrams, tables used only for teaching flow, quiz text, and illustrative code-block outputs per prompt. Several Hubble-specific claims are real and directly documented, but the primary docs live on docs.cilium.io, so those are marked `needs_allowlist_expansion` instead of forcing weaker adjacent sources.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
