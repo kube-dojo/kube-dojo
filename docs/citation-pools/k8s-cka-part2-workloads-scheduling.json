@@ -1,0 +1,299 @@
+{
+  "section": "k8s/cka/part2-workloads-scheduling",
+  "modules": [
+    "k8s/cka/part2-workloads-scheduling/module-2.1-pods",
+    "k8s/cka/part2-workloads-scheduling/module-2.2-deployments",
+    "k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets",
+    "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs",
+    "k8s/cka/part2-workloads-scheduling/module-2.5-resource-management",
+    "k8s/cka/part2-workloads-scheduling/module-2.6-scheduling",
+    "k8s/cka/part2-workloads-scheduling/module-2.7-configmaps-secrets",
+    "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory",
+    "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+  ],
+  "generated_at": "2026-05-07T04:53:28+00:00",
+  "batch_count": 3,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "title": "Pods",
+      "tier": "standards",
+      "scope_notes": "Backs pod fundamentals: pods as the smallest deployable unit, one-or-more container model, shared network namespace, shared storage, co-location, and the pod abstraction used by higher-level workload controllers.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.1-pods",
+        "k8s/cka/part2-workloads-scheduling/module-2.2-deployments",
+        "k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets",
+        "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+      "title": "Pod Lifecycle",
+      "tier": "standards",
+      "scope_notes": "Backs pod phases, restart behavior, termination, grace periods, container states, and troubleshooting language around Pending, Running, Succeeded, Failed, and CrashLoop-style failures.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.1-pods",
+        "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/",
+      "title": "Liveness, Readiness, and Startup Probes",
+      "tier": "standards",
+      "scope_notes": "Backs probe semantics, differences between liveness/readiness/startup probes, and how kubelet reacts to failing probes or holds readiness during startup.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.1-pods",
+        "k8s/cka/part2-workloads-scheduling/module-2.2-deployments"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+      "title": "Init Containers",
+      "tier": "standards",
+      "scope_notes": "Backs init-container ordering, run-to-completion behavior, differences from app containers, and pod startup sequencing before main containers begin.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.1-pods"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+      "title": "Deployments",
+      "tier": "standards",
+      "scope_notes": "Backs Deployment behavior, Deployment-to-ReplicaSet-to-Pod ownership, rollout strategy, rolling updates, maxSurge/maxUnavailable behavior, rollout history, pause/resume, and rollback concepts.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.2-deployments"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
+      "title": "DaemonSet",
+      "tier": "standards",
+      "scope_notes": "Backs one-pod-per-node semantics, automatic coverage of added nodes, common node-level use cases, selective node placement via nodeSelector/affinity, and DaemonSet toleration behavior.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets"
+      ]
+    },
+    {
+      "source_id": "S007",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/",
+      "title": "StatefulSets",
+      "tier": "standards",
+      "scope_notes": "Backs stable pod identity, ordinal naming, stable storage via volumeClaimTemplates, ordered deployment and rolling updates, headless Service requirements, and DNS/network identity behavior.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.3-daemonsets-statefulsets"
+      ]
+    },
+    {
+      "source_id": "S008",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/job/",
+      "title": "Jobs",
+      "tier": "standards",
+      "scope_notes": "Backs run-to-completion semantics, backoffLimit, restartPolicy constraints, completions, parallelism, pod replacement on failure, and batch workload behavior distinct from Deployments.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs"
+      ]
+    },
+    {
+      "source_id": "S009",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/",
+      "title": "CronJob",
+      "tier": "standards",
+      "scope_notes": "Backs scheduled Job execution, cron syntax expectations, concurrencyPolicy, history limits, suspend behavior, and controller behavior for missed schedules and overlapping runs.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs"
+      ]
+    },
+    {
+      "source_id": "S010",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
+      "title": "Resource Management for Pods and Containers",
+      "tier": "standards",
+      "scope_notes": "Primary source for CPU and memory requests and limits, resource units, scheduler use of requests, allocatable-fit behavior, OOMKilled examples, and in-place Pod resize as stable in Kubernetes 1.35.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.5-resource-management",
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S011",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/policy/limit-range/",
+      "title": "Limit Ranges",
+      "tier": "standards",
+      "scope_notes": "Supports claims about namespace-scoped minimum and maximum resource constraints, default requests and limits, and admission-time enforcement via LimitRange.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.5-resource-management"
+      ]
+    },
+    {
+      "source_id": "S012",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/policy/resource-quotas/",
+      "title": "Resource Quotas",
+      "tier": "standards",
+      "scope_notes": "Supports claims about namespace resource governance, aggregate consumption limits, object-count quotas, and the relationship between quotas and resource requests/limits.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.5-resource-management"
+      ]
+    },
+    {
+      "source_id": "S013",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+      "title": "Assigning Pods to Nodes",
+      "tier": "standards",
+      "scope_notes": "Primary source for nodeSelector, node affinity, inter-pod affinity and anti-affinity, built-in topology labels, and the core node-placement model used by the scheduler.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.6-scheduling",
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S014",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "title": "Taints and Tolerations",
+      "tier": "standards",
+      "scope_notes": "Supports claims about NoSchedule, PreferNoSchedule, NoExecute behavior, taint-based repulsion, node-condition taints, and toleration-driven scheduling and eviction interactions.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.6-scheduling",
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S015",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/configuration/configmap/",
+      "title": "ConfigMaps",
+      "tier": "standards",
+      "scope_notes": "Primary source for non-sensitive configuration, env-var and file-based injection, immutability, key/value structure, size limits, and update propagation behavior for mounted ConfigMaps.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.7-configmaps-secrets"
+      ]
+    },
+    {
+      "source_id": "S016",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/configuration/secret/",
+      "title": "Secrets",
+      "tier": "standards",
+      "scope_notes": "Primary source for Secret semantics, security caveats, env-var and volume consumption, optional and missing-key behavior, immutability, update propagation, and subPath update caveats.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.7-configmaps-secrets"
+      ]
+    },
+    {
+      "source_id": "S017",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+      "title": "Pod Priority and Preemption",
+      "tier": "standards",
+      "scope_notes": "Supports claims about PriorityClass, scheduling order, preemption flow, nominatedNodeName, graceful termination of preemption victims, and best-effort interaction with PodDisruptionBudgets.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S018",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-qos/",
+      "title": "Pod Quality of Service Classes",
+      "tier": "standards",
+      "scope_notes": "Primary source for Guaranteed, Burstable, and BestEffort classification criteria and for high-level eviction ordering under node resource pressure.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.5-resource-management",
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S019",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle",
+      "title": "Pod Lifecycle",
+      "tier": "standards",
+      "scope_notes": "Supports claims about Pod phases, scheduling/binding terminology, graceful termination, terminationGracePeriodSeconds, preStop hook execution during shutdown, and Pod resize status conditions in v1.35.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory"
+      ]
+    },
+    {
+      "source_id": "S020",
+      "url": "https://v1-35.docs.kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/",
+      "title": "Horizontal Pod Autoscaling",
+      "tier": "standards",
+      "scope_notes": "Primary source for HPA behavior in Kubernetes 1.35: purpose, control-loop cadence, scaling formula, min/max bounds, multiple metrics, custom/external metrics support, stabilization behavior, and autoscaling/v2 examples.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S021",
+      "url": "https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_autoscale/",
+      "title": "kubectl autoscale",
+      "tier": "standards",
+      "scope_notes": "Primary source for imperative HPA creation syntax and CLI semantics in Kubernetes 1.35, including current flags such as --min, --max, --cpu, and --memory.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S022",
+      "url": "https://github.com/kubernetes-sigs/metrics-server",
+      "title": "Kubernetes Metrics Server",
+      "tier": "upstream",
+      "scope_notes": "Primary source for metrics-server installation manifest URL, requirements, role in the built-in autoscaling pipeline, kubectl top support, 15-second collection interval, and common local-cluster TLS caveats.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S023",
+      "url": "https://v1-35.docs.kubernetes.io/docs/tasks/debug-application-cluster/resource-usage-monitoring/",
+      "title": "Tools for Monitoring Resources",
+      "tier": "standards",
+      "scope_notes": "Primary source for the resource metrics pipeline and for explaining how HPA/VPA consume metrics.k8s.io, and how custom/external metrics require a fuller metrics pipeline with adapters.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S024",
+      "url": "https://github.com/kubernetes-sigs/prometheus-adapter",
+      "title": "Prometheus Adapter for Kubernetes Metrics APIs",
+      "tier": "upstream",
+      "scope_notes": "Primary source for a concrete custom.metrics.k8s.io and external.metrics.k8s.io adapter example that can back claims about custom-metric-based HPA setups.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S025",
+      "url": "https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/",
+      "title": "Vertical Pod Autoscaling",
+      "tier": "standards",
+      "scope_notes": "Primary source for comparing HPA and VPA, including VPA purpose, components, dependency on metrics, and update modes such as InPlaceOrRecreate.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S026",
+      "url": "https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/",
+      "title": "Resize CPU and Memory Resources assigned to Containers",
+      "tier": "standards",
+      "scope_notes": "Primary source for Kubernetes 1.35 in-place container resource resize capability, useful when verifying claims that newer VPA modes can leverage in-place resize instead of always recreating Pods.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    },
+    {
+      "source_id": "S027",
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/node-autoscaling/",
+      "title": "Node Autoscaling",
+      "tier": "standards",
+      "scope_notes": "Primary source for comparing workload autoscaling with node autoscaling and for explaining how Cluster Autoscaler-style node provisioning complements HPA-created Pods.",
+      "relevant_modules": [
+        "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling"
+      ]
+    }
+  ],
+  "rejected_urls": []
+}
