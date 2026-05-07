@@ -19,9 +19,9 @@ sidebar:
 
 ## The Operational Reality of Bare Metal Registries
 
-Running the upstream `distribution/distribution` (formerly Docker Registry) as a standalone pod is insufficient for production. With the release of Docker Registry v3.0.0, the project marked its first stable v3 release and notably removed support for older storage drivers like `oss` and `swift`, solidifying the need for modern object storage. A practitioner-grade registry requires Role-Based Access Control (RBAC), automated vulnerability scanning, artifact signing, replication, and high availability.
+Running the upstream `distribution/distribution` (formerly Docker Registry) as a standalone pod is insufficient for production. With the release of [Docker Registry v3.0.0, the project marked its first stable v3 release and notably removed support for older storage drivers like `oss` and `swift`](https://github.com/distribution/distribution/releases), solidifying the need for modern object storage. A practitioner-grade registry requires Role-Based Access Control (RBAC), automated vulnerability scanning, artifact signing, replication, and high availability.
 
-The OCI Distribution Specification (marked as Standards Track with a published metadata date of November 2025) defines a standardized API protocol for distributing OCI content, closely related to the OCI image format and runtime specifications. On bare metal, you do not have AWS ECR or GCP Artifact Registry abstracting this away. You are responsible for the metadata database, the caching layer, the storage backend, and the ingress routing for potentially gigabytes of concurrent image layer pulls during a cluster-wide horizontal pod autoscaling (HPA) event.
+The OCI Distribution Specification ([marked as Standards Track with a published metadata date of November 2025](https://specs.opencontainers.org/distribution-spec/?v=v1.1.1)) defines a standardized API protocol for distributing OCI content, closely related to the OCI image format and runtime specifications. On bare metal, you do not have AWS ECR or GCP Artifact Registry abstracting this away. You are responsible for the metadata database, the caching layer, the storage backend, and the ingress routing for potentially gigabytes of concurrent image layer pulls during a cluster-wide horizontal pod autoscaling (HPA) event.
 
 ### Platform Comparisons
 
@@ -29,11 +29,11 @@ When selecting a registry for on-premises deployment, the choice dictates your m
 
 | Feature | Harbor | Quay | Zot | GitLab Registry |
 | :--- | :--- | :--- | :--- | :--- |
-| **Origin / Backer** | CNCF Graduated (Accepted 2018-07-31, Graduated 2020-06-15) | Red Hat | CNCF Incubating (Cisco) | GitLab |
-| **Architecture** | Microservices (Registry, Core, Jobservice, Database, Redis) | Microservices (Quay, Clair, Postgres, Redis) | Single Go Binary | Integrated with GitLab monolith |
+| **Origin / Backer** | [CNCF Graduated (Accepted 2018-07-31, Graduated 2020-06-15)](https://www.cncf.io/projects/harbor/) | Red Hat | CNCF Sandbox project | GitLab |
+| **Architecture** | Microservices (Registry, Core, Jobservice, Database, Redis) | Microservices (Quay, Clair, Postgres, Redis) | Minimal service footprint | Integrated with GitLab monolith |
 | **Scanning** | Pluggable (Trivy default, Clair optional) | Clair (tightly integrated) | Trivy (built-in via extensions) | Trivy / GitLab Secure |
 | **Storage Backend** | S3, GCS, Azure, Swift, OSS, local | S3, GCS, Azure, Swift, RadosGW, local | Local filesystem, S3 | S3, GCS, Azure, local |
-| **OIDC / SSO** | Yes (OIDC, LDAP, Active Directory) | Yes (OIDC, LDAP, Keystone) | Yes (OIDC, LDAP) | Yes (via GitLab instance) |
+| **OIDC / SSO** | Yes (OIDC, LDAP, Active Directory) | [Yes (OIDC, LDAP, Keystone)](https://github.com/quay/quay) | Yes (OIDC, LDAP) | Yes (via GitLab instance) |
 | **Resource Footprint**| Heavy (~6-8 pods, requires DB/Redis) | Heavy (requires DB/Redis) | Extremely Lightweight | Bound to GitLab footprint |
 | **Best For** | Enterprise standard, policy enforcement | Red Hat ecosystems, OpenShift | Edge deployments, minimal operational overhead | Teams already using GitLab CI/CD heavily |
 
@@ -59,28 +59,28 @@ graph TD
 3.  **OCI Distribution:** The actual `distribution/distribution` or equivalent daemon that streams layer blobs to/from the storage backend.
 4.  **Database (PostgreSQL):** Stores metadata: users, projects, repository names, tags, RBAC policies, and replication rules. *It does not store image layers.*
 5.  **Cache/Queue (Redis):** Caches layer metadata and coordinates asynchronous jobs like replication, garbage collection, and scanning.
-6.  **Storage Backend:** Stores the immutable blobs (layers) and manifests. On bare metal, this should strictly be an S3-compatible endpoint (Ceph RadosGW or MinIO). **Do not use NFS for registry storage**; concurrent read/write locking issues on NFS will corrupt your registry state or cause severe latency spikes during layer pulls.
+6.  **Storage Backend:** Stores the immutable blobs (layers) and manifests. On bare metal, this should strictly be an S3-compatible endpoint (Ceph RadosGW or MinIO). Prefer object storage or a storage backend explicitly documented as supported by your registry; shared filesystems need careful validation before you rely on them for blob storage.
 
 ### Authentication and Image Pulling Behavior
 
 When integrating your self-hosted registry with Kubernetes, you must handle authentication securely and understand how the kubelet caches and requests images. 
 
-Starting with Kubernetes v1.26, the legacy image credential mechanism was removed. You must now use kubelet credential provider configuration or attach `imagePullSecrets` to your Pods or ServiceAccounts. Registry authentication is stored as a Kubernetes Secret. You should use `kubectl create secret docker-registry`, which creates the recommended `kubernetes.io/dockerconfigjson` secret type (superseding the legacy `kubernetes.io/dockercfg`).
+[Starting with Kubernetes v1.26, the legacy image credential mechanism was removed. You must now use kubelet credential provider configuration or attach `imagePullSecrets` to your Pods or ServiceAccounts.](https://kubernetes.io/docs/concepts/containers/images/) Registry authentication is stored as a Kubernetes Secret. You should use `kubectl create secret docker-registry`, which creates the recommended `kubernetes.io/dockerconfigjson` secret type (superseding the legacy `kubernetes.io/dockercfg`).
 
 > **Stop and think**: If you define an `imagePullSecret` in the `default` namespace, can a Pod in the `production` namespace use it to pull an image?
 
-Crucially, `imagePullSecrets` entries must reference Secrets in the *same namespace* as the Pod, and they are used directly by the kubelet to authenticate to private registries. To reduce operational toil, these credentials can be attached via a ServiceAccount-level `imagePullSecrets`, which are then automatically inherited by any Pods created with that ServiceAccount. Even for edge workloads or control plane components running as static Pods, `imagePullSecrets` and pre-pulled image approaches are fully supported for private registry access.
+Crucially, [`imagePullSecrets` entries must reference Secrets in the *same namespace* as the Pod](https://kubernetes.io/docs/concepts/containers/images/), and they are used directly by the kubelet to authenticate to private registries. To reduce operational toil, these credentials can be attached via a ServiceAccount-level `imagePullSecrets`, which are then automatically inherited by any Pods created with that ServiceAccount. Even for edge workloads or control plane components running as static Pods, `imagePullSecrets` and pre-pulled image approaches are fully supported for private registry access.
 
 Understanding the kubelet's image pulling behavior is equally important:
-* When `imagePullPolicy` is omitted, Kubernetes defaults it to `Always` for `:latest` tags or untagged images. It sets it to `IfNotPresent` for digest-based or tagged non-latest images. Once set, this policy is immutable for the life of the Pod, even if the tag changes in the registry.
+* When `imagePullPolicy` is omitted, [Kubernetes defaults it to `Always` for `:latest` tags or untagged images. It sets it to `IfNotPresent` for digest-based or tagged non-latest images. Once set, this policy is immutable for the life of the Pod](https://kubernetes.io/docs/concepts/containers/images/), even if the tag changes in the registry.
 * With a policy of `IfNotPresent` or `Never`, the kubelet prefers local cached images. If you use cache-based strategies for private registry-driven pods, you must ensure all nodes share identical pre-pulled images.
-* To secure this caching layer, Kubernetes v1.35 introduces the `KubeletEnsureSecretPulledImages` feature (beta, enabled by default), which strictly validates credentials when pre-pulled images are used, preventing unauthorized pods from accessing cached images originating from a private registry.
+* To secure this caching layer, [Kubernetes v1.35 introduces the `KubeletEnsureSecretPulledImages` feature (beta, enabled by default)](https://kubernetes.io/docs/concepts/containers/images/), which strictly validates credentials when pre-pulled images are used, preventing unauthorized pods from accessing cached images originating from a private registry.
 
 ### Pull-Through Caching (Proxy Cache)
 
 > **Pause and predict**: If your bare metal cluster scales out from 10 to 100 nodes, and every node attempts to pull the exact same 1GB image from Docker Hub simultaneously, what happens to your corporate firewall and external IP reputation?
 
-Upstream rate limits (e.g., Docker Hub's 100 pulls per 6 hours per IP) will break bare metal clusters where all egress traffic NATs through a single IP address. 
+Upstream rate limits (e.g., [Docker Hub's 100 pulls per 6 hours per IP](https://docs.docker.com/docker-hub/usage/pulls/)) will break bare metal clusters where all egress traffic NATs through a single IP address. 
 
 A proxy cache intercepts pull requests. If the layer exists locally, it serves it. If not, it pulls from the upstream, caches it locally, and serves it to the client.
 
@@ -94,7 +94,7 @@ Alternatively, configure `containerd` on your bare metal nodes to transparently 
 [plugins."io.containerd.grpc.v1.cri".registry.mirrors."docker.io"]
   endpoint = ["https://harbor.internal.corp/v2/dockerhub-proxy"]
 ```
-*Note: Depending on the containerd version (1.5+ vs 1.7+), registry configuration is moving to the `/etc/containerd/certs.d/` directory structure. Always verify your specific containerd version's configuration path.*
+*Note: Depending on the containerd version (1.5+ vs 1.7+), [registry configuration is moving to the `/etc/containerd/certs.d/` directory structure](https://github.com/containerd/containerd/blob/main/docs/hosts.md). Always verify your specific containerd version's configuration path.*
 
 ### Vulnerability Scanning and Policy Enforcement
 
@@ -110,9 +110,9 @@ Harbor uses Trivy by default. Scanning can be configured to run:
 
 Image tags are mutable; `v1.0.0` can be overwritten. Digests (`sha256:...`) are immutable but difficult for humans to verify. Cosign (part of the Sigstore project) solves this by attaching cryptographic signatures to OCI artifacts.
 
-Cosign stores signatures in the registry alongside the image. If you sign `alpine:3.18`, Cosign pushes an object named `sha256-<image-digest>.sig` to the same repository.
+Cosign stores signatures in the registry alongside the image. If you sign `alpine:3.18`, [Cosign pushes an object named `sha256-<image-digest>.sig` to the same repository](https://github.com/sigstore/cosign).
 
-Registries must support OCI artifact specifications to handle these `.sig` files properly. Harbor and Zot have native support for grouping signatures with their target images in the UI and preventing deletion of an image if its signature is required.
+Registries that understand OCI referrers can surface signatures alongside their subject artifacts, but deletion and garbage-collection behavior remains registry-specific and should be verified in product documentation.
 
 ## Hands-on Lab
 
@@ -126,7 +126,7 @@ In this lab, we will deploy a lightweight instance of Harbor on a local `kind` c
 
 According to official installation guidance, Harbor can be deployed via Docker Compose or Kubernetes using Helm. The documented minimum resource and platform requirements include at least 2 CPU, 4 GB RAM, and a 40 GB disk. The host must run Docker Engine >20.10 and Docker Compose >2.3, and requires ports 80 and 443 to be open for registry and API access.
 
-*Note: For reference, Harbor's edge documentation branch currently indicates `2.14.0`, while the release history lists `v2.14.1` as the latest stable entry and `v2.14.2-rc1` as a pre-release.*
+*Note: Check Harbor's current documentation branch and release page for the latest stable and prerelease versions before you deploy.*
 
 ### Step 1: Provision the Cluster
 
@@ -291,26 +291,26 @@ kind delete cluster --name registry-lab
 ### 1. The Garbage Collection Locking Nightmare
 Unlike a local filesystem, removing an image tag in a registry API only deletes the metadata mapping. The underlying blobs (layers) remain in the storage backend to support layer sharing across different images. Reclaiming storage requires running Garbage Collection (GC). 
 
-**The Gotcha:** In older versions of Distribution and Harbor, GC required placing the registry in read-only mode to prevent race conditions where a concurrent push references a blob right as GC deletes it.
-**The Fix:** Modern Harbor supports non-blocking GC, but you must ensure your underlying S3 storage supports standard consistency. If using Ceph RGW or MinIO, monitor the IOPS during GC runs; heavy GC against spinning disks behind S3 gateways will saturate the disk controllers and cause pull timeouts for the entire cluster.
+**The Gotcha:** Garbage-collection behavior has changed across Harbor releases, so verify the documented online-GC semantics for the exact version you run before scheduling cleanup jobs.
+**The Fix:** Test garbage collection under representative load on your chosen object-storage backend, because cleanup traffic can contend with normal pulls and pushes if the storage layer is undersized.
 
 ### 2. Orphaned Signatures After Tag Deletion
-When a user deletes an image tag from the registry UI, the associated Cosign signature (`sha256-...sig`) may be left behind as an orphaned artifact if the registry does not strictly enforce OCI referential integrity.
-**The Fix:** Use registries that explicitly support OCI `1.1.0` referential metadata (like Harbor v2.8+ or Zot). These versions understand that the `.sig` object is a child of the main image digest and will automatically prune the signature when the parent manifest is garbage collected.
+When a user deletes an image tag from the registry UI, the associated Cosign signature (`sha256-...sig`) [may be left behind as an orphaned artifact](https://github.com/sigstore/cosign) if the registry does not strictly enforce OCI referential integrity.
+**The Fix:** Prefer registries that document how they present and clean up signature accessories, and validate that behavior in a test repository before you rely on automatic cleanup.
 
 ### 3. Untrusted Custom CAs and Containerd
 You deploy Harbor with an internal enterprise CA certificate. You can pull images perfectly via `docker pull` on your laptop, but Kubernetes pods remain stuck in `ErrImagePull` / `ImagePullBackOff`.
 **The Gotcha:** The `containerd` daemon running on the Kubernetes nodes does not trust the enterprise CA by default, so the TLS handshake with the registry fails.
-**The Fix:** You must distribute the CA certificate to every bare metal node. Copy the `ca.crt` to `/usr/local/share/ca-certificates/` and run `update-ca-certificates` (Debian/Ubuntu) or `/etc/pki/ca-trust/source/anchors/` and run `update-ca-trust` (RHEL), then restart the `containerd` service on all nodes.
+**The Fix:** [You must distribute the CA certificate to every bare metal node.](https://github.com/containerd/containerd/blob/main/docs/hosts.md) Copy the `ca.crt` to `/usr/local/share/ca-certificates/` and run `update-ca-certificates` (Debian/Ubuntu) or `/etc/pki/ca-trust/source/anchors/` and run `update-ca-trust` (RHEL), then restart the `containerd` service on all nodes.
 
 ### 4. Redis Persistence Failures Blocking Scans
 Harbor uses Redis heavily for job queueing (scans, replications, GC). If Redis restarts and its persistence (RDB/AOF) is corrupted or disabled, jobs silently disappear.
 **The Gotcha:** Users trigger Trivy scans, but the UI remains stuck in "Scanning..." indefinitely. The Core service dispatched the job to Redis, but the Jobservice pod died, Redis evicted the queue, and the state machine is permanently deadlocked waiting for a completion webhook.
-**The Fix:** Ensure Redis is backed by a reliable Persistent Volume with `appendonly yes` configured. If a deadlock occurs, you often have to manually update the PostgreSQL `artifact` table to reset the scan status from `Scanning` back to `Pending` or `Unscanned`.
+**The Fix:** Back Harbor job-service state with supported persistence settings and follow Harbor's documented recovery workflow if scan jobs become stuck; avoid recommending direct database edits without vendor documentation.
 
 ### 5. Disk Exhaustion in the Scanner Pod
 Trivy operates by downloading the image layers from the registry core into the Trivy pod's local filesystem to perform static analysis. 
-**The Gotcha:** If you configure the Trivy pod with emptyDir (ephemeral storage) and users push massive images (e.g., 15GB machine learning models), the Trivy pod will exhaust node disk space, hit an `Evicted` state, and crash loop.
+**The Gotcha:** Scanner workloads need enough ephemeral or persistent storage for image analysis; oversized artifacts can exhaust node-local storage and disrupt scans if you underprovision the scanner.
 **The Fix:** Allocate a dedicated PersistentVolumeClaim (PVC) for the Trivy pod's cache and working directory, and enforce strict layer size limits at the Ingress controller level (e.g., `nginx.ingress.kubernetes.io/proxy-body-size: "0"` to allow large pushes, but rely on registry quotas to restrict total size).
 
 ## Quiz
@@ -340,7 +340,7 @@ You are designing a high-availability registry for a bare-metal edge environment
 *   C) Quay
 *   D) Zot
 
-*Correct Answer: D* (Zot is intentionally designed as a single Go binary to function as an OCI-native, extremely lightweight registry. This minimal architectural footprint makes it the ideal solution for edge environments where hardware is severely constrained. Because it does not rely on external databases or caching tiers, it avoids the memory penalties associated with traditional enterprise registries. In contrast, microservice-based architectures like Harbor or Quay require significant operational overhead, including separate PostgreSQL databases and Redis instances, which would immediately overwhelm a strict 2 CPU and 4GB RAM allocation.)
+*Correct Answer: D* (Zot is intentionally designed as a single Go binary to function as an OCI-native, extremely lightweight registry. This minimal architectural footprint makes it the ideal solution for edge environments where hardware is severely constrained. Because it does not rely on external databases or caching tiers, it avoids the memory penalties associated with traditional enterprise registries. In contrast, microservice-based architectures like Harbor or Quay require significant operational overhead, including separate PostgreSQL databases and Redis instances, which would likely strain a strict 2 CPU and 4GB RAM allocation.)
 
 **Question 4**
 A developer pushes `app:v1.0.0`, signs it using Cosign, and verifies the signature exists in Harbor. The next day, a compromised pipeline overwrites the `app:v1.0.0` tag with a new, malicious image containing cryptominers. What happens to the cryptographic signature?
@@ -349,7 +349,7 @@ A developer pushes `app:v1.0.0`, signs it using Cosign, and verifies the signatu
 *   C) The signature becomes invalid for the new image because the signature is cryptographically bound to the immutable digest (`sha256:...`) of the original image, not the mutable tag.
 *   D) Harbor will natively reject the push of the malicious image because the tag `v1.0.0` is permanently locked once signed.
 
-*Correct Answer: C* (Cosign cryptographic signatures are intrinsically bound to the immutable digest of the specific image layer configuration, rather than the mutable string tag. When the tag is overwritten with malicious layers, the underlying computed digest fundamentally changes. Because the original cryptographic signature does not match this new digest, the malicious image will immediately fail verification. This immutable binding ensures that even if a registry allows tag mutability, the deployment environment remains protected from the compromised pipeline.)
+*Correct Answer: C* (Cosign cryptographic signatures are intrinsically bound to the immutable digest of the specific image layer configuration, rather than the mutable string tag. When the tag is overwritten with malicious layers, the underlying computed digest fundamentally changes. Because the original cryptographic signature does not match this new digest, the malicious image will fail verification when signature checks are enforced. This immutable binding ensures that even if a registry allows tag mutability, the deployment environment remains protected from the compromised pipeline.)
 
 **Question 5**
 You have configured Harbor with a project-level policy to prevent pulling images with `CRITICAL` vulnerabilities. A pod scaling event triggers, and the kubelet attempts to pull an image that was pushed and scanned clean 6 months ago. The pull is rejected by Harbor at the API level, citing a critical vulnerability. Why did this happen?
@@ -367,3 +367,14 @@ You have configured Harbor with a project-level policy to prevent pulling images
 *   [Sigstore Cosign Documentation](https://docs.sigstore.dev/cosign/system_config/overview/)
 *   [Trivy Vulnerability Scanner (Aqua Security)](https://aquasecurity.github.io/trivy/)
 *   [OCI Distribution Specification](https://github.com/opencontainers/distribution-spec)
+
+## Sources
+
+- [github.com: releases](https://github.com/distribution/distribution/releases) — The upstream release notes directly state both the first stable v3 release status and the removal of the `oss` and `swift` drivers.
+- [The OpenContainers Distribution Spec](https://specs.opencontainers.org/distribution-spec/?v=v1.1.1) — Backs OCI registry protocol and API standardization claims for self-hosted registries and image distribution workflows.
+- [cncf.io: harbor](https://www.cncf.io/projects/harbor/) — The CNCF project page lists the acceptance, incubation, and graduation dates explicitly.
+- [github.com: quay](https://github.com/quay/quay) — The Project Quay upstream README directly lists these authentication, storage, and Clair capabilities.
+- [kubernetes.io: images](https://kubernetes.io/docs/concepts/containers/images/) — The Kubernetes images documentation explicitly states that the legacy built-in mechanism was removed starting with v1.26.
+- [docs.docker.com: pulls](https://docs.docker.com/docker-hub/usage/pulls/) — Docker's own usage page publishes the 100-per-6-hours unauthenticated limit.
+- [github.com: hosts.md](https://github.com/containerd/containerd/blob/main/docs/hosts.md) — The upstream containerd registry configuration docs explicitly deprecate the old CRI mirror/config style and point to `config_path` and `hosts.toml`.
+- [github.com: cosign](https://github.com/sigstore/cosign) — The Cosign upstream README explicitly recommends digest-based signing and documents the registry storage naming convention.
