@@ -1,0 +1,43 @@
+name: UK quality checks
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/content/docs/uk/**/*.md'
+
+permissions:
+  contents: read
+
+jobs:
+  uk-russicism-check:
+    name: Ukrainian Russicism check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Ukrainian Russicism gate
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          CHANGED_FILES=(
+            $(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
+          )
+
+          if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
+            echo "No changed Ukrainian docs files detected; skipping russicism gate."
+            exit 0
+          fi
+
+          echo "Checking ${#CHANGED_FILES[@]} changed Ukrainian files"
+          for path in "${CHANGED_FILES[@]}"; do
+            echo "- $path"
+          done
+
+          python3 scripts/quality/check_uk_changed.py "${CHANGED_FILES[@]}"

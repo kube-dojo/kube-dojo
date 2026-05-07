@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import re
 import sqlite3
 import subprocess
@@ -4175,7 +4176,11 @@ def build_delivery_status(repo_root: Path) -> dict[str, Any]:
     }
 
     try:
-        health_cmd = [_venv_python_for_repo(repo_root), "scripts/check_site_health.py"]
+        try:
+            health_exe = _venv_python_for_repo(repo_root)
+        except FileNotFoundError:
+            health_exe = shutil.which("python") or "python"
+        health_cmd = [health_exe, "scripts/check_site_health.py"]
         result = subprocess.run(
             health_cmd,
             cwd=repo_root,
