@@ -31,19 +31,19 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-In production, you never run standalone pods. You use **Deployments**.
+In most production application scenarios, you use higher-level controllers such as **Deployments** rather than standalone pods.
 
 Deployments are the most common workload resource. They handle:
 - Running multiple replicas of your app
-- Rolling updates with zero downtime
-- Automatic rollbacks when things go wrong
+- [Rolling updates with zero downtime](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
+- Rollback to a previous revision when you intentionally run `kubectl rollout undo`
 - Scaling up and down
 
 The CKA exam tests creating deployments, performing rolling updates, scaling, and rollbacks. These are fundamental skills you'll use daily.
 
 > **The Fleet Manager Analogy**
 >
-> Think of a Deployment like a fleet manager for a taxi company. The manager doesn't drive taxis directly—they manage drivers (pods). If a driver calls in sick (pod crashes), the manager assigns a replacement. If demand increases (scale up), the manager hires more drivers. During a vehicle upgrade (rolling update), the manager swaps old cars for new ones gradually, ensuring customers always have rides available.
+> Think of a Deployment like a fleet manager for a taxi company. The manager doesn't drive taxis directly—they manage drivers (pods). If a driver calls in sick (pod crashes), the manager assigns a replacement. If demand increases (scale up), the manager hires more drivers. During a vehicle upgrade (rolling update), the manager swaps old cars for new ones gradually, so customers usually still have rides available.
 
 ---
 
@@ -92,7 +92,7 @@ flowchart TD
 | Update history | ❌ | ✅ |
 | Pause/Resume | ❌ | ✅ |
 
-**Rule**: Always use Deployments. Never create ReplicaSets directly.
+**Rule**: Prefer Deployments for most application workloads. Create ReplicaSets directly only in uncommon cases where you do not need Deployment features.
 
 ### 1.3 Deployment Spec
 
@@ -120,7 +120,7 @@ spec:
         - containerPort: 80
 ```
 
-> **Critical**: The `spec.selector.matchLabels` must match `spec.template.metadata.labels`. If they don't match, the Deployment won't manage the pods.
+> **Critical**: [The `spec.selector.matchLabels` must match `spec.template.metadata.labels`](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/). If they don't match, the Deployment won't manage the pods.
 
 ---
 
@@ -200,7 +200,7 @@ kubectl rollout status deployment/nginx
 
 > **Did You Know?**
 >
-> The `kubectl rollout status` command blocks until the rollout completes. It's perfect for CI/CD pipelines—if the rollout fails, the command exits with a non-zero status.
+> [The `kubectl rollout status` command blocks until the rollout completes.](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_status/) It's perfect for CI/CD pipelines—if the rollout fails, the command exits with a non-zero status.
 
 ---
 
@@ -239,7 +239,7 @@ nginx-5d5dd5d5fb
 └── Deployment name
 ```
 
-When you update the deployment, a new ReplicaSet is created with a different hash.
+When you update the deployment, [a new ReplicaSet is created with a different hash](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/).
 
 ### 3.3 Don't Manage ReplicaSets Directly
 
@@ -448,7 +448,7 @@ spec:
 
 > **War Story: The Accidental Production Outage**
 >
-> A team deployed a broken image to production. Panic ensued. The engineer who knew about `kubectl rollout undo` saved the day in seconds. The engineer who didn't spent 20 minutes trying to figure out the previous image tag. Know your rollback commands!
+> A broken image can make a rollout fail quickly, and knowing `kubectl rollout undo` lets you restore the previous revision faster than manually reconstructing the last known-good image.
 
 ---
 
@@ -457,9 +457,9 @@ spec:
 ### 7.1 Why Pause?
 
 Pause a deployment to:
-- Make multiple changes without triggering multiple rollouts
+- [Make multiple changes without triggering multiple rollouts](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/)
 - Batch updates together
-- Debug without new pods being created
+- Inspect a partial rollout without triggering another rollout from additional template changes
 
 ### 7.2 Using Pause/Resume
 
@@ -549,7 +549,7 @@ kubectl describe deployment nginx | grep -A10 Conditions
 
 > **Stop and think**: If a Deployment is stuck in a `Progressing` state but never becomes `Available`, where is the first place you should look to understand why the new pods aren't starting?
 
-When a rollout gets stuck, it's usually because the new pods are failing to start or become ready. The RollingUpdate strategy pauses to prevent a full outage. Here is a concrete workflow to diagnose and recover from a stuck rollout.
+When a rollout gets stuck, it's usually because [the new pods are failing to start or become ready](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/). The RollingUpdate strategy pauses to prevent a full outage. Here is a concrete workflow to diagnose and recover from a stuck rollout.
 
 **Step 1: Deploy a broken update**
 ```bash
@@ -605,11 +605,11 @@ kubectl rollout status deployment/nginx
 
 - **Deployments are declarative**: You specify desired state, Kubernetes figures out how to get there.
 
-- **ReplicaSets are immutable**: When you update a Deployment, a new ReplicaSet is created. The old one is kept for rollback.
+- When you update a Deployment's Pod template, Kubernetes creates a new ReplicaSet and retains older ReplicaSets for rollout history and rollback.
 
-- **Default strategy is RollingUpdate** with `maxSurge: 25%` and `maxUnavailable: 25%`.
+- [**Default strategy is RollingUpdate** with `maxSurge: 25%` and `maxUnavailable: 25%`](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/).
 
-- **`--record` is deprecated** in newer versions but still works. Annotations now track changes automatically.
+- **`--record` is deprecated**. If you want meaningful rollout history, set `kubernetes.io/change-cause` explicitly or use tooling that writes it.
 
 ---
 
@@ -978,3 +978,11 @@ kubectl delete deployment lifecycle-test
 ## Next Module
 
 [Module 2.3: DaemonSets & StatefulSets](../module-2.3-daemonsets-statefulsets/) - Specialized workload controllers.
+
+## Sources
+
+- [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Backs Deployment behavior, Deployment-to-ReplicaSet-to-Pod ownership, rollout strategy, rolling updates, maxSurge/maxUnavailable behavior, rollout history, pause/resume, and rollback concepts.
+- [kubernetes.io: kubectl rollout status](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_rollout/kubectl_rollout_status/) — The kubectl command reference documents the default watch-until-done behavior for `rollout status`.
+- [Liveness, Readiness, and Startup Probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/) — Backs probe semantics, differences between liveness/readiness/startup probes, and how kubelet reacts to failing probes or holds readiness during startup.
+- [Update a Deployment Without Downtime](https://kubernetes.io/docs/tasks/run-application/update-deployment-rolling/) — Best walkthrough for rolling updates, stalled rollouts, pause/resume, and undo in practice.
+- [ReplicaSet](https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/) — Clarifies why Deployments manage ReplicaSets and how selectors and ownership behave under the hood.
