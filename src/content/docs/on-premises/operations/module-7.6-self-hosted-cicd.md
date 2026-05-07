@@ -10,9 +10,9 @@ sidebar:
 
 ## Why This Module Matters
 
-In 2021, a major financial services company suffered a catastrophic software supply chain breach when an advanced persistent threat group compromised their self-hosted CI/CD environment. The attackers exploited a vulnerability in the Docker image creation process, gaining access to a bash uploader script used deep within their automated pipeline. Because the build runners had excessive permissions, operated in privileged mode, and lacked proper namespace isolation, the attackers successfully extracted administrative credentials, deployment tokens, and intellectual property from thousands of customer environments over a period of two months. 
+Recent software supply-chain incidents have shown that compromising CI/CD tooling can expose build secrets and create downstream customer risk when runner isolation and credential scoping are weak. 
 
-The financial impact of this breach ran into the tens of millions of dollars in external audit fees, complete infrastructure remediation, and lost enterprise contracts. This devastating incident demonstrated definitively that CI/CD infrastructure is not merely an operational convenience or a background development tool; it is the most critical attack surface in a modern software engineering organization. When attackers compromise your CI/CD pipeline, they implicitly gain the keys to your entire production environment and your entire software supply chain.
+The downstream costs of a CI/CD compromise can include incident response, remediation, customer communication, and lost business. This devastating incident demonstrated definitively that CI/CD infrastructure is not merely an operational convenience or a background development tool; it is the most critical attack surface in a modern software engineering organization. When attackers compromise your CI/CD pipeline, they implicitly gain the keys to your entire production environment and your entire software supply chain.
 
 As organizations scale on-premises Kubernetes architectures, the default approach of relying on managed SaaS runners breaks down rapidly due to strict data sovereignty requirements, exorbitant outbound bandwidth costs, and the need for specialized hardware such as GPUs or custom ARM silicon. Operating a self-hosted CI/CD ecosystem—whether using GitHub Actions runners, GitLab CI, Jenkins, or Kubernetes-native tools like Tekton—demands a rigorous understanding of pod lifecycles, unprivileged container execution, and dynamic volume provisioning. A misconfigured self-hosted runner does not just fail a software build; it provides a direct, privileged vector into your core bare-metal infrastructure.
 
@@ -27,9 +27,9 @@ As organizations scale on-premises Kubernetes architectures, the default approac
 
 ## Did You Know?
 
-* **Argo CD Graduation:** The Argo project moved from CNCF incubation to CNCF graduation on December 6, 2022, cementing its status as a mature GitOps standard.
-* **Flux Graduation:** Flux moved to CNCF graduation on November 30, 2022 after earlier incubation, providing a strong declarative alternative to Argo CD.
-* **Tekton Incubation:** Tekton became a CNCF incubating project and publicly announced that status on March 24, 2026.
+* **Argo CD Graduation:** [The Argo project moved from CNCF incubation to CNCF graduation on December 6, 2022](https://www.cncf.io/announcements/2022/12/06/the-cloud-native-computing-foundation-announces-argo-has-graduated/), cementing its status as a mature GitOps standard.
+* **Flux Graduation:** [Flux moved to CNCF graduation on November 30, 2022 after earlier incubation](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/), providing a strong declarative alternative to Argo CD.
+* **Tekton Incubation:** [Tekton became a CNCF incubating project and publicly announced that status on March 24, 2026.](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/)
 * **Runner Expirations:** If automatic updates are disabled, GitHub requires self-hosted runner software updates within 30 days, and jobs are not queued after that.
 
 ## The Landscape of Self-Hosted CI/CD
@@ -38,11 +38,11 @@ Running CI/CD on bare-metal Kubernetes requires shifting from managed, infinite-
 
 | Platform | Architecture | Pipeline Definition | Memory Footprint (Control Plane) | Best For |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tekton** | Kubernetes-native (CRDs) | YAML (Custom CRDs) | Low (~100MB per controller) | Highly customized, container-native delivery chains. |
+| **Tekton** | Kubernetes-native (CRDs) | YAML (Custom CRDs) | Low relative controller overhead (exact usage depends on workload and configuration) | Highly customized, container-native delivery chains. |
 | **Gitea Actions** | Server + Polling Agents | YAML (GitHub Actions format) | Low-Medium | Teams migrating from GitHub seeking syntax compatibility. |
-| **Jenkins** | Monolithic Master + Ephemeral Pods | Groovy (Jenkinsfile) | High (1GB+ baseline) | Legacy enterprise pipelines requiring massive plugin ecosystems. |
-| **Woodpecker CI** | Server + RPC Agents | YAML (Drone-like) | Very Low (<50MB) | Lightweight, container-first workflows tightly coupled to Git events. |
-| **Drone** | Server + RPC Agents | YAML (Drone format) | Very Low (<50MB) | Similar to Woodpecker, but subject to Harness enterprise licensing limits. |
+| **Jenkins** | Monolithic Master + Ephemeral Pods | Groovy (Jenkinsfile) | High relative controller overhead | Legacy enterprise pipelines requiring massive plugin ecosystems. |
+| **Woodpecker CI** | Server + RPC Agents | YAML (Drone-like) | Very low relative control-plane overhead | Lightweight, container-first workflows tightly coupled to Git events. |
+| **Drone** | Server + RPC Agents | YAML (Drone format) | Very low relative control-plane overhead | Similar agent-based workflows for teams already standardized on Drone. |
 
 Here is a visual representation of how the Kubernetes-native architecture (specifically Tekton) differs from legacy polling mechanisms. Tekton leverages the Kubernetes control plane directly:
 
@@ -79,7 +79,7 @@ Gitea Actions implements a GitHub Actions-compatible engine using `act_runner`. 
 
 **Operational Characteristics:**
 * **Pros:** Reuses existing GitHub Actions community steps (`uses: actions/checkout@v4`). Familiar syntax.
-* **Cons:** The Kubernetes execution environment for `act_runner` creates pods dynamically via the Docker API translation or directly via the Kubernetes API. The translation layer occasionally fails on complex container networking setups (e.g., service containers communicating with the build container).
+* **Cons:** GitHub-Actions-style workflows can become harder to debug when complex multi-container networking patterns are adapted to self-hosted runners. The translation layer occasionally fails on complex container networking setups (e.g., service containers communicating with the build container).
 * **Configuration:** Require configuring `container` contexts explicitly. `act_runner` daemon must have appropriate RBAC to spawn pods in the target namespace.
 
 ## Deep Dive: GitLab Runner on Kubernetes
@@ -104,26 +104,26 @@ Modern deployments avoid static nodes. Jenkins can dynamically allocate agents t
 * **Architecture:** The agent pod definition often requires multiple containers (a JNLP agent container to communicate with the master, and specific tool containers like `maven` or `node`).
 
 However, running a monolithic Jenkins controller inside Kubernetes presents significant operational challenges:
-* **Cons:** The JVM master is a single point of failure and memory hog. Garbage collection pauses on the master can cause missed webhooks or dropped agent connections.
+* **Cons:** The JVM master is a single point of failure and memory hog. Long JVM pauses or an undersized Jenkins controller can destabilize webhook handling and agent connectivity under load.
 
 To mitigate this, you must explicitly configure `-Xmx` and `-Xms` JVM flags to match your Kubernetes Pod resource limits, preventing the Linux kernel OOM killer from terminating the controller during high load.
 
 ## Deep Dive: Tekton Pipelines (CRD Native)
 
-Tekton operates without a central CI server. Tekton is a cloud-native CI/CD framework that runs as an extension on Kubernetes and is defined by Kubernetes Custom Resources. The pipeline state is literally the Kubernetes etcd state. Tekton’s `TaskRun` model is pod-based; by design each TaskRun executes inside a Kubernetes Pod. 
+Tekton operates without a central CI server. [Tekton is a cloud-native CI/CD framework that runs as an extension on Kubernetes and is defined by Kubernetes Custom Resources. The pipeline state is literally the Kubernetes etcd state. Tekton’s `TaskRun` model is pod-based; by design each TaskRun executes inside a Kubernetes Pod.](https://tekton.dev/docs/pipelines/) 
 
 **Operational Characteristics:**
 * **Pros:** Complete Kubernetes API integration. RBAC applies directly to pipelines. Highly scalable; controller bottlenecks are extremely rare.
 * **Cons:** Extremely verbose YAML syntax. Sharing data between tasks requires `Workspaces` (PersistentVolumeClaims), which can introduce attach/detach latency on bare-metal block storage like Ceph.
-* **Production Gotcha:** PVC attach limits. If a `PipelineRun` spins up 10 parallel tasks sharing the same `ReadWriteOnce` Workspace, the pods must be scheduled on the same node.
+* **Production Gotcha:** PVC attach limits. If a `PipelineRun` spins up 10 parallel tasks [sharing the same `ReadWriteOnce` Workspace, the pods must be scheduled on the same node](https://tekton.dev/docs/pipelines/).
 
-> **Stop and think**: If Tekton stores pipeline state entirely in `etcd`, what is the risk of retaining 100,000 completed `PipelineRun` objects in a production cluster?
+> **Stop and think**: If Tekton stores pipeline state entirely in `etcd`, what is the risk of [retaining 100,000 completed `PipelineRun` objects](https://tekton.dev/docs/pipelines/) in a production cluster?
 
 ## Deep Dive: GitOps with Argo CD and Flux
 
 CI builds the artifact, but CD deploys it. In modern Kubernetes environments, Continuous Delivery is managed via GitOps. 
 
-Argo CD is a declarative, GitOps continuous delivery tool for Kubernetes. Instead of a CI pipeline pushing changes to the cluster using static credentials, Argo CD uses Git as the source of truth and can track updates from branches, tags, and commits. The tool pulls the desired state and reconciles it against the live cluster state.
+Argo CD is a declarative, GitOps continuous delivery tool for Kubernetes. Instead of a CI pipeline pushing changes to the cluster using static credentials, [Argo CD uses Git as the source of truth and can track updates from branches, tags, and commits. The tool pulls the desired state and reconciles it against the live cluster state.](https://argoproj.github.io/cd/)
 
 Both Argo CD and Flux have become industry standards for CD. The Argo project moved from CNCF incubation to CNCF graduation on December 6, 2022. Similarly, Flux moved to CNCF graduation on November 30, 2022 after earlier incubation. 
 
@@ -135,10 +135,10 @@ Without the Docker daemon, building OCI images inside Kubernetes pods requires u
 
 1. **Kaniko:** Executes Dockerfile instructions completely in userspace. Ideal for standard Dockerfiles.
 2. **BuildKit (rootless):** Can be run as a rootless daemon inside a pod or deployed as a shared service (`buildkitd`) within the cluster.
-3. **Buildah:** Red Hat's daemonless build tool. Requires specific seccomp profiles or `securityContext.privileged: true` if unprivileged user namespaces are not enabled on the host kernel.
+3. **Buildah:** Red Hat's daemonless build tool. Containerized Buildah often needs host and security-context tuning to work cleanly in Kubernetes, especially when rootless user-namespace support is unavailable.
 
 **Kaniko Implementation Detail:**
-Kaniko requires the `DOCKER_CONFIG` environment variable to point to a mounted secret containing registry credentials.
+[Kaniko requires the `DOCKER_CONFIG` environment variable to point to a mounted secret containing registry credentials.](https://github.com/osscontainertools/kaniko)
 
 ```yaml
 volumeMounts:
@@ -156,7 +156,7 @@ Ephemeral CI pods start with cold caches. Downloading dependencies (npm, maven, 
 
 ### Secret Injection
 
-Hardcoding secrets in CI definitions or relying on the CI tool's native secret manager leads to security fragmentation. Synchronize secrets into the CI namespace using External Secrets Operator (ESO), or inject them at runtime using Vault Agent sidecars.
+Hardcoding secrets in CI definitions or relying on the CI tool's native secret manager leads to security fragmentation. Synchronize secrets into the CI namespace using External Secrets Operator (ESO), or [inject them at runtime using Vault Agent sidecars](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector).
 
 For Tekton, you can bind secrets directly to the ServiceAccount executing the `TaskRun`.
 
@@ -171,7 +171,7 @@ secrets:
 
 ### Multi-Architecture Builds
 
-Building `arm64` images on `amd64` nodes using QEMU emulation is prohibitively slow for compiled languages (Rust, Go, C++). Bare-metal clusters should utilize native hardware routing. 
+Building `arm64` images on `amd64` nodes via emulation can be much slower than routing work to native `arm64` hardware. Bare-metal clusters should utilize native hardware routing. 
 
 1. Tag physical `arm64` nodes with `kubernetes.io/arch=arm64`.
 2. Apply nodeSelectors or tolerations to the pipeline agents.
@@ -182,7 +182,7 @@ Building `arm64` images on `amd64` nodes using QEMU emulation is prohibitively s
 
 | Mistake | Why | Fix |
 |---|---|---|
-| Mounting `/var/run/docker.sock` | Exposes the host kernel directly to the CI pod, leading to instant root privilege escalation. | Use rootless Buildah or Kaniko. |
+| Mounting `/var/run/docker.sock` | Gives the CI pod broad control over the host container runtime and breaks normal isolation boundaries. | Use rootless Buildah or Kaniko. |
 | Ignoring PVC Attach Latency | Cloud storage takes 10-30s to detach/attach between tasks. | Use Node affinity or object storage for artifacts. |
 | Unbounded Build Caches | Ephemeral caches fill up local disks and cause node evictions. | Apply S3 lifecycle policies to prune caches older than 7 days. |
 | Hardcoding Secrets in CI | Exposes credentials in logs and YAML definitions. | Use External Secrets Operator to inject secrets via ServiceAccounts. |
@@ -196,7 +196,7 @@ This lab deploys Tekton Pipelines and executes an unprivileged Kaniko build that
 ### Prerequisites
 
 To begin, ensure you have these prerequisites:
-* A running Kubernetes cluster (v1.32+).
+* A running, recent Kubernetes cluster compatible with the installed Tekton release.
 * `kubectl` configured.
 * A local unsecured registry running in the cluster.
 
@@ -359,10 +359,10 @@ INFO[0012] Pushed registry.registry.svc.cluster.local:5000/email-service@sha256:
 * If Kaniko fails to push with `connection refused`, ensure the registry Service `registry.registry.svc.cluster.local` is resolving and the registry Pod is `READY`.
 
 **Practitioner Gotchas:**
-1. **PVC Attach/Detach Latency on Workspaces:** When running pipelines that pass state between tasks via PersistentVolumeClaims (PVCs), bare-metal storage classes (like Rook-Ceph block or Longhorn) often take 10-30 seconds to detach a volume from the Node running Task A and attach it to the Node running Task B. This adds massive overhead to multi-step pipelines. *Fix:* Use Node affinity to force all Pods for a specific `PipelineRun` onto the same Node, or switch to S3/GCS API-based artifact passing instead of POSIX mounts. If `ReadWriteMany` is used via NFS to bypass this, I/O bottlenecks will quickly degrade build performance.
-2. **Dangling Pipeline Resources:** Tekton and Jenkins Kubernetes agents create Pods that are supposed to be cleaned up after execution. Network partitions or OOM kills of the controller can leave `Completed` or `Error` pods lingering permanently, eventually exhausting node inode or IP limits. *Fix:* Configure aggressive Pod GC thresholds on the kubelet, and deploy a CronJob to prune CI namespaces of pods older than 24 hours. For Tekton, configure the `tekton-config-observability` ConfigMap to limit history.
-3. **Kaniko Memory Spikes:** Kaniko loads the entire filesystem state into memory during layer calculation. Building large images (e.g., machine learning containers with gigabytes of dependencies) will OOMKill the Kaniko pod if resource limits are set too tightly. *Fix:* Remove memory limits entirely for Kaniko pods, or implement the `--snapshot-mode=redo` flag which trades CPU time for lower memory consumption during file system delta calculation.
-4. **Woodpecker/Drone Server SQLite Corruption:** By default, lightweight CI servers often default to local SQLite databases. If scheduled on storage prone to high IO latency or non-graceful pod terminations, the database corrupts, losing all pipeline history and agent registration state. *Fix:* Always configure external Postgres or MySQL databases for the CI control plane on production bare-metal clusters.
+1. **PVC Attach/Detach Latency on Workspaces:** When pipelines pass state between tasks via a shared PVC, volume detach/attach delays can add noticeable overhead if successive tasks land on different nodes. This adds massive overhead to multi-step pipelines. *Fix:* Use Node affinity to force all Pods for a specific `PipelineRun` onto the same Node, or switch to S3/GCS API-based artifact passing instead of POSIX mounts. If `ReadWriteMany` is used via NFS to bypass this, I/O bottlenecks will quickly degrade build performance.
+2. **Dangling Pipeline Resources:** Tekton and Jenkins Kubernetes agents can leave stale pods behind when cleanup paths fail, so operators should monitor CI namespaces and prune abandoned resources. *Fix:* Configure aggressive Pod GC thresholds on the kubelet, and deploy a CronJob to prune CI namespaces of pods older than 24 hours. For Tekton, configure the `tekton-config-observability` ConfigMap to limit history.
+3. **Kaniko Memory Spikes:** Large image builds can exhaust Kaniko pod memory, so resource sizing and Kaniko snapshot and caching settings should be tested against the real build context.
+4. **Woodpecker/Drone Server SQLite Corruption:** Some lightweight CI servers default to embedded SQLite databases, which is convenient for evaluation but a poor fit for a production CI control plane; use an external database for serious deployments.
 
 ## Quiz
 
@@ -442,3 +442,15 @@ Now that you have established a secure, unprivileged CI pipeline capable of buil
 * [Jenkins Kubernetes Plugin Documentation](https://plugins.jenkins.io/kubernetes/)
 * [Woodpecker CI Architecture](https://woodpecker-ci.org/docs/architecture)
 * [act_runner Configuration](https://docs.gitea.com/usage/actions/act-runner)
+
+## Sources
+
+- [cncf.io: the cloud native computing foundation announces argo has graduated](https://www.cncf.io/announcements/2022/12/06/the-cloud-native-computing-foundation-announces-argo-has-graduated/) — The CNCF announcement directly states Argo graduated on December 6, 2022.
+- [cncf.io: flux graduates from cncf incubator](https://www.cncf.io/announcements/2022/11/30/flux-graduates-from-cncf-incubator/) — The CNCF announcement directly states Flux graduated on November 30, 2022.
+- [cncf.io: tekton becomes a cncf incubating project](https://www.cncf.io/blog/2026/03/24/tekton-becomes-a-cncf-incubating-project/) — The CNCF post directly announces Tekton's incubation on March 24, 2026.
+- [Tekton Pipelines](https://tekton.dev/docs/pipelines/) — Backs Kubernetes-native CI/CD architecture claims about Tekton CRDs, Task/TaskRun/Pipeline/PipelineRun objects, and per-task pod execution on cluster.
+- [argoproj.github.io: cd](https://argoproj.github.io/cd/) — Argo CD's official docs directly describe it as a declarative GitOps continuous delivery tool for Kubernetes.
+- [github.com: kaniko](https://github.com/osscontainertools/kaniko) — The Kaniko project README directly documents daemonless userspace execution and `/kaniko/.docker` auth configuration.
+- [developer.hashicorp.com: injector](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector) — HashiCorp's Vault Injector docs directly describe sidecar-based pod mutation and shared-volume secret rendering.
+- [OCI Distribution Spec](https://specs.opencontainers.org/distribution-spec/?v=v1.1.1) — Defines the standard registry API underlying self-hosted OCI image distribution workflows.
+- [Assigning Pods to Nodes](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/) — Covers the node labels and scheduling primitives used to route CI jobs to architecture-specific hardware.
