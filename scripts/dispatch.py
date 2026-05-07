@@ -414,8 +414,9 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
     `selectedType=oauth-personal`). The CLI path also auto-flips to
     subscription mode when API-key inheritance is rate-limited there.
 
-    REST does not support MCP tool injection — when ``mcp=True`` we skip
-    REST and go straight to the CLI path.
+    REST does not support MCP tool injection — when ``mcp=True`` or
+    ``KUBEDOJO_GEMINI_SUBSCRIPTION=1`` we skip REST and go straight to the
+    OAuth CLI path.
     """
     base_delay = 30
     output = ""
@@ -430,7 +431,7 @@ def dispatch_gemini_with_retry(prompt: str, model: str = GEMINI_DEFAULT_MODEL,
         model = GEMINI_REVIEW_MODEL
 
     # Primary: REST API key path. Skip if MCP tools requested or no key in env.
-    if not mcp and (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
+    if not mcp and not _FORCE_GEMINI_SUBSCRIPTION and (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
         ok, output = dispatch_gemini_rest(prompt, model, review, timeout)
         if ok:
             return True, output
