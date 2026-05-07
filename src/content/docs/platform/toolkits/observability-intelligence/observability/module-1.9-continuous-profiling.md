@@ -51,7 +51,7 @@ Profiling is not a luxury. It is how you stop guessing and start *seeing* what y
 
 ## The 4th Pillar of Observability
 
-For years, observability meant three pillars: metrics, logs, and traces. But there was always a blind spot:
+For years, observability meant three pillars: metrics, logs, and traces. But there was often a blind spot:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -128,7 +128,7 @@ Parca uses eBPF to sample stack traces from every process on a node -- no code c
 
 **Key properties**:
 - **Zero instrumentation**: eBPF samples stack traces from the kernel -- works with any language
-- **Always-on**: Runs continuously with negligible overhead, so you have data *before* incidents
+- **Continuous use**: Runs continuously with low overhead in most environments, so you usually have data *before* incidents
 - **Columnar storage**: Efficient storage of profile data for querying over time
 - **Diff views**: Compare profiles between two time ranges to see what changed
 
@@ -563,7 +563,7 @@ Traces tell you that Service A spent 200ms in the `/checkout` handler. Profiling
 4. **Pyroscope** gives language-aware depth and integrates natively with Grafana
 5. **Flame graphs** are the primary visualization -- read them bottom-up, optimize the widest bars
 6. **Diff views** after deployments catch performance regressions before users notice
-7. **CPU and memory allocation** are the two profiles you should always collect
+7. **CPU and memory allocation** are the two profiles you should usually collect first
 8. **Profiling complements tracing** -- use traces to find the slow service, profiles to find the slow function
 
 ---
@@ -584,3 +584,9 @@ Continue to Module 2.1 or explore related modules:
 - [Module 1.6: Pixie](../module-1.6-pixie/) - eBPF-based observability (same kernel technology, different focus)
 - [Module 1.2: OpenTelemetry](../module-1.2-opentelemetry/) - Traces and metrics that profiling complements
 - [Module 1.3: Grafana](../module-1.3-grafana/) - Where Pyroscope profiles are visualized
+
+## Sources
+
+- [Parca Agent README](https://github.com/parca-dev/parca-agent) — Best primary source here for Parca's eBPF collection model, metadata labels, privilege requirements, and sample-rate defaults.
+- [Parca README](https://github.com/parca-dev/parca) — Covers Parca's comparison workflows, optimized storage/querying, and infrastructure-wide profile aggregation.
+- [Pyroscope and Profiling in Grafana](https://grafana.com/docs/pyroscope/latest/introduction/pyroscope-in-grafana/) — Explains how Pyroscope integrates with Grafana dashboards, traces, and other observability signals.
