@@ -1,0 +1,255 @@
+{
+  "module_key": "platform/toolkits/observability-intelligence/observability/module-1.4-loki",
+  "module_path": "src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.4-loki.md",
+  "research_run_id": "2026-05-07T03:40:47+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-observability-intelligence-observability.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A SaaS team paid $127,000 for Elasticsearch in a single month.",
+      "claim_class": "war_story",
+      "span_hint": "opening anecdote paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The infrastructure team at a fast-growing SaaS company stared at their AWS bill in disbelief. Elasticsearch: $127,000 last month.",
+      "suggested_rewrite": "At some organizations, log-search infrastructure grows expensive enough to force a redesign of the logging stack.",
+      "lesson_point_url": null,
+      "rationale": "This is a faux-specific cost anecdote with no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The security team demanded seven years of fully searchable log retention for compliance.",
+      "claim_class": "war_story",
+      "span_hint": "opening anecdote paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "\"We need these logs for compliance,\" the security team argued. \"Seven years retention, fully searchable.\"",
+      "suggested_rewrite": "Compliance and retention requirements can push teams to keep large volumes of logs accessible for long periods.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed quote plus a precise compliance requirement embedded in an unsourced story."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The team modeled 2TB/day, 12 indexed fields, 3x replication, 2,555 days of retention, and an $8.4M five-year Elasticsearch cost.",
+      "claim_class": "war_story",
+      "span_hint": "opening anecdote paragraph 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The math was brutal: 2TB of logs per day, indexed across 12 fields, replicated 3x, stored for 2,555 days. The five-year projection showed $8.4 million in Elasticsearch infrastructure costs alone.",
+      "suggested_rewrite": "High daily log volume, long retention, replication, and wide indexing can make traditional search-oriented log stacks very expensive over time.",
+      "lesson_point_url": null,
+      "rationale": "The precise capacity model and dollar projection are unsupported story details."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Switching to Loki plus S3 changed storage from $0.30/GB to $0.023/GB and cut the seven-year cost to $340,000, a 96% reduction.",
+      "claim_class": "war_story",
+      "span_hint": "opening anecdote paragraph 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Then the platform architect discovered Loki. Same 2TB/day, but stored in S3 at $0.023/GB instead of hot Elasticsearch nodes at $0.30/GB. Labels indexed, content compressed. The seven-year compliance requirement? Achievable for $340,000—a 96% cost reduction.",
+      "suggested_rewrite": "Using Loki with object storage can reduce long-retention logging costs substantially because Loki indexes labels and stores compressed log chunks in cheaper storage.",
+      "lesson_point_url": null,
+      "rationale": "This combines unsupported vendor pricing snapshots with a fabricated savings case study."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The CFO invited the team to the board meeting and the board immediately approved three more proposals.",
+      "claim_class": "war_story",
+      "span_hint": "opening anecdote paragraph 5",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Six months after migration, the CFO asked the infrastructure team to present at the board meeting. \"This is the first time anyone's ever invited infrastructure to talk about cost savings,\" the architect joked. The board approved their next three proposals on the spot.",
+      "suggested_rewrite": "A successful logging-cost reduction can change how infrastructure work is viewed inside the business.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsourced business-impact anecdote with an unattributed quote."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Loki provides cost-effective log aggregation with label-based indexing and object-storage-backed data.",
+      "claim_class": "vendor_capability",
+      "span_hint": "What You'll Be Able to Do bullet 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://grafana.com/docs/loki/latest/get-started/architecture/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool covers label-based indexing and chunk storage, and the architecture docs explicitly cover object storage and cost-effective storage mode."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "LogQL supports log exploration, metric extraction, and alert-oriented query workflows.",
+      "claim_class": "vendor_capability",
+      "span_hint": "What You'll Be Able to Do bullet 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S008",
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool covers LogQL query and metric-extraction behavior plus Grafana alerting concepts."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Loki indexes only labels and stores logs in compressed form.",
+      "claim_class": "vendor_capability",
+      "span_hint": "Why This Module Matters paragraph 2",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This is a core Loki architectural claim directly covered by the shared LogQL source."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Loki originated from Grafana engineers' frustration with expensive Elasticsearch operations.",
+      "claim_class": "war_story",
+      "span_hint": "Did You Know bullet 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Loki was inspired by frustration**—Grafana engineers were tired of running expensive Elasticsearch clusters just to find a needle in a haystack of logs",
+      "suggested_rewrite": "**Loki was created as a cost-conscious log aggregation system** inspired by Prometheus-style labeling",
+      "lesson_point_url": null,
+      "rationale": "The exact emotional/product-origin story is too specific as written and is not backed by the shared pool."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Loki can be 10-100x cheaper than Elasticsearch for the same log volume.",
+      "claim_class": "benchmark",
+      "span_hint": "Did You Know bullet 2",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Loki can be 10-100x cheaper than Elasticsearch** for the same volume—because it doesn't index log content, only labels",
+      "suggested_rewrite": "**Loki is often substantially cheaper than full-content indexing systems** for the same log volume because it indexes labels rather than every word in each log line",
+      "lesson_point_url": "https://grafana.com/docs/loki/latest/logql/",
+      "rationale": "The cost principle is supported, but the exact multiplier is a benchmark claim not backed by the shared pool."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "A startup migration to Loki delivered an 80% cost reduction with faster queries and simpler operations.",
+      "claim_class": "war_story",
+      "span_hint": "War Story intro paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A startup migrated from Elasticsearch to Loki for cost savings. Initial results were spectacular: 80% cost reduction, faster queries, simpler operations. The VP of Engineering sent a company-wide email celebrating the win.",
+      "suggested_rewrite": "Teams often move from full-content indexing systems to Loki to cut logging costs and operational overhead.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsupported success-story anecdote with precise impact claims."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "At 2:14 PM on Tuesday of week 3, developers noticed queries timing out.",
+      "claim_class": "incident",
+      "span_hint": "War Story timeline line 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Week 3, Tuesday 2:14 PM**: Developers noticed log queries timing out.",
+      "suggested_rewrite": "After rollout, developers began noticing log queries timing out.",
+      "lesson_point_url": null,
+      "rationale": "This is an exact incident timestamp with no attributable source."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "At 2:45 PM, Loki ingesters began OOMing and Kubernetes restarted them in a loop.",
+      "claim_class": "incident",
+      "span_hint": "War Story timeline line 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Week 3, Tuesday 2:45 PM**: Loki ingesters started OOMing. Kubernetes restarted them in a loop.",
+      "suggested_rewrite": "As the problem worsened, ingesters began running out of memory and restarting.",
+      "lesson_point_url": null,
+      "rationale": "This is another faux-precise incident timeline claim."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "By 3:30 PM the company had a complete logging blackout.",
+      "claim_class": "incident",
+      "span_hint": "War Story timeline line 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Week 3, Tuesday 3:30 PM**: Complete logging blackout. No logs ingested or queryable.",
+      "suggested_rewrite": "The issue escalated into a logging outage.",
+      "lesson_point_url": null,
+      "rationale": "This is an unsourced outage timeline detail."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "At 4:00 PM the team identified a debugging label as the root cause.",
+      "claim_class": "incident",
+      "span_hint": "War Story timeline line 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Week 3, Tuesday 4:00 PM**: Root cause identified. A well-intentioned developer had added a \"helpful\" label to make debugging easier:",
+      "suggested_rewrite": "The team eventually traced the outage to a high-cardinality label that created far too many streams:",
+      "lesson_point_url": null,
+      "rationale": "The timing and narrative are unsourced, even though the operational lesson is valid."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://grafana.com/docs/loki/latest/logql/",
+      "title": "Query Loki",
+      "tier": "upstream",
+      "why_relevant": "Canonical reference for LogQL syntax, label-based querying, chunk lookup, and metric queries from logs."
+    },
+    {
+      "url": "https://grafana.com/docs/loki/latest/get-started/architecture/",
+      "title": "Loki architecture",
+      "tier": "upstream",
+      "why_relevant": "Best follow-on for understanding distributors, ingesters, queriers, object storage, and multi-tenancy."
+    },
+    {
+      "url": "https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/",
+      "title": "Label best practices",
+      "tier": "upstream",
+      "why_relevant": "Directly relevant to the module's cardinality guidance and the request_id anti-pattern in the war story."
+    }
+  ],
+  "notes": "Promtail docs now mark Promtail as deprecated and EOL as of 2026-03-02, so the Promtail-heavy parts of this module likely need editorial refresh beyond citation injection. Several additional exact numbers remain inside fenced code blocks/comments (for example deployment-size thresholds and cost arithmetic); this seed leaves those alone per pipeline rules, so a manual review is still warranted.",
+  "_schema_issues": [
+    "claim[10]:hard_cite_class_cannot_soften:statistic/soften_to_illustration — must be supported, weak_anchor, or needs_allowlist_expansion",
+    "claim[11]:hard_cite_class_cannot_soften:statistic/soften_to_illustration — must be supported, weak_anchor, or needs_allowlist_expansion",
+    "claim[17]:hard_cite_class_cannot_soften:statistic/soften_to_illustration — must be supported, weak_anchor, or needs_allowlist_expansion"
+  ],
+  "rejected_urls": []
+}

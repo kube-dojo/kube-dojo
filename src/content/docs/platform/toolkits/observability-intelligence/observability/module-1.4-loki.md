@@ -17,15 +17,15 @@ Before starting this module:
 
 ---
 
-The infrastructure team at a fast-growing SaaS company stared at their AWS bill in disbelief. Elasticsearch: $127,000 last month. For logs. Not revenue-generating features, not customer-facing services—just storing text that nobody read 99% of the time.
+At some organizations, log-search infrastructure grows expensive enough to force a redesign of the logging stack. For logs. Not revenue-generating features, not customer-facing services—just storing text that nobody read 99% of the time.
 
-"We need these logs for compliance," the security team argued. "Seven years retention, fully searchable."
+Compliance and retention requirements can push teams to keep large volumes of logs accessible for long periods.
 
-The math was brutal: 2TB of logs per day, indexed across 12 fields, replicated 3x, stored for 2,555 days. The five-year projection showed $8.4 million in Elasticsearch infrastructure costs alone.
+High daily log volume, long retention, replication, and wide indexing can make traditional search-oriented log stacks very expensive over time.
 
-Then the platform architect discovered Loki. Same 2TB/day, but stored in S3 at $0.023/GB instead of hot Elasticsearch nodes at $0.30/GB. Labels indexed, content compressed. The seven-year compliance requirement? Achievable for $340,000—a 96% cost reduction.
+Using Loki with object storage can reduce long-retention logging costs substantially because Loki indexes labels and stores compressed log chunks in cheaper storage.
 
-Six months after migration, the CFO asked the infrastructure team to present at the board meeting. "This is the first time anyone's ever invited infrastructure to talk about cost savings," the architect joked. The board approved their next three proposals on the spot.
+A successful logging-cost reduction can change how infrastructure work is viewed inside the business.
 
 ---
 
@@ -33,8 +33,8 @@ Six months after migration, the CFO asked the infrastructure team to present at 
 
 After completing this module, you will be able to:
 
-- **Deploy Loki for cost-effective log aggregation with label-based indexing and object storage backends**
-- **Implement LogQL queries for log exploration, metric extraction, and pattern-based alerting**
+- [**Deploy Loki for cost-effective log aggregation with label-based indexing and object storage backends**](https://grafana.com/docs/loki/latest/logql/)
+- [**Implement LogQL queries for log exploration, metric extraction, and pattern-based alerting**](https://grafana.com/docs/loki/latest/logql/)
 - **Configure Promtail and Grafana Alloy agents for Kubernetes log collection with label enrichment**
 - **Optimize Loki's storage configuration and retention policies for high-volume log environments**
 
@@ -43,12 +43,12 @@ After completing this module, you will be able to:
 
 Logs tell you what happened. Metrics tell you something is wrong; logs tell you why. But traditional logging solutions (ELK, Splunk) are expensive—indexing every field in every log line costs storage and compute.
 
-Loki takes a different approach: index only labels, store logs compressed. It's "Prometheus for logs"—same label-based discovery, fraction of the cost. At scale, this matters enormously.
+Loki takes a different approach: [index only labels, store logs compressed](https://grafana.com/docs/loki/latest/logql/). It's "Prometheus for logs"—same label-based discovery, fraction of the cost. At scale, this matters enormously.
 
 ## Did You Know?
 
-- **Loki was inspired by frustration**—Grafana engineers were tired of running expensive Elasticsearch clusters just to find a needle in a haystack of logs
-- **Loki can be 10-100x cheaper than Elasticsearch** for the same volume—because it doesn't index log content, only labels
+- **Loki was created as a cost-conscious log aggregation system** inspired by Prometheus-style labeling
+- **Loki is often substantially cheaper than full-content indexing systems** for the same log volume because it indexes labels rather than every word in each log line
 - **The name comes from Norse mythology**—Loki is the trickster god, fitting for a system that "tricks" you into thinking you have full-text search
 - **Loki's query language (LogQL) borrows heavily from PromQL**—if you know Prometheus, you're 80% there
 
@@ -724,15 +724,15 @@ Or use "Derived Fields":
 
 ## War Story: The Stream Explosion That Killed Production
 
-A startup migrated from Elasticsearch to Loki for cost savings. Initial results were spectacular: 80% cost reduction, faster queries, simpler operations. The VP of Engineering sent a company-wide email celebrating the win.
+Teams often move from full-content indexing systems to Loki to cut logging costs and operational overhead.
 
-**Week 3, Tuesday 2:14 PM**: Developers noticed log queries timing out.
+After rollout, developers began noticing log queries timing out.
 
-**Week 3, Tuesday 2:45 PM**: Loki ingesters started OOMing. Kubernetes restarted them in a loop.
+As the problem worsened, ingesters began running out of memory and restarting.
 
-**Week 3, Tuesday 3:30 PM**: Complete logging blackout. No logs ingested or queryable.
+The issue escalated into a logging outage.
 
-**Week 3, Tuesday 4:00 PM**: Root cause identified. A well-intentioned developer had added a "helpful" label to make debugging easier:
+The team eventually traced the outage to a high-cardinality label that created far too many streams:
 
 ```yaml
 # The problematic Promtail config
@@ -864,7 +864,7 @@ This tells Promtail:
 - Wait up to 3 seconds for more lines before flushing
 - Combine up to 128 lines into one entry
 
-Without this, each line of a stack trace becomes a separate log entry, making them impossible to search together.
+Without this, each line of a stack trace becomes a separate log entry, making them much harder to search together.
 </details>
 
 ### Question 5
@@ -1178,3 +1178,10 @@ Continue to [Module 1.5: Distributed Tracing](../module-1.5-tracing/) where we'l
 ---
 
 *"Logs tell the story. Labels help you find the right chapter. LogQL lets you skip to the good parts."*
+
+## Sources
+
+- [Grafana Loki: Query Loki (LogQL)](https://grafana.com/docs/loki/latest/logql/) — Backs Loki’s label-based query model, log streams, compressed chunk storage, label indexing instead of full-content indexing, and LogQL basics for log exploration and metric extraction from logs.
+- [Grafana Alerting](https://grafana.com/docs/grafana/latest/alerting/) — Backs Grafana-managed alert rules, evaluation behavior, notification routing, contact points, grouping, silences, and other alerting concepts relevant to dashboard-adjacent operations.
+- [Loki architecture](https://grafana.com/docs/loki/latest/get-started/architecture/) — Best follow-on for understanding distributors, ingesters, queriers, object storage, and multi-tenancy.
+- [Label best practices](https://grafana.com/docs/loki/latest/get-started/labels/bp-labels/) — Directly relevant to the module's cardinality guidance and the request_id anti-pattern in the war story.
