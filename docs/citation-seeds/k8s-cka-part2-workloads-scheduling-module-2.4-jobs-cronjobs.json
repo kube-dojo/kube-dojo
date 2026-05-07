@@ -1,0 +1,208 @@
+{
+  "module_key": "k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs",
+  "module_path": "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.4-jobs-cronjobs.md",
+  "research_run_id": "2026-05-07T05:30:08+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part2-workloads-scheduling.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Jobs are for one-time tasks, while CronJobs are for scheduled recurring tasks.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "supported",
+      "source_ids": [
+        "S008",
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared Job and CronJob concept pages define these controllers in those terms."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The CKA exam tests creating Jobs with specific completion requirements and troubleshooting failed Jobs.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CKA exam tests creating Jobs with specific completion requirements and troubleshooting failed Jobs.",
+      "suggested_rewrite": "This module focuses on creating Jobs with completion settings and troubleshooting failed runs.",
+      "lesson_point_url": null,
+      "rationale": "Current public CKA domain pages confirm Workloads and Scheduling broadly, but I did not find an authoritative source for this exact Job-specific exam claim."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Jobs run Pods to completion, whereas Deployments keep Pods running \"forever.\"",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.1 What Is a Job?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S008",
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A Job creates pods that run to completion. Unlike Deployments (which keep pods running forever), Jobs expect pods to terminate successfully.",
+      "suggested_rewrite": "A Job creates Pods that run to completion. Unlike Deployments, which aim to keep a set of Pods running continuously, Jobs expect Pods to terminate successfully.",
+      "lesson_point_url": null,
+      "rationale": "Upstream docs support the run-to-completion versus continuous desired-state distinction, but not the literal 'running forever' wording."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "A Job pod template may use only `restartPolicy: Never` or `restartPolicy: OnFailure`.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.4 Restart Policy",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Job spec docs explicitly state these are the only allowed restart policies for a Job pod template."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "With `restartPolicy: Never`, failed attempts create new Pods; with `OnFailure`, retries happen in the same Pod, and a `backoffLimit` of 4 might yield 5 Pods.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1.4 Restart Policy | Did You Know",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "With `restartPolicy: Never`, failed attempts create new pods. With a backoffLimit of 4, you might see 5 pods (1 original + 4 retries). With `OnFailure`, you see fewer pods because containers restart in place.",
+      "suggested_rewrite": "With `restartPolicy: Never`, failed attempts create new Pods. With `OnFailure`, the container is restarted in the same Pod, so you generally see fewer Pods.",
+      "lesson_point_url": null,
+      "rationale": "Upstream docs directly support new-Pod versus in-place restart behavior, but not the exact five-Pod arithmetic as written."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "A CronJob creates Jobs on a schedule, similar to cron on Linux.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 4.1 What Is a CronJob?",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The CronJob concept page defines CronJob as creating one-time Jobs on a repeating Cron-format schedule."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Jobs are not cleaned up automatically by default; setting `ttlSecondsAfterFinished` enables automatic cleanup after a Job finishes.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Job docs describe TTL-based cleanup and state that an unset `ttlSecondsAfterFinished` means the TTL controller will not clean up the Job."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "CronJob schedules use the controller-manager's timezone, usually UTC.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **CronJob timezone** is based on the controller-manager's timezone (usually UTC). Plan schedules accordingly.",
+      "suggested_rewrite": "- **CronJob timezone** is based on the `kube-controller-manager` local timezone unless you set `.spec.timeZone`. Plan schedules accordingly.",
+      "lesson_point_url": null,
+      "rationale": "The CronJob docs support local-time interpretation by `kube-controller-manager`, but 'usually UTC' is deployment-specific and not a stable upstream guarantee."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Completed Job Pods usually remain available for log inspection, and deleting the Job deletes the Pods it created.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Job docs explicitly say completed Job Pods are usually not deleted immediately and that deleting the Job deletes the Pods it created."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Indexed Jobs assign unique completion indexes to Pods for parallel processing, and the feature is available on Kubernetes v1.21 or later.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/tasks/job/indexed-parallel-processing-static/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared Job page backs indexed completion semantics, and the indexed Job task page explicitly states the feature requires Kubernetes v1.21 or later."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "`concurrencyPolicy: Forbid` skips a new run if the previous Job is still running, while `Replace` terminates the current run and starts a new one.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 4.5 CronJob Concurrency Policy",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The CronJob concept page defines the exact controller behavior for `Forbid` and `Replace`."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/job/",
+      "title": "Jobs",
+      "tier": "standards",
+      "why_relevant": "Primary upstream reference for Job lifecycle, retries, completion modes, cleanup, and failure handling."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/",
+      "title": "CronJob",
+      "tier": "standards",
+      "why_relevant": "Primary upstream reference for schedules, concurrency policy, history limits, suspension, and timezone handling."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/",
+      "title": "Automatic Cleanup for Finished Jobs",
+      "tier": "standards",
+      "why_relevant": "Explains `ttlSecondsAfterFinished` and the lifecycle of finished Job cleanup."
+    }
+  ],
+  "notes": "Code blocks, tables, quiz items, and hands-on exercise steps were excluded per pipeline rules. Most prose claims are covered by the shared pool; one additional Kubernetes task page was needed for the Indexed Jobs version-floor claim.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

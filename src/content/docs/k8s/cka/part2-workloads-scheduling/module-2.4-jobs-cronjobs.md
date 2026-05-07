@@ -135,7 +135,7 @@ Jobs require either `Never` or `OnFailure`:
 
 | Policy | Behavior |
 |--------|----------|
-| `Never` | Create new pod on failure |
+| `Never` | Usually create a new pod after failure |
 | `OnFailure` | Restart container in same pod on failure |
 
 ```yaml
@@ -148,7 +148,7 @@ spec:
 
 > **Did You Know?**
 >
-> With `restartPolicy: Never`, failed attempts create new pods. With a backoffLimit of 4, you might see 5 pods (1 original + 4 retries). With `OnFailure`, you see fewer pods because containers restart in place.
+> With `restartPolicy: Never`, failed attempts usually create new pods until the Job hits its retry or deadline limits. With a backoffLimit of 4, you might see 5 pods (1 original + 4 retries). With `OnFailure`, you see fewer pods because containers restart in place.
 
 ---
 
@@ -412,7 +412,7 @@ spec:
 | Issue | Symptom | Debug Command |
 |-------|---------|---------------|
 | Image pull failure | Pod in ImagePullBackOff | `kubectl describe pod <pod>` |
-| Command failure | Job never completes | `kubectl logs job/<job-name>` |
+| Command failure | Job may not complete successfully | `kubectl logs job/<job-name>` |
 | Timeout | Job killed | Check `activeDeadlineSeconds` |
 | Too many retries | Multiple failed pods | Check `backoffLimit` |
 
@@ -455,9 +455,9 @@ kubectl get events --field-selector involvedObject.name=myjob
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| Using `restartPolicy: Always` | Job never completes | Use `Never` or `OnFailure` |
+| Using `restartPolicy: Always` | Job is rejected | Use `Never` or `OnFailure` |
 | Forgetting backoffLimit | Infinite retries | Set appropriate `backoffLimit` |
-| Wrong cron syntax | Job never triggers | Verify with crontab.guru |
+| Wrong cron syntax | Job may not trigger as expected | Verify with crontab.guru |
 | Not checking logs | Unknown failure cause | Always check `kubectl logs job/name` |
 | CronJob overlap | Resource contention | Set `concurrencyPolicy: Forbid` |
 
@@ -788,3 +788,9 @@ kubectl get job challenge-job
 ## Next Module
 
 [Module 2.5: Resource Management](../module-2.5-resource-management/) - Requests, limits, and QoS classes.
+
+## Sources
+
+- [Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Primary upstream reference for Job lifecycle, retries, completion modes, cleanup, and failure handling.
+- [CronJob](https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/) — Primary upstream reference for schedules, concurrency policy, history limits, suspension, and timezone handling.
+- [Automatic Cleanup for Finished Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/ttlafterfinished/) — Explains `ttlSecondsAfterFinished` and the lifecycle of finished Job cleanup.
