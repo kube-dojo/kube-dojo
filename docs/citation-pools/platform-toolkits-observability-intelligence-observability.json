@@ -1,0 +1,246 @@
+{
+  "section": "platform/toolkits/observability-intelligence/observability",
+  "modules": [
+    "platform/toolkits/observability-intelligence/observability/module-1.1-prometheus",
+    "platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling",
+    "platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry",
+    "platform/toolkits/observability-intelligence/observability/module-1.3-grafana",
+    "platform/toolkits/observability-intelligence/observability/module-1.4-loki",
+    "platform/toolkits/observability-intelligence/observability/module-1.5-tracing",
+    "platform/toolkits/observability-intelligence/observability/module-1.6-pixie",
+    "platform/toolkits/observability-intelligence/observability/module-1.7-hubble",
+    "platform/toolkits/observability-intelligence/observability/module-1.8-coroot",
+    "platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling"
+  ],
+  "generated_at": "2026-05-07T02:50:49+00:00",
+  "batch_count": 3,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://prometheus.io/docs/introduction/overview/",
+      "title": "Prometheus Overview",
+      "tier": "upstream",
+      "scope_notes": "Backs Prometheus as a pull-based metrics system with labeled time series, HTTP scraping, service discovery, local storage, recording rules, alert generation, and common ecosystem components such as Alertmanager and Grafana.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.1-prometheus",
+        "platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling",
+        "platform/toolkits/observability-intelligence/observability/module-1.3-grafana"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://prometheus.io/docs/prometheus/latest/configuration/configuration/",
+      "title": "Prometheus Configuration",
+      "tier": "upstream",
+      "scope_notes": "Backs Kubernetes service discovery roles, scrape configuration, relabeling-related target metadata, and the mechanics used to debug missing or mislabeled scrape targets in Kubernetes.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.1-prometheus"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://opentelemetry.io/docs/collector/",
+      "title": "OpenTelemetry Collector",
+      "tier": "upstream",
+      "scope_notes": "Backs the Collector as the vendor-neutral layer for receiving, processing, and exporting telemetry, including the receiver/processor/exporter pipeline model and backend-neutral architecture.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://opentelemetry.io/docs/specs/otlp/",
+      "title": "OTLP Specification 1.10.0",
+      "tier": "upstream",
+      "scope_notes": "Backs OTLP as the OpenTelemetry transport protocol, including gRPC and HTTP transport details, request/response behavior, default ports, retry semantics, and signal transport expectations.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://grafana.com/docs/grafana/latest/",
+      "title": "Grafana Documentation",
+      "tier": "upstream",
+      "scope_notes": "Broad official docs hub for Grafana dashboards, variables, data sources, panels, Explore, correlations, and operational workflows that connect metrics, logs, and traces.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling",
+        "platform/toolkits/observability-intelligence/observability/module-1.3-grafana"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://grafana.com/docs/grafana/latest/alerting/",
+      "title": "Grafana Alerting",
+      "tier": "upstream",
+      "scope_notes": "Backs Grafana-managed alert rules, evaluation behavior, notification routing, contact points, grouping, silences, and other alerting concepts relevant to dashboard-adjacent operations.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.3-grafana"
+      ]
+    },
+    {
+      "source_id": "S007",
+      "url": "https://github.com/OpenSLO/OpenSLO",
+      "title": "OpenSLO Specification",
+      "tier": "upstream",
+      "scope_notes": "Backs OpenSLO as a vendor-neutral specification for expressing SLOs, SLIs, objectives, alert policies, services, and budgeting methods in portable YAML.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.10-slo-tooling"
+      ]
+    },
+    {
+      "source_id": "S008",
+      "url": "https://grafana.com/docs/loki/latest/logql/",
+      "title": "Grafana Loki: Query Loki (LogQL)",
+      "tier": "upstream",
+      "scope_notes": "Backs Loki’s label-based query model, log streams, compressed chunk storage, label indexing instead of full-content indexing, and LogQL basics for log exploration and metric extraction from logs.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.4-loki"
+      ]
+    },
+    {
+      "source_id": "S009",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+      "title": "OpenTelemetry: Traces",
+      "tier": "upstream",
+      "scope_notes": "Backs core tracing concepts: traces, spans, parent-child relationships, span context, attributes, events, links, status, and how a request path is represented across services.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.5-tracing",
+        "platform/toolkits/observability-intelligence/observability/module-1.6-pixie"
+      ]
+    },
+    {
+      "source_id": "S010",
+      "url": "https://opentelemetry.io/docs/concepts/sampling/",
+      "title": "OpenTelemetry: Sampling",
+      "tier": "upstream",
+      "scope_notes": "Backs head-vs-tail sampling concepts, cost-control rationale, and practical guidance about reducing trace volume while preserving useful signal.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.5-tracing"
+      ]
+    },
+    {
+      "source_id": "S011",
+      "url": "https://grafana.com/docs/tempo/latest/introduction/architecture/",
+      "title": "Grafana Tempo: Architecture",
+      "tier": "upstream",
+      "scope_notes": "Backs Tempo’s backend architecture, object-storage-based trace retention, TraceQL search, ingestion/query path, and tradeoff discussions for self-managed tracing backends.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.5-tracing"
+      ]
+    },
+    {
+      "source_id": "S012",
+      "url": "https://github.com/parca-dev/parca-agent",
+      "title": "Parca Agent README",
+      "tier": "upstream",
+      "scope_notes": "Backs Parca Agent claims: always-on sampling profiler, eBPF-based stack collection, Kubernetes/systemd target discovery, zero code changes or restarts, supported languages, Linux/BTF requirements, and currently supported profile scope.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling"
+      ]
+    },
+    {
+      "source_id": "S013",
+      "url": "https://github.com/parca-dev/parca",
+      "title": "Parca README",
+      "tier": "upstream",
+      "scope_notes": "Backs Parca server/product claims: continuous profiling over time, line-level analysis, pprof interoperability, optimized storage/querying, infrastructure-wide aggregation, and comparison across dimensions for regression analysis.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling"
+      ]
+    },
+    {
+      "source_id": "S014",
+      "url": "https://grafana.com/docs/pyroscope/latest/introduction/pyroscope-in-grafana/",
+      "title": "Pyroscope and Profiling in Grafana",
+      "tier": "upstream",
+      "scope_notes": "Backs Pyroscope/Grafana workflow claims: continuous profiling in Grafana, correlation with metrics/logs/traces, traces-to-profiles navigation, and dashboard integration.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling"
+      ]
+    },
+    {
+      "source_id": "S015",
+      "url": "https://grafana.com/docs/pyroscope/latest/configure-client/profile-types/",
+      "title": "Pyroscope Profile Types and Instrumentation",
+      "tier": "upstream",
+      "scope_notes": "Backs profile-type claims and caveats: CPU, memory, goroutine, mutex, block, wall, heap, lock, exceptions; also backs that eBPF auto-instrumentation primarily provides CPU profiling while other types depend on language/runtime instrumentation.",
+      "relevant_modules": [
+        "platform/toolkits/observability-intelligence/observability/module-1.9-continuous-profiling"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://sre.google/workbook/alerting-on-slos/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://sloth.dev/introduction/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://pyrra.dev/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://www.w3.org/TR/trace-context/",
+      "reason": "http_403",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.px.dev/about-pixie/what-is-pixie/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.px.dev/installing-pixie/requirements/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.cilium.io/en/stable/observability/hubble/setup.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.cilium.io/en/stable/observability/hubble/hubble-cli.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.cilium.io/en/stable/observability/metrics.html",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://ebpf.io/what-is-ebpf/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.coroot.com/installation/architecture/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.coroot.com/inspections/slo/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.coroot.com/profiling/overview/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://research.google/pubs/google-wide-profiling-a-continuous-profiling-infrastructure-for-data-centers/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}
