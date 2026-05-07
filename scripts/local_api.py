@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import re
 import sqlite3
 import subprocess
@@ -4175,7 +4176,11 @@ def build_delivery_status(repo_root: Path) -> dict[str, Any]:
     }
 
     try:
-        health_cmd = [_venv_python_for_repo(repo_root), "scripts/check_site_health.py"]
+        try:
+            health_exe = _venv_python_for_repo(repo_root)
+        except FileNotFoundError:
+            health_exe = shutil.which("python") or "python"
+        health_cmd = [health_exe, "scripts/check_site_health.py"]
         result = subprocess.run(
             health_cmd,
             cwd=repo_root,
@@ -6995,6 +7000,11 @@ def build_api_schema() -> dict[str, Any]:
                 "desc": "UK translation queue",
                 "query": ["section=...", "freshness=1 (slow git walk)"],
             },
+            {
+                "path": "/api/translation/v2/enqueue",
+                "desc": "Enqueue done modules from quality board into translation queue",
+                "query": ["from_quality=done", "dry_run=1"],
+            },
             {"path": "/api/labs/status", "desc": "Labs summary"},
             {"path": "/api/ztt/status", "desc": "Zero-to-Terminal pilot status"},
             {"path": "/api/git/worktree", "desc": "Dirty entries in the PRIMARY repo only"},
@@ -7132,6 +7142,110 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         from pipeline_v2.cli import _build_status_report as build_v2_status_report
         from status import _enrich_v2_with_per_track
         return 200, _enrich_v2_with_per_track(build_v2_status_report(db_path)), "application/json; charset=utf-8"
+    if path == "/api/translation/v2/enqueue":
+        from translation_v2 import (
+            ControlPlane,
+            TRANSLATE_ESTIMATED_USD,
+            TRANSLATE_MODEL,
+            _has_pending_or_leased_job,
+        )
+
+        from_quality = query.get("from_quality", [None])[0]
+        if from_quality != "done":
+            return (
+                400,
+                {"error": "invalid_from_quality", "supported": ["done"]},
+                "application/json; charset=utf-8",
+            )
+
+        raw_dry_run = query.get("dry_run", ["0"])[0]
+        dry_run = raw_dry_run not in ("0", "false", "False", "FALSE", "")
+
+        board = build_quality_board(repo_root)
+        modules = board.get("modules")
+        if not isinstance(modules, list):
+            modules = []
+
+        total_modules = len(modules)
+        done_modules = [
+            item.get("module_key")
+            for item in modules
+            if str(item.get("status") or "").lower() == "done"
+        ]
+        done_modules = [key for key in done_modules if isinstance(key, str)]
+
+        db_path = repo_root / ".pipeline" / "translation_v2.db"
+        control_plane = ControlPlane(repo_root=repo_root, db_path=db_path)
+
+        skipped_reasons = {
+            "already_pending_or_leased": 0,
+            "already_completed": 0,
+            "previously_failed": 0,
+            "not_done": max(total_modules - len(done_modules), 0),
+        }
+        enqueued: list[str] = []
+
+        if db_path.exists():
+            conn = sqlite3.connect(db_path)
+            try:
+                for module_key in done_modules:
+                    if _has_pending_or_leased_job(db_path, module_key):
+                        skipped_reasons["already_pending_or_leased"] += 1
+                        continue
+
+                    terminal_row = conn.execute(
+                        "SELECT queue_state FROM jobs WHERE module_key = ? AND queue_state IN ('failed', 'completed') LIMIT 1",
+                        (module_key,),
+                    ).fetchone()
+                    if terminal_row is not None:
+                        if terminal_row[0] == "completed":
+                            skipped_reasons["already_completed"] += 1
+                        else:
+                            skipped_reasons["previously_failed"] += 1
+                        continue
+
+                    if not dry_run:
+                        control_plane.enqueue(
+                            module_key,
+                            phase="write",
+                            model=TRANSLATE_MODEL,
+                            priority=100 + len(enqueued),
+                            requested_calls=1,
+                            estimated_usd=TRANSLATE_ESTIMATED_USD,
+                        )
+                    enqueued.append(module_key)
+            finally:
+                conn.close()
+        else:
+            if not dry_run:
+                for module_key in done_modules:
+                    control_plane.enqueue(
+                        module_key,
+                        phase="write",
+                        model=TRANSLATE_MODEL,
+                        priority=100 + len(enqueued),
+                        requested_calls=1,
+                        estimated_usd=TRANSLATE_ESTIMATED_USD,
+                    )
+                    enqueued.append(module_key)
+            else:
+                enqueued = done_modules
+
+        return (
+            200,
+            {
+                "enqueued": len(enqueued),
+                "skipped": (
+                    skipped_reasons["already_pending_or_leased"]
+                    + skipped_reasons["already_completed"]
+                    + skipped_reasons["previously_failed"]
+                    + skipped_reasons["not_done"]
+                ),
+                "skipped_reasons": skipped_reasons,
+                "dry_run": dry_run,
+            },
+            "application/json; charset=utf-8",
+        )
     if path == "/api/translation/v2/status":
         section = query.get("section", [None])[0]
         # Dashboard hot path skips the git-per-file freshness walk; callers
