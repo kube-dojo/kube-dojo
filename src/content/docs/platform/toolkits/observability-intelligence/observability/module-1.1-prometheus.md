@@ -45,7 +45,7 @@ The difficult part is that Prometheus rewards precise thinking and punishes casu
 
 ## Prometheus as an Operating Model
 
-Prometheus is a metrics system built around a simple contract: targets expose measurements over HTTP, and the Prometheus server periodically scrapes those targets. This pull model sounds modest, but it changes how operators reason about availability. If Prometheus cannot scrape a target, the failure itself becomes observable through the `up` metric, which is often the first signal that a network policy, Service selector, endpoint, or application process has broken.
+Prometheus is a metrics system built around a simple contract: [targets expose measurements over HTTP, and the Prometheus server periodically scrapes those targets](https://prometheus.io/docs/introduction/overview/). This pull model sounds modest, but it changes how operators reason about availability. If Prometheus cannot scrape a target, the failure itself becomes observable through the `up` metric, which is often the first signal that a network policy, Service selector, endpoint, or application process has broken.
 
 The pull model also centralizes scrape frequency, timeout behavior, target labels, and failure visibility inside the monitoring system. Application teams do not need to embed a complex agent that knows where the monitoring backend lives, and platform teams can inspect the target list from the Prometheus UI during an incident. The trade-off is reachability: Prometheus must be able to make an HTTP request to each target, so private networks, pod security, and service discovery rules become part of the monitoring design.
 
@@ -74,7 +74,7 @@ The pull model also centralizes scrape frequency, timeout behavior, target label
 
 A useful mental model is to treat Prometheus as a controlled polling engine plus a label-aware database. The polling engine decides what exists and whether it can be reached, while the database stores samples with metric names and labels. PromQL then works over those labeled samples, so the quality of the answer depends heavily on the quality of labels chosen during instrumentation and service discovery.
 
-The local storage engine, often called the TSDB, stores time series as samples over time. A time series is not just a metric name; it is the metric name plus one exact set of labels. `http_requests_total{service="checkout",status="500"}` and `http_requests_total{service="checkout",status="200"}` are different series, which is why label design becomes an operational concern rather than a documentation detail.
+The local storage engine, often called the TSDB, stores time series as samples over time. [A time series is not just a metric name; it is the metric name plus one exact set of labels.](https://prometheus.io/docs/concepts/) `http_requests_total{service="checkout",status="500"}` and `http_requests_total{service="checkout",status="200"}` are different series, which is why label design becomes an operational concern rather than a documentation detail.
 
 > **Stop and think:** If a platform team adds `user_id` as a label to every HTTP request metric, how many new time series could one busy endpoint create in a day, and what part of Prometheus would feel that cost first?
 
@@ -99,9 +99,9 @@ That boundary matters because many teams try to compensate for weak traces or lo
 
 ## Scraping, Targets, and the Pull Model
 
-A scrape is an HTTP request from Prometheus to a target endpoint, usually `/metrics`, where the target returns measurements in the Prometheus exposition format. Each scrape produces a batch of samples at one point in time, and Prometheus attaches labels such as `job` and `instance` before storing them. When scrapes fail, Prometheus records `up{...} == 0`, which gives operators a direct way to distinguish "the app is reporting bad numbers" from "the monitoring system cannot reach the app."
+A scrape is an HTTP request from Prometheus to a target endpoint, usually `/metrics`, where the target returns measurements in the Prometheus exposition format. Each scrape produces a batch of samples at one point in time, and [Prometheus attaches labels such as `job` and `instance` before storing them. When scrapes fail, Prometheus records `up{...} == 0`](https://prometheus.io/docs/concepts/jobs_instances/), which gives operators a direct way to distinguish "the app is reporting bad numbers" from "the monitoring system cannot reach the app."
 
-A typical Kubernetes scrape path begins with metadata, not with HTTP. Prometheus asks the Kubernetes API for Pods, Services, Endpoints, or EndpointSlices, then relabeling rules decide which discovered objects become scrape targets. This distinction is essential: a healthy application can be invisible to Prometheus if service discovery filters it out, and a dead endpoint can remain visible if stale metadata still matches the discovery rule until Kubernetes updates the endpoint list.
+A typical Kubernetes scrape path begins with metadata, not with HTTP. [Prometheus asks the Kubernetes API for Pods, Services, Endpoints, or EndpointSlices, then relabeling rules decide which discovered objects become scrape targets.](https://prometheus.io/docs/prometheus/latest/configuration/configuration/) This distinction is essential: a healthy application can be invisible to Prometheus if service discovery filters it out, and a dead endpoint can remain visible if stale metadata still matches the discovery rule until Kubernetes updates the endpoint list.
 
 ```ascii
 +--------------------------------------------------------------------------------+
@@ -132,7 +132,7 @@ A typical Kubernetes scrape path begins with metadata, not with HTTP. Prometheus
 +--------------------------------------------------------------------------------+
 ```
 
-Pull and push models both appear in monitoring systems, and neither is universally superior. Prometheus chooses pull for normal services because it makes target health visible and gives the server control over scrape intervals. Pushgateway exists for short-lived batch jobs that would disappear before Prometheus could scrape them, but it should not become the default path for long-running services because it weakens the clean "can I reach this target" signal.
+Pull and push models both appear in monitoring systems, and neither is universally superior. Prometheus chooses pull for normal services because it makes target health visible and gives the server control over scrape intervals. [Pushgateway exists for short-lived batch jobs that would disappear before Prometheus could scrape them, but it should not become the default path for long-running services](https://prometheus.io/docs/practices/pushing/) because it weakens the clean "can I reach this target" signal.
 
 ```ascii
 +------------------------------------+    +------------------------------------+
@@ -183,7 +183,7 @@ Step two is to filter the failure series. Most HTTP dashboards treat 5xx as serv
 http_requests_total{service="checkout",status=~"5.."}
 ```
 
-Step three is to convert the counter into a per-second rate over a range window. Counters reset when a process restarts, so subtracting two raw samples by hand is fragile. `rate()` understands counter resets and estimates the average per-second increase across the selected time range.
+Step three is to convert the counter into a per-second rate over a range window. Counters reset when a process restarts, so subtracting two raw samples by hand is fragile. [`rate()` understands counter resets and estimates the average per-second increase across the selected time range.](https://prometheus.io/docs/prometheus/2.55/querying/functions/)
 
 ```promql
 rate(http_requests_total{service="checkout",status=~"5.."}[5m])
@@ -217,7 +217,7 @@ sum by (service, route) (
 )
 ```
 
-The same layering pattern works for latency histograms. Histograms store cumulative bucket counters, so you first rate the bucket counters, then aggregate by the labels that should define one distribution, and then ask `histogram_quantile()` to estimate the percentile. The `le` label must remain in the aggregation because it identifies the bucket boundaries.
+The same layering pattern works for latency histograms. [Histograms store cumulative bucket counters, so you first rate the bucket counters, then aggregate by the labels that should define one distribution, and then ask `histogram_quantile()` to estimate the percentile. The `le` label must remain in the aggregation because it identifies the bucket boundaries.](https://prometheus.io/docs/prometheus/2.55/querying/functions/)
 
 ```promql
 histogram_quantile(
@@ -232,7 +232,7 @@ histogram_quantile(
 
 You destroyed the bucket boundary labels that describe how many requests were less than or equal to each latency threshold. Without those boundaries, Prometheus has only a merged number and cannot reconstruct the distribution. This is a common example of a query that is syntactically close to correct but semantically wrong because it aggregates away the label that gives the function meaning.
 
-`rate()` and `irate()` are both useful, but they answer different operational questions. `rate()` uses the full range and is therefore better for alerting, SLOs, and dashboards that should not flap on a single scrape. `irate()` uses the last two samples and is better for short debugging sessions where you want to see an immediate spike while accepting that the value is noisy.
+`rate()` and `irate()` are both useful, but they answer different operational questions. [`rate()` uses the full range and is therefore better for alerting, SLOs, and dashboards that should not flap on a single scrape. `irate()` uses the last two samples and is better for short debugging sessions where you want to see an immediate spike while accepting that the value is noisy.](https://prometheus.io/docs/prometheus/3.9/querying/functions/)
 
 ```ascii
 +--------------------------------------------------------------------------------+
@@ -260,7 +260,7 @@ PromQL also has failure modes around empty vectors and division by zero. If a de
 up{job="kubernetes-pods",service="checkout"} == 0
 ```
 
-Recording rules become useful once a query is expensive, reused, or semantically important. Instead of repeating the same service request-rate expression across several dashboards and alerts, you can evaluate it once and store the result as a new time series. That improves query speed, reduces repeated work, and creates a stable vocabulary for operational signals.
+Recording rules become useful once a query is expensive, reused, or semantically important. Instead of repeating the same service request-rate expression across several dashboards and alerts, [you can evaluate it once and store the result as a new time series. That improves query speed, reduces repeated work, and creates a stable vocabulary for operational signals.](https://prometheus.io/docs/practices/rules/)
 
 ```yaml
 groups:
@@ -308,7 +308,7 @@ kubectl -n payments get service payment-api -o yaml
 kubectl -n payments get endpointslice -l kubernetes.io/service-name=payment-api
 ```
 
-A correct Service for the example should select the same label used by the Pod template and should name the metrics port consistently. The port name matters because many ServiceMonitor configurations select endpoints by port name rather than by number. A numeric port mismatch is visible, but a name mismatch is easier to overlook during review.
+A correct Service for the example should select the same label used by the Pod template and should name the metrics port consistently. [The port name matters because many ServiceMonitor configurations select endpoints by port name rather than by number.](https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md) A numeric port mismatch is visible, but a name mismatch is easier to overlook during review.
 
 ```yaml
 apiVersion: v1
@@ -327,7 +327,7 @@ spec:
       targetPort: metrics
 ```
 
-Now inspect the ServiceMonitor selector. The selector matches Service labels, not Pod labels, which is another common source of confusion. The ServiceMonitor below selects Services labeled `app.kubernetes.io/name: payment-api`, then scrapes the endpoint named `metrics` at `/metrics` every fifteen seconds.
+Now inspect the ServiceMonitor selector. The selector matches Service labels, not Pod labels, which is another common source of confusion. [The ServiceMonitor below selects Services labeled `app.kubernetes.io/name: payment-api`, then scrapes the endpoint named `metrics` at `/metrics` every fifteen seconds.](https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md)
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
@@ -351,7 +351,7 @@ spec:
       scrapeTimeout: 10s
 ```
 
-The `release` label in this example is not universal; it depends on how your Prometheus Operator installation selects ServiceMonitor resources. Many Helm installations of `kube-prometheus-stack` configure Prometheus to select monitors with a release label matching the Helm release name. If your monitor is valid but Prometheus ignores it, inspect the Prometheus custom resource selector before changing application code.
+The `release` label in this example is not universal; it depends on how your Prometheus Operator installation selects ServiceMonitor resources. [Many Helm installations of `kube-prometheus-stack` configure Prometheus to select monitors with a release label matching the Helm release name.](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md) If your monitor is valid but Prometheus ignores it, inspect the Prometheus custom resource selector before changing application code.
 
 ```bash
 kubectl -n monitoring get prometheus -o yaml
@@ -392,7 +392,7 @@ spec:
               containerPort: 8080
 ```
 
-Raw Prometheus `kubernetes_sd_configs` expose Kubernetes metadata as labels beginning with `__meta_kubernetes_`. Relabeling rules can keep only annotated Pods, set the metrics path, and copy useful Kubernetes labels into normal labels. This is powerful, but it is also sharp: one incorrect `keep` rule can drop every target before the scrape stage.
+[Raw Prometheus `kubernetes_sd_configs` expose Kubernetes metadata as labels beginning with `__meta_kubernetes_`.](https://prometheus.io/docs/prometheus/latest/configuration/configuration/) Relabeling rules can keep only annotated Pods, set the metrics path, and copy useful Kubernetes labels into normal labels. This is powerful, but it is also sharp: one incorrect `keep` rule can drop every target before the scrape stage.
 
 ```yaml
 scrape_configs:
@@ -471,7 +471,7 @@ groups:
 
 The `for` field is not a way to hide bad signals; it is a way to align alert timing with response value. A one-scrape spike can be useful on a dashboard but harmful as a page because it creates noise without giving humans enough evidence to act. A sustained ten-minute breach of an error-ratio threshold is more likely to represent a real customer-impacting symptom.
 
-Alertmanager receives firing alerts from Prometheus and decides how humans see them. It groups related alerts so a regional outage does not produce hundreds of separate notifications, deduplicates repeated alerts, supports silences during planned work, and routes by labels such as `team`, `severity`, or `service`. Prometheus decides that a condition is true; Alertmanager decides how to communicate it.
+Alertmanager receives firing alerts from Prometheus and decides how humans see them. [It groups related alerts so a regional outage does not produce hundreds of separate notifications, deduplicates repeated alerts, supports silences during planned work, and routes by labels such as `team`, `severity`, or `service`.](https://prometheus.io/docs/alerting/latest/alertmanager/) Prometheus decides that a condition is true; Alertmanager decides how to communicate it.
 
 ```yaml
 global:
@@ -561,7 +561,7 @@ The severity of a target-down alert depends on ownership and blast radius. A sin
 
 ## Storage, Cardinality, and Production Scale
 
-Prometheus stores one time series for each unique metric name and label set, so scale is often driven more by cardinality than by raw traffic volume. A service handling many requests can be cheap to monitor if it emits a small, stable set of labeled counters and histograms. A low-traffic service can be expensive if it emits labels for user IDs, request IDs, raw URLs, exception messages, or dynamically generated tenant keys.
+Prometheus stores one time series for each unique metric name and label set, so scale is often driven more by cardinality than by raw traffic volume. A service handling many requests can be cheap to monitor if it emits a small, stable set of labeled counters and histograms. A low-traffic service can be expensive if it emits [labels for user IDs, request IDs, raw URLs, exception messages, or dynamically generated tenant keys](https://prometheus.io/docs/practices/naming/).
 
 High cardinality has several symptoms. Memory usage rises because active series must be indexed, query latency increases because selectors match more series, compaction gets heavier, and restarts may take longer. The system may appear fine until a deployment or traffic spike creates many new label combinations, at which point the monitoring system becomes another incident participant.
 
@@ -603,7 +603,7 @@ If one service owns most of the series for a shared metric, inspect that service
 +--------------------------------------------------------------------------------+
 ```
 
-Cardinality control belongs in multiple places. Application libraries should avoid unbounded labels, code review should treat metric labels as production API, scrape configs can drop unsafe labels, and Prometheus can enforce sample limits on noisy scrape jobs. No single layer is enough because a platform team may not control every exporter or application library.
+Cardinality control belongs in multiple places. Application libraries should avoid unbounded labels, code review should treat metric labels as production API, [scrape configs can drop unsafe labels, and Prometheus can enforce sample limits on noisy scrape jobs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/). No single layer is enough because a platform team may not control every exporter or application library.
 
 ```yaml
 scrape_configs:
@@ -623,7 +623,7 @@ scrape_configs:
 
 Metric relabeling can protect Prometheus from some bad labels after scraping, but it is not a substitute for fixing instrumentation. Prometheus still has to scrape and parse the response before applying metric relabeling, and the application still spends CPU creating those labels. Treat relabeling as a guardrail and migration tool, not as permission to emit unbounded metrics.
 
-Retention decisions should reflect query needs and architecture. Local Prometheus storage is excellent for recent operational investigation, but long-term reporting often belongs in a remote storage system designed for durable retention and larger historical queries. Keeping years of data in a single local Prometheus server usually creates operational risk without giving users a good analytics experience.
+Retention decisions should reflect query needs and architecture. [Local Prometheus storage is excellent for recent operational investigation, but long-term reporting often belongs in a remote storage system designed for durable retention and larger historical queries.](https://prometheus.io/docs/introduction/overview/) Keeping years of data in a single local Prometheus server usually creates operational risk without giving users a good analytics experience.
 
 ```yaml
 server:
@@ -644,7 +644,7 @@ remote_write:
       max_shards: 8
 ```
 
-Federation is different from remote write. Federation lets one Prometheus scrape selected time series from another Prometheus, often for aggregated regional or global views. Remote write streams raw or selected samples to a storage backend, while federation usually pulls curated metrics. The right choice depends on whether you need durable raw history, aggregated status, or a hierarchy of operational views.
+Federation is different from remote write. [Federation lets one Prometheus scrape selected time series from another Prometheus, often for aggregated regional or global views. Remote write streams raw or selected samples to a storage backend, while federation usually pulls curated metrics.](https://prometheus.io/docs/prometheus/latest/federation/) The right choice depends on whether you need durable raw history, aggregated status, or a hierarchy of operational views.
 
 ```yaml
 scrape_configs:
@@ -681,7 +681,7 @@ The USE pattern is a practical starting point for resources: utilization, satura
 | Saturation | Queues and pools | Queue depth, active connections, pending work | Increase workers or reduce admission |
 | Cost | Platform economics | Samples ingested, active series, storage bytes | Control cardinality and retention |
 
-Dashboard queries deserve review because they run repeatedly and shape operational decisions. A query that scans every series every few seconds can become an invisible load generator. A panel that groups by `pod` may help a developer during debugging but overload an executive overview. Good dashboards use recording rules for shared expensive expressions and reserve high-cardinality breakdowns for drill-down pages.
+Dashboard queries deserve review because they run repeatedly and shape operational decisions. [A query that scans every series every few seconds can become an invisible load generator. A panel that groups by `pod` may help a developer during debugging but overload an executive overview. Good dashboards use recording rules for shared expensive expressions](https://prometheus.io/docs/prometheus/latest/querying/basics/) and reserve high-cardinality breakdowns for drill-down pages.
 
 Prometheus has its own metrics for query and scrape health. If dashboards slow down, do not guess only at Grafana. Inspect Prometheus query duration, rule evaluation duration, scrape sample counts, and TSDB series metrics. The monitoring system is itself a production service, and it should have dashboards and alerts like any other platform component.
 
@@ -1057,3 +1057,20 @@ kubectl delete namespace monitoring
 ## Next Module
 
 Continue to [Module 1.2: OpenTelemetry](../module-1.2-opentelemetry/) to learn how vendor-neutral instrumentation connects metrics, traces, and logs across services.
+
+## Sources
+
+- [Prometheus Overview](https://prometheus.io/docs/introduction/overview/) — Backs Prometheus as a pull-based metrics system with labeled time series, HTTP scraping, service discovery, local storage, recording rules, alert generation, and common ecosystem components such as Alertmanager and Grafana.
+- [prometheus.io: jobs instances](https://prometheus.io/docs/concepts/jobs_instances/) — The jobs/instances concept page explicitly defines the auto-generated labels and the `up` time series semantics.
+- [prometheus.io: concepts](https://prometheus.io/docs/concepts/) — This is a direct statement from the Prometheus data model documentation.
+- [prometheus.io: naming](https://prometheus.io/docs/practices/naming/) — Prometheus naming guidance explicitly warns that every unique label set is a new series and warns against unbounded labels.
+- [prometheus.io: pushing](https://prometheus.io/docs/practices/pushing/) — Prometheus best-practice guidance states both the intended Pushgateway use case and its tradeoffs.
+- [Prometheus Configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/) — Backs Kubernetes service discovery roles, scrape configuration, relabeling-related target metadata, and the mechanics used to debug missing or mislabeled scrape targets in Kubernetes.
+- [prometheus.io: functions](https://prometheus.io/docs/prometheus/2.55/querying/functions/) — The Prometheus query functions documentation explicitly defines counter behavior and `rate()` semantics.
+- [prometheus.io: functions](https://prometheus.io/docs/prometheus/3.9/querying/functions/) — The official PromQL function reference distinguishes `irate()` from `rate()` on exactly these terms.
+- [prometheus.io: rules](https://prometheus.io/docs/practices/rules/) — Prometheus recording-rules guidance explicitly describes precomputing reused or expensive expressions.
+- [raw.githubusercontent.com: api.md](https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md) — The Operator API reference on raw GitHub directly documents both `ServiceMonitor` purpose and `serviceMonitorSelector` behavior.
+- [github.com: README.md](https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md) — The kube-prometheus-stack README documents the default release-tag-based monitor discovery behavior.
+- [prometheus.io: alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/) — The official Alertmanager concepts page directly documents these responsibilities.
+- [prometheus.io: federation](https://prometheus.io/docs/prometheus/latest/federation/) — The federation documentation explicitly defines federation as scraping selected time series from another Prometheus server.
+- [prometheus.io: basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) — The querying basics page explicitly warns about slow or overload-prone queries and recommends pre-recording expensive expressions.

@@ -1,0 +1,357 @@
+{
+  "module_key": "platform/toolkits/observability-intelligence/observability/module-1.1-prometheus",
+  "module_path": "src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.1-prometheus.md",
+  "research_run_id": "2026-05-07T02:57:25+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-observability-intelligence-observability.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Prometheus uses a pull model in which targets expose metrics over HTTP and the Prometheus server periodically scrapes them.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prometheus as an Operating Model",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This is a core Prometheus architecture claim directly covered by the shared Prometheus overview source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Prometheus generates the `up` series for each scraped target and automatically attaches `job` and `instance` labels; `up` is 1 on successful scrape and 0 on failure.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prometheus as an Operating Model; section: Scraping, Targets, and the Pull Model",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/concepts/jobs_instances/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The jobs/instances concept page explicitly defines the auto-generated labels and the `up` time series semantics."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "In Prometheus, a time series is identified by the metric name plus its exact label set, and any label change creates a new series.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prometheus as an Operating Model",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/concepts/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This is a direct statement from the Prometheus data model documentation."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "High-cardinality labels such as user IDs, request IDs, and other unbounded values create new time series for each unique value and can dramatically increase stored data.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prometheus as an Operating Model; section: Storage, Cardinality, and Production Scale",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/practices/naming/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Prometheus naming guidance explicitly warns that every unique label set is a new series and warns against unbounded labels."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The Pushgateway is meant for limited cases such as short-lived service-level batch jobs and should not be the default path for long-running services because it removes normal `up` health visibility and can retain stale series.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Scraping, Targets, and the Pull Model",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/practices/pushing/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Prometheus best-practice guidance states both the intended Pushgateway use case and its tradeoffs."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Prometheus Kubernetes service discovery works from Kubernetes objects such as Pods, Services, Endpoints, and EndpointSlices, and relabeling determines which discovered objects become scrape targets.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Scraping, Targets, and the Pull Model",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared configuration source covers Kubernetes SD roles and relabeling mechanics."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "For Kubernetes `role: pod`, Prometheus exposes pod labels, annotations, namespace, pod name, and container-port metadata as `__meta_kubernetes_*` labels for relabeling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Scraping, Targets, and the Pull Model; section: Worked Example: Fixing Kubernetes Service Discovery",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared configuration source documents the pod SD role and its exposed meta labels."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Counters only increase or reset, and `rate()` calculates the per-second average rate of increase across a range while handling counter resets, making it appropriate for alerts.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Building PromQL From a Symptom",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/prometheus/2.55/querying/functions/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Prometheus query functions documentation explicitly defines counter behavior and `rate()` semantics."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Classic histogram buckets are cumulative and `histogram_quantile()` requires the `le` label to remain in the aggregation for classic histograms.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Building PromQL From a Symptom; section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/prometheus/2.55/querying/functions/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official query functions documentation directly states the `le` requirement for classic histograms."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "`irate()` uses only the last two samples and is intended for volatile debugging views, while `rate()` is the recommended choice for alerts and slow-moving counters.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Building PromQL From a Symptom",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/prometheus/3.9/querying/functions/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official PromQL function reference distinguishes `irate()` from `rate()` on exactly these terms."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Recording rules precompute frequently reused or expensive expressions into new time series so later queries can be faster and more consistent.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Building PromQL From a Symptom; section: Alerting Rules, Recording Rules, and Human Action",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/practices/rules/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Prometheus recording-rules guidance explicitly describes precomputing reused or expensive expressions."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "In Prometheus Operator, `ServiceMonitor` defines how a group of services should be scraped, and `Prometheus` or `PrometheusAgent` selects `ServiceMonitor` objects using label and namespace selectors.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Fixing Kubernetes Service Discovery",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Operator API reference on raw GitHub directly documents both `ServiceMonitor` purpose and `serviceMonitorSelector` behavior."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "For a `ServiceMonitor` endpoint, `port` refers to the Service port name and takes precedence over `targetPort`, while `targetPort` refers to the Pod container port behind the Service.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Fixing Kubernetes Service Discovery",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Operator API reference precisely defines `port` and `targetPort` for ServiceMonitor endpoints."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "By default, kube-prometheus-stack discovers PodMonitors and ServiceMonitors in its namespace that carry the same release tag as the Prometheus Operator release.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Worked Example: Fixing Kubernetes Service Discovery; section: Hands-On Exercise, Step 4",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kube-prometheus-stack README documents the default release-tag-based monitor discovery behavior."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Alertmanager handles grouping, deduplication, silencing, inhibition, and routing of alerts to receivers.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Alerting Rules, Recording Rules, and Human Action",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/alerting/latest/alertmanager/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official Alertmanager concepts page directly documents these responsibilities."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Prometheus scrape configuration supports per-scrape `sample_limit`, `label_limit`, and metric relabeling as guardrails against noisy or unsafe metrics.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Storage, Cardinality, and Production Scale",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "These configuration fields and relabeling mechanics are documented in the shared configuration source."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Prometheus local storage is single-node in scope, stores data in a local TSDB, keeps the current ingest block in memory, and uses remote-storage integrations when more durability or scale is needed.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Storage, Cardinality, and Production Scale; section: Did You Know",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": "https://prometheus.io/docs/prometheus/latest/storage/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The storage documentation directly states the single-node limits, local TSDB behavior, and remote storage interfaces."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "Federation allows one Prometheus server to scrape selected time series from another Prometheus server, which is different from remote write sending samples to a remote backend.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Storage, Cardinality, and Production Scale",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/prometheus/latest/federation/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The federation documentation explicitly defines federation as scraping selected time series from another Prometheus server."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "PromQL queries over very large or high-cardinality result sets can time out or overload the server or browser, and expensive repeated queries should be pre-recorded.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Dashboards, SLOs, and Query Review",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/prometheus/latest/querying/basics/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The querying basics page explicitly warns about slow or overload-prone queries and recommends pre-recording expensive expressions."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "The RED method is the named dashboard pattern of rate, errors, and duration for request-driven services.",
+      "claim_class": "standard",
+      "span_hint": "section: Dashboards, SLOs, and Query Review",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://www.weave.works/blog/the-red-method-key-metrics-for-microservices-architecture/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The module names a specific observability method, but the obvious primary source is off the current allowlist."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "The USE method is the named resource-observability pattern of utilization, saturation, and errors.",
+      "claim_class": "standard",
+      "span_hint": "section: Dashboards, SLOs, and Query Review",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://www.brendangregg.com/usemethod.html",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The module names a specific operations method, but the canonical explanatory source is off the current allowlist."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "The kube-prometheus-stack chart installs a cluster-monitoring stack including Prometheus Operator, Prometheus, Alertmanager, Grafana, and exporters.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Hands-On Exercise, Step 1",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/README.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The chart README explicitly describes the installed monitoring components."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://prometheus.io/docs/introduction/overview/",
+      "title": "Prometheus Overview",
+      "tier": "upstream",
+      "why_relevant": "Best short upstream refresher on Prometheus architecture, pull scraping, labels, rules, and core components."
+    },
+    {
+      "url": "https://prometheus.io/docs/prometheus/latest/configuration/configuration/",
+      "title": "Prometheus Configuration",
+      "tier": "upstream",
+      "why_relevant": "Direct reference for Kubernetes service discovery roles, relabeling, scrape limits, and other configuration details used throughout the module."
+    },
+    {
+      "url": "https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/Documentation/api-reference/api.md",
+      "title": "Prometheus Operator API Reference",
+      "tier": "upstream",
+      "why_relevant": "Useful for checking `ServiceMonitor`, `Prometheus`, and `PrometheusRule` field semantics when debugging operator-managed scraping."
+    }
+  ],
+  "notes": "Excluded code blocks, tables, quiz prompts/answers, and clearly illustrative incident setup prose. No rewrite dispositions were needed. The RED and USE method references likely need allowlist review if they are to remain as named methods with inline citations.",
+  "_schema_issues": [],
+  "rejected_urls": [
+    {
+      "url": "https://prometheus.io/docs/prometheus/2.54/configuration/alerting_rules/",
+      "reason": "http_404",
+      "at_step": "research_validation",
+      "agent_proposed_tier": "upstream"
+    }
+  ]
+}
