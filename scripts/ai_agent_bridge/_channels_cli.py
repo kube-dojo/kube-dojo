@@ -14,6 +14,7 @@ ab channel list
 ab channel info <name>
 ab channel context <name> [--edit] [--show]
 ab channel tail <name> [--n N] [--thread TID]
+ab channel watch <thread_id> [--follow] [--event-stream]
 
 ab post <channel> <body> [--to A,...] [--parent ID] [--corr ID]
 ab p <channel> <agent> <body>                    # shorthand
@@ -42,6 +43,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from . import _channels
+from ._channels_watch import watch_channel_events
 
 # ── argparse registration ────────────────────────────────────────────
 
@@ -123,6 +125,23 @@ def register_channel_commands(subparsers: Any) -> None:
     tail_parser.add_argument(
         "--json", action="store_true",
         help="Output as JSON instead of human-readable",
+    )
+
+    # ab channel watch
+    watch_parser = channel_sub.add_parser(
+        "watch",
+        help="Replay and optionally follow progress events for one thread",
+    )
+    watch_parser.add_argument("thread_id", help="Thread ID to watch")
+    watch_parser.add_argument(
+        "--follow",
+        action="store_true",
+        help="Keep polling for newly appended events",
+    )
+    watch_parser.add_argument(
+        "--event-stream",
+        action="store_true",
+        help="Emit JSONL rows for machine readers",
     )
 
     # ── top-level: post ───────────────────────────────────────────
@@ -291,6 +310,8 @@ def _dispatch_channel_group(args) -> int:
         return _handle_channel_context(args)
     if sub == "tail":
         return _handle_channel_tail(args)
+    if sub == "watch":
+        return _handle_channel_watch(args)
     print(f"unknown subcommand: channel {sub}", file=sys.stderr)
     return 2
 
@@ -664,6 +685,18 @@ def _handle_channel_tail(args) -> int:
         if len(m["body"]) > 200:
             print(f"   ... [{len(m['body']) - 200} more chars]")
     return 0
+
+
+def _handle_channel_watch(args) -> int:
+    try:
+        return watch_channel_events(
+            args.thread_id,
+            follow=args.follow,
+            event_stream=args.event_stream,
+        )
+    except ValueError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
 
 
 def _handle_post(args) -> int:
