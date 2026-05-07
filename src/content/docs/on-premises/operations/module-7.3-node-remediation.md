@@ -708,7 +708,7 @@ Continue to [Module 7.4: Observability Without Cloud Services](/on-premises/oper
 
 ## Sources
 
-- [kubernetes.io: taint and toleration](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) — General lesson point for an illustrative rewrite.
+- [kubernetes.io: taint and toleration](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) — Explains how the node lifecycle controller applies NotReady/unreachable taints and how pod tolerationSeconds governs eviction timing during node remediation.
 - [Node Problem Detector](https://github.com/kubernetes/node-problem-detector) — Supports claims about detecting kernel, filesystem, runtime, and hardware-adjacent node problems and surfacing them to Kubernetes as Events and NodeConditions for higher-level remediation.
 - [Cluster API MachineHealthCheck](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html) — Supports claims about MachineHealthCheck remediation triggers, unhealthy-condition timeouts, short-circuit safeguards, remediation limits, and delete-and-recreate behavior for unhealthy machines.
 - [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) — Backs rack/zone spread behavior, topology keys, default spread behavior, and cluster scheduling policy claims when distributing workloads across mixed racks or hardware domains.
