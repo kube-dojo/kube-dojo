@@ -26,9 +26,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          CHANGED_FILES=(
-            $(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
-          )
+          mapfile -t CHANGED_FILES < <(git diff --name-only "origin/${BASE_REF}"...HEAD -- 'src/content/docs/uk/**/*.md')
 
           if [ ${#CHANGED_FILES[@]} -eq 0 ]; then
             echo "No changed Ukrainian docs files detected; skipping russicism gate."

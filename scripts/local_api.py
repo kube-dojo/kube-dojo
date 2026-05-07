@@ -7179,6 +7179,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
 
         skipped_reasons = {
             "already_pending_or_leased": 0,
+            "already_completed": 0,
+            "previously_failed": 0,
             "not_done": max(total_modules - len(done_modules), 0),
         }
         enqueued: list[str] = []
@@ -7191,11 +7193,15 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
                         skipped_reasons["already_pending_or_leased"] += 1
                         continue
 
-                    failed_row = conn.execute(
-                        "SELECT 1 FROM jobs WHERE module_key = ? AND queue_state = 'failed' LIMIT 1",
+                    terminal_row = conn.execute(
+                        "SELECT queue_state FROM jobs WHERE module_key = ? AND queue_state IN ('failed', 'completed') LIMIT 1",
                         (module_key,),
                     ).fetchone()
-                    if failed_row is not None:
+                    if terminal_row is not None:
+                        if terminal_row[0] == "completed":
+                            skipped_reasons["already_completed"] += 1
+                        else:
+                            skipped_reasons["previously_failed"] += 1
                         continue
 
                     if not dry_run:
@@ -7229,7 +7235,12 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
             200,
             {
                 "enqueued": len(enqueued),
-                "skipped": skipped_reasons["already_pending_or_leased"] + skipped_reasons["not_done"],
+                "skipped": (
+                    skipped_reasons["already_pending_or_leased"]
+                    + skipped_reasons["already_completed"]
+                    + skipped_reasons["previously_failed"]
+                    + skipped_reasons["not_done"]
+                ),
                 "skipped_reasons": skipped_reasons,
                 "dry_run": dry_run,
             },

@@ -110,6 +110,8 @@ def test_translation_v2_enqueue_happy_path(tmp_path: Path, monkeypatch) -> None:
         "skipped": 2,
         "skipped_reasons": {
             "already_pending_or_leased": 1,
+            "already_completed": 0,
+            "previously_failed": 0,
             "not_done": 1,
         },
         "dry_run": False,
@@ -143,6 +145,8 @@ def test_translation_v2_enqueue_dry_run_does_not_mutate_db(tmp_path: Path, monke
         "skipped": 2,
         "skipped_reasons": {
             "already_pending_or_leased": 1,
+            "already_completed": 0,
+            "previously_failed": 0,
             "not_done": 1,
         },
         "dry_run": True,
@@ -157,3 +161,12 @@ def test_translation_v2_enqueue_dry_run_does_not_mutate_db(tmp_path: Path, monke
         conn.close()
     assert rows is not None
     assert rows[0] == 0
+
+
+def test_translation_v2_enqueue_rejects_invalid_from_quality(tmp_path: Path) -> None:
+    status_code, payload, _ = local_api.route_request(
+        tmp_path,
+        "/api/translation/v2/enqueue?from_quality=invalid",
+    )
+    assert status_code == 400
+    assert payload["error"] == "invalid_from_quality"
