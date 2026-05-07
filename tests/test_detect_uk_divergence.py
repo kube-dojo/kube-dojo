@@ -73,3 +73,24 @@ def test_missing_en_commit_reported(tmp_path: Path) -> None:
     summary = detect.detect_uk_divergence(repo_root=tmp_path, dry_run=True)
     assert summary["missing_en_commit"][0]["module_key"] == "prerequisites/zero-to-terminal/module-0.3-gamma"
     assert summary["stale"] == []
+
+
+def test_idempotent_enqueue(tmp_path: Path) -> None:
+    # A second identical call must not re-enqueue the same module.
+    # After the first call, _has_pending_or_leased_job returns True for the module,
+    # so the enqueue branch is skipped and summary["enqueued"] == [] on the second run.
+    # Uses a real ControlPlane against a tempdir SQLite db (no mocks).
+    _init_repo(tmp_path)
+    en_path, en_commit = _en(tmp_path, "prerequisites/zero-to-terminal/module-0.4-delta", "old")
+    _uk(tmp_path / "src/content/docs/uk/prerequisites/zero-to-terminal/module-0.4-delta.md", en_commit, en_path.relative_to(tmp_path))
+    _run(tmp_path, "add", "."); _run(tmp_path, "commit", "-m", "uk")
+
+    _write(en_path, "\n".join(["---", 'title: English', "---", "", "## Body", "", "changed", *[f"x{i}" for i in range(8)]]))
+    _run(tmp_path, "add", str(en_path)); _run(tmp_path, "commit", "-m", "en update")
+
+    db = tmp_path / ".pipeline/translation_v2.db"
+    summary1 = detect.detect_uk_divergence(repo_root=tmp_path, threshold=5, db_path=db)
+    assert summary1["enqueued"] == ["prerequisites/zero-to-terminal/module-0.4-delta"]
+
+    summary2 = detect.detect_uk_divergence(repo_root=tmp_path, threshold=5, db_path=db)
+    assert summary2["enqueued"] == []

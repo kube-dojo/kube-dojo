@@ -41,6 +41,9 @@ def detect_uk_divergence(*, repo_root: Path, threshold: int = 5, dry_run: bool =
     missing_en_commit = []
     enqueued = []
     cp = None
+    # When --limit is hit we stop enqueuing but keep iterating so stale/missing_en_commit
+    # counts reflect the full scan rather than a truncated view.
+    enqueue_cap_reached = False
 
     for uk_path in uk_files:
         commit = uk_sync._get_uk_synced_commit(uk_path.read_text(encoding="utf-8"))
@@ -58,7 +61,7 @@ def detect_uk_divergence(*, repo_root: Path, threshold: int = 5, dry_run: bool =
             continue
 
         stale.append({"module_key": module_key, "en_commit_uk": commit[:8], "en_head": uk_sync._get_en_file_commit(en_path)[:8], "drift_lines": drift_lines})
-        if dry_run or translation_v2._has_pending_or_leased_job(db_path, module_key):
+        if dry_run or enqueue_cap_reached or translation_v2._has_pending_or_leased_job(db_path, module_key):
             continue
 
         if cp is None:
@@ -66,7 +69,7 @@ def detect_uk_divergence(*, repo_root: Path, threshold: int = 5, dry_run: bool =
         cp.enqueue(module_key, phase="write", model=translation_v2.TRANSLATE_MODEL, requested_calls=1, estimated_usd=translation_v2.TRANSLATE_ESTIMATED_USD, priority=100 + len(enqueued))
         enqueued.append(module_key)
         if limit is not None and len(enqueued) >= limit:
-            break
+            enqueue_cap_reached = True
 
     summary = {"scanned_at": datetime.now(timezone.utc).isoformat(), "total_uk_files": len(uk_files), "stale": stale, "missing_en_commit": missing_en_commit, "enqueued": enqueued}
     out = repo_root / ".pipeline/translation_divergence.json"
