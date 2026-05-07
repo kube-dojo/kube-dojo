@@ -284,8 +284,8 @@ Finally, decide what pages a human. The default should be symptom-based alerts t
 
 1. The Prometheus TSDB's two-hour head block is not arbitrary. It was chosen because two hours is short enough to keep the in-memory index manageable on commodity hardware, and long enough that a typical query window (last hour, last thirty minutes) almost always lives entirely in the head, avoiding any disk read at all. Changing it is technically possible but operationally inadvisable.
 2. Mimir's *shuffle sharding* assigns each tenant to a deterministic random subset of ingesters, rather than spreading every tenant across every ingester. This bounds the blast radius of a noisy tenant: at most the subset is affected, and statistically the overlap between any two tenants is small. The technique was originally formalized by AWS for SQS and is now used widely in multi-tenant data systems.
-3. Tempo's storage format started as bespoke and migrated to Parquet so that the same files could be queried by general-purpose tools like Apache DataFusion. This is part of a wider pattern in observability: backends are increasingly settling on Parquet plus object storage as the universal substrate, because it is cheap and lets independent tools share data without re-ingestion.
-4. The `prometheus_remote_storage_dropped_samples_total` counter is one of the most under-watched metrics in the ecosystem. When it is non-zero, your remote-write pipeline is silently losing data; alerts that depend on the dropped data will never fire, and dashboards will show an apparent return to baseline that is in fact a measurement gap. Treat any non-zero rate on this counter as a paging-grade event.
+3. Tempo's storage format started as bespoke and migrated to Parquet so that the same files could be queried by general-purpose tools like Apache DataFusion. This is part of a wider pattern in observability: backends are increasingly settling on Parquet plus object storage as a common substrate, because it is cheap and lets independent tools share data without re-ingestion.
+4. The `prometheus_remote_storage_dropped_samples_total` counter is one of the most under-watched metrics in the ecosystem. When it is non-zero, your remote-write pipeline is silently losing data; alerts that depend on the dropped data may never fire, and dashboards can show an apparent return to baseline that is in fact a measurement gap. Treat any non-zero rate on this counter as a paging-grade event.
 
 ## Common Mistakes
 
@@ -547,3 +547,9 @@ Continue to [Module 7.9: Capacity Planning and Forecasting](../module-7.9-capaci
 - [OpenTelemetry Collector Processors](https://opentelemetry.io/docs/collector/configuration/#processors)
 - [Loki Label Best Practices](https://grafana.com/docs/loki/latest/get-started/labels/)
 - [Tempo TraceQL Documentation](https://grafana.com/docs/tempo/latest/traceql/)
+
+## Sources
+
+- [Prometheus Storage](https://prometheus.io/docs/prometheus/latest/storage/) — Best primary reference for TSDB head behavior, WAL replay, block compaction, and single-node storage constraints.
+- [Deploy the OpenTelemetry Collector](https://opentelemetry.io/docs/collector/deploy/) — Covers agent, gateway, and split-tier Collector deployment patterns used throughout the module.
+- [Loki Cardinality](https://grafana.com/docs/loki/latest/get-started/labels/cardinality/) — Directly explains why high-cardinality labels create stream explosions and operational pain in Loki.

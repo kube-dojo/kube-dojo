@@ -1,0 +1,358 @@
+{
+  "module_key": "on-premises/operations/module-7.8-observability-at-scale",
+  "module_path": "src/content/docs/on-premises/operations/module-7.8-observability-at-scale.md",
+  "research_run_id": "2026-05-07T02:16:15+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/on-premises-operations.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening bank outage anecdote presents a real incident with specific timestamps, alert counts, and WAL replay duration.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "At 03:14 on a Saturday, a regional bank's payment authorization service starts dropping transactions. The on-call SRE wakes to a phone full of pages: 312 alerts in the first nine minutes, fired by 312 separate routes because each microservice owns its own routing tree. Buried somewhere in that wall is the actual cause, but the engineer cannot find it because the central Prometheus has just OOM-killed itself trying to evaluate the dashboards everyone is opening, and the standby instance is in a 40-minute WAL replay loop with no query path. The metrics platform built to *show them* what was happening is the platform that is now *blind* during the incident, and the post-mortem will conclude that the observability stack added forty minutes to mean-time-to-resolution.",
+      "suggested_rewrite": "During a major incident, a poorly scaled observability stack can make triage slower by flooding responders with alerts and leaving dashboards unavailable at the worst moment.",
+      "lesson_point_url": null,
+      "rationale": "This is an unattributed war story with fake-precise operational details."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module states that the opening scenario is a real, non-hypothetical incident.",
+      "claim_class": "incident",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This is not a hypothetical.",
+      "suggested_rewrite": "This failure pattern is common in large observability deployments.",
+      "lesson_point_url": null,
+      "rationale": "The text asserts a real incident but provides no attributable source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Teams typically hit single-node Prometheus limits past roughly 500 nodes or a few million active series.",
+      "claim_class": "statistic",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Every team that runs Prometheus past about 500 nodes, or past a few million active series, runs into a version of the same wall.",
+      "suggested_rewrite": "Teams that run Prometheus at sufficiently large scale eventually hit limits in a single-node collection, storage, querying, and alerting architecture.",
+      "lesson_point_url": null,
+      "rationale": "The numeric thresholds are presented as fact without a primary source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Prometheus keeps the current head block in memory, persists crash safety through a WAL, and local storage is not clustered or replicated.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Limits of Single-Node Prometheus",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool storage source directly covers in-memory head data, WAL replay, and single-node local-storage limitations."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "An active series uses roughly 3-4 KiB of RAM, so 15 million active series need about 50-60 GiB just for head memory.",
+      "claim_class": "statistic",
+      "span_hint": "section: The Limits of Single-Node Prometheus",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A series consumes roughly three to four kilobytes of resident memory regardless of how often it is sampled. A cluster with fifteen million active series therefore needs fifty to sixty gigabytes of RAM just for the head, plus working memory for queries and rule evaluation, before you have left any headroom for the spikes that happen when a Deployment rolls and every pod gets a new `pod-template-hash` label.",
+      "suggested_rewrite": "Active-series count is one of the main drivers of Prometheus memory usage, so very large series counts can require tens of gigabytes of RAM before query and rule-evaluation overhead are added.",
+      "lesson_point_url": null,
+      "rationale": "The exact per-series RAM estimate and derived capacity numbers need a direct primary source and are not backed by the shared pool."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Prometheus compacts initial TSDB blocks on a two-hour cadence and uses a WAL to make incoming samples crash-safe.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Limits of Single-Node Prometheus",
+      "disposition": "supported",
+      "source_ids": [
+        "S006"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool storage documentation directly describes two-hour blocks and WAL-backed crash recovery."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Slow disks or network volumes cause the WAL to fall behind and produce `out of order sample` scrape errors.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: The Limits of Single-Node Prometheus",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "On NVMe these operations are usually invisible, but on a spinning disk or a slow network volume the WAL falls behind the scrape, scrapes start dropping with `out of order sample` errors, and the data your alerts depend on is silently incomplete.",
+      "suggested_rewrite": "Fast local storage makes Prometheus compaction and WAL activity much less intrusive, while slow storage can increase ingest latency and make the monitoring data your alerts depend on less trustworthy.",
+      "lesson_point_url": null,
+      "rationale": "The precise failure chain to `out of order sample` errors is too specific for the cited material."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Prometheus Operator sharding distributes targets across `spec.shards`, defaults to hashing `__address__`, and supports custom `__tmp_hash` relabeling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Hierarchical Federation Versus Sharding",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://prometheus-operator.dev/docs/api-reference/api/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The operator API reference directly documents `shards`, default sharding labels, and `__tmp_hash`, but the docs host is off-allowlist."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Prometheus Agent mode was introduced in v2.32, is enabled with `--enable-feature=agent`, and disables local querying and block storage for remote-write-focused operation.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Prometheus Agent Mode",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/prometheus/prometheus/blob/main/CHANGELOG.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream changelog explicitly documents the 2.32 introduction, flag, and reduced local-storage/query behavior."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Thanos sidecars upload completed Prometheus blocks to object storage, while the querier combines live sidecars and store-gateway-backed historical blocks.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Long-Term Storage: Thanos Versus Mimir",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://thanos.io/tip/thanos/design.md/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "These are real architecture claims, but the canonical Thanos docs host is outside the allowlist."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Grafana Mimir uses a microservices architecture, relies on a tenant header for requests, and supports native multi-tenancy.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Long-Term Storage: Thanos Versus Mimir",
+      "disposition": "supported",
+      "source_ids": [
+        "S016"
+      ],
+      "proposed_url": "https://grafana.com/docs/mimir/latest/get-started/about-grafana-mimir-architecture/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool covers Mimir positioning, and Grafana's architecture docs directly cover componentization and tenant-ID headers."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "OpenTelemetry Collector supports agent and gateway deployment patterns, with gateways used for centralized processing such as filtering and tail sampling.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: OpenTelemetry Collector Pipelines",
+      "disposition": "supported",
+      "source_ids": [
+        "S015"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool source directly covers Collector deployment patterns including agent, gateway, and split-tier designs."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "The Collector batch processor should be placed after `memory_limiter` and sampling processors.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: OpenTelemetry Collector Pipelines",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream batch processor documentation explicitly gives the ordering guidance cited by the module."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "The Kubernetes attributes processor enriches telemetry with Kubernetes metadata such as pod and namespace identifiers.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: OpenTelemetry Collector Pipelines",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/k8sattributesprocessor/README.md",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream k8sattributes processor README directly documents Kubernetes metadata enrichment."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Loki indexes labels rather than log-line content, and high-cardinality labels increase stream count and degrade performance.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Loki: Logs Indexed By Label Only",
+      "disposition": "supported",
+      "source_ids": [
+        "S007",
+        "S017"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool includes Loki architecture and cardinality guidance that directly support this design description."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Loki keeps storage costs an order of magnitude lower than Elasticsearch on the same workload.",
+      "claim_class": "benchmark",
+      "span_hint": "section: Loki: Logs Indexed By Label Only",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S017"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This is how Loki keeps storage costs an order of magnitude lower than Elasticsearch on the same workload.",
+      "suggested_rewrite": "This is how Loki can keep storage costs substantially lower than full-text systems that index log content.",
+      "lesson_point_url": "https://grafana.com/docs/loki/latest/get-started/labels/cardinality/",
+      "rationale": "The general cost principle is defensible, but the exact comparative multiplier needs a dedicated benchmark source."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Tempo uses Parquet-based block storage and TraceQL for querying traces.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Tempo: Traces At Object-Storage Cost",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://grafana.com/docs/tempo/latest/configuration/parquet/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Grafana Tempo docs directly describe Parquet block format and its role in TraceQL-enabled search."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "Tempo can only be looked up directly by trace ID.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Tempo: Traces At Object-Storage Cost",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Like Loki, Tempo trades expensive indexes for cheap storage: the only thing you can look up directly is a trace ID, and richer queries scan over Parquet using TraceQL's filter pushdown.",
+      "suggested_rewrite": "Like Loki, Tempo trades heavyweight indexing for cheaper storage: exact trace IDs are easy to retrieve, and richer searches rely on TraceQL over Parquet-backed trace data.",
+      "lesson_point_url": null,
+      "rationale": "Current Tempo supports broader TraceQL-based search, so the trace-ID-only wording is too absolute."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Mimir supports per-tenant rate and ingestion limits, and exceeding them can produce HTTP 429 responses.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Cardinality Management",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://grafana.com/docs/mimir/latest/references/architecture/components/distributor/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Grafana Mimir distributor docs directly describe per-tenant limits and 429 behavior."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "The head block is two hours because Prometheus designers deliberately balanced commodity-memory limits against common query windows.",
+      "claim_class": "statistic",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The Prometheus TSDB's two-hour head block is not arbitrary. It was chosen because two hours is short enough to keep the in-memory index manageable on commodity hardware, and long enough that a typical query window (last hour, last thirty minutes) almost always lives entirely in the head, avoiding any disk read at all. Changing it is technically possible but operationally inadvisable.",
+      "suggested_rewrite": "Prometheus organizes ingested samples into two-hour TSDB blocks, with the current head kept in memory until it is compacted.",
+      "lesson_point_url": null,
+      "rationale": "The historical design explanation and operational conclusion need a source stronger than the storage overview."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Mimir shuffle sharding assigns each tenant a deterministic subset of ingesters or partitions to reduce overlap and noisy-neighbor blast radius.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://grafana.com/docs/mimir/latest/configure/configure-shuffle-sharding/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Grafana Mimir docs explicitly describe deterministic subset assignment and blast-radius reduction via shuffle sharding."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "Tempo started with a bespoke format and later migrated to Parquet so the same files could be queried by Apache DataFusion.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Tempo's storage format started as bespoke and migrated to Parquet so that the same files could be queried by general-purpose tools like Apache DataFusion. This is part of a wider pattern in observability: backends are increasingly settling on Parquet plus object storage as the universal substrate, because it is cheap and lets independent tools share data without re-ingestion.",
+      "suggested_rewrite": "Tempo now uses Parquet-based blocks in object storage, reflecting a broader observability trend toward cheap object storage plus columnar formats for large-scale telemetry data.",
+      "lesson_point_url": null,
+      "rationale": "The current Parquet fact is supportable, but the migration history and DataFusion rationale are not directly backed by the cited docs."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://prometheus.io/docs/prometheus/latest/storage/",
+      "title": "Prometheus Storage",
+      "tier": "upstream",
+      "why_relevant": "Best primary reference for TSDB head behavior, WAL replay, block compaction, and single-node storage constraints."
+    },
+    {
+      "url": "https://opentelemetry.io/docs/collector/deploy/",
+      "title": "Deploy the OpenTelemetry Collector",
+      "tier": "upstream",
+      "why_relevant": "Covers agent, gateway, and split-tier Collector deployment patterns used throughout the module."
+    },
+    {
+      "url": "https://grafana.com/docs/loki/latest/get-started/labels/cardinality/",
+      "title": "Loki Cardinality",
+      "tier": "upstream",
+      "why_relevant": "Directly explains why high-cardinality labels create stream explosions and operational pain in Loki."
+    }
+  ],
+  "notes": "Per instructions, no claim entries were emitted for quiz prompts/answers, Mermaid diagrams, code blocks, tables, Common Mistakes rows, Hands-On Exercise steps, or the embedded Further Reading list itself.",
+  "_schema_issues": [
+    "claim[7]:needs_allowlist_expansion_but_url_is_already_allowlisted",
+    "claim[20]:needs_allowlist_expansion_but_url_is_already_allowlisted",
+    "claim[21]:needs_allowlist_expansion_but_url_is_already_allowlisted",
+    "claim[25]:needs_allowlist_expansion_but_url_is_already_allowlisted"
+  ],
+  "rejected_urls": []
+}
