@@ -57,7 +57,7 @@ That e-commerce company deployed Coroot on a Friday afternoon. By Monday morning
 
 - **One fintech saved $380,000 annually by replacing Datadog with Coroot** — Their 200-service deployment cost $31K/month in APM fees. Coroot (open source) plus ClickHouse hosting: ~$800/month. They got better visibility into legacy systems that Datadog's agents couldn't instrument.
 
-- **Coroot detected a $2.1M incident in 3 minutes—traditional APM missed it entirely** — A cryptocurrency exchange experienced a trading halt from TCP retransmissions between their matching engine and database. Application metrics showed nothing wrong. Coroot's kernel-level TCP monitoring caught the network degradation immediately.
+- **Coroot detected a $2.1M incident in 3 minutes—traditional APM missed it entirely** — A cryptocurrency exchange experienced a trading halt from TCP retransmissions between their matching engine and database. Application metrics showed nothing wrong. Coroot's kernel-level TCP monitoring caught the network degradation quickly.
 
 - **Zero-instrumentation tracing saves 2-4 weeks per microservice** — Traditional distributed tracing requires SDK integration, context propagation code, and careful testing. Companies report 40-80 hours of engineering time per service. Coroot captures trace context at the kernel level—instant tracing for any application, any language.
 
@@ -1020,3 +1020,10 @@ If you need highly specific business metrics, custom trace attributes, or run on
 ## Next Module
 
 Continue to [Module 2.1: ArgoCD](/platform/toolkits/cicd-delivery/gitops-deployments/module-2.1-argocd/) for GitOps continuous delivery, or explore [Module 1.6: Pixie](../module-1.6-pixie/) to compare another eBPF-based observability tool.
+
+## Sources
+
+- [Coroot GitHub README](https://github.com/coroot/coroot) — Best allowlisted high-level source for Coroot's zero-instrumentation positioning, service map, SLO tracking, tracing, and profiling features.
+- [coroot-node-agent README](https://raw.githubusercontent.com/coroot/coroot-node-agent/main/README.md) — Best allowlisted source for node-agent kernel requirements, TCP tracing, service-map generation, log discovery, and OOM-related telemetry.
+- [Prometheus Overview](https://prometheus.io/docs/introduction/overview/) — Useful background for understanding how Coroot relates to Prometheus-style metrics pipelines and scraping.
+- [OpenTelemetry Traces](https://opentelemetry.io/docs/concepts/signals/traces/) — Useful baseline for comparing Coroot's eBPF-derived spans with conventional distributed tracing instrumentation.
