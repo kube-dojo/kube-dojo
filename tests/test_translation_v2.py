@@ -284,6 +284,53 @@ def test_translation_worker_completes_missing_module(tmp_path: Path) -> None:
     assert report["queue"]["counts"]["done"] == 1
 
 
+def test_worker_loop_respects_max_calls(tmp_path: Path, monkeypatch, capsys) -> None:
+    db_path = tmp_path / ".pipeline" / "translation_v2.db"
+
+    class FakeWorker:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run_once(self) -> translation_v2.TranslationRunOutcome:
+            self.calls += 1
+            return translation_v2.TranslationRunOutcome(
+                status="queued_for_verify",
+                module_key=f"module-{self.calls}",
+                lease_id=f"lease-{self.calls}",
+                details={"attempts": self.calls},
+            )
+
+    worker = FakeWorker()
+    monkeypatch.setattr(translation_v2, "TranslationWorker", lambda *_args, **_kwargs: worker)
+
+    exit_code = translation_v2.main(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "--db",
+            str(db_path),
+            "worker",
+            "loop",
+            "--max-calls",
+            "2",
+            "--sleep-seconds",
+            "0",
+        ]
+    )
+    output = capsys.readouterr().out.splitlines()
+
+    assert exit_code == 0
+    assert worker.calls == 2
+    worker_lines = [line for line in output if line.startswith("[worker]")]
+    assert len(worker_lines) == 2
+    first_payload = json.loads(worker_lines[0].split("] ", 1)[1])
+    assert first_payload["status"] == "queued_for_verify"
+    assert first_payload["module_key"] == "module-1"
+    assert first_payload["lease_id"] == "lease-1"
+    assert first_payload["attempts"] == 1
+    assert output[-1] == "worker summary: max_calls=2 successful_calls=2"
+
+
 def test_verify_worker_requeues_write_on_quality_failure(tmp_path: Path) -> None:
     repo_root = tmp_path
     _init_repo(repo_root)

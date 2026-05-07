@@ -7,6 +7,7 @@ import re
 import sqlite3
 import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -731,9 +732,11 @@ def build_parser() -> argparse.ArgumentParser:
     worker_run = worker_sub.add_parser("run", help="Translate one queued module")
     worker_run.add_argument("--worker-id", default="translation-worker")
     worker_run.add_argument("--json", action="store_true")
+    worker_run.add_argument("--max-calls", type=int)
     worker_loop = worker_sub.add_parser("loop", help="Run translation worker loop")
     worker_loop.add_argument("--worker-id", default="translation-worker")
     worker_loop.add_argument("--sleep-seconds", type=float, default=5.0)
+    worker_loop.add_argument("--max-calls", type=int)
 
     verify_worker = subparsers.add_parser("verify-worker", help="Run translation verify worker")
     verify_sub = verify_worker.add_subparsers(dest="verify_worker_command", required=True)
@@ -754,6 +757,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     control_plane = ControlPlane(repo_root=args.repo_root, db_path=args.db, budgets_path=args.budgets)
+
+    def _worker_log_outcome(outcome: TranslationRunOutcome) -> None:
+        attempts = None
+        if outcome.details:
+            attempts = outcome.details.get("attempts")
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "module_key": outcome.module_key,
+            "status": outcome.status,
+            "lease_id": outcome.lease_id,
+            "attempts": attempts,
+        }
+        print(f"[worker] {json.dumps(payload, sort_keys=True)}")
+
+    def _worker_summary(successful_calls: int, max_calls: int | None) -> None:
+        if max_calls is None:
+            return
+        print(f"worker summary: max_calls={max_calls} successful_calls={successful_calls}")
 
     if args.command == "status":
         report = build_status(args.repo_root, db_path=args.db, section=args.section)
@@ -785,15 +806,28 @@ def main(argv: list[str] | None = None) -> int:
         worker = TranslationWorker(control_plane, worker_id=args.worker_id)
         if args.worker_command == "run":
             outcome = worker.run_once()
+            successful_calls = 1 if outcome.status == "queued_for_verify" else 0
             if args.json:
                 print(json.dumps(outcome.__dict__, indent=2, sort_keys=True))
             else:
                 print(outcome.status)
                 if outcome.module_key:
                     print(outcome.module_key)
+                if args.max_calls is not None and successful_calls >= args.max_calls:
+                    _worker_summary(successful_calls, args.max_calls)
             return 0
         if args.worker_command == "loop":
-            worker.loop_forever(sleep_seconds=args.sleep_seconds)
+            successful_calls = 0
+            while True:
+                outcome = worker.run_once()
+                _worker_log_outcome(outcome)
+                if outcome.status == "queued_for_verify":
+                    successful_calls += 1
+                    if args.max_calls is not None and successful_calls >= args.max_calls:
+                        _worker_summary(successful_calls, args.max_calls)
+                        return 0
+                if outcome.status == "idle":
+                    time.sleep(args.sleep_seconds)
             return 0
 
     if args.command == "verify-worker":
