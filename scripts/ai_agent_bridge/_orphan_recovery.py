@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ._config import REPO_ROOT
@@ -105,11 +107,47 @@ def _run_ruff(repo_root: Path, py_files: tuple[str, ...]) -> bool:
     return result.returncode == 0
 
 
+def _check_lease(
+    db_conn: sqlite3.Connection, delivery_id: str
+) -> RecoveryResult | None:
+    """Return a refused RecoveryResult if the broker lease is still active.
+
+    Callers MUST pass the live DB connection — this check is the only guard
+    against racing a broker that is still writing to the workspace.  The rule:
+      - delivery row missing → refuse (unknown state, don't guess)
+      - lease_until NULL     → safe (broker never claimed a lease)
+      - lease_until expired  → safe (broker's window has closed)
+      - lease_until in future → refuse (broker may still be writing)
+    """
+    cursor = db_conn.execute(
+        "SELECT lease_until FROM deliveries WHERE delivery_id = ?",
+        (delivery_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return RecoveryResult(commit_sha=None, reason="delivery-not-found")
+    lease_until_raw: str | None = row[0]
+    if lease_until_raw is not None:
+        try:
+            lease_dt = datetime.fromisoformat(lease_until_raw)
+        except ValueError:
+            pass
+        else:
+            if lease_dt > datetime.now(UTC):
+                return RecoveryResult(commit_sha=None, reason="broker-lease-active")
+    return None
+
+
 def recover_orphan_commit(
     candidate: RecoveryCandidate,
     *,
+    db_conn: sqlite3.Connection,
     repo_root: Path = REPO_ROOT,
 ) -> RecoveryResult:
+    refused = _check_lease(db_conn, candidate.delivery_id)
+    if refused is not None:
+        return refused
+
     changed_files = _git_head_changed_files(repo_root)
     if not changed_files:
         return RecoveryResult(commit_sha=None, reason="clean-tree")
