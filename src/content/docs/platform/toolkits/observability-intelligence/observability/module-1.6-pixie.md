@@ -35,7 +35,7 @@ A platform engineer at a payments company gets paged because checkout latency ha
 
 That is the real observability gap Pixie is designed to close. Traditional instrumentation is still valuable, especially when teams need business spans, custom metrics, and long-term history, but it only sees what engineers deliberately added to the code path. The hardest incidents often appear in the space between instrumented systems: DNS retries, connection churn, untracked internal HTTP calls, noisy pods sharing a node, or a dependency that nobody remembered was still in the request path.
 
-Pixie uses eBPF to observe workload behavior from the Linux kernel and Kubernetes metadata plane. Instead of asking each service to emit telemetry, Pixie watches the traffic, process activity, and protocol events already happening on every node. That makes it especially useful during the first hour of an incident, when the platform team needs fast evidence before deciding whether to add permanent instrumentation, scale a dependency, fix a network policy, or escalate to an application owner.
+[Pixie uses eBPF to observe workload behavior from the Linux kernel and Kubernetes metadata plane. Instead of asking each service to emit telemetry, Pixie watches the traffic, process activity, and protocol events already happening on every node.](https://github.com/pixie-io/pixie) That makes it especially useful during the first hour of an incident, when the platform team needs fast evidence before deciding whether to add permanent instrumentation, scale a dependency, fix a network policy, or escalate to an application owner.
 
 This module teaches Pixie as a troubleshooting workflow, not as a collection of commands. You will first build a mental model for where Pixie sits, then learn how its architecture collects and queries telemetry, then walk through a worked incident from symptom to fix. By the end, you should be able to use Pixie responsibly: fast enough for production debugging, careful enough for sensitive payloads, and realistic enough to know when another observability tool should carry the long-term signal.
 
@@ -628,7 +628,7 @@ Decision: If failures concentrate on one service name, check Kubernetes Service 
 
 Problem: Pixie helped identify a latency signal that should become part of normal operations. The team needs to export an aggregate, not every raw request, to avoid privacy and cost problems.
 
-Solution approach: Aggregate the signal in PxL and send the summarized data through an approved export path such as an OpenTelemetry collector or Prometheus-compatible gateway. In production, design the export with labels, retention, and ownership before relying on it for alerts.
+Solution approach: Aggregate the signal in PxL and send the summarized data through an approved export path such as an OpenTelemetry collector. In production, design the export with labels, retention, and ownership before relying on it for alerts.
 
 ```python
 import px
@@ -981,3 +981,9 @@ k delete namespace pixie-demo
 ## Next Module
 
 Continue to [Module 1.7: Hubble - Network Observability with Cilium](../module-1.7-hubble/) to learn how Cilium and Hubble expose network flows, service communication, and policy-aware observability.
+
+## Sources
+
+- [github.com: pixie](https://github.com/pixie-io/pixie) — The Pixie GitHub README directly states that Pixie uses eBPF for automatic telemetry collection without manual instrumentation.
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Relevant for the module's recommendation to turn Pixie discoveries into durable exported telemetry.
+- [Kubernetes DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) — Useful background for understanding why Pixie validates PEM coverage node by node.
