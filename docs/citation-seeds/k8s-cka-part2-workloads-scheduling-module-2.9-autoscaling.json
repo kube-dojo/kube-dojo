@@ -1,0 +1,347 @@
+{
+  "module_key": "k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling",
+  "module_path": "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling.md",
+  "research_run_id": "2026-05-07T06:44:51+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part2-workloads-scheduling.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The CKA exam tests workload autoscaling skills, including configuring workload autoscaling.",
+      "claim_class": "standard",
+      "span_hint": "line 36 | section: Why This Module Matters",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Linux Foundation CKA page explicitly lists workload autoscaling in the exam scope."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "HPA runs its control loop every 15 seconds by default, using the sync-period setting, and averages metrics across pods for utilization targets.",
+      "claim_class": "statistic",
+      "span_hint": "lines 46-46 | section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [
+        "S020"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA docs state the default sync period is 15 seconds and describe averaging across pods for targetAverage metrics."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "By default, HPA uses a 5 minute downscale stabilization window to reduce flapping.",
+      "claim_class": "statistic",
+      "span_hint": "lines 48-48 | section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [
+        "S020"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA docs document the default downscale stabilization window as 300 seconds (5 minutes)."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The module says HPA cannot function without metrics-server installed in the cluster.",
+      "claim_class": "standard",
+      "span_hint": "line 50 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S020",
+        "S023"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "HPA can't function without metrics-server installed in the cluster. It provides the CPU/memory metrics that HPA needs.",
+      "suggested_rewrite": "CPU- and memory-based HPA relies on the resource metrics pipeline, typically provided by metrics-server. Custom or external metric scaling also requires the corresponding adapter API.",
+      "lesson_point_url": null,
+      "rationale": "The blanket claim is too broad because HPA can scale on custom or external metrics without metrics-server."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "With Kubernetes 1.35 era in-place resize support, VPA can use in-place resource updates for CPU and memory in the appropriate mode.",
+      "claim_class": "standard",
+      "span_hint": "line 52 | section: Did You Know?",
+      "disposition": "supported",
+      "source_ids": [
+        "S025",
+        "S026"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The VPA docs describe the InPlaceOrRecreate mode, and the resize docs describe in-place CPU and memory resize as stable in v1.35."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "HPA needs metrics-server or an equivalent resource metrics pipeline to read CPU and memory usage.",
+      "claim_class": "standard",
+      "span_hint": "line 60 | section: 1.1 Prerequisites: metrics-server",
+      "disposition": "supported",
+      "source_ids": [
+        "S020",
+        "S022",
+        "S023"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA and metrics pipeline docs explain that resource-metric HPA uses metrics.k8s.io, commonly provided by metrics-server."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "HPA computes desired replicas with ceil(currentReplicas * currentMetricValue / desiredMetricValue).",
+      "claim_class": "standard",
+      "span_hint": "line 136 | section: 1.2 Creating an HPA",
+      "disposition": "supported",
+      "source_ids": [
+        "S020"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA algorithm docs give this formula explicitly."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "By default, HPA scale-up behavior allows up to 4 pods or 100% of current replicas every 15 seconds, and the behavior field customizes this.",
+      "claim_class": "standard",
+      "span_hint": "line 148 | section: 1.3 How HPA Decides",
+      "disposition": "supported",
+      "source_ids": [
+        "S020"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The default behavior section in the HPA docs shows these default policies and the behavior field."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Scaling on custom metrics requires a custom metrics adapter, such as prometheus-adapter, serving the custom.metrics.k8s.io API.",
+      "claim_class": "standard",
+      "span_hint": "line 150 | section: 1.3 How HPA Decides",
+      "disposition": "supported",
+      "source_ids": [
+        "S020",
+        "S023",
+        "S024"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA docs require custom.metrics.k8s.io for custom metrics, and the Prometheus Adapter repo is the canonical example in the section pool."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "VPA adjusts CPU and memory requests and limits based on observed usage, whereas HPA scales by replica count.",
+      "claim_class": "standard",
+      "span_hint": "line 206 | section: Part 3: Vertical Pod Autoscaler",
+      "disposition": "supported",
+      "source_ids": [
+        "S025"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The VPA docs define vertical autoscaling as adjusting resource requests and limits instead of adding pods."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "The table says VPA Auto mode uses in-place resize on Kubernetes 1.35+ and falls back to recreate.",
+      "claim_class": "standard",
+      "span_hint": "line 242 | section: 3.2 VPA Modes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S025"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| `Auto` | Uses in-place resize (K8s 1.35+) when possible, falls back to recreate |",
+      "suggested_rewrite": "| `InPlaceOrRecreate` | Attempts in-place resource updates when possible, and falls back to recreate when needed |",
+      "lesson_point_url": null,
+      "rationale": "Current VPA docs say `Auto` is deprecated and behaves like `Recreate`; in-place behavior belongs to `InPlaceOrRecreate`."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "The note says VPA Auto mode can adjust running pods without restart in Kubernetes 1.35.",
+      "claim_class": "standard",
+      "span_hint": "line 244 | section: 3.2 VPA Modes",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S025",
+        "S026"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "With in-place pod resize GA, VPA in `Auto` mode can now adjust CPU and memory on running pods without restart — a major improvement for stateful workloads.",
+      "suggested_rewrite": "With in-place pod resize available in Kubernetes 1.35, VPA can use `InPlaceOrRecreate` to try in-place CPU and memory updates and fall back to recreation when needed.",
+      "lesson_point_url": null,
+      "rationale": "The upstream VPA docs distinguish deprecated `Auto` from `InPlaceOrRecreate`."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "If HPA cannot fetch the underlying resource metrics, it cannot scale on that metric.",
+      "claim_class": "standard",
+      "span_hint": "lines 254-255 and line 268 | sections: Common Mistakes, Quiz 1 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S020",
+        "S022",
+        "S023"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA and metrics pipeline docs explain that scaling depends on access to the metrics APIs."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Without CPU resource requests on pods, HPA cannot calculate utilization percentage for CPU-based autoscaling.",
+      "claim_class": "standard",
+      "span_hint": "lines 255-255 and line 268 | sections: Common Mistakes, Quiz 1 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S020",
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The HPA docs say resource requests must be set to compute utilization, and the resource management docs define requests."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "After fixing metrics-server and CPU requests, the HPA should show utilization within 15-30 seconds.",
+      "claim_class": "benchmark",
+      "span_hint": "line 268 | section: Quiz 1 answer",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S020",
+        "S022"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "After both fixes, the HPA should show actual utilization within 15-30 seconds and begin making scaling decisions.",
+      "suggested_rewrite": "After both fixes, the HPA should begin reporting utilization once fresh metrics have been collected and the control loop has run, typically within a short interval.",
+      "lesson_point_url": "https://v1-35.docs.kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/",
+      "rationale": "The exact 15-30 second timing is environment-dependent, but the general lesson about metrics collection plus the HPA control loop is well supported."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "If HPA creates pods that cannot be scheduled on existing nodes, node autoscaling can add nodes to make them schedulable.",
+      "claim_class": "standard",
+      "span_hint": "line 274 | section: Quiz 2 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S027"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The node autoscaling docs explain that unschedulable pods can trigger provisioning of new nodes."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Custom metrics such as packets-per-second respond faster to traffic changes than CPU utilization.",
+      "claim_class": "benchmark",
+      "span_hint": "line 274 | section: Quiz 2 answer",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S020",
+        "S024"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Also consider using HPA with custom metrics (like the `packets-per-second` metric shown earlier) instead of CPU, which responds faster to traffic changes than CPU utilization does.",
+      "suggested_rewrite": "Also consider using HPA with custom metrics (like the `packets-per-second` metric shown earlier) when CPU utilization is not the best early signal for incoming demand.",
+      "lesson_point_url": "https://github.com/kubernetes-sigs/prometheus-adapter",
+      "rationale": "The exact responsiveness comparison is workload-specific, but using custom metrics to scale on application-level demand is well supported."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "The quiz answer says VPA Auto mode on Kubernetes 1.35+ uses in-place pod resize without restarting the container.",
+      "claim_class": "standard",
+      "span_hint": "line 280 | section: Quiz 3 answer",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S025",
+        "S026"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Once you trust the recommendations, switch to `updateMode: \"Auto\"` which, on Kubernetes 1.35+, uses in-place pod resize to adjust resources without restarting the container -- critical for a cache that would lose data on restart.",
+      "suggested_rewrite": "Once you trust the recommendations, switch to `updateMode: \"InPlaceOrRecreate\"` if you want VPA to attempt in-place resource updates and fall back to recreation when needed.",
+      "lesson_point_url": null,
+      "rationale": "Upstream VPA docs say `Auto` is deprecated and equivalent to `Recreate`; in-place behavior is documented under `InPlaceOrRecreate`."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "VPA should not be used with HPA on CPU or memory; if combined, HPA should use custom or external metrics instead.",
+      "claim_class": "standard",
+      "span_hint": "lines 258-259 and lines 286-286 | sections: Common Mistakes, Quiz 4 answer",
+      "disposition": "supported",
+      "source_ids": [
+        "S024"
+      ],
+      "proposed_url": "https://github.com/kubernetes/autoscaler/issues/6060",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The autoscaler issue reproduces the documented VPA limitation verbatim, and the section pool includes the canonical custom-metrics adapter example."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://v1-35.docs.kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/",
+      "title": "Horizontal Pod Autoscaling",
+      "tier": "standards",
+      "why_relevant": "Primary reference for HPA behavior, algorithm details, metrics APIs, and scaling policies."
+    },
+    {
+      "url": "https://github.com/kubernetes-sigs/metrics-server",
+      "title": "Kubernetes Metrics Server",
+      "tier": "upstream",
+      "why_relevant": "Explains the resource metrics pipeline that backs kubectl top and CPU/memory-based autoscaling."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/",
+      "title": "Vertical Pod Autoscaling",
+      "tier": "standards",
+      "why_relevant": "Covers VPA architecture, update modes, and current guidance on in-place versus recreate-based updates."
+    }
+  ],
+  "notes": "The main doc drift is in the VPA section: current upstream docs distinguish `InPlaceOrRecreate` from deprecated `Auto`, while the module currently treats `Auto` as the in-place mode.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
