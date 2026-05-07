@@ -1,0 +1,288 @@
+{
+  "module_key": "platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry",
+  "module_path": "src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.2-opentelemetry.md",
+  "research_run_id": "2026-05-07T03:27:44+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-observability-intelligence-observability.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening bank migration story describes a large European bank with 400+ services, three tracing stacks, and disconnected payment traces.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A platform team at a large European bank inherited a payment system with more than four hundred services and three separate tracing stacks. Legacy workloads emitted Zipkin spans, newer Java services sent data to Jaeger, and a Python rewrite had vendor-specific DataDog instrumentation baked into business code. When a card authorization crossed all three generations, the trace did not show a failed payment journey; it showed three disconnected fragments that each team interpreted differently.",
+      "suggested_rewrite": "Large organizations often inherit multiple tracing systems across generations of services, so one end-to-end request can appear as disconnected fragments in different backends.",
+      "lesson_point_url": null,
+      "rationale": "This is a specific operational anecdote with named technologies and quantitative detail but no attributable real-world source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The follow-on anecdote claims an audit required end-to-end regulated payment tracing and that the architect solved it with an OpenTelemetry migration layer.",
+      "claim_class": "war_story",
+      "span_hint": "section: Why This Module Matters, paragraph 2",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The problem became urgent when an audit required end-to-end transaction tracing for regulated payment flows. The expensive answer was to migrate every service to one commercial agent, rewrite old instrumentation, and accept a long period where observability would be worse before it became better. The platform architect chose a different route: put OpenTelemetry between the applications and the backends, let existing signals enter through compatible receivers, normalize the data in one Collector layer, and export to a single tracing backend while teams gradually cleaned up code.",
+      "suggested_rewrite": "In regulated environments, teams often need end-to-end tracing for critical transaction flows. A practical migration path is to place OpenTelemetry between applications and backends, ingest existing signals through compatible receivers, normalize them in a Collector, and migrate services incrementally instead of rewriting every application at once.",
+      "lesson_point_url": null,
+      "rationale": "This continues the same unsourced anecdote and should be rewritten as a general operational lesson without false specifics."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "OpenTelemetry lets application code emit telemetry without being tied to one observability backend.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 1. The Problem OpenTelemetry Solves, paragraph 1",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The practical result is that your application code can describe what happened without caring whether the backend is Jaeger, Tempo, Prometheus, Loki, Honeycomb, Datadog, New Relic, or another system.",
+      "suggested_rewrite": "The practical result is that your application code can describe what happened without being tied to one observability backend.",
+      "lesson_point_url": "https://opentelemetry.io/docs/collector/",
+      "rationale": "The backend-neutral lesson is well supported, but one source should not be forced to substantiate every named backend in the illustrative list."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "OpenTelemetry provides a common API and SDK, OTLP, and a Collector as the core vendor-neutral telemetry path.",
+      "claim_class": "standard",
+      "span_hint": "section: 1. The Problem OpenTelemetry Solves, paragraph 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool directly covers the Collector role and OTLP as the OpenTelemetry transport protocol."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "The OpenTelemetry Java agent supports automatic instrumentation for Spring, JDBC, and common HTTP clients without application code changes.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Instrumentation Strategy, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/zero-code/java/agent/supported-libraries/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official supported-libraries page directly lists Spring, JDBC, and multiple HTTP client instrumentations for the Java agent."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Python auto-instrumentation can instrument many common frameworks and client libraries without changing application code.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Instrumentation Strategy, paragraph 2",
+      "disposition": "soften_to_illustration",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A Python wrapper can instrument Flask, FastAPI, SQLAlchemy, requests, and other common libraries.",
+      "suggested_rewrite": "A Python auto-instrumentation setup can instrument many common frameworks and client libraries without changing application code.",
+      "lesson_point_url": "https://opentelemetry.io/docs/zero-code/python/",
+      "rationale": "The official Python zero-code docs support the broader auto-instrumentation capability, but not this exact enumerated library list in one place."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "If `service.name` is not specified, OpenTelemetry SDKs fall back to an `unknown_service` value.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Instrumentation Strategy, paragraph after first Python trace example",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/specs/semconv/registry/attributes/service/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The semantic-conventions spec explicitly defines the `unknown_service` fallback for missing `service.name`."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Concrete paths such as `/orders/123` and `/orders/124` create separate Prometheus time series because label value changes create new series.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Instrumentation Strategy, paragraph after metrics example",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://prometheus.io/docs/concepts/data_model/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Prometheus documents that time series are identified by metric name plus labels and that changing a label value creates a new series."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "OpenTelemetry also supports B3 propagation for compatibility with Zipkin-style environments.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Context Propagation, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/specs/otel/context/api-propagators/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Propagators API spec explicitly includes B3 among the propagators distributed by the OpenTelemetry project."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Collector pipelines are defined per signal and consist of receivers, processors, and exporters.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 4. The Collector, paragraph 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared Collector source directly covers the receiver/processor/exporter pipeline model."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "The default port for OTLP/gRPC is 4317 and the default port for OTLP/HTTP is 4318.",
+      "claim_class": "standard",
+      "span_hint": "section: 6. Debugging an OpenTelemetry Pipeline, protocol mismatch paragraph",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The OTLP specification explicitly defines 4317 for OTLP/gRPC and 4318 for OTLP/HTTP."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Head sampling cannot guarantee that all error traces are kept, while tail sampling can keep traces based on completed-trace outcomes such as errors or latency.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Sampling, Filtering, and Cost Control, first two paragraphs",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared sampling source directly contrasts head and tail sampling and gives error and latency as tail-sampling examples."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Tail sampling in a multi-replica gateway requires trace-aware routing so all spans for a trace reach the same Collector instance.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Sampling, Filtering, and Cost Control, paragraph after tail-sampling thought exercise",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/collector/deploy/gateway/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official gateway deployment guidance explicitly discusses routing by trace ID so tail-sampling collectors see all spans for a trace."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "A metric with unbounded identifiers can create millions of series.",
+      "claim_class": "statistic",
+      "span_hint": "section: 5. Sampling, Filtering, and Cost Control, final paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A metric with `user.id`, `order.id`, or full URL paths can create millions of series even when request volume is moderate.",
+      "suggested_rewrite": "A metric with `user.id`, `order.id`, or full URL paths can create very high-cardinality series even when request volume is moderate.",
+      "lesson_point_url": null,
+      "rationale": "The exact magnitude is illustrative rather than sourced here, so the operational lesson should be kept while removing the false precision."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "OpenTelemetry was formed by merging the OpenTracing and OpenCensus projects.",
+      "claim_class": "standard",
+      "span_hint": "section: Did You Know, bullet 1",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/what-is-opentelemetry/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official OpenTelemetry overview page directly states that the project resulted from a merger of OpenTracing and OpenCensus."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "Collector self-metrics such as exporter queue size and send failures help distinguish export problems from earlier pipeline problems.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 6. Debugging an OpenTelemetry Pipeline, paragraph 2",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/collector/internal-telemetry/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official internal-telemetry docs enumerate queue and send-failure metrics and explain how they indicate downstream exporter trouble."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "The Collector can be deployed in multiple shapes such as agent, gateway, sidecar, or standalone process.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: Did You Know, bullet 3",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://opentelemetry.io/docs/collector/deploy/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official deployment-pattern docs describe the supported Collector deployment shapes and when to use them."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://opentelemetry.io/docs/collector/",
+      "title": "OpenTelemetry Collector",
+      "tier": "upstream",
+      "why_relevant": "Best starting point for the receiver-processor-exporter model and why the Collector is the operational control point."
+    },
+    {
+      "url": "https://opentelemetry.io/docs/specs/otlp/",
+      "title": "OTLP Specification 1.10.0",
+      "tier": "upstream",
+      "why_relevant": "Defines OTLP transports, default ports, request/response behavior, and the protocol details that matter during debugging."
+    },
+    {
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+      "title": "OpenTelemetry Traces",
+      "tier": "upstream",
+      "why_relevant": "Covers traces, spans, parent-child relationships, and the conceptual model behind propagation and trace debugging."
+    }
+  ],
+  "notes": "Code blocks, quiz items, exercise steps, and tables were intentionally excluded unless their surrounding prose contained a load-bearing factual claim. The opening bank story appears composite and should be rewritten rather than cited.",
+  "_schema_issues": [],
+  "rejected_urls": [
+    {
+      "url": "https://www.w3.org/TR/trace-context/",
+      "reason": "http_403",
+      "at_step": "research_validation",
+      "agent_proposed_tier": "standards"
+    }
+  ]
+}

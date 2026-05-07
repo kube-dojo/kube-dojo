@@ -30,9 +30,9 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-A platform team at a large European bank inherited a payment system with more than four hundred services and three separate tracing stacks. Legacy workloads emitted Zipkin spans, newer Java services sent data to Jaeger, and a Python rewrite had vendor-specific DataDog instrumentation baked into business code. When a card authorization crossed all three generations, the trace did not show a failed payment journey; it showed three disconnected fragments that each team interpreted differently.
+Large organizations often inherit multiple tracing systems across generations of services, so one end-to-end request can appear as disconnected fragments in different backends.
 
-The problem became urgent when an audit required end-to-end transaction tracing for regulated payment flows. The expensive answer was to migrate every service to one commercial agent, rewrite old instrumentation, and accept a long period where observability would be worse before it became better. The platform architect chose a different route: put OpenTelemetry between the applications and the backends, let existing signals enter through compatible receivers, normalize the data in one Collector layer, and export to a single tracing backend while teams gradually cleaned up code.
+In regulated environments, teams often need end-to-end tracing for critical transaction flows. A practical migration path is to place OpenTelemetry between applications and backends, ingest existing signals through compatible receivers, normalize them in a Collector, and migrate services incrementally instead of rewriting every application at once.
 
 That decision mattered because it changed the migration from an application rewrite into an infrastructure rollout. The teams could prove the payment path first, then improve service instrumentation one workload at a time. OpenTelemetry did not magically fix missing spans, bad service names, or sampling mistakes, but it gave the platform a standard vocabulary and a neutral transport. That is the skill you are building in this module: not memorizing OpenTelemetry terms, but designing and debugging a telemetry path that survives real production constraints.
 
@@ -40,7 +40,7 @@ That decision mattered because it changed the migration from an application rewr
 
 ### 1. The Problem OpenTelemetry Solves
 
-OpenTelemetry is the instrumentation and telemetry transport standard for modern observability. It gives application teams a common API and SDK for creating telemetry, a protocol called OTLP for moving it, and a Collector for receiving, processing, and exporting it. The practical result is that your application code can describe what happened without caring whether the backend is Jaeger, Tempo, Prometheus, Loki, Honeycomb, Datadog, New Relic, or another system.
+OpenTelemetry is the instrumentation and telemetry transport standard for modern observability. It gives application teams [a common API and SDK for creating telemetry, a protocol called OTLP for moving it, and a Collector for receiving, processing, and exporting it](https://opentelemetry.io/docs/collector/). The practical result is that your application code can describe what happened without being tied to one observability backend.
 
 The important word is standard, not tool. OpenTelemetry is not a full observability backend by itself. It does not replace dashboards, long-term storage, alerting rules, or incident workflows. Instead, it sits at the boundary where applications produce telemetry and platforms decide where that telemetry should go. This boundary is where vendor lock-in usually grows, so standardizing it gives the platform team leverage.
 
@@ -111,7 +111,7 @@ A mature platform treats these signals as connected evidence, not separate produ
 
 Instrumentation is the act of making software describe its behavior. Automatic instrumentation attaches to common frameworks and libraries, such as HTTP servers, database clients, message queues, and gRPC clients. Manual instrumentation adds spans, attributes, metrics, and events around business operations that generic library hooks cannot understand.
 
-Start with automatic instrumentation because it gives fast coverage and exposes the request graph quickly. A Java agent can instrument Spring, JDBC, and HTTP clients without changing application code. A Python wrapper can instrument Flask, FastAPI, SQLAlchemy, requests, and other common libraries. This is especially useful when your first goal is to find missing service-to-service edges rather than model every business decision.
+Start with automatic instrumentation because it gives fast coverage and exposes the request graph quickly. [A Java agent can instrument Spring, JDBC, and HTTP clients without changing application code.](https://opentelemetry.io/docs/zero-code/java/agent/supported-libraries/) A Python auto-instrumentation setup can instrument many common frameworks and client libraries without changing application code. This is especially useful when your first goal is to find missing service-to-service edges rather than model every business decision.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
 The worked example has a root span called `process_order` and child spans for validation and saving. If validation fails, the exception is recorded on the business span, not only in a log line. That difference matters during incidents because the failing decision becomes visible in the trace tree, and the backend can keep error traces even when successful traces are sampled aggressively.
 
-**Pause and predict:** If the `service.name` resource attribute is missing from the example, what will the backend show? Most systems will still ingest the spans, but they may appear under an unknown service or be grouped with unrelated telemetry. Predict how that would affect ownership, alert routing, and dashboard filters before reading further.
+**Pause and predict:** If the `service.name` resource attribute is missing from the example, what will the backend show? Most systems will still ingest the spans, but [they may appear under an unknown service or be grouped with unrelated telemetry](https://opentelemetry.io/docs/specs/semconv/registry/attributes/service/). Predict how that would affect ownership, alert routing, and dashboard filters before reading further.
 
 The resource is not decoration. It is the identity card attached to telemetry. `service.name`, `service.version`, and `deployment.environment` let backends group data correctly and let platform teams distinguish a production checkout failure from a development test. Missing or inconsistent resource attributes are one of the most common causes of "OpenTelemetry is working, but nobody can find anything."
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     provider.shutdown()
 ```
 
-This example uses route templates rather than raw paths. `/orders/{id}` is safe because it groups many requests into one series. `/orders/123`, `/orders/124`, and every other concrete ID would create a new time series, which raises cost and makes dashboards slower. Senior observability work is often about this kind of restraint: record the attribute that supports a decision, not every value that happens to exist.
+This example uses route templates rather than raw paths. `/orders/{id}` is safe because it groups many requests into one series. [`/orders/123`, `/orders/124`, and every other concrete ID would create a new time series](https://prometheus.io/docs/concepts/data_model/), which raises cost and makes dashboards slower. Senior observability work is often about this kind of restraint: record the attribute that supports a decision, not every value that happens to exist.
 
 ### 3. Context Propagation: The Difference Between Spans and Traces
 
@@ -296,7 +296,7 @@ A span is one timed operation. A trace is a connected tree of spans that share a
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The W3C `traceparent` header is the default modern propagation format. Some environments also need B3 propagation for compatibility with Zipkin-era services. During migrations, it is common to accept more than one propagator so that old and new workloads can share context while teams gradually standardize.
+The W3C `traceparent` header is the default modern propagation format. Some environments also need [B3 propagation for compatibility with Zipkin-era services](https://opentelemetry.io/docs/specs/otel/context/api-propagators/). During migrations, it is common to accept more than one propagator so that old and new workloads can share context while teams gradually standardize.
 
 ```python
 from opentelemetry.baggage.propagation import W3CBaggagePropagator
@@ -325,7 +325,7 @@ A Collector can transform, filter, sample, and export telemetry, but it cannot i
 
 ### 4. The Collector: Receivers, Processors, Exporters, and Pipelines
 
-The OpenTelemetry Collector is the operational control point for telemetry. Receivers accept data, processors modify or decide what to keep, exporters send data onward, and pipelines connect those pieces per signal type. A Collector can receive OTLP from applications, scrape Prometheus endpoints, accept legacy Zipkin traffic, batch data, apply memory limits, remove noisy spans, and export to multiple destinations.
+The OpenTelemetry Collector is the operational control point for telemetry. [Receivers accept data, processors modify or decide what to keep, exporters send data onward, and pipelines connect those pieces per signal type](https://opentelemetry.io/docs/collector/). A Collector can receive OTLP from applications, scrape Prometheus endpoints, accept legacy Zipkin traffic, batch data, apply memory limits, remove noisy spans, and export to multiple destinations.
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -474,7 +474,7 @@ Sampling decides which traces are kept. Filtering removes telemetry that should 
 
 Head sampling makes the decision near the beginning of a trace. It is simple, cheap, and easy to run in application SDKs or agent Collectors. Its weakness is that it decides before the system knows whether the trace will become slow or fail, so rare but important traces can be dropped.
 
-Tail sampling waits until a trace is complete or until a decision timeout is reached. It can keep all error traces, all slow traces, and a smaller percentage of normal traces. Its weakness is complexity: the Collector must buffer spans long enough to make the decision, and horizontally scaled tail-sampling gateways must see all spans for the same trace or use a load-balancing strategy that routes trace IDs consistently.
+[Tail sampling waits until a trace is complete or until a decision timeout is reached. It can keep all error traces, all slow traces, and a smaller percentage of normal traces.](https://opentelemetry.io/docs/concepts/sampling/) Its weakness is complexity: the Collector must buffer spans long enough to make the decision, and horizontally scaled tail-sampling gateways must see all spans for the same trace or use a load-balancing strategy that routes trace IDs consistently.
 
 ```text
 HEAD SAMPLING                                      TAIL SAMPLING
@@ -515,7 +515,7 @@ processors:
 
 **Pause and predict:** Your gateway Collector runs three replicas behind a normal Kubernetes Service, and you enable tail sampling. Some spans from one trace land on replica one, while other spans from the same trace land on replica two. What will happen to sampling decisions? Predict the failure mode before reading the answer.
 
-Tail sampling only works well when the decision maker sees enough of the trace. If spans from the same trace are scattered across independent Collectors, each replica may make incomplete decisions. One replica may keep a partial trace because it saw an error span, while another may drop related normal spans. Production designs usually place tail sampling in a gateway layer and add routing that keeps spans for the same trace together, or they accept head sampling when the operational complexity of tail sampling is not justified.
+Tail sampling only works well when the decision maker sees enough of the trace. If spans from the same trace are scattered across independent Collectors, each replica may make incomplete decisions. One replica may keep a partial trace because it saw an error span, while another may drop related normal spans. Production designs usually place tail sampling in a gateway layer and [add routing that keeps spans for the same trace together](https://opentelemetry.io/docs/collector/deploy/gateway/), or they accept head sampling when the operational complexity of tail sampling is not justified.
 
 | Control | Strength | Risk | Good Use |
 |---|---|---|---|
@@ -525,7 +525,7 @@ Tail sampling only works well when the decision maker sees enough of the trace. 
 | Batching | Improves export efficiency | Can delay visibility slightly | Almost every Collector pipeline |
 | Memory limiting | Protects Collector stability | Drops telemetry under pressure | All production Collectors |
 
-Cost control is not only about sampling percentages. Attribute design can be more important. A metric with `user.id`, `order.id`, or full URL paths can create millions of series even when request volume is moderate. A trace attribute with sensitive data can create compliance risk even if ingestion cost is acceptable. Good OpenTelemetry design asks: "Will this attribute help us route, aggregate, debug, or explain behavior?" If not, leave it out or put it somewhere safer.
+Cost control is not only about sampling percentages. Attribute design can be more important. A metric with `user.id`, `order.id`, or full URL paths can create very high-cardinality series even when request volume is moderate. A trace attribute with sensitive data can create compliance risk even if ingestion cost is acceptable. Good OpenTelemetry design asks: "Will this attribute help us route, aggregate, debug, or explain behavior?" If not, leave it out or put it somewhere safer.
 
 ### 6. Debugging an OpenTelemetry Pipeline
 
@@ -557,9 +557,9 @@ Debugging OpenTelemetry works best when you test one boundary at a time. First p
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Collector self-metrics are an underused debugging tool. Metrics such as accepted spans, refused spans, processor drops, exporter queue size, and send failures can tell you whether the problem is upstream or downstream. If accepted spans increase but exporter failures also increase, the Collector is receiving data and failing to deliver it. If accepted spans stay at zero, focus on application endpoints, protocol mismatch, DNS, and network policy.
+Collector self-metrics are an underused debugging tool. Metrics such as accepted spans, refused spans, processor drops, [exporter queue size, and send failures can tell you whether the problem is upstream or downstream](https://opentelemetry.io/docs/collector/internal-telemetry/). If accepted spans increase but exporter failures also increase, the Collector is receiving data and failing to deliver it. If accepted spans stay at zero, focus on application endpoints, protocol mismatch, DNS, and network policy.
 
-A protocol mismatch is easy to miss. OTLP/gRPC commonly uses port `4317`; OTLP/HTTP commonly uses port `4318`. Sending HTTP payloads to the gRPC receiver, or gRPC traffic to the HTTP receiver, often looks like a generic connection or parsing failure. During incident response, explicitly verify the exporter type and endpoint instead of assuming the port is enough.
+A protocol mismatch is easy to miss. [OTLP/gRPC commonly uses port `4317`; OTLP/HTTP commonly uses port `4318`](https://opentelemetry.io/docs/specs/otlp/). Sending HTTP payloads to the gRPC receiver, or gRPC traffic to the HTTP receiver, often looks like a generic connection or parsing failure. During incident response, explicitly verify the exporter type and endpoint instead of assuming the port is enough.
 
 ```bash
 # Verify Collector pods and service endpoints.
@@ -583,9 +583,9 @@ When telemetry is missing, resist the urge to change several things at once. Add
 
 ## Did You Know?
 
-- OpenTelemetry was created by merging OpenTracing and OpenCensus, which ended a split between two major open instrumentation efforts.
+- OpenTelemetry was [created by merging OpenTracing and OpenCensus](https://opentelemetry.io/docs/what-is-opentelemetry/), which ended a split between two major open instrumentation efforts.
 - OTLP can carry traces, metrics, and logs, but each signal still needs a correctly configured pipeline in the Collector.
-- The Collector can run as an agent, gateway, sidecar, or standalone process; the right shape depends on traffic volume, ownership, and failure isolation.
+- The Collector can [run as an agent, gateway, sidecar, or standalone process](https://opentelemetry.io/docs/collector/deploy/); the right shape depends on traffic volume, ownership, and failure isolation.
 - Tail sampling can preserve important traces, but it becomes a distributed-systems problem when gateway replicas do not consistently receive all spans for the same trace.
 
 ## Common Mistakes
@@ -1027,3 +1027,19 @@ Success criteria:
 ## Next Module
 
 Continue to [Module 1.3: Grafana](../module-1.3-grafana/) to learn how dashboards and visual exploration turn telemetry into operational decisions.
+
+## Sources
+
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — General lesson point for an illustrative rewrite.
+- [OTLP Specification 1.10.0](https://opentelemetry.io/docs/specs/otlp/) — Backs OTLP as the OpenTelemetry transport protocol, including gRPC and HTTP transport details, request/response behavior, default ports, retry semantics, and signal transport expectations.
+- [opentelemetry.io: supported libraries](https://opentelemetry.io/docs/zero-code/java/agent/supported-libraries/) — The official supported-libraries page directly lists Spring, JDBC, and multiple HTTP client instrumentations for the Java agent.
+- [opentelemetry.io: python](https://opentelemetry.io/docs/zero-code/python/) — General lesson point for an illustrative rewrite.
+- [opentelemetry.io: service](https://opentelemetry.io/docs/specs/semconv/registry/attributes/service/) — The semantic-conventions spec explicitly defines the `unknown_service` fallback for missing `service.name`.
+- [prometheus.io: data model](https://prometheus.io/docs/concepts/data_model/) — Prometheus documents that time series are identified by metric name plus labels and that changing a label value creates a new series.
+- [opentelemetry.io: api propagators](https://opentelemetry.io/docs/specs/otel/context/api-propagators/) — The Propagators API spec explicitly includes B3 among the propagators distributed by the OpenTelemetry project.
+- [OpenTelemetry: Sampling](https://opentelemetry.io/docs/concepts/sampling/) — Backs head-vs-tail sampling concepts, cost-control rationale, and practical guidance about reducing trace volume while preserving useful signal.
+- [opentelemetry.io: gateway](https://opentelemetry.io/docs/collector/deploy/gateway/) — The official gateway deployment guidance explicitly discusses routing by trace ID so tail-sampling collectors see all spans for a trace.
+- [opentelemetry.io: what is opentelemetry](https://opentelemetry.io/docs/what-is-opentelemetry/) — The official OpenTelemetry overview page directly states that the project resulted from a merger of OpenTracing and OpenCensus.
+- [opentelemetry.io: internal telemetry](https://opentelemetry.io/docs/collector/internal-telemetry/) — The official internal-telemetry docs enumerate queue and send-failure metrics and explain how they indicate downstream exporter trouble.
+- [opentelemetry.io: deploy](https://opentelemetry.io/docs/collector/deploy/) — The official deployment-pattern docs describe the supported Collector deployment shapes and when to use them.
+- [OpenTelemetry Traces](https://opentelemetry.io/docs/concepts/signals/traces/) — Covers traces, spans, parent-child relationships, and the conceptual model behind propagation and trace debugging.
