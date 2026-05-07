@@ -24,9 +24,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
+import os
 import subprocess
 import sys
 import time
+import threading
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -34,6 +37,7 @@ REPO_ROOT = SCRIPT_DIR.parent
 PYTHON = str(REPO_ROOT / ".venv" / "bin" / "python")
 RUN_SECTION_V3 = str(SCRIPT_DIR / "run_section_v3.py")
 LOG_DIR = REPO_ROOT / ".pipeline" / "v3" / "autopilot"
+HEARTBEAT_PATH = LOG_DIR / "heartbeat.json"
 
 
 def _parse_hhmm(value: str) -> dt.datetime:
@@ -58,7 +62,6 @@ def _queue_preview(min_uncited: int, *, content_stable_only: bool) -> list[tuple
 def _log_iteration(entry: dict) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / f"{dt.date.today().isoformat()}.jsonl"
-    import json
     with log_path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
@@ -84,6 +87,29 @@ def _run_one_section(min_uncited: int, *, content_stable_only: bool) -> tuple[in
         check=False,
     )
     return result.returncode, ""
+
+
+def _start_heartbeat(pid: int) -> threading.Event:
+    stop_event = threading.Event()
+    start = dt.datetime.now()
+
+    def _writer() -> None:
+        while True:
+            now = dt.datetime.now()
+            payload = {
+                "pid": pid,
+                "ts": now.isoformat(timespec="seconds"),
+                "uptime_s": int((now - start).total_seconds()),
+            }
+            HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with HEARTBEAT_PATH.open("w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False)
+            if stop_event.wait(60):
+                break
+
+    thread = threading.Thread(target=_writer, name="autopilot-v3-heartbeat", daemon=True)
+    thread.start()
+    return stop_event
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -144,53 +170,62 @@ def main(argv: list[str] | None = None) -> int:
     print(f"→ queue head ({len(queue)} sections above threshold):", flush=True)
     for sec, uncited, total in queue[:10]:
         print(f"    {uncited:3d}/{total:<3d}  {sec}", flush=True)
-    if args.dry_run:
-        return 0
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    stop_heartbeat = _start_heartbeat(os.getpid())
 
-    processed = 0
-    failures = 0
-    while True:
-        if args.max_sections is not None and processed >= args.max_sections:
-            print(f"→ stop: processed {processed} sections", flush=True)
-            break
-        if deadline is not None and dt.datetime.now() >= deadline:
-            print(f"→ stop: deadline {deadline.isoformat()} reached", flush=True)
-            break
+    try:
+        if args.dry_run:
+            return 0
 
-        iteration_start = time.time()
-        rc, _ = _run_one_section(args.min_uncited, content_stable_only=content_stable_only)
-        elapsed = round(time.time() - iteration_start, 1)
-        _log_iteration({
-            "iteration": processed + 1,
-            "finished_at": dt.datetime.now().isoformat(timespec="seconds"),
-            "elapsed_s": elapsed,
-            "exit_code": rc,
-        })
-        processed += 1
-        if rc != 0:
-            failures += 1
-            print(f"✗ iteration {processed} exit={rc} ({elapsed}s) — continuing", flush=True)
-        else:
-            print(f"✓ iteration {processed} ok ({elapsed}s)", flush=True)
+        processed = 0
+        failures = 0
+        while True:
+            if args.max_sections is not None and processed >= args.max_sections:
+                print(f"→ stop: processed {processed} sections", flush=True)
+                break
+            if deadline is not None and dt.datetime.now() >= deadline:
+                print(f"→ stop: deadline {deadline.isoformat()} reached", flush=True)
+                break
 
-        # Recheck whether anything's left; pipeline auto-pick prints
-        # "queue may be drained" with rc=0 when empty.
-        remaining = _queue_preview(args.min_uncited, content_stable_only=content_stable_only)
-        if not remaining:
-            print("→ queue drained; stopping", flush=True)
-            break
+            iteration_start = time.time()
+            rc, _ = _run_one_section(
+                args.min_uncited,
+                content_stable_only=content_stable_only,
+            )
+            elapsed = round(time.time() - iteration_start, 1)
+            _log_iteration({
+                "iteration": processed + 1,
+                "finished_at": dt.datetime.now().isoformat(timespec="seconds"),
+                "elapsed_s": elapsed,
+                "exit_code": rc,
+            })
+            processed += 1
+            if rc != 0:
+                failures += 1
+                print(f"✗ iteration {processed} exit={rc} ({elapsed}s) — continuing", flush=True)
+            else:
+                print(f"✓ iteration {processed} ok ({elapsed}s)", flush=True)
 
-        if args.max_sections is not None and processed >= args.max_sections:
-            continue  # break next loop iteration
-        if deadline is not None and dt.datetime.now() >= deadline:
-            continue
+            # Recheck whether anything's left; pipeline auto-pick prints
+            # "queue may be drained" with rc=0 when empty.
+            remaining = _queue_preview(args.min_uncited, content_stable_only=content_stable_only)
+            if not remaining:
+                print("→ queue drained; stopping", flush=True)
+                break
 
-        if args.sleep_between > 0:
-            print(f"  sleeping {args.sleep_between}s before next section", flush=True)
-            time.sleep(args.sleep_between)
+            if args.max_sections is not None and processed >= args.max_sections:
+                continue  # break next loop iteration
+            if deadline is not None and dt.datetime.now() >= deadline:
+                continue
 
-    print(f"== autopilot done: processed={processed} failures={failures} ==", flush=True)
-    return 0 if failures == 0 else 1
+            if args.sleep_between > 0:
+                print(f"  sleeping {args.sleep_between}s before next section", flush=True)
+                time.sleep(args.sleep_between)
+
+        print(f"== autopilot done: processed={processed} failures={failures} ==", flush=True)
+        return 0 if failures == 0 else 1
+    finally:
+        stop_heartbeat.set()
 
 
 if __name__ == "__main__":
