@@ -195,7 +195,7 @@ OpenFaaS focuses heavily on operational simplicity. OpenFaaS CE and Pro document
 
 However, organizations must be acutely aware of licensing. OpenFaaS Community Edition is limited for commercial use and intended for personal/non-production scenarios with a 60-day commercial usage limit. Deploying CE into a revenue-generating environment violates this limit.
 
-Furthermore, deployment topology matters. OpenFaaS CE requires a Kubernetes cluster with full internet access continuously; air-gapped/restricted environments are positioned as better fit for OpenFaaS Standard. The CE edition routinely checks external registries and validation endpoints, which will instantly crash loop in a disconnected datacenter.
+Furthermore, deployment topology matters. OpenFaaS CE requires a Kubernetes cluster with full internet access continuously; air-gapped/restricted environments are positioned as better fit for OpenFaaS Standard. The CE edition routinely checks external registries and validation endpoints, which can quickly trigger a crash loop in a disconnected datacenter.
 
 For extreme edge use cases or isolated bare-metal environments lacking a full orchestration control plane, OpenFaaS can also be deployed as faasd on a single host without Kubernetes, using containerd and CNI. This makes it an incredibly versatile tool for IoT gateways or isolated industrial servers.
 
@@ -521,3 +521,11 @@ D) Java (Spring Boot framework, JIT compiled).
 Ready to dive deeper into the operational realities of these platforms? Now that you have constructed a functional serverless environment on your bare-metal nodes, it is time to secure it. In the next module, we will explore advanced traffic management, enforcing zero-trust networking between serverless functions, and implementing mutual TLS utilizing service meshes.
 
 [Continue with Zero-Trust Architecture ->](/on-premises/security/module-6.8-zero-trust-architecture/)
+
+## Sources
+
+- [Knative Project Overview](https://www.cncf.io/projects/knative/) — Best high-level source for Knative's CNCF status and major components before diving into Serving and Eventing details.
+- [KEDA Project Overview](https://www.cncf.io/projects/keda/) — Concise authoritative overview of KEDA's role as an event-driven autoscaler and its CNCF maturity.
+- [CloudEvents Core Specification](https://github.com/cloudevents/spec/blob/main/cloudevents/spec.md) — Grounds the event-format and interoperability claims behind Knative Eventing.
+- [faasd Repository](https://github.com/openfaas/faasd) — Useful for the module's single-host and edge-style alternatives to full Kubernetes-based serverless stacks.
+- [Fission Repository](https://github.com/fission/fission) — Backs the warm-pool and cold-start trade-off discussion for an alternative Kubernetes-native FaaS framework.
