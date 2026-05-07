@@ -1,0 +1,264 @@
+{
+  "module_key": "k8s/cka/part2-workloads-scheduling/module-2.1-pods",
+  "module_path": "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.1-pods.md",
+  "research_run_id": "2026-05-07T05:04:10+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part2-workloads-scheduling.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "Pods are Kubernetes' smallest deployable unit and wrap one or more co-located containers with shared storage and networking.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 1 / 1.1 What Is a Pod?",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Pods concept page directly defines Pods this way."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "Deployments, StatefulSets, DaemonSets, and Jobs create or manage Pods rather than raw containers.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S005",
+        "S006",
+        "S007",
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool covers Pods plus the main workload controllers named in the sentence."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "A security context defines privilege and access control settings for a Pod or Container, including settings such as runAsUser, fsGroup, allowPrivilegeEscalation, and readOnlyRootFilesystem.",
+      "claim_class": "security_claim",
+      "span_hint": "section: Part 2 / 2.4 Security Contexts",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes security-context task page directly defines the field and documents the exact example settings used here."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The CKA exam tests pod creation, troubleshooting, and multi-container patterns.",
+      "claim_class": "standard",
+      "span_hint": "section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CKA exam tests pod creation, troubleshooting, and multi-container patterns.",
+      "suggested_rewrite": "This module focuses on pod creation, troubleshooting, and multi-container patterns you'll use regularly in practice.",
+      "lesson_point_url": null,
+      "rationale": "The official CKA domains cover workloads and troubleshooting, but this exact subtopic list is not stated precisely enough to support as written."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Pods follow a defined lifecycle, are relatively ephemeral, and move through phases such as Pending, Running, Succeeded, and Failed.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3 / 3.1 Pod Phases",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The v1.35 Pod Lifecycle page directly describes Pod phases and Pod ephemerality."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "When a Pod is deleted, it is immediately removed from Service endpoints.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3 / 3.5 Pod Termination & Grace Periods",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "1. The pod state is set to `Terminating` and it is removed from Service endpoints.",
+      "suggested_rewrite": "1. The pod enters `Terminating`, and its endpoints stop being treated as ready for regular Service traffic.",
+      "lesson_point_url": null,
+      "rationale": "Current Kubernetes docs say terminating endpoints are not immediately removed; they are marked not ready for regular traffic."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Pod deletion uses graceful termination: kubelet sends SIGTERM to the main process in each container, waits for the termination grace period (30 seconds by default), and then force-kills remaining processes with SIGKILL.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 3 / 3.5 Pod Termination & Grace Periods",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Pod Lifecycle page documents the default 30-second grace period and TERM/KILL shutdown flow."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Multi-container Pods are meant for tightly coupled containers that share resources and lifecycle, and init containers run before app containers.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 5 / 5.1 Why Multiple Containers? and 5.4 Init Containers",
+      "disposition": "supported",
+      "source_ids": [
+        "S001",
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared pool directly covers multi-container Pod coupling and init-container startup ordering."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Regular init containers must complete successfully before app containers start, are restarted on failure according to restart policy behavior, and do not support readiness, liveness, or startup probes.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 5 / 5.5 Init Container Use Cases",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The init-containers doc directly covers completion ordering, restart behavior, and probe limitations."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Startup probes disable other probes until startup succeeds; failing liveness or startup probes causes kubelet to kill the container; failing readiness probes removes the Pod from matching Service endpoints.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 6 / 6.1 Probe Types",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The probes concept page directly states these probe semantics."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Kubernetes supports only three probe mechanisms: httpGet, tcpSocket, and exec.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 6 / 6.2 Probe Mechanisms",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Probes can check health using three main mechanisms:",
+      "suggested_rewrite": "Probes can check health using several mechanisms, including the following:",
+      "lesson_point_url": null,
+      "rationale": "Current Kubernetes documentation includes a fourth built-in probe mechanism, gRPC, so the exact count is outdated."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Probe checks can use exec, HTTP GET, and TCP socket mechanisms; exec succeeds on exit code 0, HTTP succeeds on 200-399 responses, and TCP succeeds when the port is open.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 6 / 6.2 Probe Mechanisms",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The probes concept page directly defines these mechanism-specific success conditions."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Containers in the same Pod share a network namespace and IP address and can communicate with each other over localhost.",
+      "claim_class": "standard",
+      "span_hint": "section: Part 7 / 7.2 Container Communication in Pod",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Pods concept page directly states same-Pod containers share IP/ports and can talk over localhost."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "A Pod can be Running but still not receive traffic if its readiness probe is failing.",
+      "claim_class": "war_story",
+      "span_hint": "section: Part 4 / War Story: The Silent Failure",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S003",
+        "S019"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "A junior engineer spent 3 hours debugging why their pod wasn't working. `kubectl get pods` showed `Running`. They finally ran `kubectl describe pod` and saw the readiness probe was failing. The pod was running but not receiving traffic because it wasn't ready. Always check `READY` column and describe output!",
+      "suggested_rewrite": "A pod can show `Running` while still not receiving traffic if its readiness probe is failing. Always check the `READY` column and `kubectl describe pod` output!",
+      "lesson_point_url": null,
+      "rationale": "The operational lesson is real and documented, but the timed anecdote is unattributed and must be collapsed into a general principle."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/",
+      "title": "Pods",
+      "tier": "standards",
+      "why_relevant": "Primary upstream overview of Pod structure, shared networking/storage, and multi-container Pod behavior."
+    },
+    {
+      "url": "https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle",
+      "title": "Pod Lifecycle",
+      "tier": "standards",
+      "why_relevant": "Best reference for Pod phases, restart behavior, graceful termination, and troubleshooting status semantics."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/",
+      "title": "Liveness, Readiness, and Startup Probes",
+      "tier": "standards",
+      "why_relevant": "Canonical source for probe types, mechanisms, and kubelet behavior when checks fail."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/",
+      "title": "Init Containers",
+      "tier": "standards",
+      "why_relevant": "Useful follow-on reading for init-container sequencing, restart behavior, and differences from app containers."
+    }
+  ],
+  "notes": "Per brief, I excluded quiz prompts/answers, exercise steps, code blocks, and diagram/table-only content unless the surrounding prose made a separate factual claim. Main repair points are the unsourced war story, the outdated probe-mechanism count, the over-specific CKA exam sentence, and the too-strong endpoint-removal statement during Pod termination.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

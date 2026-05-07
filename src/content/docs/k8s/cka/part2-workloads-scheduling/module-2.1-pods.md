@@ -31,13 +31,13 @@ After this module, you will be able to:
 
 ## Why This Module Matters
 
-Pods are the **atomic unit of deployment** in Kubernetes. Every container you run lives inside a pod. Every Deployment, StatefulSet, DaemonSet, and Job creates pods. If you don't understand pods deeply, you'll struggle with everything else.
+Pods are the **atomic unit of deployment** in Kubernetes. Every container you run lives inside a pod. [Every Deployment, StatefulSet, DaemonSet, and Job creates pods.](https://kubernetes.io/docs/concepts/workloads/pods/) If you don't understand pods deeply, you'll struggle with everything else.
 
-The CKA exam tests pod creation, troubleshooting, and multi-container patterns. You'll need to create pods quickly, debug failing pods, and understand how containers within a pod interact.
+This module focuses on pod creation, troubleshooting, and multi-container patterns you'll use regularly in practice. You'll need to create pods quickly, debug failing pods, and understand how containers within a pod interact.
 
 > **The Apartment Analogy**
 >
-> Think of a pod like an apartment. Containers are roommates sharing the apartment. They share the same address (IP), the same living space (network namespace), and can share storage (volumes). They have their own rooms (filesystem) but can talk to each other easily (localhost). When the apartment is demolished (pod deleted), all roommates leave together.
+> Think of a pod like an apartment. Containers are roommates sharing the apartment. [They share the same address (IP), the same living space (network namespace), and can share storage (volumes). They have their own rooms (filesystem) but can talk to each other easily (localhost).](https://kubernetes.io/docs/concepts/workloads/pods/) When the apartment is demolished (pod deleted), all roommates leave together.
 
 ---
 
@@ -57,7 +57,7 @@ By the end of this module, you'll be able to:
 ### 1.1 What Is a Pod?
 
 A pod is:
-- The smallest deployable unit in Kubernetes
+- [The smallest deployable unit in Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/)
 - A wrapper around one or more containers
 - Containers that share network and storage
 - Ephemeral (can be killed and recreated)
@@ -190,7 +190,7 @@ kubectl get pods -w
 
 ### 2.4 Security Contexts
 
-Security contexts define privilege and access control settings for a Pod or Container. This is essential for preventing workloads from running as root.
+[Security contexts define privilege and access control settings for a Pod or Container.](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) This is essential for preventing workloads from running as root.
 
 ```yaml
 apiVersion: v1
@@ -218,7 +218,7 @@ spec:
 
 ## Part 3: Pod Lifecycle
 
-### 3.1 Pod Phases
+### 3.1 [Pod Phases](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle)
 
 | Phase | Description |
 |-------|-------------|
@@ -285,8 +285,8 @@ kubectl describe pod nginx | grep -A5 "Events:"
 
 ### 3.5 Pod Termination & Grace Periods
 
-When you delete a pod, Kubernetes doesn't kill it immediately. It follows a graceful termination process:
-1. The pod state is set to `Terminating` and it is removed from Service endpoints.
+When you delete a pod, Kubernetes doesn't kill it immediately. It follows a [graceful termination process](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle):
+1. The pod enters `Terminating`, and its endpoints stop being treated as ready for regular Service traffic.
 2. A `SIGTERM` signal is sent to the main process in each container.
 3. Kubernetes waits for the **termination grace period** (default 30 seconds).
 4. If the container is still running after the grace period, a `SIGKILL` is sent to forcefully stop it.
@@ -384,7 +384,7 @@ kubectl top pod nginx              # Resource usage (if metrics-server)
 
 > **War Story: The Silent Failure**
 >
-> A junior engineer spent 3 hours debugging why their pod wasn't working. `kubectl get pods` showed `Running`. They finally ran `kubectl describe pod` and saw the readiness probe was failing. The pod was running but not receiving traffic because it wasn't ready. Always check `READY` column and describe output!
+> A pod can show `Running` while still not receiving traffic if its readiness probe is failing. Always check the `READY` column and `kubectl describe pod` output!
 
 ---
 
@@ -394,7 +394,7 @@ kubectl top pod nginx              # Resource usage (if metrics-server)
 
 Multi-container pods are for containers that:
 - Need to share resources (network, storage)
-- Have tightly coupled lifecycles
+- [Have tightly coupled lifecycles](https://kubernetes.io/docs/concepts/workloads/pods/)
 - Form a single cohesive unit of service
 
 ### 5.2 Multi-Container Patterns
@@ -501,13 +501,13 @@ spec:
 
 > **Did You Know?**
 >
-> Init containers have the same spec as regular containers but with different restart behavior. If an init container fails, the pod restarts (unless restartPolicy is Never). Init containers don't support readiness probes since they must complete, not stay running.
+> Init containers have the same spec as regular containers but with different restart behavior. [If an init container fails, the pod restarts (unless restartPolicy is Never).](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) Init containers don't support readiness probes since they must complete, not stay running.
 
 ---
 
 ## Part 6: Health Checks and Probes
 
-Kubernetes needs to know if your application is healthy to make routing and restart decisions. It does this using three types of probes: Liveness, Readiness, and Startup probes.
+Kubernetes needs to know if your application is healthy to make routing and restart decisions. It does this using [three types of probes: Liveness, Readiness, and Startup probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/).
 
 ### 6.1 Probe Types
 
@@ -521,8 +521,8 @@ Kubernetes needs to know if your application is healthy to make routing and rest
 
 ### 6.2 Probe Mechanisms
 
-Probes can check health using three main mechanisms:
-1. `httpGet`: Performs an HTTP GET request. Success is any 2xx or 3xx status code.
+Probes can check health using several mechanisms, including the following:
+1. [`httpGet`: Performs an HTTP GET request. Success is any 2xx or 3xx status code.](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/)
 2. `tcpSocket`: Attempts to open a TCP connection to the specified port.
 3. `exec`: Executes a command inside the container. Success is a zero exit status.
 
@@ -1078,3 +1078,15 @@ kubectl delete pod challenge
 ## Next Module
 
 [Module 2.2: Deployments & ReplicaSets](../module-2.2-deployments/) - Rolling updates, rollbacks, and scaling.
+
+## Sources
+
+- [Pods](https://kubernetes.io/docs/concepts/workloads/pods/) — Backs pod fundamentals: pods as the smallest deployable unit, one-or-more container model, shared network namespace, shared storage, co-location, and the pod abstraction used by higher-level workload controllers.
+- [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) — Backs Deployment behavior, Deployment-to-ReplicaSet-to-Pod ownership, rollout strategy, rolling updates, maxSurge/maxUnavailable behavior, rollout history, pause/resume, and rollback concepts.
+- [DaemonSet](https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/) — Backs one-pod-per-node semantics, automatic coverage of added nodes, common node-level use cases, selective node placement via nodeSelector/affinity, and DaemonSet toleration behavior.
+- [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) — Backs stable pod identity, ordinal naming, stable storage via volumeClaimTemplates, ordered deployment and rolling updates, headless Service requirements, and DNS/network identity behavior.
+- [Jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/) — Backs run-to-completion semantics, backoffLimit, restartPolicy constraints, completions, parallelism, pod replacement on failure, and batch workload behavior distinct from Deployments.
+- [kubernetes.io: security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) — The Kubernetes security-context task page directly defines the field and documents the exact example settings used here.
+- [Pod Lifecycle](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle) — Supports claims about Pod phases, scheduling/binding terminology, graceful termination, terminationGracePeriodSeconds, preStop hook execution during shutdown, and Pod resize status conditions in v1.35.
+- [Init Containers](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) — Backs init-container ordering, run-to-completion behavior, differences from app containers, and pod startup sequencing before main containers begin.
+- [Liveness, Readiness, and Startup Probes](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/) — Backs probe semantics, differences between liveness/readiness/startup probes, and how kubelet reacts to failing probes or holds readiness during startup.
