@@ -59,7 +59,7 @@ By the end of this module, you'll be able to:
 
 ## Did You Know?
 
-- **In-Place Pod Resize is now GA**: As of Kubernetes 1.35, you can change CPU and memory requests/limits on running pods **without restarting them**. This feature was alpha since K8s 1.27 and took 3 years to stabilize. Use `kubectl patch` to resize a running pod — no downtime required.
+- **In-Place Pod Resize is now GA**: In Kubernetes 1.35, you can update CPU and memory requests and limits for running Pods through the `/resize` subresource. Whether a container restarts depends on its `resizePolicy` and the kind of resource change.
 
 ---
 
@@ -137,7 +137,7 @@ spec:
 | `1Gi` | 1 gibibyte |
 | `256M` | 256 megabytes (256 × 1000² bytes) |
 
-> **Gotcha**: `Mi` (mebibyte) ≠ `M` (megabyte). `128Mi` = 134,217,728 bytes. `128M` = 128,000,000 bytes. Use `Mi` for consistency.
+> **Gotcha**: `Mi` and `M` are different units. `Mi` uses powers of two, while `M` uses powers of ten, so the same numeric prefix represents different byte counts. Use `Mi` consistently when you want binary units.
 
 ---
 
@@ -145,7 +145,7 @@ spec:
 
 ### 2.1 Scheduling Decision
 
-The scheduler places pods on nodes with sufficient **allocatable** resources:
+[The scheduler places pods on nodes with sufficient **allocatable** resources](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/manage-resources-containers/):
 
 ```bash
 # Check node allocatable resources
@@ -223,7 +223,7 @@ kubectl describe node <node-name> | grep -A10 "Conditions"
 ### 3.1 CPU Limits (Throttling)
 
 When a container exceeds CPU limits:
-- CPU usage is **throttled**
+- [CPU usage is **throttled**](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
 - Process slows down but continues
 - No container termination
 
@@ -235,7 +235,7 @@ When a container exceeds CPU limits:
 ### 3.2 Memory Limits (OOMKilled)
 
 When a container exceeds memory limits:
-- Container is **killed** (OOMKilled)
+- [Container is **killed** (OOMKilled)](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
 - Pod may restart based on restartPolicy
 - You see `OOMKilled` in pod status
 
@@ -271,7 +271,7 @@ spec:
 
 > **War Story: The Silent Memory Leak**
 >
-> A team's pod kept restarting randomly. No application errors in logs. They finally checked `kubectl describe pod` and saw `OOMKilled`. The app had a memory leak that slowly consumed memory until it hit the limit. Without the limit, it would have crashed the entire node. Limits saved the cluster, and logs revealed the problem.
+> A pod that restarts without obvious application errors may be hitting its memory limit and showing `OOMKilled` in `kubectl describe pod`; resource limits can contain the blast radius while you investigate leaks or traffic spikes.
 
 ---
 
@@ -291,7 +291,7 @@ Kubernetes assigns QoS classes based on resource configuration:
 
 ### 4.2 Guaranteed
 
-All containers must have requests = limits for both CPU and memory:
+[All containers must have requests = limits for both CPU and memory](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-qos/):
 
 ```yaml
 apiVersion: v1
@@ -367,7 +367,7 @@ Eviction Order (first to last):
 
 > **Did You Know?**
 >
-> Limits-only pods are still **not** automatically Guaranteed in the general case. Guaranteed requires both CPU and memory requests and limits, with matching values for each container.
+> Limits-only pods are still **not** automatically Guaranteed in the general case. [Guaranteed requires both CPU and memory requests and limits, with matching values for each container.](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-qos/)
 
 ---
 
@@ -375,7 +375,7 @@ Eviction Order (first to last):
 
 ### 5.1 What Is a LimitRange?
 
-LimitRange sets default/min/max resource constraints per namespace:
+[LimitRange sets default/min/max resource constraints per namespace](https://v1-35.docs.kubernetes.io/docs/concepts/policy/limit-range/):
 
 ```yaml
 apiVersion: v1
@@ -429,7 +429,7 @@ kubectl get pod test -n development -o yaml | grep -A10 resources
 
 ### 6.1 What Is a ResourceQuota?
 
-ResourceQuota limits total resources consumed in a namespace:
+[ResourceQuota limits total resources consumed in a namespace](https://v1-35.docs.kubernetes.io/docs/concepts/policy/resource-quotas/):
 
 ```yaml
 apiVersion: v1
@@ -473,7 +473,7 @@ kubectl run new-pod --image=nginx -n development
 
 > **Exam Tip**
 >
-> If a ResourceQuota is set in a namespace, pods MUST specify resource requests/limits (or have LimitRange defaults). Otherwise, pod creation fails.
+> If a namespace has compute ResourceQuotas for CPU or memory, new Pods must specify requests or limits for those resources, or receive them from a LimitRange; otherwise admission may be rejected.
 
 ---
 
@@ -538,7 +538,7 @@ kubectl top nodes
 
 ## Part 8: Monitoring Resources
 
-### 8.1 kubectl top (Requires metrics-server)
+### 8.1 kubectl top ([Requires metrics-server](https://github.com/kubernetes-sigs/metrics-server))
 
 ```bash
 # Check node resource usage
@@ -567,7 +567,7 @@ kubectl describe node <node-name> | grep -A10 "Allocated resources"
 
 ## Part 9: In-Place Pod Resource Resize (K8s 1.35+)
 
-Starting with Kubernetes 1.35, you can **resize CPU and memory** on running pods without restarting them. This graduated to GA after 3 years of development.
+Starting with Kubernetes 1.35, you can resize CPU and memory on running Pods via the `/resize` subresource. Depending on `resizePolicy` and the type of change, a container may be updated in place or restarted.
 
 ### 9.1 Resize a Running Pod
 
@@ -598,7 +598,7 @@ k get pod nginx -o jsonpath='{.status.conditions[?(@.type=="PodResizeInProgress"
 
 ### 9.2 Resize Policy
 
-Containers can specify a `resizePolicy` to control whether resizes require a restart:
+[Containers can specify a `resizePolicy` to control whether resizes require a restart](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/):
 
 ```yaml
 apiVersion: v1
@@ -629,7 +629,7 @@ spec:
 > - **Right-sizing**: Adjust resources based on observed usage without redeploying
 > - **Cost optimization**: Reduce over-provisioned resources on running workloads
 >
-> For automated resizing, use the **Vertical Pod Autoscaler (VPA)** which can now leverage in-place resize.
+> For automated resizing, use the **Vertical Pod Autoscaler (VPA)** which [can now leverage in-place resize](https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/).
 
 ---
 
@@ -637,9 +637,9 @@ spec:
 
 | Mistake | Problem | Solution |
 |---------|---------|----------|
-| No requests set | Scheduling ignores resource needs | Always set requests |
+| No requests set | Scheduling ignores resource needs | Usually set requests |
 | Limits too low | Frequent OOMKills | Profile app and set appropriate limits |
-| Requests = Limits (always) | No burst capacity | Allow buffer between request and limit |
+| Requests = Limits by default | No burst capacity | Allow buffer between request and limit |
 | Using `M` instead of `Mi` | Slightly off values | Use `Mi` and `Gi` consistently |
 | No LimitRange in shared namespaces | Runaway pods | Set namespace defaults |
 
@@ -1164,3 +1164,13 @@ kubectl delete namespace challenge
 ## Next Module
 
 [Module 2.6: Scheduling](../module-2.6-scheduling/) - Node selection, affinity, taints, and tolerations.
+
+## Sources
+
+- [Resource Management for Pods and Containers](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/manage-resources-containers/) — Primary source for CPU and memory requests and limits, resource units, scheduler use of requests, allocatable-fit behavior, OOMKilled examples, and in-place Pod resize as stable in Kubernetes 1.35.
+- [Pod Quality of Service Classes](https://v1-35.docs.kubernetes.io/docs/concepts/workloads/pods/pod-qos/) — Primary source for Guaranteed, Burstable, and BestEffort classification criteria and for high-level eviction ordering under node resource pressure.
+- [Limit Ranges](https://v1-35.docs.kubernetes.io/docs/concepts/policy/limit-range/) — Supports claims about namespace-scoped minimum and maximum resource constraints, default requests and limits, and admission-time enforcement via LimitRange.
+- [Resource Quotas](https://v1-35.docs.kubernetes.io/docs/concepts/policy/resource-quotas/) — Supports claims about namespace resource governance, aggregate consumption limits, object-count quotas, and the relationship between quotas and resource requests/limits.
+- [Kubernetes Metrics Server](https://github.com/kubernetes-sigs/metrics-server) — Primary source for metrics-server installation manifest URL, requirements, role in the built-in autoscaling pipeline, kubectl top support, 15-second collection interval, and common local-cluster TLS caveats.
+- [Resize CPU and Memory Resources assigned to Containers](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/) — Primary source for Kubernetes 1.35 in-place container resource resize capability, useful when verifying claims that newer VPA modes can leverage in-place resize instead of always recreating Pods.
+- [Vertical Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/vertical-pod-autoscale/) — Primary source for comparing HPA and VPA, including VPA purpose, components, dependency on metrics, and update modes such as InPlaceOrRecreate.
