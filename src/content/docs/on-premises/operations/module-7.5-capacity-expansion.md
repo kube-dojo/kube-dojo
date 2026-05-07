@@ -24,11 +24,11 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In January 2024, a gaming company running a 120-node bare metal Kubernetes cluster needed to add 40 new servers for a game launch. Their existing cluster used Intel Xeon Silver 4214 (Cascade Lake, 2019) processors. The procurement team ordered Dell R760 servers with AMD EPYC 9354 (Genoa, 2023) processors because they offered better price/performance. The infrastructure team racked the servers, PXE-booted them, and joined them to the cluster. Everything appeared fine until the scheduler started placing workloads on the new nodes.
+When a team expands a large bare-metal Kubernetes cluster with a newer hardware generation, scheduling behavior can change in ways that are not obvious during initial bring-up.
 
-The Java applications ran 15% faster on the AMD nodes due to higher single-thread performance. The data science team's TensorFlow jobs ran 40% faster because the EPYC CPUs had AVX-512 support. But here was the problem: the Kubernetes scheduler does not understand CPU performance differences. It sees "48 CPU cores available" on both the old Intel and new AMD nodes. The scheduler distributed pods evenly, but the AMD nodes could handle more work per core. Some teams manually pinned their pods to AMD nodes using nodeSelectors, creating an uneven resource distribution. Other teams complained that their pods were "slow" when scheduled on the older Intel nodes.
+Workloads can perform differently across CPU generations, while the default Kubernetes scheduler still reasons about requested CPU as a quantity rather than benchmarked per-core performance. If teams respond by manually pinning workloads to newer nodes, overall cluster utilization can become uneven.
 
-The real disaster came when the team tried to decommission 20 of the oldest Intel servers. They had not configured topology spread constraints, so draining those nodes pushed 300 pods onto nodes that were already at 75% utilization. The cluster hit 95% CPU utilization, OOM kills spiked, and the monitoring stack (also on the cluster) slowed to a crawl -- right when they needed it most.
+Decommissioning older nodes without spread constraints and spare capacity can overload the remaining cluster, trigger evictions or OOM-related instability, and even degrade the monitoring systems you need during the change.
 
 The lesson: adding hardware to a Kubernetes cluster is not just racking and stacking. You need to account for CPU generation differences, topology constraints, scheduling policies, and a decommission plan that respects capacity limits.
 
@@ -79,13 +79,13 @@ flowchart TD
     Before --> After
 ```
 
-> **Stop and think**: If you provision a new rack of older OS images (which default to cgroup v1) and try to join them to a Kubernetes 1.35+ cluster, what will happen? By default, the kubelet will refuse to start because cgroup v1 is officially deprecated. Both the kubelet and your container runtime must strictly use cgroup v2 with the systemd cgroup driver to successfully register the node.
+> **Stop and think**: If you provision a new rack of older OS images (which default to cgroup v1) and try to join them to a Kubernetes 1.35+ cluster, what will happen? By default, the kubelet will refuse to start because [cgroup v1 is officially deprecated](https://kubernetes.io/docs/concepts/architecture/cgroups/). Both the kubelet and your container runtime must strictly use [cgroup v2 with the systemd cgroup driver](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) to successfully register the node.
 
 > **Pause and predict**: You are adding 40 new AMD EPYC servers to a cluster running Intel Xeon nodes. The Kubernetes scheduler sees "32 cores available" on both, but the AMD cores are 44% faster per-core. How would you prevent latency-sensitive pods from being scheduled on slower Intel nodes without hardcoding node names?
 
 ### Node Provisioning Script for New Rack
 
-Unlike cloud environments, the vanilla Kubernetes Cluster Autoscaler does not support on-premises bare-metal node provisioning because it relies on cloud provider node pool APIs. This means bare-metal capacity expansion requires manual or scripted provisioning processes. Before running any automation, ensure that each bare-metal server has a unique hostname, MAC address, and `product_uuid`, as `kubeadm` will fail to register nodes if these are duplicated.
+Unlike cloud environments, [the vanilla Kubernetes Cluster Autoscaler does not support on-premises bare-metal node provisioning](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md) because it relies on cloud provider node pool APIs. This means bare-metal capacity expansion requires manual or scripted provisioning processes. Before running any automation, ensure that each bare-metal server has a [unique hostname, MAC address, and `product_uuid`](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/), as `kubeadm` will fail to register nodes if these are duplicated.
 
 This script automates the most error-prone part of rack expansion: waiting for each server to PXE boot, joining it to the cluster, and applying the correct topology labels. Labels for rack, hardware generation, and CPU model enable scheduling policies that account for heterogeneous hardware.
 
@@ -148,7 +148,7 @@ echo "Run: kubectl get nodes -l kubedojo.io/rack=${RACK_ID}"
 
 ### The Problem with Heterogeneous Performance
 
-When mixing CPU generations, you must account for varying hardware capabilities. In Kubernetes 1.35, advanced features like the Topology Manager's `max-allowable-numa-nodes` reached General Availability (GA), giving you granular control over workload placement on modern multi-socket AMD and Intel systems. However, even with advanced topology management, the primary challenge remains: raw performance differences across generations.
+When mixing CPU generations, you must account for varying hardware capabilities. In Kubernetes 1.35, advanced features like [the Topology Manager's `max-allowable-numa-nodes` reached General Availability (GA)](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/), giving you granular control over workload placement on modern multi-socket AMD and Intel systems. However, even with advanced topology management, the primary challenge remains: raw performance differences across generations.
 
 | Model | Year | Cores | Single-Thread | Passmark |
 |-------|------|-------|---------------|----------|
@@ -156,7 +156,7 @@ When mixing CPU generations, you must account for varying hardware capabilities.
 | Xeon Gold 6330 | 2021 | 28 | 2,100 | 35,000 |
 | EPYC 9354 | 2023 | 32 | 2,600 | 53,000 |
 
-The EPYC 9354 delivers ~44% more single-thread and ~3.5x more multi-thread performance than the 4214.
+The EPYC 9354 substantially outperforms the 4214 in both single-threaded and multithreaded benchmark data, but the exact percentage depends on the benchmark source and snapshot date.
 
 Kubernetes natively sees: "32 cores available" on both.
 Reality dictates: 32 EPYC cores >> 32 Xeon Silver cores.
@@ -236,7 +236,7 @@ spec:
 
 ### Weighted Resource Capacity
 
-Kubernetes sees all CPU cores as equal, but they are not. Use benchmark scores (e.g., Passmark single-thread) to calculate "normalized" capacity. Example: decommissioning 20 older Xeon 4214 nodes from a 120-node mixed cluster removes only ~8% of effective compute capacity, not the 17% that a simple node count would suggest. Always use weighted capacity calculations when planning decommissions.
+Kubernetes sees all CPU cores as equal, but they are not. Use benchmark data to calculate normalized capacity, because removing older nodes can reduce effective compute by much less than raw node counts suggest. Always use weighted capacity calculations when planning decommissions.
 
 ---
 
@@ -325,7 +325,7 @@ Removing nodes requires careful capacity planning to avoid overloading the remai
 
 ### Decommission Checklist
 
-This script performs safety checks before removing a node: verifying remaining capacity will stay below 80%, checking for local PersistentVolumes that would be lost, and then draining and deleting the node.
+This script performs safety checks before removing a node: verifying remaining capacity will stay below 80%, checking for [local PersistentVolumes that would be lost](https://kubernetes.io/docs/concepts/storage/volumes/), and then draining and deleting the node.
 
 ```bash
 #!/bin/bash
@@ -405,7 +405,7 @@ echo "  4. Update monitoring targets"
 echo "  5. Update PXE/DHCP reservations"
 ```
 
-When physically powering down decommissioned nodes, do not simply turn them off. While Graceful Node Shutdown is enabled by default in Kubernetes, it is not actually activated unless you have explicitly configured `shutdownGracePeriod` to a non-zero value in your kubelet configuration. Always use the `kubectl drain` process to safely evict workloads.
+When physically powering down decommissioned nodes, do not simply turn them off. While [Graceful Node Shutdown is enabled by default in Kubernetes, it is not actually activated unless you have explicitly configured `shutdownGracePeriod` to a non-zero value in your kubelet configuration](https://kubernetes.io/docs/concepts/cluster-administration/node-shutdown/). Always use the `kubectl drain` process to safely evict workloads.
 
 When decommissioning in batches, remove 5 nodes at a time over 1-2 day phases. Monitor utilization overnight after each batch. Never exceed 80% cluster utilization during the process. After all nodes are removed, verify no orphaned PVs remain and update monitoring targets, alerting thresholds, and spare node counts.
 
@@ -415,18 +415,18 @@ When decommissioning in batches, remove 5 nodes at a time over 1-2 day phases. M
 
 ### Cost Comparison
 
-For a 100-node cluster at $10,000/node:
+For a 100-node cluster, refresh-cycle cost depends heavily on hardware pricing, support terms, energy costs, and workload requirements:
 
 | Factor | 3-Year Cycle | 5-Year Cycle |
 |--------|-------------|-------------|
-| Amortized CapEx/year | $333,333 | $200,000 |
-| Support contracts | $150,000 total | $310,000 total (higher in years 4-5) |
-| Power (total) | $360,000 | $648,000 (efficiency degrades ~5%/year) |
-| Failure rate (end of life) | 1-2% | 5-8% |
-| Performance vs current gen | 100% at refresh | 60% at end of life |
-| **Total cost** | **$1.52M ($506k/yr)** | **$2.04M ($407k/yr)** |
+| Amortized CapEx/year | Higher annualized spend with faster refresh | Lower annualized spend with slower refresh |
+| Support contracts | Typically lower over a shorter lifecycle | Typically higher as hardware ages |
+| Power (total) | Typically lower with newer, more efficient nodes | Typically higher when older nodes stay in service longer |
+| Failure rate (end of life) | Typically lower | Typically higher |
+| Performance vs current gen | Closer to current-generation performance | Further behind current-generation performance |
+| **Total cost** | **Depends on your hardware, power, support, and failure assumptions** | **Depends on your hardware, power, support, and failure assumptions** |
 
-The 3-year cycle is 24% more expensive per year but keeps you on the latest hardware with lower failure rates and power costs.
+A shorter refresh cycle usually increases annualized capital spend, while a longer cycle can increase operational risk, support burden, and power costs.
 
 Choose 3-year cycles for performance-sensitive workloads, rapid growth, or when power efficiency matters. Choose 5-year cycles for budget-constrained environments with stable, predictable loads that are not CPU-bound.
 
@@ -457,7 +457,7 @@ timeline
 
 ## Capacity Planning with Hardware Generations
 
-When forecasting long-term growth across multiple hardware refresh cycles, remember that Kubernetes v1.35 has official large-cluster tested limits: a maximum of 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers. Your capacity plans must ensure all four constraints are met simultaneously.
+When forecasting long-term growth across multiple hardware refresh cycles, remember that Kubernetes v1.35 has official large-cluster tested limits: [a maximum of 5,000 nodes, 110 pods per node, 150,000 total pods, and 300,000 total containers](https://kubernetes.io/docs/setup/best-practices/cluster-large/). Your capacity plans must ensure all four constraints are met simultaneously.
 
 ### Monitoring Capacity Trends
 
@@ -467,17 +467,17 @@ Create Prometheus recording rules that track CPU capacity and utilization broken
 
 ## Did You Know?
 
-- **Kubernetes 1.35 is the last release to support containerd 1.7.** If your hardware refresh involves reinstalling the operating system and container runtime on new servers, ensure you install containerd 2.0+ (or another CRI v1 compliant runtime). The fallback compatibility for older runtimes will be completely removed in Kubernetes 1.36.
+- **Kubernetes 1.35 is the last release to support the containerd 1.x series.** If your hardware refresh involves reinstalling the operating system and container runtime on new servers, plan to use containerd 2.x or another CRI-conformant runtime before upgrading beyond 1.35, because newer kubelets continue tightening runtime compatibility.
 
-- **Intel and AMD use different socket standards, so you cannot swap CPUs between vendors in the same server chassis.** A hardware refresh that switches from Intel to AMD (or vice versa) requires entirely new servers, not just new CPUs. This is why vendor choice in the initial purchase has long-term implications.
+- **Switching CPU vendors usually means replacing the server platform, not just the processor, because server sockets and platform compatibility differ by vendor and generation.** This is why vendor choice in the initial purchase has long-term implications.
 
-- **The US Department of Energy's supercomputing centers use a 5-year refresh cycle** because their systems cost hundreds of millions of dollars. They plan each refresh 3 years in advance, with a 2-year overlap period where old and new systems run simultaneously. This staggered approach is now being adopted by large Kubernetes operators.
+- **Large HPC operators often plan refreshes years in advance and may run old and new systems in parallel during transitions.** Similar overlap planning can help large Kubernetes operators reduce migration risk during hardware refreshes.
 
-- **Kubernetes 1.35 graduated In-place Pod Resize to General Availability (GA).** This means you can resize the CPU and memory requests of running containers without restarting them. This is incredibly useful when migrating long-running workloads between hardware generations that possess different baseline performance characteristics, as you can dynamically adjust resources as the pod lands on a faster or slower node.
+- **Kubernetes 1.35 graduated In-place Pod Resize to General Availability (GA).** This lets you change CPU and memory requests and limits for running containers without recreating the Pod, which can reduce disruption when migrating long-running workloads across mixed hardware.
 
-- **Kubernetes 1.24 added the `MinDomainsInPodTopologySpread` feature** (stable in 1.30) that lets you specify the minimum number of topology domains a workload should span. This is particularly useful during hardware refresh: you can require pods to be spread across at least 2 hardware generations, ensuring a generation-specific bug does not take down all replicas.
+- [**Kubernetes 1.24 added the `MinDomainsInPodTopologySpread` feature** (stable in 1.30)](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) that lets you specify the minimum number of topology domains a workload should span. This is particularly useful during hardware refresh: you can require pods to be spread across at least 2 hardware generations, ensuring a generation-specific bug does not take down all replicas.
 
-- **A 2023 Uptime Institute report found that the average server lifespan has increased from 3.5 years in 2015 to 5.2 years in 2023**, driven by companies extending server lifecycles to reduce CapEx during economic uncertainty. However, power efficiency improvements mean newer servers often pay for themselves in energy savings within 2 years.
+- **Recent industry reporting suggests that many operators are extending server lifecycles beyond the traditional three-year window.** Even so, newer hardware can still offer meaningful efficiency gains, so refresh timing should be based on measured total cost of ownership rather than purchase price alone.
 
 ---
 
@@ -718,3 +718,15 @@ Why is it dangerous to treat all CPU cores as identical when combining servers f
 ## Next Module
 
 This concludes the Day-2 Operations section. Return to the [Operations index](/on-premises/operations/) to review all modules, or continue to the next section in the on-premises track.
+
+## Sources
+
+- [kubernetes.io: cgroups](https://kubernetes.io/docs/concepts/architecture/cgroups/) — The upstream cgroups documentation explicitly documents the v1.35 deprecation and default kubelet behavior.
+- [kubernetes.io: container runtimes](https://kubernetes.io/docs/setup/production-environment/container-runtimes/) — The container runtime documentation covers the shared-driver requirement and the cgroup v2/systemd recommendation.
+- [github.com: FAQ.md](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md) — Upstream Cluster Autoscaler docs assume node groups and external provisioning/registration tooling, but they do not state this bare-metal limitation in exactly those words.
+- [kubernetes.io: install kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/) — The kubeadm install guide explicitly requires these identifiers to be unique and warns that installation may fail otherwise.
+- [kubernetes.io: topology manager](https://kubernetes.io/docs/tasks/administer-cluster/topology-manager/) — The Topology Manager task page states that `max-allowable-numa-nodes` is GA in Kubernetes 1.35.
+- [kubernetes.io: volumes](https://kubernetes.io/docs/concepts/storage/volumes/) — The volumes documentation explains local PV node affinity and the reduced availability/data-loss risk tied to the underlying node.
+- [kubernetes.io: node shutdown](https://kubernetes.io/docs/concepts/cluster-administration/node-shutdown/) — The upstream node shutdown docs explicitly describe the default-enabled gate and the zero-value configuration caveat.
+- [kubernetes.io: cluster large](https://kubernetes.io/docs/setup/best-practices/cluster-large/) — These exact scalability limits are documented in the upstream large-cluster guidance.
+- [kubernetes.io: topology spread constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) — The topology spread documentation states the pre-1.30 gate requirement and the stable availability from 1.30 onward.
