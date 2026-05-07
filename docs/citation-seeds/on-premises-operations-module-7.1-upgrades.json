@@ -1,0 +1,339 @@
+{
+  "module_key": "on-premises/operations/module-7.1-upgrades",
+  "module_path": "src/content/docs/on-premises/operations/module-7.1-upgrades.md",
+  "research_run_id": "2026-05-07T00:22:59+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/on-premises-operations.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The opening October 2023 outage story about a 45-node financial-services cluster, exact timing, capacity level, and outage duration is presented as a real event.",
+      "claim_class": "war_story",
+      "span_hint": "line 16",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In October 2023, a financial services company running a 45-node bare metal Kubernetes cluster needed to upgrade from 1.27 to 1.28. They had been delaying upgrades for nine months because the process was manual, undocumented, and everyone who had done the last upgrade had left the company. When the security team mandated the upgrade due to a CVE in the kubelet, the remaining team attempted it on a Friday afternoon. They upgraded the control plane to 1.28, then upgraded all 45 worker nodes simultaneously. Twenty minutes in, they discovered that three nodes had a different kernel version that was incompatible with the new kubelet. Those nodes entered a crash loop. But the drain had already evicted pods from those nodes, and the cluster was running at 60% capacity. The PodDisruptionBudgets they had configured were ignored because they used `kubectl drain --force`. The result: 4 hours of degraded service, 2 hours of complete outage for stateful workloads, and a rollback that took another 3 hours because nobody had tested it.",
+      "suggested_rewrite": "An undocumented, all-at-once upgrade on heterogeneous bare-metal nodes can turn routine maintenance into an outage, especially when capacity is tight and rollback has not been rehearsed.",
+      "lesson_point_url": null,
+      "rationale": "This is a named, date-specific incident narrative with precise operational details but no attributable source."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The quoted CTO postmortem line is presented as a real quotation.",
+      "claim_class": "war_story",
+      "span_hint": "line 18",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The CTO's postmortem note: \"We treated a bare metal upgrade like a cloud upgrade. It is not. Every node is a snowflake until you prove otherwise.\"",
+      "suggested_rewrite": "A useful postmortem conclusion is that bare-metal upgrades need rehearsed runbooks, staged rollouts, and validation of node differences before production changes.",
+      "lesson_point_url": null,
+      "rationale": "This is a verbatim quote attributed to a real executive without a source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "Managed Kubernetes upgrades are a button click with automatic rollback.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 20",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In the cloud, managed Kubernetes upgrades are a button click with automatic rollback.",
+      "suggested_rewrite": "In managed Kubernetes services, the provider automates more of the upgrade workflow.",
+      "lesson_point_url": null,
+      "rationale": "As written this overgeneralizes provider behavior and adds an unsupported universal rollback guarantee."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "For a v1.35 API server, HA API servers may differ by one minor version, controller-manager and scheduler may be v1.35 or v1.34, kubelet and kube-proxy may be v1.35 through v1.32, and kubectl may be v1.36 through v1.34.",
+      "claim_class": "standard",
+      "span_hint": "lines 64-68",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared version-skew policy page directly lists these supported combinations."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "With apiserver at 1.35, kubelet 1.32 is still supported but kubelet 1.31 is not.",
+      "claim_class": "standard",
+      "span_hint": "line 72",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The version-skew policy gives the exact kubelet support range relative to kube-apiserver."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "kubeadm upgrades require either static control-plane/etcd pods or an external etcd cluster, and do not support other control-plane topologies.",
+      "claim_class": "standard",
+      "span_hint": "line 89",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm upgrade guide states this prerequisite directly."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "The first control-plane node uses `kubeadm upgrade apply`, while additional control-plane nodes use `kubeadm upgrade node`.",
+      "claim_class": "standard",
+      "span_hint": "lines 93-98 and lines 126-141",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared kubeadm upgrade guide defines this sequencing and command split explicitly."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "For Kubernetes versions released after September 13, 2023, operators must use the `pkgs.k8s.io` repositories and the legacy apt/yum repositories are frozen.",
+      "claim_class": "standard",
+      "span_hint": "line 95",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm upgrade/install guidance documents this repository transition and date."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "`kubeadm upgrade apply` is idempotent enough to rerun after a failed upgrade attempt that did not fully roll back.",
+      "claim_class": "standard",
+      "span_hint": "line 97",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm upgrade guide says you can run `kubeadm upgrade` again after a failed non-rollback state because it is idempotent."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "In-place minor kubelet upgrades are not supported and nodes should be drained before a minor kubelet upgrade.",
+      "claim_class": "standard",
+      "span_hint": "line 146",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The version-skew policy page explicitly notes that minor kubelet upgrades require draining and that in-place minor kubelet upgrades are unsupported."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "`--force` on `kubectl drain` skips PodDisruptionBudget checks.",
+      "claim_class": "standard",
+      "span_hint": "line 205",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "--force skips PDB checks and deletes standalone pods",
+      "suggested_rewrite": "--force allows drain to proceed for unmanaged pods; bypassing PodDisruptionBudgets requires `--disable-eviction`, which is much riskier.",
+      "lesson_point_url": null,
+      "rationale": "The drain reference says `--force` is for unmanaged pods, while `--disable-eviction` is the flag that bypasses PodDisruptionBudget checks."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "A PodDisruptionBudget that allows zero voluntary evictions can cause `kubectl drain` to block until replica health or capacity improves.",
+      "claim_class": "standard",
+      "span_hint": "lines 218-223",
+      "disposition": "supported",
+      "source_ids": [
+        "S003",
+        "S012"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The disruptions documentation and drain reference both describe drain respecting PDBs and blocking when evictions are not allowed."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "etcd upgrades may leave binary rollback impossible after the cluster is fully upgraded, so a pre-upgrade snapshot is required for reliable recovery.",
+      "claim_class": "standard",
+      "span_hint": "line 340 and line 429",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://etcd.io/docs/v3.7/upgrades/upgrade_3_6/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "This is a real operational claim, but the clearest primary source is etcd's own upgrade documentation on an off-allowlist host."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Kubernetes minor releases receive approximately 12 months of patch support.",
+      "claim_class": "statistic",
+      "span_hint": "line 423",
+      "disposition": "supported",
+      "source_ids": [
+        "S001"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The shared version-skew policy page states that Kubernetes 1.19 and newer receive approximately one year of patch support."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "For Kubernetes 1.35 on Linux, the kubelet defaults to cgroups v2 and sets `FailCgroupV1=true` by default.",
+      "claim_class": "standard",
+      "span_hint": "line 425",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**For Kubernetes 1.35 on Linux, the kubelet defaults to cgroups v2 and sets `FailCgroupV1=true` by default.** This means nodes still on legacy cgroups v1 will actively fail to start the kubelet, highlighting the importance of hardware-aware OS upgrades alongside Kubernetes upgrades.",
+      "suggested_rewrite": "**For Kubernetes 1.35 on Linux, the kubelet no longer starts on cgroup v1 nodes by default.** This makes cgroup v2 readiness an important prerequisite when refreshing node operating systems and runtimes.",
+      "lesson_point_url": null,
+      "rationale": "The official cgroups documentation directly supports the cgroup-v1 startup failure behavior, but not the broader phrasing that kubelet 'defaults to cgroups v2'."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "The kubelet skew tolerance was expanded from two minor versions to three in Kubernetes 1.28.",
+      "claim_class": "standard",
+      "span_hint": "first sentence of line 427",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/blog/2023/08/15/kubernetes-v1-28-release/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes 1.28 release announcement states that the supported skew expanded from n-2 to n-3."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "The 1.28 skew expansion was specifically motivated by on-premises and air-gapped environments, with large bare-metal deployments cited as the primary beneficiary.",
+      "claim_class": "standard",
+      "span_hint": "second sentence of line 427",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "This change was specifically motivated by on-premises and air-gapped environments where upgrading all nodes quickly is impractical. The KEP (Kubernetes Enhancement Proposal) cited large bare metal deployments as the primary beneficiary.",
+      "suggested_rewrite": "This change reduced the pressure to upgrade every node immediately during slower rolling-upgrade programs.",
+      "lesson_point_url": null,
+      "rationale": "The release notes support the operational benefit, but not this stronger claim about specific motivation and primary beneficiary."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "Google upgrades Borg clusters cell-by-cell across thousands of nodes using a dedicated upgrade service.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 431",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "**Google's internal Borg system inspired Kubernetes, but Google upgrades Borg clusters cell-by-cell across thousands of nodes using a dedicated upgrade service.** On bare metal Kubernetes, you are building that upgrade service yourself with shell scripts and kubeadm.",
+      "suggested_rewrite": "**Kubernetes was heavily influenced by Borg, but on bare metal you still need to design and operate your own upgrade process.**",
+      "lesson_point_url": null,
+      "rationale": "The broad Borg comparison is directionally true, but the specific internal upgrade-process details are not supported here by an attributable primary source."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "kubeadm only supports upgrading one minor version at a time.",
+      "claim_class": "standard",
+      "span_hint": "line 439",
+      "disposition": "supported",
+      "source_ids": [
+        "S002"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm upgrade guide explicitly says skipping minor versions is unsupported."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Using `--force` on drain skips PodDisruptionBudget checks.",
+      "claim_class": "standard",
+      "span_hint": "line 442",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Using `--force` on drain | Skips PDB checks, deletes standalone pods | Use `--timeout` and fix blocked drains properly |",
+      "suggested_rewrite": "| Using `--force` or `--disable-eviction` carelessly during drain | `--force` affects unmanaged pods, while `--disable-eviction` bypasses PDB protections | Prefer normal eviction, use timeouts, and fix the blocking condition explicitly |",
+      "lesson_point_url": null,
+      "rationale": "The table row conflates two different drain flags; the drain reference separates unmanaged-pod handling from PDB bypass behavior."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/",
+      "title": "Upgrading kubeadm Clusters",
+      "tier": "standards",
+      "why_relevant": "Primary upstream runbook for control-plane and worker upgrade sequencing, recovery behavior, and repository guidance."
+    },
+    {
+      "url": "https://kubernetes.io/releases/version-skew-policy",
+      "title": "Kubernetes Version Skew Policy",
+      "tier": "standards",
+      "why_relevant": "Defines the supported version combinations that determine safe upgrade order and maintenance windows."
+    },
+    {
+      "url": "https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_drain/",
+      "title": "kubectl drain Reference",
+      "tier": "standards",
+      "why_relevant": "Clarifies eviction behavior, `--force`, `--disable-eviction`, daemonset handling, and safe drain mechanics."
+    }
+  ],
+  "notes": "Quiz items, exercise steps, code blocks, and Mermaid diagrams were excluded unless a surrounding prose/table sentence made a factual operational claim. The local cold-start API briefing failed to start, so source verification relied on the module text, the shared section pool, and live upstream documentation.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
