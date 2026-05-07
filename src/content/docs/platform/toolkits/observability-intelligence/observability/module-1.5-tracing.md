@@ -42,7 +42,7 @@ This module teaches tracing as a production debugging skill, not as a vendor fea
 
 ### 1. Trace Anatomy: A Request Becomes A Timeline
 
-A trace is the complete recorded journey of one logical operation through a distributed system. In a simple service, that operation might be one HTTP request handled by one process. In a real platform, the same operation might touch an API gateway, authentication service, checkout service, inventory database, payment provider, message broker, and notification worker. The trace gives that operation one stable identity so the system can be read as a sequence instead of as disconnected logs.
+[A trace is the complete recorded journey of one logical operation through a distributed system](https://opentelemetry.io/docs/concepts/signals/traces/). In a simple service, that operation might be one HTTP request handled by one process. In a real platform, the same operation might touch an API gateway, authentication service, checkout service, inventory database, payment provider, message broker, and notification worker. The trace gives that operation one stable identity so the system can be read as a sequence instead of as disconnected logs.
 
 A span is one timed unit of work inside that trace. A span usually represents an inbound HTTP request, an outbound HTTP call, a database query, a cache lookup, a queue publish, or a manually instrumented block of business logic. The span records when the work started, when it ended, which span was its parent, whether it failed, and which attributes describe the work. The parent-child relationship is what turns a pile of timings into a tree that explains causality.
 
@@ -87,7 +87,7 @@ A trace ID identifies the whole request, while a span ID identifies one span ins
 
 > **Pause and predict:** If `checkout-api` calls `payment-api`, and both services emit spans but the HTTP client in `checkout-api` does not inject `traceparent`, what will the tracing backend show? Write down whether you expect one trace, two traces, or no traces before reading the next paragraph.
 
-The backend will usually show two traces. The inbound request to `checkout-api` still creates a trace, and the inbound request to `payment-api` may create another trace, but there is no parent-child link between them. This is one reason tracing can appear to be "working" while still being operationally weak: spans exist, dashboards have data, and storage grows, yet the exact boundary you need during an incident is broken.
+[The backend will usually show two traces](https://opentelemetry.io/docs/concepts/signals/traces/). The inbound request to `checkout-api` still creates a trace, and the inbound request to `payment-api` may create another trace, but there is no parent-child link between them. This is one reason tracing can appear to be "working" while still being operationally weak: spans exist, dashboards have data, and storage grows, yet the exact boundary you need during an incident is broken.
 
 The W3C Trace Context standard defines the headers that make this boundary reliable across languages and vendors. The `traceparent` header carries the trace ID, parent span ID, and sampling flag in a predictable format. The `tracestate` header lets vendors add implementation-specific data without breaking interoperability. You do not usually hand-write these headers in production code; instrumentation libraries should inject and extract them for HTTP, gRPC, and supported messaging clients.
 
@@ -200,7 +200,7 @@ Install the dependencies into the repository virtual environment or into an equi
 .venv/bin/opentelemetry-bootstrap --action=install
 ```
 
-Now run the service with console trace export. Console export is intentionally simple: it prints span data to the terminal instead of requiring Jaeger, Tempo, or a collector. In production you would export to an OpenTelemetry Collector over OTLP, but local console output is the fastest way to verify that spans exist, attributes are populated, and errors are marked.
+Now run the service with console trace export. Console export is intentionally simple: it prints span data to the terminal instead of requiring Jaeger, Tempo, or a collector. In production you would export to an OpenTelemetry Collector over OTLP, but local console output is one of the fastest ways to verify that spans exist, attributes are populated, and errors are marked.
 
 ```bash
 OTEL_SERVICE_NAME=checkout-api \
@@ -245,7 +245,7 @@ A shortened console span will look similar to the following. Your exact span IDs
 
 This worked example demonstrates the minimum useful loop for initial instrumentation. First, set a stable `service.name` so traces can be grouped by workload. Second, enable automatic instrumentation for inbound and outbound framework boundaries. Third, add manual spans only where business operations clarify the request story. Fourth, generate known normal, slow, and failing traffic so you can verify the trace shape before depending on it during an incident.
 
-When you move this pattern into Kubernetes, the same environment variables usually become Deployment configuration. The service emits spans to an OpenTelemetry Collector or directly to a backend over OTLP. A collector is preferred in production because it centralizes retries, batching, redaction, sampling, and routing. Direct-to-backend export can be acceptable in a lab, but it spreads operational policy across every service.
+When you move this pattern into Kubernetes, the same environment variables usually become Deployment configuration. The service emits spans to an OpenTelemetry Collector or directly to a backend over OTLP. [A collector is preferred in production because it centralizes retries, batching, redaction, sampling, and routing](https://opentelemetry.io/docs/collector/). Direct-to-backend export can be acceptable in a lab, but it spreads operational policy across every service.
 
 ```yaml
 apiVersion: apps/v1
@@ -287,9 +287,9 @@ The most common beginner mistake is to stop after installing an SDK and seeing a
 
 A tracing backend stores traces and lets engineers retrieve them during investigations. The backend is not the tracing system by itself; the system includes instrumentation libraries, propagation, collectors, sampling policy, storage, query, dashboards, and operational habits. Choosing a backend is therefore less about brand preference and more about the workflow you need during incidents. The central question is how your team usually finds the trace it needs.
 
-Jaeger is a strong fit when engineers need direct search over trace attributes. If support receives an order ID, a customer tier, or a custom business tag, Jaeger-style indexed search can help locate candidate traces without first finding a trace ID elsewhere. That power has a cost: indexing span data requires more storage infrastructure, tuning, and operational care. Jaeger can be excellent for teams that value exploratory trace search and accept the cost of running indexed storage.
+Jaeger is often chosen for teams that want a dedicated tracing backend and flexible trace-search workflows, but the exact search experience and storage trade-offs depend on the storage backend and deployment design.
 
-Grafana Tempo takes a different position. Tempo is optimized around cheap trace storage and trace-ID lookup, with strong integration into Grafana workflows. Instead of indexing every span attribute heavily, Tempo expects you to arrive with a trace ID from metrics exemplars, logs, or TraceQL-supported search paths depending on deployment mode and version. This can be a better fit for teams already using Prometheus, Grafana, and Loki, especially when trace volume is high and cost pressure is real.
+Grafana Tempo takes a different position. Tempo is optimized around cheap trace storage and trace-ID lookup, with strong integration into Grafana workflows. Instead of indexing every span attribute heavily, [Tempo expects you to arrive with a trace ID from metrics exemplars, logs, or TraceQL-supported search paths](https://grafana.com/docs/tempo/latest/introduction/architecture/) depending on deployment mode and version. This can be a better fit for teams already using Prometheus, Grafana, and Loki, especially when trace volume is high and cost pressure is real.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -319,7 +319,7 @@ Grafana Tempo takes a different position. Tempo is optimized around cheap trace 
 |-----------------|----------|-----------|----------|
 | Jaeger with indexed storage | Direct search by service, operation, duration, and tags. | More storage and index operations to run and tune. | Teams that frequently search by custom attributes during support or incident work. |
 | Grafana Tempo | Cost-efficient storage and strong Grafana correlation. | Trace ID discovery workflow must be designed carefully. | Teams already using Prometheus, Grafana, and Loki at significant trace volume. |
-| Zipkin | Simple open-source tracing model with broad historical support. | Less common as a primary new platform choice at large scale. | Smaller systems, legacy Zipkin instrumentation, or educational environments. |
+| Zipkin | Longstanding open-source tracing system. | Evaluate current ecosystem fit, operational model, and team familiarity rather than assuming one default recommendation. | Smaller systems, legacy Zipkin instrumentation, or teaching environments. |
 | Managed tracing service | Reduced backend operations and cloud integration. | Pricing, data residency, and vendor-specific workflow constraints. | Teams that prefer buying storage and UI operations over running them. |
 | OpenTelemetry Collector plus multiple exporters | Flexible routing to several destinations. | More policy design and collector capacity planning. | Migration periods, hybrid environments, and teams separating hot and cold trace paths. |
 
@@ -348,7 +348,7 @@ A practical architecture puts the OpenTelemetry Collector between services and t
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-A minimal Jaeger all-in-one deployment is useful for development and workshops. It stores data in memory by default, exposes the UI, and accepts OTLP when enabled. It is not a production architecture, because it has one pod, ephemeral storage, and no durable index. Its value is speed: learners can send spans, open a UI, and see trace structure without deploying a storage cluster.
+A minimal Jaeger all-in-one deployment is useful for development and workshops. [It stores data in memory by default, exposes the UI, and accepts OTLP when enabled](https://github.com/jaegertracing/jaeger). It is not a production architecture, because it has one pod, ephemeral storage, and no durable index. Its value is speed: learners can send spans, open a UI, and see trace structure without deploying a storage cluster.
 
 ```yaml
 apiVersion: v1
@@ -555,9 +555,9 @@ The first calculation is simple enough to do during design reviews. Multiply req
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Head-based sampling decides at the beginning of the trace whether the request will be sampled. It is simple, cheap, and easy to propagate because the sampled decision travels in the trace context. The weakness is that the decision happens before the system knows whether the request will be slow, fail, or hit an unusual path. A random decision at the start can discard the one trace that would have explained the incident.
+[Head-based sampling decides at the beginning of the trace whether the request will be sampled](https://opentelemetry.io/docs/concepts/sampling/). It is simple, cheap, and easy to propagate because the sampled decision travels in the trace context. The weakness is that the decision happens before the system knows whether the request will be slow, fail, or hit an unusual path. A random decision at the start can discard the one trace that would have explained the incident.
 
-Tail-based sampling waits until enough of the trace has arrived to make a smarter decision. The collector can keep traces with errors, traces above a latency threshold, traces for important routes, or traces for selected tenants. The cost is that the collector must receive and buffer many traces before deciding, which uses memory and adds operational complexity. Tail sampling is powerful, but it is not free.
+Tail-based sampling waits until enough of the trace has arrived to make a smarter decision. The collector can keep traces with errors, traces above a latency threshold, traces for important routes, or traces for selected tenants. The cost is that [the collector must receive and buffer many traces before deciding, which uses memory and adds operational complexity](https://opentelemetry.io/docs/concepts/sampling/). Tail sampling is powerful, but it is not free.
 
 | Sampling Strategy | Decision Time | Keeps Errors Reliably | Cost Profile | Good Use |
 |-------------------|---------------|-----------------------|--------------|----------|
@@ -636,9 +636,9 @@ The weak assumption is that random coverage guarantees diagnostic coverage. Ten 
 
 ### 5. Correlation: Metrics Tell You When, Traces Tell You Where, Logs Tell You Why
 
-Observability becomes much stronger when the three major signals share identifiers. Metrics are the fastest way to notice a broad symptom, such as elevated latency or error rate. Traces show where a specific request spent time or crossed a failing dependency. Logs provide local detail, such as the exact exception message, retry count, database lock, or business rule decision. Correlation means you can move between these signals without starting the investigation over each time.
+Observability becomes much stronger when the three major signals share identifiers. Metrics are often the fastest way to notice a broad symptom, such as elevated latency or error rate. Traces show where a specific request spent time or crossed a failing dependency. Logs provide local detail, such as the exact exception message, retry count, database lock, or business rule decision. Correlation means you can move between these signals without starting the investigation over each time.
 
-The best incident workflow often starts with metrics because metrics are compact and objective-oriented. A latency alert points to a service-level objective burn, a route, or a dependency. An exemplar can attach a trace ID to a specific metric observation, letting an engineer jump from a slow histogram bucket to a real trace. The trace then identifies the suspicious span, and logs filtered by `trace_id` reveal the local details around that span.
+The best incident workflow often starts with metrics because metrics are compact and objective-oriented. A latency alert points to a service-level objective burn, a route, or a dependency. [An exemplar can attach a trace ID to a specific metric observation](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/), letting an engineer jump from a slow histogram bucket to a real trace. The trace then identifies the suspicious span, and logs filtered by `trace_id` reveal the local details around that span.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -662,7 +662,7 @@ The best incident workflow often starts with metrics because metrics are compact
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-For logs, the minimum useful practice is to include `trace_id` and `span_id` in structured log records. Application frameworks can often inject these fields automatically when logging occurs inside an active span. The fields should be plain strings that Loki, Elasticsearch, or another log backend can parse and filter. Avoid hiding trace IDs inside unstructured messages, because incident responders should not need regular-expression archaeology while customers are waiting.
+For logs, the minimum useful practice is to include `trace_id` and `span_id` in structured log records. Application frameworks can often inject these fields automatically when logging occurs inside an active span. The fields should be plain strings that [Loki, Elasticsearch, or another log backend can parse and filter](https://grafana.com/docs/loki/latest/logql/). Avoid hiding trace IDs inside unstructured messages, because incident responders should not need regular-expression archaeology while customers are waiting.
 
 For metrics, exemplars are the bridge from aggregate measurement to a specific trace. A histogram records many observations, while an exemplar points to one representative trace for a particular bucket or sample. Exemplars are especially valuable for high-latency requests because they let an engineer move from "p99 is bad" to "this exact p99 request waited on this exact dependency." Not every dashboard needs exemplars, but latency and error dashboards are strong candidates.
 
@@ -697,9 +697,9 @@ A common senior-level design question is which attributes belong on spans, logs,
 |--------|---------|----------------|--------------|
 | Metrics | Alerting, trends, SLOs, and aggregate comparison. | Low-cardinality labels such as service, route, method, and status class. | User IDs, order IDs, stack traces, and unbounded labels. |
 | Traces | Request path, timing, dependency shape, and causal relationships. | Service name, operation name, status, route template, dependency attributes, and trace ID. | Huge payloads, secrets, and spans for every tiny helper call. |
-| Logs | Local details, exceptions, retries, decisions, and audit-style facts. | Trace ID, span ID, severity, message, error type, and structured context. | Being the only place where cross-service request identity exists. |
+| Logs | Local details, exceptions, retries, decisions, and audit-style facts. | Trace ID, span ID, severity, message, error type, and structured context. | Being the main place where cross-service request identity exists. |
 
-Trace context can also cross asynchronous boundaries, but it usually needs explicit attention. HTTP libraries commonly propagate headers automatically once instrumented. Messaging systems vary by client and instrumentation maturity, so a producer may need to inject context into message headers and a consumer may need to extract it before starting work. If this is missing, the producer trace and consumer trace become disconnected, which is exactly when teams lose visibility into background workflows.
+Trace context can also cross asynchronous boundaries, but it usually needs explicit attention. HTTP libraries commonly propagate headers automatically once instrumented. Messaging systems vary by client and instrumentation maturity, so a producer may need to inject context into message headers and a consumer may need to extract it before starting work. If this is missing, [the producer trace and consumer trace become disconnected](https://opentelemetry.io/docs/concepts/signals/traces/), which is exactly when teams lose visibility into background workflows.
 
 ```python
 from opentelemetry import propagate, trace
@@ -1171,3 +1171,13 @@ Final success criteria for the exercise:
 ## Next Module
 
 Continue to [GitOps & Deployments Toolkit](/platform/toolkits/cicd-delivery/gitops-deployments/) to learn how observable services are delivered and operated through declarative deployment workflows.
+
+## Sources
+
+- [OpenTelemetry: Traces](https://opentelemetry.io/docs/concepts/signals/traces/) — Backs core tracing concepts: traces, spans, parent-child relationships, span context, attributes, events, links, status, and how a request path is represented across services.
+- [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) — Backs the Collector as the vendor-neutral layer for receiving, processing, and exporting telemetry, including the receiver/processor/exporter pipeline model and backend-neutral architecture.
+- [Grafana Tempo: Architecture](https://grafana.com/docs/tempo/latest/introduction/architecture/) — Backs Tempo’s backend architecture, object-storage-based trace retention, TraceQL search, ingestion/query path, and tradeoff discussions for self-managed tracing backends.
+- [github.com: jaeger](https://github.com/jaegertracing/jaeger) — The Jaeger repository README directly describes all-in-one as including UI, collector, query, and in-memory storage.
+- [OpenTelemetry: Sampling](https://opentelemetry.io/docs/concepts/sampling/) — Backs head-vs-tail sampling concepts, cost-control rationale, and practical guidance about reducing trace volume while preserving useful signal.
+- [grafana.com: exemplars](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/) — Grafana's exemplar docs directly explain exemplars as links from metric observations to individual traces and show drill-down from metrics and Loki logs.
+- [Grafana Loki: Query Loki (LogQL)](https://grafana.com/docs/loki/latest/logql/) — Backs Loki’s label-based query model, log streams, compressed chunk storage, label indexing instead of full-content indexing, and LogQL basics for log exploration and metric extraction from logs.

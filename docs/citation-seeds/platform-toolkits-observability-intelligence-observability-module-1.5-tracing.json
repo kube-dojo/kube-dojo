@@ -1,0 +1,237 @@
+{
+  "module_key": "platform/toolkits/observability-intelligence/observability/module-1.5-tracing",
+  "module_path": "src/content/docs/platform/toolkits/observability-intelligence/observability/module-1.5-tracing.md",
+  "research_run_id": "2026-05-07T03:51:10+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/platform-toolkits-observability-intelligence-observability.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "A trace represents an end-to-end request path, while spans are timed units of work linked by parent-child relationships and identified by trace and span IDs.",
+      "claim_class": "standard",
+      "span_hint": "section: 1. Trace Anatomy | opening paragraphs and terminology table",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The OpenTelemetry traces concepts page directly defines traces, spans, span context, and parent-child relationships."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "If context propagation breaks between services, a backend will record disconnected traces instead of one continuous request trace.",
+      "claim_class": "standard",
+      "span_hint": "section: 1. Trace Anatomy | paragraph beginning \"The backend will usually show two traces.\"",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "OpenTelemetry explicitly states that context propagation is what allows spans to be correlated and assembled into a trace."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "The OpenTelemetry Collector is a vendor-agnostic layer for receiving, processing, and exporting telemetry, and it centralizes concerns such as retries, batching, and sensitive-data filtering.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 2. Worked Example | paragraph beginning \"When you move this pattern into Kubernetes\" and section: 3. Backends | paragraph beginning \"A practical architecture puts the OpenTelemetry Collector\"",
+      "disposition": "supported",
+      "source_ids": [
+        "S003"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Collector docs directly describe it as vendor-agnostic and recommend it for centralized handling such as retries, batching, and filtering."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Jaeger is presented as the backend for direct indexed attribute search, including custom business-tag lookups, with a corresponding indexed-storage trade-off.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Backends | Jaeger comparison paragraph",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Jaeger is a strong fit when engineers need direct search over trace attributes. If support receives an order ID, a customer tier, or a custom business tag, Jaeger-style indexed search can help locate candidate traces without first finding a trace ID elsewhere. That power has a cost: indexing span data requires more storage infrastructure, tuning, and operational care. Jaeger can be excellent for teams that value exploratory trace search and accept the cost of running indexed storage.",
+      "suggested_rewrite": "Jaeger is often chosen for teams that want a dedicated tracing backend and flexible trace-search workflows, but the exact search experience and storage trade-offs depend on the storage backend and deployment design.",
+      "lesson_point_url": null,
+      "rationale": "This paragraph makes specific product-comparison claims about indexed search behavior and storage trade-offs that are not cleanly backed by the shared pool or an allowlisted primary source."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Tempo stores trace data in object storage and supports retrieving traces by trace ID or by TraceQL search.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Backends | Tempo comparison paragraph and TraceQL paragraph",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Tempo architecture docs directly describe object storage, trace-ID retrieval, and TraceQL-based search."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Jaeger all-in-one combines the UI, collector, query service, and in-memory storage for quick local testing.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Backends | paragraph beginning \"A minimal Jaeger all-in-one deployment\"",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://github.com/jaegertracing/jaeger",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Jaeger repository README directly describes all-in-one as including UI, collector, query, and in-memory storage."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Jaeger memory storage is intended for quick starts rather than production workloads and loses data when the process exits.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Backends | paragraph beginning \"A minimal Jaeger all-in-one deployment\"",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://www.jaegertracing.io/docs/1.76/deployment/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The right primary source is the official Jaeger deployment documentation, but `jaegertracing.io` is outside the current allowlist."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The Zipkin row makes an unsupported comparative claim about current large-scale platform adoption.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 3. Backends | backend comparison table | Zipkin row",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| Zipkin | Simple open-source tracing model with broad historical support. | Less common as a primary new platform choice at large scale. | Smaller systems, legacy Zipkin instrumentation, or educational environments. |",
+      "suggested_rewrite": "| Zipkin | Longstanding open-source tracing system. | Evaluate current ecosystem fit, operational model, and team familiarity rather than assuming one default recommendation. | Smaller systems, legacy Zipkin instrumentation, or teaching environments. |",
+      "lesson_point_url": null,
+      "rationale": "The market-position claim is opinionated and not directly supported by an allowlisted primary source."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Head sampling makes its decision at trace start, while tail sampling waits until more or all spans arrive and can retain traces based on conditions such as errors or latency.",
+      "claim_class": "standard",
+      "span_hint": "section: 4. Sampling | paragraphs beginning \"Head-based sampling decides\" and \"Tail-based sampling waits\" plus the sampling strategy table",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The OpenTelemetry sampling concepts page directly distinguishes head and tail sampling and explains what each can and cannot preserve."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Tail sampling provides better selection for important traces but requires stateful buffering and higher memory and processing overhead.",
+      "claim_class": "standard",
+      "span_hint": "section: 4. Sampling | paragraph beginning \"Tail-based sampling waits\" and the paragraph beginning \"Sampling depends on correct span status\"",
+      "disposition": "supported",
+      "source_ids": [
+        "S010"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The sampling docs explicitly call out tail sampling's stateful and operational cost trade-offs."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "Exemplars connect aggregate metric observations to specific traces, and Grafana can use them to jump from metrics or logs into trace details.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Correlation | paragraphs beginning \"An exemplar can attach a trace ID\" and \"For metrics, exemplars are the bridge\"",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://grafana.com/docs/grafana/latest/fundamentals/exemplars/",
+      "proposed_tier": "upstream",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Grafana's exemplar docs directly explain exemplars as links from metric observations to individual traces and show drill-down from metrics and Loki logs."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Loki indexes labels and timestamps rather than full log content, using LogQL's label selectors and pipelines to narrow and process logs.",
+      "claim_class": "vendor_capability",
+      "span_hint": "section: 5. Correlation | paragraph beginning \"For logs, the minimum useful practice\"",
+      "disposition": "supported",
+      "source_ids": [
+        "S008"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Loki query docs directly describe label-based querying and state that Loki indexes timestamps and labels, not the rest of the log line."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Across asynchronous messaging boundaries, trace context must be injected by the producer and extracted by the consumer; otherwise the producer and consumer will appear as disconnected traces.",
+      "claim_class": "standard",
+      "span_hint": "section: 5. Correlation | paragraph beginning \"Trace context can also cross asynchronous boundaries\" and the producer/consumer code example",
+      "disposition": "supported",
+      "source_ids": [
+        "S009"
+      ],
+      "proposed_url": "https://www.w3.org/TR/trace-context/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "OpenTelemetry covers trace context and causal linkage, and the W3C Trace Context spec defines the propagation mechanism that must cross boundaries."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+      "title": "OpenTelemetry Traces Concepts",
+      "tier": "upstream",
+      "why_relevant": "Best single refresher on traces, spans, context propagation, attributes, links, and status."
+    },
+    {
+      "url": "https://opentelemetry.io/docs/concepts/sampling/",
+      "title": "OpenTelemetry Sampling Concepts",
+      "tier": "upstream",
+      "why_relevant": "Direct background for head sampling, tail sampling, and the cost-versus-evidence trade-offs discussed in the module."
+    }
+  ],
+  "notes": "Repeated statements in Common Mistakes, Quiz answers, and the hands-on walkthrough mostly restate the same factual claims above; the inject step can usually reuse these sources rather than adding a new citation at every repetition. Code blocks were not enumerated unless surrounding prose made a factual product or protocol claim.",
+  "_schema_issues": [],
+  "rejected_urls": [
+    {
+      "url": "https://www.w3.org/TR/trace-context/",
+      "reason": "http_403",
+      "at_step": "research_validation",
+      "agent_proposed_tier": "standards"
+    },
+    {
+      "url": "https://www.w3.org/TR/trace-context/",
+      "reason": "http_403",
+      "at_step": "research_validation",
+      "agent_proposed_tier": "standards"
+    }
+  ]
+}
