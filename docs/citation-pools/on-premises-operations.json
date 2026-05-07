@@ -1,0 +1,270 @@
+{
+  "section": "on-premises/operations",
+  "modules": [
+    "on-premises/operations/module-7.1-upgrades",
+    "on-premises/operations/module-7.2-hardware-lifecycle",
+    "on-premises/operations/module-7.3-node-remediation",
+    "on-premises/operations/module-7.4-observability",
+    "on-premises/operations/module-7.5-capacity-expansion",
+    "on-premises/operations/module-7.6-self-hosted-cicd",
+    "on-premises/operations/module-7.7-self-hosted-registry",
+    "on-premises/operations/module-7.8-observability-at-scale",
+    "on-premises/operations/module-7.9-serverless-bare-metal"
+  ],
+  "generated_at": "2026-05-07T00:16:28+00:00",
+  "batch_count": 3,
+  "fallback_used": false,
+  "sources": [
+    {
+      "source_id": "S001",
+      "url": "https://kubernetes.io/releases/version-skew-policy",
+      "title": "Kubernetes Version Skew Policy",
+      "tier": "standards",
+      "scope_notes": "Supports claims about supported minor-version skew between kube-apiserver, controller-manager, scheduler, kubelet, kube-proxy, and kubectl during staged upgrades and mixed-version maintenance windows.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.1-upgrades",
+        "on-premises/operations/module-7.2-hardware-lifecycle",
+        "on-premises/operations/module-7.3-node-remediation"
+      ]
+    },
+    {
+      "source_id": "S002",
+      "url": "https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/",
+      "title": "Upgrading kubeadm Clusters",
+      "tier": "standards",
+      "scope_notes": "Supports kubeadm upgrade workflow claims: first control plane vs additional control planes, worker upgrade sequencing, drain/uncordon expectations, certificate renewal behavior, and current package-repository guidance for post-2023 releases.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.1-upgrades"
+      ]
+    },
+    {
+      "source_id": "S003",
+      "url": "https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_drain/",
+      "title": "kubectl drain Reference",
+      "tier": "standards",
+      "scope_notes": "Supports maintenance and upgrade claims around cordon/drain/uncordon behavior, eviction vs delete semantics, daemonset handling, graceful termination, and the risk of bypassing disruption protections.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.1-upgrades",
+        "on-premises/operations/module-7.2-hardware-lifecycle"
+      ]
+    },
+    {
+      "source_id": "S004",
+      "url": "https://github.com/kubernetes/node-problem-detector",
+      "title": "Node Problem Detector",
+      "tier": "upstream",
+      "scope_notes": "Supports claims about detecting kernel, filesystem, runtime, and hardware-adjacent node problems and surfacing them to Kubernetes as Events and NodeConditions for higher-level remediation.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.3-node-remediation",
+        "on-premises/operations/module-7.4-observability"
+      ]
+    },
+    {
+      "source_id": "S005",
+      "url": "https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html",
+      "title": "Cluster API MachineHealthCheck",
+      "tier": "standards",
+      "scope_notes": "Supports claims about MachineHealthCheck remediation triggers, unhealthy-condition timeouts, short-circuit safeguards, remediation limits, and delete-and-recreate behavior for unhealthy machines.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.3-node-remediation"
+      ]
+    },
+    {
+      "source_id": "S006",
+      "url": "https://prometheus.io/docs/prometheus/latest/storage/",
+      "title": "Prometheus Storage",
+      "tier": "upstream",
+      "scope_notes": "Supports claims about Prometheus local TSDB behavior, WAL replay, retention/storage tradeoffs, disk sizing pressure, and why single-node local storage becomes an operational constraint at scale.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.4-observability",
+        "on-premises/operations/module-7.8-observability-at-scale"
+      ]
+    },
+    {
+      "source_id": "S007",
+      "url": "https://grafana.com/docs/loki/latest/get-started/",
+      "title": "Grafana Loki Get Started",
+      "tier": "upstream",
+      "scope_notes": "Supports claims about Loki as a horizontally scalable, highly available log aggregation system, its label-based indexing model, Kubernetes log collection patterns, and self-hosted centralized logging design.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.4-observability"
+      ]
+    },
+    {
+      "source_id": "S008",
+      "url": "https://github.com/prometheus-community/ipmi_exporter",
+      "title": "Prometheus IPMI Exporter",
+      "tier": "upstream",
+      "scope_notes": "Supports claims about exporting BMC/IPMI hardware telemetry into Prometheus, multi-target scraping patterns, required FreeIPMI tooling, and integrating physical-server health into observability.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.2-hardware-lifecycle",
+        "on-premises/operations/module-7.4-observability"
+      ]
+    },
+    {
+      "source_id": "S009",
+      "url": "https://kubernetes.io/docs/concepts/architecture/cgroups/",
+      "title": "About cgroup v2",
+      "tier": "standards",
+      "scope_notes": "Backs Kubernetes cgroup v2 requirements, systemd cgroup driver expectations, and v1.35 deprecation/default kubelet startup behavior on cgroup v1 nodes during hardware refresh and node provisioning.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.5-capacity-expansion"
+      ]
+    },
+    {
+      "source_id": "S010",
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+      "title": "Assigning Pods to Nodes",
+      "tier": "standards",
+      "scope_notes": "Backs node labels, nodeSelector, node affinity and anti-affinity, and scheduler placement controls for heterogeneous hardware pools and dedicated CI builder nodes.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.5-capacity-expansion",
+        "on-premises/operations/module-7.6-self-hosted-cicd"
+      ]
+    },
+    {
+      "source_id": "S011",
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/",
+      "title": "Pod Topology Spread Constraints",
+      "tier": "standards",
+      "scope_notes": "Backs rack/zone spread behavior, topology keys, default spread behavior, and cluster scheduling policy claims when distributing workloads across mixed racks or hardware domains.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.5-capacity-expansion",
+        "on-premises/operations/module-7.6-self-hosted-cicd"
+      ]
+    },
+    {
+      "source_id": "S012",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/",
+      "title": "Disruptions",
+      "tier": "standards",
+      "scope_notes": "Backs PodDisruptionBudget behavior, voluntary disruption semantics, and drain/eviction behavior relevant to decommissioning old nodes during capacity expansion.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.5-capacity-expansion"
+      ]
+    },
+    {
+      "source_id": "S013",
+      "url": "https://tekton.dev/docs/pipelines/",
+      "title": "Tekton Pipelines",
+      "tier": "upstream",
+      "scope_notes": "Backs Kubernetes-native CI/CD architecture claims about Tekton CRDs, Task/TaskRun/Pipeline/PipelineRun objects, and per-task pod execution on cluster.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.6-self-hosted-cicd"
+      ]
+    },
+    {
+      "source_id": "S014",
+      "url": "https://specs.opencontainers.org/distribution-spec/?v=v1.1.1",
+      "title": "The OpenContainers Distribution Spec",
+      "tier": "upstream",
+      "scope_notes": "Backs OCI registry protocol and API standardization claims for self-hosted registries and image distribution workflows.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.6-self-hosted-cicd",
+        "on-premises/operations/module-7.7-self-hosted-registry"
+      ]
+    },
+    {
+      "source_id": "S015",
+      "url": "https://opentelemetry.io/docs/collector/deploy/",
+      "title": "Deploy the Collector",
+      "tier": "upstream",
+      "scope_notes": "Backs OpenTelemetry Collector deployment patterns, especially agent and gateway topologies for splitting collection and aggregation responsibilities.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.8-observability-at-scale"
+      ]
+    },
+    {
+      "source_id": "S016",
+      "url": "https://grafana.com/oss/mimir/",
+      "title": "What is Grafana Mimir?",
+      "tier": "upstream",
+      "scope_notes": "Backs Mimir positioning as a horizontally scalable, highly available, multi-tenant Prometheus-compatible long-term metrics backend with remote write and large active-series scale.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.8-observability-at-scale"
+      ]
+    },
+    {
+      "source_id": "S017",
+      "url": "https://grafana.com/docs/loki/latest/get-started/labels/cardinality/",
+      "title": "Loki Cardinality",
+      "tier": "upstream",
+      "scope_notes": "Backs claims about Loki label cardinality, stream explosion, and why unbounded or short-lived labels degrade performance at scale.",
+      "relevant_modules": [
+        "on-premises/operations/module-7.8-observability-at-scale"
+      ]
+    }
+  ],
+  "rejected_urls": [
+    {
+      "url": "https://www.dmtf.org/standards/redfish",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://thanos.io/tip/thanos/getting-started.md",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://distribution.github.io/distribution/storage-drivers/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://thanos.io/tip/thanos/quick-tutorial.md/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/serving/request-flow/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/install/yaml-install/serving/install-serving-with-yaml/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/serving/config-network-adapters/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/eventing/brokers/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://knative.dev/docs/eventing/triggers/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://keda.sh/docs/2.19/concepts/scaling-deployments/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://keda.sh/docs/2.19/reference/scaledobject-spec/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://keda.sh/docs/2.19/operate/cluster/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    },
+    {
+      "url": "https://docs.openfaas.com/deployment/kubernetes/",
+      "reason": "off_allowlist",
+      "at_step": "section_source_discovery"
+    }
+  ]
+}

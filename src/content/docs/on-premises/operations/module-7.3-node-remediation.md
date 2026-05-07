@@ -25,13 +25,13 @@ After completing this module, you will be able to:
 
 ## Why This Module Matters
 
-In June 2023, a logistics company running an 80-node bare metal Kubernetes cluster experienced a cascade failure that started with a single faulty power supply. At 2:47 AM, worker-34's redundant PSU failed. The server continued on its remaining PSU. Nobody noticed because there was no hardware-level alerting. At 3:12 AM, the second PSU tripped due to a power surge on the same circuit. Worker-34 went offline. Kubernetes marked the node as `NotReady` after 40 seconds and began rescheduling pods -- but only after the default 5-minute taint toleration expired. During those 5 minutes, 23 pods were unavailable.
+A single hardware fault can escalate quickly when there is no hardware-level alerting and workloads stay bound to a failed node until default node-failure tolerations expire.
 
-Then it got worse. Worker-34 hosted a Ceph OSD with 4TB of data. The OSD went down, triggering Ceph recovery across the remaining OSDs. The recovery I/O saturated the storage network on the same rack. Worker-33 and worker-35, sharing the same top-of-rack switch, experienced packet drops. Their kubelet heartbeats became intermittent. The control plane marked them as `NotReady` too. Now three nodes were degraded, and Ceph was trying to rebuild 4TB of data across already-stressed nodes.
+If a failed node also hosts storage or participates in a busy replicated storage system, recovery traffic can stress the surrounding failure domain and turn one node failure into a wider availability problem.
 
-The on-call engineer was paged at 3:18 AM. By the time they logged in, diagnosed the problem, and manually intervened, 45 minutes had passed. The fix: power-cycle worker-34 from the BMC, wait for it to boot, and let Ceph rebalance. Total incident time: 2.5 hours. Revenue impact: $180,000 in delayed shipment processing.
+Without automated remediation, on-call response and manual hardware recovery can stretch a node outage from minutes into a much longer incident.
 
-An automated remediation system would have detected the node failure within seconds, attempted a BMC power cycle within 2 minutes, and if that failed, fenced the node and triggered reprovisioning. The 5-minute pod eviction timeout could have been tuned to 60 seconds for non-stateful workloads. The entire incident could have been resolved in under 5 minutes without human intervention.
+With automated remediation and workload-specific eviction settings, many node failures can be handled much faster and with less manual intervention.
 
 ---
 
@@ -73,11 +73,11 @@ An automated remediation system would have detected the node failure within seco
 
 ---
 
-> **Pause and predict**: Kubernetes marks a node as NotReady only when the kubelet stops sending heartbeats -- which takes 40 seconds by default. During those 40 seconds, pods on the node are running but potentially broken. What types of hardware failures would be invisible to the kubelet heartbeat mechanism?
+> **Pause and predict**: Kubernetes marks a node unhealthy only after missed heartbeats accumulate for about 50 seconds by default. During those 40 seconds, pods on the node are running but potentially broken. What types of hardware failures would be invisible to the kubelet heartbeat mechanism?
 
 ## Node Problem Detector
 
-Node Problem Detector (NPD) is a DaemonSet that monitors system logs and reports problems as Kubernetes node conditions. Without NPD, Kubernetes only knows a node is unhealthy when kubelet stops reporting -- which can take minutes.
+[Node Problem Detector (NPD) is a DaemonSet that monitors system logs and reports problems as Kubernetes node conditions.](https://github.com/kubernetes/node-problem-detector) Without NPD, Kubernetes only knows a node is unhealthy when kubelet stops reporting -- which can take minutes.
 
 ### Deploying Node Problem Detector
 
@@ -133,13 +133,13 @@ spec:
             name: npd-config
 ```
 
-NPD supports custom health check plugins. Configure a `hardware-health-checker` that runs every 60 seconds, checking ECC errors (via `/sys/devices/system/edac/`) and SMART disk health (via `smartctl -H`). When errors exceed thresholds (e.g., >100 correctable ECC errors, or SMART health FAILED), the plugin sets a `HardwareHealthy=False` node condition that Machine Health Checks can act on.
+NPD supports custom health check plugins. For example, you can add a custom health-check plugin that periodically inspects EDAC counters and disk SMART health, then sets a custom node condition when those checks fail.
 
 ---
 
 ## Machine Health Checks (Cluster API)
 
-Machine Health Checks (MHC) are a Cluster API resource that watches node conditions and triggers remediation when conditions are unhealthy for a specified duration.
+[Machine Health Checks (MHC) are a Cluster API resource that watches node conditions and triggers remediation when conditions are unhealthy for a specified duration.](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html)
 
 ### MHC Configuration
 
@@ -398,7 +398,7 @@ ipmitool -I lanplus -H bmc-addr -U admin -P pass sdr type "Power Supply"
 To prevent a single hardware failure from taking down an entire application, you must design for failure domain isolation. On bare metal, failure domains are physical: Top-of-Rack (ToR) switches, power circuits, and storage arrays.
 
 ### Topology Spread Constraints & Rack-Aware Scheduling
-Use `topologySpreadConstraints` to ensure pods are distributed across physical racks. If a ToR switch fails, only a fraction of the application's pods go down.
+[Use `topologySpreadConstraints` to ensure pods are distributed across physical racks.](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) If a ToR switch fails, only a fraction of the application's pods go down.
 
 ```yaml
 # Example: Rack-aware scheduling
@@ -415,7 +415,7 @@ spec:
 ### Storage Isolation
 Stateful workloads create data gravity. If a node with dense storage fails, rebuilding that data heavily stresses the network.
 - **Dedicated Storage Networks**: Isolate storage replication traffic onto a separate VLAN to prevent it from starving kubelet heartbeats.
-- **Failure Domain Mapping**: Configure your storage system (like Ceph's CRUSH map) to mirror data across racks, ensuring a single rack failure never results in data unavailability.
+- **Failure Domain Mapping**: Configure your storage system (like Ceph's CRUSH map) to mirror data across racks, reducing the chance that a single rack failure results in data unavailability.
 
 ---
 
@@ -423,7 +423,7 @@ Stateful workloads create data gravity. If a node with dense storage fails, rebu
 
 Default Kubernetes eviction settings are tuned for cloud environments. On bare metal, you may want faster or slower eviction depending on the failure mode.
 
-Since Kubernetes 1.22, pod eviction on node failure uses taint-based eviction rather than the removed `--pod-eviction-timeout` flag. When a node becomes `NotReady`, the node lifecycle controller adds a `node.kubernetes.io/not-ready` taint. Pods are evicted when their toleration for this taint expires.
+Node-failure eviction relies on taint-based eviction and per-pod `NoExecute` tolerations. [When a node becomes `NotReady`, the node lifecycle controller adds a `node.kubernetes.io/not-ready` taint. Pods are evicted when their toleration for this taint expires.](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)
 
 ```bash
 # Default behavior:
@@ -468,11 +468,11 @@ ceph tell 'osd.*' injectargs '--osd-recovery-op-priority 1'
 
 ## Did You Know?
 
-- **Google's Borg system automatically handles about 5 machine failures per day in a typical 10,000-machine cell.** The failure rate is roughly 0.05% per day, which means in a 100-node bare metal cluster, you should expect approximately one node failure every 20 days. Design your remediation accordingly.
+- **Large production schedulers are designed to absorb regular machine failures.** Even smaller bare-metal clusters should assume node loss is a routine event and automate remediation accordingly.
 
-- **Machine Health Checks were inspired by AWS Auto Scaling Group health checks**, which automatically replace unhealthy EC2 instances. The Cluster API MHC brings the same concept to bare metal, but replacing a physical server takes minutes (reboot) to hours (reprovision) instead of seconds.
+- **Machine Health Checks play a similar role to health-check-based replacement in cloud autoscaling systems**, but bare-metal recovery usually takes longer because rebooting or reprovisioning physical hardware takes time.
 
-- **ECC (Error Correcting Code) memory can correct single-bit errors and detect double-bit errors.** A Google study found that about 8% of DIMMs experience at least one correctable error per year, and DIMMs with correctable errors are 13-228x more likely to experience an uncorrectable (fatal) error. This is why monitoring ECC errors is critical for predicting failures.
+- **ECC memory can catch many memory faults, and recurring ECC alerts are a strong warning sign that a DIMM needs attention before it causes wider disruption.**
 
 - **The "Pets vs Cattle" metaphor applies to bare metal nodes too.** Even though the hardware is physical and unique, your automation should treat nodes as replaceable. If a node fails, the system should automatically replace it without human intervention (at least for the first attempt). The node's identity comes from its Kubernetes registration, not from its hardware serial number.
 
@@ -509,7 +509,7 @@ With 10 nodes and 3 unhealthy (30%), the MHC checks: is 30% >= 40%? No, so it pr
 - Node-07: 3/10 unhealthy = 30% < 40% -> remediate
 - Node-09: still 3/10 unhealthy (or 2/10 if node-03 recovered) -> remediate
 
-If a 4th node fails while these are being remediated: 4/10 = 40%, which meets the threshold -> MHC **stops** remediating and alerts.
+If a 5th node fails while these are being remediated: 5/10 = 50%, which exceeds the threshold, so MHC stops further remediation until the cluster is healthier.
 
 **The safety mechanism**: `maxUnhealthy` prevents the MHC from rebooting your entire cluster in a cascade. If 40%+ of nodes are unhealthy, the problem is systemic and needs human investigation (bad switch, power issue, control plane failure).
 </details>
@@ -564,8 +564,8 @@ You are designing a spare node strategy for a 60-node cluster across 3 racks (20
 **Recommended: 3 spare nodes, one per rack.**
 
 **Reasoning:**
-- 5% of 60 = 3 spare nodes (industry standard for bare metal)
-- One per rack ensures a same-rack spare is always available
+- A practical starting point is at least one spare per rack, then adjust based on utilization and recovery targets.
+- One per rack usually means a same-rack spare is available
 - Same-rack replacement minimizes network topology changes
 - If a rack loses power, the spare in that rack is also lost -- but the other 2 racks still have spares
 
@@ -601,7 +601,7 @@ Your custom node watchdog script attempts a BMC power cycle on a failed node. Th
 
 **What happened:**
 1. Kubernetes uses TLS certificates for kubelet-to-apiserver communication
-2. These certificates are auto-rotated by kubelet (default: 1 year validity, rotate at 80% lifetime)
+2. These certificates are commonly issued for one year by default, and kubelet requests a replacement as expiration approaches
 3. If the node was down for an extended period (or if the certificate was already near expiration), the certificate may have expired before kubelet could rotate it
 4. When the node reboots, kubelet tries to connect with the expired certificate -> rejected
 
@@ -705,3 +705,12 @@ kind delete cluster --name npd-lab
 ## Next Module
 
 Continue to [Module 7.4: Observability Without Cloud Services](/on-premises/operations/module-7.4-observability/) to learn how to build a self-hosted monitoring stack with Prometheus, Thanos, Grafana, and Loki.
+
+## Sources
+
+- [kubernetes.io: taint and toleration](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) — General lesson point for an illustrative rewrite.
+- [Node Problem Detector](https://github.com/kubernetes/node-problem-detector) — Supports claims about detecting kernel, filesystem, runtime, and hardware-adjacent node problems and surfacing them to Kubernetes as Events and NodeConditions for higher-level remediation.
+- [Cluster API MachineHealthCheck](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html) — Supports claims about MachineHealthCheck remediation triggers, unhealthy-condition timeouts, short-circuit safeguards, remediation limits, and delete-and-recreate behavior for unhealthy machines.
+- [Pod Topology Spread Constraints](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/) — Backs rack/zone spread behavior, topology keys, default spread behavior, and cluster scheduling policy claims when distributing workloads across mixed racks or hardware domains.
+- [kubernetes.io: troubleshooting kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/) — The kubeadm troubleshooting docs explicitly describe expired kubelet client certificates causing authentication and rejoin problems.
+- [Node Status](https://kubernetes.io/docs/reference/node/node-status) — Documents `Ready` and `Unknown` semantics and the current default node-monitor-grace-period.

@@ -18,7 +18,7 @@ In February 2024, a healthcare company running a 70-node bare metal Kubernetes c
 
 Instead, they built a rolling firmware update pipeline: cordon a node, drain its workloads, use the Redfish API to stage the BIOS update, reboot the server into the firmware update mode, wait for it to come back, verify the new BIOS version via IPMI, uncordon, and move to the next node. The process took 12 days but caused zero downtime. Three servers failed to reboot after the BIOS update due to a known bug with their specific DIMM configuration. Because they were updating one node at a time, these failures were contained. The spare capacity absorbed the missing nodes while the team worked with Dell support to recover them.
 
-In the cloud, you never think about BIOS versions or disk firmware. The cloud provider handles it. On bare metal, hardware lifecycle management is a continuous operational responsibility that directly affects your cluster's security posture, reliability, and performance.
+In the cloud, you usually do not have to think about BIOS versions or disk firmware. The cloud provider handles it. On bare metal, hardware lifecycle management is a continuous operational responsibility that directly affects your cluster's security posture, reliability, and performance.
 
 ---
 
@@ -412,7 +412,7 @@ A SMART check on `/dev/sdb` shows `Reallocated_Sector_Count = 52` and `Current_P
 
 **This disk is showing signs of imminent failure and should be replaced proactively.**
 
-The presence of pending sectors means the drive is already struggling to read data, and waiting for a complete failure significantly increases the risk of data unavailability if another drive fails simultaneously. Ceph's replication protects your data, but that protection is only effective if you act decisively before multiple disks in the same placement group fail. You must immediately set the OSD to `noout`, mark it `down` and `out`, allow the data to safely migrate, and then purge the OSD before physically replacing the drive. Proactive replacement eliminates the performance penalty of sudden failure during peak workloads and ensures the cluster maintains its fault tolerance.
+The presence of pending sectors means the drive is already struggling to read data, and waiting for a complete failure significantly increases the risk of data unavailability if another drive fails simultaneously. Ceph's replication protects your data, but that protection is only effective if you act decisively before multiple disks in the same placement group fail. You should promptly set the OSD to `noout`, mark it `down` and `out`, allow the data to safely migrate, and then purge the OSD before physically replacing the drive. Proactive replacement eliminates the performance penalty of sudden failure during peak workloads and ensures the cluster maintains its fault tolerance.
 </details>
 
 ### Question 3
@@ -551,3 +551,9 @@ chmod +x /tmp/smartmon-collector.sh
 ## Next Module
 
 Continue to [Module 7.3: Node Failure & Auto-Remediation](/on-premises/operations/module-7.3-node-remediation/) to learn how to detect and automatically recover from node failures using Machine Health Checks and node problem detector.
+
+## Sources
+
+- [kubectl drain Reference](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_drain/) — Covers the Kubernetes-side maintenance semantics that hardware workflows depend on.
+- [Prometheus IPMI Exporter](https://github.com/prometheus-community/ipmi_exporter) — Shows how to pull BMC/IPMI telemetry into Prometheus for hardware-health alerting.
+- [NIST SP 800-193 Platform Firmware Resiliency Guidelines](https://www.nist.gov/publications/platform-firmware-resiliency-guidelines) — Provides a strong firmware-resilience framework for patching, recovery, and platform trust.

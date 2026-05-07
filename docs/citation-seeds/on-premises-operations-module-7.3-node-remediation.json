@@ -1,0 +1,346 @@
+{
+  "module_key": "on-premises/operations/module-7.3-node-remediation",
+  "module_path": "src/content/docs/on-premises/operations/module-7.3-node-remediation.md",
+  "research_run_id": "2026-05-07T00:59:55+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/on-premises-operations.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The June 2023 logistics-company outage narrative with an 80-node cluster, exact timestamps, a PSU failure chain, a 40-second `NotReady` transition, a 5-minute toleration window, and 23 unavailable pods.",
+      "claim_class": "incident",
+      "span_hint": "lines 28-29 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "In June 2023, a logistics company running an 80-node bare metal Kubernetes cluster experienced a cascade failure that started with a single faulty power supply. At 2:47 AM, worker-34's redundant PSU failed. The server continued on its remaining PSU. Nobody noticed because there was no hardware-level alerting. At 3:12 AM, the second PSU tripped due to a power surge on the same circuit. Worker-34 went offline. Kubernetes marked the node as `NotReady` after 40 seconds and began rescheduling pods -- but only after the default 5-minute taint toleration expired. During those 5 minutes, 23 pods were unavailable.",
+      "suggested_rewrite": "A single hardware fault can escalate quickly when there is no hardware-level alerting and workloads stay bound to a failed node until default node-failure tolerations expire.",
+      "lesson_point_url": null,
+      "rationale": "This is a specific outage narrative with precise dates, timings, and impact counts, but no attributable source is provided."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The follow-on Ceph/rack cascade narrative with a 4 TB OSD, recovery saturation, and packet loss on neighboring workers.",
+      "claim_class": "incident",
+      "span_hint": "line 30 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Then it got worse. Worker-34 hosted a Ceph OSD with 4TB of data. The OSD went down, triggering Ceph recovery across the remaining OSDs. The recovery I/O saturated the storage network on the same rack. Worker-33 and worker-35, sharing the same top-of-rack switch, experienced packet drops. Their kubelet heartbeats became intermittent. The control plane marked them as `NotReady` too. Now three nodes were degraded, and Ceph was trying to rebuild 4TB of data across already-stressed nodes.",
+      "suggested_rewrite": "If a failed node also hosts storage or participates in a busy replicated storage system, recovery traffic can stress the surrounding failure domain and turn one node failure into a wider availability problem.",
+      "lesson_point_url": null,
+      "rationale": "This paragraph reads as a real incident with exact infrastructure details and quantified storage state, but it has no source."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The on-call timeline, 45-minute manual response, 2.5-hour total incident, and $180,000 business-impact claim.",
+      "claim_class": "incident",
+      "span_hint": "line 32 | section: Why This Module Matters",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The on-call engineer was paged at 3:18 AM. By the time they logged in, diagnosed the problem, and manually intervened, 45 minutes had passed. The fix: power-cycle worker-34 from the BMC, wait for it to boot, and let Ceph rebalance. Total incident time: 2.5 hours. Revenue impact: $180,000 in delayed shipment processing.",
+      "suggested_rewrite": "Without automated remediation, on-call response and manual hardware recovery can stretch a node outage from minutes into a much longer incident.",
+      "lesson_point_url": null,
+      "rationale": "Exact outage durations and revenue-loss figures require a primary incident source; none is provided."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "Automated remediation would have power-cycled within 2 minutes, a 60-second toleration would have sufficed, and the whole incident would have been resolved in under 5 minutes.",
+      "claim_class": "benchmark",
+      "span_hint": "line 34 | section: Why This Module Matters",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "An automated remediation system would have detected the node failure within seconds, attempted a BMC power cycle within 2 minutes, and if that failed, fenced the node and triggered reprovisioning. The 5-minute pod eviction timeout could have been tuned to 60 seconds for non-stateful workloads. The entire incident could have been resolved in under 5 minutes without human intervention.",
+      "suggested_rewrite": "With automated remediation and workload-specific eviction settings, many node failures can be handled much faster and with less manual intervention.",
+      "lesson_point_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "rationale": "The operational lesson is sound, but the exact recovery and eviction timings are illustrative rather than sourced."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Kubernetes marks a node `NotReady` after 40 seconds by default.",
+      "claim_class": "standard",
+      "span_hint": "line 76 | section: Node Failure Detection Architecture",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Kubernetes marks a node as NotReady only when the kubelet stops sending heartbeats -- which takes 40 seconds by default.",
+      "suggested_rewrite": "Kubernetes marks a node unhealthy only after missed heartbeats accumulate for about 50 seconds by default.",
+      "lesson_point_url": null,
+      "rationale": "Current Kubernetes docs describe the default node-monitor-grace-period as 50 seconds, so the exact 40-second default is outdated."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "Node Problem Detector is a DaemonSet that monitors system logs and reports problems as Kubernetes node conditions.",
+      "claim_class": "vendor_capability",
+      "span_hint": "lines 80-84 | section: Node Problem Detector",
+      "disposition": "supported",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The upstream Node Problem Detector repository documents log monitoring and export of problems to Kubernetes."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "A custom `hardware-health-checker` should run every 60 seconds, watch EDAC and SMART, and flip `HardwareHealthy=False` after thresholds such as >100 correctable ECC errors.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 136 | section: Node Problem Detector",
+      "disposition": "soften_to_illustration",
+      "source_ids": [
+        "S004"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "NPD supports custom health check plugins. Configure a `hardware-health-checker` that runs every 60 seconds, checking ECC errors (via `/sys/devices/system/edac/`) and SMART disk health (via `smartctl -H`). When errors exceed thresholds (e.g., >100 correctable ECC errors, or SMART health FAILED), the plugin sets a `HardwareHealthy=False` node condition that Machine Health Checks can act on.",
+      "suggested_rewrite": "NPD supports custom health check plugins. For example, you can add a custom health-check plugin that periodically inspects EDAC counters and disk SMART health, then sets a custom node condition when those checks fail.",
+      "lesson_point_url": "https://github.com/kubernetes/node-problem-detector",
+      "rationale": "The custom-plugin capability is real, but the exact polling interval, thresholds, and condition name are local design choices rather than sourced defaults."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "MachineHealthChecks watch node or machine health conditions and trigger remediation after configured unhealthy durations.",
+      "claim_class": "standard",
+      "span_hint": "lines 140-142 | section: Machine Health Checks (Cluster API)",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Cluster API documentation defines MachineHealthCheck condition checks and remediation behavior."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "Topology spread constraints can use rack labels to distribute pods across physical failure domains.",
+      "claim_class": "standard",
+      "span_hint": "lines 400-401 | section: Topology Spread Constraints & Rack-Aware Scheduling",
+      "disposition": "supported",
+      "source_ids": [
+        "S011"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The topology spread docs explicitly cover administrator-defined topology keys for spreading workloads across failure domains."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "Ceph's CRUSH map can place replicas across rack-level failure domains so a single rack outage does not remove all copies.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 418 | section: Storage Isolation",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.ceph.com/en/latest/rados/operations/crush-map/",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Official Ceph docs directly describe CRUSH failure domains and rack-aware placement, but `docs.ceph.com` is off the current allowlist."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "Since Kubernetes 1.22, node-failure eviction uses taint-based eviction rather than the removed `--pod-eviction-timeout` flag.",
+      "claim_class": "standard",
+      "span_hint": "line 426 | section: Tuning Eviction Timeouts",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Since Kubernetes 1.22, pod eviction on node failure uses taint-based eviction rather than the removed `--pod-eviction-timeout` flag.",
+      "suggested_rewrite": "Node-failure eviction relies on taint-based eviction and per-pod `NoExecute` tolerations.",
+      "lesson_point_url": null,
+      "rationale": "The stable, sourceable behavior is taint-based eviction; the versioned statement about the removed flag is not cleanly backed here and is easy to get wrong."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "When a node becomes `NotReady` or `Unreachable`, Kubernetes adds built-in taints and automatically gives pods 300-second tolerations unless overridden.",
+      "claim_class": "standard",
+      "span_hint": "lines 426-436 | section: Tuning Eviction Timeouts",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The Kubernetes taints and tolerations docs explicitly describe the built-in taints and the default 300-second tolerations."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Ceph recovery and backfill can materially reduce operational performance, so operators tune recovery/backfill settings to limit impact during rebuilds.",
+      "claim_class": "vendor_capability",
+      "span_hint": "lines 455-464 | section: Tuning Storage Recovery Throttling",
+      "disposition": "needs_allowlist_expansion",
+      "source_ids": [],
+      "proposed_url": "https://docs.ceph.com/en/squid/rados/configuration/osd-config-ref",
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Official Ceph docs describe backfill/recovery performance impact and the relevant tuning knobs, but `docs.ceph.com` is off-allowlist."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "Borg handles about 5 machine failures per day in a 10,000-machine cell, implying 0.05% daily failure and one node failure every 20 days in a 100-node cluster.",
+      "claim_class": "statistic",
+      "span_hint": "line 471 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Google's Borg system automatically handles about 5 machine failures per day in a typical 10,000-machine cell.** The failure rate is roughly 0.05% per day, which means in a 100-node bare metal cluster, you should expect approximately one node failure every 20 days. Design your remediation accordingly.",
+      "suggested_rewrite": "- **Large production schedulers are designed to absorb regular machine failures.** Even smaller bare-metal clusters should assume node loss is a routine event and automate remediation accordingly.",
+      "lesson_point_url": null,
+      "rationale": "The exact Borg numbers and derived arithmetic are unsourced in the module and should not be preserved as precise facts."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "Machine Health Checks were inspired by AWS Auto Scaling Group health checks, and cloud replacement happens in seconds while bare-metal replacement takes minutes to hours.",
+      "claim_class": "vendor_capability",
+      "span_hint": "line 473 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **Machine Health Checks were inspired by AWS Auto Scaling Group health checks**, which automatically replace unhealthy EC2 instances. The Cluster API MHC brings the same concept to bare metal, but replacing a physical server takes minutes (reboot) to hours (reprovision) instead of seconds.",
+      "suggested_rewrite": "- **Machine Health Checks play a similar role to health-check-based replacement in cloud autoscaling systems**, but bare-metal recovery usually takes longer because rebooting or reprovisioning physical hardware takes time.",
+      "lesson_point_url": null,
+      "rationale": "The similarity is fair, but the historical inspiration claim and exact timing comparison are not sourced here."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "ECC memory corrects single-bit errors and detects double-bit errors, and a Google study found about 8% of DIMMs see correctable errors per year while such DIMMs are 13-228x more likely to suffer a fatal uncorrectable error.",
+      "claim_class": "statistic",
+      "span_hint": "line 475 | section: Did You Know?",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- **ECC (Error Correcting Code) memory can correct single-bit errors and detect double-bit errors.** A Google study found that about 8% of DIMMs experience at least one correctable error per year, and DIMMs with correctable errors are 13-228x more likely to experience an uncorrectable (fatal) error. This is why monitoring ECC errors is critical for predicting failures.",
+      "suggested_rewrite": "- **ECC memory can catch many memory faults, and recurring ECC alerts are a strong warning sign that a DIMM needs attention before it causes wider disruption.**",
+      "lesson_point_url": null,
+      "rationale": "This bullet mixes an over-broad ECC statement with a misquoted study result about fatal errors, so the safest fix is to keep the lesson and drop the false precision."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "With `maxUnhealthy: 40%`, remediation still proceeds in a 10-node pool when 3 nodes are unhealthy.",
+      "claim_class": "standard",
+      "span_hint": "lines 504-510 | quiz answer 1",
+      "disposition": "supported",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "Cluster API health-check docs state remediation continues when the unhealthy count does not exceed the configured 40% limit."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "At 4 unhealthy nodes out of 10, MHC stops remediating because 40% meets the threshold.",
+      "claim_class": "standard",
+      "span_hint": "line 512 | quiz answer 1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [
+        "S005"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "If a 4th node fails while these are being remediated: 4/10 = 40%, which meets the threshold -> MHC **stops** remediating and alerts.",
+      "suggested_rewrite": "If a 5th node fails while these are being remediated: 5/10 = 50%, which exceeds the threshold, so MHC stops further remediation until the cluster is healthier.",
+      "lesson_point_url": null,
+      "rationale": "Current docs say remediation stops when the unhealthy count exceeds the configured limit, not when it merely equals 40%."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "5% spare capacity is an industry-standard bare-metal rule, so a 60-node cluster should use exactly 3 spares.",
+      "claim_class": "benchmark",
+      "span_hint": "line 567 | quiz answer 3",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- 5% of 60 = 3 spare nodes (industry standard for bare metal)",
+      "suggested_rewrite": "- A practical starting point is at least one spare per rack, then adjust based on utilization and recovery targets.",
+      "lesson_point_url": null,
+      "rationale": "The exact percentage and its presentation as an industry standard are heuristic, not a cited standard."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "Kubelet client certificates rotate at 80% of their one-year lifetime.",
+      "claim_class": "standard",
+      "span_hint": "line 604 | quiz answer 4",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "These certificates are auto-rotated by kubelet (default: 1 year validity, rotate at 80% lifetime)",
+      "suggested_rewrite": "These certificates are commonly issued for one year by default, and kubelet requests a replacement as expiration approaches",
+      "lesson_point_url": null,
+      "rationale": "Upstream docs describe a rotation window as expiry approaches, not a single exact 80%-of-lifetime trigger."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "An expired kubelet client certificate can stop a rebooted node from rejoining the cluster.",
+      "claim_class": "standard",
+      "span_hint": "lines 600-606 | quiz answer 4",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/troubleshooting-kubeadm/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The kubeadm troubleshooting docs explicitly describe expired kubelet client certificates causing authentication and rejoin problems."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html",
+      "title": "Cluster API MachineHealthCheck",
+      "tier": "standards",
+      "why_relevant": "Primary reference for remediation thresholds, unhealthy-condition timeouts, and short-circuit behavior."
+    },
+    {
+      "url": "https://github.com/kubernetes/node-problem-detector",
+      "title": "Node Problem Detector",
+      "tier": "upstream",
+      "why_relevant": "Upstream reference for log monitors, health-check plugins, and how node problems surface to Kubernetes."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+      "title": "Taints and Tolerations",
+      "tier": "standards",
+      "why_relevant": "Explains built-in node taints, default 300-second tolerations, and taint-based eviction behavior."
+    },
+    {
+      "url": "https://kubernetes.io/docs/reference/node/node-status",
+      "title": "Node Status",
+      "tier": "standards",
+      "why_relevant": "Documents `Ready` and `Unknown` semantics and the current default node-monitor-grace-period."
+    }
+  ],
+  "notes": "The local cold-start API failed (`api: FAILED to start — see logs/api.log`), so this seed was assembled from the module text, the shared section pool, and primary upstream docs. Current Kubernetes docs show a 50s default node-monitor-grace-period, not 40s. Ceph-specific CRUSH and recovery-throttling claims are real but need allowlist expansion for `docs.ceph.com`.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}

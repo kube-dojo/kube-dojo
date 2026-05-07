@@ -13,11 +13,11 @@ sidebar:
 
 ## Why This Module Matters
 
-In October 2023, a financial services company running a 45-node bare metal Kubernetes cluster needed to upgrade from 1.27 to 1.28. They had been delaying upgrades for nine months because the process was manual, undocumented, and everyone who had done the last upgrade had left the company. When the security team mandated the upgrade due to a CVE in the kubelet, the remaining team attempted it on a Friday afternoon. They upgraded the control plane to 1.28, then upgraded all 45 worker nodes simultaneously. Twenty minutes in, they discovered that three nodes had a different kernel version that was incompatible with the new kubelet. Those nodes entered a crash loop. But the drain had already evicted pods from those nodes, and the cluster was running at 60% capacity. The PodDisruptionBudgets they had configured were ignored because they used `kubectl drain --force`. The result: 4 hours of degraded service, 2 hours of complete outage for stateful workloads, and a rollback that took another 3 hours because nobody had tested it.
+An undocumented, all-at-once upgrade on heterogeneous bare-metal nodes can turn routine maintenance into an outage, especially when capacity is tight and rollback has not been rehearsed.
 
-The fix was straightforward but required discipline: a staging cluster that mirrors production, a written runbook, one-node-at-a-time rolling upgrades, and rollback procedures tested before the upgrade begins. The CTO's postmortem note: "We treated a bare metal upgrade like a cloud upgrade. It is not. Every node is a snowflake until you prove otherwise."
+The fix was straightforward but required discipline: a staging cluster that mirrors production, a written runbook, one-node-at-a-time rolling upgrades, and rollback procedures tested before the upgrade begins. A useful postmortem conclusion is that bare-metal upgrades need rehearsed runbooks, staged rollouts, and validation of node differences before production changes.
 
-In the cloud, managed Kubernetes upgrades are a button click with automatic rollback. On bare metal, you are the managed service. Every upgrade is a planned operation that must account for heterogeneous hardware, limited spare capacity, and the absence of a safety net.
+In managed Kubernetes services, the provider automates more of the upgrade workflow. On bare metal, you are the managed service. Every upgrade is a planned operation that must account for heterogeneous hardware, limited spare capacity, and the absence of a safety net.
 
 ---
 
@@ -61,7 +61,7 @@ flowchart LR
     API --- Etcd
 ```
 
-For example, if `kube-apiserver` is at **v1.35**:
+[For example, if `kube-apiserver` is at **v1.35**:](https://kubernetes.io/releases/version-skew-policy)
 - In highly available (HA) control planes, all `kube-apiserver` instances must be within one minor version of each other.
 - `kube-controller-manager` and `kube-scheduler` can be at **v1.35** or **v1.34**.
 - `kubelet` and `kube-proxy` can be at **v1.35**, **v1.34**, **v1.33**, or **v1.32**.
@@ -69,7 +69,7 @@ For example, if `kube-apiserver` is at **v1.35**:
 
 ### Why Three-Version Kubelet Skew Matters on Bare Metal
 
-In the cloud, you upgrade all nodes within hours. On bare metal with 200 nodes and maintenance windows, the upgrade might stretch over weeks. The three-version kubelet skew means you can run apiserver at 1.35 while some workers still run kubelet 1.32 -- but 1.31 kubelets would stop working.
+In the cloud, you upgrade all nodes within hours. On bare metal with 200 nodes and maintenance windows, the upgrade might stretch over weeks. [The three-version kubelet skew means you can run apiserver at 1.35 while some workers still run kubelet 1.32 -- but 1.31 kubelets would stop working.](https://kubernetes.io/releases/version-skew-policy)
 
 ```bash
 # Check current versions across all nodes
@@ -84,17 +84,17 @@ kubectl get nodes -o custom-columns=\
 
 ## kubeadm Upgrade Workflow
 
-> **Pause and predict**: Before reading the upgrade steps, think about why the first control plane node uses `kubeadm upgrade apply` while subsequent control plane nodes use `kubeadm upgrade node`. What is different about the first node?
+> **Pause and predict**: Before reading the upgrade steps, think about why [the first control plane node uses `kubeadm upgrade apply` while subsequent control plane nodes use `kubeadm upgrade node`](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/). What is different about the first node?
 
-> **Prerequisite**: Your bare-metal cluster must be running with either static control-plane/etcd pods or an external etcd cluster. `kubeadm upgrade` does not support other control plane topologies.
+> **Prerequisite**: [Your bare-metal cluster must be running with either static control-plane/etcd pods or an external etcd cluster. `kubeadm upgrade` does not support other control plane topologies.](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
 
 ### Step 1: Upgrade the First Control Plane Node
 
 The first control plane upgrade is special: `kubeadm upgrade apply` upgrades the cluster-wide components (API server, controller manager, scheduler manifests) and etcd. Subsequent nodes only need to update their local kubelet and static pod manifests.
 
-> **Note**: For Kubernetes versions released after September 13, 2023, you must use the community-owned `pkgs.k8s.io` package repositories, which use per-minor URLs. Legacy apt/yum repos are frozen and no longer receive updates.
+> **Note**: For Kubernetes versions released after September 13, 2023, [you must use the community-owned `pkgs.k8s.io` package repositories](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/), which use per-minor URLs. Legacy apt/yum repos are frozen and no longer receive updates.
 
-> **Note**: If `kubeadm upgrade apply` fails partway through, it does not fully roll back automatically. However, the command is idempotent—you can fix the underlying issue and safely run `kubeadm upgrade apply` again.
+> **Note**: If `kubeadm upgrade apply` fails partway through, it does not fully roll back automatically. However, [the command is idempotent—you can fix the underlying issue and safely run `kubeadm upgrade apply` again.](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
 
 ```bash
 # Check available versions
@@ -143,7 +143,7 @@ systemctl restart kubelet
 
 ### Step 3: Upgrade Worker Nodes (Rolling)
 
-In-place minor kubelet upgrades are not supported. You must drain the node before upgrading the packages.
+[In-place minor kubelet upgrades are not supported. You must drain the node before upgrading the packages.](https://kubernetes.io/releases/version-skew-policy)
 
 ```mermaid
 flowchart TD
@@ -202,7 +202,7 @@ kubectl drain worker-07 \
   --pod-selector='app!=critical-singleton'
 
 # NEVER use --force unless you understand the consequences
-# --force skips PDB checks and deletes standalone pods
+# --force allows drain to proceed for unmanaged pods; bypassing PodDisruptionBudgets requires `--disable-eviction`, which is much riskier.
 ```
 
 ### Handling Pods That Refuse to Drain
@@ -420,15 +420,15 @@ flowchart TD
 
 ## Did You Know?
 
-- **Kubernetes drops support for a minor version approximately 12 months after release.** On bare metal, where upgrades take longer to plan and execute, this means you should start planning the next upgrade almost immediately after completing the current one. Falling behind two versions is uncomfortable; falling behind three is an emergency.
+- [**Kubernetes drops support for a minor version approximately 12 months after release.**](https://kubernetes.io/releases/version-skew-policy) On bare metal, where upgrades take longer to plan and execute, this means you should start planning the next upgrade almost immediately after completing the current one. Falling behind two versions is uncomfortable; falling behind three is an emergency.
 
-- **For Kubernetes 1.35 on Linux, the kubelet defaults to cgroups v2 and sets `FailCgroupV1=true` by default.** This means nodes still on legacy cgroups v1 will actively fail to start the kubelet, highlighting the importance of hardware-aware OS upgrades alongside Kubernetes upgrades.
+- **For Kubernetes 1.35 on Linux, the kubelet no longer starts on cgroup v1 nodes by default.** This makes cgroup v2 readiness an important prerequisite when refreshing node operating systems and runtimes.
 
-- **The kubelet's three-version skew tolerance was expanded from two in Kubernetes 1.28.** This change was specifically motivated by on-premises and air-gapped environments where upgrading all nodes quickly is impractical. The KEP (Kubernetes Enhancement Proposal) cited large bare metal deployments as the primary beneficiary.
+- [**The kubelet's three-version skew tolerance was expanded from two in Kubernetes 1.28.**](https://kubernetes.io/blog/2023/08/15/kubernetes-v1-28-release/) This change reduced the pressure to upgrade every node immediately during slower rolling-upgrade programs.
 
 - **etcd upgrades are the riskiest part of a control plane upgrade.** etcd uses a WAL (Write-Ahead Log) format that can change between versions. If the new etcd version migrates the WAL format, you cannot simply roll back to the old binary. This is why etcd backup before upgrade is non-negotiable.
 
-- **Google's internal Borg system inspired Kubernetes, but Google upgrades Borg clusters cell-by-cell across thousands of nodes using a dedicated upgrade service.** On bare metal Kubernetes, you are building that upgrade service yourself with shell scripts and kubeadm.
+- **Kubernetes was heavily influenced by Borg, but on bare metal you still need to design and operate your own upgrade process.**
 
 ---
 
@@ -439,7 +439,7 @@ flowchart TD
 | Skipping minor versions | kubeadm only supports +1 minor version upgrades | Upgrade sequentially: 1.33 -> 1.34 -> 1.35 |
 | No etcd backup before upgrade | Cannot roll back if etcd schema changes | Always `etcdctl snapshot save` before upgrading |
 | Draining all workers at once | Insufficient capacity for running workloads | Roll in batches matching your spare capacity |
-| Using `--force` on drain | Skips PDB checks, deletes standalone pods | Use `--timeout` and fix blocked drains properly |
+| Using `--force` or `--disable-eviction` carelessly during drain | `--force` affects unmanaged pods, while `--disable-eviction` bypasses PDB protections | Prefer normal eviction, use timeouts, and fix the blocking condition explicitly |
 | Not testing on staging | Hardware-specific failures discovered in production | Maintain staging with representative hardware |
 | Ignoring version skew | Components stop communicating | Check all component versions before and after |
 | Upgrading on Friday afternoon | No time to handle unexpected failures | Schedule upgrades Tuesday-Wednesday morning |
@@ -482,7 +482,7 @@ You have just upgraded your control plane from 1.34 to 1.35. Twenty minutes late
 <details>
 <summary>Answer</summary>
 
-Rolling back a control plane is complex because `kubeadm` does not have a built-in downgrade command, and etcd may have migrated its Write-Ahead Log to a new, incompatible format. You cannot simply downgrade the etcd binary; you must restore etcd from the snapshot you took immediately before the upgrade. First, stop the API server on all control plane nodes by temporarily moving their static pod manifests out of `/etc/kubernetes/manifests/` to prevent any further writes. Next, use `etcdctl snapshot restore` to recover the previous state, downgrade the `kubeadm`, `kubelet`, and `kubectl` packages to the 1.34 version, and restore the pre-upgrade static pod manifests from the `/etc/kubernetes/tmp/kubeadm-backup-manifests-*` directory. Finally, restart the kubelet to bring the 1.34 control plane back online, keeping in mind that any cluster state changes made during those twenty minutes will be permanently lost.
+Rolling back a control plane is complex because `kubeadm` does not have a built-in downgrade command, and etcd may have migrated its Write-Ahead Log to a new, incompatible format. You usually cannot simply downgrade the etcd binary after an upgrade; instead, restore etcd from the snapshot you took immediately before the upgrade. First, stop the API server on all control plane nodes by temporarily moving their static pod manifests out of `/etc/kubernetes/manifests/` to prevent any further writes. Next, use `etcdctl snapshot restore` to recover the previous state, downgrade the `kubeadm`, `kubelet`, and `kubectl` packages to the 1.34 version, and restore the pre-upgrade static pod manifests from the `/etc/kubernetes/tmp/kubeadm-backup-manifests-*` directory. Finally, restart the kubelet to bring the 1.34 control plane back online, keeping in mind that any cluster state changes made during those twenty minutes will be permanently lost.
 </details>
 
 ---
@@ -557,3 +557,11 @@ kind delete cluster --name upgrade-lab
 ## Next Module
 
 Continue to [Module 7.2: Hardware Lifecycle & Firmware](/on-premises/operations/module-7.2-hardware-lifecycle/) to learn how to manage BIOS updates, disk replacements, and firmware patching without cluster downtime.
+
+## Sources
+
+- [Kubernetes Version Skew Policy](https://kubernetes.io/releases/version-skew-policy) — Supports claims about supported minor-version skew between kube-apiserver, controller-manager, scheduler, kubelet, kube-proxy, and kubectl during staged upgrades and mixed-version maintenance windows.
+- [Upgrading kubeadm Clusters](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/) — Supports kubeadm upgrade workflow claims: first control plane vs additional control planes, worker upgrade sequencing, drain/uncordon expectations, certificate renewal behavior, and current package-repository guidance for post-2023 releases.
+- [kubectl drain Reference](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_drain/) — Supports maintenance and upgrade claims around cordon/drain/uncordon behavior, eviction vs delete semantics, daemonset handling, graceful termination, and the risk of bypassing disruption protections.
+- [Disruptions](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/) — Backs PodDisruptionBudget behavior, voluntary disruption semantics, and drain/eviction behavior relevant to decommissioning old nodes during capacity expansion.
+- [kubernetes.io: kubernetes v1 28 release](https://kubernetes.io/blog/2023/08/15/kubernetes-v1-28-release/) — The Kubernetes 1.28 release announcement states that the supported skew expanded from n-2 to n-3.
