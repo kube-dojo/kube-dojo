@@ -31,27 +31,27 @@ After completing this module, you will be able to:
 
 The SRE lead at a mid-size fintech company had done everything by the book. She had SLOs documented in Confluence. The team agreed on 99.9% availability for the payment API and a 200ms p99 latency target for the checkout flow. Error budget policies were signed off by engineering leadership. Textbook SRE.
 
-Then a Thursday afternoon deployment introduced a subtle serialization bug. Not a hard crash -- requests succeeded, but 4% of responses returned stale cached data instead of live prices. The service stayed "up." Prometheus alerts stayed green. The error rate metric everyone watched only counted HTTP 5xx responses, and these were all 200s with wrong data.
+A deployment can introduce a subtle correctness bug that slips past coarse availability alerts, especially when the team only measures HTTP 5xx responses.
 
-For **twelve hours**, the error budget burned silently. By the time a customer support escalation reached the on-call engineer Friday morning, the monthly error budget was gone. Entirely. The quarterly business review turned into a post-mortem. The CTO asked one question: "We have SLOs. Why didn't anyone know?"
+Without burn-rate alerts and an error-budget view, a team can spend a large portion of its budget before anyone notices.
 
 The answer was painful. SLOs lived in a wiki. The Prometheus rules were hand-written, outdated, and only covered availability -- not correctness. Nobody had a dashboard showing error budget consumption in real time. There were no burn-rate alerts. The SLOs existed on paper but not in the system.
 
 **SLO tooling bridges the gap between SRE theory and production reality.** Tools like Sloth and Pyrra turn SLO definitions into working Prometheus rules, burn-rate alerts, and real-time dashboards -- automatically. You define your SLOs once in YAML, and the tooling generates everything needed to actually enforce them.
 
-That fintech team adopted Sloth the following sprint. The same bug pattern hit again two months later. This time, a multi-window burn-rate alert fired within 14 minutes. The error budget dashboard showed exactly how much budget remained. The incident was resolved in 23 minutes instead of 12 hours.
+Putting SLOs into working tooling can shorten detection and response time by surfacing burn-rate alerts and current error-budget status during an incident.
 
 ---
 
 ## Did You Know?
 
-- **Hand-written SLO recording rules are wrong 60% of the time** -- Google's SRE workbook documents that manually maintaining multi-window burn-rate alerts is so error-prone that most teams either get the math wrong or stop updating the rules after a few months. Sloth eliminates this entirely by generating mathematically correct rules from a simple YAML spec.
+- **Hand-written SLO recording rules are easy to get wrong** -- the Google SRE workbook recommends multi-window burn-rate alerting, and tools like Sloth reduce manual rule-writing by generating the recording and alert rules from an SLO spec.
 
-- **Pyrra was born from frustration at Red Hat** -- Engineers at Red Hat kept building the same Grafana dashboards for every new SLO. They built Pyrra to auto-generate error budget dashboards directly from Prometheus rules, so teams could go from "I have an SLO" to "I can see my error budget" in minutes, not days.
+- **Pyrra focuses on SLO visibility** -- it generates Prometheus recording rules from SLO objects and provides UI views for error budgets, burn rates, and alert status.
 
-- **The OpenSLO specification has backing from over 15 organizations** -- OpenSLO is a vendor-neutral, open standard for defining SLOs as code. It means you can define your SLO once and port it between Nobl9, Datadog, Dynatrace, or open-source tools without rewriting anything.
+- **OpenSLO is a vendor-neutral SLO specification** -- it provides a common YAML format for expressing SLOs as code and is intended to make definitions more portable across tooling.
 
-- **Multi-window burn-rate alerting reduces false positives by 90%** -- The naive approach (alert when error rate exceeds threshold) generates constant noise. The multi-window, multi-burn-rate method from Google's SRE book catches real incidents fast while ignoring brief spikes. Sloth implements this automatically -- you would need roughly 30 recording rules per SLO to do it by hand.
+- **Multi-window burn-rate alerting improves precision over a single threshold** -- the Google SRE workbook recommends pairing long and short windows so alerts focus on sustained budget burn, and tools like Sloth automate that rule generation.
 
 ---
 
@@ -90,7 +90,7 @@ Before diving into individual tools, here is how they fit together:
 
 ## Sloth: SLOs as Code
 
-Sloth takes a simple YAML definition and generates all the Prometheus recording rules and alerting rules you need. No manual PromQL. No math errors.
+Sloth takes a simple YAML definition and [generates all the Prometheus recording rules and alerting rules you need](https://github.com/slok/sloth). You still define the SLI queries, but Sloth handles the repetitive rule generation and alert math.
 
 ### How Sloth Works
 
@@ -157,7 +157,7 @@ For a single SLO, Sloth produces:
 | Burn-rate alert rules | 2 | Page alert (fast burn) + ticket alert (slow burn) |
 | Metadata recording rules | ~4 | Labels, objectives, periods for dashboards |
 
-That is roughly **12 rules** generated from your 20-line YAML. Try writing those by hand and getting the math right every time.
+That turns a short SLO spec into multiple recording and alerting rules, which is much easier to maintain than writing them all by hand.
 
 ### Running Sloth as a Kubernetes Operator
 
@@ -209,9 +209,9 @@ Pyrra complements Sloth by providing a dedicated UI for SLO tracking. While Slot
 
 - **Error budget dashboard**: See remaining budget at a glance
 - **Burn-rate visualization**: Charts showing how fast budget is consumed
-- **Multi-window views**: 1h, 6h, 1d, 7d, 30d burn rates side by side
+- **Multi-window views**: multiple burn-rate and error-budget views for the same SLO
 - **Alert status**: Which SLOs are currently alerting
-- **Prometheus-native**: Reads directly from Prometheus, no extra database
+- **Prometheus-native**: works alongside Prometheus and queries it for SLO data
 
 ### Deploying Pyrra
 
@@ -246,7 +246,7 @@ spec:
         metric: http_requests_total{service="payment-api"}
 ```
 
-Once applied, Pyrra generates Prometheus rules and displays the SLO in its web UI with error budget graphs, burn-rate charts, and alert status.
+Once applied, [Pyrra generates Prometheus rules and displays the SLO in its web UI](https://github.com/pyrra-dev/pyrra) with error budget graphs, burn-rate charts, and alert status.
 
 ### Pyrra + Grafana Integration
 
@@ -264,7 +264,7 @@ pyrra_objective_burn_rate{service="payment-api", window="1h"}
 
 ## The OpenSLO Specification
 
-OpenSLO is a vendor-neutral YAML format for defining SLOs. Think of it as the "OpenAPI but for SLOs."
+OpenSLO is a [vendor-neutral YAML format for defining SLOs](https://github.com/OpenSLO/OpenSLO). Think of it as the "OpenAPI but for SLOs."
 
 ```yaml
 apiVersion: openslo/v1
@@ -300,7 +300,7 @@ spec:
       isRolling: true
 ```
 
-The advantage of OpenSLO is portability. Define your SLO once, and adapters can translate it to Sloth, Pyrra, Nobl9, Datadog, or any other platform that supports the spec.
+The advantage of OpenSLO is portability. It gives teams a common way to express SLOs as code and makes translation between compatible tools easier.
 
 ---
 
@@ -308,7 +308,7 @@ The advantage of OpenSLO is portability. Define your SLO once, and adapters can 
 
 | Feature | Sloth | Pyrra | Nobl9 | Google SLO Generator |
 |---------|-------|-------|-------|---------------------|
-| **Type** | CLI / K8s Operator | K8s Operator + UI | SaaS Platform | CLI Tool |
+| **Type** | CLI / K8s Operator | K8s Operator + UI | SaaS Platform | [CLI Tool](https://github.com/google/slo-generator) |
 | **SLO Definition** | Custom YAML | Custom CRD | Web UI / Terraform | YAML config |
 | **Rule Generation** | Prometheus rules | Prometheus rules | Managed backend | Stackdriver / Prometheus |
 | **Dashboard** | No (use Grafana) | Built-in web UI | Built-in web UI | No (use Grafana) |
@@ -335,7 +335,7 @@ The advantage of OpenSLO is portability. Define your SLO once, and adapters can 
 |---------|---------------|------------|
 | SLI query does not match real traffic | Copy-pasted a query without verifying label names | Run the SLI query in Prometheus first; confirm it returns data |
 | Objective set too high (99.99%) | Ambition without measuring current baseline | Measure actual performance for 2 weeks, then set an objective slightly above it |
-| Forgetting the `{{.window}}` placeholder in Sloth | Hardcoding a time window like `[5m]` | Always use `{{.window}}`; Sloth substitutes the correct windows |
+| Forgetting the `{{.window}}` placeholder in Sloth | Hardcoding a time window like `[5m]` | In most cases, use `{{.window}}`; Sloth substitutes the correct windows |
 | Not loading generated rules into Prometheus | Generating rules but never applying them | Use Prometheus Operator CRDs or mount rules into the Prometheus config |
 | Only tracking availability, ignoring latency | Availability is the easiest SLI to define | Define at least two SLOs: availability and latency (p99 or p95) |
 | Alert thresholds that page on slow burns | Using a single burn-rate threshold for all alert severities | Use Sloth's page vs ticket alert separation; page on fast burns, ticket on slow burns |
@@ -551,3 +551,10 @@ A page alert means the error budget is burning at a rate that will exhaust it we
 ## Next Module
 
 [Module 1.11 (Coming Soon)] -- Continue exploring the observability toolkit.
+
+## Sources
+
+- [github.com: sloth](https://github.com/slok/sloth) — The Sloth README directly describes generation of Prometheus SLO metrics and multi-window multi-burn alerts from an SLO spec.
+- [github.com: pyrra](https://github.com/pyrra-dev/pyrra) — The Pyrra README describes the UI, error-budget views, burn rates, and backend generation of Prometheus recording rules.
+- [OpenSLO Specification](https://github.com/OpenSLO/OpenSLO) — Backs OpenSLO as a vendor-neutral specification for expressing SLOs, SLIs, objectives, alert policies, services, and budgeting methods in portable YAML.
+- [github.com: slo generator](https://github.com/google/slo-generator) — The official repository README directly describes the CLI, YAML/JSON configuration, supported backends, and computed SLO outputs.
