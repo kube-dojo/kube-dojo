@@ -506,7 +506,7 @@ When a pod is evicted:
 1. The pod's status becomes `Failed` with reason `Evicted`
 2. The pod remains visible in `k get pods` until garbage collected
 3. If the pod is owned by a controller (Deployment, ReplicaSet, StatefulSet, Job), the controller creates a replacement pod. The replacement is scheduled by the scheduler and may land on any eligible node.
-4. Standalone pods (no controller) are **permanently lost**. This is why you should always use controllers.
+4. Standalone pods (no controller) are **permanently lost**. This is why you should usually use controllers.
 5. The evicted pod's node has a taint applied temporarily (`node.kubernetes.io/memory-pressure`, etc.) to prevent new pods from being scheduled there while it recovers.
 
 ### 4.5 Node Conditions Under Pressure
@@ -692,7 +692,7 @@ Understanding this distinction is essential. A PDB with `minAvailable: 3` on a 3
 | Setting `terminationGracePeriodSeconds: 0` | No graceful shutdown; in-flight requests dropped, data corruption risk | Use at least 15s; longer for stateful workloads |
 | Assuming PDBs protect against all disruptions | Node crash, OOM, and kubelet hard eviction ignore PDBs | Design for involuntary disruption: replicas across zones, persistent storage, idempotent operations |
 | Setting `maxUnavailable: 0` on PDB | Blocks all voluntary disruptions including node drains and upgrades | Use `maxUnavailable: 1` or `minAvailable: N-1` to allow rolling operations |
-| Using `preemptionPolicy: Never` on critical pods | Pod will sit Pending forever if no node has capacity -- it cannot preempt | Only use `preemptionPolicy: Never` for batch/background work that should wait |
+Pod may remain Pending until a node has capacity -- it cannot preempt
 | Ignoring QoS class on batch jobs | Batch jobs with Guaranteed QoS are evicted last, blocking eviction of pods you care more about | Set batch jobs to BestEffort or Burstable with low requests |
 
 ---
@@ -716,7 +716,7 @@ The QoS class is **Burstable**. For a pod to be Guaranteed, requests must equal 
 <details>
 <summary>3. Pod X has priority 1000 and needs 2 CPU. Node A has Pod Y (priority 100, 1.5 CPU) and Pod Z (priority 500, 1 CPU) running, with 0.5 CPU free. Which pod(s) will the scheduler preempt?</summary>
 
-The scheduler will preempt Pod Y (priority 100, 1.5 CPU) because it is the lowest-priority pod and freeing it provides 2 CPU total (1.5 CPU from Y + 0.5 CPU already free), which is exactly enough for Pod X. The scheduler always preempts the minimum set of lowest-priority pods needed to satisfy the incoming pod's resource requests. Pod Z (priority 500) is spared because evicting Pod Y alone frees sufficient resources.
+The scheduler will preempt Pod Y (priority 100, 1.5 CPU) because it is the lowest-priority pod and freeing it provides 2 CPU total (1.5 CPU from Y + 0.5 CPU already free), which is exactly enough for Pod X. The scheduler generally tries to preempt the lowest-priority set of pods needed to satisfy the incoming pod's resource requests. Pod Z (priority 500) is spared because evicting Pod Y alone frees sufficient resources.
 </details>
 
 <details>
@@ -1010,3 +1010,10 @@ Timed drills for CKA exam preparation. Practice until you can complete each with
 ## Next Module
 
 Continue to [Module 2.9: Autoscaling (HPA, VPA, Cluster)](/k8s/cka/part2-workloads-scheduling/module-2.9-autoscaling/) to learn how Kubernetes automatically adjusts resources based on demand and gracefully evicts workloads during downsizing.
+
+## Sources
+
+- [Kubernetes Scheduler](https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/) — Best primary reference for unscheduled Pods, feasible nodes, scoring, binding, and random tie-breaking.
+- [Pod Priority and Preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/) — Covers PriorityClasses, preemption flow, `nominatedNodeName`, and best-effort PDB handling during preemption.
+- [Node-pressure Eviction](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/) — Primary source for kubelet eviction signals, default hard thresholds, node conditions, taints, and OOM/eviction behavior.
+- [Pod Lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/) — Best high-level reference for Pod phases, graceful termination flow, and shutdown behavior under Kubernetes 1.35-era docs.

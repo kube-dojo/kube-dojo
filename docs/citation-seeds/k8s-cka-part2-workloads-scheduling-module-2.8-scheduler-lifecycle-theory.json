@@ -1,0 +1,503 @@
+{
+  "module_key": "k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory",
+  "module_path": "src/content/docs/k8s/cka/part2-workloads-scheduling/module-2.8-scheduler-lifecycle-theory.md",
+  "research_run_id": "2026-05-07T06:21:13+00:00-codex-gpt-5.3-codex-spark",
+  "schema_version": 3,
+  "section_pool_ref": "docs/citation-pools/k8s-cka-part2-workloads-scheduling.json",
+  "claims": [
+    {
+      "claim_id": "C001",
+      "claim_text": "The historical note enumerates early API evolution through Kubernetes v1.1-v1.5.",
+      "claim_class": "standard",
+      "span_hint": "Historical Note",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Historically, APIs evolved through v1.1, v1.2, v1.3, v1.4, and v1.5.",
+      "suggested_rewrite": "These APIs evolved across many Kubernetes releases.",
+      "lesson_point_url": null,
+      "rationale": "The exact early-version list is unsourced and not necessary once the teaching point is stated more generally."
+    },
+    {
+      "claim_id": "C002",
+      "claim_text": "The module says Kubernetes 1.35 is the current stable release.",
+      "claim_class": "standard",
+      "span_hint": "Historical Note",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Later versions like v1.27 introduced further refinements. Today, we explicitly target Kubernetes 1.35 (the current stable release).",
+      "suggested_rewrite": "Later versions continued to refine these APIs. This module targets Kubernetes 1.35.",
+      "lesson_point_url": null,
+      "rationale": "As of 2026-05-07, kubernetes.io lists v1.36 as the latest documentation version, so calling v1.35 the current stable release is outdated."
+    },
+    {
+      "claim_id": "C003",
+      "claim_text": "The CKA callout says scheduling troubleshooting, PriorityClasses, QoS, PDB behavior, and graceful termination are all directly tested.",
+      "claim_class": "standard",
+      "span_hint": "CKA Exam Relevance callout",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "Scheduling troubleshooting, PriorityClasses, QoS classification, PDB behavior, and graceful termination are all tested.",
+      "suggested_rewrite": "These topics map directly to the CKA Workloads & Scheduling and Troubleshooting domains.",
+      "lesson_point_url": null,
+      "rationale": "The official CKA pages expose domains and competencies, but not this exact topic list in one authoritative source."
+    },
+    {
+      "claim_id": "C004",
+      "claim_text": "kube-scheduler watches unscheduled Pods with no assigned node and places them through filtering, scoring, and binding.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.1 Overview",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official scheduler overview explicitly describes unscheduled Pods, feasible nodes, scoring, and binding."
+    },
+    {
+      "claim_id": "C005",
+      "claim_text": "Filter plugins are hard constraints, and `NodeResourcesFit` checks whether requested resources fit on a node.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.2 Phase 1: Filter",
+      "disposition": "supported",
+      "source_ids": [
+        "S010",
+        "S013"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/reference/scheduling/config/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The scheduler configuration and resource-management docs cover filter semantics and NodeResourcesFit behavior."
+    },
+    {
+      "claim_id": "C006",
+      "claim_text": "If no node is feasible after filtering, the Pod remains Pending/unscheduled and the scheduler surfaces scheduling failures.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.2 after failed-filter example",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The scheduler docs state that Pods remain unscheduled when no suitable node exists and only schedule once a feasible node is found."
+    },
+    {
+      "claim_id": "C007",
+      "claim_text": "Scoring ranks feasible nodes, and equal-score ties are broken at random.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.3 Phase 2: Score",
+      "disposition": "supported",
+      "source_ids": [
+        "S013"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The scheduler docs describe scoring and explicitly note that one of equally scored nodes is chosen at random."
+    },
+    {
+      "claim_id": "C008",
+      "claim_text": "Scheduler plugin scores are combined using configured plugin weights.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.3 Phase 2: Score",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/reference/scheduling/config/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The scheduler configuration reference states that score plugins provide node scores and the scheduler selects the node with the highest weighted score sum."
+    },
+    {
+      "claim_id": "C009",
+      "claim_text": "The bind discussion cites reserve/permit stages but over-specifies example features.",
+      "claim_class": "standard",
+      "span_hint": "Part 1.4 Phase 3: Bind",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "The bind phase also runs permit and reserve plugins (for features like volume binding confirmation and gang scheduling), finalizing the transaction with the API Server.",
+      "suggested_rewrite": "The scheduling framework also includes reserve and permit stages around binding before the scheduler finalizes the assignment with the API server.",
+      "lesson_point_url": null,
+      "rationale": "Reserve and permit are official scheduler stages, but the specific feature examples are broader than the core docs directly support here."
+    },
+    {
+      "claim_id": "C010",
+      "claim_text": "A PriorityClass maps a name to a numeric priority value, and higher values take precedence in scheduling/preemption decisions.",
+      "claim_class": "standard",
+      "span_hint": "Part 2.1 PriorityClasses",
+      "disposition": "supported",
+      "source_ids": [
+        "S017"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S017 directly defines PriorityClass semantics and how priority values affect scheduling."
+    },
+    {
+      "claim_id": "C011",
+      "claim_text": "When a Pod cannot fit, preemption considers removing lower-priority Pods, and `nominatedNodeName` is informative rather than a placement guarantee.",
+      "claim_class": "standard",
+      "span_hint": "Part 2.2 How Preemption Works; Did You Know #2",
+      "disposition": "supported",
+      "source_ids": [
+        "S017"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S017 covers victim selection logic, `nominatedNodeName`, and the gap before the preemptor actually schedules."
+    },
+    {
+      "claim_id": "C012",
+      "claim_text": "PodDisruptionBudgets are best-effort during scheduler preemption and do not absolutely block it.",
+      "claim_class": "standard",
+      "span_hint": "Part 2.4 PDB Interaction with Preemption",
+      "disposition": "supported",
+      "source_ids": [
+        "S017"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S017 explicitly says PDB support during preemption is best effort, not guaranteed."
+    },
+    {
+      "claim_id": "C013",
+      "claim_text": "Kubernetes automatically derives a Pod QoS class from container resource requests and limits; users do not set QoS directly.",
+      "claim_class": "standard",
+      "span_hint": "Part 3.1 How QoS Class Is Determined",
+      "disposition": "supported",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S018 is the primary source for QoS class derivation."
+    },
+    {
+      "claim_id": "C014",
+      "claim_text": "QoS edge cases include limits-only implying matching requests, mixed-container Pods becoming Burstable, CPU and memory both mattering, and ephemeral storage not affecting QoS classification.",
+      "claim_class": "standard",
+      "span_hint": "Part 3.3 Edge Cases",
+      "disposition": "supported",
+      "source_ids": [
+        "S010",
+        "S018"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S010 and S018 together cover request/limit defaulting and the exact QoS classification criteria."
+    },
+    {
+      "claim_id": "C015",
+      "claim_text": "QoS class does not influence scheduling fit; the scheduler uses requests, while limits are enforced at runtime.",
+      "claim_class": "standard",
+      "span_hint": "Part 3.4 QoS and Scheduling",
+      "disposition": "supported",
+      "source_ids": [
+        "S010",
+        "S018"
+      ],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S010 explains that scheduling uses requests and runtime enforcement uses limits, while S018 scopes QoS to eviction behavior."
+    },
+    {
+      "claim_id": "C016",
+      "claim_text": "Node-pressure eviction is kubelet-driven, separate from scheduler placement, and is based on resource signals crossing eviction thresholds.",
+      "claim_class": "standard",
+      "span_hint": "Part 4.1 Kubelet Eviction Manager",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official node-pressure eviction docs define eviction as a kubelet action based on monitored resource signals and thresholds."
+    },
+    {
+      "claim_id": "C017",
+      "claim_text": "The table presents `memory.available` with a typical soft threshold of `< 500Mi (grace 90s)` and hard threshold of `< 100Mi`.",
+      "claim_class": "statistic",
+      "span_hint": "Part 4.1 eviction-signals table, memory row",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| `memory.available` | Free memory on the node | < 500Mi (grace 90s) | < 100Mi |",
+      "suggested_rewrite": "| `memory.available` | Free memory on the node | Operator-configured soft threshold | < 100Mi (default hard threshold on Linux nodes) |",
+      "lesson_point_url": null,
+      "rationale": "The hard threshold is documented, but the soft threshold example is not a Kubernetes default or authoritative 'typical' value."
+    },
+    {
+      "claim_id": "C018",
+      "claim_text": "The table presents `nodefs.available` with a typical soft threshold of `< 15% (grace 120s)` and hard threshold of `< 10%`.",
+      "claim_class": "statistic",
+      "span_hint": "Part 4.1 eviction-signals table, nodefs row",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| `nodefs.available` | Free disk on root partition | < 15% (grace 120s) | < 10% |",
+      "suggested_rewrite": "| `nodefs.available` | Free disk on root partition | Operator-configured soft threshold | < 10% (default hard threshold) |",
+      "lesson_point_url": null,
+      "rationale": "The hard threshold is documented, but the soft threshold example is not a Kubernetes default or authoritative 'typical' value."
+    },
+    {
+      "claim_id": "C019",
+      "claim_text": "The table presents `imagefs.available` with a typical soft threshold of `< 15% (grace 120s)` and hard threshold of `< 10%`.",
+      "claim_class": "statistic",
+      "span_hint": "Part 4.1 eviction-signals table, imagefs row",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| `imagefs.available` | Free disk on image filesystem | < 15% (grace 120s) | < 10% |",
+      "suggested_rewrite": "| `imagefs.available` | Free disk on image filesystem | Operator-configured soft threshold | < 15% (default hard threshold) |",
+      "lesson_point_url": null,
+      "rationale": "The documented default hard threshold for `imagefs.available` is `< 15%`, so the row's hard-threshold value is inaccurate."
+    },
+    {
+      "claim_id": "C020",
+      "claim_text": "The table presents `pid.available` with typical soft and hard thresholds of `< 1000` and `< 500`.",
+      "claim_class": "statistic",
+      "span_hint": "Part 4.1 eviction-signals table, pid row",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "| `pid.available` | Free PIDs | < 1000 (grace 60s) | < 500 |",
+      "suggested_rewrite": "| `pid.available` | Free PIDs | Operator-configured soft threshold | Operator-configured hard threshold |",
+      "lesson_point_url": null,
+      "rationale": "The official docs define `pid.available` as an eviction signal but do not document these numbers as default thresholds."
+    },
+    {
+      "claim_id": "C021",
+      "claim_text": "Soft eviction thresholds require a grace period, while hard thresholds trigger immediate eviction; they are configured with kubelet eviction flags.",
+      "claim_class": "standard",
+      "span_hint": "Part 4.2 Soft vs Hard Thresholds",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The node-pressure eviction docs define soft versus hard thresholds and list the relevant kubelet settings."
+    },
+    {
+      "claim_id": "C022",
+      "claim_text": "During node-pressure eviction, kubelet marks selected Pods Failed, and workload controllers such as Deployments or StatefulSets create replacements.",
+      "claim_class": "standard",
+      "span_hint": "Part 4.4 What Happens to Evicted Pods?",
+      "disposition": "supported",
+      "source_ids": [
+        "S005",
+        "S007",
+        "S008"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The eviction docs describe Failed-phase evictions and self-healing replacements for managed Pods, while the workload-controller docs define the controllers that recreate Pods."
+    },
+    {
+      "claim_id": "C023",
+      "claim_text": "`MemoryPressure`, `DiskPressure`, and `PIDPressure` are node conditions derived from eviction signals and mapped to taints.",
+      "claim_class": "standard",
+      "span_hint": "Part 4.5 Node Conditions Under Pressure",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The node-pressure eviction docs map eviction signals to node conditions and say the control plane maps those conditions to taints."
+    },
+    {
+      "claim_id": "C024",
+      "claim_text": "Pod termination starts the grace-period timer before `PreStop`, runs `PreStop` before TERM, and force-kills containers when the grace period expires.",
+      "claim_class": "standard",
+      "span_hint": "Part 5.1-5.2 termination sequence and key points",
+      "disposition": "supported",
+      "source_ids": [
+        "S019"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "S019 and the container lifecycle hooks docs jointly describe pod termination flow, `PreStop`, and grace-period accounting."
+    },
+    {
+      "claim_id": "C025",
+      "claim_text": "The module recommends specific shutdown grace-period ranges such as 60-120s for databases and 15-30s for simple web servers.",
+      "claim_class": "benchmark",
+      "span_hint": "Part 5.2 Configuring Graceful Shutdown",
+      "disposition": "soften_to_illustration",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- For databases or stateful services, 60-120s is common. For simple web servers, 15-30s usually suffices.",
+      "suggested_rewrite": "- For stateful services, choose a grace period long enough to cover shutdown and flush work; simple web services often need less, but you should measure your own drain time.",
+      "lesson_point_url": "https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/",
+      "rationale": "These numbers are operational heuristics rather than a stable Kubernetes-defined benchmark, but the underlying lesson about sizing grace periods is real and citable."
+    },
+    {
+      "claim_id": "C026",
+      "claim_text": "A PodDisruptionBudget uses either `minAvailable` or `maxUnavailable`, and those values can be integers or percentages.",
+      "claim_class": "standard",
+      "span_hint": "Part 5.4 PodDisruptionBudgets",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/tasks/run-application/configure-pdb/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official PDB task page explicitly documents these fields, their mutual exclusivity, and integer/percentage forms."
+    },
+    {
+      "claim_id": "C027",
+      "claim_text": "The module says PDBs limit voluntary disruptions including preemption and do not prevent involuntary disruptions.",
+      "claim_class": "standard",
+      "span_hint": "Part 5.4 PDB rules",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "- PDBs only limit **voluntary** disruptions (drain, preemption, eviction API). They do **not** prevent involuntary disruptions (node crash, OOM kill, kubelet eviction under hard pressure).",
+      "suggested_rewrite": "- PDBs limit Eviction API-based voluntary disruptions such as `kubectl drain`; scheduler preemption only treats PDBs as best effort, and involuntary disruptions such as node crashes or hard kubelet evictions are not prevented.",
+      "lesson_point_url": null,
+      "rationale": "The original line overstates preemption as if PDB enforcement were hard, while Kubernetes documents preemption support as best effort."
+    },
+    {
+      "claim_id": "C028",
+      "claim_text": "`kubectl drain` keeps retrying evictions and can effectively hang until Pods terminate or a timeout is reached if a PDB blocks progress.",
+      "claim_class": "standard",
+      "span_hint": "Part 5.4 PDB rules",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/concepts/workloads/pods/disruptions/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The disruptions doc explains that `kubectl drain` retries failed eviction requests until success or a configurable timeout."
+    },
+    {
+      "claim_id": "C029",
+      "claim_text": "The module claims kube-scheduler can make over 10,000 scheduling decisions per second in large clusters.",
+      "claim_class": "statistic",
+      "span_hint": "Did You Know #1",
+      "disposition": "cannot_be_salvaged",
+      "source_ids": [],
+      "proposed_url": null,
+      "proposed_tier": null,
+      "anchor_text": "1. **Scheduling throughput**: In large clusters, the kube-scheduler can make over 10,000 scheduling decisions per second. It achieves this by evaluating only a percentage of nodes (controlled by `percentageOfNodesToScore`) rather than all nodes in clusters with hundreds of nodes.",
+      "suggested_rewrite": "1. **Scheduling throughput**: In large clusters, kube-scheduler can improve throughput by evaluating only a percentage of nodes (controlled by `percentageOfNodesToScore`) rather than always checking every node.",
+      "lesson_point_url": null,
+      "rationale": "The optimization is documented, but the exact throughput figure is not backed by a stable primary source here."
+    },
+    {
+      "claim_id": "C030",
+      "claim_text": "Kubelet eviction and Linux OOM kill are different mechanisms, and kubelet assigns `oom_score_adj` by QoS, including 1000 for BestEffort and -997 for Guaranteed.",
+      "claim_class": "statistic",
+      "span_hint": "Did You Know #3",
+      "disposition": "supported",
+      "source_ids": [
+        "S018"
+      ],
+      "proposed_url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The node-pressure eviction docs explicitly distinguish kubelet eviction from OOM kill and list the documented `oom_score_adj` values."
+    },
+    {
+      "claim_id": "C031",
+      "claim_text": "A PDB with `maxUnavailable: 0` blocks voluntary disruptions and can prevent node drains from completing.",
+      "claim_class": "standard",
+      "span_hint": "Did You Know #4",
+      "disposition": "supported",
+      "source_ids": [],
+      "proposed_url": "https://kubernetes.io/docs/tasks/run-application/configure-pdb/",
+      "proposed_tier": "standards",
+      "anchor_text": null,
+      "suggested_rewrite": null,
+      "lesson_point_url": null,
+      "rationale": "The official PDB task page states that zero voluntary evictions can prevent a drain from ever completing."
+    }
+  ],
+  "further_reading": [
+    {
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/kube-scheduler/",
+      "title": "Kubernetes Scheduler",
+      "tier": "standards",
+      "why_relevant": "Best primary reference for unscheduled Pods, feasible nodes, scoring, binding, and random tie-breaking."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/",
+      "title": "Pod Priority and Preemption",
+      "tier": "standards",
+      "why_relevant": "Covers PriorityClasses, preemption flow, `nominatedNodeName`, and best-effort PDB handling during preemption."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+      "title": "Node-pressure Eviction",
+      "tier": "standards",
+      "why_relevant": "Primary source for kubelet eviction signals, default hard thresholds, node conditions, taints, and OOM/eviction behavior."
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+      "title": "Pod Lifecycle",
+      "tier": "standards",
+      "why_relevant": "Best high-level reference for Pod phases, graceful termination flow, and shutdown behavior under Kubernetes 1.35-era docs."
+    }
+  ],
+  "notes": "As of 2026-05-07, kubernetes.io lists v1.36 as the latest documentation version, so references calling v1.35 the current stable release should be rewritten as target-version statements. The eviction-threshold table mixes documented defaults with illustrative soft-threshold numbers; only the documented defaults should remain as hard factual claims.",
+  "_schema_issues": [],
+  "rejected_urls": []
+}
