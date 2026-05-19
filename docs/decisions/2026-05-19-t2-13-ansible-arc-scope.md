@@ -49,3 +49,25 @@ If you want **D**, the move is 4 file paths + 1 astro.config.mjs edit + 1 sideba
 ## Awaiting
 
 User decision: A / B / C / D / or override scope. Will sit in `pending/` until user returns.
+
+---
+
+## OUTCOME — chosen 2026-05-20 (session 34)
+
+**Selected: Option A** (foundational module + sub-issues).
+
+**User trigger**: "i am going to sleep , please go auto and rive the project" (session-34, 2026-05-20).
+
+**Shipped**:
+
+- PR [#1354](https://github.com/kube-dojo/kube-dojo.github.io/pull/1354) — Module 7.12: Ansible Operator SDK Fundamentals (1567 net new lines, T0 verifier, body_words=5041, mean_wpp=54.8, 13/13 sources reachable). Codex (gpt-5.5 architect, danger, --search) drafted; claude-sonnet + agy/Gemini 3.5 Flash (High) both APPROVE_WITH_NITS in parallel cross-family review (4 sonnet nits + 3 agy nits); codex fixup applied all 7 in commit `27b46bd5`. Squash-merged.
+- Sub-issues filed for the rest of the arc:
+  - [#1356](https://github.com/kube-dojo/kube-dojo.github.io/issues/1356) — Module 7.13: Advanced watches.yaml patterns
+  - [#1357](https://github.com/kube-dojo/kube-dojo.github.io/issues/1357) — Module 7.14: AWX + EDA integration
+  - [#1358](https://github.com/kube-dojo/kube-dojo.github.io/issues/1358) — Module 7.15: Helm vs Ansible vs Go decision framework
+  - [#1359](https://github.com/kube-dojo/kube-dojo.github.io/issues/1359) — Module 7.16: Production patterns (status / finalizers / idempotency)
+  - [#1360](https://github.com/kube-dojo/kube-dojo.github.io/issues/1360) — Module 7.17: Testing with Molecule + Kuttl
+
+**Wave 2 status**: 8/9 complete (T2-13 foundational scope shipped; 5 follow-up sub-issues now in the arc backlog instead of the original "4-7 modules" line item).
+
+**Territorial question (iac-tools vs k8s/extending)**: not committed. Module 7.12 lives in iac-tools as a first-in-arc placement; can be renumbered/moved cheaply when the rest of the arc materializes if the user wants to consolidate under k8s/extending.
