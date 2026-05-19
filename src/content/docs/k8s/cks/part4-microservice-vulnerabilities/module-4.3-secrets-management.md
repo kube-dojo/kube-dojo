@@ -135,7 +135,7 @@ resources:
       - identity: {}
 ```
 
-The local providers have different tradeoffs. `aescbc` is the common local provider for clusters that cannot integrate with an external KMS yet, and it requires a base64-encoded 32-byte key. `aesgcm` provides authenticated encryption, but it is sensitive to nonce limits and demands stricter operational rotation discipline. `secretbox` uses a NaCl secretbox construction and also requires a 32-byte key. `identity` performs no encryption and should normally appear only as a temporary fallback for reading old plaintext values during migration, because placing it first means new writes stay unencrypted.
+The local providers have different tradeoffs. `aescbc` is the common local provider for clusters that cannot integrate with an external KMS yet, and it requires a base64-encoded 32-byte key. `aesgcm` is faster than `aescbc` because GCM authentication and decryption are accelerated on modern x86_64 chips, but it imposes a hard upper bound on writes per key. With a random 96-bit nonce, the birthday-bound for collisions starts to matter at roughly 2^32 (~4 billion) writes per key, after which an attacker observing collisions could derive plaintext. The Kubernetes documentation recommends `secretbox` over `aesgcm` for new clusters because secretbox's XSalsa20-Poly1305 construction uses a 192-bit nonce and dodges this constraint entirely. `secretbox` uses a NaCl secretbox construction and also requires a 32-byte key. `identity` performs no encryption and should normally appear only as a temporary fallback for reading old plaintext values during migration, because placing it first means new writes stay unencrypted.
 
 ```yaml
 apiVersion: apiserver.config.k8s.io/v1
@@ -156,11 +156,44 @@ resources:
 
 Enabling the file is only half of the work. The kube-apiserver must receive `--encryption-provider-config`, and a static Pod control plane must mount the host path containing that file into the API server container. A common exam failure is to create a valid file on the node and forget the `volumeMounts` and `volumes` entries, causing the API server to restart into a path-not-found error. After the API server is healthy, newly written Secrets use the first provider, but existing Secrets remain in their previous storage form until they are rewritten through the API.
 
+### Wiring the config file into kube-apiserver
+
+Edit `/etc/kubernetes/manifests/kube-apiserver.yaml` on the control plane node so the static Pod can see the encryption config file. Kubelet watches this manifest directory and restarts the static Pod after a valid edit, so the API server will pick up the new command/volume wiring automatically. The most common mistake is to create a correct `encryption-config.yaml` but forget to mount it into the kube-apiserver container.
+
+```yaml
+# /etc/kubernetes/manifests/kube-apiserver.yaml
+# In spec.containers[0].command, add:
+- --encryption-provider-config=/etc/kubernetes/enc/encryption-config.yaml
+
+# In spec.containers[0].volumeMounts, add:
+- name: enc-config
+  mountPath: /etc/kubernetes/enc
+  readOnly: true
+
+# In spec.volumes, add:
+- name: enc-config
+  hostPath:
+    path: /etc/kubernetes/enc
+    type: DirectoryOrCreate
+```
+
+All three pieces — the flag, mount, and volume — must be present; if one is missing, the API server does not load the config and falls back to identity (plaintext) writes silently.
+
 ```bash
 kubectl get secrets --all-namespaces -o json | kubectl replace -f -
 ```
 
 Verification should prove both configuration and data transformation. The API server flag proves the process knows where the provider file is, but it does not prove older records were rewritten. A storage-level sample should show the encrypted storage prefix for a newly written Secret, while ordinary `kubectl get secret` should still return a usable object because decryption happens transparently on API reads. If a compliance check only asks whether the flag exists, it is checking intent rather than outcome. If it only checks one newly created Secret, it may miss historical plaintext data.
+
+```bash
+ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  get /registry/secrets/secrets-lab/app-db | strings | head -5
+```
+
+After encryption is enabled, the value should start with `k8s:enc:aescbc:v1:` (or `:aesgcm:v1:` / `:secretbox:v1:` / `:kms:v2:` depending on provider). Before encryption, or when `identity` is used for write paths, plaintext fields are still visible and no such prefix appears. This is the canonical proof step: the verifier is authoritative when you can read the raw etcd value and see the `k8s:enc:...` prefix, because that is the storage format the API server writes when encryption is active.
 
 Key rotation is a provider-ordering exercise, not a one-line replacement. Add the new key above the old key, restart or reload the API server according to your control-plane model, rewrite the protected resources, verify that new storage records reference the new key, and only then remove the old key from the provider list. Removing an old key too early can make older stored objects unreadable. Leaving retired keys forever weakens the purpose of rotation because a leaked old key remains useful for any object that was never rewritten.
 
@@ -236,11 +269,13 @@ spec:
     name: payment-db
     creationPolicy: Owner
   data:
-    - secretKey: password
-      remoteRef:
-        key: payments/database
-        property: password
+      - secretKey: password
+        remoteRef:
+          key: payments/database
+          property: password
 ```
+
+Note: ExternalSecret moved from `external-secrets.io/v1beta1` to `external-secrets.io/v1` in ESO 0.10. Clusters running ESO 0.9.x still use `v1beta1` — replace the `apiVersion` field accordingly.
 
 The `SecretStore` versus `ClusterSecretStore` decision is a governance decision. A `SecretStore` lives in one namespace and is usually owned by the team that owns the workloads there. A `ClusterSecretStore` is cluster-scoped and useful when a platform team wants one provider configuration shared by many namespaces. The cluster-scoped option is powerful, so pair it with admission policy, namespace allowlists, and provider-side authorization. Otherwise, a namespace owner may gain a clean Kubernetes API path to remote secrets they should never reach.
 
@@ -255,6 +290,26 @@ ESO templating is useful when the provider stores atomic values but the applicat
 Sealed Secrets is a different GitOps-centered pattern. The `kubeseal` client encrypts a Secret using the controller's public key, producing a `SealedSecret` custom resource safe to commit to Git for the target cluster and scope. The controller inside the cluster holds the private key and decrypts the resource into a native Secret. This fits teams that want pull-based GitOps and do not have, or do not want, a runtime dependency on a cloud secret manager for every application. It does not fit secrets that need dynamic issuance, short leases, or centralized provider audit trails across many clusters.
 
 Sealed Secrets scope is a security feature that should be understood before moving encrypted YAML between environments. A sealed value can be bound to a name and namespace, which prevents someone from taking a ciphertext meant for one Secret and replaying it under a more privileged name elsewhere. That protection is useful, but it also means renaming or moving a Secret may require resealing. Back up the controller private key carefully, because losing it can make committed SealedSecret resources undecryptable during cluster recovery.
+
+Sealed Secrets keys rotate automatically every 30 days when the controller flag `--key-renew-period=720h` (the default) is set, but older keys are kept indefinitely so existing SealedSecret resources continue to decrypt. To force a manual rotation, create a new key Secret in `kube-system` with the `sealedsecrets.bitnami.com/sealed-secrets-key: active` label and the controller will use it for new seals on its next reconcile; the existing SealedSecret resources do not need to be re-sealed because each carries the encryption-key fingerprint in its annotations. The controller decrypts using whichever key the fingerprint points at, even after rotation.
+
+```yaml
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: app-db
+  namespace: production
+spec:
+  encryptedData:
+    password: AgBy3i4OJSWK+...g8VPo3vP
+  template:
+    metadata:
+      name: app-db
+      namespace: production
+    type: Opaque
+```
+
+`encryptedData` values are sealed against the controller's public key (via `kubeseal`); the controller in `kube-system` decrypts them at apply time and creates the matching plain Secret.
 
 ```text
 +------------------+      public key       +-------------------+
@@ -298,6 +353,20 @@ spec:
 ```
 
 Hypothetical scenario: a critical service starts without its expected Vault-rendered file because an injection annotation was copied to the Deployment template but the ServiceAccount was not bound to the Vault role. The container image is healthy, Kubernetes scheduling is healthy, and the application error looks like an ordinary missing-file problem. The security lesson is that injector-based delivery creates an admission-time dependency and a runtime file contract. Your readiness probe should fail if the rendered file is absent, and your deployment pipeline should validate both annotations and ServiceAccount-to-Vault-role bindings before traffic moves.
+
+```bash
+# One-time setup inside the Vault pod (after vault is unsealed):
+kubectl exec -n vault vault-0 -- /bin/sh -c '
+  vault auth enable kubernetes
+  vault write auth/kubernetes/config \
+    kubernetes_host="https://kubernetes.default.svc.cluster.local:443" \
+    kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+    token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token \
+    issuer="https://kubernetes.default.svc.cluster.local"
+'
+```
+
+In this setup, `token_reviewer_jwt` is the ServiceAccount JWT Vault uses when calling Kubernetes TokenReview to validate client Pod service account tokens. The `issuer` must match the cluster's JWT issuer configured on the API server via `--service-account-issuer`, otherwise token validation requests are rejected.
 
 The Secrets Store CSI Driver occupies the middle ground between native Kubernetes Secret consumption and direct application calls to an external provider. The kubelet mounts provider data into a Pod as a CSI volume, and optional sync features can also create a Kubernetes Secret when a workload or chart requires one. This is attractive when you want rotation to appear as file updates and when you want the external provider to remain the real store. The driver runs node components, provider plugins, and SecretProviderClass configuration, so operational ownership must include node coverage, provider credentials, and application reload behavior.
 
@@ -477,7 +546,7 @@ The cost decision follows the same path. Native Secrets add little direct cloud 
 
 ## Did You Know?
 
-- **KMS v2 became stable in Kubernetes 1.29.** That graduation matters because KMS v1 is deprecated and disabled by default in newer Kubernetes releases, making v2 the preferred provider path for external key management.
+- **KMS v2 became stable in Kubernetes 1.29.** KMS v1 is marked deprecated as of Kubernetes 1.28 but remains functional and configurable through 1.30+. KMS v2 (GA in 1.29) is strongly preferred for new deployments because the v1 plugin protocol's gRPC-streaming design has known performance and partition-failure issues that v2's request/response model resolves.
 - **Immutable Secrets became stable in Kubernetes 1.21.** They are not just a security guardrail; they also reduce kubelet watch load for clusters with many mounted Secret and ConfigMap objects.
 - **A ServiceAccount token can be requested for a specific audience and expiration.** That is the modern alternative to treating a long-lived token Secret as a reusable password for every internal service.
 - **A Secret read logged at `RequestResponse` level can expose the payload in the audit backend.** For most Secret access monitoring, `Metadata` level gives the actor, verb, resource, namespace, and timestamp without copying the sensitive value.
@@ -573,6 +642,8 @@ The decoded output should match the literal value you provided. That proves the 
 
 Generate a key in the lab and create a configuration file that encrypts only Secrets. Keep `identity` last so old plaintext records can still be read during migration.
 
+If your lab exposes the control-plane filesystem, also wire the manifest edit from “Wiring the config file into kube-apiserver” into `/etc/kubernetes/manifests/kube-apiserver.yaml`, then wait for kubelet to restart the static API server Pod.
+
 ```bash
 mkdir -p /tmp/cks-4-3
 head -c 32 /dev/urandom | base64 > /tmp/cks-4-3/aescbc.key
@@ -591,6 +662,21 @@ resources:
               secret: ${ENC_KEY}
       - identity: {}
 EOF
+
+sudo mkdir -p /etc/kubernetes/enc
+sudo cp /tmp/cks-4-3/encryption-config.yaml /etc/kubernetes/enc/encryption-config.yaml
+
+# Edit /etc/kubernetes/manifests/kube-apiserver.yaml to mount and pass the new config:
+# --encryption-provider-config, matching volumeMount, and volume entries.
+# Then verify the static Pod has restarted.
+
+kubectl get secrets --all-namespaces -o json | kubectl replace -f -
+
+ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  get /registry/secrets/secrets-lab/app-db | strings | head -5
 ```
 
 <details>
