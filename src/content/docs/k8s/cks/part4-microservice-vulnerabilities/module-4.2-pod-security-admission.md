@@ -81,12 +81,12 @@ The useful comparison is not "which profile is more secure?" because restricted 
 |---|---|---|---|
 | Privileged containers | Allowed | Disallowed | Disallowed |
 | Host namespaces | Allowed | Disallowed for hostPID, hostIPC, and hostNetwork | Disallowed |
-| HostPath volumes | Allowed | Allowed by baseline | Disallowed |
+| HostPath volumes | Allowed | Not restricted | Disallowed |
 | Linux capabilities | Unrestricted | Blocks dangerous additions beyond the baseline allowlist | Must drop `ALL`; only `NET_BIND_SERVICE` may be added |
 | Running as root | Allowed | Allowed | Must not run as UID 0; `runAsNonRoot` and nonzero user settings matter |
 | Privilege escalation | Allowed | Not comprehensively blocked | Must set `allowPrivilegeEscalation: false` for Linux containers |
 | Seccomp | Unrestricted | Must not explicitly use `Unconfined` | Must explicitly use `RuntimeDefault` or `Localhost` |
-| Volume types | Unrestricted | Broadly compatible | Limited to safe volume sources such as ConfigMap, Secret, PVC, projected, downwardAPI, CSI, and emptyDir |
+| Volume types | Unrestricted | Broadly compatible | Limited to safe volume sources such as ConfigMap, Secret, PVC, projected, downwardAPI, CSI, emptyDir, and ephemeral |
 
 Baseline is the profile you use when you need compatibility but still want to stop obviously risky pod specs. It blocks privileged containers and host namespaces, restricts host ports and dangerous capability additions, and prevents several direct escapes from the container boundary. It does not require non-root execution, does not require dropping all capabilities, and does not require read-only root filesystems. That makes baseline a reasonable default for development namespaces or legacy application namespaces during the first migration phase.
 
@@ -122,6 +122,8 @@ Several fields in that manifest are doing admission work rather than runtime dec
 
 A noncompliant version helps you read rejection messages faster. This pod asks for privileged mode, host networking, UID 0, added capabilities, and no seccomp profile. Under `enforce: baseline`, privileged mode, host networking, and the capability addition are already enough to reject the request. Under `enforce: restricted`, the root user, missing `allowPrivilegeEscalation: false`, missing `drop: ["ALL"]`, and missing seccomp profile will also appear in the violation list.
 
+Logical representation:
+
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -138,6 +140,8 @@ spec:
       capabilities:
         add: ["NET_ADMIN"]
 ```
+
+This is a logical map of baseline's policy gates, not a runnable pod manifest — each line references the field path where the relevant policy applies (e.g., `privileged` lives in `spec.containers[].securityContext.privileged`).
 
 Before running this, what output do you expect if the namespace has `enforce: baseline`, `warn: restricted`, and `audit: restricted`? The pod should be rejected because it violates the enforced baseline profile, so the warning mode is not the reason it fails. If you remove the baseline violations but leave restricted-only gaps, the pod can be admitted while the API server warns the caller and records audit annotations for the restricted profile.
 
@@ -221,7 +225,7 @@ metadata:
 spec:
   securityContext:
     runAsNonRoot: true
-    runAsUser: 1000
+    runAsUser: 1000  # UID for the nginx user in alpine images
     seccompProfile:
       type: RuntimeDefault
   containers:
@@ -232,6 +236,8 @@ spec:
       capabilities:
         drop: ["ALL"]
 ```
+
+Note: nginx requires root by default, so this pod passes PSA admission but may CrashLoopBackOff at runtime — PSA admission and runtime health are independent concerns, covered later in this module.
 
 Warnings look similar, but they do not stop the request. When a namespace has `warn: restricted`, `kubectl apply` may print lines beginning with `Warning:` that name the profile and the violating fields. Those warnings are easy to ignore during a busy rollout, which is why warn mode should feed a ticket, report, or CI quality gate. A warning-only rollout that nobody reads is just delayed enforcement without a repair plan.
 
@@ -301,7 +307,6 @@ plugins:
       warn: restricted
       warn-version: v1.35
     exemptions:
-      usernames: []
       runtimeClasses:
       - privileged-runtime
       namespaces:
