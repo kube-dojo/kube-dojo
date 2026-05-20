@@ -122,9 +122,10 @@ flowchart TD
         App["Application Process"]
     end
     subgraph gVisor ["gVisor Sentry (User-space)"]
-        Sentry["Implements ~300 Linux syscalls
-        Written in memory-safe Go
-        Can't be exploited by kernel CVEs"]
+    Sentry["Intercepts and reimplements Linux syscalls in Go
+    Partial Linux ABI — some syscalls unsupported
+    Written in memory-safe Go
+    Dramatically reduces host kernel CVE exposure"]
     end
     subgraph Host ["Host OS"]
         Kernel["Host Kernel
@@ -350,7 +351,7 @@ kubectl get pods -A -o json | jq -r '
 If specific namespaces must exclusively run sandboxed workloads, enforce that mandate with admission control rather than relying on developer memory. A namespace label can document the requirement, and a ValidatingAdmissionPolicy or policy engine can reject Pods whose `runtimeClassName` is missing or set to an unapproved value. Runtime sandboxing is most reliable when it is treated as a platform contract, not an optional annotation.
 
 ```yaml
-# Use a ValidatingAdmissionPolicy (K8s 1.35+) or OPA/Gatekeeper
+# Use a ValidatingAdmissionPolicy (K8s 1.30+ GA) or OPA/Gatekeeper
 # Example with namespace annotation for documentation
 
 apiVersion: v1
@@ -588,9 +589,11 @@ docker exec cks-gvisor-control-plane bash -lc '
 '
 
 docker exec cks-gvisor-control-plane bash -lc '
-  pkill -HUP containerd || true
-  sleep 5
-  crictl info | grep -A20 runsc || true
+  # containerd resolves shim binaries dynamically at pod creation;
+  # the runsc binary just needs to be in PATH. If the runtime is not
+  # discovered, restart the kind node container:
+  #   docker restart cks-gvisor-control-plane
+  crictl info | grep -A20 runsc || echo "runsc plugin not yet discovered — restart the kind node"
 '
 
 kubectl label node cks-gvisor-control-plane gvisor.kubernetes.io/enabled=true
