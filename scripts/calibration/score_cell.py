@@ -158,11 +158,15 @@ class ContentWritingLongScorer:
         response: str,
         ground_truth: dict[str, Any],
     ) -> str | None:
+        default_instruction = (
+            "Score whether the module actually teaches the topic, not "
+            "just rephrases upstream docs."
+        )
+        instruction = ground_truth.get("judge_instruction", default_instruction)
         return _judge_prompt(
             "pedagogy",
             response,
-            "Score whether the module actually teaches Kubernetes RBAC "
-            "with TTT pedagogy rather than paraphrasing upstream docs.",
+            instruction,
             ground_truth,
         )
 

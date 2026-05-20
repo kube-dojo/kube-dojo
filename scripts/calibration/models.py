@@ -97,6 +97,11 @@ ANCHORS: tuple[CalibrationModel, ...] = (
         "B",
         "claude-sonnet-4-6",
     ),
+    # Wave B uses gemini-cli for gemini-3.1-pro-preview because agy-cli
+    # does not expose pro-preview models.
+    # After 2026-06-18 (gemini-cli cutover to agy), this row may need to
+    # migrate or be retired.
+    # Tracked in #1365.
     CalibrationModel(
         "google",
         "gemini-cli",
@@ -213,4 +218,3 @@ def model_by_canonical(canonical_string: str) -> CalibrationModel:
         if model.canonical_string == canonical_string:
             return model
     raise KeyError(f"unknown calibration model: {canonical_string}")
-

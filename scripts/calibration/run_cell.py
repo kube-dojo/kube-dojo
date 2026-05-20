@@ -106,6 +106,10 @@ def build_dispatch_plan(model: CalibrationModel) -> DispatchPlan:
             agent_name = "deepseek"
         elif model.family == "alibaba":
             agent_name = "qwen"
+        elif model.family == "xai":
+            # No dedicated grok adapter exists yet, so route Wave C xai traffic
+            # through the openrouter-backed hermes adapter.
+            agent_name = "qwen"
         else:
             raise NotImplementedError(
                 "hermes prompt-prefix dispatch is not implemented for "
