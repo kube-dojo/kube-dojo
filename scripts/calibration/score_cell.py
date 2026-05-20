@@ -1,0 +1,597 @@
+"""Per-lane deterministic scoring and optional LLM judge wiring."""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Any, Callable, Protocol
+
+import yaml
+
+from . import schema
+from .models import model_by_canonical
+from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, dispatch_prompt
+
+GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
+
+
+class LaneScorer(Protocol):
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        ...
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        ...
+
+
+def _contains_all(text: str, terms: list[str]) -> bool:
+    lowered = text.lower()
+    return all(term.lower() in lowered for term in terms)
+
+
+def _contains_any(text: str, terms: list[str]) -> bool:
+    lowered = text.lower()
+    return any(term.lower() in lowered for term in terms)
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w'-]+\b", text))
+
+
+def _extract_fenced_code(response: str, language: str = "python") -> str:
+    pattern = re.compile(
+        rf"```(?:{re.escape(language)})?\s*\n(.*?)```",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(response)
+    if match:
+        return match.group(1).strip() + "\n"
+    return response.strip() + "\n"
+
+
+def run_command(
+    args: list[str],
+    *,
+    cwd: Path,
+    timeout_s: int = 60,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
+        check=False,
+    )
+
+
+class CodeWritingScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        code = _extract_fenced_code(response)
+        tests_py = str(ground_truth["tests_py"])
+        with tempfile.TemporaryDirectory(prefix="calibration-code-writing-") as tmp:
+            tmp_path = Path(tmp)
+            (tmp_path / "solution.py").write_text(code, encoding="utf-8")
+            (tmp_path / "test_solution.py").write_text(tests_py, encoding="utf-8")
+            pytest_result = run_command(
+                [".venv/bin/python", "-m", "pytest", str(tmp_path / "test_solution.py")],
+                cwd=REPO_ROOT,
+            )
+            ruff_result = run_command(
+                [".venv/bin/ruff", "check", str(tmp_path / "solution.py")],
+                cwd=REPO_ROOT,
+            )
+        return {
+            "pytest_exit": pytest_result.returncode == 0,
+            "ruff_exit": ruff_result.returncode == 0,
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class CodeReviewScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        findings = ground_truth.get("findings", [])
+        found = [
+            finding
+            for finding in findings
+            if _contains_any(response, list(finding.get("aliases", [])))
+        ]
+        hallucination_terms = list(ground_truth.get("hallucination_terms", []))
+        return {
+            "ground_truth_findings": len(found) == len(findings),
+            "no_hallucinations": not _contains_any(response, hallucination_terms),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class ContentWritingLongScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        tier = _verifier_tier(response)
+        accepted_tiers = set(ground_truth.get("accepted_verifier_tiers", ["T0", "T1"]))
+        mermaid_pattern = re.compile(r"```\s*mermaid\b.*?```", re.IGNORECASE | re.DOTALL)
+        return {
+            "verifier_t0_t1": tier in accepted_tiers,
+            "mermaid_block": bool(mermaid_pattern.search(response)),
+            "no_simply": not re.search(r"\bsimply\b", response, re.IGNORECASE),
+            "bloom_l3_outcomes": _contains_any(
+                response,
+                list(ground_truth.get("bloom_l3_terms", [])),
+            ),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        default_instruction = (
+            "Score whether the module actually teaches the topic, not "
+            "just rephrases upstream docs."
+        )
+        instruction = ground_truth.get("judge_instruction", default_instruction)
+        return _judge_prompt(
+            "pedagogy",
+            response,
+            instruction,
+            ground_truth,
+        )
+
+
+class ContentReviewScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        flaws = ground_truth.get("planted_flaws", [])
+        found = [
+            flaw
+            for flaw in flaws
+            if _contains_any(response, list(flaw.get("aliases", [])))
+        ]
+        hallucination_terms = list(ground_truth.get("hallucination_terms", []))
+        return {
+            "planted_flaw_recall": len(found) == len(flaws),
+            "review_precision": not _contains_any(response, hallucination_terms),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class FactCheckScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        verdicts = _parse_json_response(response)
+        expected = {
+            claim["claim_id"]: claim["verdict"]
+            for claim in ground_truth.get("claims", [])
+        }
+        matched = 0
+        cited = 0
+        for item in verdicts:
+            claim_id = item.get("claim_id")
+            verdict = item.get("verdict")
+            rationale = str(item.get("rationale", ""))
+            if expected.get(claim_id) == verdict:
+                matched += 1
+            if "http://" in rationale or "https://" in rationale:
+                cited += 1
+        total = len(expected)
+        return {
+            "verdict_class_match": total > 0 and matched == total,
+            "citation_grounding": total > 0 and cited >= int(ground_truth.get("min_citations", 3)),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class ArchitectingScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        required = list(ground_truth.get("required_categories", []))
+        covered = [category for category in required if _contains_any(response, [category])]
+        novel_terms = list(ground_truth.get("novel_risk_terms", []))
+        return {
+            "required_category_count": len(covered) >= len(required),
+            "novel_risk_bonus": _contains_any(response, novel_terms),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return _judge_prompt(
+            "architecture",
+            response,
+            "Score design clarity, failure-mode coverage, and operational fit.",
+            ground_truth,
+        )
+
+
+class OrchestratingScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        routes = ground_truth.get("expected_routes", [])
+        route_hits = [
+            route
+            for route in routes
+            if _contains_all(
+                response,
+                [route["subtask"], route["model_class"], route["lane"]],
+            )
+        ]
+        return {
+            "routing_accuracy": len(route_hits) == len(routes),
+            "cost_awareness": _contains_any(response, ["cost", "$", "cheap", "budget"]),
+            "decision_card_discipline": _contains_any(
+                response,
+                ["decision card", "disagreement", "tradeoff"],
+            ),
+            "same_family_serialized": _contains_any(response, ["serialize", "same-family"]),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return _judge_prompt(
+            "orchestration",
+            response,
+            "Score plan coherence, parallelization discipline, and routing judgment.",
+            ground_truth,
+        )
+
+
+class DebuggingScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        patch_ok = _contains_any(response, list(ground_truth.get("fix_terms", [])))
+        root_cause_ok = _contains_any(response, list(ground_truth.get("root_cause_terms", [])))
+        broad_rewrite = _contains_any(response, list(ground_truth.get("broad_rewrite_terms", [])))
+        test_result = _run_optional_command(ground_truth.get("pytest_command"))
+        return {
+            "root_cause_identified": root_cause_ok,
+            "patch_targets_bug": patch_ok,
+            "tests_pass": test_result,
+            "minimal_patch": not broad_rewrite,
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class RefactoringScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        original_loc = int(ground_truth.get("original_loc", 200))
+        response_loc = len(_extract_fenced_code(response).splitlines())
+        tests_pass = _run_optional_command(ground_truth.get("test_command"))
+        lint_clean = _run_optional_command(ground_truth.get("lint_command"))
+        return {
+            "tests_still_pass": tests_pass,
+            "loc_reduction": response_loc < original_loc,
+            "lint_clean": lint_clean,
+            "behavior_preserved": _contains_any(
+                response,
+                list(ground_truth.get("behavior_terms", [])),
+            ),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return None
+
+
+class SummarizationScorer:
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        must_mentions = list(ground_truth.get("must_mentions", []))
+        banned = list(ground_truth.get("banned_hallucinations", []))
+        min_words = int(ground_truth.get("min_words", 180))
+        max_words = int(ground_truth.get("max_words", 220))
+        words = _word_count(response)
+        return {
+            "must_mention_recall": all(
+                mention.lower() in response.lower() for mention in must_mentions
+            ),
+            "length_compliance": min_words <= words <= max_words,
+            "no_hallucination": not _contains_any(response, banned),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return _judge_prompt(
+            "summary coherence",
+            response,
+            "Score whether the handoff is coherent, useful, and faithful.",
+            ground_truth,
+        )
+
+
+SCORERS: dict[str, LaneScorer] = {
+    "code-writing": CodeWritingScorer(),
+    "code-review": CodeReviewScorer(),
+    "content-writing-long": ContentWritingLongScorer(),
+    "content-review": ContentReviewScorer(),
+    "fact-check": FactCheckScorer(),
+    "architecting": ArchitectingScorer(),
+    "orchestrating": OrchestratingScorer(),
+    "debugging": DebuggingScorer(),
+    "refactoring": RefactoringScorer(),
+    "summarization": SummarizationScorer(),
+}
+
+
+def _parse_json_response(response: str) -> list[dict[str, Any]]:
+    try:
+        parsed = json.loads(response)
+    except json.JSONDecodeError:
+        match = re.search(r"```(?:json)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
+        if not match:
+            return []
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            return []
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict) and isinstance(parsed.get("claims"), list):
+        return [item for item in parsed["claims"] if isinstance(item, dict)]
+    return []
+
+
+def _run_optional_command(command: object) -> bool:
+    if not command:
+        return True
+    if not isinstance(command, list) or not all(isinstance(part, str) for part in command):
+        return False
+    result = run_command(command, cwd=REPO_ROOT, timeout_s=120)
+    return result.returncode == 0
+
+
+def _verifier_tier(response: str) -> str:
+    """Return verify_module.py tier when response looks like a module.
+
+    Short unit-test snippets and malformed model outputs fall back to an
+    explicit ``T0``/``T1`` marker search so the scorer still records a gate
+    rather than crashing before the ledger write.
+    """
+    if response.lstrip().startswith("---"):
+        with tempfile.TemporaryDirectory(prefix="calibration-module-") as tmp:
+            module_path = Path(tmp) / "module.md"
+            module_path.write_text(response, encoding="utf-8")
+            result = run_command(
+                [
+                    ".venv/bin/python",
+                    "scripts/quality/verify_module.py",
+                    str(module_path),
+                    "--skip-source-check",
+                    "--tier-only",
+                ],
+                cwd=REPO_ROOT,
+                timeout_s=120,
+            )
+        if result.returncode == 0:
+            match = re.search(r"\bT[0-4]\b", result.stdout)
+            if match:
+                return match.group(0)
+    tier_match = re.search(r"\bT([0-4])\b", response)
+    return f"T{tier_match.group(1)}" if tier_match else ""
+
+
+def _judge_prompt(
+    dimension: str,
+    response: str,
+    instruction: str,
+    ground_truth: dict[str, Any],
+) -> str:
+    rubric = ground_truth.get("llm_rubric", "Return JSON: {\"score\": 0-10, \"rationale\": \"...\"}.")
+    return (
+        f"You are a calibration judge for {dimension}.\n\n"
+        f"{instruction}\n\n"
+        f"Rubric:\n{rubric}\n\n"
+        f"Model response:\n{response}\n"
+    )
+
+
+def load_ground_truth(lane: str, fixture_id: str) -> dict[str, Any]:
+    path = GROUND_TRUTH_ROOT / lane / f"{fixture_id}.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"missing calibration ground truth: {path}")
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(payload, dict):
+        raise ValueError(f"ground truth must be a mapping: {path}")
+    return payload
+
+
+def _latest_response_path(conn: Any, cell_id: str) -> Path:
+    row = conn.execute(
+        """
+        SELECT response_path
+        FROM dispatches
+        WHERE cell_id = ?
+        ORDER BY dispatch_ts DESC
+        LIMIT 1
+        """,
+        (cell_id,),
+    ).fetchone()
+    if row is None:
+        raise FileNotFoundError(f"no dispatch response recorded for {cell_id}")
+    path = Path(row["response_path"])
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return path
+
+
+def _parse_judge_score(response: str) -> float:
+    rows = _parse_json_response(response)
+    if rows and "score" in rows[0]:
+        return float(rows[0]["score"])
+    try:
+        parsed = json.loads(response)
+        if isinstance(parsed, dict) and "score" in parsed:
+            return float(parsed["score"])
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+    match = re.search(r"\b(?:score\s*[:=]\s*)?([0-9](?:\.[0-9])?|10)\b", response)
+    if not match:
+        raise ValueError(f"judge response does not contain a score: {response[:120]}")
+    return float(match.group(1))
+
+
+JudgeFn = Callable[[str, str], str]
+
+
+def dispatch_judge(judge_model: str, prompt: str) -> str:
+    model = model_by_canonical(judge_model)
+    result = dispatch_prompt(model, prompt, REPO_ROOT, 1800)
+    return result.response
+
+
+def score_cell(
+    *,
+    cell_id: str,
+    db_path: Path = DEFAULT_DB_PATH,
+    judge1: str = "claude-sonnet-4-6",
+    judge2: str = "gemini-3.5-flash-high",
+    judge_fn: JudgeFn = dispatch_judge,
+) -> dict[str, bool]:
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell = schema.fetch_cell(conn, cell_id)
+        response_path = _latest_response_path(conn, cell_id)
+        response = response_path.read_text(encoding="utf-8")
+        ground_truth = load_ground_truth(str(cell["lane"]), str(cell["fixture_id"]))
+        scorer = SCORERS[str(cell["lane"])]
+        gates = scorer.deterministic_gates(response, ground_truth)
+        schema.insert_scores(conn, cell_id=cell_id, gates=gates)
+
+        if not all(gates.values()):
+            return gates
+
+        prompt = scorer.llm_judge_prompt(response, ground_truth)
+        if prompt is None:
+            return gates
+
+        judge_scores: list[float] = []
+        for judge_model in (judge1, judge2):
+            judge_response = judge_fn(judge_model, prompt)
+            judge_score = _parse_judge_score(judge_response)
+            judge_scores.append(judge_score)
+            schema.insert_score(
+                conn,
+                cell_id=cell_id,
+                gate_name="llm_judge_score",
+                gate_pass=judge_score >= 7.0,
+                score_value=judge_score,
+                scorer=f"llm-judge:{judge_model}",
+            )
+        if len(judge_scores) == 2 and abs(judge_scores[0] - judge_scores[1]) > 1.0:
+            schema.insert_score(
+                conn,
+                cell_id=cell_id,
+                gate_name="human_spot_check",
+                gate_pass=False,
+                score_value=abs(judge_scores[0] - judge_scores[1]),
+                scorer="deterministic",
+            )
+    return gates
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Score one calibration cell")
+    parser.add_argument("--cell-id", required=True)
+    parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
+    parser.add_argument("--judge1", default="claude-sonnet-4-6")
+    parser.add_argument("--judge2", default="gemini-3.5-flash-high")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    gates = score_cell(
+        cell_id=args.cell_id,
+        db_path=args.db_path,
+        judge1=args.judge1,
+        judge2=args.judge2,
+    )
+    print(json.dumps(gates, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

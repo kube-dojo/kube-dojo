@@ -1,0 +1,229 @@
+from __future__ import annotations
+
+import json
+import subprocess
+
+from scripts.calibration import schema, score_cell
+from scripts.calibration.models import model_by_canonical
+
+
+def _completed(returncode: int = 0) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout="", stderr="")
+
+
+def test_code_writing_scorer_happy_path(monkeypatch):
+    monkeypatch.setattr(score_cell, "run_command", lambda *args, **kwargs: _completed())
+    response = """
+```python
+import yaml
+
+def parse_dependabot_cooldown(yaml_text: str) -> int | None:
+    data = yaml.safe_load(yaml_text) if yaml_text else None
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError("top-level YAML must be a mapping")
+    cooldown = data.get("cooldown")
+    if cooldown is None:
+        return None
+    if not isinstance(cooldown, dict):
+        raise ValueError("cooldown must be a mapping")
+    days = cooldown.get("default-days")
+    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+        raise ValueError("default-days must be a non-negative integer")
+    return days
+```
+"""
+    ground_truth = score_cell.load_ground_truth("code-writing", "parse-dependabot-cooldown")
+    assert score_cell.SCORERS["code-writing"].deterministic_gates(response, ground_truth) == {
+        "pytest_exit": True,
+        "ruff_exit": True,
+    }
+
+
+def test_code_review_scorer_happy_path():
+    response = (
+        ".github/workflows/security.yml:10 security -- zizmor lacks "
+        "--strict-collection. .github/workflows/security.yml:11 correctness -- "
+        "scan scope misses .github/actions reusable actions. "
+        ".github/dependabot.yml:6 correctness -- missing cooldown default-days. "
+        ".github/workflows/security.yml:8 security -- pip install zizmor is unpinned."
+    )
+    ground_truth = score_cell.load_ground_truth("code-review", "pr-1333-security-yaml")
+    gates = score_cell.SCORERS["code-review"].deterministic_gates(response, ground_truth)
+    assert gates == {"ground_truth_findings": True, "no_hallucinations": True}
+
+
+def test_content_writing_long_scorer_happy_path():
+    response = """
+Verifier tier: T0
+Learning outcomes: analyze RBAC bindings and diagnose namespace escalation.
+```mermaid
+graph TD
+  User --> RoleBinding --> Role
+```
+"""
+    ground_truth = score_cell.load_ground_truth(
+        "content-writing-long",
+        "kubedojo-rbac-module",
+    )
+    gates = score_cell.SCORERS["content-writing-long"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert all(gates.values())
+
+
+def test_content_review_scorer_happy_path():
+    response = (
+        "hallucinated flag --remove-extra-permission; missing IPA; duplicate H1; "
+        "broken citation missing-page 404; Bloom outcomes only understand/know; "
+        "missing Mermaid diagram; source has # Kubernetes RBAC duplicate H1; "
+        "uses banned word simply."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "content-review",
+        "flawed-module-rubric-review",
+    )
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates == {"planted_flaw_recall": True, "review_precision": True}
+
+
+def test_fact_check_scorer_happy_path():
+    response = json.dumps(
+        [
+            {"claim_id": "C1", "verdict": "VERIFIED", "rationale": "https://kubernetes.io/docs/"},
+            {"claim_id": "C2", "verdict": "VERIFIED", "rationale": "https://kubernetes.io/docs/"},
+            {"claim_id": "C3", "verdict": "VERIFIED", "rationale": "https://kubernetes.io/docs/"},
+            {"claim_id": "C4", "verdict": "FALSE", "rationale": "NetworkPolicy remains."},
+            {"claim_id": "C5", "verdict": "FALSE", "rationale": "replicas is integer."},
+        ]
+    )
+    ground_truth = score_cell.load_ground_truth("fact-check", "k8s-1-35-claims")
+    gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, ground_truth)
+    assert gates == {"verdict_class_match": True, "citation_grounding": True}
+
+
+def test_architecting_scorer_happy_path():
+    response = (
+        "env-var format, validation, hermes invocation, failure modes, telemetry, "
+        "flow integration, rollback, rate-limit behavior, prompt-model mismatch, "
+        "worktree safety, cost cap, audit trail."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "architecting",
+        "kubedojo-review-override-rfc",
+    )
+    gates = score_cell.SCORERS["architecting"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates == {"required_category_count": True, "novel_risk_bonus": True}
+
+
+def test_orchestrating_scorer_happy_path():
+    response = (
+        "Python bug -> codex -> debugging. security regressions -> claude -> "
+        "code-review. module handoff -> cheap -> summarization. fact-check -> "
+        "google -> fact-check. Serialize same-family Codex work, include a "
+        "cost estimate, and draft a decision card for the override disagreement."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "orchestrating",
+        "multi-task-routing-brief",
+    )
+    gates = score_cell.SCORERS["orchestrating"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert all(gates.values())
+
+
+def test_debugging_scorer_happy_path():
+    response = (
+        "Root cause: ResourceQuota requests.storage is 300Gi but PVCs sum to 320Gi.\n"
+        "```diff\n-    requests.storage: 300Gi\n+    requests.storage: 320Gi\n```"
+    )
+    ground_truth = score_cell.load_ground_truth("debugging", "resourcequota-pvc-mismatch")
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, ground_truth)
+    assert all(gates.values())
+
+
+def test_refactoring_scorer_happy_path():
+    response = """
+```python
+def record_frontmatter_result(rel, content, report):
+    if not content.startswith("---"):
+        report.error(f"Missing frontmatter: {rel}")
+    if "title:" not in content:
+        report.error(f"Missing title: {rel}")
+    if "order:" not in content:
+        report.warn(f"Missing sidebar.order: {rel}")
+```
+"""
+    ground_truth = score_cell.load_ground_truth(
+        "refactoring",
+        "check-site-health-refactor",
+    )
+    gates = score_cell.SCORERS["refactoring"].deterministic_gates(response, ground_truth)
+    assert all(gates.values())
+
+
+def test_summarization_scorer_happy_path():
+    required = (
+        "CKS 4.2 PSA rewrite shipped as PR #1362. "
+        "CKS 4.3 Secrets Management shipped as PR #1363. "
+        "T2-13 Ansible arc decision archived. "
+        "Calibration framework v1 spec designed and shipped as PR #1364. "
+        "Module 7.12 Ansible Operator SDK shipped as PR #1354. "
+        "agy/Gemini 3.5 Flash High promoted to primary-tier reviewer. "
+    )
+    filler = (
+        "Next work should keep the rewrite queue moving, preserve dual review, "
+        "and treat the calibration build as the foundation for later model runs. "
+    )
+    response = required + " ".join([filler] * 7)
+    ground_truth = score_cell.load_ground_truth("summarization", "session-34-handoff")
+    gates = score_cell.SCORERS["summarization"].deterministic_gates(response, ground_truth)
+    assert all(gates.values())
+
+
+def test_score_cell_writes_deterministic_rows(tmp_path):
+    db_path = tmp_path / "ledger.db"
+    response_path = tmp_path / "response.md"
+    response_path.write_text(
+        ".github/workflows/security.yml:10 --strict-collection; "
+        ".github/actions reusable actions; dependabot cooldown default-days; "
+        "pip install zizmor unpinned.",
+        encoding="utf-8",
+    )
+    model = model_by_canonical("claude-opus-4-7")
+    row = schema.build_cell_row(
+        lane="code-review",
+        fixture_id="pr-1333-security-yaml",
+        model=model,
+        run_date="2026-05-21",
+    )
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell_id = schema.insert_cell(conn, row)
+        schema.insert_dispatch(
+            conn,
+            cell_id=cell_id,
+            task_id="task",
+            response_path=str(response_path),
+        )
+
+    gates = score_cell.score_cell(cell_id=cell_id, db_path=db_path)
+
+    assert all(gates.values())
+    with schema.connect(db_path) as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) AS count FROM scores WHERE cell_id = ?",
+            (cell_id,),
+        ).fetchone()["count"]
+    assert count == 2
+

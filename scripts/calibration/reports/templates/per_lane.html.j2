@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ lane }} — calibration lane</title>
+<link rel="stylesheet" href="../../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; background:#e0e0ff; color:#1a1a8a; }
+</style>
+</head>
+<body>
+<h1>{{ lane }}</h1>
+<p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
+<table>
+  <thead>
+    <tr><th>Model</th><th>Family</th><th>Effort</th><th>Deterministic</th><th>LLM judge</th><th>Response</th></tr>
+  </thead>
+  <tbody>
+    {% for cell in cells %}
+    <tr>
+      <td>{{ cell.canonical_string }}</td>
+      <td>{{ cell.family }}</td>
+      <td><span class="pill">{{ cell.effort_requested }} / {{ cell.effort_confidence }}</span></td>
+      <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
+      <td>{% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</td>
+      <td>{% if cell.response_path %}{{ cell.response_path }}{% else %}n/a{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>
+

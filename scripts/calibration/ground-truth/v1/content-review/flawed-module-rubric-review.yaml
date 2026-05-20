@@ -1,0 +1,25 @@
+# Fixture source: v1.1 spec lane 4, deliberately flawed module.
+fixture_id: flawed-module-rubric-review
+lane: content-review
+planted_flaws:
+  - id: hallucinated-kubectl-flag
+    aliases: ["--remove-extra-permission", "hallucinated flag"]
+  - id: missing-ipa-tags
+    aliases: ["IPA", "instructional purpose", "missing ipa"]
+  - id: wrong-header-levels
+    aliases: ["duplicate H1", "header", "heading"]
+  - id: broken-citation
+    aliases: ["broken citation", "missing-page", "404"]
+  - id: off-by-one-bloom
+    aliases: ["Bloom", "understand", "know"]
+  - id: missing-diagram
+    aliases: ["diagram", "Mermaid"]
+  - id: duplicate-h1
+    aliases: ["duplicate H1", "# Kubernetes RBAC"]
+  - id: banned-simply
+    aliases: ["simply", "banned word"]
+hallucination_terms:
+  - "etcd encryption"
+  - "PSA labels"
+  - "container runtime"
+
