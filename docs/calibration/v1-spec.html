@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Calibration framework v1 — spec</title>
+<title>Calibration framework v1.1 — spec</title>
 <link rel="stylesheet" href="../design-system.css">
 <style>
   body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
@@ -12,6 +12,7 @@
   .pill-locked { background:#d4edda; color:#155724; }
   .pill-open { background:#fff3cd; color:#856404; }
   .pill-deferred { background:#cce5ff; color:#004085; }
+  .pill-revised { background:#e0e0ff; color:#1a1a8a; }
   table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
   th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
   th { background:#f3f5f7; text-align:left; }
@@ -25,85 +26,88 @@
 </head>
 <body>
 
-<h1>Calibration framework v1 — spec</h1>
-<p class="meta">Designed 2026-05-20 session 34 · authors: claude opus 4.7 (orchestrator), codex gpt-5.5 (architecture), agy/Gemini 3.5 Flash High (content/fact-check lanes) via <code>ab discuss calibration-framework</code> · <strong>v1 spec locked; build queued as a separate PR.</strong></p>
+<h1>Calibration framework v1.1 — spec</h1>
+<p class="meta">Revised 2026-05-20 session 34 · authors: claude opus 4.7 (orchestrator), gpt-5.5 (architecture), gemini-3.5-flash-high (content/fact-check lanes) via <code>ab discuss calibration-framework</code> · <strong>v1.1 spec locked; build queued as a separate PR.</strong></p>
 
 <div class="tl">
-<strong>TL;DR.</strong> A persistent multi-model calibration framework for kubedojo (and reusable for learn-ukrainian once the harness is stable). Tests <em>each model × effort level × activity lane</em> against <strong>locked prompts</strong> with <strong>deterministic ground-truth gates first, LLM-as-judge second</strong>. Canonical storage is <strong>JSONL + SQLite</strong>; Markdown decision notes and HTML matrices are <em>generated reports</em>, not the database. v1 ships a <strong>25-cell smoke suite</strong> (5 lanes × 4 anchors + 1 rotating challenger), with <strong>shadow production routing</strong> as the long-term replacement for static-matrix calibration. The shape is "anchored evidence ledger + shadow routing," not "big static spreadsheet." Driven by the gap session 33 surfaced: <strong>DeepSeek V4 Pro scored 5/5 on calibration but caused 2 T0→T3 production regressions</strong> — calibration scores alone lie, the framework joins them to typed production events.
+<strong>TL;DR.</strong> A persistent, ledger-first calibration framework for kubedojo (and reusable for learn-ukrainian once the harness is stable). The atomic execution unit is a <strong>single cell</strong>: each <code>(lane, model, effort, fixture_version)</code> appends one SQLite row and one JSONL event. The v1 seed is <strong>Wave A</strong>: 5 family anchors × 10 lanes = 50 cells. Later waves append cells without re-running prior waves; reports query the ledger and may render matrix views, but the matrix is a report, not the test design. Effort signal is recorded with <code>effort_mechanism</code> and <code>effort_confidence</code> so native flags, CLI config, model-name suffixes, prompt-prefix hints, and no-effort paths are not treated as equivalent. Driven by the gap session 33 surfaced: <code>deepseek-v4-pro</code> scored strongly on calibration but caused 2 T0→T3 production regressions — calibration scores alone lie, the framework joins them to typed production events.
 </div>
 
 <h2>Why this exists</h2>
 
-<p>The model lineup churns weekly (agy / Gemini 3.5 Flash landed 2026-05-19; gpt-5.5 + deepseek-v4 family in the previous month; new entrants expected through 2026-Q3). Per-session ad-hoc calibrations have been <strong>n=1 with single-prompt verdicts</strong> ("most cells are n=1" — <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Sample-size caveat), which often don't generalize. The framework turns "is model X good at Y?" from <em>vibe-check + one prompt</em> into a deterministic, repeatable test that can be re-fired when a new model lands and re-run quarterly to detect regression.</p>
+<p>The model lineup churns weekly (<code>gemini-3.5-flash-high</code> landed 2026-05-19; <code>gpt-5.5</code> + <code>deepseek-v4</code> family in the previous month; new entrants expected through 2026-Q3). Per-session ad-hoc calibrations have been <strong>n=1 with single-prompt verdicts</strong> ("most cells are n=1" — <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Sample-size caveat), which often do not generalize. The framework turns "is model X good at Y?" from <em>vibe-check + one prompt</em> into a deterministic, repeatable ledger that can accept new cells when a model, effort tier, or fixture version lands.</p>
 
-<p>The trigger was the user's session-34 question: <em>"how is flash 3.5 gemini? they say it is better than 3.1 pro — did you do a very detailed testing of coding, code reviewing, planning, architecting, content writing, document writing, fact checking, content review?"</em> Answer at the time: <strong>partial.</strong> 5 lanes had data (Cells 1-6 from session 33 + this session's production data points); 4 lanes were untested. The framework fixes that gap structurally.</p>
+<p>The trigger was the user's session-34 question: <em>"how is flash 3.5 gemini? they say it is better than 3.1 pro — did you do a very detailed testing of coding, code reviewing, planning, architecting, content writing, document writing, fact checking, content review?"</em> Answer at the time: <strong>partial.</strong> Several production-routed activities had no locked fixture. v1.1 fixes that gap structurally with 10 lanes, family-level anchors, and append-only evidence.</p>
 
 <h2>Scope</h2>
 
 <table>
-<thead><tr><th>Dimension</th><th>v1 value</th><th>Status</th></tr></thead>
+<thead><tr><th>Dimension</th><th>v1.1 value</th><th>Status</th></tr></thead>
 <tbody>
-<tr><td><strong>Models</strong></td><td>4 anchors (stable benchmarks, kept across runs) + 1 rotating challenger slot. v1 anchors: <code>claude-sonnet-4-6</code> · <code>codex gpt-5.5</code> · <code>gpt-5.3-codex-spark</code> · <code>agy/Gemini 3.5 Flash (High)</code>. v1 challenger: <code>deepseek-v4-pro</code>.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Lanes</strong></td><td>5 activities: code review · content review · fact-check / hallucination resistance · long content writing · architecting.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Atomic row key</strong></td><td><code>model@effort</code> (e.g., <code>claude-sonnet-4-6@medium</code> vs <code>claude-sonnet-4-6@xhigh</code>). Avoids hidden averaging when the same model exposes multiple effort tiers.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Cells per v1 run</strong></td><td>25 (5 lanes × 5 models). Single prompt per cell for v1 smoke. n≥3 prompts per lane comes in v2.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Canonical storage</strong></td><td>JSONL append-only + SQLite ledger. Reuses <code>dispatch_smart.py</code>'s existing JSONL + <code>response_path</code> infrastructure.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Execution unit</strong></td><td>Ledger-first single-cell unit. Each <code>(lane, model, effort, fixture_version)</code> dispatch writes one row to SQLite and one event to JSONL. Adding a model or effort tier appends new cells and does not re-run prior anchors.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Wave backlog</strong></td><td>Priority-ordered Wave A → E. v1 seed = Wave A only. Later waves append cells without re-running earlier waves.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Wave A anchors</strong></td><td>One model per family at provider-specific ceiling: <code>claude-opus-4-7</code> · <code>gpt-5.5</code> · <code>gemini-3.5-flash-high</code> · <code>deepseek-v4-pro</code> · <code>qwen3.6-plus</code>.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Lanes</strong></td><td>10 activities: code writing · code review · content writing — long · content review · fact-check / hallucination · architecting · orchestrating · debugging · refactoring · summarization.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Structured model row key</strong></td><td><code>(family, provider_cli, model_id, version, effort_requested, run_date)</code>. Display slugs such as <code>anthropic/claude-opus-4-7@max</code> are human-readable report labels only.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Effort dimensions</strong></td><td><code>effort_requested</code>, <code>effort_mechanism</code>, <code>effort_confidence</code>, and nullable <code>effort_effective</code>. Native flags, CLI config overrides, model-name suffixes, prompt-prefix hints, and no-effort paths are distinct.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Canonical storage</strong></td><td>JSONL append-only + SQLite ledger. Reuses <code>dispatch_smart.py</code>'s existing JSONL + <code>response_path</code> infrastructure where possible.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
 <tr><td><strong>Generated artifacts</strong></td><td>MD decision notes + HTML reports (matrix, per-lane, per-model, regression). Read-only; rebuildable from the ledger.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Scoring philosophy</strong></td><td>Deterministic gates first (build pass, verifier T0, ground-truth count, URL HEAD checks). LLM-as-judge only for prose with 2 cross-judges to detect correlated errors.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Scoring philosophy</strong></td><td>Deterministic gates first (build pass, verifier tier, ground-truth count, URL/citation checks). LLM-as-judge only for prose where deterministic gates cannot measure pedagogy or design quality.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
 <tr><td><strong>Production join</strong></td><td>Typed event ledger: <code>approved_stayed_t0</code> / <code>approved_later_t3</code> / <code>real_bug_caught</code> / <code>hallucinated_blocker</code> / <code>silent_miss</code> / <code>verifier_failure</code>. NOT a single multiplier.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Long-term shape</strong></td><td>Static matrix is a report. <strong>Shadow production routing</strong> is the real framework: challenger models review real PRs with NO merge authority until they accumulate enough production evidence. v1 implements shadow routing for both code-review AND content-review lanes.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Domain scope</strong></td><td>Schema multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, <code>as_of_date</code>, <code>ground_truth</code>, <code>verifier</code>, <code>production_join_key</code> fields). v1 fixtures KubeDojo-only. learn-ukrainian forks the harness once stable.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
-<tr><td><strong>Cadence</strong></td><td>Quarterly full sweep · on-demand single-model add when new model lands · persistent record for regression detection across time.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Parallelism</strong></td><td>Family-level scheduler: max 1 inflight per family. <code>anthropic</code> ∥ <code>openai</code> (serialized inside) ∥ <code>google</code> ∥ <code>deepseek</code> ∥ <code>alibaba</code> ∥ <code>xai</code>.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
+<tr><td><strong>Domain scope</strong></td><td>Schema multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, <code>fixture_version</code>, <code>as_of_date</code>, <code>ground_truth</code>, <code>verifier</code>, <code>production_join_key</code> fields). Fixture-level fields (<code>ground_truth</code>, <code>verifier</code>, <code>production_join_key</code>) live in per-lane YAML files under <code>scripts/calibration/ground-truth/v1/</code>; the SQLite schema records only the per-cell run metadata. v1 fixtures KubeDojo-only. learn-ukrainian forks the harness once stable.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Cadence</strong></td><td>Highest effort first per anchor. Lower efforts append later through Wave E single-cell adds. New model versions append as new rows; reports compare across time.</td><td><span class="pill pill-revised">REVISED</span></td></tr>
 </tbody>
 </table>
 
-<h2>What "anchor" means (terminology clarification)</h2>
+<h2>Wave structure</h2>
 
-<p>An <strong>anchor</strong> is a model we keep in every smoke run to provide a stable reference point. Anchors don't rotate. The 5th slot is the <strong>challenger</strong> — whichever new model we want to evaluate this round (3.5 Flash today, gpt-5.6 next month, qwen-3.7 after that).</p>
+<p>The wave list is a priority-ordered backlog. v1 seed runs Wave A only. Later waves append cells to the same ledger without re-running prior waves.</p>
 
 <table>
-<thead><tr><th>#</th><th>Anchor</th><th>Why it earns a fixed slot</th></tr></thead>
+<thead><tr><th>Wave</th><th>Models</th><th>Effort &amp; mechanism</th><th>Cells (× 10 lanes)</th><th>Cost</th><th>Rationale</th></tr></thead>
 <tbody>
-<tr><td>1</td><td><code>claude-sonnet-4-6</code></td><td>Current production reviewer baseline. Session 31-32 track record: 5/5 modules stayed T0 after merge. Regression alarm: if sonnet score drops in a future run on the locked prompts, something changed (model update, prompt cache miss, vendor regression) — anchors make that detectable.</td></tr>
-<tr><td>2</td><td><code>codex gpt-5.5</code></td><td>Current production writer baseline. Top-tier on architect + edit + coding. The model that drafted both CKS 4.2 and 4.3 rewrites this session.</td></tr>
-<tr><td>3</td><td><code>gpt-5.3-codex-spark</code></td><td>Cheap-tier baseline (most <code>edit</code> dispatches go here). Lets us measure cost-vs-quality without conflating spark with gpt-5.5 results. Required to plot the Pareto frontier honestly.</td></tr>
-<tr><td>4</td><td><code>agy / Gemini 3.5 Flash (High)</code></td><td>Newly-promoted production reviewer (session 34 added to primary-tier alongside sonnet). Independent rate-limit counter from gemini-cli — keeps the framework working through the 2026-06-18 gemini-cli cutover.</td></tr>
+<tr><td><strong>A (v1 seed)</strong></td><td><code>claude-opus-4-7</code> · <code>gpt-5.5</code> · <code>gemini-3.5-flash-high</code> · <code>deepseek-v4-pro</code> · <code>qwen3.6-plus</code></td><td><code>max</code> (anthropic native flag) · <code>xhigh</code> (codex <code>-c model_reasoning_effort</code>) · <code>high</code> (gemini model-name suffix; ceiling) · <code>xhigh</code> (hermes prompt-prefix hint) · <code>xhigh</code> (hermes prompt-prefix hint)</td><td>50</td><td>~$2.50</td><td>One model per family at provider-specific ceiling — establishes the family-by-family ceiling for the matrix</td></tr>
+<tr><td><strong>B (production reviewers)</strong></td><td><code>claude-sonnet-4-6</code> · <code>gemini-3.1-pro-preview</code> · <code>deepseek-v4-flash</code></td><td><code>max</code> · <code>high</code> (default, ceiling) · <code>xhigh</code> (hermes hint)</td><td>+30</td><td>~$1.50</td><td>Models that currently do production cross-family review but aren't Wave A anchors. Without sonnet@max data we cannot compare opus@max to the production reviewer baseline. <code>gemini-3.1-pro-preview</code> is the gemini-cli primary model, which is a distinct dispatch pathway from <code>agy-cli</code> (used for <code>gemini-3.5-flash-high</code>).</td></tr>
+<tr><td><strong>C (new family)</strong></td><td><code>grok-4.3</code></td><td>TBD (hermes assumed; adapter unverified)</td><td>+10</td><td>~$0.50</td><td>Net-new family signal. Zero prior calibration data on grok. One model unlocks an entire family's frontier. Grok-4.3 adapter and hermes reachability require verification before Wave C dispatch; if unreachable, Wave C is deferred until the adapter lands.</td></tr>
+<tr><td><strong>D (cheap tier — cost frontier)</strong></td><td><code>claude-haiku-4-5</code> · <code>gpt-5.3-codex-spark</code> · <code>gpt-5.4-mini</code> · <code>gemini-3.1-flash-lite-preview</code> · <code>qwen3.6</code></td><td><code>default</code> (haiku has no adaptive effort; <code>--effort</code> flag does not apply) · <code>xhigh</code> requested (codex; spark self-reports support, mini reports unknown) · <code>xhigh</code> requested (codex; may downgrade) · <code>high</code> requested (docs flag as DYNAMIC — may downgrade) · <code>xhigh</code> (hermes hint)</td><td>+50</td><td>~$2.50</td><td>Maps the cheap edge of the cost frontier per family. Lets us push routing down the cost ladder when quality holds</td></tr>
+<tr><td><strong>E (effort sweep — orthogonal dimension)</strong></td><td>All 14 models × 3 lower efforts (low / medium / high) — only meaningful for models with native effort flag</td><td>n/a</td><td>~360 incremental</td><td>~$18</td><td>Final cost-vs-quality frontier per model. Skipped for hermes-routed models where effort is only a prompt-prefix hint (signal too noisy). Wave E is treated as an orthogonal dimension, not a sequential wave. Cells append to the ledger as they are run; there is no "Wave E batch."</td></tr>
 </tbody>
 </table>
 
-<div class="rationale">
-<strong>What anchoring gains us:</strong> (1) regression detection across time (anchors held constant; if claude-sonnet scores 5/5 today and 3/5 next quarter, that's signal). (2) Calibration ceiling — a challenger that doesn't beat any anchor on any lane doesn't earn a roster slot. (3) Cost frontier — the 4 anchors span price/speed bands (cheap spark ↔ premium gpt-5.5 ↔ fast Flash), letting us position new models inside that frontier rather than rate them in a vacuum.
-</div>
+<p><strong>Cumulative cell counts:</strong> A=50 · A+B=80 · A+B+C=90 · A+B+C+D=140 · full E sweep adds ~360 (spread across sessions).</p>
 
-<h3>v1 challenger pick: <code>deepseek-v4-pro</code></h3>
-
-<p>Selected because it has <strong>both calibration data and a known production failure</strong> — exactly the case the framework is designed to detect.</p>
-
-<ul>
-  <li>Session 30 calibration: DeepSeek V4 Pro scored 5/5 on the controlled review prompt — top-tier per the calibration-only rubric.</li>
-  <li>Session 33 production reality: DeepSeek V4 Pro had approved 2 modules that have since aged poorly (T0→T3 by verifier). Real production data documented in <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Production track record table.</li>
-  <li>If the framework's production-event join works, the matrix should flag deepseek-v4-pro as "high calibration / low production" — that's the smoke test for the framework itself, not just for deepseek.</li>
-</ul>
-
-<h2>Lanes (the 5 v1 activities)</h2>
+<h2>10 lanes</h2>
 
 <table>
-<thead><tr><th>Lane</th><th>What it tests</th><th>Why it's in v1</th></tr></thead>
+<thead><tr><th>#</th><th>Lane</th><th>Production use today</th><th>Fixture (v1 anchor prompt)</th><th>Scoring</th></tr></thead>
 <tbody>
-<tr><td>Code review</td><td>Adversary review of a Python diff + security YAML. Catch ground-truth findings without confidently fabricating non-findings.</td><td>Highest-stakes production lane (every PR has a cross-family review). Session 30 + session 34 produced calibration data already.</td></tr>
-<tr><td>Content review</td><td>Review a >1k-line teaching module against the kubedojo rubric. Flag verifier-gate failures + factual errors + pedagogical weakness.</td><td>The 160-module rewrite pivot leans entirely on this lane. Session 33 + session 34 produced both calibration and production data — including the case where agy's Cell 2 caught 3 real bugs sonnet missed in production.</td></tr>
-<tr><td>Fact-check / hallucination resistance</td><td>Verify specific upstream claims (Kubernetes docs, GitHub Actions YAML schema, vendor pricing). Adversarial prompts include plausible-but-false premises. Reward honest "I don't know" / "this doesn't exist."</td><td>The session 33 calibration found 3 models (DS V4 Pro, DS V4 Flash, agy/3.5 Flash High) hallucinating the same Dependabot cooldown YAML schema. Persistent fact-check testing keeps that class of bug out of production.</td></tr>
-<tr><td>Long content writing</td><td>Write a 5000-word teaching module that passes the kubedojo deterministic verifier (T0/T1).</td><td>Direct measurement of the writer-class capability needed for the 160-module rewrite pivot. Codex gpt-5.5 architect is the production default; we need data on whether alternatives can fill in.</td></tr>
-<tr><td>Architecting</td><td>Design a kubedojo feature (RFC depth): risk surfacing, integration points, rollback, observability. Score on novel-risk catches + completeness.</td><td>Architecture decisions affect 100+ modules and the dispatch infrastructure. Session 33 Cell 3 found agy surfaced a unique risk flag ("Prompt-Model Mismatch") that none of the baseline models caught — that pattern is worth measuring systematically.</td></tr>
+<tr><td>1</td><td>Code writing</td><td>dispatch_smart edits, infra scripts, fixups</td><td>Implement <code>parse_dependabot_cooldown(yaml_text: str) -&gt; int | None</code> with 8 test cases (existing prompt — promote from "Coding" section in current spec)</td><td>deterministic: pytest exit + ruff exit</td></tr>
+<tr><td>2</td><td>Code review</td><td>every PR cross-family review</td><td>Review PR #1333 security-YAML diff against 4 known findings (existing)</td><td>deterministic: findings ∩ ground truth − hallucinations</td></tr>
+<tr><td>3</td><td>Content writing — long</td><td>160-module rewrite pivot</td><td>Write 5000-word kubedojo RBAC module (existing)</td><td>deterministic verifier T0/T1 + Mermaid regex + no-"simply" regex + LLM-judge pedagogy</td></tr>
+<tr><td>4</td><td>Content review</td><td>module reviews</td><td>Review deliberately-flawed 1500-line module (existing)</td><td>deterministic: precision + recall against 8 planted flaws</td></tr>
+<tr><td>5</td><td>Fact-check / hallucination</td><td>citation verification</td><td>5 claims about K8s 1.35 (3 true, 2 plausible-false) (existing)</td><td>deterministic: verdict-class match + rationale grounded in citations</td></tr>
+<tr><td>6</td><td>Architecting</td><td>RFCs, decision cards, system design</td><td>Design <code>KUBEDOJO_REVIEW_OVERRIDE</code> env-var hook (existing, 700-1500 word RFC)</td><td>deterministic: 10 required risk categories + LLM-judge bonus for novel risks</td></tr>
+<tr><td>7</td><td><strong>Orchestrating</strong> (new)</td><td>claude inline: dispatch routing, multi-agent deliberation, decision-card framing</td><td>Given a 3-sentence multi-task brief, output: (a) dispatch plan with model/effort/lane per sub-task, (b) parallelization decisions, (c) decision-card draft if disagreement plausible, (d) cost estimate</td><td>deterministic: routing accuracy + cost-awareness + decision-card discipline. <strong>Headless dispatches only — orchestrator does not grade itself</strong></td></tr>
+<tr><td>8</td><td><strong>Debugging</strong> (new)</td><td>failing test → root cause → fix</td><td>Given failing pytest output + relevant file, identify root cause (1 sentence) + produce minimal fix patch. Material: real bug from <code>docs/bug-autopsies/</code> archive (recommend session-32 ResourceQuota PVC bug or PSA exit-code-7-vs-28 ambiguity)</td><td>deterministic: does fix make test pass without breaking others? Score on correctness + minimality</td></tr>
+<tr><td>9</td><td><strong>Refactoring</strong> (new)</td><td>working code with quality issues → better code, behavior preserved</td><td>Given a 200-line script with dead code, duplicate state, and poor naming, refactor while preserving behavior. Material: known-messy module from kubedojo repo (recommend an older <code>scripts/</code> file with TODOs and dead imports)</td><td>deterministic: all tests still pass + LOC reduction + lint-clean</td></tr>
+<tr><td>10</td><td><strong>Summarization</strong> (new)</td><td>session handoffs, PR explainers, batch summaries</td><td>Given raw transcript of session 34 (<code>docs/session-state/2026-05-20-session-34-rewrite-pivot-launch-plus-calibration-framework.html</code>), write 200-word handoff against 6-fact checklist (PRs merged, decisions made, blockers)</td><td>deterministic: recall of must-mention items + length compliance + no-hallucination</td></tr>
 </tbody>
 </table>
 
-<h2>v1 prompts (locked — codex + gemini contributed)</h2>
+<p>The lane-7 through lane-10 concrete prompt files and ground-truth files are created in PR 1. This spec locks the fixture shape, scoring shape, and production lane mapping.</p>
 
-<p>Each lane has one v1 prompt. n=1 is acknowledged as a v1 limitation; v2 expands to n≥3 per lane after the harness is proven on v1.</p>
+<h2>v1 prompts (locked shape)</h2>
 
 <details open>
-<summary>Code review (codex anchored)</summary>
+<summary>1. Code writing</summary>
+<p><strong>Prompt:</strong> Implement <code>parse_dependabot_cooldown(yaml_text: str) -&gt; int | None</code>. The function returns the configured cooldown days as <code>int</code>, or <code>None</code> if no cooldown is configured. Constraints: use <code>yaml.safe_load</code>; handle malformed input by raising <code>ValueError</code> (not bare <code>except</code>); ruff clean.</p>
+<p><strong>Ground truth:</strong> 8 test cases. Valid: <code>cooldown: { default-days: 7 }</code> → 7. Edge: missing cooldown → None. Malformed: non-mapping value → raises ValueError. Plus 5 more.</p>
+<p><strong>Scoring:</strong> deterministic — <code>pytest</code> exit code + ruff exit code.</p>
+</details>
+
+<details open>
+<summary>2. Code review</summary>
 <p><strong>Prompt:</strong> Review the security-YAML diff from PR #1333. Output: file:line citations for each finding + classification (security / correctness / style) + hallucination scoring (any claim not directly grounded in the diff is a false-positive).</p>
 <p><strong>Ground truth (4 findings):</strong></p>
 <ul>
@@ -116,39 +120,115 @@
 </details>
 
 <details>
-<summary>Coding (codex anchored)</summary>
-<p><strong>Prompt:</strong> Implement <code>parse_dependabot_cooldown(yaml_text: str) -> int | None</code>. The function returns the configured cooldown days as <code>int</code>, or <code>None</code> if no cooldown is configured. Constraints: use <code>yaml.safe_load</code>; handle malformed input by raising <code>ValueError</code> (not bare <code>except</code>); ruff clean.</p>
-<p><strong>Ground truth:</strong> 8 test cases. Valid: <code>cooldown: { default-days: 7 }</code> → 7. Edge: missing cooldown → None. Malformed: non-mapping value → raises ValueError. Plus 5 more.</p>
-<p><strong>Scoring:</strong> deterministic — <code>pytest</code> exit code + ruff exit code.</p>
-</details>
-
-<details>
-<summary>Architect (codex anchored)</summary>
-<p><strong>Prompt:</strong> Design <code>KUBEDOJO_REVIEW_OVERRIDE</code> — an env-var hook that routes review-class dispatches to any OpenRouter model without registering it as a first-class agent. Output a 700-1500 word design RFC covering: env-var format, validation, hermes invocation, failure modes, telemetry, flow integration, rollback, rate-limit behavior, prompt-model mismatch, worktree/mode safety.</p>
-<p><strong>Ground truth:</strong> 10 required risk-flag categories. Bonus: unique novel risk catches (e.g., "Prompt-Model Mismatch" from session 33 cell 3).</p>
-<p><strong>Scoring:</strong> deterministic count of required categories + LLM-as-judge for prose quality (2 cross-judges) + bonus for novel risks not in the ground-truth list.</p>
-</details>
-
-<details open>
-<summary>Content writing — long (gemini anchored)</summary>
+<summary>3. Content writing — long</summary>
 <p><strong>Prompt:</strong> Write a 5000-word kubedojo module on Kubernetes RBAC. Constraints: TTT pedagogy (telegraph → teach → test), include a Mermaid binding diagram, hit the kubedojo deterministic verifier T0/T1, do not use the word "simply".</p>
 <p><strong>Ground truth:</strong> verifier T0 or T1 + Mermaid block present + zero "simply" occurrences + Bloom L3+ verbs in learning outcomes.</p>
 <p><strong>Scoring:</strong> mostly deterministic (verifier + regex). LLM-as-judge only for "did it actually teach RBAC, not just rephrase the kubernetes.io page."</p>
 </details>
 
 <details>
-<summary>Content review (gemini anchored)</summary>
+<summary>4. Content review</summary>
 <p><strong>Prompt:</strong> Review a deliberately-flawed 1500-line module against <code>docs/quality-rubric.md</code>. Output: JSON list of failing rubric criteria with file:line evidence. Do NOT enumerate passing criteria.</p>
 <p><strong>Ground truth:</strong> 8 planted flaws (hallucinated kubectl flag, missing IPA tags, wrong header levels, broken citation, off-by-one Bloom level, etc.).</p>
 <p><strong>Scoring:</strong> deterministic — precision + recall against the 8-flaw ground truth.</p>
 </details>
 
 <details>
-<summary>Fact checking (gemini anchored)</summary>
+<summary>5. Fact-check / hallucination</summary>
 <p><strong>Prompt:</strong> Verify these 5 claims about Kubernetes 1.35: (a) 3 true, (b) 2 plausible-but-false. Output JSON: <code>[{claim_id, verdict: "VERIFIED" | "FALSE" | "UNVERIFIABLE" | "NONEXISTENT", rationale}]</code>. Explicit instruction: "do not guess; if you cannot find the claim in upstream docs, return UNVERIFIABLE."</p>
 <p><strong>Ground truth:</strong> the 2 false claims correctly returned <code>FALSE</code>; the 3 true claims correctly returned <code>VERIFIED</code>; bonus for surfacing the upstream source URL. Honest UNVERIFIABLE answers on a true claim score lower than VERIFIED but higher than confidently-wrong.</p>
 <p><strong>Scoring:</strong> deterministic — verdict-class match + rationale grounded in citations.</p>
 </details>
+
+<details>
+<summary>6. Architecting</summary>
+<p><strong>Prompt:</strong> Design <code>KUBEDOJO_REVIEW_OVERRIDE</code> — an env-var hook that routes review-class dispatches to any OpenRouter model without registering it as a first-class agent. Output a 700-1500 word design RFC covering: env-var format, validation, hermes invocation, failure modes, telemetry, flow integration, rollback, rate-limit behavior, prompt-model mismatch, worktree/mode safety.</p>
+<p><strong>Ground truth:</strong> 10 required risk-flag categories. Bonus: unique novel risk catches (e.g., "Prompt-Model Mismatch" from session 33 cell 3).</p>
+<p><strong>Scoring:</strong> deterministic count of required categories + LLM-as-judge for prose quality (2 cross-judges) + bonus for novel risks not in the ground-truth list.</p>
+</details>
+
+<details>
+<summary>7. Orchestrating</summary>
+<p><strong>Prompt:</strong> Given a 3-sentence multi-task brief, output: (a) dispatch plan with model/effort/lane per sub-task, (b) parallelization decisions, (c) decision-card draft if disagreement is plausible, and (d) cost estimate.</p>
+<p><strong>Ground truth:</strong> route obvious code, review, content, fact-check, and orchestration sub-tasks to the expected model family and effort; serialize same-family work; produce a decision-card draft only when the brief has a real disagreement or reversible tradeoff.</p>
+<p><strong>Scoring:</strong> deterministic routing accuracy + cost-awareness + decision-card discipline. Headless dispatches only; the orchestrator does not grade itself.</p>
+</details>
+
+<details>
+<summary>8. Debugging</summary>
+<p><strong>Prompt:</strong> Given failing pytest output plus the relevant file, identify the root cause in one sentence and produce a minimal patch. Material comes from <code>docs/bug-autopsies/</code>, with session-32 ResourceQuota PVC behavior or PSA exit-code-7-vs-28 ambiguity recommended.</p>
+<p><strong>Ground truth:</strong> the fix makes the failing test pass without breaking nearby tests and without broad unrelated rewrites.</p>
+<p><strong>Scoring:</strong> deterministic test pass/fail + minimality review.</p>
+</details>
+
+<details>
+<summary>9. Refactoring</summary>
+<p><strong>Prompt:</strong> Given a 200-line script with dead code, duplicate state, and poor naming, refactor while preserving behavior. Material should be a known-messy kubedojo module from an older <code>scripts/</code> file with TODOs and dead imports.</p>
+<p><strong>Ground truth:</strong> behavior preserved, tests still pass, lint is clean, LOC is reduced, and names expose the real data flow.</p>
+<p><strong>Scoring:</strong> deterministic tests + ruff + LOC reduction, with manual/LLM review only for whether the refactor improves readability without changing semantics.</p>
+</details>
+
+<details>
+<summary>10. Summarization</summary>
+<p><strong>Prompt:</strong> Given the raw transcript of session 34 (<code>docs/session-state/2026-05-20-session-34-rewrite-pivot-launch-plus-calibration-framework.html</code>), write a 200-word handoff against a 6-fact checklist covering PRs merged, decisions made, and blockers.</p>
+<p><strong>Ground truth:</strong> all 6 required facts appear, no invented blockers or PR outcomes appear, and the response stays within the length target.</p>
+<p><strong>Scoring:</strong> deterministic checklist recall + length compliance + no-hallucination.</p>
+</details>
+
+<h2>Scoring</h2>
+
+<p>Scoring starts with deterministic gates wherever possible: <code>pytest</code>, <code>ruff</code>, verifier tier, ground-truth recall/precision, exact verdict class, length compliance, regex checks, and citation grounding. LLM-as-judge is reserved for prose quality, pedagogy, design completeness, and novel-risk bonuses that deterministic checks cannot measure.</p>
+
+<p>All LLM-as-judge dispatches are <strong>headless</strong> (<code>claude -p</code>, <code>codex exec</code>, <code>agy-cli</code> subprocess, hermes subprocess). While <code>agy-cli</code> is TUI-controlled for interactive use, the kubedojo adapter (<code>scripts/agent_runtime/adapters/agy.py</code>) invokes it headlessly via subprocess with the model identifier in the brief; the TUI label in the Locked anchor table refers to interactive model-selection, not dispatch invocation. The interactive orchestrator does not grade itself or any other dispatch. This keeps judge runs reproducible across sessions and avoids billing-pool conflation.</p>
+
+<h2>Effort verification methodology</h2>
+
+<ol>
+  <li><strong>Anthropic effort tiers:</strong> Sourced from official adaptive-thinking docs at <a href="https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking">https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking</a>. Tiers: <code>low</code> | <code>medium</code> | <code>high</code> (default) | <code>xhigh</code> | <code>max</code>. <code>max</code> supported on <code>opus-4-7</code>, <code>opus-4-6</code>, <code>sonnet-4-6</code>, Mythos Preview. <code>xhigh</code> is <strong>opus-4-7-exclusive</strong>. <code>haiku-4-5</code> does NOT support adaptive thinking; <code>--effort</code> flag does not apply.</li>
+  <li><strong>OpenAI/Codex effort tiers:</strong> Sourced from canonical <code>ReasoningEffort</code> Rust enum in <code>openai/codex</code> repo (<a href="https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs"><code>codex-rs/protocol/src/openai_models.rs</code></a>). Tiers: <code>None</code> | <code>Minimal</code> | <code>Low</code> | <code>Medium</code> (default) | <code>High</code> | <code>XHigh</code>. No <code>max</code> tier. Per-model <code>reasoning_effort_mapping</code> exists; <code>gpt-5.3-codex-spark</code> and <code>gpt-5.4-mini</code> may silently downgrade — record <code>effort_requested</code> and (when measurable) <code>effort_effective</code> separately.</li>
+  <li><strong>Google Gemini effort tiers:</strong> Sourced from <a href="https://ai.google.dev/gemini-api/docs/thinking">ai.google.dev/gemini-api/docs/thinking</a>. Tiers: <code>minimal</code> | <code>low</code> | <code>medium</code> | <code>high</code>. <strong>No xhigh, no max.</strong> <code>gemini-3.1-flash-lite</code> "high" is documented as <strong>dynamic</strong>, may downgrade.</li>
+  <li><strong>Hermes-routed models (deepseek, qwen, presumed grok):</strong> No native effort flag. <code>dispatch.py</code> forwards effort as prompt prefix: <code>[Reasoning effort hint: xhigh]\n\n{prompt}</code>. This is a soft signal — record as <code>effort_mechanism = prompt_prefix_hint</code>, <code>effort_confidence = LOW</code>.</li>
+  <li><strong>Model self-report probes (2026-05-20):</strong> Dispatched a "what effort levels do you support" prompt with explicit "do not guess" framing to the 4 ambiguous models. Results:
+    <ul>
+      <li><code>claude-haiku-4-5</code> → <code>{"unknown": true}</code> (honest; aligns with docs)</li>
+      <li><code>gemini-3.1-flash-lite-preview</code> → <code>{"unknown": true}</code> (honest; aligns with docs)</li>
+      <li><code>gpt-5.3-codex-spark</code> → <code>{"supported":["low","medium","high","xhigh"]}</code> (claim; matches Codex enum but not behaviorally verified)</li>
+      <li><code>gpt-5.4-mini</code> → <code>{"unknown": true}</code> (honest; flag as may-downgrade)</li>
+    </ul>
+  </li>
+</ol>
+
+<h2>Locked anchor table</h2>
+
+<p>Every row records the structured model identity, requested effort, mechanism, confidence, and source-of-truth. Human-readable reports may render display slugs such as <code>anthropic/claude-opus-4-7@max</code>; those slugs are not database keys.</p>
+
+<table>
+<thead><tr><th>#</th><th>family</th><th>provider_cli</th><th>model_id</th><th>version</th><th>effort_requested</th><th>effort_mechanism</th><th>effort_confidence</th><th>source-of-truth</th></tr></thead>
+<tbody>
+<tr><th colspan="9">Wave A</th></tr>
+<tr><td>1</td><td><code>anthropic</code></td><td><code>claude-cli</code> (<code>claude -p --effort max</code>)</td><td><code>claude-opus</code></td><td><code>4-7</code></td><td><code>max</code></td><td><code>native_flag</code></td><td>high</td><td>Anthropic adaptive-thinking docs: <code>max</code> available on <code>opus-4-7</code></td></tr>
+<tr><td>2</td><td><code>openai</code></td><td><code>codex-cli</code> (<code>codex exec -c model_reasoning_effort=xhigh</code>)</td><td><code>gpt-5</code></td><td><code>5.5</code></td><td><code>xhigh</code></td><td><code>cli_config</code></td><td>high</td><td><code>~/.codex/config.toml</code> + Codex <code>ReasoningEffort</code> Rust enum (low/medium/high/xhigh)</td></tr>
+<tr><td>3</td><td><code>google</code></td><td><code>agy-cli (TUI)</code></td><td><code>gemini-3.5-flash</code></td><td><code>3.5-flash</code></td><td><code>high</code></td><td><code>model_name_suffix</code></td><td>high</td><td>Gemini <code>thinkingLevel</code> docs: tiers are minimal/low/medium/high; no xhigh exists; <code>-high</code> IS ceiling</td></tr>
+<tr><td>4</td><td><code>deepseek</code></td><td><code>hermes</code> (openrouter)</td><td><code>deepseek-v4-pro</code></td><td><code>v4-pro</code></td><td><code>xhigh</code></td><td><code>prompt_prefix_hint</code></td><td>low</td><td>hermes has no native effort flag; effort is forwarded as prompt prefix <code>[Reasoning effort hint: xhigh]\n\n...</code></td></tr>
+<tr><td>5</td><td><code>alibaba</code></td><td><code>hermes</code> (openrouter)</td><td><code>qwen3.6-plus</code></td><td><code>3.6-plus</code></td><td><code>xhigh</code></td><td><code>prompt_prefix_hint</code></td><td>low</td><td>same</td></tr>
+<tr><th colspan="9">Wave B</th></tr>
+<tr><td>6</td><td><code>anthropic</code></td><td><code>claude-cli</code></td><td><code>claude-sonnet</code></td><td><code>4-6</code></td><td><code>max</code></td><td><code>native_flag</code></td><td>high</td><td>docs: max applies; xhigh is opus-4-7-exclusive</td></tr>
+<tr><td>7</td><td><code>google</code></td><td><code>gemini-cli</code> (different pathway than agy-cli)</td><td><code>gemini-3.1-pro</code></td><td><code>3.1-pro-preview</code></td><td><code>high</code></td><td><code>model_name_suffix</code> / default</td><td>high</td><td>docs: default is already high; ceiling = high</td></tr>
+<tr><td>8</td><td><code>deepseek</code></td><td><code>hermes</code></td><td><code>deepseek-v4-flash</code></td><td><code>v4-flash</code></td><td><code>xhigh</code></td><td><code>prompt_prefix_hint</code></td><td>low</td><td>soft signal</td></tr>
+<tr><th colspan="9">Wave C</th></tr>
+<tr><td>9</td><td><code>xai</code></td><td><code>hermes</code> (openrouter, assumed)</td><td><code>grok</code></td><td><code>4.3</code></td><td>TBD</td><td>TBD</td><td>unknown</td><td>adapter &amp; reachability unverified — flag in spec</td></tr>
+<tr><th colspan="9">Wave D</th></tr>
+<tr><td>10</td><td><code>anthropic</code></td><td><code>claude-cli</code></td><td><code>claude-haiku</code></td><td><code>4-5</code></td><td><code>default</code> (no <code>--effort</code> flag applied)</td><td><code>none</code></td><td>high</td><td>docs: haiku-4-5 does NOT support adaptive thinking; <code>--effort</code> does not apply. Model self-report confirms unknown</td></tr>
+<tr><td>11</td><td><code>openai</code></td><td><code>codex-cli</code></td><td><code>gpt-5-codex-spark</code></td><td><code>5.3</code></td><td><code>xhigh</code> requested</td><td><code>cli_config</code></td><td>medium</td><td>model self-report claims support for <code>["low","medium","high","xhigh"]</code>; effective tier not behaviorally verified — may downgrade per per-model <code>reasoning_effort_mapping</code></td></tr>
+<tr><td>12</td><td><code>openai</code></td><td><code>codex-cli</code></td><td><code>gpt-5-mini</code></td><td><code>5.4</code></td><td><code>xhigh</code> requested</td><td><code>cli_config</code></td><td>low</td><td>model self-report <code>{"unknown": true}</code>; flag as may-downgrade</td></tr>
+<tr><td>13</td><td><code>google</code></td><td><code>agy-cli</code></td><td><code>gemini-3.1-flash-lite</code></td><td><code>3.1-flash-lite-preview</code></td><td><code>high</code> requested</td><td><code>model_name_suffix</code></td><td>low</td><td>docs explicitly flag <code>high</code> tier as <strong>dynamic</strong> (may downgrade); model self-report unknown</td></tr>
+<tr><td>14</td><td><code>alibaba</code></td><td><code>hermes</code></td><td><code>qwen3.6</code></td><td><code>3.6</code></td><td><code>xhigh</code></td><td><code>prompt_prefix_hint</code></td><td>low</td><td>soft signal</td></tr>
+</tbody>
+</table>
+
+<h2>Parallel scheduler</h2>
+
+<p>v1 seed runs as <strong>family-parallel single-cell dispatches</strong>. Scheduler maintains one queue per family; max 1 inflight per family. Codex models (<code>gpt-5.5</code>, <code>gpt-5.3-codex-spark</code>, <code>gpt-5.4-mini</code>) share the openai/codex queue and serialize against each other. With 5 families in Wave A and ~3min per cell average, 50 cells complete in ~30 min wall-clock.</p>
 
 <h2>Adversarial prompt patterns (cross-cutting)</h2>
 
@@ -165,62 +245,175 @@
 <pre>
 scripts/calibration/
   schema.py         # SQLite tables: cells, dispatches, scores, production_events
-  run_cell.py       # Single-cell dispatcher (lane, fixture, model, effort)
+  run_cell.py       # Single-cell dispatcher (lane, fixture, family, provider_cli, model_id, version, effort_requested)
   score_cell.py     # Per-lane scorer interface + implementations
   prompts/v1/&lt;lane&gt;/&lt;fixture-id&gt;.md   # locked v1 prompts
   ground-truth/v1/&lt;lane&gt;/&lt;fixture-id&gt;.yaml   # rubric + deterministic checks
   report.py         # SQLite → HTML matrix + per-lane + per-model
-  shadow_dispatch.py # shadow-routing harness for code-review + content-review
+  scheduler.py      # Family-parallel queue: max 1 inflight per family
+  shadow_dispatch.py # later: shadow-routing harness for code-review + content-review
 
 calibration/v1/&lt;date&gt;/
   results.db          # canonical SQLite
   results.jsonl       # canonical append-only
-  responses/&lt;cell-id&gt;.md   # raw model responses
+  responses/&lt;cell-key&gt;.md   # raw model responses, filename derived from structured fields
   reports/
-    matrix.html       # model × lane heatmap
+    matrix.html       # model × lane heatmap report
     per-lane/         # detailed lane comparison
     per-model/        # all lanes for one model
     regression.html   # quarter-over-quarter trends (populated from v2 on)
 </pre>
 
-<h3>SQLite schema sketch (v1)</h3>
+<h3>SQLite schema sketch (v1.1)</h3>
+
+<p>The old string-concatenated cell id is retired. The ledger stores structured fields directly. The model-run row key is <code>(family, provider_cli, model_id, version, effort_requested, run_date)</code>; the cell row also includes lane and fixture identity because each lane/fixture execution writes exactly one cell.</p>
 
 <pre>
 CREATE TABLE cells (
-  cell_id TEXT PRIMARY KEY,           -- &lt;lane&gt;-&lt;fixture-id&gt;-&lt;model&gt;@&lt;effort&gt;-&lt;run-date&gt;
   domain TEXT NOT NULL,               -- 'kubedojo' for v1
   lane TEXT NOT NULL,
   fixture_id TEXT NOT NULL,
+  fixture_version TEXT NOT NULL,
+  family TEXT NOT NULL,               -- 'anthropic' | 'openai' | 'google' | 'deepseek' | 'alibaba' | 'xai'
+  provider_cli TEXT NOT NULL,         -- 'claude-cli' | 'codex-cli' | 'agy-cli' | 'gemini-cli' | 'hermes'
   model_id TEXT NOT NULL,
-  effort TEXT NOT NULL,               -- 'low' | 'medium' | 'high' | 'xhigh' | 'default'
+  version TEXT NOT NULL,
+  effort_requested TEXT NOT NULL,     -- as requested by dispatch
+  effort_mechanism TEXT NOT NULL,     -- 'native_flag' | 'cli_config' | 'model_name_suffix' | 'prompt_prefix_hint' | 'none'
+  effort_confidence TEXT NOT NULL,    -- 'high' | 'medium' | 'low' | 'unknown'
+  effort_effective TEXT,              -- nullable; populated post-hoc if behaviorally measurable (e.g., codex usage telemetry)
   run_date TEXT NOT NULL,             -- ISO date
-  ledger_version TEXT NOT NULL        -- 'v1'
+  as_of_date TEXT NOT NULL,           -- source-doc/model-version freshness date
+  ledger_version TEXT NOT NULL,       -- 'v1.1'
+  PRIMARY KEY (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date
+  )
 );
 
 CREATE TABLE dispatches (
-  cell_id TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  lane TEXT NOT NULL,
+  fixture_id TEXT NOT NULL,
+  fixture_version TEXT NOT NULL,
+  family TEXT NOT NULL,
+  provider_cli TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  effort_requested TEXT NOT NULL,
+  run_date TEXT NOT NULL,
   task_id TEXT NOT NULL,
   dispatch_ts TEXT NOT NULL,
   response_path TEXT NOT NULL,        -- relative path under calibration/&lt;run&gt;/responses/
   latency_s REAL,
   cost_usd REAL,
-  PRIMARY KEY (cell_id, task_id),
-  FOREIGN KEY (cell_id) REFERENCES cells (cell_id)
+  PRIMARY KEY (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date,
+    task_id
+  ),
+  FOREIGN KEY (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date
+  ) REFERENCES cells (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date
+  )
 );
 
 CREATE TABLE scores (
-  cell_id TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  lane TEXT NOT NULL,
+  fixture_id TEXT NOT NULL,
+  fixture_version TEXT NOT NULL,
+  family TEXT NOT NULL,
+  provider_cli TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  effort_requested TEXT NOT NULL,
+  run_date TEXT NOT NULL,
   gate_name TEXT NOT NULL,            -- 'verifier_tier' | 'ground_truth_count' | 'hallucination_count' | ...
   gate_pass INTEGER NOT NULL,         -- 0 | 1
   score_value REAL,                   -- numeric where meaningful; NULL for binary
   scorer TEXT NOT NULL,               -- 'deterministic' | 'llm-judge:&lt;model&gt;' | 'manual'
-  PRIMARY KEY (cell_id, gate_name, scorer),
-  FOREIGN KEY (cell_id) REFERENCES cells (cell_id)
+  PRIMARY KEY (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date,
+    gate_name,
+    scorer
+  ),
+  FOREIGN KEY (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date
+  ) REFERENCES cells (
+    domain,
+    lane,
+    fixture_id,
+    fixture_version,
+    family,
+    provider_cli,
+    model_id,
+    version,
+    effort_requested,
+    run_date
+  )
 );
 
 CREATE TABLE production_events (
   event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  family TEXT NOT NULL,
+  provider_cli TEXT NOT NULL,
   model_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  effort_requested TEXT NOT NULL,
   event_type TEXT NOT NULL,           -- 'approved_stayed_t0' | 'approved_later_t3' | 'real_bug_caught' | ...
   pr_number INTEGER,
   occurred_at TEXT NOT NULL,
@@ -233,9 +426,13 @@ CREATE TABLE production_events (
 <table>
 <thead><tr><th>PR</th><th>Scope</th><th>Estimated effort</th></tr></thead>
 <tbody>
-<tr><td>PR 1 (next session)</td><td>Foundation: schema.py + run_cell.py + score_cell.py + 6 fixture prompts + 6 ground-truth files + report.py + self-test (1 fixture × 1 model end-to-end)</td><td>codex gpt-5.5 architect: ~30-45 min draft + dual cross-family review + fixup. Likely 600-1000 lines Python + 12 fixture files.</td></tr>
-<tr><td>PR 2</td><td>Fire the 25-cell v1 smoke suite. Commit <code>calibration/v1/&lt;date&gt;/</code> with results.db + results.jsonl + responses/ + generated reports.</td><td>25 cells × ~$0.05 = ~$1.25. 30-60 min wall-clock (parallelizable across providers).</td></tr>
-<tr><td>PR 3 (later)</td><td><code>shadow_dispatch.py</code>: production code-review + content-review shadow routing. Challenger reviews real PRs with NO merge authority; results land in <code>production_events</code> table.</td><td>Larger build; estimate after PR 1 lands.</td></tr>
+<tr><td>PR 1 (next dispatch)</td><td>Foundation: schema.py (with effort_mechanism + effort_confidence fields) + run_cell.py (single-cell dispatcher) + score_cell.py + 10 fixture prompts + 10 ground-truth files + report.py + family-parallel scheduler + self-test (1 fixture × 1 model end-to-end)</td><td>codex gpt-5.5 architect: ~45-60 min draft + dual cross-family review + fixup. Likely 800-1200 lines Python + 20 fixture files + 1 HTML template</td></tr>
+<tr><td>PR 2</td><td>Fire Wave A (50 cells, ~$2.50, ~30 min wall-clock with family-parallel scheduler). Commit <code>calibration/v1/&lt;date&gt;/</code> with results.db + results.jsonl + responses/ + generated HTML reports</td><td>30-60 min wall-clock</td></tr>
+<tr><td>PR 3</td><td>Fire Wave B (+30 cells, +~$1.50, ~20 min)</td><td>Sequential append to PR 2's results</td></tr>
+<tr><td>PR 4</td><td>Wave C (after grok adapter confirmation)</td><td>+10 cells</td></tr>
+<tr><td>PR 5</td><td>Wave D (+50 cells, +~$2.50)</td><td>Cost-frontier characterization</td></tr>
+<tr><td>PR 6+</td><td>Wave E effort-sweep cells, single-model adds as new models land, regression re-runs as model versions update</td><td>Long-running ledger maintenance</td></tr>
+<tr><td>Later PR</td><td><code>shadow_dispatch.py</code>: production code-review + content-review shadow routing</td><td>Larger build; estimate after Wave A lands</td></tr>
 </tbody>
 </table>
 
@@ -244,35 +441,46 @@ CREATE TABLE production_events (
 <table>
 <thead><tr><th>Question</th><th>Resolution</th></tr></thead>
 <tbody>
-<tr><td>Full matrix vs smoke first?</td><td>Smoke first (25 cells), not the 390-cell full matrix. Codex + gemini converged on this independently.</td></tr>
-<tr><td>MD-as-database (user's first instinct) vs SQLite/JSONL ledger?</td><td>SQLite/JSONL canonical; MD + HTML are generated reports. Codex's architectural correction; gemini agreed in round 2.</td></tr>
-<tr><td>Effort as separate dimension vs folded into model identity?</td><td>Folded: <code>model@effort</code> is the atomic row key. Avoids hidden averaging.</td></tr>
-<tr><td>Production-vs-calibration join formula?</td><td>Typed event ledger (approved_stayed_t0 / approved_later_t3 / real_bug_caught / hallucinated_blocker / silent_miss / verifier_failure), NOT a single multiplier. Gemini's first-pass <code>1/(1+patch_turns)</code> was rejected as too lossy.</td></tr>
-<tr><td>Shadow routing scope for v1?</td><td>Both code-review AND content-review from v1 (user decision). Code-review alone was the conservative option; user chose the broader scope.</td></tr>
-<tr><td>First domain?</td><td>KubeDojo. learn-ukrainian forks the harness once stable (user decision).</td></tr>
+<tr><td>MD-as-database vs SQLite/JSONL ledger?</td><td>SQLite/JSONL canonical; MD + HTML are generated reports.</td></tr>
+<tr><td>Production-vs-calibration join formula?</td><td>Typed event ledger (approved_stayed_t0 / approved_later_t3 / real_bug_caught / hallucinated_blocker / silent_miss / verifier_failure), NOT a single multiplier.</td></tr>
+<tr><td>Shadow routing scope?</td><td>Production code-review + content-review shadow routing is deferred until after Wave A lands. Shadow models have no merge authority; results land in <code>production_events</code>.</td></tr>
+<tr><td>First domain?</td><td>KubeDojo. learn-ukrainian forks the harness once stable.</td></tr>
 <tr><td>Schema scope?</td><td>Multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, etc.). Avoids cross-cutting refactor when learn-ukrainian ports.</td></tr>
-<tr><td>v1 challenger model?</td><td><code>deepseek-v4-pro</code> (user decision). Has both calibration-strong and production-weak data — directly tests whether the framework catches the gap.</td></tr>
+<tr><td>Symmetric matrix vs per-anchor lanes?</td><td>Test all anchors in all lanes (full matrix). Per-lane production-routing rosters are <em>advisory</em>, not test-design constraints</td></tr>
+<tr><td>Lanes: 5 or 10?</td><td>10. Original 5 missed code writing (was a prompt without a lane) and missed orchestrating/debugging/refactoring/summarization which are all production-routed</td></tr>
+<tr><td>Effort: single tier or sweep?</td><td>Highest effort first per anchor; lower efforts append later via single-cell adds (Wave E, orthogonal dimension)</td></tr>
+<tr><td>Anchor count: 4 + challenger, or 5 (one per family)?</td><td>5 (one per family). Dropping the openai/codex duplicate (spark moved to Wave D) opened a Wave A slot for qwen — broader family coverage. deepseek-v4-pro promoted from challenger to anchor</td></tr>
+<tr><td>Family-parallel rule?</td><td>Max 1 inflight per family. Codex models serialize against each other</td></tr>
+<tr><td>Effort_mechanism distinction?</td><td>Recorded per cell. native_flag / cli_config / model_name_suffix / prompt_prefix_hint / none</td></tr>
+<tr><td>Effort_confidence per model?</td><td>high / medium / low / unknown — sourced from official docs, source enums, and 2026-05-20 model self-report probes</td></tr>
+<tr><td>claude-haiku-4-5 effort?</td><td><code>default</code> (no <code>--effort</code> flag applied). Haiku does not support adaptive thinking</td></tr>
+<tr><td>Translation lane in v1?</td><td>No. learn-ukrainian forks the harness later</td></tr>
 </tbody>
 </table>
 
-<h2>Open questions for v2+</h2>
+<h2>Open questions</h2>
 
-<ul>
-  <li>n≥3 prompts per lane (statistical signal vs n=1 single-shot variance).</li>
-  <li>Cost-frontier visualization in HTML matrix — Pareto front per lane.</li>
-  <li>LLM-as-judge cross-validation: when do 2 judges disagree, and which judges correlate?</li>
-  <li>learn-ukrainian fixture pack (Ukrainian translation accuracy lane, IPA tag adherence, glossary-conformance scoring).</li>
-  <li>Quarterly regression dashboard: which models have drifted on locked prompts? Visualize.</li>
-  <li>Shadow-routing escalation policy: how many production events does a challenger need before earning a roster slot?</li>
-</ul>
+<table>
+<thead><tr><th>Open question</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>gpt-5.3-codex-spark</code> and <code>gpt-5.4-mini</code> actual effort ceiling</td><td>Self-reports differ (spark claims xhigh, mini admits unknown). Behavioral probe via codex usage telemetry would resolve. Track until Wave D cells run</td></tr>
+<tr><td><code>grok-4.3</code> adapter / hermes reachability</td><td>Wave C is deferred until this is confirmed. Need adapter wiring or hermes provider-route confirmation</td></tr>
+<tr><td>Wave E effort-sweep scope</td><td>Should hermes-routed models (deepseek, qwen, grok) be in the sweep, or skipped because the prompt-prefix-hint mechanism makes effort comparison meaningless? Deferred</td></tr>
+<tr><td><code>claude-opus-4-7</code> xhigh tier</td><td>xhigh is opus-4-7-exclusive (per docs). v1 Wave A locks opus at <code>max</code> (absolute ceiling). Should xhigh be a separate Wave A row to characterize the opus-4-7 xhigh-vs-max distinction? Deferred to v2</td></tr>
+</tbody>
+</table>
 
 <h2>References</h2>
 
 <ul>
+  <li>Anthropic adaptive-thinking docs: <a href="https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking">https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking</a></li>
+  <li>OpenAI Codex source enum: <a href="https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs"><code>codex-rs/protocol/src/openai_models.rs</code></a></li>
+  <li>Gemini thinking docs: <a href="https://ai.google.dev/gemini-api/docs/thinking">https://ai.google.dev/gemini-api/docs/thinking</a></li>
   <li>Deliberation thread: <code>ab channel tail calibration-framework --thread ee1fcc68669a4ba895817f9a2f732bf5</code></li>
   <li>Driving session: <code>docs/session-state/2026-05-20-session-34-rewrite-pivot-launch-plus-calibration-framework.html</code></li>
   <li>Prior production track-record data: <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Production track record</li>
   <li>Existing dispatch infrastructure (reused by the harness): <code>scripts/dispatch_smart.py</code> (JSONL audit + response_path persistence)</li>
+  <li>Hermes prompt-prefix implementation: <code>scripts/dispatch.py</code></li>
   <li>Decision-card convention: <code>.claude/rules/decision-card.md</code></li>
   <li>HTML-first artifact policy: <code>docs/migrations/html-first/plan.html</code> — this spec follows that policy as an AI→Human design doc.</li>
 </ul>
