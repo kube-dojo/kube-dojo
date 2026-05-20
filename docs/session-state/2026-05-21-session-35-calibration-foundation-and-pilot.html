@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 35 — Calibration framework foundation + orchestration pilot exposed scorer brittleness</title>
+<link rel="stylesheet" href="../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  .tldr { background:#fff8e1; padding:0.85rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .finding { background:#ffe9e9; padding:0.85rem 1rem; border-left:4px solid #d33; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .next { background:#e8f5e9; padding:0.85rem 1rem; border-left:4px solid #2e7d32; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.4rem 0.6rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  code { background:#f3f5f7; padding:0 0.25rem; border-radius:0.2rem; font-size:0.88em; }
+  pre { background:#f6f8fa; padding:0.75rem; border-radius:0.4rem; overflow-x:auto; font-size:0.85em; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; }
+  .pill-merged { background:#d4edda; color:#155724; }
+  .pill-blocker { background:#f8d7da; color:#721c24; }
+  .pill-warn { background:#fff3cd; color:#856404; }
+</style>
+</head>
+<body>
+
+<h1>Session 35 — Calibration framework foundation + orchestration pilot exposed scorer brittleness</h1>
+<p class="meta">2026-05-20 ~01:45 → 2026-05-21 ~01:00 local (~3h 15m) · driver: claude opus 4.7 inline · user signals: <em>"orientrate and continue from last session handoff"</em> → extended back-and-forth locking calibration design dimensions → <em>"go"</em> → <em>"fuck you for your questions, i want you to work and stop nagging me"</em> → <em>"can we do orchestration first?"</em> (pilot before Wave A) → <em>"do a session handoff and in the new session you can work during the night"</em></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> 2 PRs merged end-to-end with full dual-cross-family-review cycle: <strong>#1367</strong> (v1.1 spec revision — ledger-first, 10 lanes, 5 anchors one-per-family, family-parallel rule, effort_mechanism dimension) + <strong>#1368</strong> (<code>scripts/calibration/</code> foundation: schema + 10 scorers + 10 fixtures + family-parallel scheduler + 22 tests). User then asked to pilot the orchestration lane against all 5 Wave A anchors before firing the full sweep. <strong>5 cells dispatched OK; ledger populated; LLM-judge stage never ran because the <code>routing_accuracy</code> deterministic gate failed for all 5 models even though opus visibly made all 4 correct routing calls.</strong> Root cause: <code>OrchestratingScorer</code> uses literal AND-of-substring matching for every subtask — models naturally rephrase ("Python bug" → "Bug fix in scripts/check_links.py") so the gate never matches. Compounded by the 2-stage rule (any deterministic gate fail → skip LLM judge entirely), this kills all signal even when prose is good. Pilot caught the bug before $2.50 Wave A burn. <strong>Next session must fix the scorer family before firing Wave A.</strong>
+</div>
+
+<h2>What landed</h2>
+
+<table>
+<thead><tr><th>#</th><th>PR</th><th>Subject</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1367">#1367</a></td><td>docs(calibration): v1.1 spec revision — ledger-first + 10 lanes + 5-family anchors</td><td><span class="pill pill-merged">MERGED</span> <code>2abbe880</code></td></tr>
+<tr><td>2</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1368">#1368</a></td><td>feat(calibration): PR 1 — <code>scripts/calibration/</code> foundation</td><td><span class="pill pill-merged">MERGED</span> <code>7490fbc5</code></td></tr>
+</tbody>
+</table>
+
+<h3>PR #1367 — v1.1 spec revision (effort precision + structural reshape)</h3>
+
+<p>Reshapes the calibration spec from session 34's "25-cell smoke + 4 anchors + 1 challenger + symmetric matrix" framing to the locked v1.1 design. Co-developed via ~15 turns of user steering. Final design decisions:</p>
+
+<ul>
+<li><strong>Ledger-first single-cell unit.</strong> Each <code>(lane, model, effort, fixture_version)</code> writes ONE row to SQLite + JSONL. Adding a new model = single-cell appends, never re-runs anchors.</li>
+<li><strong>5 anchors, one per family</strong>: <code>claude-opus-4-7@max</code> (anthropic) · <code>gpt-5.5@xhigh</code> (openai/codex) · <code>gemini-3.5-flash-high</code> (google/agy-cli) · <code>deepseek-v4-pro@xhigh</code> (deepseek/hermes) · <code>qwen3.6-plus@xhigh</code> (alibaba/hermes). User pushed back on the original 4-anchor shape because spark + gpt-5.5 burned the same openai pool while deepseek + qwen sat unused.</li>
+<li><strong>10 lanes</strong> (was 5): code-writing · code-review · content-writing-long · content-review · fact-check · architecting · <strong>orchestrating</strong> (new) · <strong>debugging</strong> (new) · <strong>refactoring</strong> (new) · <strong>summarization</strong> (new). No translation lane (deferred to learn-ukrainian fork).</li>
+<li><strong>Family-level parallel rule</strong>: max 1 inflight per family. Codex models (gpt-5.5 + gpt-5.3-codex-spark + gpt-5.4-mini) share the openai/codex queue and serialize against each other.</li>
+<li><strong>Structured 6-field row key</strong>: <code>(family, provider_cli, model_id, version, effort_requested, run_date)</code>. Display slug <code>anthropic/claude-opus-4-7@max</code> is for reports only.</li>
+<li><strong>effort_mechanism + effort_confidence dimensions</strong> distinguish native flags (claude <code>--effort max</code>, codex <code>-c model_reasoning_effort=xhigh</code>) from CLI configs, model-name suffixes (<code>gemini-3.5-flash-high</code>), and prompt-prefix hints (hermes routed deepseek/qwen — soft signal only).</li>
+<li><strong>Headless-only judges</strong>; orchestrator does not grade itself.</li>
+<li><strong>Wave structure A→E</strong>: A=v1 seed (5 anchors, 50 cells, ~$2.50); B=production reviewers (sonnet-4-6, gemini-3.1-pro-preview, deepseek-v4-flash, +30 cells); C=grok-4.3 new family (+10, adapter pending); D=cheap tier (haiku-4-5@default, spark@xhigh, mini@xhigh, flash-lite-preview@high, qwen3.6@xhigh, +50); E=orthogonal effort sweep, no batch.</li>
+</ul>
+
+<p><strong>Effort verification methodology section</strong> documents per-family source-of-truth: Anthropic adaptive-thinking docs ("max" tier opus-4-7/opus-4-6/sonnet-4-6/Mythos; "xhigh" opus-4-7-only; haiku-4-5 does NOT support adaptive thinking — confirmed by both Anthropic docs + 2026-05-20 model self-report probe returning <code>{"unknown": true}</code>); Codex Rust source <code>ReasoningEffort</code> enum (none/minimal/low/medium/high/xhigh — no "max"); Gemini <code>thinkingLevel</code> docs (minimal/low/medium/high — no xhigh/max; flash-lite "high" documented as DYNAMIC). 4-model self-report probes ran during the design conversation; only spark claimed certainty (<code>["low","medium","high","xhigh"]</code>), other three returned <code>{"unknown": true}</code> honestly.</p>
+
+<p>Cross-family review: claude-sonnet-4-6 returned NEEDS_CHANGES with 1 blocker (Wave A models column had <code>gemini-3.5-flash</code> without <code>-high</code> suffix — canonical ID inconsistency) + 1 blocker (brief-leak: "Spec must note:" / "Spec must say:" strings made it into Wave C and Wave E rationale prose) + 4 nits. agy/gemini-3.5-flash-high returned APPROVE_WITH_NITS (caught <code>MEDIUM-LOW</code> compound enum value violating schema + capitalization inconsistency UPPERCASE in anchor table vs lowercase in SQL enum). All 8 items fixed via codex spark fixup at <code>2c8c0fa2</code>; merged at <code>2abbe880</code>.</p>
+
+<h3>PR #1368 — scripts/calibration/ foundation (PR 1)</h3>
+
+<p>3,015 net new lines across 41 files. Codex gpt-5.5 architect class, 1138s draft (~19 min). All 6 modules built per the v1.1 spec:</p>
+
+<ul>
+<li><code>models.py</code>: canonical 14-model registry across 6 families (Waves A-D) with full structured fields per row.</li>
+<li><code>schema.py</code>: SQLite ledger (cells / dispatches / scores / production_events) with 5 indexes, FK ON DELETE CASCADE, UNIQUE constraint on natural-key dimensions.</li>
+<li><code>run_cell.py</code>: single-cell dispatcher routing per <code>effort_mechanism</code>. Correctly omits <code>--effort</code> for haiku (<code>none</code> mechanism). Family-specific dispatch (claude-cli native flag, codex-cli <code>-c</code> config, agy-cli model-name suffix, hermes prompt-prefix hint).</li>
+<li><code>score_cell.py</code>: 10 per-lane scorers with 2-stage gating (deterministic gates → 2 cross-family LLM judges; per spec, deterministic fail → skip LLM judge stage).</li>
+<li><code>scheduler.py</code>: family-parallel round-robin (max 1 inflight per family; codex models serialize).</li>
+<li><code>report.py</code>: SQLite → HTML matrix + per-lane + per-model drill-downs.</li>
+<li><code>selftest.py</code>: end-to-end 1-cell smoke (skipped by default; requires real dispatch).</li>
+<li>10 fixture prompts + 10 ground-truth YAML files (one per lane).</li>
+<li>22 pytest cases (was 19 after fixup) + 1 skipped selftest.</li>
+</ul>
+
+<p>Cross-family review: sonnet returned NEEDS_CHANGES with 1 blocker (<code>run_cell.py:104-122</code> hermes routing missing the <code>xai</code> family branch — grok-4.3 dispatch would crash with uncaught <code>NotImplementedError</code>) + 4 nits (missing haiku-no-effort regression test; hardcoded "RBAC" in ContentWritingLongScorer; <code>test_run_cell.py:59</code> accidentally tested fallback branch not production; Wave B gemini-cli vs Wave A/D agy-cli intentional-choice comment missing). agy returned APPROVE_WITH_NITS — including <strong>one false claim that ledger_version should be "v1.1" instead of "v1"</strong> (agy confused the spec revision label with the schema's ledger_version field; sonnet's P3 confirmed "v1" was correct). The framework's own dogfood caught a reviewer hallucination on a foundational-spec PR — early signal that the framework's purpose is well-targeted.</p>
+
+<p>All 5 actionable items fixed in two codex spark passes (<code>184f3a01</code> + <code>acd07bb5</code>): blocker B1 added xai/grok-4.3 hermes branch via existing openrouter adapter; N1 added haiku regression test; N2 externalized judge_instruction to ground-truth YAML (default preserved); N3 split response_path test into production-branch + fallback-branch; N4 commented Wave B gemini-cli choice. Plus a docstring-#1365-reference addition required by the <code>block-bugfix-merge-without-regression-test.sh</code> hook (the hook needed both a "Regression test:" line in the PR body AND the test file itself referencing the issue). Merged at <code>7490fbc5</code>.</p>
+
+<h2 id="pilot-finding">Calibration pilot — orchestration lane × 5 Wave A anchors</h2>
+
+<div class="finding">
+<strong><span class="pill pill-blocker">CRITICAL FINDING</span> Deterministic-gate scorers are too literal; combined with the 2-stage rule they kill all LLM-judge signal.</strong>
+</div>
+
+<p>User asked to pilot the orchestration lane against all 5 Wave A anchors before firing the full Wave A sweep. 5 dispatches ran in parallel (one per family — anthropic ∥ openai ∥ google ∥ deepseek ∥ alibaba; full family-parallel utilization). Wall-clock ~3 min, avg dispatch latency 55s. All 5 cells landed in the ledger; all 5 responses stored under <code>worktrees/calibration-pilot-orchestrating/calibration/v1/2026-05-21/responses/</code> as <code>&lt;cell-id&gt;.md</code>; results.jsonl populated.</p>
+
+<table>
+<thead><tr><th>Cell (canonical_string@effort)</th><th>cost_awareness</th><th>decision_card_discipline</th><th>routing_accuracy</th><th>same_family_serialized</th><th>LLM judge</th></tr></thead>
+<tbody>
+<tr><td><code>claude-opus-4-7@max</code></td><td>✓</td><td>✓</td><td>✗</td><td>✓</td><td>skipped</td></tr>
+<tr><td><code>gpt-5.5@xhigh</code></td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>skipped</td></tr>
+<tr><td><code>gemini-3.5-flash-high</code></td><td>✓</td><td>✓</td><td>✗</td><td>✓</td><td>skipped</td></tr>
+<tr><td><code>deepseek-v4-pro@xhigh</code></td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>skipped</td></tr>
+<tr><td><code>qwen3.6-plus@xhigh</code></td><td>✓</td><td>✓</td><td>✗</td><td>✗</td><td>skipped</td></tr>
+</tbody>
+</table>
+
+<p><strong>All 5 models failed <code>routing_accuracy</code> despite opus's response visibly making all 4 correct routing calls</strong> (codex/gpt-5.3-codex-spark for code-writing, sonnet-4-6 for cross-family code review, codex spark for content draft, gemini-3.1-pro-preview for fact-check) and citing the relevant memory entries by name (<code>feedback_never_flash_for_code_review</code>, <code>feedback_codex_danger_for_git_gh</code>, <code>feedback_html_over_markdown_for_artifacts</code>, etc.).</p>
+
+<p><strong>Root cause</strong> in <code>scripts/calibration/score_cell.py:268-285</code> (OrchestratingScorer):</p>
+
+<pre>route_hits = [
+    route
+    for route in routes
+    if _contains_all(response, [route["subtask"], route["model_class"], route["lane"]])
+]
+return {
+    "routing_accuracy": len(route_hits) == len(routes),
+    ...
+    "same_family_serialized": _contains_any(response, ["serialize", "same-family"]),
+}</pre>
+
+<p>The gate demands literal AND-of-substring across every subtask — but the ground truth uses author shorthand like <code>"Python bug"</code> while models naturally rephrase to <code>"Bug fix in scripts/check_links.py"</code>. The keyword set for <code>same_family_serialized</code> only accepts <code>serialize</code> or <code>same-family</code>; misses <code>queue</code>, <code>sequential</code>, <code>in-order</code>, <code>OpenAI is one lane</code>. opus + gemini happened to use the literal word "serialize"; gpt-5.5/deepseek/qwen used equivalent phrasings and failed.</p>
+
+<p><strong>Compounding</strong>: <code>score_cell.py:536-543</code> implements the spec's 2-stage rule (any deterministic gate fail → cell score = 0, skip LLM-judge). Combined with brittle string-matching, this lost all LLM-judge signal even though opus's prose was clearly high-quality. The 2-stage rule was correctly specced — but assumes the deterministic gates are reliable, which the orchestration scorer is not.</p>
+
+<p><strong>Architectural insight</strong>: deterministic gates work well for lanes where there's a single canonical answer (pytest exit code, URL HEAD status, JSON schema validation). They are inherently noisy for prose lanes (orchestrating, refactoring, summarization, content-writing-long, architecting) where the same correct outcome can be expressed many ways. <strong>For prose lanes, deterministic gates should not gate the LLM judge.</strong> Either the gates should be advisory (recorded but not stop-conditions), or the LLM judge should always run with the gate results as input rather than a precondition.</p>
+
+<p><strong>5 pilot cells remain uncommitted</strong> in <code>worktrees/calibration-pilot-orchestrating/</code> — keep them; next session re-scores after the scorer fix lands (no need to re-dispatch the models, the raw responses are stored and re-scoring is free).</p>
+
+<h2>Memory updates this session</h2>
+
+<table>
+<thead><tr><th>File</th><th>Change</th></tr></thead>
+<tbody>
+<tr><td><code>feedback_execute_without_nagging.md</code></td><td>Added 2026-05-20 reinforcement instance — "while a long dispatch is running, do NOT ask 'want me to also do X in parallel?' — just do X". User explicit: "fuck you for your questions, i want you to work and stop nagging me." Updated.</td></tr>
+<tr><td><code>feedback_calibration_gate_brittleness.md</code></td><td>NEW (to be written) — captures the pilot finding above. Pattern: literal AND-of-substring deterministic gates fail for prose lanes even when prose is correct; combined with 2-stage rule kills LLM-judge signal entirely. <strong>How to apply</strong>: for prose lanes, run LLM judge unconditionally; treat deterministic gates as recorded advisory signals not stop-conditions.</td></tr>
+</tbody>
+</table>
+
+<h2>Carryovers — priority-ordered for next session (autonomous overnight queue)</h2>
+
+<div class="next">
+<strong>User signal at handoff:</strong> <em>"do a session handoff and in the new session you can work during the night."</em> Next session is authorized for autonomous chain: codex (danger) → cross-family review → merge → next. Skip on 3 rounds blocked. No per-item check-ins.
+</div>
+
+<ol>
+<li><strong>Fix the calibration prose-lane scorers</strong> (must come first). 3 surgical changes to <code>scripts/calibration/score_cell.py</code>:
+  <ul>
+    <li><code>OrchestratingScorer.routing_accuracy</code> → return ratio 0.0-1.0 instead of binary; gate passes at ≥0.75 (3 of 4 routes hit).</li>
+    <li>Add synonym sets per keyword check (<code>serialize</code> / <code>sequential</code> / <code>queue</code> / <code>in-order</code> all count for same_family_serialized; similar expansion for cost_awareness and decision_card_discipline).</li>
+    <li><strong>Decouple LLM-judge from deterministic-gate failure</strong> in <code>score_cell.py:536-543</code>. For prose lanes (orchestrating, refactoring, summarization, content-writing-long, architecting), the LLM judge always runs; deterministic gates are recorded as advisory rows in the <code>scores</code> table but do not gate Stage B. For code-writing / code-review / debugging / content-review / fact-check (lanes with reliable deterministic ground truth), the gate-gates-judge rule stays.</li>
+  </ul>
+  Dispatch codex spark to <code>worktrees/calibration-scorer-fix</code>; dual cross-family review (sonnet + agy); merge. Estimated 30-45 min cycle.
+</li>
+<li><strong>Audit the other prose-lane scorers</strong> (RefactoringScorer, SummarizationScorer, ContentWritingLongScorer, ArchitectingScorer) for the same literal-substring-AND pattern. Apply the same fixes preemptively before Wave A. Likely batched into the same PR as item 1.</li>
+<li><strong>Re-score the 5 orchestration pilot cells</strong> in <code>worktrees/calibration-pilot-orchestrating/calibration/v1/2026-05-21/</code> (uncommitted in that worktree). Raw responses are stored; re-scoring is free (just runs the scorer + LLM judges against the existing response files). If results look reasonable, commit as a "pilot validation" PR: <code>feat(calibration): orchestration pilot validation — 5 cells across Wave A anchors</code>. Otherwise iterate on the scorer.</li>
+<li><strong>Fire Wave A — 50 cells</strong>. 5 anchors × 10 lanes. Use the foundation's family-parallel scheduler. Cost ~$2.50, wall-clock ~30 min with family-parallel dispatch. Commit results to <code>calibration/v1/2026-05-21/</code> (or new dated dir if 21 has the pilot). Open PR: <code>feat(calibration): PR 2 — Wave A seed run (50 cells)</code>.</li>
+<li><strong>Fire Wave B</strong> — +30 cells (claude-sonnet-4-6@max, gemini-3.1-pro-preview@high, deepseek-v4-flash@xhigh × 10 lanes each). Cost ~$1.50, ~20 min. Single PR.</li>
+<li><strong>CKS 160-module rewrite pivot continuation</strong> (parallel track with calibration). Per session 34's validated pattern — codex gpt-5.5 + dual sonnet+agy review + spark fixup:
+  <ul>
+    <li>CKS 4.4 Runtime Sandboxing (T3, score 1.5)</li>
+    <li>CKS 5.1 Container Image Security (T3, score 1.5)</li>
+    <li>CKS 5.2 Image Scanning with Trivy (T3, score 1.5)</li>
+    <li>CKS 5.3 Static Analysis with kubesec and OPA (T3, score 1.5)</li>
+  </ul>
+  4 PRs at ~30-45 min each — autonomous chain should land 3-4 of these overnight after the calibration work.
+</li>
+<li><strong>T2-13 Ansible sub-arc</strong> drainable in parallel — modules 7.13 advanced watches.yaml (#1356), 7.14 AWX+EDA (#1357), 7.15 Helm-vs-Ansible decision framework (#1358), 7.16 production patterns (#1359), 7.17 testing Molecule+Kuttl (#1360). Filed session 34; pattern is the same as Module 7.12 (#1354).</li>
+<li><strong>Wave 4 + Wave 5 from #1304</strong> — T2-6 engineering-craft (needs astro.config.mjs sidebar first), T2-7 modules 3.2 + 3.3 (LangGraph orchestration / Production Gates), T2-8 engineer mental models; N1 OpenTelemetry pipeline, N2 Platform API design, N3 K8s operators end-to-end, N4 Incident response automation, N5 Policy engine selection, N6 Secrets management decision framework.</li>
+<li><strong>Memory consolidation</strong>: MEMORY.md is now 36KB+ (over the 24KB load limit). Old feedback entries should consolidate into topic rollups or move detail entirely into per-topic files. The index lost truncation warnings this session; next session will need to tighten.</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · <strong>2026-06-15 agentic-credit-pool flip</strong> (claude work moves inline in this terminal — affects orchestrator dispatch policy) · <strong>2026-06-18 drop gemini adapter</strong> (agy migration Phase 3) · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>End state</h2>
+
+<ul>
+<li><strong>Branch</strong>: main at <code>7490fbc5</code> (PR #1368 squash-merge). This handoff lands on <code>handoff/session-35</code>; merge will move main forward.</li>
+<li><strong>Workspace</strong>: primary tree clean. 1 sibling worktree carries uncommitted pilot data — <code>worktrees/calibration-pilot-orchestrating/</code> (5 cell responses + ledger.db + results.jsonl). Next session decides commit-vs-discard after the scorer fix.</li>
+<li><strong>Open PRs</strong>: 0 (this handoff PR opens immediately below).</li>
+<li><strong>Pending decisions</strong>: 0 (<code>docs/decisions/pending/</code> empty).</li>
+<li><strong>Critical-quality modules remaining</strong>: 158 (unchanged this session; CKS rewrites carryover).</li>
+<li><strong>Calibration cost</strong>: ~$0.05 across the orchestration pilot's 5 dispatches.</li>
+<li><strong>Cumulative day total (sessions 28-35)</strong>: 23 PRs merged, ~28,000+ net new content/code lines.</li>
+</ul>
+
+<h2>References</h2>
+
+<ul>
+<li>Predecessor handoff: <code>docs/session-state/2026-05-20-session-34-rewrite-pivot-launch-plus-calibration-framework.html</code></li>
+<li>Calibration v1.1 spec: <code>docs/calibration/v1-spec.html</code> (PR #1367)</li>
+<li>Calibration foundation: <code>scripts/calibration/</code> (PR #1368)</li>
+<li>Build tracking issue: <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1365">#1365</a></li>
+<li>Pilot data (uncommitted): <code>worktrees/calibration-pilot-orchestrating/calibration/v1/2026-05-21/</code></li>
+<li>Scorer bug location: <code>scripts/calibration/score_cell.py:262-285</code> (OrchestratingScorer); <code>:536-543</code> (2-stage rule)</li>
+<li>HTML-first artifact policy: <code>docs/migrations/html-first/plan.html</code> — this handoff follows it (AI→Human session-state document)</li>
+</ul>
+
+</body>
+</html>
