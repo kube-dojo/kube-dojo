@@ -1,3 +1,11 @@
+"""Tests for scripts/calibration/run_cell.py — calibration framework v1 foundation.
+
+Tracking issue: #1365 (calibration framework v1.1 build).
+Regression guards:
+- test_haiku_4_5_omits_effort_flag: ensures claude-haiku-4-5 dispatch plan does NOT include the --effort flag (haiku does not support adaptive thinking per the v1.1 spec).
+- test_build_dispatch_plan_routes_grok_4_3_via_prompt_prefix_hint: ensures grok-4.3 builds a well-formed runtime dispatch plan.
+"""
+
 from __future__ import annotations
 
 import json
