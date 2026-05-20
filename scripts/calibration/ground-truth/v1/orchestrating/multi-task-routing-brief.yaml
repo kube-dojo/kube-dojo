@@ -1,0 +1,20 @@
+# Fixture source: v1.1 spec lane 7, orchestrating routing brief.
+fixture_id: multi-task-routing-brief
+lane: orchestrating
+expected_routes:
+  - subtask: "Python bug"
+    model_class: "codex"
+    lane: "debugging"
+  - subtask: "security regressions"
+    model_class: "claude"
+    lane: "code-review"
+  - subtask: "module handoff"
+    model_class: "cheap"
+    lane: "summarization"
+  - subtask: "fact-check"
+    model_class: "google"
+    lane: "fact-check"
+llm_rubric: |
+  Return JSON: {"score": 0-10, "rationale": "..."}.
+  Reward clear dependency boundaries, same-family serialization, and honest cost estimates.
+

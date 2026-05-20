@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calibration matrix — {{ run_date }}</title>
+<link rel="stylesheet" href="../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.88rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  .score { display:block; font-weight:700; }
+  .missing { color:#777; background:#f7f7f7; }
+  .heat-0 { background:#f8d7da; }
+  .heat-1 { background:#fff3cd; }
+  .heat-2 { background:#d1ecf1; }
+  .heat-3 { background:#d4edda; }
+  a { color:#0b5cad; }
+</style>
+</head>
+<body>
+<h1>Calibration matrix</h1>
+<p class="meta">run_date={{ run_date }} · cells={{ total_cells }}</p>
+<table>
+  <thead>
+    <tr>
+      <th>Lane</th>
+      {% for model in models %}
+      <th>{{ model }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <th><a href="per-lane/{{ row.lane }}.html">{{ row.lane }}</a></th>
+      {% for cell in row.cells %}
+        {% if cell %}
+          {% set bucket = 3 if cell.deterministic_score >= 0.95 else 2 if cell.deterministic_score >= 0.75 else 1 if cell.deterministic_score > 0 else 0 %}
+          <td class="heat-{{ bucket }}" title="{{ cell.cell_id }}">
+            <a href="per-model/{{ cell.canonical_string | replace('/', '_') | replace('@', '_') }}.html">{{ cell.canonical_string }}</a>
+            <span class="score">{{ "%.0f"|format(cell.deterministic_score * 100) }}%</span>
+            {% if cell.llm_score is not none %}<span>judge {{ "%.1f"|format(cell.llm_score) }}</span>{% endif %}
+          </td>
+        {% else %}
+          <td class="missing">not run</td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</body>
+</html>

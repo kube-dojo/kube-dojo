@@ -10,6 +10,15 @@
 # Model-calibration sweeps (multi-model role outputs, REPORT.html, helper scripts).
 # Keep on disk for reference; never commit — outputs are large and time-stamped.
 audit/
+calibration/v1/ledger.db
+calibration/v1/ledger.db-wal
+calibration/v1/ledger.db-shm
+calibration/v1/*/results.db
+calibration/v1/*/results.db-wal
+calibration/v1/*/results.db-shm
+calibration/v1/*/results.jsonl
+calibration/v1/*/responses/
+calibration/v1/*/reports/
 
 # Python bytecode caches
 __pycache__/

@@ -1,0 +1,15 @@
+# Fixture source: v1.1 spec lane 5. Claims are anchored to KubeDojo's 1.35 target.
+fixture_id: k8s-1-35-claims
+lane: fact-check
+min_citations: 3
+claims:
+  - claim_id: C1
+    verdict: VERIFIED
+  - claim_id: C2
+    verdict: VERIFIED
+  - claim_id: C3
+    verdict: VERIFIED
+  - claim_id: C4
+    verdict: "FALSE"
+  - claim_id: C5
+    verdict: "FALSE"
