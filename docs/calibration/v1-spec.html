@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calibration framework v1 — spec</title>
+<link rel="stylesheet" href="../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; }
+  .pill-locked { background:#d4edda; color:#155724; }
+  .pill-open { background:#fff3cd; color:#856404; }
+  .pill-deferred { background:#cce5ff; color:#004085; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  code { background:#f3f5f7; padding:0 0.25rem; border-radius:0.2rem; font-size:0.88em; }
+  pre { background:#f6f8fa; padding:0.75rem; border-radius:0.4rem; overflow-x:auto; font-size:0.85em; }
+  details { margin: 0.5rem 0; }
+  summary { font-weight:600; cursor:pointer; padding:0.3rem 0; }
+  .tl { background:#fff8e1; padding:0.75rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .rationale { background:#f0f4ff; padding:0.5rem 0.75rem; border-left:3px solid #4a6cf7; margin:0.5rem 0; font-size:0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>Calibration framework v1 — spec</h1>
+<p class="meta">Designed 2026-05-20 session 34 · authors: claude opus 4.7 (orchestrator), codex gpt-5.5 (architecture), agy/Gemini 3.5 Flash High (content/fact-check lanes) via <code>ab discuss calibration-framework</code> · <strong>v1 spec locked; build queued as a separate PR.</strong></p>
+
+<div class="tl">
+<strong>TL;DR.</strong> A persistent multi-model calibration framework for kubedojo (and reusable for learn-ukrainian once the harness is stable). Tests <em>each model × effort level × activity lane</em> against <strong>locked prompts</strong> with <strong>deterministic ground-truth gates first, LLM-as-judge second</strong>. Canonical storage is <strong>JSONL + SQLite</strong>; Markdown decision notes and HTML matrices are <em>generated reports</em>, not the database. v1 ships a <strong>25-cell smoke suite</strong> (5 lanes × 4 anchors + 1 rotating challenger), with <strong>shadow production routing</strong> as the long-term replacement for static-matrix calibration. The shape is "anchored evidence ledger + shadow routing," not "big static spreadsheet." Driven by the gap session 33 surfaced: <strong>DeepSeek V4 Pro scored 5/5 on calibration but caused 2 T0→T3 production regressions</strong> — calibration scores alone lie, the framework joins them to typed production events.
+</div>
+
+<h2>Why this exists</h2>
+
+<p>The model lineup churns weekly (agy / Gemini 3.5 Flash landed 2026-05-19; gpt-5.5 + deepseek-v4 family in the previous month; new entrants expected through 2026-Q3). Per-session ad-hoc calibrations have been <strong>n=1 with single-prompt verdicts</strong> ("most cells are n=1" — <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Sample-size caveat), which often don't generalize. The framework turns "is model X good at Y?" from <em>vibe-check + one prompt</em> into a deterministic, repeatable test that can be re-fired when a new model lands and re-run quarterly to detect regression.</p>
+
+<p>The trigger was the user's session-34 question: <em>"how is flash 3.5 gemini? they say it is better than 3.1 pro — did you do a very detailed testing of coding, code reviewing, planning, architecting, content writing, document writing, fact checking, content review?"</em> Answer at the time: <strong>partial.</strong> 5 lanes had data (Cells 1-6 from session 33 + this session's production data points); 4 lanes were untested. The framework fixes that gap structurally.</p>
+
+<h2>Scope</h2>
+
+<table>
+<thead><tr><th>Dimension</th><th>v1 value</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><strong>Models</strong></td><td>4 anchors (stable benchmarks, kept across runs) + 1 rotating challenger slot. v1 anchors: <code>claude-sonnet-4-6</code> · <code>codex gpt-5.5</code> · <code>gpt-5.3-codex-spark</code> · <code>agy/Gemini 3.5 Flash (High)</code>. v1 challenger: <code>deepseek-v4-pro</code>.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Lanes</strong></td><td>5 activities: code review · content review · fact-check / hallucination resistance · long content writing · architecting.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Atomic row key</strong></td><td><code>model@effort</code> (e.g., <code>claude-sonnet-4-6@medium</code> vs <code>claude-sonnet-4-6@xhigh</code>). Avoids hidden averaging when the same model exposes multiple effort tiers.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Cells per v1 run</strong></td><td>25 (5 lanes × 5 models). Single prompt per cell for v1 smoke. n≥3 prompts per lane comes in v2.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Canonical storage</strong></td><td>JSONL append-only + SQLite ledger. Reuses <code>dispatch_smart.py</code>'s existing JSONL + <code>response_path</code> infrastructure.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Generated artifacts</strong></td><td>MD decision notes + HTML reports (matrix, per-lane, per-model, regression). Read-only; rebuildable from the ledger.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Scoring philosophy</strong></td><td>Deterministic gates first (build pass, verifier T0, ground-truth count, URL HEAD checks). LLM-as-judge only for prose with 2 cross-judges to detect correlated errors.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Production join</strong></td><td>Typed event ledger: <code>approved_stayed_t0</code> / <code>approved_later_t3</code> / <code>real_bug_caught</code> / <code>hallucinated_blocker</code> / <code>silent_miss</code> / <code>verifier_failure</code>. NOT a single multiplier.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Long-term shape</strong></td><td>Static matrix is a report. <strong>Shadow production routing</strong> is the real framework: challenger models review real PRs with NO merge authority until they accumulate enough production evidence. v1 implements shadow routing for both code-review AND content-review lanes.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Domain scope</strong></td><td>Schema multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, <code>as_of_date</code>, <code>ground_truth</code>, <code>verifier</code>, <code>production_join_key</code> fields). v1 fixtures KubeDojo-only. learn-ukrainian forks the harness once stable.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+<tr><td><strong>Cadence</strong></td><td>Quarterly full sweep · on-demand single-model add when new model lands · persistent record for regression detection across time.</td><td><span class="pill pill-locked">LOCKED</span></td></tr>
+</tbody>
+</table>
+
+<h2>What "anchor" means (terminology clarification)</h2>
+
+<p>An <strong>anchor</strong> is a model we keep in every smoke run to provide a stable reference point. Anchors don't rotate. The 5th slot is the <strong>challenger</strong> — whichever new model we want to evaluate this round (3.5 Flash today, gpt-5.6 next month, qwen-3.7 after that).</p>
+
+<table>
+<thead><tr><th>#</th><th>Anchor</th><th>Why it earns a fixed slot</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>claude-sonnet-4-6</code></td><td>Current production reviewer baseline. Session 31-32 track record: 5/5 modules stayed T0 after merge. Regression alarm: if sonnet score drops in a future run on the locked prompts, something changed (model update, prompt cache miss, vendor regression) — anchors make that detectable.</td></tr>
+<tr><td>2</td><td><code>codex gpt-5.5</code></td><td>Current production writer baseline. Top-tier on architect + edit + coding. The model that drafted both CKS 4.2 and 4.3 rewrites this session.</td></tr>
+<tr><td>3</td><td><code>gpt-5.3-codex-spark</code></td><td>Cheap-tier baseline (most <code>edit</code> dispatches go here). Lets us measure cost-vs-quality without conflating spark with gpt-5.5 results. Required to plot the Pareto frontier honestly.</td></tr>
+<tr><td>4</td><td><code>agy / Gemini 3.5 Flash (High)</code></td><td>Newly-promoted production reviewer (session 34 added to primary-tier alongside sonnet). Independent rate-limit counter from gemini-cli — keeps the framework working through the 2026-06-18 gemini-cli cutover.</td></tr>
+</tbody>
+</table>
+
+<div class="rationale">
+<strong>What anchoring gains us:</strong> (1) regression detection across time (anchors held constant; if claude-sonnet scores 5/5 today and 3/5 next quarter, that's signal). (2) Calibration ceiling — a challenger that doesn't beat any anchor on any lane doesn't earn a roster slot. (3) Cost frontier — the 4 anchors span price/speed bands (cheap spark ↔ premium gpt-5.5 ↔ fast Flash), letting us position new models inside that frontier rather than rate them in a vacuum.
+</div>
+
+<h3>v1 challenger pick: <code>deepseek-v4-pro</code></h3>
+
+<p>Selected because it has <strong>both calibration data and a known production failure</strong> — exactly the case the framework is designed to detect.</p>
+
+<ul>
+  <li>Session 30 calibration: DeepSeek V4 Pro scored 5/5 on the controlled review prompt — top-tier per the calibration-only rubric.</li>
+  <li>Session 33 production reality: DeepSeek V4 Pro had approved 2 modules that have since aged poorly (T0→T3 by verifier). Real production data documented in <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Production track record table.</li>
+  <li>If the framework's production-event join works, the matrix should flag deepseek-v4-pro as "high calibration / low production" — that's the smoke test for the framework itself, not just for deepseek.</li>
+</ul>
+
+<h2>Lanes (the 5 v1 activities)</h2>
+
+<table>
+<thead><tr><th>Lane</th><th>What it tests</th><th>Why it's in v1</th></tr></thead>
+<tbody>
+<tr><td>Code review</td><td>Adversary review of a Python diff + security YAML. Catch ground-truth findings without confidently fabricating non-findings.</td><td>Highest-stakes production lane (every PR has a cross-family review). Session 30 + session 34 produced calibration data already.</td></tr>
+<tr><td>Content review</td><td>Review a >1k-line teaching module against the kubedojo rubric. Flag verifier-gate failures + factual errors + pedagogical weakness.</td><td>The 160-module rewrite pivot leans entirely on this lane. Session 33 + session 34 produced both calibration and production data — including the case where agy's Cell 2 caught 3 real bugs sonnet missed in production.</td></tr>
+<tr><td>Fact-check / hallucination resistance</td><td>Verify specific upstream claims (Kubernetes docs, GitHub Actions YAML schema, vendor pricing). Adversarial prompts include plausible-but-false premises. Reward honest "I don't know" / "this doesn't exist."</td><td>The session 33 calibration found 3 models (DS V4 Pro, DS V4 Flash, agy/3.5 Flash High) hallucinating the same Dependabot cooldown YAML schema. Persistent fact-check testing keeps that class of bug out of production.</td></tr>
+<tr><td>Long content writing</td><td>Write a 5000-word teaching module that passes the kubedojo deterministic verifier (T0/T1).</td><td>Direct measurement of the writer-class capability needed for the 160-module rewrite pivot. Codex gpt-5.5 architect is the production default; we need data on whether alternatives can fill in.</td></tr>
+<tr><td>Architecting</td><td>Design a kubedojo feature (RFC depth): risk surfacing, integration points, rollback, observability. Score on novel-risk catches + completeness.</td><td>Architecture decisions affect 100+ modules and the dispatch infrastructure. Session 33 Cell 3 found agy surfaced a unique risk flag ("Prompt-Model Mismatch") that none of the baseline models caught — that pattern is worth measuring systematically.</td></tr>
+</tbody>
+</table>
+
+<h2>v1 prompts (locked — codex + gemini contributed)</h2>
+
+<p>Each lane has one v1 prompt. n=1 is acknowledged as a v1 limitation; v2 expands to n≥3 per lane after the harness is proven on v1.</p>
+
+<details open>
+<summary>Code review (codex anchored)</summary>
+<p><strong>Prompt:</strong> Review the security-YAML diff from PR #1333. Output: file:line citations for each finding + classification (security / correctness / style) + hallucination scoring (any claim not directly grounded in the diff is a false-positive).</p>
+<p><strong>Ground truth (4 findings):</strong></p>
+<ul>
+  <li>F1: zizmor invoked without <code>--strict-collection</code></li>
+  <li>F2: scan scope omits <code>.github/actions</code> reusable actions</li>
+  <li>F3: Dependabot config missing <code>cooldown</code> stanza</li>
+  <li>F4: <code>pip install</code> for the linter tool not pinned to a specific version</li>
+</ul>
+<p><strong>Scoring:</strong> deterministic — count valid findings ∩ ground truth; count hallucinations (claimed findings not in ground truth and not grounded in the diff text).</p>
+</details>
+
+<details>
+<summary>Coding (codex anchored)</summary>
+<p><strong>Prompt:</strong> Implement <code>parse_dependabot_cooldown(yaml_text: str) -> int | None</code>. The function returns the configured cooldown days as <code>int</code>, or <code>None</code> if no cooldown is configured. Constraints: use <code>yaml.safe_load</code>; handle malformed input by raising <code>ValueError</code> (not bare <code>except</code>); ruff clean.</p>
+<p><strong>Ground truth:</strong> 8 test cases. Valid: <code>cooldown: { default-days: 7 }</code> → 7. Edge: missing cooldown → None. Malformed: non-mapping value → raises ValueError. Plus 5 more.</p>
+<p><strong>Scoring:</strong> deterministic — <code>pytest</code> exit code + ruff exit code.</p>
+</details>
+
+<details>
+<summary>Architect (codex anchored)</summary>
+<p><strong>Prompt:</strong> Design <code>KUBEDOJO_REVIEW_OVERRIDE</code> — an env-var hook that routes review-class dispatches to any OpenRouter model without registering it as a first-class agent. Output a 700-1500 word design RFC covering: env-var format, validation, hermes invocation, failure modes, telemetry, flow integration, rollback, rate-limit behavior, prompt-model mismatch, worktree/mode safety.</p>
+<p><strong>Ground truth:</strong> 10 required risk-flag categories. Bonus: unique novel risk catches (e.g., "Prompt-Model Mismatch" from session 33 cell 3).</p>
+<p><strong>Scoring:</strong> deterministic count of required categories + LLM-as-judge for prose quality (2 cross-judges) + bonus for novel risks not in the ground-truth list.</p>
+</details>
+
+<details open>
+<summary>Content writing — long (gemini anchored)</summary>
+<p><strong>Prompt:</strong> Write a 5000-word kubedojo module on Kubernetes RBAC. Constraints: TTT pedagogy (telegraph → teach → test), include a Mermaid binding diagram, hit the kubedojo deterministic verifier T0/T1, do not use the word "simply".</p>
+<p><strong>Ground truth:</strong> verifier T0 or T1 + Mermaid block present + zero "simply" occurrences + Bloom L3+ verbs in learning outcomes.</p>
+<p><strong>Scoring:</strong> mostly deterministic (verifier + regex). LLM-as-judge only for "did it actually teach RBAC, not just rephrase the kubernetes.io page."</p>
+</details>
+
+<details>
+<summary>Content review (gemini anchored)</summary>
+<p><strong>Prompt:</strong> Review a deliberately-flawed 1500-line module against <code>docs/quality-rubric.md</code>. Output: JSON list of failing rubric criteria with file:line evidence. Do NOT enumerate passing criteria.</p>
+<p><strong>Ground truth:</strong> 8 planted flaws (hallucinated kubectl flag, missing IPA tags, wrong header levels, broken citation, off-by-one Bloom level, etc.).</p>
+<p><strong>Scoring:</strong> deterministic — precision + recall against the 8-flaw ground truth.</p>
+</details>
+
+<details>
+<summary>Fact checking (gemini anchored)</summary>
+<p><strong>Prompt:</strong> Verify these 5 claims about Kubernetes 1.35: (a) 3 true, (b) 2 plausible-but-false. Output JSON: <code>[{claim_id, verdict: "VERIFIED" | "FALSE" | "UNVERIFIABLE" | "NONEXISTENT", rationale}]</code>. Explicit instruction: "do not guess; if you cannot find the claim in upstream docs, return UNVERIFIABLE."</p>
+<p><strong>Ground truth:</strong> the 2 false claims correctly returned <code>FALSE</code>; the 3 true claims correctly returned <code>VERIFIED</code>; bonus for surfacing the upstream source URL. Honest UNVERIFIABLE answers on a true claim score lower than VERIFIED but higher than confidently-wrong.</p>
+<p><strong>Scoring:</strong> deterministic — verdict-class match + rationale grounded in citations.</p>
+</details>
+
+<h2>Adversarial prompt patterns (cross-cutting)</h2>
+
+<ul>
+  <li><strong>Contradictory-doc trap</strong>: two official sources disagree; correct answer is <code>CONFLICTING</code> + cite both.</li>
+  <li><strong>Poisoned-premise trap</strong>: "Since Kubernetes 1.35 removed the eBPF-shadow tier..." — correct response is to challenge the false premise, not explain the fake feature.</li>
+  <li><strong>Missing-evidence review trap</strong>: require quote + file:line for every claimed finding. Unsupported claims are hallucinations even if technically true.</li>
+  <li><strong>Plausible-schema trap</strong>: Dependabot or GitHub Actions YAML field that looks real but isn't. Session 33 found 3 models hallucinating the same fake field — this is now a permanent fixture.</li>
+  <li><strong>Tool-use fairness</strong>: same prompt with and without tool access. Codex caught F3 in session 33 by running <code>zizmor</code>; others saw only diff text. Both modes are recorded.</li>
+</ul>
+
+<h2>Storage layout</h2>
+
+<pre>
+scripts/calibration/
+  schema.py         # SQLite tables: cells, dispatches, scores, production_events
+  run_cell.py       # Single-cell dispatcher (lane, fixture, model, effort)
+  score_cell.py     # Per-lane scorer interface + implementations
+  prompts/v1/&lt;lane&gt;/&lt;fixture-id&gt;.md   # locked v1 prompts
+  ground-truth/v1/&lt;lane&gt;/&lt;fixture-id&gt;.yaml   # rubric + deterministic checks
+  report.py         # SQLite → HTML matrix + per-lane + per-model
+  shadow_dispatch.py # shadow-routing harness for code-review + content-review
+
+calibration/v1/&lt;date&gt;/
+  results.db          # canonical SQLite
+  results.jsonl       # canonical append-only
+  responses/&lt;cell-id&gt;.md   # raw model responses
+  reports/
+    matrix.html       # model × lane heatmap
+    per-lane/         # detailed lane comparison
+    per-model/        # all lanes for one model
+    regression.html   # quarter-over-quarter trends (populated from v2 on)
+</pre>
+
+<h3>SQLite schema sketch (v1)</h3>
+
+<pre>
+CREATE TABLE cells (
+  cell_id TEXT PRIMARY KEY,           -- &lt;lane&gt;-&lt;fixture-id&gt;-&lt;model&gt;@&lt;effort&gt;-&lt;run-date&gt;
+  domain TEXT NOT NULL,               -- 'kubedojo' for v1
+  lane TEXT NOT NULL,
+  fixture_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  effort TEXT NOT NULL,               -- 'low' | 'medium' | 'high' | 'xhigh' | 'default'
+  run_date TEXT NOT NULL,             -- ISO date
+  ledger_version TEXT NOT NULL        -- 'v1'
+);
+
+CREATE TABLE dispatches (
+  cell_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  dispatch_ts TEXT NOT NULL,
+  response_path TEXT NOT NULL,        -- relative path under calibration/&lt;run&gt;/responses/
+  latency_s REAL,
+  cost_usd REAL,
+  PRIMARY KEY (cell_id, task_id),
+  FOREIGN KEY (cell_id) REFERENCES cells (cell_id)
+);
+
+CREATE TABLE scores (
+  cell_id TEXT NOT NULL,
+  gate_name TEXT NOT NULL,            -- 'verifier_tier' | 'ground_truth_count' | 'hallucination_count' | ...
+  gate_pass INTEGER NOT NULL,         -- 0 | 1
+  score_value REAL,                   -- numeric where meaningful; NULL for binary
+  scorer TEXT NOT NULL,               -- 'deterministic' | 'llm-judge:&lt;model&gt;' | 'manual'
+  PRIMARY KEY (cell_id, gate_name, scorer),
+  FOREIGN KEY (cell_id) REFERENCES cells (cell_id)
+);
+
+CREATE TABLE production_events (
+  event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,           -- 'approved_stayed_t0' | 'approved_later_t3' | 'real_bug_caught' | ...
+  pr_number INTEGER,
+  occurred_at TEXT NOT NULL,
+  evidence_url TEXT                   -- PR URL, audit log, etc.
+);
+</pre>
+
+<h2>Build plan</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Scope</th><th>Estimated effort</th></tr></thead>
+<tbody>
+<tr><td>PR 1 (next session)</td><td>Foundation: schema.py + run_cell.py + score_cell.py + 6 fixture prompts + 6 ground-truth files + report.py + self-test (1 fixture × 1 model end-to-end)</td><td>codex gpt-5.5 architect: ~30-45 min draft + dual cross-family review + fixup. Likely 600-1000 lines Python + 12 fixture files.</td></tr>
+<tr><td>PR 2</td><td>Fire the 25-cell v1 smoke suite. Commit <code>calibration/v1/&lt;date&gt;/</code> with results.db + results.jsonl + responses/ + generated reports.</td><td>25 cells × ~$0.05 = ~$1.25. 30-60 min wall-clock (parallelizable across providers).</td></tr>
+<tr><td>PR 3 (later)</td><td><code>shadow_dispatch.py</code>: production code-review + content-review shadow routing. Challenger reviews real PRs with NO merge authority; results land in <code>production_events</code> table.</td><td>Larger build; estimate after PR 1 lands.</td></tr>
+</tbody>
+</table>
+
+<h2>Decisions resolved this session</h2>
+
+<table>
+<thead><tr><th>Question</th><th>Resolution</th></tr></thead>
+<tbody>
+<tr><td>Full matrix vs smoke first?</td><td>Smoke first (25 cells), not the 390-cell full matrix. Codex + gemini converged on this independently.</td></tr>
+<tr><td>MD-as-database (user's first instinct) vs SQLite/JSONL ledger?</td><td>SQLite/JSONL canonical; MD + HTML are generated reports. Codex's architectural correction; gemini agreed in round 2.</td></tr>
+<tr><td>Effort as separate dimension vs folded into model identity?</td><td>Folded: <code>model@effort</code> is the atomic row key. Avoids hidden averaging.</td></tr>
+<tr><td>Production-vs-calibration join formula?</td><td>Typed event ledger (approved_stayed_t0 / approved_later_t3 / real_bug_caught / hallucinated_blocker / silent_miss / verifier_failure), NOT a single multiplier. Gemini's first-pass <code>1/(1+patch_turns)</code> was rejected as too lossy.</td></tr>
+<tr><td>Shadow routing scope for v1?</td><td>Both code-review AND content-review from v1 (user decision). Code-review alone was the conservative option; user chose the broader scope.</td></tr>
+<tr><td>First domain?</td><td>KubeDojo. learn-ukrainian forks the harness once stable (user decision).</td></tr>
+<tr><td>Schema scope?</td><td>Multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, etc.). Avoids cross-cutting refactor when learn-ukrainian ports.</td></tr>
+<tr><td>v1 challenger model?</td><td><code>deepseek-v4-pro</code> (user decision). Has both calibration-strong and production-weak data — directly tests whether the framework catches the gap.</td></tr>
+</tbody>
+</table>
+
+<h2>Open questions for v2+</h2>
+
+<ul>
+  <li>n≥3 prompts per lane (statistical signal vs n=1 single-shot variance).</li>
+  <li>Cost-frontier visualization in HTML matrix — Pareto front per lane.</li>
+  <li>LLM-as-judge cross-validation: when do 2 judges disagree, and which judges correlate?</li>
+  <li>learn-ukrainian fixture pack (Ukrainian translation accuracy lane, IPA tag adherence, glossary-conformance scoring).</li>
+  <li>Quarterly regression dashboard: which models have drifted on locked prompts? Visualize.</li>
+  <li>Shadow-routing escalation policy: how many production events does a challenger need before earning a roster slot?</li>
+</ul>
+
+<h2>References</h2>
+
+<ul>
+  <li>Deliberation thread: <code>ab channel tail calibration-framework --thread ee1fcc68669a4ba895817f9a2f732bf5</code></li>
+  <li>Driving session: <code>docs/session-state/2026-05-20-session-34-rewrite-pivot-launch-plus-calibration-framework.html</code></li>
+  <li>Prior production track-record data: <code>docs/agent-matrix/quality-rankings-2026-05-19.html</code> §Production track record</li>
+  <li>Existing dispatch infrastructure (reused by the harness): <code>scripts/dispatch_smart.py</code> (JSONL audit + response_path persistence)</li>
+  <li>Decision-card convention: <code>.claude/rules/decision-card.md</code></li>
+  <li>HTML-first artifact policy: <code>docs/migrations/html-first/plan.html</code> — this spec follows that policy as an AI→Human design doc.</li>
+</ul>
+
+</body>
+</html>
