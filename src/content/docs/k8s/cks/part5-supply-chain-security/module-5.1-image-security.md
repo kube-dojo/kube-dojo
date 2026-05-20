@@ -212,9 +212,12 @@ In a scanner scenario, do not treat every CVE row as equal. Ask which package ow
 
 ```bash
 kubectl get pods -A -o json | jq -r '
-  .items[] as $pod |
-  ($pod.spec.containers[]? | select(.image | test("(:latest$)|(^[^:]+/[^:]+$)|(^[^:/]+$)"))) |
-  "\($pod.metadata.namespace)/\($pod.metadata.name) \(.name) \(.image)"
+  .items[] as $pod
+  | (
+      ($pod.spec.containers // []) + ($pod.spec.initContainers // []) + ($pod.spec.ephemeralContainers // [])
+    )[]
+  | select(.image | split("/")[-1] | (test("[:@]") | not) or endswith(":latest"))
+  | "\($pod.metadata.namespace)/\($pod.metadata.name) \(.name) \(.image)"
 '
 
 kubectl -n image-lab describe pod private-app
@@ -301,6 +304,28 @@ This lab uses `kind`, a local registry, Docker-compatible build commands, and Tr
 
 - [ ] Create a local registry container named `kind-registry` on port `5001` if it is not already running: `docker run -d --restart=always -p 127.0.0.1:5001:5000 --name kind-registry registry:2`.
 - [ ] Create a kind cluster with a registry mirror for `localhost:5001`, then connect the registry container to the kind network so nodes can pull through `kind-registry:5000`.
+```yaml
+# kind-with-registry.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+```
+
+```bash
+kind create cluster --name image-lab --config kind-with-registry.yaml
+
+for node in $(kind get nodes --name image-lab); do
+  docker exec "$node" mkdir -p /etc/containerd/certs.d/localhost:5001
+  cat <<EOT | docker exec -i "$node" tee /etc/containerd/certs.d/localhost:5001/hosts.toml
+[host."http://registry:5000"]
+EOT
+done
+```
 - [ ] Create a working directory with a tiny Go or static HTTP application, a `go.mod` if needed, and a `.dockerignore` that excludes `.git`, `.env`, `*.key`, `kubeconfig`, and local build output.
 - [ ] Write a multi-stage Dockerfile that compiles in a builder stage and copies only the final binary or static files into `gcr.io/distroless/static-debian12:nonroot` or another minimal non-root runtime image.
 - [ ] Build the image as `localhost:5001/cks/image-secure:v1` and inspect it with `docker image inspect` to verify the configured user and entrypoint are not root and shell-form.
@@ -322,7 +347,7 @@ This lab uses `kind`, a local registry, Docker-compatible build commands, and Tr
 - [Kubernetes Ephemeral Containers](https://kubernetes.io/docs/concepts/workloads/pods/ephemeral-containers/) — explains why distroless images need a separate debugging path when `kubectl exec` is insufficient.
 - [Kubernetes Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) — provides the Pod and container fields used to reinforce non-root image defaults.
 - [Docker Build Best Practices](https://docs.docker.com/build/building/best-practices/) — covers trusted base images, multi-stage builds, rebuild cadence, `.dockerignore`, and Dockerfile instruction guidance.
-- [Docker Hub Pull Usage and Limits](https://docs.docker.com/docker-hub/usage/storage/) — lists current Docker Hub pull limits and explains how pull accounting and `429` responses work.
+- [Docker Hub Pull Usage and Limits](https://docs.docker.com/docker-hub/usage/pulls/) — lists current Docker Hub pull limits and explains how pull accounting and `429` responses work.
 - [GoogleContainerTools Distroless](https://github.com/GoogleContainerTools/distroless) — source project for Google's distroless runtime images and examples.
 - [Sigstore Cosign Verification](https://docs.sigstore.dev/cosign/verifying/verify/) — documents `cosign verify` and the identity checks used for signed container artifacts.
 - [Notary Project Quickstart](https://notaryproject.dev/docs/quickstart/) — introduces Notation signing and verification for OCI artifacts.
