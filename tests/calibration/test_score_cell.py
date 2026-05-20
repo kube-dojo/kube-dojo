@@ -295,7 +295,8 @@ def test_score_cell_prose_lane_runs_judge_despite_gate_fail(tmp_path):
     assert len(calls) == 2
 
 
-def test_score_cell_mechanical_lane_skips_judge_on_gate_fail(tmp_path):
+def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
+    """Verify the `prompt is None` early-return path for mechanical lanes."""
     db_path = tmp_path / "ledger.db"
     response_path = tmp_path / "response.md"
     response_path.write_text(
@@ -331,6 +332,9 @@ def test_score_cell_mechanical_lane_skips_judge_on_gate_fail(tmp_path):
         judge_fn=fake_judge_fn,
     )
     assert not gates["ground_truth_findings"]
+    # PROSE_LANES guard at score_cell.py:607-609 would only fire for a
+    # mechanical lane with a judge; no lane has one today, so future coverage
+    # would need a mocked mechanical-lane judge.
     assert calls == []
 
 

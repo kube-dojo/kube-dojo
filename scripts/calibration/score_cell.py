@@ -16,6 +16,10 @@ from .models import model_by_canonical
 from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, dispatch_prompt
 
 GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
+# refactoring is listed here so it routes through the prose-lane judge path
+# the day RefactoringScorer gains an llm_judge_prompt. Today its judge prompt
+# returns None and the function returns early before the PROSE_LANES guard
+# fires — so this membership is forward-declaration, not active behavior.
 PROSE_LANES: frozenset[str] = frozenset(
     {
         "orchestrating",
@@ -296,7 +300,6 @@ class OrchestratingScorer:
                 response,
                 [
                     "cost",
-                    "$",
                     "cheap",
                     "budget",
                     "spend",
@@ -325,9 +328,7 @@ class OrchestratingScorer:
                     "same-family",
                     "same family",
                     "sequential",
-                    "queue",
                     "in-order",
-                    "in order",
                     "one at a time",
                     "one lane",
                     "single inflight",
