@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 34 — Rewrite pivot launch (CKS 4.2 + 4.3 T3→T0) + calibration framework designed</title>
+<link rel="stylesheet" href="../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; }
+  .pill-shipped { background:#d4edda; color:#155724; }
+  .pill-deferred { background:#fff3cd; color:#856404; }
+  .pill-meta { background:#cce5ff; color:#004085; }
+  .pill-dq { background:#f5c2c7; color:#842029; }
+  .pill-design { background:#e2d9f3; color:#553a8b; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  code { background:#f3f5f7; padding:0 0.25rem; border-radius:0.2rem; font-size:0.88em; }
+  pre { background:#f6f8fa; padding:0.75rem; border-radius:0.4rem; overflow-x:auto; font-size:0.85em; }
+  details { margin: 0.5rem 0; }
+  summary { font-weight:600; cursor:pointer; padding:0.3rem 0; }
+  .tl { background:#fff8e1; padding:0.75rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+</style>
+</head>
+<body>
+
+<h1>Session 34 — Rewrite pivot launch (CKS 4.2 + 4.3 T3→T0) + calibration framework designed</h1>
+<p class="meta">2026-05-19 ~23:55 → 2026-05-20 ~01:40 local (~1h45m) · driver: claude opus 4.7 inline · user signals: "orientate and continue from last session handoff" → "Cleanups + Cell 2 (1-4)" → "i am going to sleep, please go auto and rive the project" → "keep working the night dont close the session too early there are lots to do" → "how is flash 3.5 gemini? did you do a very detailed testing?" → "create a framework where we test each model … HTML reports for humans" → "please do a session handoff asap" · <strong>7 PRs merged, 5 GH issues filed, 1 multi-agent deliberation (ab discuss converged on a calibration framework architecture), 2 critical-quality module rewrites validated the 160-module pivot pattern end-to-end</strong>.</p>
+
+<div class="tl">
+<strong>TL;DR.</strong> Three layers landed:
+<strong>(1) Cleanups</strong> — session-33 carryovers shipped (dispatch_smart agy carve-out + worktree node_modules symlink #1352; module 3.1 deployment bug fixes from agy Cell 2 re-run #1353; quality-rankings doc promoting agy to primary-tier reviewer #1355; decision card archive #1361).
+<strong>(2) Cell 2 recalibration + T2-13 closure</strong> — agy/Gemini 3.5 Flash (High) re-tested on pre-fix PR #1349 module 3.1 caught <strong>3 real deployment-blocking bugs that claude-sonnet missed in production</strong> (ResourceQuota PVC mismatch, missing HF_TOKEN for gated Llama-3.1, NetworkPolicy exit-code ambiguity) — directly shipped as fixes in #1353. T2-13 Option A also shipped: Module 7.12 Ansible Operator SDK Fundamentals #1354 (1567 lines, T0, dual cross-family APPROVE_WITH_NITS); 5 sub-issues filed for remaining arc; decision card archived to <code>docs/decisions/</code>.
+<strong>(3) 160-module rewrite pivot launched</strong> — two pilots shipped end-to-end: CKS 4.2 PSA #1362 (T3→T0, 196→5500 body words, 0→11 sources) and CKS 4.3 Secrets Management #1363 (T3→T0, fail→5517 body words, 0→18 sources). Cross-family reviewers caught real exam-critical gaps both times (sonnet NEEDS_CHANGES on #1363 found missing kube-apiserver static-Pod manifest + missing etcdctl verification — both fixed before merge). Cost per rewrite: ~$0.10-0.20 in dispatches; wall-clock ~30-45 min including review + fixup + merge.
+<strong>(4) Calibration framework designed</strong> — ab discuss (codex + gemini) converged on a 25-cell smoke architecture (5 lanes × 4 anchors + 1 challenger), JSONL/SQLite ledger as canonical store, MD/HTML as <em>generated</em> reports, shadow production routing as the long-term replacement for static matrices. User locked v1 spec; build deferred to next session.
+</div>
+
+<h2>What landed</h2>
+
+<table>
+<thead><tr><th>#</th><th>PR / Issue</th><th>Subject</th><th>Status</th></tr></thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td><code>#1352</code></td>
+  <td>fix(dispatch_smart): agy danger carve-out + worktree node_modules symlink</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>4395f8f2</code> — codex spark writer; agy/Flash 3.5 cross-family review caught two real blockers the orchestrator missed (line-411 elif guard + dry-run test bypassing both guards); fixup commit addressed all. First production code review for agy on kubedojo — caught what orchestrator missed.</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td><code>#1353</code></td>
+  <td>fix(module-3.1): 3 deployment bugs caught by agy Cell 2</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>82da7206</code> — Cell 2 calibration re-run on pre-fix PR #1349 surfaced 3 real bugs sonnet missed in original production review: ResourceQuota requests.storage=300Gi vs PVC sum 320Gi → 2nd PVC Pending forever; missing HF_TOKEN for gated meta-llama/Llama-3.1-8B-Instruct → crash loop; NetworkPolicy curl verification with ambiguous exit-code semantics. Dual cross-family review (sonnet + agy) both APPROVE_WITH_NITS; codex spark fixup applied sonnet's CNI variation nit (exit 28 timeout OR exit 7 RST both confirm enforcement).</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td><code>#1354</code></td>
+  <td>feat(platform): Module 7.12 Ansible Operator SDK Fundamentals — T2-13 Wave 2</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>eb7981ed</code> — 1567 lines, T0 verifier (body_words=5041, mean_wpp=54.8, median_wpp=59.5, short_rate=3.3%, 13/13 sources reachable). Codex gpt-5.5 architect 1124s draft. <strong>Dual cross-family review:</strong> sonnet APPROVE_WITH_NITS (4 nits: containerPort vs CR.spec.port, wait:true reconcile blocking, meta/main.yml precision, sed→cat); agy APPROVE_WITH_NITS (3 nits: Ansible robustness | first | default, kind --image fallback, quiz camelCase clarification). Codex spark fixup applied all 7.</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td><code>#1355</code></td>
+  <td>docs(agent-matrix): Cell 2 calibration re-run + agy promoted to primary-tier reviewer</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>1540c104</code> — Cell 2 was previously "test gap, defer" in session 33. Now scored STRONG: agy caught 4 real bugs (canonical vLLM probe-path + 3 sonnet missed in original PR #1349 review). PR #1352 review (caught 2 blockers orchestrator missed) is the second n=1 data point. Both lanes (code review + content review) promoted from "Supplemental 2nd voice" to "Primary-tier reviewer alongside claude-sonnet" with explicit n=1 caveats.</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><code>#1361</code></td>
+  <td>docs(decisions): T2-13 Ansible arc scope — Option A shipped, decision archived</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>0c947ce2</code> — moved <code>docs/decisions/pending/2026-05-19-t2-13-ansible-arc-scope.md</code> → <code>docs/decisions/</code> with the outcome appended: Option A shipped via PR #1354, 5 sub-issues filed for remaining arc (#1356 Module 7.13 advanced watches.yaml; #1357 Module 7.14 AWX+EDA; #1358 Module 7.15 Helm-vs-Ansible decision framework; #1359 Module 7.16 production patterns; #1360 Module 7.17 testing Molecule+Kuttl). Wave 2 status: 8/9 with 5 arc-sub-issues backlog.</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td><code>#1362</code></td>
+  <td>feat(cks): rewrite module 4.2 Pod Security Admission — T3 → T0</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>4c8e305c</code> — <strong>FIRST production module of the 160-module rewrite pivot.</strong> Before: T3, 196 body words, mean_wpp 15.1, 0 sources, 4 quiz items, 5 mistakes. After: T0, 5500 body words, mean_wpp 71.4, median_wpp 75, short_rate 2.6%, 11 reachable sources, 7 quiz items, 7 mistakes, 6 hands-on checkboxes. Codex gpt-5.5 architect 1222s draft. <strong>Dual cross-family review:</strong> sonnet APPROVE_WITH_NITS (4 nits including nginx-will-crash-at-runtime callout — pedagogical N1); agy APPROVE_WITH_NITS (3 nits: wildcard usernames, malformed baseline YAML, nginx UID 101 alpine note). Codex spark fixup applied 6 of 7 (agy N1 wildcard was already absent — covered by sonnet N4's empty-usernames removal).</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td><code>#1363</code></td>
+  <td>feat(cks): rewrite module 4.3 Secrets Management — T3 → T0</td>
+  <td><span class="pill pill-shipped">MERGED</span> <code>147585ac</code> — Second pilot. Before: T3, rubric 1.5, 0 sources. After: T0, 5517 body words, mean_wpp 84.9, median_wpp 88, short_rate 1.5%, 18 reachable sources, 7 quiz items, 7 mistakes, 5 hands-on checkboxes. <strong>Sonnet NEEDS_CHANGES caught two real exam-critical gaps:</strong> B1 missing kube-apiserver static-Pod manifest snippet (--encryption-provider-config flag + volumeMount + hostPath); B2 missing etcdctl verification command showing <code>k8s:enc:aescbc:v1:</code> prefix vs plaintext. Plus 3 nits (aesgcm nonce-exhaustion risk + secretbox recommendation, Sealed Secrets key rotation, ESO v1 vs v1beta1 compatibility note). Agy independently caught 3 different nits (KMS v1 status: deprecated not disabled; missing SealedSecret YAML snippet; missing Vault auth setup with token reviewer JWT). Codex spark fixup addressed all 7 findings.</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td><code>#1356-#1360</code></td>
+  <td>5 sub-issues for the T2-13 Ansible Operator arc remainder</td>
+  <td><span class="pill pill-meta">FILED</span> — Modules 7.13 (advanced watches.yaml) / 7.14 (AWX+EDA) / 7.15 (Helm-vs-Ansible decision framework) / 7.16 (production patterns: status, finalizers, idempotency) / 7.17 (testing Molecule+Kuttl). Each with full topic-coverage brief + depth target + cross-references back to Module 7.12 in #1354.</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><code>#1364</code> + <code>#1365</code></td>
+  <td>Calibration framework — v1 spec doc + build tracking issue</td>
+  <td><span class="pill pill-design">SPEC + ISSUE FILED</span> — User asked "create a framework where we test each model, model type with different efforts for different activities … HTML reports for humans … do you have a better idea?" Launched <code>ab discuss calibration-framework --with codex,gemini --max-rounds 2</code>. Both agents converged (token-level [DISAGREE] in round 2 was the discuss-tool's known parallel-response caveat; substance converged). v1 spec locked + documented at <code>docs/calibration/v1-spec.html</code> (PR #1364) + GH tracking issue #1365 with phased build plan. Build PR1 (foundation: schema + dispatcher + scorers + 6 fixtures + HTML report) queued for next session.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>The 160-module rewrite pivot: pattern validated</h2>
+
+<p>Session 32 user green-lit the rewrite pivot. This session ran the first two pilots end-to-end:</p>
+
+<table>
+<thead><tr><th>Module</th><th>Before</th><th>After</th><th>Cycle</th></tr></thead>
+<tbody>
+<tr>
+  <td>CKS 4.2: Pod Security Admission (#1362)</td>
+  <td>T3, 196 body words, 0 sources, 4 quiz, 5 mistakes, 0 hands-on</td>
+  <td>T0, 5500 body words, 11 sources, 7 quiz, 7 mistakes, 6 hands-on</td>
+  <td>codex gpt-5.5 (1222s draft) → sonnet APPROVE_WITH_NITS + agy APPROVE_WITH_NITS in parallel → codex spark fixup (97s) → merge</td>
+</tr>
+<tr>
+  <td>CKS 4.3: Secrets Management (#1363)</td>
+  <td>T3, rubric 1.5, 0 sources</td>
+  <td>T0, 5517 body words, 18 sources, 7 quiz, 7 mistakes, 5 hands-on</td>
+  <td>codex gpt-5.5 draft → <strong>sonnet NEEDS_CHANGES + agy APPROVE_WITH_NITS</strong> (sonnet caught 2 exam-critical blockers agy missed: kube-apiserver manifest snippet + etcdctl verification) → codex spark fixup → merge</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Pattern observations worth memorializing:</strong></p>
+<ul>
+  <li><strong>Cost per rewrite</strong>: ~$0.10-0.20 in subscription dispatches (codex gpt-5.5 architect + 2 reviews + 1 fixup). Wall-clock ~30-45 min including CI + merge. Extrapolated to 160 modules: ~$16-32 budget, ~80-120 hours wall-clock (3-4 modules per parallel session). Affordable.</li>
+  <li><strong>Dual-reviewer discipline pays</strong>: sonnet + agy together caught complementary findings each time. Sonnet specialized in pedagogy/exam-context judgment (PR #1363 B1+B2 blockers — without sonnet we'd have shipped a CKS module without the kube-apiserver wiring step that the exam tests directly). Agy specialized in factual sharpness (PR #1362 wildcard usernames, malformed YAML; PR #1363 KMS v1 status correction). Either alone would have missed real issues.</li>
+  <li><strong>Verifier T0/T1 gate is non-negotiable</strong>: both pilots required the codex writer to verify T0 before push. The session-32-built deterministic verifier (median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%, body_words ≥ 5000, sources ≥ 10) holds the quality floor. Without it, codex tends toward shorter "list of facts" output that fails pedagogically.</li>
+  <li><strong>Codex gpt-5.5 architect class + --search is the right writer tier</strong>: spark tier (gpt-5.3-codex-spark) is sufficient for surgical edits and fixups, but full rewrites need gpt-5.5's depth + tool access. Confirmed across T2-13 + both CKS rewrites.</li>
+</ul>
+
+<h2>Calibration framework — designed, build queued</h2>
+
+<p>User asked for a systematic framework to test models × efforts × activities. Launched a multi-agent deliberation (<code>scripts/ab discuss calibration-framework --with codex,gemini --max-rounds 2</code>) which converged on the following architecture.</p>
+
+<details open>
+<summary>v1 spec (locked)</summary>
+
+<table>
+<thead><tr><th>Dimension</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Models</td><td>4 anchors + 1 rotating challenger slot. <strong>v1 anchors:</strong> claude-sonnet-4-6 · codex gpt-5.5 · gpt-5.3-codex-spark · agy/Gemini 3.5 Flash (High). <strong>v1 challenger:</strong> deepseek-v4-pro (high-signal: 5/5 calibration in session 30, BUT caused 2 T0→T3 production regressions in session 33 — directly tests whether the framework catches the calibration-vs-production gap).</td></tr>
+<tr><td>Lanes</td><td>5: code review · content review · fact-check/hallucination · long content writing · architecting</td></tr>
+<tr><td>Cells</td><td>25 (5 lanes × 5 models). Single prompt per cell for v1 smoke; n≥3 prompts per lane comes in v2.</td></tr>
+<tr><td>Atomic row key</td><td><code>model@effort</code> — same model at low/medium/high/xhigh effort is a different row. Avoids hidden averaging.</td></tr>
+<tr><td>Canonical storage</td><td><strong>JSONL + SQLite ledger</strong> (codex's architectural correction to the user's "save as MD" mandate). MD/HTML are <em>generated reports</em>. Reuses <code>dispatch_smart.py</code>'s existing JSONL + <code>response_path</code> infrastructure.</td></tr>
+<tr><td>Scoring</td><td>Deterministic gates first (build pass, verifier T0, ground-truth count, URL HEAD). LLM-as-judge only for prose with 2 cross-judges. Avoid same-family correlated errors.</td></tr>
+<tr><td>Production join</td><td>Typed event ledger: approved-stayed-T0 / approved-later-T3 / real-bug-caught / hallucinated-blocker / silent-miss / verifier-failure. NOT a single multiplier (gemini's first-pass <code>1/(1+patch_turns)</code> rejected as too lossy).</td></tr>
+<tr><td>Long-term shape</td><td>Static matrix is just a report. <strong>Shadow production routing</strong> is the real framework: challenger models review real PRs with NO merge authority until they accumulate evidence. Plan: build for both code-review AND content-review lanes from v1.</td></tr>
+<tr><td>Domain scope</td><td>Schema multi-domain from day 1 (<code>domain</code>, <code>lane</code>, <code>fixture_id</code>, <code>as_of_date</code>, <code>ground_truth</code>, <code>verifier</code>, <code>production_join_key</code> fields). v1 fixtures KubeDojo-only. learn-ukrainian forks the harness once stable.</td></tr>
+<tr><td>Cadence</td><td>Quarterly full sweep · on-demand single-model add when new model lands · persistent record for regression detection.</td></tr>
+<tr><td>Cost</td><td>25 cells × ~$0.05 = ~$1.25 + 30-60 min wall-clock (parallelizable — 5 providers have independent rate limits).</td></tr>
+</tbody>
+</table>
+
+<p><strong>v1 locked prompts (codex + gemini contributed):</strong></p>
+<ul>
+  <li>Code review: PR #1333 security-YAML diff (4 ground-truth findings: strict-collection, scan-scope, Dependabot cooldown, unpinned pip install)</li>
+  <li>Coding: implement <code>parse_dependabot_cooldown(yaml_text) -&gt; int | None</code></li>
+  <li>Architect: design <code>KUBEDOJO_REVIEW_OVERRIDE</code> env-var hook</li>
+  <li>Content writing: 1500-word RBAC module with TTT pedagogy + Mermaid + "no 'simply'" constraint</li>
+  <li>Content review: deliberately-flawed module → JSON list of failing rubric criteria</li>
+  <li>Fact checking: 5 claims (3 true, 2 plausible-false) → JSON verdicts with explicit "do not guess"</li>
+</ul>
+
+<p><strong>Adversarial prompt design</strong>: explicit verdict classes (<code>VERIFIED</code> / <code>CONFLICTING</code> / <code>UNVERIFIED</code> / <code>NONEXISTENT</code>) + "do NOT answer from memory" + poisoned-premise traps + plausible-schema traps. Reward honest refusal, do NOT punish "I don't know."</p>
+</details>
+
+<details>
+<summary>Build plan (PR 1 — queued for next session)</summary>
+
+<pre>
+scripts/calibration/
+  schema.py         # SQLite tables: cells, dispatches, scores, production_events
+  run_cell.py       # Single-cell dispatcher (lane, fixture, model, effort)
+  score_cell.py     # Per-lane scorer interface + implementations
+  prompts/v1/&lt;lane&gt;/&lt;fixture-id&gt;.md   # locked
+  ground-truth/v1/&lt;lane&gt;/&lt;fixture-id&gt;.yaml   # rubric + deterministic checks
+  report.py         # SQLite → HTML matrix
+  shadow_dispatch.py # shadow-routing harness (later)
+
+calibration/v1/2026-05-20/
+  results.db          # canonical
+  results.jsonl       # canonical append-only
+  responses/&lt;cell-id&gt;.md   # raw model responses
+  reports/
+    matrix.html
+    per-lane/
+    per-model/
+</pre>
+
+<p>Dispatch codex gpt-5.5 (architect class) for the foundation; dual cross-family review (sonnet + agy). Likely ~600-1000 lines of Python + 6 fixture files + 1 HTML template. Estimated 30-45 min draft + review + fixup.</p>
+</details>
+
+<h2>Memory updates this session</h2>
+
+<ul>
+  <li><strong>New file</strong>: <code>reference_agy_antigravity_cli.md</code> — install + flag mapping + behavioral facts + current production lane placement (top-tier on architect+edit, primary-tier on code+content review after sessions 33-34 promotions, DQ on factual schema draft).</li>
+  <li><strong>Updated</strong>: <code>reference_provider_routing_economics.md</code> — added agy as new path independent from gemini-cli (until 2026-06-18 cutover).</li>
+  <li><strong>Updated</strong>: <code>project_role_allocation_2026-05-16.md</code> — agy/Gemini 3.5 Flash (High) lane placements section added with this session's data points (PR #1352 code review caught 2 blockers; PR #1353 + PR #1362 + PR #1363 content reviews caught complementary nits/blockers to sonnet).</li>
+  <li><strong>MEMORY.md index</strong>: refreshed entries for the 3 updated files; index is at 36KB+ (over the 24KB warning) and continues to need consolidation eventually.</li>
+</ul>
+
+<h2>End state</h2>
+
+<ul>
+  <li><strong>Branch</strong>: <code>main</code> at <code>147585ac</code> (PR #1363 squash merge).</li>
+  <li><strong>Workspace</strong>: clean. 0 worktrees beyond primary. 0 in-flight dispatches.</li>
+  <li><strong>Open PRs</strong>: 0.</li>
+  <li><strong>Pending decisions</strong>: 0 (<code>docs/decisions/pending/</code> empty).</li>
+  <li><strong>Critical-quality modules remaining</strong>: 158 (was 160; 2 cleared this session). At 3-4 modules per parallel session = ~40-50 more sessions to drain.</li>
+  <li><strong>Cumulative day total (sessions 28-34)</strong>: 21 PRs merged, ~25,000+ net new content/code lines.</li>
+  <li><strong>Budget</strong>: ~$2-3 estimated for this session's codex/agy dispatches (subscription pool; no metered cost).</li>
+</ul>
+
+<h2>Carryovers — priority-ordered for next session</h2>
+
+<ul>
+  <li><strong>Calibration framework PR 1</strong> (tracked in issue <code>#1365</code>, spec in PR <code>#1364</code>) — build <code>scripts/calibration/</code> harness per the v1 spec at <code>docs/calibration/v1-spec.html</code>. v1 spec fully locked (5 models including deepseek-v4-pro challenger, 5 lanes, 25 cells, SQLite ledger, shadow routing for both code+content review, KubeDojo-only fixtures). Dispatch codex gpt-5.5 architect; dual cross-family review.</li>
+  <li><strong>Calibration framework PR 2</strong> (Phase 2 in issue <code>#1365</code>) — run the v1 smoke suite (25 cells, ~$1.25, 30-60 min) and commit results.db + results.jsonl + responses/ + HTML report at <code>calibration/v1/&lt;date&gt;/reports/matrix.html</code>.</li>
+  <li><strong>CKS 4.4-4.6 rewrite continuation</strong> — Runtime Sandboxing (4.4), Container Image Security (5.1), Image Scanning with Trivy (5.2) all at score 1.5 T3. Same codex gpt-5.5 + dual review pattern that worked on 4.2 + 4.3.</li>
+  <li><strong>Wave 4 from #1304</strong>: T2-6 engineering-craft framing module (needs <code>astro.config.mjs</code> sidebar entry first); T2-8 engineer mental models. T2-7 modules 3.2 (Wiring the LLM App / LangGraph / retry logic) and 3.3 (Production Gates / DeepEval / Promptfoo / LangFuse / HPA on custom metrics) — full briefs in <code>docs/research/gap-llm-native-app-synthesis.md</code>.</li>
+  <li><strong>Wave 5 from #1304</strong>: N1 OpenTelemetry pipeline · N2 Platform API design · N3 K8s operators end-to-end · N4 Incident response automation · N5 Policy engine selection (OPA vs Kyverno vs jsPolicy) · N6 Secrets management decision framework.</li>
+  <li><strong>T2-13 sub-arc</strong>: 5 sub-issues filed (#1356-#1360). Can be drained in parallel with the CKS rewrite pivot — different writer brief shape but same dispatch pattern.</li>
+  <li><strong>Memory consolidation</strong>: <code>MEMORY.md</code> is 36KB (limit 24KB). Need to consolidate older feedback entries into a single rollup or move detail entirely into topic files.</li>
+  <li><strong>Date-bound</strong>: 2026-06-08 pilot claude-i wrapper · <strong>2026-06-15</strong> agentic-credit-pool flip (claude work moves inline in this terminal — affects orchestrator dispatch policy) · <strong>2026-06-18</strong> drop gemini adapter (agy migration Phase 3) · 2026-07-13 weekly-double bump expires.</li>
+</ul>
+
+</body>
+</html>
