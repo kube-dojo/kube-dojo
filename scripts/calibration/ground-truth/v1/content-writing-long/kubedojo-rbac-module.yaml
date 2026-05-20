@@ -2,6 +2,7 @@
 fixture_id: kubedojo-rbac-module
 lane: content-writing-long
 accepted_verifier_tiers: ["T0", "T1"]
+topic_terms: ["RBAC", "ClusterRole", "RoleBinding", "rolebinding", "ServiceAccount"]
 bloom_l3_terms: ["analyze", "diagnose", "compare", "design", "troubleshoot"]
 judge_instruction: "Score whether the module actually teaches Kubernetes RBAC with TTT pedagogy rather than paraphrasing upstream docs."
 llm_rubric: |

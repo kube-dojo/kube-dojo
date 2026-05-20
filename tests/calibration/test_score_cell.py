@@ -121,7 +121,7 @@ def test_architecting_scorer_happy_path():
         response,
         ground_truth,
     )
-    assert gates == {"required_category_count": True, "novel_risk_bonus": True}
+    assert gates == {"required_category_ratio": True, "novel_risk_bonus": True}
 
 
 def test_orchestrating_scorer_happy_path():
@@ -140,6 +140,67 @@ def test_orchestrating_scorer_happy_path():
         ground_truth,
     )
     assert all(gates.values())
+
+
+def test_orchestrating_scorer_alias_match():
+    response = (
+        "Bug fix in scripts/check_links.py (fix the bug) assigned to codex and routed "
+        "to debugging; security review by claude in code-review; module handoff to "
+        "cheap in summarization; fact-check by google using verify claims."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "orchestrating",
+        "multi-task-routing-brief",
+    )
+    gates = score_cell.SCORERS["orchestrating"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates["routing_accuracy"] is True
+
+
+def test_orchestrating_scorer_synonym_serialization():
+    response = (
+        "Python bug route with codex and debugging, security review with claude, "
+        "module handoff with cheap, fact-check with google. Queue OpenAI work "
+        "sequentially in one at a time with no overlap."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "orchestrating",
+        "multi-task-routing-brief",
+    )
+    gates = score_cell.SCORERS["orchestrating"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates["same_family_serialized"] is True
+
+
+def test_orchestrating_scorer_ratio_threshold():
+    """Regression for #1369: routing gate is ratio-based, not strict AND."""
+    response_3_of_4 = (
+        "Python bug -> codex -> debugging. security regressions -> claude -> "
+        "code-review. module handoff -> cheap -> summarization. "
+        "Serialize same-family Codex work and include cost estimate."
+    )
+    response_2_of_4 = (
+        "Python bug -> codex -> debugging. security regressions -> claude -> "
+        "code-review. Include cost estimate and serialize same-family."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "orchestrating",
+        "multi-task-routing-brief",
+    )
+    pass_gates = score_cell.SCORERS["orchestrating"].deterministic_gates(
+        response_3_of_4,
+        ground_truth,
+    )
+    fail_gates = score_cell.SCORERS["orchestrating"].deterministic_gates(
+        response_2_of_4,
+        ground_truth,
+    )
+    assert pass_gates["routing_accuracy"] is True
+    assert fail_gates["routing_accuracy"] is False
 
 
 def test_debugging_scorer_happy_path():
@@ -191,6 +252,119 @@ def test_summarization_scorer_happy_path():
     assert all(gates.values())
 
 
+def test_score_cell_prose_lane_runs_judge_despite_gate_fail(tmp_path):
+    db_path = tmp_path / "ledger.db"
+    response_path = tmp_path / "response.md"
+    response_path.write_text(
+        "Bug fix in scripts/check_links.py mapped to codex debugging. "
+        "security regressions via claude in code-review. module handoff by "
+        "cheap summarization. Fact-check with google. Draft a decision card."
+        " Include a cost estimate.",
+        encoding="utf-8",
+    )
+    model = model_by_canonical("claude-opus-4-7")
+    row = schema.build_cell_row(
+        lane="orchestrating",
+        fixture_id="multi-task-routing-brief",
+        model=model,
+        run_date="2026-05-21",
+    )
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell_id = schema.insert_cell(conn, row)
+        schema.insert_dispatch(
+            conn,
+            cell_id=cell_id,
+            task_id="task",
+            response_path=str(response_path),
+        )
+    calls = []
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        calls.append((model_name, prompt))
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    gates = score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+    assert gates["same_family_serialized"] is False
+    assert len(calls) == 2
+
+
+def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
+    """Verify the `prompt is None` early-return path for mechanical lanes."""
+    db_path = tmp_path / "ledger.db"
+    response_path = tmp_path / "response.md"
+    response_path.write_text(
+        "No findings listed and no real observations.",
+        encoding="utf-8",
+    )
+    model = model_by_canonical("claude-opus-4-7")
+    row = schema.build_cell_row(
+        lane="code-review",
+        fixture_id="pr-1333-security-yaml",
+        model=model,
+        run_date="2026-05-21",
+    )
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell_id = schema.insert_cell(conn, row)
+        schema.insert_dispatch(
+            conn,
+            cell_id=cell_id,
+            task_id="task",
+            response_path=str(response_path),
+        )
+
+    calls = []
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        calls.append((model_name, prompt))
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    gates = score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+    )
+    assert not gates["ground_truth_findings"]
+    # PROSE_LANES guard at score_cell.py:607-609 would only fire for a
+    # mechanical lane with a judge; no lane has one today, so future coverage
+    # would need a mocked mechanical-lane judge.
+    assert calls == []
+
+
+def test_summarization_must_mention_ratio():
+    required = [
+        "CKS 4.2 PSA rewrite shipped as PR #1362",
+        "CKS 4.3 Secrets Management shipped as PR #1363",
+        "T2-13 Ansible arc decision archived",
+        "Calibration framework v1 spec designed and shipped as PR #1364",
+        "Module 7.12 Ansible Operator SDK shipped as PR #1354",
+        "agy/Gemini 3.5 Flash High promoted to primary-tier reviewer",
+    ]
+    filler = (
+        "Next work should keep the rewrite queue moving, preserve dual review, "
+        "and treat the calibration build as the foundation for later model runs."
+    )
+    pass_response = " ".join(required[:5] + [filler] * 8)
+    fail_response = " ".join(required[:3] + [filler] * 10)
+    ground_truth = score_cell.load_ground_truth("summarization", "session-34-handoff")
+    pass_gates = score_cell.SCORERS["summarization"].deterministic_gates(
+        pass_response,
+        ground_truth,
+    )
+    fail_gates = score_cell.SCORERS["summarization"].deterministic_gates(
+        fail_response,
+        ground_truth,
+    )
+    assert pass_gates["must_mention_recall"] is True
+    assert fail_gates["must_mention_recall"] is False
+
 def test_score_cell_writes_deterministic_rows(tmp_path):
     db_path = tmp_path / "ledger.db"
     response_path = tmp_path / "response.md"
@@ -226,4 +400,3 @@ def test_score_cell_writes_deterministic_rows(tmp_path):
             (cell_id,),
         ).fetchone()["count"]
     assert count == 2
-

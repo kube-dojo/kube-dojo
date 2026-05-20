@@ -16,6 +16,19 @@ from .models import model_by_canonical
 from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, dispatch_prompt
 
 GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
+# refactoring is listed here so it routes through the prose-lane judge path
+# the day RefactoringScorer gains an llm_judge_prompt. Today its judge prompt
+# returns None and the function returns early before the PROSE_LANES guard
+# fires — so this membership is forward-declaration, not active behavior.
+PROSE_LANES: frozenset[str] = frozenset(
+    {
+        "orchestrating",
+        "refactoring",
+        "summarization",
+        "content-writing-long",
+        "architecting",
+    },
+)
 
 
 class LaneScorer(Protocol):
@@ -143,9 +156,11 @@ class ContentWritingLongScorer:
         tier = _verifier_tier(response)
         accepted_tiers = set(ground_truth.get("accepted_verifier_tiers", ["T0", "T1"]))
         mermaid_pattern = re.compile(r"```\s*mermaid\b.*?```", re.IGNORECASE | re.DOTALL)
+        topic_terms = list(ground_truth.get("topic_terms", []))
         return {
             "verifier_t0_t1": tier in accepted_tiers,
             "mermaid_block": bool(mermaid_pattern.search(response)),
+            "topic_relevance": not topic_terms or _contains_any(response, topic_terms),
             "no_simply": not re.search(r"\bsimply\b", response, re.IGNORECASE),
             "bloom_l3_outcomes": _contains_any(
                 response,
@@ -241,8 +256,9 @@ class ArchitectingScorer:
         required = list(ground_truth.get("required_categories", []))
         covered = [category for category in required if _contains_any(response, [category])]
         novel_terms = list(ground_truth.get("novel_risk_terms", []))
+        required_ratio = len(covered) / len(required) if required else 1.0
         return {
-            "required_category_count": len(covered) >= len(required),
+            "required_category_ratio": required_ratio >= 0.75,
             "novel_risk_bonus": _contains_any(response, novel_terms),
         }
 
@@ -266,22 +282,59 @@ class OrchestratingScorer:
         ground_truth: dict[str, Any],
     ) -> dict[str, bool]:
         routes = ground_truth.get("expected_routes", [])
-        route_hits = [
-            route
-            for route in routes
-            if _contains_all(
-                response,
-                [route["subtask"], route["model_class"], route["lane"]],
-            )
-        ]
+        if not routes:
+            routing_ratio = 0.0
+        else:
+            hits = 0
+            for route in routes:
+                aliases = [route["subtask"], *route.get("aliases", [])]
+                if _contains_any(response, aliases) and _contains_all(
+                    response,
+                    [route["model_class"], route["lane"]],
+                ):
+                    hits += 1
+            routing_ratio = hits / len(routes)
         return {
-            "routing_accuracy": len(route_hits) == len(routes),
-            "cost_awareness": _contains_any(response, ["cost", "$", "cheap", "budget"]),
+            "routing_accuracy": routing_ratio >= 0.75,
+            "cost_awareness": _contains_any(
+                response,
+                [
+                    "cost",
+                    "cheap",
+                    "budget",
+                    "spend",
+                    "expensive",
+                    "price",
+                    "weekly cap",
+                ],
+            ),
             "decision_card_discipline": _contains_any(
                 response,
-                ["decision card", "disagreement", "tradeoff"],
+                [
+                    "decision card",
+                    "disagreement",
+                    "tradeoff",
+                    "trade-off",
+                    "option a",
+                    "option b",
+                    "ab discuss",
+                    "deliberat",
+                ],
             ),
-            "same_family_serialized": _contains_any(response, ["serialize", "same-family"]),
+            "same_family_serialized": _contains_any(
+                response,
+                [
+                    "serialize",
+                    "same-family",
+                    "same family",
+                    "sequential",
+                    "in-order",
+                    "one at a time",
+                    "one lane",
+                    "single inflight",
+                    "max 1 inflight",
+                ],
+            ),
         }
 
     def llm_judge_prompt(
@@ -332,13 +385,15 @@ class RefactoringScorer:
         response_loc = len(_extract_fenced_code(response).splitlines())
         tests_pass = _run_optional_command(ground_truth.get("test_command"))
         lint_clean = _run_optional_command(ground_truth.get("lint_command"))
+        behavior_aliases = list(ground_truth.get("behavior_aliases", []))
         return {
             "tests_still_pass": tests_pass,
             "loc_reduction": response_loc < original_loc,
             "lint_clean": lint_clean,
             "behavior_preserved": _contains_any(
                 response,
-                list(ground_truth.get("behavior_terms", [])),
+                list(ground_truth.get("behavior_terms", []))
+                + behavior_aliases,
             ),
         }
 
@@ -361,10 +416,16 @@ class SummarizationScorer:
         min_words = int(ground_truth.get("min_words", 180))
         max_words = int(ground_truth.get("max_words", 220))
         words = _word_count(response)
+        must_mentions_lower = [mention.lower() for mention in must_mentions]
+        response_lower = response.lower()
+        must_mention_ratio = (
+            sum(1 for term in must_mentions_lower if term in response_lower) / len(must_mentions)
+            if must_mentions
+            else 1.0
+        )
         return {
-            "must_mention_recall": all(
-                mention.lower() in response.lower() for mention in must_mentions
-            ),
+            # Require at least 75% of required points to balance model paraphrase drift.
+            "must_mention_recall": must_mention_ratio >= 0.75,
             "length_compliance": min_words <= words <= max_words,
             "no_hallucination": not _contains_any(response, banned),
         }
@@ -536,15 +597,17 @@ def score_cell(
         response_path = _latest_response_path(conn, cell_id)
         response = response_path.read_text(encoding="utf-8")
         ground_truth = load_ground_truth(str(cell["lane"]), str(cell["fixture_id"]))
-        scorer = SCORERS[str(cell["lane"])]
+        lane = str(cell["lane"])
+        scorer = SCORERS[lane]
         gates = scorer.deterministic_gates(response, ground_truth)
         schema.insert_scores(conn, cell_id=cell_id, gates=gates)
 
-        if not all(gates.values()):
-            return gates
-
         prompt = scorer.llm_judge_prompt(response, ground_truth)
         if prompt is None:
+            return gates
+
+        if lane not in PROSE_LANES and not all(gates.values()):
+            # Mechanical lanes keep deterministic-gate-as-gate behavior.
             return gates
 
         judge_scores: list[float] = []
