@@ -157,7 +157,7 @@ The practical CKS pattern is a multi-stage build. Compile or assemble the applic
 
 ```dockerfile
 # Build stage has tooling.
-FROM golang:1.25 AS build
+FROM golang:1.24-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -201,15 +201,23 @@ Signing adds a trust decision to the immutable content decision. Cosign document
 ```bash
 IMAGE=registry.example.com/payments/api@sha256:22223333444455556666777788889999aaaabbbbccccddddeeeeffff00001111
 
-cosign sign "$IMAGE"
-cosign verify "$IMAGE"
+# Key-based (typical for CKS lab / killercoda environments)
+cosign sign --key cosign.key "$IMAGE"
+cosign verify --key cosign.pub "$IMAGE"
+
+# Keyless (CI/CD with ambient OIDC, e.g. GitHub Actions + Fulcio + Rekor)
+# cosign sign "$IMAGE"
+# cosign verify \
+#   --certificate-identity=signer@example.com \
+#   --certificate-oidc-issuer=https://accounts.google.com \
+#   "$IMAGE"
 ```
 
 Keep the layers separate in your explanation. A digest answers "which bytes should run?" A signature answers "who vouched for those bytes, under which identity or key?" An admission controller answers "should this workload be accepted into this cluster right now?" A read-only root filesystem answers "can the accepted workload rewrite its own image filesystem after it starts?" Those controls compose, but none of them fully replaces the others. ([OCI Content Descriptors](https://github.com/opencontainers/image-spec/blob/main/descriptor.md), [Cosign Signing](https://docs.sigstore.dev/cosign/signing/signing_with_containers/), [Kubernetes Admission Controllers](https://v1-35.docs.kubernetes.io/docs/reference/access-authn-authz/admission-controllers/))
 
 Use real digests from the registry in production and lab answers. A digest is not a decoration that can be invented in a manifest. It is the content identifier returned by the registry for a specific manifest or image index. In a real workflow, you build and push the image, resolve the digest, scan and sign that digest, and then deploy the digest-pinned reference. Keep the resolver step repeatable. Store the digest next to the build output. Review the digest in the change request. Roll back by returning to the previous digest. Treat a digest change as a production change, even when the tag text looks the same. If a prompt provides a registry and asks you to harden a manifest, retrieve or use the provided digest rather than copying a placeholder from a lesson. ([Kubernetes Images](https://v1-35.docs.kubernetes.io/docs/concepts/containers/images/), [OCI Content Descriptors](https://github.com/opencontainers/image-spec/blob/main/descriptor.md))
 
-Signature verification should fail closed when it is used as an admission control. If an image has no matching signature, the signature comes from the wrong identity, or the attestation does not match the required policy, the Pod should not be admitted into the protected namespace. Kyverno verifyImages supports required verification, digest verification, and attestors, while Sigstore documents verification of signed images. This makes signing operationally useful because the signature is checked at the point where a workload asks to enter the cluster. Keep the human process aligned with that gate. Rotate keys deliberately. Review keyless identity patterns. Decide who can sign release images. Store verification failures where release owners can see them. A silent signature failure becomes a deployment mystery, but a visible failure becomes a supply-chain control. ([Kyverno Verify Images](https://kyverno.io/docs/policy-types/cluster-policy/verify-images/overview/), [Cosign Verification](https://docs.sigstore.dev/cosign/verifying/verify/))
+Signature verification should fail closed when it is used as an admission control. If an image has no matching signature, the signature comes from the wrong identity, or the attestation does not match the required policy, the Pod should not be admitted into the protected namespace. Kyverno verifyImages supports required verification, digest verification, and attestors, while Sigstore documents verification of signed images. This makes signing operationally useful because the signature is checked at the point where a workload asks to enter the cluster. Keep the human process aligned with that gate. Rotate keys deliberately. Review keyless identity patterns. Keyless signing uses Fulcio, a short-lived certificate authority that issues a signing cert bound to your OIDC identity, and records the signing event in Rekor, an append-only transparency log, so trust rests on verifiable identity rather than a static private key. Decide who can sign release images. Store verification failures where release owners can see them. A silent signature failure becomes a deployment mystery, but a visible failure becomes a supply-chain control. ([Kyverno Verify Images](https://kyverno.io/docs/policy-types/cluster-policy/verify-images/overview/), [Cosign Verification](https://docs.sigstore.dev/cosign/verifying/verify/))
 
 ## Admission Enforcement
 
