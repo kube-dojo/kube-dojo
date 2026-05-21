@@ -32,11 +32,23 @@
         "hooks": [
           {"type": "command", "command": ".claude/hooks/block-agent-worktree-isolation.sh"}
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {"type": "command", "command": ".claude/hooks/pre-read-warn-large-log.sh"}
+        ]
       }
     ],
     "PostToolUse": [
       {
         "hooks": [{"type": "command", "command": ".claude/hooks/context-monitor.sh"}]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {"type": "command", "command": ".claude/hooks/post-write-py-autoformat.sh"}
+        ]
       }
     ],
     "SessionStart": [
