@@ -25,6 +25,10 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def test_calibration_reports_are_allowed_artifacts() -> None:
+    assert "calibration/v1/reports" in local_api._ARTIFACT_ALLOWED_DIRS
+
+
 def test_artifacts_index_lists_seeded_html_by_category(tmp_path: Path) -> None:
     first = tmp_path / "audit" / "report.html"
     second = tmp_path / "docs" / "migrations" / "html-first" / "_design-system.html"
