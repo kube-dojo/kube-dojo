@@ -58,6 +58,7 @@ class ModelPareto:
 
 
 QUALITY_FLOOR = 1.0  # det 0.5 + judge 5.0/10 — below this, the model is not useful
+DETERMINISTIC_SCORERS = ("deterministic", "respected_inline_return")
 
 
 def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> list[ModelPareto]:
@@ -79,8 +80,9 @@ def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> li
             for cell_id in slot["cells"]:
                 det = conn.execute(
                     "SELECT AVG(CAST(gate_pass AS REAL)) FROM scores "
-                    "WHERE cell_id=? AND scorer='deterministic' AND gate_name != 'human_spot_check'",
-                    (cell_id,),
+                    "WHERE cell_id=? AND scorer IN (?, ?) "
+                    "AND gate_name != 'human_spot_check'",
+                    (cell_id, *DETERMINISTIC_SCORERS),
                 ).fetchone()[0]
                 if det is not None:
                     slot["det_passes"].append(float(det))

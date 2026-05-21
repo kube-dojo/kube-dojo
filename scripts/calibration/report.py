@@ -14,6 +14,7 @@ from .models import ANCHORS, LANES
 from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "reports" / "templates"
+DETERMINISTIC_SCORERS = {"deterministic", "respected_inline_return"}
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ def load_summaries(db_path: Path) -> list[CellSummary]:
         deterministic = [
             int(row["gate_pass"])
             for row in cell_scores
-            if str(row["scorer"]) == "deterministic"
+            if str(row["scorer"]) in DETERMINISTIC_SCORERS
             and str(row["gate_name"]) != "human_spot_check"
         ]
         llm = [

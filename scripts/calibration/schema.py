@@ -1,6 +1,7 @@
 """SQLite schema and small persistence helpers for calibration v1."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import asdict
@@ -56,6 +57,8 @@ CREATE TABLE IF NOT EXISTS dispatches (
   task_id TEXT NOT NULL,
   dispatch_ts TEXT NOT NULL,
   response_path TEXT NOT NULL,
+  cwd TEXT,
+  tool_uses TEXT,
   latency_s REAL,
   cost_usd REAL,
   returncode INTEGER,
@@ -70,6 +73,7 @@ CREATE TABLE IF NOT EXISTS scores (
   score_value REAL,
   scorer TEXT NOT NULL,
   replicate_seq INTEGER NOT NULL DEFAULT 0,
+  stderr_excerpt TEXT,
   scored_at TEXT NOT NULL,
   PRIMARY KEY (cell_id, gate_name, scorer)
 );
@@ -131,16 +135,36 @@ def init_db(db_path: Path | str) -> None:
         # so this is a one-shot on first init; re-applies are no-ops.
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA_SQL)
-        ensure_replicate_seq_column(conn)
+        _ensure_columns(
+            conn,
+            "dispatches",
+            {
+                "cwd": "TEXT",
+                "tool_uses": "TEXT",
+            },
+        )
+        _ensure_columns(
+            conn,
+            "scores",
+            {
+                "replicate_seq": "INTEGER NOT NULL DEFAULT 0",
+                "stderr_excerpt": "TEXT",
+            },
+        )
 
 
-def ensure_replicate_seq_column(conn: sqlite3.Connection) -> None:
-    columns = {
+def _ensure_columns(
+    conn: sqlite3.Connection,
+    table: str,
+    columns: dict[str, str],
+) -> None:
+    existing = {
         str(row["name"])
-        for row in conn.execute("PRAGMA table_info(scores)").fetchall()
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
     }
-    if "replicate_seq" not in columns:
-        conn.execute("ALTER TABLE scores ADD COLUMN replicate_seq INTEGER NOT NULL DEFAULT 0")
+    for name, sql_type in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}")
 
 
 def _scorer_for_replicate(scorer: str, replicate_seq: int) -> str:
@@ -235,22 +259,30 @@ def insert_dispatch(
     cell_id: str,
     task_id: str,
     response_path: str,
+    cwd: str | None = None,
+    tool_uses: object | None = None,
     latency_s: float | None = None,
     cost_usd: float | None = None,
     returncode: int | None = None,
     stderr_excerpt: str | None = None,
     dispatch_ts: str | None = None,
 ) -> None:
+    if isinstance(tool_uses, str) or tool_uses is None:
+        tool_uses_json = tool_uses
+    else:
+        tool_uses_json = json.dumps(tool_uses, sort_keys=True)
     conn.execute(
         """
         INSERT INTO dispatches (
-          cell_id, task_id, dispatch_ts, response_path, latency_s, cost_usd,
-          returncode, stderr_excerpt
+          cell_id, task_id, dispatch_ts, response_path, cwd, tool_uses,
+          latency_s, cost_usd, returncode, stderr_excerpt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(cell_id, task_id) DO UPDATE SET
           dispatch_ts=excluded.dispatch_ts,
           response_path=excluded.response_path,
+          cwd=excluded.cwd,
+          tool_uses=excluded.tool_uses,
           latency_s=excluded.latency_s,
           cost_usd=excluded.cost_usd,
           returncode=excluded.returncode,
@@ -261,6 +293,8 @@ def insert_dispatch(
             task_id,
             dispatch_ts or utc_now_iso(),
             response_path,
+            cwd,
+            tool_uses_json,
             latency_s,
             cost_usd,
             returncode,
@@ -278,18 +312,21 @@ def insert_score(
     score_value: float | None = None,
     scorer: str = "deterministic",
     replicate_seq: int = 0,
+    stderr_excerpt: str | None = None,
     scored_at: str | None = None,
 ) -> None:
     scorer = _scorer_for_replicate(scorer, replicate_seq)
     conn.execute(
         """
         INSERT INTO scores (
-          cell_id, gate_name, gate_pass, score_value, scorer, replicate_seq, scored_at
+          cell_id, gate_name, gate_pass, score_value, scorer, stderr_excerpt,
+          replicate_seq, scored_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(cell_id, gate_name, scorer) DO UPDATE SET
           gate_pass=excluded.gate_pass,
           score_value=excluded.score_value,
+          stderr_excerpt=excluded.stderr_excerpt,
           replicate_seq=excluded.replicate_seq,
           scored_at=excluded.scored_at
         """,
@@ -299,6 +336,7 @@ def insert_score(
             1 if gate_pass else 0,
             score_value,
             scorer,
+            stderr_excerpt,
             replicate_seq,
             scored_at or utc_now_iso(),
         ),
