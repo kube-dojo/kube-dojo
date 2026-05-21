@@ -145,6 +145,8 @@ The `[Unit]` section describes identity, documentation, dependencies, and orderi
 | `dbus` | After the configured bus name appears | D-Bus activated services | Bus name never acquired |
 | `idle` | Delayed until other jobs are dispatched | Low-priority console-noise reduction | Misused for real dependency ordering |
 
+For `Type=notify`, the daemon must call `sd_notify` with `READY=1`; if it does not, the unit times out during activation.
+
 Choose the service type from the program's readiness behavior, not from preference. A `simple` service can be healthy for a process that starts quickly and handles its own readiness, but a payment API or node agent that needs initialization should expose readiness with `Type=notify` or a service-specific mechanism when supported. A legacy daemon that double-forks belongs under `Type=forking` only if systemd can still identify the main process reliably. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
 The service type is where many "it started, but it is not ready" outages begin. With `Type=simple`, systemd considers the service started almost immediately. That may be acceptable for a local cache. It is risky for an API that must open databases, warm schemas, or load certificates before traffic arrives. With `Type=notify`, the daemon can report readiness after its own checks pass. The unit state then tracks application readiness more closely. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
@@ -164,7 +166,7 @@ Restart policy is an operating contract. `Restart=no` means systemd will not aut
 | Restart policy | Use when | Avoid when | First triage command |
 |---|---|---|---|
 | `no` | A one-shot task should leave success or failure visible | A long-running daemon must self-heal after crashes | `systemctl status <unit>` |
-| `on-failure` | Availability matters and failed exits are safe to retry | Repeated failure can corrupt state or flood dependencies | `journalctl -u <unit> -p warning..alert` |
+| `on-failure` | Availability matters and failed exits are safe to retry | Repeated failure can corrupt state or flood dependencies | `journalctl -u <unit> -p warning..alert` (in syslog numbering, lower means more severe: `alert=1`, `warning=4`) |
 | `on-abnormal` | You only want signal, timeout, or watchdog-style recovery | Normal nonzero exits should also recover | `systemctl show -p NRestarts <unit>` |
 | `on-abort` | A signal abort should be treated as crash recovery | Exit-code failures also need restart | `coredumpctl list <unit>` |
 | `on-watchdog` | The daemon participates in watchdog health checks | The daemon cannot send watchdog notifications | `journalctl -u <unit> | grep -i watchdog` |
@@ -175,7 +177,7 @@ After editing a unit file or drop-in, run `systemctl daemon-reload` before expec
 ```bash
 sudo systemctl edit payment-worker.service
 sudo systemctl daemon-reload
-systemd-analyze verify /etc/systemd/system/payment-worker.service 2>/dev/null || true
+systemd-analyze verify /etc/systemd/system/payment-worker.service
 systemctl cat payment-worker.service
 systemctl show -p Type -p Restart -p ExecStart payment-worker.service
 ```
@@ -250,7 +252,7 @@ flowchart LR
     J -->|journalctl filters and JSON| O[Operator evidence]
     J -->|ForwardToSyslog| X[rsyslog or syslog daemon]
     J -->|journal upload| U[remote journal receiver]
-    J -->|agent reads journal| A[Vector, Fluent Bit, Alloy, or Loki pipeline]
+    J -->|agent reads journal| A[Vector, Fluent Bit, or Alloy to Loki/Elasticsearch/etc.]
     X --> D[Durable log storage]
     U --> D
     A --> D
@@ -272,7 +274,7 @@ Priorities are filters, not conclusions. A high-priority message may be noisy du
 
 ## Forwarding and Durable Storage
 
-Local journals are excellent for first response, but they are not the same as centralized retention. `systemd-journald` can forward messages to a syslog socket when configured, and RHEL documentation describes a common RHEL path where journald collects messages and forwards them to Rsyslog for further processing. The POSIX syslog interface remains a classic logging boundary, but the operator question is where the durable copy lives and which fields survive the hop. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), [syslog(3)](https://man7.org/linux/man-pages/man3/syslog.3.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
+Local journals are excellent for first response, but they are not the same as centralized retention. `systemd-journald` can forward messages to a syslog socket when configured, and RHEL documentation describes a common RHEL path where journald collects messages and forwards them to Rsyslog for further processing. Set `ForwardToSyslog=yes` in `/etc/systemd/journald.conf` or a drop-in to enable this path. The POSIX syslog interface remains a classic logging boundary, but the operator question is where the durable copy lives and which fields survive the hop. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), [syslog(3)](https://man7.org/linux/man-pages/man3/syslog.3.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
 
 Remote journal transport is another option when you want systemd-native fields across hosts. `systemd-journal-upload` sends journal events to a remote endpoint, and the systemd manuals document the upload service alongside journal remote components. This keeps journal semantics closer to the source than plain text syslog, but it still requires an intentional receiver, authentication design, retention policy, and failure monitoring. ([systemd-journal-upload.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-upload.service.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
