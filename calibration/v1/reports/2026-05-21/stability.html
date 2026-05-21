@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stability variance report - 2026-05-21</title>
+<style>
+  body { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.2rem; }
+  h2 { margin-top: 2rem; border-bottom: 2px solid #eee; padding-bottom: 0.25rem; }
+  .tldr { background:#fff8e1; padding:0.85rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .finding { background:#e8f5e9; padding:0.6rem 0.9rem; border-left:4px solid #2e7d32; margin:0.5rem 0; border-radius:0.3rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.92rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.cell code { word-break: break-all; }
+  td.top { background: #e6f4ea; font-weight: 600; }
+  td.mid { background: #fff8e1; }
+  td.bot { background: #fde7e7; font-weight: 600; }
+  code { background:#f3f5f7; padding:0.05rem 0.3rem; border-radius:0.2rem; font-size:0.9em; }
+  a { color:#0645ad; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Stability variance report</h1>
+<p class="meta">2026-05-21 &middot; 168 scored cells &middot; 42 stability candidates &middot; replicate_seq=0, 1, 2 &middot; output=<code>calibration/v1/reports/2026-05-21/stability.html</code></p>
+
+<h2>1. Headline variance floor</h2>
+<div class="tldr">
+  <strong>Variance floor.</strong> Across all scored cells in <code>calibration/v1/ledger.db</code>, per-cell raw <code>score_value</code> standard deviation averages <strong>1.797</strong>, with median <strong>0.500</strong> and p95 <strong>4.409</strong>.
+</div>
+<table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Mean cell stddev</td><td class="num">1.797</td></tr>
+    <tr><td>Median cell stddev</td><td class="num">0.500</td></tr>
+    <tr><td>p95 cell stddev</td><td class="num">4.409</td></tr>
+  </tbody>
+</table>
+
+<h2>2. Top 20 most-disagreeing cells</h2>
+<table>
+  <thead><tr>
+    <th>Lane</th><th>Model</th><th>Fixture</th><th>n_scores</th><th>Mean</th><th>Stddev</th><th>[min..max]</th><th>Disagreement</th>
+  </tr></thead>
+  <tbody>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/claude-opus-4-7.html"><code>claude-opus-4-7@max</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/claude-sonnet-4-6.html"><code>claude-sonnet-4-6@max</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/deepseek-v4-pro.html"><code>deepseek-v4-pro@xhigh</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/gemini-3.1-flash-lite-preview.html"><code>gemini-3.1-flash-lite-preview@high</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/gpt-5.4-mini.html"><code>gpt-5.4-mini@xhigh</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/gpt-5.5.html"><code>gpt-5.5@xhigh</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/grok-4.3.html"><code>grok-4.3@xhigh</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">5</td><td class="num">4.400</td><td class="num">4.587</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/content-writing-long.html">content-writing-long</a></td><td><a href="per-model/claude-sonnet-4-6.html"><code>claude-sonnet-4-6@max</code></a></td><td><code>kubedojo-rbac-module</code></td><td class="num">7</td><td class="num">3.000</td><td class="num">4.140</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/content-writing-long.html">content-writing-long</a></td><td><a href="per-model/claude-opus-4-7.html"><code>claude-opus-4-7@max</code></a></td><td><code>kubedojo-rbac-module</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.954</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/content-writing-long.html">content-writing-long</a></td><td><a href="per-model/gpt-5.3-codex-spark.html"><code>gpt-5.3-codex-spark@xhigh</code></a></td><td><code>kubedojo-rbac-module</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.954</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/summarization.html">summarization</a></td><td><a href="per-model/grok-4.3.html"><code>grok-4.3@xhigh</code></a></td><td><code>session-34-handoff</code></td><td class="num">6</td><td class="num">3.500</td><td class="num">3.775</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><a href="per-model/claude-opus-4-7.html"><code>claude-opus-4-7@max</code></a></td><td><code>multi-task-routing-brief</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.692</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><a href="per-model/deepseek-v4-flash.html"><code>deepseek-v4-flash@xhigh</code></a></td><td><code>multi-task-routing-brief</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.692</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/summarization.html">summarization</a></td><td><a href="per-model/deepseek-v4-pro.html"><code>deepseek-v4-pro@xhigh</code></a></td><td><code>session-34-handoff</code></td><td class="num">18</td><td class="num">3.556</td><td class="num">3.643</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/mcp-use.html">mcp-use</a></td><td><a href="per-model/gemini-3.5-flash-high.html"><code>gemini-3.5-flash-high@high</code></a></td><td><code>define-the-word-in-uk</code></td><td class="num">6</td><td class="num">3.667</td><td class="num">3.636</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/summarization.html">summarization</a></td><td><a href="per-model/gpt-5.4-mini.html"><code>gpt-5.4-mini@xhigh</code></a></td><td><code>session-34-handoff</code></td><td class="num">6</td><td class="num">3.667</td><td class="num">3.636</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><a href="per-model/deepseek-v4-pro.html"><code>deepseek-v4-pro@xhigh</code></a></td><td><code>multi-task-routing-brief</code></td><td class="num">7</td><td class="num">3.143</td><td class="num">3.603</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/summarization.html">summarization</a></td><td><a href="per-model/qwen3.6-plus.html"><code>qwen3.6-plus@xhigh</code></a></td><td><code>session-34-handoff</code></td><td class="num">17</td><td class="num">3.529</td><td class="num">3.449</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><a href="per-model/gpt-5.4-mini.html"><code>gpt-5.4-mini@xhigh</code></a></td><td><code>multi-task-routing-brief</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.369</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+    <tr><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><a href="per-model/qwen3.6-plus.html"><code>qwen3.6-plus@xhigh</code></a></td><td><code>multi-task-routing-brief</code></td><td class="num">7</td><td class="num">3.286</td><td class="num">3.369</td><td class="num">[0.000..10.000]</td><td class="num">10.000</td></tr>
+  </tbody>
+</table>
+
+<h2>3. Replicate coverage table</h2>
+<p class="meta"><code>replicates_done</code> counts distinct scored <code>replicate_seq</code> values, including baseline <code>0</code>; this report caps the display at the target of 3 samples per candidate.</p>
+<table>
+  <thead><tr>
+    <th>Candidate cell_id</th><th>Lane</th><th>Model</th><th>replicates_done</th><th>current_mean</th><th>current_stddev</th>
+  </tr></thead>
+  <tbody>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-gemini-3.1-pro-preview@high-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gemini-3.1-pro-preview@high</code></td><td class="num bot">2</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-gemini-3.1-pro-preview@high-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>gemini-3.1-pro-preview@high</code></td><td class="num bot">2</td><td class="num">0.250</td><td class="num">0.433</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-gpt-5.4-mini@xhigh-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>gpt-5.4-mini@xhigh</code></td><td class="num bot">2</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-gpt-5.4-mini@xhigh-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>gpt-5.4-mini@xhigh</code></td><td class="num bot">2</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-gpt-5.5@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gpt-5.5@xhigh</code></td><td class="num bot">2</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-gpt-5.5@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>gpt-5.5@xhigh</code></td><td class="num bot">2</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-gpt-5.5@xhigh-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>gpt-5.5@xhigh</code></td><td class="num bot">2</td><td class="num">0.750</td><td class="num">0.433</td></tr>
+    <tr><td class="cell"><code>summarization-session-34-handoff-gemini-3.1-pro-preview@high-2026-05-21</code></td><td><a href="per-lane/summarization.html">summarization</a></td><td><code>gemini-3.1-pro-preview@high</code></td><td class="num bot">2</td><td class="num">2.091</td><td class="num">2.539</td></tr>
+    <tr><td class="cell"><code>debugging-pod-pending-topology-mismatch-qwen3.6@xhigh-2026-05-21</code></td><td><a href="per-lane/debugging.html">debugging</a></td><td><code>qwen3.6@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-claude-haiku-4-5@default-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>claude-haiku-4-5@default</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-claude-haiku-4-5@default-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>claude-haiku-4-5@default</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-claude-haiku-4-5@default-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>claude-haiku-4-5@default</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-claude-opus-4-7@max-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>claude-opus-4-7@max</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-claude-opus-4-7@max-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>claude-opus-4-7@max</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-claude-opus-4-7@max-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>claude-opus-4-7@max</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-claude-sonnet-4-6@max-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>claude-sonnet-4-6@max</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-claude-sonnet-4-6@max-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>claude-sonnet-4-6@max</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-claude-sonnet-4-6@max-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>claude-sonnet-4-6@max</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-deepseek-v4-flash@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>deepseek-v4-flash@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-deepseek-v4-flash@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>deepseek-v4-flash@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-deepseek-v4-flash@xhigh-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>deepseek-v4-flash@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-deepseek-v4-pro@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>deepseek-v4-pro@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-deepseek-v4-pro@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>deepseek-v4-pro@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-gemini-3.1-flash-lite-preview@high-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gemini-3.1-flash-lite-preview@high</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-gemini-3.1-flash-lite-preview@high-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>gemini-3.1-flash-lite-preview@high</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-gemini-3.5-flash-high@high-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gemini-3.5-flash-high@high</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-gemini-3.5-flash-high@high-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>gemini-3.5-flash-high@high</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-gpt-5.3-codex-spark@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gpt-5.3-codex-spark@xhigh</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-gpt-5.3-codex-spark@xhigh-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>gpt-5.3-codex-spark@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>fact-check-k8s-1-35-claims-gpt-5.3-codex-spark@xhigh-2026-05-21</code></td><td><a href="per-lane/fact-check.html">fact-check</a></td><td><code>gpt-5.3-codex-spark@xhigh</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-gpt-5.4-mini@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>gpt-5.4-mini@xhigh</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-grok-4.3@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>grok-4.3@xhigh</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-grok-4.3@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>grok-4.3@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>content-review-flawed-module-rubric-review-grok-4.3@xhigh-2026-05-21</code></td><td><a href="per-lane/content-review.html">content-review</a></td><td><code>grok-4.3@xhigh</code></td><td class="num top">3</td><td class="num">0.833</td><td class="num">0.373</td></tr>
+    <tr><td class="cell"><code>code-review-k8s-controller-leader-election-qwen3.6@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>qwen3.6@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-qwen3.6@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>qwen3.6@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-review-pr-1333-security-yaml-qwen3.6-plus@xhigh-2026-05-21</code></td><td><a href="per-lane/code-review.html">code-review</a></td><td><code>qwen3.6-plus@xhigh</code></td><td class="num top">3</td><td class="num">0.500</td><td class="num">0.500</td></tr>
+    <tr><td class="cell"><code>code-writing-parse-dependabot-cooldown-qwen3.6-plus@xhigh-2026-05-21</code></td><td><a href="per-lane/code-writing.html">code-writing</a></td><td><code>qwen3.6-plus@xhigh</code></td><td class="num top">3</td><td class="num">0.667</td><td class="num">0.471</td></tr>
+    <tr><td class="cell"><code>orchestrating-multi-task-routing-brief-gemini-3.5-flash-high@high-2026-05-21</code></td><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><code>gemini-3.5-flash-high@high</code></td><td class="num top">3</td><td class="num">3.048</td><td class="num">3.000</td></tr>
+    <tr><td class="cell"><code>summarization-session-34-handoff-deepseek-v4-pro@xhigh-2026-05-21</code></td><td><a href="per-lane/summarization.html">summarization</a></td><td><code>deepseek-v4-pro@xhigh</code></td><td class="num top">3</td><td class="num">3.556</td><td class="num">3.643</td></tr>
+    <tr><td class="cell"><code>orchestrating-multi-task-routing-brief-gemini-3.1-flash-lite-preview@high-2026-05-21</code></td><td><a href="per-lane/orchestrating.html">orchestrating</a></td><td><code>gemini-3.1-flash-lite-preview@high</code></td><td class="num top">3</td><td class="num">2.600</td><td class="num">3.056</td></tr>
+    <tr><td class="cell"><code>summarization-session-34-handoff-qwen3.6-plus@xhigh-2026-05-21</code></td><td><a href="per-lane/summarization.html">summarization</a></td><td><code>qwen3.6-plus@xhigh</code></td><td class="num top">3</td><td class="num">3.529</td><td class="num">3.449</td></tr>
+  </tbody>
+</table>
+
+<h2>4. Methodology</h2>
+<p>Scorer-disagreement is the raw <code>max(score_value) - min(score_value)</code> span across all score rows for a cell, so it highlights cells where gates or judges disagree inside the current ledger. Replicate-variance is the standard deviation after repeated dispatches of the lane-boundary candidates selected near the pass/fail midpoint, and the coverage table shows which of those 42 cells have enough scored samples to trust that estimate. The headline variance floor aggregates every scored cell, not just candidates, and serves as the current noise estimate for the model fleet; mixed deterministic and LLM-judge scales should be read as variance flags rather than absolute grades.</p>
+
+<h2>5. Links</h2>
+<ul>
+  <li><a href="index.html">Report index</a></li>
+  <li><a href="matrix.html">Matrix heatmap</a></li>
+  <li>Per-lane reports: <a href="per-lane/architecting.html">architecting</a>, <a href="per-lane/code-review.html">code-review</a>, <a href="per-lane/code-writing.html">code-writing</a>, <a href="per-lane/content-review.html">content-review</a>, <a href="per-lane/content-writing-long.html">content-writing-long</a>, <a href="per-lane/debugging.html">debugging</a>, <a href="per-lane/fact-check.html">fact-check</a>, <a href="per-lane/harness-following.html">harness-following</a>, <a href="per-lane/mcp-use.html">mcp-use</a>, <a href="per-lane/orchestrating.html">orchestrating</a>, <a href="per-lane/refactoring.html">refactoring</a>, <a href="per-lane/summarization.html">summarization</a></li>
+  <li>Per-model reports: <a href="per-model/claude-haiku-4-5.html"><code>claude-haiku-4-5</code></a>, <a href="per-model/claude-opus-4-7.html"><code>claude-opus-4-7</code></a>, <a href="per-model/claude-sonnet-4-6.html"><code>claude-sonnet-4-6</code></a>, <a href="per-model/deepseek-v4-flash.html"><code>deepseek-v4-flash</code></a>, <a href="per-model/deepseek-v4-pro.html"><code>deepseek-v4-pro</code></a>, <a href="per-model/gemini-3.1-flash-lite-preview.html"><code>gemini-3.1-flash-lite-preview</code></a>, <a href="per-model/gemini-3.1-pro-preview.html"><code>gemini-3.1-pro-preview</code></a>, <a href="per-model/gemini-3.5-flash-high.html"><code>gemini-3.5-flash-high</code></a>, <a href="per-model/gpt-5.3-codex-spark.html"><code>gpt-5.3-codex-spark</code></a>, <a href="per-model/gpt-5.4-mini.html"><code>gpt-5.4-mini</code></a>, <a href="per-model/gpt-5.5.html"><code>gpt-5.5</code></a>, <a href="per-model/grok-4.3.html"><code>grok-4.3</code></a>, <a href="per-model/qwen3.6.html"><code>qwen3.6</code></a>, <a href="per-model/qwen3.6-plus.html"><code>qwen3.6-plus</code></a></li>
+</ul>
+
+</body>
+</html>
