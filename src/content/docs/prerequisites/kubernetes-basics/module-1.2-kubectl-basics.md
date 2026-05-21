@@ -40,7 +40,7 @@ This module teaches the command surface as an operating workflow rather than as 
 
 ## The Mental Model: kubectl Is a Typed API Client
 
-The most useful sentence in this module is simple: [every `kubectl` command becomes a request to the Kubernetes API server](https://kubernetes.io/docs/concepts/overview/kubectl/). The binary on your laptop reads kubeconfig, chooses a context, loads credentials, builds a REST request, sends it over TLS, and formats the response. It does not schedule pods, pull images, create containers, or edit etcd directly. [Those jobs belong to the API server, controllers, scheduler, kubelet, and storage layer](https://kubernetes.io/docs/concepts/overview/components/), which is why a failed command is often telling you about one of those components rather than about the CLI itself.
+The most useful sentence in this module is simple: [every `kubectl` command becomes a request to the Kubernetes API server](https://v1-35.docs.kubernetes.io/docs/concepts/overview/kubectl/). The binary on your laptop reads kubeconfig, chooses a context, loads credentials, builds a REST request, sends it over TLS, and formats the response. It does not schedule pods, pull images, create containers, or edit etcd directly. [Those jobs belong to the API server, controllers, scheduler, kubelet, and storage layer](https://v1-35.docs.kubernetes.io/docs/concepts/overview/components/), which is why a failed command is often telling you about one of those components rather than about the CLI itself.
 
 The flow below is worth studying because it explains many beginner surprises. If `kubectl get pods` says the server is unreachable, your first suspect is connectivity or kubeconfig, not the pods. If `kubectl apply` is rejected even though the YAML looks correct, an admission controller or schema rule on the API server may be responsible. If `kubectl logs` returns nothing for a container that keeps restarting, the current container instance may not be the one that crashed. The command output is evidence from a distributed system, not just text on a terminal.
 
@@ -59,7 +59,7 @@ The same model also explains why `kubectl` output sometimes lags behind your int
 
 That separation is one reason Kubernetes commands often come in pairs: one command changes desired state, and another command verifies observed state. `kubectl set image` may update a Deployment immediately, but `kubectl rollout status` tells you whether the controller managed to replace old pods with ready new pods. `kubectl delete namespace` may mark the namespace for deletion immediately, but `kubectl get namespace` later tells you whether finalizers and cleanup completed. Treat command success as the beginning of verification, not the end of operational thinking.
 
-There is a practical security lesson here too. Because `kubectl` talks to the API server with your identity, [every command is subject to authentication, authorization, and admission](https://kubernetes.io/docs/concepts/security/controlling-access/). A cluster may let you read pods while blocking deletes, or let you create ConfigMaps while rejecting privileged pods through policy. When a command is denied, do not work around it with a more powerful credential by reflex. First decide whether the policy is protecting the cluster from exactly the kind of change you are trying to make.
+There is a practical security lesson here too. Because `kubectl` talks to the API server with your identity, [every command is subject to authentication, authorization, and admission](https://v1-35.docs.kubernetes.io/docs/concepts/security/controlling-access/). A cluster may let you read pods while blocking deletes, or let you create ConfigMaps while rejecting privileged pods through policy. When a command is denied, do not work around it with a more powerful credential by reflex. First decide whether the policy is protecting the cluster from exactly the kind of change you are trying to make.
 
 > **Pause and predict:** if `kubectl` is only an API client, what happens when your kubeconfig points at a healthy cluster but your credential has expired?
 > **Answer:** the cluster can keep reconciling and pods can keep running, but your command fails before reading objects because auth is denied.
@@ -79,7 +79,7 @@ kubectl    get        pods       nginx          -n web -o yaml
             GET)     segment)
 ```
 
-The read-only verbs should become your default entry point because they reduce uncertainty without changing the cluster. `kubectl get` answers "what exists and what is its headline state?" while [`kubectl describe` answers "what does one object report about its status, conditions, owners, and recent events?"](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/) `kubectl explain` answers a different question: "what fields does this resource type support on this cluster?" You will use all three in the lab, and the order matters because broad inventory prevents you from wasting time on the wrong object.
+The read-only verbs should become your default entry point because they reduce uncertainty without changing the cluster. `kubectl get` answers "what exists and what is its headline state?" while [`kubectl describe` answers "what does one object report about its status, conditions, owners, and recent events?"](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/) `kubectl explain` answers a different question: "what fields does this resource type support on this cluster?" You will use all three in the lab, and the order matters because broad inventory prevents you from wasting time on the wrong object.
 
 ```bash
 # What exists in this namespace?
@@ -111,11 +111,11 @@ The Events section at the bottom of `kubectl describe` is one of the highest-val
 
 The broad-to-narrow habit also protects you from generated names. Deployments create ReplicaSets, ReplicaSets create Pods, and those child objects receive names with hashes and suffixes that are not meaningful to memorize. A label selector such as `-l app=web` lets you inspect the related objects without copying a generated pod name from one command into another too early. Once the failing object is obvious, then you can describe or log that specific pod with confidence.
 
-Resource short names are helpful, but they are not a substitute for understanding resource kinds. [`kubectl api-resources` shows the full kind, plural name, short names, API group, namespaced scope, and supported verbs](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_api-resources/) for every resource the cluster exposes. Running it on a cluster with controllers installed can reveal Custom Resource Definitions for certificates, rollouts, backups, policies, or cloud resources. That discovery step matters because `kubectl get pods` tells you only about core workloads, while a real platform may be shaped by many custom controllers.
+Resource short names are helpful, but they are not a substitute for understanding resource kinds. [`kubectl api-resources` shows the full kind, plural name, short names, API group, namespaced scope, and supported verbs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_api-resources/) for every resource the cluster exposes. Running it on a cluster with controllers installed can reveal Custom Resource Definitions for certificates, rollouts, backups, policies, or cloud resources. That discovery step matters because `kubectl get pods` tells you only about core workloads, while a real platform may be shaped by many custom controllers.
 
 The namespace default is another reason read commands can mislead beginners. `kubectl get pods` without `-n` reads only the namespace configured on the current context, or `default` if none is configured. In a local lab that may be fine, but in a shared cluster it can make a healthy application look missing. When the question is "what is running anywhere?" start with `-A`; when the question is "what is wrong with this one team space?" name the namespace explicitly.
 
-`kubectl explain` is easy to ignore until you need it, then it becomes a permanent habit. [It reads schema information from the API server](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_explain/), so the answer matches the Kubernetes version and Custom Resource Definitions installed on the cluster in front of you. That means you can ask for `kubectl explain deployment.spec.strategy --recursive` while authoring a manifest and get a field map without leaving the terminal. The tool is not a tutorial, but it is an accurate dictionary for the object model you are editing.
+`kubectl explain` is easy to ignore until you need it, then it becomes a permanent habit. [It reads schema information from the API server](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_explain/), so the answer matches the Kubernetes version and Custom Resource Definitions installed on the cluster in front of you. That means you can ask for `kubectl explain deployment.spec.strategy --recursive` while authoring a manifest and get a field map without leaving the terminal. The tool is not a tutorial, but it is an accurate dictionary for the object model you are editing.
 
 > **Stop and predict:** before you run `kubectl get all -n kube-system`, what objects do you expect to see?
 > **Answer:** `all` returns a curated set of common workload resources, not every Secret, ConfigMap, Role, ServiceAccount, or CRD.
@@ -124,7 +124,7 @@ It does not include every Secret, ConfigMap, Role, ServiceAccount, CRD instance,
 
 ## Output Formats, Filtering, and Automation
 
-Default `kubectl get` output is designed for a human scanning a terminal. That makes it excellent for a first look and fragile for automation. A script that pipes the default table to `grep` is depending on column layout, headers, spacing, and incidental text, all of which are less stable than the underlying JSON object. Kubernetes stores resources as typed objects, and [`kubectl` can render those objects as YAML, JSON, JSONPath projections, or custom tables](https://kubernetes.io/docs/reference/kubectl/jsonpath/) when you need precision.
+Default `kubectl get` output is designed for a human scanning a terminal. That makes it excellent for a first look and fragile for automation. A script that pipes the default table to `grep` is depending on column layout, headers, spacing, and incidental text, all of which are less stable than the underlying JSON object. Kubernetes stores resources as typed objects, and [`kubectl` can render those objects as YAML, JSON, JSONPath projections, or custom tables](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/jsonpath/) when you need precision.
 
 ```bash
 # The five formats you will actually use.
@@ -152,7 +152,7 @@ kubectl get pods -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,NODE
 
 Use `-o wide` when you need a little more context without giving up readability, such as pod IPs and node names. Use YAML when a human needs to inspect the full resource and JSON when a tool like `jq` will transform it. Use JSONPath when you need one or two fields directly from the object, especially in certification tasks and shell loops. Use custom columns when you want a stable table whose columns you chose instead of a default view that may hide the field you care about.
 
-Filtering deserves the same care as formatting because the place where filtering happens changes both correctness and performance. [`--field-selector=status.phase=Pending` asks the API server to return only matching objects](https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/), which is efficient and avoids downloading data you will discard. A JSONPath projection happens client-side after the objects arrive, which is fine for small lists but not a substitute for server-side selectors on large clusters. Label selectors sit between those ideas: they are server-side filters based on metadata that teams intentionally design for operations.
+Filtering deserves the same care as formatting because the place where filtering happens changes both correctness and performance. [`--field-selector=status.phase=Pending` asks the API server to return only matching objects](https://v1-35.docs.kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/), which is efficient and avoids downloading data you will discard. A JSONPath projection happens client-side after the objects arrive, which is fine for small lists but not a substitute for server-side selectors on large clusters. Label selectors sit between those ideas: they are server-side filters based on metadata that teams intentionally design for operations.
 
 Sorting is another underused form of signal extraction. `--sort-by=.metadata.creationTimestamp` helps you find the oldest stuck pod, while sorting by a status or spec field can make a noisy namespace readable during an investigation. Sorting still happens after the API server returns objects, so it is not a replacement for selectors, but it changes a long unordered list into a story. In practice, a good command often combines all three ideas: select the right objects, sort the list into a useful order, and project only the fields the next human or script needs.
 
@@ -164,7 +164,7 @@ Output choices also affect how well teammates can review your work. A ticket com
 
 ## Imperative, Declarative, and Server-Side Apply
 
-[You can create Kubernetes objects imperatively or declaratively](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/), and the difference is bigger than syntax. Imperative commands tell the cluster to do one action now: run this pod, create this Deployment, expose this Service, scale this workload. Declarative workflows describe the desired end state in a manifest and let the API server and controllers reconcile toward that state. Both styles are legitimate, but they belong in different operational situations.
+[You can create Kubernetes objects imperatively or declaratively](https://v1-35.docs.kubernetes.io/docs/tasks/manage-kubernetes-objects/), and the difference is bigger than syntax. Imperative commands tell the cluster to do one action now: run this pod, create this Deployment, expose this Service, scale this workload. Declarative workflows describe the desired end state in a manifest and let the API server and controllers reconcile toward that state. Both styles are legitimate, but they belong in different operational situations.
 
 ```bash
 # Imperative: fast, ephemeral, and useful for practice or one-off debugging
@@ -184,7 +184,7 @@ kubectl create deployment web --image=httpd:2.4 --replicas=3 \
   --dry-run=client -o yaml > deployment.yaml
 ```
 
-The bridge command in the last line is the practical answer to a common beginner fear: nobody expects you to write every Deployment manifest from memory. [`--dry-run=client -o yaml` asks the client to build the object it would have sent, print it as YAML, and stop before contacting the API server](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_deployment/). You get correct structure, indentation, API version, and required fields, then you edit the result and treat the file as source material. That workflow is faster and safer than copying an outdated manifest from a random search result.
+The bridge command in the last line is the practical answer to a common beginner fear: nobody expects you to write every Deployment manifest from memory. [`--dry-run=client -o yaml` asks the client to build the object it would have sent, print it as YAML, and stop before contacting the API server](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_deployment/). You get correct structure, indentation, API version, and required fields, then you edit the result and treat the file as source material. That workflow is faster and safer than copying an outdated manifest from a random search result.
 
 Imperative commands still have a legitimate place. During an exam, a throwaway lab, or a quick diagnostic session, `kubectl run` and `kubectl create deployment` help you create a known object quickly and then inspect how Kubernetes represents it. The danger starts when a temporary command becomes undocumented production state. If another engineer cannot find the desired state in Git, they cannot review it, reproduce it in another environment, or understand why the live cluster differs from the declared system.
 
@@ -214,7 +214,7 @@ Declarative workflows also make review and rollback possible. A manifest in Git 
 
 The word "idempotent" is useful here because it describes a property you want in operations work. If applying the same manifest twice has the same intended result as applying it once, then retries are less scary and automation becomes simpler. Imperative commands can be safe when they are read-only or temporary, but durable infrastructure benefits from actions that can be repeated predictably. This is one reason GitOps systems are built around declared desired state rather than around logs of human commands.
 
-Server-Side Apply is the modern form of this idea for shared resources. Traditional client-side apply relies on local diffing and an annotation that tracks the last applied configuration, which can become awkward when controllers, admission webhooks, and humans all modify different fields. [Server-Side Apply moves merge and field ownership tracking into the API server, where conflicts can be detected explicitly](https://kubernetes.io/docs/reference/using-api/server-side-apply/). When multiple actors manage the same object, a clear conflict is better than a silent overwrite.
+Server-Side Apply is the modern form of this idea for shared resources. Traditional client-side apply relies on local diffing and an annotation that tracks the last applied configuration, which can become awkward when controllers, admission webhooks, and humans all modify different fields. [Server-Side Apply moves merge and field ownership tracking into the API server, where conflicts can be detected explicitly](https://v1-35.docs.kubernetes.io/docs/reference/using-api/server-side-apply/). When multiple actors manage the same object, a clear conflict is better than a silent overwrite.
 
 Field ownership can sound abstract until you imagine two actors editing the same Deployment. A human may own the image tag, a rollout controller may own strategy fields, an autoscaler may influence replicas, and an admission webhook may add labels or defaults. Server-Side Apply lets the API server remember which field manager last asserted ownership of a field, so a conflicting change can be reported instead of quietly replacing somebody else's intent. For a beginner, the practical takeaway is simple: prefer server-side previews and be cautious when several tools manage one object.
 
@@ -240,7 +240,7 @@ kubectl label pod nginx env=prod
 kubectl annotate pod nginx owner=team-payments
 ```
 
-Deletion deserves extra respect because [Kubernetes deletion is a coordinated process, not just removal from a database](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_delete/). A normal pod deletion sets a deletion timestamp, lets the kubelet send `SIGTERM`, waits for the grace period, and then completes removal when cleanup is done. Force deletion skips important parts of that coordination from the API server's perspective. If the node is actually gone, force may be necessary; if the node is healthy and a finalizer is stuck, force can hide the object while leaving the underlying cleanup problem unsolved.
+Deletion deserves extra respect because [Kubernetes deletion is a coordinated process, not just removal from a database](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_delete/). A normal pod deletion sets a deletion timestamp, lets the kubelet send `SIGTERM`, waits for the grace period, and then completes removal when cleanup is done. Force deletion skips important parts of that coordination from the API server's perspective. If the node is actually gone, force may be necessary; if the node is healthy and a finalizer is stuck, force can hide the object while leaving the underlying cleanup problem unsolved.
 
 ```bash
 # Graceful deletion is the default
@@ -258,7 +258,7 @@ kubectl delete pod nginx --grace-period=0 --force
 kubectl drain kind-worker --ignore-daemonsets --delete-emptydir-data
 ```
 
-Wrong-target changes are the beginner mistake that experienced engineers still fear. [A context combines cluster, user, and default namespace](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/); your active context determines where the next command goes. A namespace narrows work inside one cluster, but it does not protect you from using the wrong cluster. For any destructive or persistent change, make the target visible before the command and keep namespaces explicit until you are confident the shell is scoped correctly.
+Wrong-target changes are the beginner mistake that experienced engineers still fear. [A context combines cluster, user, and default namespace](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/); your active context determines where the next command goes. A namespace narrows work inside one cluster, but it does not protect you from using the wrong cluster. For any destructive or persistent change, make the target visible before the command and keep namespaces explicit until you are confident the shell is scoped correctly.
 
 There are two common styles for context safety. Some engineers use one merged kubeconfig with many contexts and rely on visible prompts, explicit `--context`, and careful switching. Others keep separate kubeconfig files per environment and set `KUBECONFIG` per terminal session so a production shell and a local shell do not share mutable context state. Both can work, but the second style reduces accidental switching because changing clusters becomes a deliberate act of opening or configuring a shell rather than a remembered command.
 
@@ -278,11 +278,37 @@ kubectl config current-context
 kubectl config use-context kind-kind
 ```
 
-Dry-runs and diffs give you safer ways to ask "what would happen?" before you change shared state. Client dry-run checks what the local client can construct without contacting the API server. [Server dry-run sends the request through authentication, authorization, schema validation, defaulting, and admission, then discards the write](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/). [`kubectl diff` builds on that server-side path to show a unified diff between live state and the manifest you plan to apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_diff/).
+[A kubeconfig file is a `Config` document that connects named clusters, named users, named contexts, and one `current-context`](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/). The context is the decision point because it chooses both the cluster and the credential, and it may also carry a default namespace. That means namespace switching is not just cosmetic state in your shell; it changes the target for every later command that omits `-n`. [`kubectl config` is the command family for reading and updating that local targeting state](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_config/), so treat it as part of the safety workflow rather than as setup you do once and forget.
+
+```yaml
+apiVersion: v1
+kind: Config
+clusters:
+  - name: kind-kind
+    cluster:
+      server: https://127.0.0.1:6443
+      certificate-authority-data: REDACTED
+users:
+  - name: kind-kind
+    user:
+      client-certificate-data: REDACTED
+      client-key-data: REDACTED
+contexts:
+  - name: kind-kind
+    context:
+      cluster: kind-kind
+      user: kind-kind
+      namespace: kubectl-practice
+current-context: kind-kind
+```
+
+Read that structure from the bottom upward when you are about to change something. `current-context` points at a context name, the context points at one cluster and one user, and the optional namespace supplies the default scope. If the context points to the right local cluster but the namespace points to yesterday's practice namespace, a command may fail harmlessly. If the context points to the wrong cluster with a valid production credential, the API server may accept a destructive command. This is why a careful operator checks the context before mutation and still writes `-n` explicitly in commands that will be copied into a runbook.
+
+Dry-runs and diffs give you safer ways to ask "what would happen?" before you change shared state. Client dry-run checks what the local client can construct without contacting the API server. [Server dry-run sends the request through authentication, authorization, schema validation, defaulting, and admission, then discards the write](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/). [`kubectl diff` builds on that server-side path to show a unified diff between live state and the manifest you plan to apply](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_diff/).
 
 Dry-run output can still be misunderstood if you forget which layer performed the check. Client dry-run is excellent for quickly generating starter YAML or catching obvious local construction problems, but it cannot know about quotas, validating policies, admission webhooks, or resources that already exist on the cluster. Server dry-run is slower because it talks to the API server, yet it gives a higher-fidelity answer for shared environments. Choose the preview that matches the risk of the change.
 
-Deletion has a similar "which layer owns this?" question. If a Pod has an owner reference pointing to a ReplicaSet, deleting the Pod does not change the Deployment's desired replica count, so a replacement appears. If a namespace contains resources with finalizers, [deleting the namespace starts cleanup but does not complete until those finalizers finish](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/). In both cases, the surprising behavior becomes predictable once you ask which controller is still reconciling desired state.
+Deletion has a similar "which layer owns this?" question. If a Pod has an owner reference pointing to a ReplicaSet, deleting the Pod does not change the Deployment's desired replica count, so a replacement appears. If a namespace contains resources with finalizers, [deleting the namespace starts cleanup but does not complete until those finalizers finish](https://v1-35.docs.kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/). In both cases, the surprising behavior becomes predictable once you ask which controller is still reconciling desired state.
 
 ```bash
 # The two safety previews to learn early
@@ -302,10 +328,9 @@ The safest operators are not the ones who never type destructive commands. They 
 
 ## Debugging Workflow and Worked Example
 
-Day-to-day Kubernetes debugging usually follows a small set of commands rather than an encyclopedic tour of the CLI. `kubectl logs` answers what the container wrote to stdout and stderr. [`kubectl exec` lets you run a command inside the container](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/) when the image contains the tools you need. [`kubectl port-forward` creates a temporary local tunnel through the API server](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/) so you can reach an internal pod or service without exposing it publicly.
+Day-to-day Kubernetes debugging usually follows a small set of commands rather than an encyclopedic tour of the CLI. `kubectl logs` answers what the container wrote to stdout and stderr. [`kubectl exec` lets you run a command inside the container](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/) when the image contains the tools you need. [`kubectl port-forward` creates a temporary local tunnel through the API server](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/) so you can reach an internal pod or service without exposing it publicly.
 
 ```bash
-# Logs: the first thing you check when an app misbehaves
 # Logs: the first thing to check when an app misbehaves.
 kubectl logs nginx # current container output
 kubectl logs nginx -f # follow output while behavior evolves
@@ -315,15 +340,20 @@ kubectl logs nginx -c sidecar # inspect sidecar container logs
 kubectl logs nginx --previous # inspect terminated instance logs
 kubectl logs -l app=web --tail=50 # combine pod selector with latest logs
 
-# Exec: run commands inside the container
-# Run a command inside the container.
+# Exec: run a command inside the container.
 kubectl exec nginx -- ls /etc/nginx
 # Open an interactive shell when available.
-kubectl exec -it nginx -- bash
-# Use a fallback shell if bash is missing.
 kubectl exec -it nginx -- sh
 # Run shell against a specific container.
 kubectl exec -it nginx -c sidecar -- sh
+
+# Debug: add a purpose-built troubleshooting container
+kubectl debug -it pod/nginx --image=busybox:1.36 --target=nginx -- sh
+kubectl debug node/kind-worker -it --image=busybox:1.36
+
+# Copy: move a known file in or out when the image supports tar
+kubectl cp nginx:/etc/nginx/nginx.conf ./nginx.conf
+kubectl cp ./index.html nginx:/usr/share/nginx/html/index.html
 
 # Port-forward: tunnel a local port to a pod, service, or deployment
 # Validate pod-level reachability.
@@ -332,9 +362,13 @@ kubectl port-forward pod/nginx 8080:80
 kubectl port-forward svc/api 9090:80
 # Validate deployment-level reachability.
 kubectl port-forward deploy/web 8080:80
+
+# Proxy: open a local authenticated path to the Kubernetes API
+kubectl proxy --port=8001
+curl -s http://127.0.0.1:8001/api/v1/namespaces/kubectl-practice/pods
 ```
 
-The `--previous` flag is the important detail in CrashLoopBackOff investigations. When a container crashes, the kubelet starts a new container instance if the restart policy allows it. Plain `kubectl logs` reads the current instance, which may contain only a startup banner because it has not reached the failing line yet. [`kubectl logs --previous` reads the terminated instance](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), which is often where the stack trace, panic, missing environment variable, or fatal configuration error appears.
+The `--previous` flag is the important detail in CrashLoopBackOff investigations. When a container crashes, the kubelet starts a new container instance if the restart policy allows it. Plain `kubectl logs` reads the current instance, which may contain only a startup banner because it has not reached the failing line yet. [`kubectl logs --previous` reads the terminated instance](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), which is often where the stack trace, panic, missing environment variable, or fatal configuration error appears.
 
 Logs are only one signal, and absence of logs is not absence of failure. A container can fail before the application initializes logging, be killed by the kernel for memory pressure, fail a liveness probe, or never start because the image cannot be pulled. That is why the reliable sequence is `get` for status, `describe` for events and last state, then `logs --previous` when the object history says a container actually ran and exited. Each step answers a different question, so skipping one can create a false conclusion.
 
@@ -342,7 +376,13 @@ Label-based logs are helpful when a Deployment has several replicas. `kubectl lo
 
 `kubectl exec` is powerful but not guaranteed. Many production images are intentionally minimal, and [a distroless image may not include `sh`, `bash`, `curl`, `ps`, or package managers](https://github.com/GoogleContainerTools/distroless). When that happens, the failure is not proof that the pod is broken; it means the image has no shell to execute. Later Kubernetes debugging modules cover ephemeral debug containers, but for this beginner module the lesson is simpler: use `exec` when the tool exists, and do not mistake a missing shell for an application failure.
 
+[`kubectl debug` is the better decision when the target container does not contain the tools you need, because the command starts a debugging workflow instead of assuming the application image is also a toolbox](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_debug/). In a local lab, `exec` into nginx with `sh` is fine because the point is to inspect the process from inside a known image. In production diagnosis, prefer a debug container or a copied pod when you need network tools, process tools, or a shell that the application image intentionally omits. The operator decision is evidence quality: choose the least invasive command that can answer the question without rewriting the workload you are investigating.
+
+[`kubectl cp` copies files between your machine and a container, and the generated reference explicitly warns that the container image must include `tar`](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_cp/). Copying a known config file out of a lab pod can be useful, but copying new tools into a suspect production container changes the evidence surface and can create a false sense that the image was designed for interactive repair. If the task is to preserve facts, snapshot Kubernetes objects, logs, and volumes before you mutate files. If the task is a controlled lab transfer, verify the target image supports the required archive tool and keep the copied path narrow.
+
 Port-forwarding is similarly useful because it creates temporary reachability without changing the cluster's public surface. The traffic flows through your authenticated API-server connection, which means the tunnel ends when your command ends. That makes it ideal for checking a local browser against an internal admin page, testing a service before adding Ingress, or connecting a local client to a database during a short investigation. It is not a production access pattern, because it depends on a human terminal session and bypasses the normal service exposure design.
+
+[`kubectl proxy` solves a different problem from `port-forward`: it runs a local proxy to the Kubernetes API server, not to your application Service](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_proxy/). Use it when you need to explore API paths, test an API request from a local tool, or understand what a dashboard-style client is asking the API server. Do not use it as a shortcut for application access, because it exposes the API surface through your local authenticated session and can make an unsafe URL look like an ordinary local web endpoint. When the question is "can my app receive HTTP traffic?" choose `port-forward`; when the question is "what does the Kubernetes API return for this resource path?" choose `proxy`.
 
 Exercise scenario: a teammate says `web-frontend` in the `staging` namespace is not responding after a deployment. You have never seen this workload before, so you start by proving the target cluster before you inspect resources. This is not busywork; it is a guardrail against applying the right command to the wrong place. It also records the first fact in the investigation: which cluster your evidence came from.
 
@@ -466,6 +506,25 @@ Another way to use the framework is to name the source of truth before choosing 
 | You need a new repeatable resource. | `create ... --dry-run=client -o yaml`, then `apply`. | The manifest becomes reviewable and portable. | Hand-writing YAML from memory or copying outdated examples. |
 | You need a production change preview. | `kubectl diff` and `--dry-run=server`. | The API server applies validation and admission without persisting. | Trusting client-only validation when webhooks are involved. |
 | You need emergency debugging access. | `exec` or `port-forward` with a narrow target. | Access ends when the command stops and does not expose a Service publicly. | Creating temporary LoadBalancers for one-person investigations. |
+
+## Extending kubectl with Plugins
+
+The `kubectl` command surface does not end with built-in verbs. [Kubernetes supports plugins by discovering executable files named with the `kubectl-` prefix on your `PATH`](https://v1-35.docs.kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/). That mechanism is useful when a team needs a repeated local view or workflow, but it also creates an operator decision: a plugin should make a safe workflow easier to repeat, not hide a risky mutation behind a friendly subcommand. If a runbook depends on a plugin, the runbook should name the plugin, installation source, and expected behavior instead of assuming every shell has the same extension installed.
+
+```bash
+# Discover plugins available in this shell
+kubectl plugin list
+
+# Krew is itself a kubectl plugin manager
+kubectl krew search ctx
+kubectl krew install ctx ns
+
+# Common context and namespace helpers once installed
+kubectl ctx
+kubectl ns kubectl-practice
+```
+
+[Krew is the community plugin manager for `kubectl`, and its installation guide documents how it installs the `krew` plugin so later commands run through `kubectl krew`](https://krew.sigs.k8s.io/docs/user-guide/setup/install/). Tools such as `ctx` and `ns` are popular because they reduce typing during interactive work, but they should not replace explicit `--context` and `-n` flags in scripts or incident notes. The reason is reviewability: a reader can audit `kubectl get pods -n payments --context kind-staging` without knowing the previous shell state, while `kubectl ns payments` relies on an earlier local mutation. Plugins are best used to speed up deliberate workflows, not to make the target invisible.
 
 ## Did You Know?
 
@@ -701,44 +760,50 @@ The namespace deletion can take a little time because Kubernetes removes the res
 
 ## Sources
 
-- Kubernetes kubectl command reference: https://kubernetes.io/docs/reference/kubectl/
-- Kubernetes kubectl cheat sheet: https://kubernetes.io/docs/reference/kubectl/cheatsheet/
-- Kubernetes command-line tool overview: https://kubernetes.io/docs/reference/kubectl/kubectl/
-- Kubernetes API concepts: https://kubernetes.io/docs/reference/using-api/api-concepts/
-- Kubernetes OpenAPI service reference: https://kubernetes.io/docs/concepts/overview/kubernetes-api/
-- Kubernetes resource management with kubectl: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/
-- Kubernetes imperative object management: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/imperative-command/
-- Kubernetes declarative object management: https://kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/
-- Kubernetes Server-Side Apply: https://kubernetes.io/docs/reference/using-api/server-side-apply/
-- Kubernetes JSONPath support: https://kubernetes.io/docs/reference/kubectl/jsonpath/
-- Kubernetes debug running pods: https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/
-- Kubernetes debug services: https://kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+- Kubernetes kubectl command reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/
+- Kubernetes kubectl quick reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/quick-reference/
+- Kubernetes command-line tool overview: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/kubectl/
+- Kubernetes API concepts: https://v1-35.docs.kubernetes.io/docs/reference/using-api/api-concepts/
+- Kubernetes OpenAPI service reference: https://v1-35.docs.kubernetes.io/docs/concepts/overview/kubernetes-api/
+- Kubernetes resource management with kubectl: https://v1-35.docs.kubernetes.io/docs/tasks/manage-kubernetes-objects/
+- Kubernetes imperative object management: https://v1-35.docs.kubernetes.io/docs/tasks/manage-kubernetes-objects/imperative-command/
+- Kubernetes declarative object management: https://v1-35.docs.kubernetes.io/docs/tasks/manage-kubernetes-objects/declarative-config/
+- Kubernetes Server-Side Apply: https://v1-35.docs.kubernetes.io/docs/reference/using-api/server-side-apply/
+- Kubernetes JSONPath support: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/jsonpath/
+- Kubernetes debug running pods: https://v1-35.docs.kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/
+- Kubernetes debug services: https://v1-35.docs.kubernetes.io/docs/tasks/debug/debug-application/debug-service/
+- Kubernetes kubectl debug reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_debug/
+- Kubernetes kubectl cp reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_cp/
+- Kubernetes kubectl proxy reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_proxy/
+- Kubernetes kubectl config reference: https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_config/
+- Kubernetes kubectl plugin task: https://v1-35.docs.kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/
+- Krew installation guide: https://krew.sigs.k8s.io/docs/user-guide/setup/install/
 - [kubernetes.io: version skew policy](https://kubernetes.io/releases/version-skew-policy/) — The Kubernetes version skew policy directly states the supported kubectl-to-kube-apiserver minor-version skew.
-- [kubernetes.io: kubectl](https://kubernetes.io/docs/concepts/overview/kubectl/) — The kubectl overview explains that kubectl uses kubeconfig, authenticates to the API server, and translates commands into Kubernetes API requests.
-- [kubernetes.io: components](https://kubernetes.io/docs/concepts/overview/components/) — The Kubernetes components page directly defines kube-apiserver, etcd, kube-scheduler, controller-manager, and kubelet responsibilities.
-- [kubernetes.io: controlling access](https://kubernetes.io/docs/concepts/security/controlling-access/) — The API access-control documentation describes the stages a request goes through, including authentication, authorization, and admission control.
-- [kubernetes.io: kubectl describe](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/) — The generated kubectl describe reference states that it prints details including related resources such as events.
-- [kubernetes.io: kubectl api resources](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_api-resources/) — The generated kubectl api-resources reference describes printing supported resources and filtering or outputting API group, namespaced, and verb information.
-- [kubernetes.io: kubectl explain](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_explain/) — The generated kubectl explain reference says field information is retrieved from the server in OpenAPI format.
-- [kubernetes.io: organize cluster access kubeconfig](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) — The kubeconfig documentation directly defines context fields and default current-context behavior.
-- [kubernetes.io: jsonpath](https://kubernetes.io/docs/reference/kubectl/jsonpath/) — The Kubernetes JSONPath page documents kubectl JSONPath templates and examples for field extraction.
-- [kubernetes.io: field selectors](https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/) — The field selectors documentation directly covers server-side filtering by resource fields, including pod status.phase examples.
-- [kubernetes.io: manage kubernetes objects](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/) — The Kubernetes object-management task page explicitly distinguishes imperative commands, imperative object configuration, and declarative object configuration.
-- [kubernetes.io: kubectl create deployment](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_deployment/) — The generated kubectl create deployment reference documents deployment creation, dry-run modes, and output formats including YAML.
-- [kubernetes.io: server side apply](https://kubernetes.io/docs/reference/using-api/server-side-apply/) — The Server-Side Apply documentation directly explains managed fields, field managers, ownership, and conflict detection.
-- [kubernetes.io: kubectl apply](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/) — The generated kubectl apply reference directly defines client and server dry-run behavior.
-- [kubernetes.io: kubectl diff](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_diff/) — The generated kubectl diff reference defines the command as diffing the live version against a would-be applied version.
-- [kubernetes.io: kubectl delete](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_delete/) — The generated kubectl delete reference describes graceful deletion, --force, grace periods, and the risk of bypassing graceful deletion.
-- [kubernetes.io: finalizers](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) — The finalizers documentation directly explains deletionTimestamp, terminating state, cleanup, and finalizer removal.
-- [kubernetes.io: kubectl logs](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/) — The generated kubectl logs reference documents the --previous flag exactly.
-- [kubernetes.io: kubectl exec](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/) — The generated kubectl exec reference defines the command as executing a command in a container.
-- [kubernetes.io: kubectl port forward](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/) — The generated kubectl port-forward reference documents forwarding local ports and the lifecycle of the forwarding session.
+- [kubernetes.io: kubectl](https://v1-35.docs.kubernetes.io/docs/concepts/overview/kubectl/) — The kubectl overview explains that kubectl uses kubeconfig, authenticates to the API server, and translates commands into Kubernetes API requests.
+- [kubernetes.io: components](https://v1-35.docs.kubernetes.io/docs/concepts/overview/components/) — The Kubernetes components page directly defines kube-apiserver, etcd, kube-scheduler, controller-manager, and kubelet responsibilities.
+- [kubernetes.io: controlling access](https://v1-35.docs.kubernetes.io/docs/concepts/security/controlling-access/) — The API access-control documentation describes the stages a request goes through, including authentication, authorization, and admission control.
+- [kubernetes.io: kubectl describe](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_describe/) — The generated kubectl describe reference states that it prints details including related resources such as events.
+- [kubernetes.io: kubectl api resources](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_api-resources/) — The generated kubectl api-resources reference describes printing supported resources and filtering or outputting API group, namespaced, and verb information.
+- [kubernetes.io: kubectl explain](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_explain/) — The generated kubectl explain reference says field information is retrieved from the server in OpenAPI format.
+- [kubernetes.io: organize cluster access kubeconfig](https://v1-35.docs.kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) — The kubeconfig documentation directly defines context fields and default current-context behavior.
+- [kubernetes.io: jsonpath](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/jsonpath/) — The Kubernetes JSONPath page documents kubectl JSONPath templates and examples for field extraction.
+- [kubernetes.io: field selectors](https://v1-35.docs.kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/) — The field selectors documentation directly covers server-side filtering by resource fields, including pod status.phase examples.
+- [kubernetes.io: manage kubernetes objects](https://v1-35.docs.kubernetes.io/docs/tasks/manage-kubernetes-objects/) — The Kubernetes object-management task page explicitly distinguishes imperative commands, imperative object configuration, and declarative object configuration.
+- [kubernetes.io: kubectl create deployment](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_deployment/) — The generated kubectl create deployment reference documents deployment creation, dry-run modes, and output formats including YAML.
+- [kubernetes.io: server side apply](https://v1-35.docs.kubernetes.io/docs/reference/using-api/server-side-apply/) — The Server-Side Apply documentation directly explains managed fields, field managers, ownership, and conflict detection.
+- [kubernetes.io: kubectl apply](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_apply/) — The generated kubectl apply reference directly defines client and server dry-run behavior.
+- [kubernetes.io: kubectl diff](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_diff/) — The generated kubectl diff reference defines the command as diffing the live version against a would-be applied version.
+- [kubernetes.io: kubectl delete](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_delete/) — The generated kubectl delete reference describes graceful deletion, --force, grace periods, and the risk of bypassing graceful deletion.
+- [kubernetes.io: finalizers](https://v1-35.docs.kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) — The finalizers documentation directly explains deletionTimestamp, terminating state, cleanup, and finalizer removal.
+- [kubernetes.io: kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/) — The generated kubectl logs reference documents the --previous flag exactly.
+- [kubernetes.io: kubectl exec](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/) — The generated kubectl exec reference defines the command as executing a command in a container.
+- [kubernetes.io: kubectl port forward](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/) — The generated kubectl port-forward reference documents forwarding local ports and the lifecycle of the forwarding session.
 - [github.com: distroless](https://github.com/GoogleContainerTools/distroless) — The Distroless README explains that these images contain only application and runtime dependencies and do not contain package managers, shells, or other standard programs.
 - [raw.githubusercontent.com: PRINCIPLES.md](https://raw.githubusercontent.com/open-gitops/documents/main/PRINCIPLES.md) — The OpenGitOps principles document directly defines versioned immutable desired state, pull-based agents, and continuous reconciliation.
 - [github.com: kubecfg](https://github.com/kubernetes/kubernetes/tree/v0.10.0/cmd/kubecfg) — The Kubernetes v0.10.0 source tree predates v1.0 and contains the cmd/kubecfg command.
 - [github.com: kubectl.md](https://github.com/kubernetes/kubernetes/blob/v0.10.0/docs/kubectl.md) — The Kubernetes v0.10.0 kubectl documentation demonstrates that the kubectl name was present before the stable v1.0 release.
-- [kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/) — Provides a concise command reference for the beginner workflows practiced in the lab.
-- [Debug Running Pods](https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/) — Gives upstream examples for get, describe, logs, exec, and pod-level troubleshooting.
+- [kubectl Quick Reference](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/quick-reference/) — Provides a concise command reference for the beginner workflows practiced in the lab.
+- [Debug Running Pods](https://v1-35.docs.kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/) — Gives upstream examples for get, describe, logs, exec, and pod-level troubleshooting.
 
 ## Next Module
 
