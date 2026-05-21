@@ -112,7 +112,7 @@ Releases](https://fluxcd.io/flux/guides/helmreleases/))
 Sync waves are a good example of why delivery literacy matters at the platform level. Argo CD orders resources by phase, wave, kind, and name; the `argocd.argoproj.io/sync-wave` annotation assigns integer wave order, with lower waves
 applied first. That is useful for CRDs before custom resources, namespaces before namespaced objects, or Jobs around application sync. It is not a general answer to service health, traffic routing, or schema migration safety. If a lower
 wave remains unhealthy, the application can never progress to healthy, so the platform pattern must define what dependency really belongs inside a sync and what belongs in a release runbook or progressive delivery system. ([Argo CD: Sync
-Phases and Waves](https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/))
+Phases and Waves](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/))
 
 ApplicationSets and Flux Helm releases show another platform distinction. ApplicationSet lets an operator generate many Argo CD Applications from a template and generator inputs, such as clusters or Git directories. Flux `HelmRelease` lets
 a team declare a Helm chart release as a Kubernetes custom resource, with chart sources and values managed by controllers. Both reduce repeated manual configuration, but they fail differently: ApplicationSet errors can generate or update
@@ -144,7 +144,7 @@ Ingress](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/ingr
 
 Gateway API is the platform-grade successor because it splits responsibilities explicitly. The Kubernetes v1.35 Gateway API page describes Gateway API as an add-on of custom resources for dynamic infrastructure provisioning and advanced
 routing, with role-oriented resources for infrastructure providers, cluster operators, and application developers. It lists four stable API kinds: `GatewayClass`, `Gateway`, `HTTPRoute`, and `GRPCRoute`. The Gateway API project separately
-documents `HTTPRoute` as GA in the Standard channel since v0.5.0 and `GRPCRoute` as GA since v1.1.0, while `TCPRoute` and `UDPRoute` remain Alpha in the Experimental channel. A CNPA answer should therefore avoid saying "all Gateway route
+documents `HTTPRoute` as having been in the Standard channel since v0.5.0 and promoted to GA (v1) in v1.0.0. It documents `GRPCRoute` as GA since v1.1.0, while `TCPRoute` and `UDPRoute` remain Alpha in the Experimental channel. A CNPA answer should therefore avoid saying "all Gateway route
 types are GA"; the stable contract is narrower than the full protocol menu. ([Kubernetes v1.35: Gateway API](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/gateway/), [Gateway API: API
 Overview](https://gateway-api.sigs.k8s.io/docs/concepts/api-overview/), [Gateway API: HTTPRoute](https://gateway-api.sigs.k8s.io/reference/api-types/httproute/), [Gateway API:
 GRPCRoute](https://gateway-api.sigs.k8s.io/reference/api-types/grpcroute/))
@@ -213,8 +213,8 @@ A service mesh adds policy and telemetry between services after traffic is alrea
 retries, timeouts, circuit breaking, traffic policy, and observability. The platform-level question is whether those benefits justify the operational cost and whether the selected mesh contract is clear enough for product teams. Istio's
 traffic management docs describe Envoy-based routing, retries, circuit breakers, timeouts, canary rollouts, and traffic splits; Linkerd documents automatic mTLS between meshed pods, retries and timeouts on HTTPRoute or GRPCRoute resources,
 and endpoint-level circuit breaking in the proxy. ([Istio: Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/), [Istio:
-PeerAuthentication](https://istio.io/latest/docs/reference/config/security/peer_authentication/), [Linkerd: Automatic mTLS](https://linkerd.io/docs/features/automatic-mtls/), [Linkerd: Retries and
-Timeouts](https://linkerd.io/docs/features/retries-and-timeouts/), [Linkerd: Circuit Breaking](https://linkerd.io/2.19/reference/circuit-breaking/))
+PeerAuthentication](https://istio.io/latest/docs/reference/config/security/peer_authentication/), [Linkerd: Automatic mTLS](https://linkerd.io/2.19/features/automatic-mtls/), [Linkerd: Retries and
+Timeouts](https://linkerd.io/2.19/features/retries-and-timeouts/), [Linkerd: Circuit Breaking](https://linkerd.io/2.19/reference/circuit-breaking/))
 
 | Platform decision    | Istio signal                                                                                                         | Linkerd signal                                                                               | CNPA-level interpretation                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -229,12 +229,15 @@ Do not answer service mesh questions by saying "Istio is powerful" or "Linkerd i
 or an implementation that can combine ingress, mesh, and advanced routing under one operating model. It should choose Linkerd when automatic mTLS, transparent proxying, retries, timeouts, and lower configuration burden match the platform's
 actual needs. It should choose no mesh when Kubernetes NetworkPolicy, Gateway API, application telemetry, and library-level resilience already satisfy the contract. Every mesh adds a data-plane hop, a control plane, certificate operations,
 and debugging surface, so the benefit must be tied to a named platform promise. ([Istio: Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/), [Linkerd: Automatic
-mTLS](https://linkerd.io/docs/features/automatic-mtls/))
+mTLS](https://linkerd.io/2.19/features/automatic-mtls/))
+
+Authorization is a separate decision pivot from mTLS. When the requirement is L7 RBAC between services, evaluate Istio's `AuthorizationPolicy` or Linkerd's `policy.linkerd.io/Server` plus `ServerAuthorization` as the operator-level knobs.
+([Istio: AuthorizationPolicy](https://istio.io/latest/docs/reference/config/security/authorization-policy/), [Linkerd: Authorization Policy](https://linkerd.io/2.19/reference/authorization-policy/))
 
 Retries and circuit breakers are the easiest mesh features to misuse. A retry on a safe, idempotent read can hide a transient backend failure from users; a retry on a state-changing payment request can duplicate work or amplify load.
 Linkerd explicitly warns that retries should be used carefully because they can increase system load, and Istio documents circuit breaking as a way to limit the impact of failures, latency spikes, and other network effects. The platform
 contract should say which methods or routes may retry, what timeout bounds apply, how retry budgets or limits are set, and which metric proves the policy is helping rather than making an outage worse. ([Linkerd: Retries and
-Timeouts](https://linkerd.io/docs/features/retries-and-timeouts/), [Istio: Circuit Breaking](https://istio.io/latest/docs/tasks/traffic-management/circuit-breaking/))
+Timeouts](https://linkerd.io/2.19/features/retries-and-timeouts/), [Istio: Circuit Breaking](https://istio.io/latest/docs/tasks/traffic-management/circuit-breaking/))
 
 ## Observability Platform Baseline
 
@@ -448,7 +451,7 @@ Continue with [CNPA Practice Questions Set 1](./module-1.4-practice-questions-se
 - [Gateway API: HTTP Request Mirroring](https://gateway-api.sigs.k8s.io/guides/user-guides/http-request-mirroring/) - documents RequestMirror filters, mirrored backend behavior, and ignored responses from mirrored requests.
 - [Gateway API: HTTP Header Modifiers](https://gateway-api.sigs.k8s.io/guides/user-guides/http-header-modifier/) - documents RequestHeaderModifier and ResponseHeaderModifier filters for adding, setting, and removing headers.
 - [Argo CD: Automated Sync Policy](https://argo-cd.readthedocs.io/en/stable/user-guide/auto_sync/) - documents automated sync, pruning, self-heal, sync semantics, reconciliation interval, and rollback limitations.
-- [Argo CD: Sync Phases and Waves](https://argo-cd.readthedocs.io/en/latest/user-guide/sync-waves/) - documents sync waves, ordering precedence, hooks, wave annotations, and health-dependent progression.
+- [Argo CD: Sync Phases and Waves](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-waves/) - documents sync waves, ordering precedence, hooks, wave annotations, and health-dependent progression.
 - [Argo CD: ApplicationSet](https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/) - documents ApplicationSet-generated Applications, list and cluster generators, template behavior, and multi-cluster use.
 - [Argo CD: Diff Strategies](https://argo-cd.readthedocs.io/en/stable/user-guide/diff-strategies/) - documents desired-vs-live diff calculation, out-of-sync detection, and server-side diff behavior.
 - [Argo CD: App Rollback Command](https://argo-cd.readthedocs.io/en/stable/user-guide/commands/argocd_app_rollback/) - documents rollback to previous deployed application history IDs.
@@ -459,9 +462,11 @@ Continue with [CNPA Practice Questions Set 1](./module-1.4-practice-questions-se
 - [Istio: Traffic Management](https://istio.io/latest/docs/concepts/traffic-management/) - documents Istio traffic management, Envoy proxy model, retries, timeouts, circuit breakers, and traffic splitting.
 - [Istio: Circuit Breaking](https://istio.io/latest/docs/tasks/traffic-management/circuit-breaking/) - documents circuit breaking configuration, failure containment, and outlier detection concepts.
 - [Istio: PeerAuthentication](https://istio.io/latest/docs/reference/config/security/peer_authentication/) - documents mTLS policy modes, STRICT requirements, selector scope, and port-level mTLS behavior.
-- [Linkerd: Automatic mTLS](https://linkerd.io/docs/features/automatic-mtls/) - documents automatic mTLS between meshed pods, service account identity, certificate issuance, rotation, and caveats.
-- [Linkerd: Retries and Timeouts](https://linkerd.io/docs/features/retries-and-timeouts/) - documents retry and timeout configuration on HTTPRoute, GRPCRoute, and Service resources, plus retry safety cautions.
+- [Istio: AuthorizationPolicy](https://istio.io/latest/docs/reference/config/security/authorization-policy/) - documents service-to-service authorization policy actions, workload selectors, sources, operations, and conditions.
+- [Linkerd: Automatic mTLS](https://linkerd.io/2.19/features/automatic-mtls/) - documents automatic mTLS between meshed pods, service account identity, certificate issuance, rotation, and caveats.
+- [Linkerd: Retries and Timeouts](https://linkerd.io/2.19/features/retries-and-timeouts/) - documents retry and timeout configuration on HTTPRoute, GRPCRoute, and Service resources, plus retry safety cautions.
 - [Linkerd: Circuit Breaking](https://linkerd.io/2.19/reference/circuit-breaking/) - documents endpoint-level circuit breaking and failure-accrual behavior in Linkerd.
+- [Linkerd: Authorization Policy](https://linkerd.io/2.19/reference/authorization-policy/) - documents `Server` and `ServerAuthorization` resources for controlling which clients may access protected server ports.
 - [Prometheus: Data Model](https://prometheus.io/docs/concepts/data_model/) - documents time series, metric names, labels, dimensional data, samples, and label cardinality implications.
 - [OpenMetrics Specification](https://github.com/prometheus/OpenMetrics/blob/main/specification/OpenMetrics.md) - documents OpenMetrics data model, metric families, labels, numeric values, counters, gauges, histograms, summaries, and wire format expectations.
 - [Grafana Loki: Labels](https://grafana.com/docs/loki/latest/get-started/labels/) - documents Loki log streams, label strategy, OpenTelemetry resource label defaults, structured metadata, and high-cardinality warnings.
