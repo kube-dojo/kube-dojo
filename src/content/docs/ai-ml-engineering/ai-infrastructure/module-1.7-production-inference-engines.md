@@ -296,7 +296,7 @@ Use this decision flow as a deterministic first pass. It does not replace benchm
 flowchart TD
     A["Define profile: GPUs, model family, context, concurrency, dense/MoE, portability"] --> B{"Must run outside NVIDIA CUDA?"}
     B -- "Yes: AMD ROCm" --> AMD{"AMD ROCm support needed?"}
-    AMD -- "vLLM or SGLang support required" --> I["vLLM or SGLang with ROCm backend caveat"]
+    AMD -- "vLLM or SGLang support required" --> ROCM_OUT["vLLM or SGLang with ROCm backend caveat"]
     B -- "Yes: Intel, mobile, browser, Vulkan, WebGPU, NPU" --> C{"Intel server estate?"}
     C -- "Yes" --> D["OpenVINO Model Server baseline"]
     C -- "No" --> E["MLC LLM or WebLLM baseline"]
@@ -314,6 +314,7 @@ flowchart TD
     N --> O
     H --> P["Keep gateway contract and run phase benchmark"]
     I --> P
+    ROCM_OUT --> P
     D --> P
     E --> P
     O -- "Yes" --> Q["Add NVIDIA Dynamo over chosen backend"]
@@ -522,4 +523,4 @@ Success criteria:
 
 ## Next Module
 
-Continue with a deeper read on vLLM and SGLang internals in [High-Performance LLM Inference](module-1.3-vllm-sglang-inference/), which complements the production-tier selection covered here.
+Continue to [Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping](module-1.8-inference-benchmarking/) to measure the chosen engine against the workload classification you arrived at in this module.
