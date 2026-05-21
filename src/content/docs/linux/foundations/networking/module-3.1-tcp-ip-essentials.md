@@ -12,8 +12,6 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 3.1: TCP/IP Essentials
-
 > **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 35-40 min. This is the operator-grade packet model that later modules use for DNS, namespaces, veth pairs, iptables, and Kubernetes Service debugging.
 
 ## Prerequisites
@@ -24,7 +22,7 @@ Before starting this module:
 - **Helpful**: [Module 1.1: Kernel & Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/)
 - **Next bridge**: [Module 3.3: Network Namespaces & veth](../module-3.3-network-namespaces/) uses the same addressing, routing, neighbor, and MTU model inside isolated network stacks.
 
-For Kubernetes examples, define `alias k=kubectl` once. The lesson is Linux-first, but the goal is Kubernetes 1.35+ operations: pod IPs, Service virtual IPs, CNI routes, ingress sockets, egress NAT, and DNS all collapse to kernel packet decisions during troubleshooting.
+Kubernetes examples use full `kubectl` commands rather than shell aliases so transcripts remain portable. The lesson is Linux-first, but the goal is Kubernetes 1.35+ operations: pod IPs, Service virtual IPs, CNI routes, ingress sockets, egress NAT, and DNS all collapse to kernel packet decisions during troubleshooting.
 
 ## What You'll Be Able to Do
 
@@ -44,9 +42,13 @@ A platform engineer who cannot reason about TCP state machines, MTU, ARP/NDP, ro
 
 Treat every network failure as a claim about one layer of evidence. `ping` may prove ICMP reachability but not a TCP listener. `dig` may prove DNS resolution but not routing to the answer. `ss` may prove a local socket exists but not that a remote firewall lets SYN packets through. `tcpdump` may prove a packet arrived at one interface while the real drop happens later in netfilter or in an overlay MTU mismatch. The discipline is to ask: which kernel decision did I just prove?
 
+The useful habit is to turn a vague outage report into a sequence of falsifiable claims. "The Service is down" is not yet a network diagnosis. "A pod can resolve the Service name, the ClusterIP DNATs to endpoint `10.244.2.37`, the node route sends that endpoint through `vxlan.calico`, and TCP reaches `SYN-SENT` but never receives `SYN-ACK`" is a diagnosis shape. It names a destination, an address family, a dataplane decision, and a missing packet. That level of specificity lets another operator reproduce the failure without trusting your interpretation.
+
+Cloud networking makes this discipline more important because control-plane health and packet forwarding can disagree. A managed load balancer can be healthy while its backend security group blocks return traffic. A CNI can report Ready while the host route table points a remote pod CIDR at a stale tunnel device. A DNS record can be correct while the resolver expands search domains into extra queries and hits a conntrack or CoreDNS limit. The Linux model is the common language across those systems.
+
 ## Layers as Kernel Decisions
 
-OSI is useful vocabulary, but Linux operators usually debug the TCP/IP model because it maps to kernel surfaces. RFC 1122 organizes host requirements across link, internet, and transport layers; RFC 9293 is the current consolidated TCP specification and obsoletes the original RFC 793 as the core TCP reference. In Linux, each layer corresponds to objects you can inspect: links, neighbors, routes, sockets, conntrack entries, and resolver configuration. ([RFC 1122](https://www.rfc-editor.org/rfc/rfc1122), [RFC 793](https://www.rfc-editor.org/rfc/rfc793), [RFC 9293](https://www.rfc-editor.org/rfc/rfc9293))
+OSI is useful vocabulary, but Linux operators usually debug the TCP/IP model because it maps to kernel surfaces. RFC 1122 organizes host requirements across link, internet, and transport layers; RFC 9293 is the current consolidated TCP specification and obsoletes the original RFC 793 as the core TCP reference. In Linux, each layer corresponds to objects you can inspect: links, neighbors, routes, sockets, conntrack entries, and resolver configuration. ([RFC 1122](https://www.rfc-editor.org/info/rfc1122), [RFC 793](https://www.rfc-editor.org/info/rfc793), [RFC 9293](https://www.rfc-editor.org/info/rfc9293))
 
 | OSI view | TCP/IP view | Kernel-level operator question |
 |---|---|---|
@@ -78,9 +80,13 @@ flowchart LR
 
 The diagram is not just teaching art. It is a triage map. If `ip route get` selects the wrong egress interface, the TCP state is a consequence, not the root cause. If a listener is bound to `127.0.0.1:8080`, a Service cannot make remote clients reach it without a process listening on the pod or node address. If VXLAN reduces the usable inner MTU, HTTP may connect and then hang only on larger responses. Each symptom points to a decision surface.
 
+At the kernel layer, layering is less about a clean textbook stack and more about when metadata becomes available. The neighbor table cannot choose a MAC address until routing has selected an egress device and next hop. Netfilter cannot correctly reverse a DNATed reply unless conntrack has stored the original and translated tuples. TCP cannot move a socket to `ESTAB` unless both directions of the route, neighbor, firewall, and sequence-number exchange work. When you debug in that order, you stop treating every failed request as an application mystery.
+
+The reverse direction is just as important. Operators often prove that the client-to-server SYN arrived and then stop, but many real incidents live in the reply path. A node may receive a SYN on one interface and route the SYN-ACK out another. A pod may send a reply with a source address that a cloud router does not know. A NAT gateway may rewrite the source for egress but expire the idle reverse mapping before the next write. A complete packet model always asks who sends the next packet and which kernel decision it must pass.
+
 ## Addressing: IPv4, IPv6, and Kubernetes CIDRs
 
-IPv4 addresses are 32-bit values; IPv6 addresses are 128-bit values. CIDR notation says how many leading bits form the network prefix. RFC 1918 defines the familiar private IPv4 ranges, RFC 4193 defines IPv6 Unique Local Addresses, and RFC 8200 specifies IPv6 itself. The operator move is to calculate the boundary instead of comparing dotted strings by sight. ([RFC 1918](https://www.rfc-editor.org/rfc/rfc1918), [RFC 4193](https://www.rfc-editor.org/rfc/rfc4193), [RFC 8200](https://www.rfc-editor.org/rfc/rfc8200), [RFC 4632](https://www.rfc-editor.org/rfc/rfc4632))
+IPv4 addresses are 32-bit values; IPv6 addresses are 128-bit values. CIDR notation says how many leading bits form the network prefix. RFC 1918 defines the familiar private IPv4 ranges, RFC 4193 defines IPv6 Unique Local Addresses, and RFC 8200 specifies IPv6 itself. The operator move is to calculate the boundary instead of comparing dotted strings by sight. ([RFC 1918](https://www.rfc-editor.org/info/rfc1918), [RFC 4193](https://www.rfc-editor.org/info/rfc4193), [RFC 8200](https://www.rfc-editor.org/info/rfc8200), [RFC 4632](https://www.rfc-editor.org/info/rfc4632))
 
 ```text
 10.244.2.37/24
@@ -96,25 +102,29 @@ A Kubernetes cluster normally has at least three address domains. Node IPs belon
 | Address domain | Example | What it means | First Linux check |
 |---|---:|---|---|
 | Node CIDR / node IPs | `192.168.10.0/24` | Real host network reachability between nodes and gateways | `ip addr`, `ip route get <node-ip>` |
-| Pod CIDR | `10.244.0.0/16` | Workload addresses routed, bridged, overlaid, or eBPF-forwarded by CNI | `k get pods -o wide`, `ip route get <pod-ip>` |
-| Service CIDR | `10.96.0.0/12` | Virtual Service destinations selected and rewritten to endpoints | `k get svc`, `nft list ruleset` or `iptables-save` |
+| Pod CIDR | `10.244.0.0/16` | Workload addresses routed, bridged, overlaid, or eBPF-forwarded by CNI | `kubectl get pods -o wide`, `ip route get <pod-ip>` |
+| Service CIDR | `10.96.0.0/12` | Virtual Service destinations selected and rewritten to endpoints | `kubectl get svc`, `nft list ruleset` or `iptables-save` |
 | IPv6 ULA | `fd00:10:244::/56` | Private IPv6-style cluster or site addressing | `ip -6 addr`, `ip -6 route get <addr>` |
 
 The common overlap problem is simple to miss. If the corporate WAN uses `10.244.0.0/16` and a new cluster also uses `10.244.0.0/16` for pods, some destinations become ambiguous. Linux will choose the most specific matching route; humans may see only that both are "10 dot" networks. Calculate the prefixes, then ask the kernel for the actual lookup.
+
+CIDR math is also a blast-radius tool. If one worker owns `10.244.2.0/24`, the address `10.244.2.37` should be local to that node in a per-node pod-CIDR design, while `10.244.9.37` should route toward another node or tunnel. If `ip route get 10.244.2.37` leaves through the physical NIC instead of a CNI bridge or local veth path, the failure is not "pod networking" in general; it is a contradiction between the expected prefix owner and the installed route. For dual-stack clusters, repeat the same reasoning for IPv6 rather than assuming the IPv4 path explains both families.
+
+Service CIDRs deserve a separate mental bucket because they are not workload locations. A ClusterIP is an address selected by clients, not normally an address bound by the backend pod. If you search every interface with `ip addr` and do not find the Service IP, that may be normal. The question is whether the local dataplane captures traffic to that virtual destination and rewrites it to an endpoint. That is why a Service failure often requires both `kubectl get svc,endpointslices` and Linux NAT or eBPF evidence.
 
 ```bash
 ip -br addr
 ip route get 10.244.2.37
 ip -6 route get fd00:10:244::37
-k get pods -A -o wide
-k get svc -A -o wide
+kubectl get pods -A -o wide
+kubectl get svc -A -o wide
 ```
 
 Do not treat a Service IP as if it must appear on an interface. In kube-proxy iptables mode, Kubernetes documents that kube-proxy installs rules redirecting virtual IP traffic to endpoint rules, and those endpoint rules use destination NAT to backend pods. In nftables mode, kube-proxy uses the kernel netfilter subsystem through nftables instead. The Linux debugging surface is therefore routes plus packet-filter state, not only `ip addr`. ([Kubernetes Virtual IPs and Service Proxies](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/))
 
 ## Neighbor Discovery: ARP, NDP, and VIPs
 
-Routing chooses the next-hop IP and egress device; neighbor discovery finds the link-layer destination for that next hop. IPv4 commonly uses ARP, standardized in RFC 826. IPv6 uses Neighbor Discovery Protocol, specified in RFC 4861. Linux exposes both through the neighbor table, so `ip neigh` is the modern inspection tool. ([RFC 826](https://www.rfc-editor.org/rfc/rfc826), [RFC 4861](https://www.rfc-editor.org/rfc/rfc4861), [ip-neighbour(8)](https://man7.org/linux/man-pages/man8/ip-neighbour.8.html))
+Routing chooses the next-hop IP and egress device; neighbor discovery finds the link-layer destination for that next hop. IPv4 commonly uses ARP, standardized in RFC 826. IPv6 uses Neighbor Discovery Protocol, specified in RFC 4861. Linux exposes both through the neighbor table, so `ip neigh` is the modern inspection tool. ([RFC 826](https://www.rfc-editor.org/info/rfc826), [RFC 4861](https://www.rfc-editor.org/info/rfc4861), [ip-neighbour(8)](https://man7.org/linux/man-pages/man8/ip-neighbour.8.html))
 
 ```bash
 ip neigh show
@@ -126,6 +136,10 @@ sudo ip neigh flush dev eth0 nud failed
 Neighbor state matters when the failure looks like "same subnet but no traffic." If a node believes `192.168.10.44` is on-link, it will ARP for that address instead of sending the packet to a gateway. If no host answers, packets queue and then fail below TCP. If the wrong host answers, traffic goes to the wrong MAC. Active-active VIP systems amplify this risk: two nodes advertising the same virtual IP can create neighbor cache flapping, especially when gratuitous ARP or unsolicited NDP announcements are misconfigured.
 
 Use neighbor evidence before changing routes. A route such as `192.168.10.0/24 dev eth0` can be correct while a stale neighbor entry points to an old MAC after failover. Conversely, a failed neighbor lookup may be the symptom of a bad prefix: the host is ARPing because it incorrectly thinks the destination is local. This is why CIDR and ARP/NDP must be read together.
+
+VIP failover is the place where this becomes operationally sharp. A load balancer pair may move `192.168.10.50` from node A to node B and send gratuitous ARP so peers update their caches. If one switch, host, or security appliance ignores the update, some clients continue sending frames to the old MAC. Kubernetes does not remove that failure mode when you run bare-metal ingress or external load balancers. You still need to inspect the neighbor entry on the client, the gateway, and the node that should own the VIP.
+
+For IPv6, the same idea appears through Neighbor Discovery, router advertisements, and solicited-node multicast rather than broadcast ARP. Dual-stack incidents often look asymmetric because IPv4 neighbor state is healthy while IPv6 NDP is blocked or stale. Use `ip -6 neigh`, capture ICMPv6 neighbor solicitations and advertisements, and remember that blocking all ICMPv6 is not equivalent to blocking harmless ping traffic. It can break essential address resolution and PMTUD behavior.
 
 ## Routing: FIB, RIB, Longest Prefix, and Policy Rules
 
@@ -145,9 +159,13 @@ Kubernetes makes this visible on every node. A directly routed CNI may install o
 
 Policy routing explains asymmetric outages on multi-homed nodes. A request can arrive on `eth0`, but the reply lookup may select `eth1` because the destination client network is more specific through another table. Stateful firewalls and cloud security systems often drop that reply as unexpected. During triage, inspect both directions: route from client to server, and route from server back to client.
 
+The route cache answer from `ip route get` is usually more valuable than the raw table because it includes selected source address, device, next hop, and policy rule effects. When an ingress node has a public interface, a private interface, and pod-facing devices, the selected source address can decide whether replies survive upstream filtering. If the kernel chooses a node-private source for a public client path, the packet may leave correctly but be discarded by the first router that enforces source validation.
+
+Do not confuse the cluster routing contract with one particular CNI implementation. Some CNIs install Linux routes for remote pod CIDRs. Some encapsulate traffic into tunnel devices. Some rely on eBPF maps and show fewer iptables rules than older kube-proxy paths. Some cloud CNIs give pods VPC-routable addresses and move part of the decision into cloud route tables or elastic network interfaces. The Linux checks still anchor the investigation: what address is selected, which interface carries it, and what packet appears on that interface?
+
 ## TCP: Handshake, State, Close, and Keepalive
 
-TCP is a reliable byte stream with connection state, sequence numbers, acknowledgments, retransmission, flow control, and congestion control. RFC 9293 is the current TCP specification, and Linux exposes many TCP behaviors through `ss`, `/proc/sys/net/ipv4/tcp_*`, and socket state. A TCP incident is often just a state-machine question hidden under application language. ([RFC 9293](https://www.rfc-editor.org/rfc/rfc9293), [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html), [ss(8)](https://man7.org/linux/man-pages/man8/ss.8.html))
+TCP is a reliable byte stream with connection state, sequence numbers, acknowledgments, retransmission, flow control, and congestion control. RFC 9293 is the current TCP specification, and Linux exposes many TCP behaviors through `ss`, `/proc/sys/net/ipv4/tcp_*`, and socket state. A TCP incident is often just a state-machine question hidden under application language. ([RFC 9293](https://www.rfc-editor.org/info/rfc9293), [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html), [ss(8)](https://man7.org/linux/man-pages/man8/ss.8.html))
 
 Ports are part of the transport evidence, not application folklore. IANA maintains the service name and transport protocol port registry, which is why operators recognize TCP 22 for SSH, TCP 443 for HTTPS, UDP/TCP 53 for DNS, and Kubernetes control-plane ports such as TCP 6443 as conventions to verify rather than assumptions to trust blindly. A Service `port`, `targetPort`, `nodePort`, and container listener may all differ, so the reliable question is still: which tuple did the kernel see, and which process or NAT rule owned it? ([IANA Service Name and Transport Protocol Port Number Registry](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml), [Kubernetes Ports and Protocols](https://v1-35.docs.kubernetes.io/docs/reference/networking/ports-and-protocols/))
 
@@ -168,7 +186,7 @@ stateDiagram-v2
     TIME_WAIT --> CLOSED: 2MSL timeout
 ```
 
-Read `ss -tan` as evidence. `SYN-SENT` on a client means SYN packets left or are queued but no SYN-ACK has completed the handshake. `SYN-RECV` on a server means SYNs arrived and replies were attempted, but the final ACK did not complete or accept queue pressure exists. `ESTAB` proves the handshake completed. `CLOSE-WAIT` means the peer closed and the local application has not closed its side. `TIME-WAIT` is normal on the side that actively closed; it prevents old duplicate segments from corrupting a later connection using the same tuple.
+Read `ss -tan` as evidence. `SYN-SENT` on a client means SYN packets left or are queued but no SYN-ACK has completed the handshake. `SYN-RECV` on a server means SYNs arrived and replies were attempted, but the final ACK did not complete or accept queue pressure exists; it is the `SYN_RECEIVED` state in the diagram above. `ESTAB` proves the handshake completed. `CLOSE-WAIT` means the peer closed and the local application has not closed its side. `TIME-WAIT` is normal on the side that actively closed; it prevents old duplicate segments from corrupting a later connection using the same tuple.
 
 ```bash
 ss -tan
@@ -182,9 +200,15 @@ Keepalive is not a health check. Linux TCP keepalive probes can eventually detec
 
 A useful interpretation rule is refusal versus timeout. A refused connection usually means a RST came back: the host stack was reachable, but no listener accepted that destination port or policy actively rejected it. A timeout means SYNs, SYN-ACKs, or later packets disappeared. That points toward firewall, routing, neighbor, MTU, conntrack, or security group behavior before it points toward application code.
 
+Backlog pressure has its own signature. A server can listen on the correct port and still fail under SYN queue pressure, accept queue pressure, or application stalls after accept. On the client you may see retries and `SYN-SENT`; on the server you may see `SYN-RECV`, retransmitted SYN-ACKs, or a listener with high queue counts in `ss -ltn`. That evidence changes the action. You do not fix a full accept queue by editing a Service selector; you inspect the process, kernel backlog settings, load balancer health behavior, and whether the application can accept and handle connections quickly enough.
+
+Close states also prevent false alarms. `TIME-WAIT` is not automatically a leak; it is expected on the active closer and protects connection identity while old segments age out. `CLOSE-WAIT` is more suspicious because it means the peer already sent FIN and the local application has not closed its socket. A node with many `CLOSE-WAIT` sockets for an ingress backend may be revealing application close handling, while a node with many `TIME-WAIT` sockets may simply be doing high connection churn. Read the state before changing sysctls.
+
+Keepalive settings belong in an end-to-end timeout budget. Suppose an application holds idle database connections for an hour, a cloud NAT expires idle TCP mappings after a shorter period, and Linux keepalive probes start later than both. The first request after the idle period may fail even though the original handshake succeeded. The fix may be application pool validation, shorter idle lifetime, load balancer timeout alignment, or TCP keepalive tuning. The packet model tells you why the symptom appears only after quiet periods.
+
 ## UDP and QUIC: Connectionless Kernel, Stateful Userspace
 
-UDP gives applications datagrams, ports, and checksums without a kernel-managed connection state machine. The kernel can show UDP sockets, queue pressure, drops, and ICMP errors, but it does not turn a UDP exchange into `ESTABLISHED` the way TCP does. RFC 1122 covers UDP host requirements, and the Linux `udp(7)` page documents Linux UDP socket behavior. ([RFC 1122](https://www.rfc-editor.org/rfc/rfc1122), [udp(7)](https://man7.org/linux/man-pages/man7/udp.7.html))
+UDP gives applications datagrams, ports, and checksums without a kernel-managed connection state machine. The kernel can show UDP sockets, queue pressure, drops, and ICMP errors, but it does not turn a UDP exchange into `ESTABLISHED` the way TCP does. RFC 1122 covers UDP host requirements, and the Linux `udp(7)` page documents Linux UDP socket behavior. ([RFC 1122](https://www.rfc-editor.org/info/rfc1122), [udp(7)](https://man7.org/linux/man-pages/man7/udp.7.html))
 
 ```bash
 ss -uanp
@@ -193,13 +217,15 @@ tcpdump -ni any udp port 53
 tcpdump -ni any udp port 443
 ```
 
-QUIC deliberately uses UDP while implementing streams, connection IDs, loss recovery, encryption, and path migration in the protocol above UDP. RFC 9000 defines QUIC as a UDP-based multiplexed and secure transport. For operators, this means a QUIC or HTTP/3 ingress on UDP/443 will not appear as TCP `ESTAB` sockets. You inspect UDP sockets, packet captures, ingress HTTP/3 or QUIC metrics, and load balancer UDP handling. ([RFC 9000](https://www.rfc-editor.org/rfc/rfc9000))
+QUIC deliberately uses UDP while implementing streams, connection IDs, loss recovery, encryption, and path migration in the protocol above UDP. RFC 9000 defines QUIC as a UDP-based multiplexed and secure transport. For operators, this means a QUIC or HTTP/3 ingress on UDP/443 will not appear as TCP `ESTAB` sockets. You inspect UDP sockets, packet captures, ingress HTTP/3 or QUIC metrics, and load balancer UDP handling. ([RFC 9000](https://www.rfc-editor.org/info/rfc9000))
 
 The Kubernetes implication is direct. A TCP Service gives you handshake evidence; a UDP Service often gives you request/response silence unless the application logs or metrics expose protocol-level state. If DNS works intermittently in-cluster, packet loss, conntrack expiry, CoreDNS saturation, and resolver search behavior can all look like "UDP timeout." Use packet captures and application counters instead of expecting TCP-style states.
 
+QUIC adds another operational split because connection identity can survive address changes at the protocol layer while the kernel still sees UDP datagrams. A client roaming between networks may continue a QUIC session using connection IDs, but a stateless UDP load balancer or firewall may see a new source tuple. For ingress operations, verify that every component in the path handles UDP/443 intentionally: cloud load balancer, node firewall, Service protocol field, ingress controller listener, metrics pipeline, and packet capture filters.
+
 ## Conntrack, NAT, and Service Rewrites
 
-Connection tracking records flows so stateful filtering and NAT can handle replies consistently. Netfilter documentation describes conntrack as fundamental to NAT, and the kernel documents conntrack sysctls such as maximum entries and protocol timeout controls. Kubernetes Services rely on this machinery in Linux kube-proxy modes: iptables mode redirects Service virtual IP traffic to endpoints using destination NAT, and nftables mode uses the nftables API of the same netfilter subsystem. ([Netfilter Hacking HOWTO](https://www.netfilter.org/documentation/HOWTO/netfilter-hacking-HOWTO-3.html), [Netfilter NAT HOWTO](https://www.netfilter.org/documentation/HOWTO/NAT-HOWTO-5.html), [Linux nf_conntrack sysctl](https://docs.kernel.org/networking/nf_conntrack-sysctl.html), [Kubernetes Virtual IPs and Service Proxies](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/))
+Connection tracking records flows so stateful filtering and NAT can handle replies consistently. Linux netfilter documentation describes the hook-based packet path, and the kernel documents conntrack sysctls such as maximum entries and protocol timeout controls. Kubernetes Services rely on this machinery in Linux kube-proxy modes: iptables mode redirects Service virtual IP traffic to endpoints using destination NAT, and nftables mode uses the nftables API of the same netfilter subsystem. ([Linux netfilter documentation](https://docs.kernel.org/networking/netfilter.html), [Linux nf_conntrack sysctl](https://docs.kernel.org/networking/nf_conntrack-sysctl.html), [Kubernetes Virtual IPs and Service Proxies](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/))
 
 ```mermaid
 flowchart TD
@@ -233,9 +259,15 @@ sysctl net.netfilter.nf_conntrack_max net.netfilter.nf_conntrack_count 2>/dev/nu
 
 Do not flush conntrack as a reflex. It can repair stale NAT state in a lab, but in production it can also drop legitimate long-lived connections across the node. First prove the mismatch: packet capture before and after NAT, ruleset selection, route decision, and conntrack entry. Then decide whether the correct fix is endpoint draining, kube-proxy sync, firewall rule repair, timeout tuning, or a targeted conntrack deletion.
 
+For Service debugging, draw both tuples. The original tuple is what the client believes: source IP and port to ClusterIP and Service port. The reply tuple is what the backend and NAT path use after DNAT: client IP and port to pod IP and targetPort, possibly with SNAT if the dataplane masquerades traffic. If those tuples do not line up, symptoms can look arbitrary. One backend receives packets but replies from an address the client never contacted; another backend never sees traffic because the rule or eBPF map selects a different endpoint.
+
+Conntrack exhaustion is a capacity incident, not just a kernel counter. UDP-heavy DNS, short-lived HTTP clients, node-local proxies, and egress NAT can all consume entries. When `nf_conntrack_count` approaches `nf_conntrack_max`, new flows may be dropped or fail to create NAT state. The operator question is which workload creates the pressure, which timeout class keeps entries alive, and whether the node role should carry that much state. Increasing the maximum without understanding memory and traffic shape can move the failure rather than solve it.
+
+Packet-filter hook order matters when evidence seems contradictory. A packet can be accepted by one chain and still be DNATed later, routed differently after DNAT, or SNATed on egress. A local process curling a ClusterIP starts in `OUTPUT`, not `PREROUTING`, so rules that handle only forwarded packets may never see it. A pod packet entering the host from a veth can look like forwarded traffic even though the application that initiated it feels local to the developer. Match the hook path to the packet origin before reading counters.
+
 ## MTU, Fragmentation, and Overlay Penalties
 
-MTU is the maximum frame payload a link can carry without fragmentation at that layer. IPv4 supports fragmentation, but Path MTU Discovery tries to avoid it by learning the smallest usable path size. IPv6 relies on source fragmentation and Packet Too Big signaling rather than router fragmentation. RFC 1191 covers IPv4 PMTUD, RFC 8201 covers IPv6 PMTUD, and Linux exposes MTU on links and routes. ([RFC 1191](https://www.rfc-editor.org/rfc/rfc1191), [RFC 8201](https://www.rfc-editor.org/rfc/rfc8201), [ip-link(8)](https://man7.org/linux/man-pages/man8/ip-link.8.html), [Linux IP sysctl](https://docs.kernel.org/networking/ip-sysctl.html))
+MTU is the maximum frame payload a link can carry without fragmentation at that layer. IPv4 supports fragmentation, but Path MTU Discovery tries to avoid it by learning the smallest usable path size. IPv6 relies on source fragmentation and Packet Too Big signaling rather than router fragmentation. RFC 1191 covers IPv4 PMTUD, RFC 8201 covers IPv6 PMTUD, and Linux exposes MTU on links and routes. ([RFC 1191](https://www.rfc-editor.org/info/rfc1191), [RFC 8201](https://www.rfc-editor.org/info/rfc8201), [ip-link(8)](https://man7.org/linux/man-pages/man8/ip-link.8.html), [Linux IP sysctl](https://docs.kernel.org/networking/ip-sysctl.html))
 
 ```bash
 ip link show
@@ -248,6 +280,10 @@ ping -M do -s 1472 192.168.10.20
 Overlay networking makes MTU visible because encapsulation adds outer headers. VXLAN runs over UDP and Linux documents VXLAN devices as tunnel devices; IPIP, GRE, Geneve, WireGuard, and cloud fabrics have their own overhead. If the physical NIC MTU is 1500 and the overlay adds headers, the pod-facing MTU must usually be smaller. Otherwise small health checks pass while larger TLS records, image pulls, or gRPC responses stall. ([Linux VXLAN documentation](https://docs.kernel.org/networking/vxlan.html))
 
 The operational clue is size sensitivity. A TCP handshake succeeds, small requests work, and larger payloads hang or retransmit. Packet captures may show ICMP Fragmentation Needed or IPv6 Packet Too Big messages, or they may show silence if a firewall drops those control messages. Fixing the app will not help if the path cannot carry the packet size the app emits.
+
+MTU incidents are often introduced by an otherwise correct migration. Moving from direct routing to VXLAN, adding WireGuard encryption, enabling a cloud transit gateway, or chaining a service mesh sidecar can all reduce usable payload size. The service owner sees TLS, HTTP, or gRPC errors because those are the protocols that notice the stall, but the first broken assumption is lower: the path cannot carry the encapsulated packet without fragmentation or PMTUD. Compare the pod device MTU, tunnel MTU, node NIC MTU, and any route-specific MTU before changing application chunk sizes.
+
+Fragmentation also affects observability. A packet capture on the sender may show a large packet leaving the pod interface, while a capture on the underlay shows smaller outer packets or no packet if the kernel refuses to fragment with DF set. A capture at the receiver may show the first fragment but not the later one, causing the reassembled transport segment never to exist. This is why the best MTU test controls packet size, observes ICMP feedback, and captures at both the inner and outer interfaces when overlays are involved.
 
 ## DNS Resolution: From Pod Name to Packet
 
@@ -266,6 +302,10 @@ Kubernetes configures pod DNS so containers can resolve Services by name. The v1
 
 DNS is therefore not one thing. A failure may be NSS order, `/etc/hosts`, systemd-resolved forwarding, CoreDNS, upstream DNS, UDP loss, TCP fallback, search path expansion, or Service record generation. The packet tools enter only after you know what nameserver and query name the resolver actually used.
 
+In Kubernetes, DNS triage begins inside the pod because that is where the resolver configuration is mounted. A node may use one `/etc/resolv.conf`, kubelet may pass another file to pods, and the pod may add `dnsConfig` overrides. If the pod queries `my-api` and the resolver expands it through namespace and cluster search domains, CoreDNS sees multiple candidate names before the one humans expected. The right packet capture filter is therefore not only `port 53`; it is the specific query name, nameserver IP, protocol, and retry pattern.
+
+Application runtime behavior can diverge from glibc examples. Some languages use c-ares, Go's resolver, JVM caching, or custom DNS libraries; some honor `/etc/resolv.conf` differently; some cache negative answers longer than expected. The Linux baseline still matters because it tells you what the environment offered, but an operator should compare command-line resolver behavior with application traces before declaring DNS fixed. A successful `dig` proves the DNS service can answer that query; it does not prove the application used the same query, timeout, cache, or search order.
+
 ## Operator Triage Toolkit
 
 Use modern tools that match the kernel model. Legacy net-tools such as `ifconfig`, `route`, and `netstat` still appear in old runbooks, but this course uses `ip`, `ss`, and protocol-specific tools because they expose namespaces, policy routing, modern socket state, and link attributes more directly.
@@ -281,13 +321,18 @@ Use modern tools that match the kernel model. Legacy net-tools such as `ifconfig
 | Whether a TCP port handshakes | `nc -vz <host> <port>` | Transport reachability | TLS or HTTP success |
 | Where path loss or latency appears | `mtr`, `tracepath` | Hop pattern, PMTU clues | Stateful firewall verdicts |
 
-A strong triage sequence is short. Identify the name and IP, ask Linux for the route, check neighbor state if the next hop is local, test the transport, inspect local sockets, then capture at the boundary where your evidence splits. In Kubernetes, add `k get pod -o wide`, `k get svc -o wide`, and endpoint inspection to map object names to real addresses before you run Linux tools.
+A strong triage sequence is short. Identify the name and IP, ask Linux for the route, check neighbor state if the next hop is local, test the transport, inspect local sockets, then capture at the boundary where your evidence splits. In Kubernetes, add `kubectl get pod -o wide`, `kubectl get svc -o wide`, and endpoint inspection to map object names to real addresses before you run Linux tools.
+
+Choose capture points by the question you are asking. A capture inside a pod namespace proves what the workload sent or received. A capture on the host veth peer proves what crossed the namespace boundary. A capture on the bridge, tunnel, or physical NIC proves what the node dataplane emitted. A capture on only `any` can be useful for quick discovery, but it can hide which interface saw the packet and whether encapsulation changed the headers. When an outage is expensive, spend the extra minute to capture at the boundary that separates two hypotheses.
+
+Write down negative evidence with the same care as positive evidence. "No SYN-ACK observed on `eth0` after SYN leaves" is useful. "No packets" is not, unless it names the interface, filter, time window, and expected tuple. This precision matters when handing off to a network, cloud, or application team. You are not asking them to believe Linux is broken; you are giving them a reproducible packet decision that contradicts the intended design.
 
 ```bash
 TARGET=10.244.2.37
 PORT=8443
 ip route get "$TARGET"
-ip neigh show nud failed,stale,reachable
+ip neigh show
+mtr --report "$TARGET"
 nc -vz "$TARGET" "$PORT"
 ss -tan "( dport = :$PORT or sport = :$PORT )"
 sudo tcpdump -ni any "host $TARGET and tcp port $PORT"
@@ -301,9 +346,34 @@ Avoid command roulette. Running `tcpdump`, `dig`, `nc`, `curl`, `mtr`, and `ss` 
 
 Also avoid "Kubernetes object equals packet path." A Ready pod can have a broken route. A Service can have endpoints and still fail because DNAT, conntrack, or firewall state is wrong. A NetworkPolicy can be correct while the underlay drops encapsulated packets. Kubernetes gives intent; Linux still executes the path.
 
-## Scenario Checks
+The strongest operators keep two models in parallel. The declarative model says what Kubernetes, cloud load balancers, DNS records, and CNI configuration intend. The packet model says what the node kernel, neighbor table, route lookup, socket table, resolver, and conntrack state actually did. An outage is the gap between those models. Your job is not to memorize every implementation detail; it is to narrow the gap until the next repair action is obvious and testable.
 
-<details><summary>Question 1: A client gets `connection refused` to a ClusterIP Service, but `k get endpoints` shows ready pods. What is your first split?</summary>
+## Did You Know
+
+- ARP and IPv6 NDP are not optional trivia on "modern" clusters; bare-metal ingress, node failover, and same-subnet gateways still depend on neighbor cache behavior.
+- A Kubernetes ClusterIP can be unreachable even when no interface owns that IP, because normal Service forwarding happens through a virtual IP dataplane rather than address assignment.
+- `TIME-WAIT` is usually a correctness feature, not a defect; `CLOSE-WAIT` more often points to an application that has not closed after the peer's FIN.
+- QUIC gives applications connection-like behavior over UDP, so the kernel will not expose QUIC sessions as TCP `ESTAB` sockets.
+
+These facts are useful because they stop common misreads. A missing ClusterIP in `ip addr` is not proof that the Service is absent. A full screen of `TIME-WAIT` is not proof that TCP is broken. A healthy TCP ingress tells you little about UDP/443. The kernel exposes the evidence you ask for; the operator has to ask the question that matches the protocol.
+
+## Common Mistakes: TCP/IP Triage
+
+| Mistake | Why it misleads | Better operator move |
+|---|---|---|
+| Treating DNS success as application reachability | A name can resolve while routing, firewall, MTU, or listener state still fails | Resolve the name, then test route, socket, and packet path to the returned address |
+| Looking for a ClusterIP in `ip addr` | Service IPs are often virtual destinations handled by kube-proxy or another dataplane | Inspect Service objects, endpoint selection, and NAT/eBPF forwarding evidence |
+| Debugging TCP with only `ping` | ICMP reachability does not prove a TCP listener, stateful firewall, or path for replies | Use `ss`, `nc`, and packet captures for the exact TCP tuple |
+| Flushing conntrack before proving the tuple | A broad flush can drop legitimate flows and destroy evidence | Compare original and translated tuples, then delete only targeted stale entries if needed |
+| Ignoring return routes | SYN arrival does not prove the SYN-ACK can return through policy routing or firewalls | Run route checks and captures in both directions |
+| Treating small successful probes as proof MTU is fine | Overlay overhead can break only larger payloads | Test size-sensitive traffic and PMTUD evidence |
+| Using legacy net-tools output as the source of truth | Older tools hide policy routing, namespaces, and modern socket detail | Prefer `ip`, `ss`, `tcpdump`, `dig`, `mtr`, `tracepath`, and `conntrack` |
+
+The pattern behind these mistakes is premature conclusion. Each command proves one boundary, not the whole network. A good incident note says what the command proved and what it left unproven. That makes the next command smaller and prevents the team from changing random knobs under pressure.
+
+## Knowledge Check
+
+<details><summary>Question 1: A client gets `connection refused` to a ClusterIP Service, but `kubectl get endpoints` shows ready pods. What is your first split?</summary>
 
 Separate Service translation from backend socket state. `connection refused` usually means a RST returned, so inspect whether the selected backend pod actually has a listener on the targetPort with `ss -tlnp` in the correct namespace or debug container. Then inspect Service port to targetPort mapping and kube-proxy rules. Do not start with MTU or DNS; the refusal is transport evidence.
 
@@ -367,8 +437,8 @@ Record whether you saw refusal, timeout, or immediate local error. Tie each resu
 ### Task 3: Inspect Kubernetes Addresses
 
 ```bash
-k get pods -A -o wide
-k get svc -A -o wide
+kubectl get pods -A -o wide
+kubectl get svc -A -o wide
 POD_IP=<choose-a-pod-ip>
 ip route get "$POD_IP"
 ```
@@ -398,11 +468,11 @@ Find the egress interface MTU and any PMTU clue from `tracepath`. If you are on 
 
 ### Success Criteria
 
-- [ ] Calculated at least one IPv4 or IPv6 prefix boundary instead of guessing from address strings.
-- [ ] Used `ip route get` and `ip neigh` to separate routing from link-layer resolution.
-- [ ] Interpreted at least three TCP states from `ss -tan` output.
-- [ ] Explained how a Kubernetes ClusterIP flow can be DNATed to a pod endpoint and tracked by conntrack.
-- [ ] Connected DNS resolver configuration to actual DNS packets.
+- [ ] Analyze a failing Kubernetes or host connection by separating link, neighbor, route, transport, conntrack, DNS, and application evidence.
+- [ ] Calculate IPv4 and IPv6 prefix boundaries, then decide whether a pod, node, Service, gateway, or VIP is local, routed, or virtual.
+- [ ] Trace TCP connection state from `SYN-SENT` through `TIME-WAIT` and use `ss -tan` output to distinguish refusal, timeout, backlog, close, and keepalive symptoms.
+- [ ] Diagnose Service and ingress failures by connecting Linux conntrack, DNAT, netfilter hooks, sockets, and kube-proxy proxy modes.
+- [ ] Design a triage sequence for MTU, DNS, ARP/NDP, routing, and transport incidents without falling back to legacy net-tools.
 - [ ] Chose modern `ip`, `ss`, `tcpdump`, `dig`, `mtr`, `nc`, and `conntrack` tools instead of legacy net-tools.
 
 ## Next Module
@@ -411,20 +481,23 @@ Next, continue to [Module 3.2: DNS in Linux](../module-3.2-dns-linux/) to go dee
 
 ## Sources
 
-- [RFC 1122: Requirements for Internet Hosts - Communication Layers](https://www.rfc-editor.org/rfc/rfc1122)
-- [RFC 9293: Transmission Control Protocol](https://www.rfc-editor.org/rfc/rfc9293)
-- [RFC 1918: Address Allocation for Private Internets](https://www.rfc-editor.org/rfc/rfc1918)
-- [RFC 4193: Unique Local IPv6 Unicast Addresses](https://www.rfc-editor.org/rfc/rfc4193)
-- [RFC 826: Address Resolution Protocol](https://www.rfc-editor.org/rfc/rfc826)
-- [RFC 4861: Neighbor Discovery for IPv6](https://www.rfc-editor.org/rfc/rfc4861)
-- [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc1191)
-- [RFC 8201: Path MTU Discovery for IPv6](https://www.rfc-editor.org/rfc/rfc8201)
-- [RFC 9000: QUIC](https://www.rfc-editor.org/rfc/rfc9000)
+- [RFC 1122: Requirements for Internet Hosts - Communication Layers](https://www.rfc-editor.org/info/rfc1122)
+- [RFC 9293: Transmission Control Protocol](https://www.rfc-editor.org/info/rfc9293)
+- [RFC 1918: Address Allocation for Private Internets](https://www.rfc-editor.org/info/rfc1918)
+- [RFC 4632: Classless Inter-domain Routing (CIDR)](https://www.rfc-editor.org/info/rfc4632)
+- [RFC 4193: Unique Local IPv6 Unicast Addresses](https://www.rfc-editor.org/info/rfc4193)
+- [RFC 8200: Internet Protocol, Version 6 (IPv6) Specification](https://www.rfc-editor.org/info/rfc8200)
+- [RFC 826: Address Resolution Protocol](https://www.rfc-editor.org/info/rfc826)
+- [RFC 4861: Neighbor Discovery for IPv6](https://www.rfc-editor.org/info/rfc4861)
+- [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/info/rfc1191)
+- [RFC 8201: Path MTU Discovery for IPv6](https://www.rfc-editor.org/info/rfc8201)
+- [RFC 9000: QUIC](https://www.rfc-editor.org/info/rfc9000)
 - [IANA Service Name and Transport Protocol Port Number Registry](https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml)
 - [Linux ip-route manual](https://man7.org/linux/man-pages/man8/ip-route.8.html)
 - [Linux ip-rule manual](https://man7.org/linux/man-pages/man8/ip-rule.8.html)
 - [Linux ip-neighbour manual](https://man7.org/linux/man-pages/man8/ip-neighbour.8.html)
 - [Linux ss manual](https://man7.org/linux/man-pages/man8/ss.8.html)
+- [Linux kernel netfilter documentation](https://docs.kernel.org/networking/netfilter.html)
 - [Linux kernel conntrack sysctl documentation](https://docs.kernel.org/networking/nf_conntrack-sysctl.html)
 - [Linux kernel IP sysctl documentation](https://docs.kernel.org/networking/ip-sysctl.html)
 - [Linux kernel VXLAN documentation](https://docs.kernel.org/networking/vxlan.html)
