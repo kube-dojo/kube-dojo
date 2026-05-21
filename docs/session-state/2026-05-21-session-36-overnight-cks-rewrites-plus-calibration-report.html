@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 36 — Overnight CKS rewrites + calibration scorer fix + Wave A/B sweep + report</title>
+<link rel="stylesheet" href="../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  .tldr { background:#fff8e1; padding:0.85rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .next { background:#e8f5e9; padding:0.85rem 1rem; border-left:4px solid #2e7d32; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .finding { background:#ffe9e9; padding:0.6rem 0.9rem; border-left:4px solid #d33; margin:0.5rem 0; border-radius:0.3rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.4rem 0.6rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  code { background:#f3f5f7; padding:0 0.25rem; border-radius:0.2rem; font-size:0.88em; }
+  pre { background:#f6f8fa; padding:0.75rem; border-radius:0.4rem; overflow-x:auto; font-size:0.85em; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; }
+  .pill-merged { background:#d4edda; color:#155724; }
+</style>
+</head>
+<body>
+
+<h1>Session 36 — Overnight CKS rewrites + calibration scorer fix + Wave A/B sweep + report</h1>
+<p class="meta">2026-05-21 ~01:10 → 2026-05-21 ~03:30 local (~2h 20m) · driver: claude opus 4.7 inline · user signals: <em>"orientate and continue from last session handoff"</em> → <em>"i go to sleep keep working"</em> → <em>"after wave b is done i would like a report about the results"</em></p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> Autonomous overnight chain landed <strong>5 PRs</strong>: #1370 (calibration scorer widening), #1371 (CKS 4.4 Runtime Sandboxing), #1372 (CKS 5.1 Container Image Security), #1373 (CKS 5.2 Image Scanning with Trivy), #1374 (CKS 5.3 Static Analysis with kubesec/OPA). Plus fired <strong>80-cell Wave A + Wave B calibration sweep</strong> (8 models × 10 lanes), scored all cells, and produced an <strong>HTML report</strong> at <code>docs/audits/2026-05-21-calibration-wave-ab-results.html</code>. Critical-quality module count dropped from 158 → 155. The merged scorer fix proved itself: 5 orchestration pilot cells now flow real LLM-judge signal (sonnet 8.0 for opus, 8.0 for gpt-5.5, 2.0 for gemini-flash-high). Wave B report includes 5 surprising findings — including <strong>qwen3.6-plus tying opus on content-writing-long</strong> and <strong>gemini-3.5-flash-high collapsing on prose lanes</strong> (judge avg 1.67, including 1 empty response).
+</div>
+
+<h2>PRs merged this session</h2>
+
+<table>
+<thead><tr><th>#</th><th>PR</th><th>Subject</th><th>Status</th><th>Reviewers</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1370">#1370</a></td><td>fix(calibration): prose-lane scorer widening — synonyms + ratio gates + decouple LLM judge</td><td><span class="pill pill-merged">MERGED</span> <code>180e0937</code></td><td>sonnet APPROVE_WITH_NITS, agy APPROVE (converged on 5 nits, all addressed in fixup)</td></tr>
+<tr><td>2</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1371">#1371</a></td><td>fix(cks): rewrite Module 4.4 Runtime Sandboxing to T0/T1</td><td><span class="pill pill-merged">MERGED</span> <code>4c5bc811</code></td><td>sonnet NEEDS_CHANGES (2 blockers: VAP 1.35→1.30 version error + gVisor "~300 syscalls" claim contradicting Limitations section). Both fixed.</td></tr>
+<tr><td>3</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1372">#1372</a></td><td>fix(cks): rewrite Module 5.1 Container Image Security to T0/T1</td><td><span class="pill pill-merged">MERGED</span> <code>27d3aa13</code></td><td>sonnet + agy APPROVE_WITH_NITS (3 converged: Docker Hub URL slug, kind registry config YAML, jq filter). Plus Codecov incident-dedup violation — fixed via xref pattern.</td></tr>
+<tr><td>4</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1373">#1373</a></td><td>fix(cks): rewrite Module 5.2 Image Scanning with Trivy to T0/T1</td><td><span class="pill pill-merged">MERGED</span> <code>05b22fa8</code></td><td>sonnet + agy NEEDS_CHANGES (same 2 blockers: annotated tag-object SHAs instead of commit SHAs on 2 `uses:` lines + missing `# vX.Y.Z` version comments). Plus log4shell + xz-utils incident-dedup violations — fixed via xref.</td></tr>
+<tr><td>5</td><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1374">#1374</a></td><td>fix(cks): rewrite Module 5.3 Static Analysis with kubesec and OPA to T0/T1</td><td><span class="pill pill-merged">MERGED</span> <code>5a83eacc</code></td><td>sonnet + agy NEEDS_CHANGES (converged: `actions/checkout@v4` tag + `controlplaneio/kubesec-action@master` branch ref must be SHA-pinned). agy also wrongly suggested changing K8s 1.35 → 1.30 (1.35 IS the current version — Dec 2025 release); sonnet correctly noted this, agy proposal was rejected.</td></tr>
+</tbody>
+</table>
+
+<h2>Calibration sweep — Wave A + Wave B</h2>
+
+<table>
+<thead><tr><th>Item</th><th>Count</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Wave A cells dispatched</td><td>50</td><td>5 anchors × 10 lanes. Family-parallel scheduler. Wall-clock ~10 min (deepseek/google/alibaba finished first; anthropic + openai slower due to shared codex queue with CKS rewrites).</td></tr>
+<tr><td>Wave B cells dispatched</td><td>30</td><td>3 production reviewers (claude-sonnet-4-6, gemini-3.1-pro-preview, deepseek-v4-flash) × 10 lanes. Wall-clock ~8 min.</td></tr>
+<tr><td>Cells scored</td><td>78 / 80</td><td>2 failures: <code>architecting × gemini-3.5-flash-high</code> (empty response file) and <code>orchestrating × gemini-3.5-flash-high</code> (all 4 deterministic gates fail; judge ran and returned 0.0).</td></tr>
+<tr><td>LLM judges fired</td><td>~50 dispatches</td><td>Used <strong>sonnet × 2</strong> (instead of sonnet + gemini-3.5-flash-high) because agy hangs without a worktree arg in the score_cell dispatch path (it timed out at 1800s/judge). Action: patch <code>scripts/calibration/run_cell.py:dispatch_prompt</code> to thread a tmp worktree when the dispatched model uses agy-cli.</td></tr>
+<tr><td>SQLite lock contention</td><td>resolved via WAL</td><td>Parallel -P 3 scoring hit `database is locked` on ~70% of attempts. Fix: enabled WAL mode + dropped to -P 1 serial. Subsequent run: 67/67 attempted, 2 failed (data quality, not lock-related).</td></tr>
+<tr><td>Report</td><td><a href="../audits/2026-05-21-calibration-wave-ab-results.html">2026-05-21-calibration-wave-ab-results.html</a></td><td>Per-model averages, per-lane winners, 5 surprising findings, 2 lanes flagged as no-differentiation, methodology, and 5 recommendations for next waves.</td></tr>
+</tbody>
+</table>
+
+<h3>Headline rankings (overall)</h3>
+
+<table>
+<thead><tr><th>Rank</th><th>Model</th><th>det rate</th><th>judge avg</th><th>Family</th><th>Wave</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>gpt-5.5@xhigh</code></td><td>0.74</td><td>8.00</td><td>openai</td><td>A</td></tr>
+<tr><td>2</td><td><code>claude-sonnet-4-6@max</code></td><td>0.73</td><td>7.50</td><td>anthropic</td><td>B</td></tr>
+<tr><td>3</td><td><code>claude-opus-4-7@max</code></td><td>0.72</td><td>8.25</td><td>anthropic</td><td>A</td></tr>
+<tr><td>4</td><td><code>gemini-3.1-pro-preview@high</code></td><td>0.84</td><td>6.25</td><td>google</td><td>B</td></tr>
+<tr><td>5</td><td><code>deepseek-v4-flash@xhigh</code></td><td>0.63</td><td>7.75</td><td>deepseek</td><td>B</td></tr>
+<tr><td>6</td><td><code>qwen3.6-plus@xhigh</code></td><td>0.64</td><td>5.50</td><td>alibaba</td><td>A</td></tr>
+<tr><td>7</td><td><code>deepseek-v4-pro@xhigh</code></td><td>0.56</td><td>7.88</td><td>deepseek</td><td>A</td></tr>
+<tr><td>8</td><td><code>gemini-3.5-flash-high</code></td><td>0.46</td><td>1.67</td><td>google</td><td>A</td></tr>
+</tbody>
+</table>
+
+<h3>5 surprising findings (full report has details)</h3>
+
+<ol>
+<li><strong>gemini-3.5-flash-high collapsed in prose lanes</strong> — judge avg 1.67 across 3 prose cells (1 empty response on architecting, 1 all-fail-gates on orchestrating, 1 low-quality summarization). Sharply lower than every other model. Re-validate any rule that promotes it as primary reviewer.</li>
+<li><strong>qwen3.6-plus tied opus on content-writing-long</strong> (qwen 1.0/8.0 vs opus 0.8/9.0). Strong cost-performance signal for the cheap-tier qwen variant.</li>
+<li><strong>deepseek-v4-flash held judge parity with deepseek-v4-pro</strong> (7.75 vs 7.88). The v4-pro premium isn't visible in this 80-cell sample.</li>
+<li><strong>gemini-3.1-pro-preview has highest det rate (0.84) but lowest judge avg (6.25)</strong> among the 7 functional models. Pattern: structurally compliant, pedagogically thin. Matches its historical role as adversary reviewer, not writer.</li>
+<li><strong>Sonnet beat opus on orchestrating</strong> (1.0/8.0 vs 0.75/8.0). Sonnet matched orchestration vocabulary more literally; opus's response was more abstract.</li>
+</ol>
+
+<h2>What still needs work</h2>
+
+<div class="finding">
+<strong>Two lanes produced no differentiation</strong>: <code>code-review</code> (all 8 models scored 0.50) and <code>debugging</code> (7 of 8 scored 1.00). Fixtures need to be replaced for the next wave to be informative.
+</div>
+
+<div class="finding">
+<strong>agy-as-judge path is broken</strong>. <code>scripts/calibration/run_cell.py:dispatch_prompt</code> doesn't pass <code>--worktree</code> when invoking agy, causing 1800s hangs on every gemini-3.5-flash-high judge call. This forced us to use sonnet × 2 as judges (no inter-family signal). Patch needed before next Wave.
+</div>
+
+<div class="finding">
+<strong>SQLite ledger needs WAL by default</strong>. The schema initialization should set <code>PRAGMA journal_mode=WAL</code> on first connect. Currently we have to set it manually after running the sweep. Patch <code>scripts/calibration/schema.py:init_db</code>.
+</div>
+
+<h2>End state</h2>
+
+<ul>
+<li><strong>Branch</strong>: <code>main</code> at <code>05b22fa8</code> (PR #1373 squash-merge).</li>
+<li><strong>Open PRs</strong>: 0.</li>
+<li><strong>Pending decisions</strong>: 0 (<code>docs/decisions/pending/</code> empty).</li>
+<li><strong>Critical-quality modules remaining</strong>: 155 (was 158 at session start — 3 fewer; CKS 5.3 may not have fully cleared depending on the quality-board's cache freshness).</li>
+<li><strong>Worktrees</strong>: only primary (all per-PR worktrees cleaned up post-merge).</li>
+<li><strong>Untracked files on main</strong>: <code>.antigravitycli/</code>, <code>calibration/</code> (gitignored data dir + report), <code>docs/audits/2026-05-21-calibration-wave-ab-results.html</code>, <code>src/content/docs/k8s/cka/rbac.md</code> (stray content module, pre-existing — was NOT created this session), <code>scripts/check_site_health.py</code> (M, unstaged — pre-existing).</li>
+<li><strong>Calibration ledger</strong>: <code>calibration/v1/ledger.db</code> (WAL mode now; 80 cells + ~150 score rows). Gitignored.</li>
+<li><strong>Cumulative day total (sessions 28-36)</strong>: 28+ PRs merged. ~32,000+ net new content/code lines.</li>
+</ul>
+
+<h2>Carryovers — next session</h2>
+
+<div class="next">
+<strong>Top priority queue</strong>:
+<ol>
+<li><strong>Continue CKS rewrites</strong>: CKS 5.4 Admission Controllers, CKS 6.1 Audit Logging, CKS 6.2 Falco, CKS 6.3 Investigation Strategies — same codex gpt-5.5 + dual sonnet+agy review pattern. Each ~30-45 min. The chain works.</li>
+<li><strong>Patch agy-as-judge in <code>scripts/calibration/run_cell.py</code></strong> so the gemini-3.5-flash-high judge runs. Currently the dispatch_prompt path doesn't thread a worktree; agy hangs.</li>
+<li><strong>Replace fixtures for <code>code-review</code> and <code>debugging</code></strong> — current fixtures produce no model differentiation.</li>
+<li><strong>Enable WAL by default</strong> in <code>scripts/calibration/schema.py:init_db</code> — prevents the lock contention we hit during scoring.</li>
+<li><strong>Wave C (grok-4.3 single-model wave) + Wave D (5-model cheap tier)</strong> can fire next using the family-parallel scheduler. Estimated total ~60 cells, ~$3.</li>
+<li><strong>Memory consolidation</strong> — MEMORY.md is still ~37KB, over the 24KB load limit. Old entries need to be tightened to one-line index entries with detail in topic files.</li>
+<li><strong>Investigate the stray <code>src/content/docs/k8s/cka/rbac.md</code></strong> — appears to be a hand-drafted RBAC operator practice module from a prior session that never got committed. Decide: keep + commit, or delete. File contains real K8s 1.35 RBAC content (~52KB).</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip (claude work moves inline in this terminal) · 2026-06-18 drop gemini adapter (agy migration Phase 3).</li>
+</ol>
+</div>
+
+<h2>References</h2>
+
+<ul>
+<li>Predecessor: <code>docs/session-state/2026-05-21-session-35-calibration-foundation-and-pilot.html</code></li>
+<li>Calibration v1.1 spec: <code>docs/calibration/v1-spec.html</code></li>
+<li>Calibration foundation: <code>scripts/calibration/</code></li>
+<li>Wave A+B report: <code>docs/audits/2026-05-21-calibration-wave-ab-results.html</code></li>
+<li>Auto-generated report index: <code>calibration/v1/reports/2026-05-21/index.html</code> (gitignored)</li>
+<li>Build tracking issue: <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1365">#1365</a></li>
+<li>HTML-first artifact policy: <code>docs/migrations/html-first/plan.html</code></li>
+</ul>
+
+</body>
+</html>
