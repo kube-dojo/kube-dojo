@@ -231,7 +231,7 @@ jobs:
             dockerfile: services/worker/Dockerfile
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5.0.1
 
       - name: Build image
         run: |
@@ -242,7 +242,7 @@ jobs:
             "${{ matrix.context }}"
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}/${{ matrix.image }}:${{ github.sha }}
           format: sarif
@@ -254,7 +254,7 @@ jobs:
 
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
+        uses: github/codeql-action/upload-sarif@458d36d7d4f47d0dd16ca424c1d3cda0060f1360  # v3
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
 
@@ -268,7 +268,7 @@ jobs:
 
       - name: Install cosign
         if: github.event_name == 'push'
-        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159  # v3.9.2
 
       - name: Sign pushed digest
         if: github.event_name == 'push'
@@ -501,7 +501,7 @@ When a scan returns more than one hundred CVEs and the timer is running, use a t
 - [Trivy filtering and suppression documentation](https://trivy.dev/docs/dev/docs/configuration/filtering/)
 - [Trivy VEX documentation](https://trivy.dev/docs/latest/supply-chain/vex/)
 - [Trivy plugin list CLI reference](https://trivy.dev/latest/docs/references/configuration/cli/trivy_plugin_list/)
-- [Trivy GitHub Action README at commit a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8](https://github.com/aquasecurity/trivy-action/tree/a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8)
+- [Trivy GitHub Action README at commit ed142fd0673e97e23eac54620cfb913e5ce36c25](https://github.com/aquasecurity/trivy-action/tree/ed142fd0673e97e23eac54620cfb913e5ce36c25)
 - [Aqua Security trivy-db repository](https://github.com/aquasecurity/trivy-db)
 - [Aqua Security vuln-list repository](https://github.com/aquasecurity/vuln-list)
 - [Aqua Security advisory: Trivy ecosystem supply chain temporarily compromised](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)
