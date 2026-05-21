@@ -218,8 +218,42 @@ def test_dispatch_backfill_sha_regex_parses_ok_line():
         ("qwen", ["qwen", "gemini", "claude"]),
         ("deepseek", ["deepseek", "claude", "qwen"]),
         ("gemini", ["gemini", "claude", "qwen"]),
+        # #1350 Phase 1 carryover: agy is a peer-Google adapter post-2026-06-18
+        # and a viable primary reviewer; cascade skips gemini (shared OAuth)
+        # and falls to claude → qwen.
+        ("agy", ["agy", "claude", "qwen"]),
     ],
 )
 def test_reviewer_cascade_selection(primary: str, expected: list[str]) -> None:
     cascade = pilot.build_reviewer_cascade(primary)
     assert [name for name, _fn in cascade] == expected
+
+
+def test_dispatch_agy_review_uses_danger_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The agy adapter requires mode='danger' in headless dispatch — verify
+    dispatch_agy_review passes it and uses the correct agent_name."""
+    from types import SimpleNamespace
+
+    calls: list[dict] = []
+
+    def fake_invoke(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            ok=True,
+            response="VERDICT: APPROVE\nlooks good",
+            stderr_excerpt=None,
+        )
+
+    monkeypatch.setattr(pilot, "invoke", fake_invoke)
+    monkeypatch.setattr(pilot, "log", lambda _event: None)
+    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+
+    text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-test")
+
+    assert verdict == "APPROVE"
+    assert text == "VERDICT: APPROVE\nlooks good"
+    assert len(calls) == 1
+    assert calls[0]["agent_name"] == "agy"
+    assert calls[0]["mode"] == "danger"
+    assert calls[0]["entrypoint"] == "dispatch"
+    assert "model" not in calls[0]  # agy uses TUI-picker, no model= arg
