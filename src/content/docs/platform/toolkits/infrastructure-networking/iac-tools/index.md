@@ -4,7 +4,7 @@ sidebar:
   order: 0
   label: "IaC Tools"
 ---
-> **Toolkit Track** | 12 Modules | ~11 hours total
+> **Toolkit Track** | 13 Modules | ~13 hours total
 
 ## Overview
 
@@ -37,6 +37,7 @@ Before starting this toolkit:
 | 7.11 | [HCP Terraform Workflow Operations](module-7.11-hcp-terraform-workflows/) | `[COMPLEX]` | 60-70 min |
 | 7.12 | [Ansible Operator SDK Fundamentals](module-7.12-ansible-operator-sdk/) | `[COMPLEX]` | ~90 min |
 | 7.15 | [Helm vs Ansible vs Go Operator Decision Framework](module-7.15-helm-ansible-go-operator-decision/) | `[COMPLEX]` | ~90 min |
+| 7.16 | [Production Ansible Operator Patterns](module-7.16-production-ansible-operator-patterns/) | `[EXPERT]` | ~120 min |
 
 ## Learning Outcomes
 
@@ -55,6 +56,7 @@ After completing this toolkit, you will be able to:
 11. **Operate Terraform at organizational scale** — HCP Terraform workspaces, dynamic provider credentials, Sentinel/OPA policy gates, drift detection, and private module registry workflows
 12. **Build Ansible Operators** — Map Kubernetes custom resources to Ansible roles with Operator SDK, `watches.yaml`, `kubernetes.core`, and status-aware reconciliation
 13. **Choose the right operator implementation style** — Score a requirement across twelve decision axes (complexity, state-machine fit, OLM tier, upgrade safety, and more) to select Helm, Ansible, or Go, and plan incremental migrations as requirements grow
+14. **Operate Ansible Operators in production** — Status conditions, finalizer safety, idempotency at scale, CRD upgrade strategies, leader election, OLM bundles, and operator observability
 
 ## Tool Selection Guide
 
@@ -103,6 +105,7 @@ WHICH IAC TOOL?
      • Reconcile logic implemented as Ansible roles
      • `watches.yaml` maps CRDs to roles or playbooks
      • Strong when platform teams already own Ansible automation
+     • Production patterns (status conditions, finalizers, OLM): Module 7.16
 
 "I need to choose between Helm, Ansible, and Go for a Kubernetes operator"
 └──▶ Module 7.15: Helm vs Ansible vs Go Operator Decision Framework
@@ -259,6 +262,11 @@ Module 7.15: Helm vs Ansible vs Go Operator Decision Framework
      │  12-axis decision matrix
      │  Three worked examples, all 3 flavors on kind
      ▼
+Module 7.16: Production Ansible Operator Patterns
+     │
+     │  Status conditions, finalizers, idempotency at scale
+     │  Leader election, OLM, observability, chaos testing
+     ▼
 [Toolkit Complete] → Apply to production
 ```
 
@@ -279,6 +287,7 @@ Module 7.15: Helm vs Ansible vs Go Operator Decision Framework
 | HCP Terraform | VCS-driven workflow with dynamic credentials and policy gates |
 | Ansible Operator SDK | Build a DemoApp custom resource reconciled by an Ansible role |
 | Helm vs Ansible vs Go Decision | Build all three operator styles against the same WebApp CRD on kind; compare line counts, debugging, and capability ceilings |
+| Production Ansible Operator Patterns | Deploy operator with HA leader election, create 100 CRs, inject leader transition, measure reconciliation latency |
 
 ## Related Tracks
 
