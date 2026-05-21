@@ -194,12 +194,23 @@ def preflight_probe(
     for (provider_cli, agent_name), model in seen.items():
         started = time.monotonic()
         try:
-            dispatch_prompt(
+            result = dispatch_prompt(
                 model,
                 "Reply with the single word OK.",
                 Path.cwd(),
                 probe_timeout_s,
             )
+            # Validate the response actually said something (post-challenge-
+            # round fix). dispatch_prompt already raises on empty + non-zero
+            # rc, but a model that returns "I cannot help with that" still
+            # gets `ok=True`. The probe shape is tight enough that any non-
+            # empty response demonstrates the adapter is reachable.
+            response_text = (result.response or "").strip()
+            if not response_text:
+                raise RuntimeError(
+                    f"preflight probe returned empty response from "
+                    f"{model.canonical_string}"
+                )
             results.append(
                 {
                     "ok": True,
@@ -207,6 +218,7 @@ def preflight_probe(
                     "agent_name": agent_name,
                     "model": model.canonical_string,
                     "elapsed_s": time.monotonic() - started,
+                    "response_preview": response_text[:80],
                 }
             )
             print(

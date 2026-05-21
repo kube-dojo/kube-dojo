@@ -321,7 +321,12 @@ class OrchestratingScorer:
     ) -> dict[str, bool]:
         routes = ground_truth.get("expected_routes", [])
         if not routes:
-            routing_ratio = 0.0
+            # Vacuous pass — matches the empty-set convention every other
+            # ratio scorer uses (CodeReview / Mcp / Harness / Summarization).
+            # Caught by the challenge-round pilot on PR #1376: this used to
+            # silently mark every model as failed when a fixture shipped
+            # without expected_routes.
+            routing_ratio = 1.0
         else:
             hits = 0
             for route in routes:

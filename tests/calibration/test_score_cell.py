@@ -203,6 +203,18 @@ def test_orchestrating_scorer_ratio_threshold():
     assert fail_gates["routing_accuracy"] is False
 
 
+def test_orchestrating_scorer_empty_routes_is_vacuous_pass():
+    """Regression from PR #1376 challenge-round: empty `expected_routes` used
+    to set routing_ratio=0.0 (silent fail for every model). Other ratio
+    scorers treat empty-set as vacuous pass; orchestrating now matches."""
+    scorer = score_cell.SCORERS["orchestrating"]
+    gates = scorer.deterministic_gates(
+        "any response",
+        {"expected_routes": []},
+    )
+    assert gates["routing_accuracy"] is True
+
+
 def test_debugging_scorer_happy_path():
     response = (
         "Root cause: ResourceQuota requests.storage is 300Gi but PVCs sum to 320Gi.\n"
