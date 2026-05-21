@@ -81,6 +81,7 @@ flowchart LR
     P --> W{Are stages dependent?}
     W -->|No, scripts are enough| P
     W -->|Yes, lineage matters| L[Introduce a pipeline]
+    L --> X([Retire, archive, or hand off])
 ```
 
 The diagram is useful because it turns a vague architecture conversation into an operator decision. The question is not "Which tool is more professional?" The question is "What responsibility has this work acquired, and which working mode exposes that responsibility clearly enough for the next person?"
@@ -98,7 +99,7 @@ A project layout is a communication tool. It tells future readers what they can 
 ```text
 my-ai-project/
 ├── README.md
-├── requirements.txt
+├── pyproject.toml
 ├── notebooks/
 │   ├── 01-exploration.ipynb
 │   └── 02-error-analysis.ipynb
@@ -228,6 +229,8 @@ if __name__ == "__main__":
 PYTHONPATH=src .venv/bin/python src/my_project/run_features.py
 ```
 
+Here `PYTHONPATH=src` is only a pre-install shorthand for a project that has not been installed yet. Once the package has an editable install, run the command without that environment prefix.
+
 The function in `features.py` is reusable logic. The script in `run_features.py` is executable workflow. The notebook can import the same function for inspection, but it no longer owns the only copy of the transformation.
 
 Notice that the script writes to `outputs/reports/`, not beside the source file. This one choice makes review easier because source changes and generated results do not compete for attention in the same directory.
@@ -311,6 +314,8 @@ The `src` layout is not decoration. Setuptools documents package discovery for `
 .venv/bin/python -m pytest
 ```
 
+After this install, `PYTHONPATH=src` is no longer needed; the package is importable by name in the active environment.
+
 Do not turn `pyproject.toml` into an experiment diary. Model thresholds, dataset snapshots, prompt variants, and output report paths usually belong in command arguments or config files because they change per run. Package names, supported Python versions, and development tool settings belong in `pyproject.toml` because they describe the project environment. That separation keeps metadata stable while still letting experiments vary.
 
 ---
@@ -331,14 +336,15 @@ The table is not a ranking. It is a warning against mixing ownership. uv documen
 # uv-owned project
 uv add pandas scikit-learn
 uv sync
+# (use uv run <command> for one-off commands in the managed environment)
 
 # PDM-owned project
 pdm add pandas scikit-learn
 pdm install
 
 # pip-tools-owned project
-.venv/bin/python -m piptools compile requirements.in -o requirements.txt
-.venv/bin/python -m piptools sync requirements.txt
+.venv/bin/pip-compile requirements.in -o requirements.txt
+.venv/bin/pip-sync requirements.txt
 ```
 
 For notebook-heavy work, dependency hygiene also protects interpretation. A model metric can change because the data changed, the code changed, or a library version changed. If the dependency state is not documented, the team may spend hours debugging model behavior while the real difference is a silently upgraded parser, tokenizer, dataframe library, or evaluation package. A clean project records the dependency decision near the code so reruns can test the same hypothesis under the same environment boundary.
@@ -537,7 +543,7 @@ def predict_label(text: str) -> str:
     return "needs_review"
 
 
-def predict_rows(features: list[dict[str, object]]) -> list[dict[str, str]]:
+def predict_rows(features: list[dict[str, object]]) -> list[dict[str, object]]:
     predictions = []
     for item in features:
         text = str(item["text"])
@@ -602,7 +608,7 @@ Step seven is to run the project from a clean command. A teammate should be able
 
 ```bash
 cd my-ai-project
-PYTHONPATH=src .venv/bin/python src/my_project/run_baseline.py
+.venv/bin/python src/my_project/run_baseline.py
 cat outputs/predictions/baseline.jsonl
 ```
 
@@ -641,7 +647,7 @@ Conversion tools help you cross the bridge from exploration to repeatability, bu
 ```bash
 mkdir -p converted
 jupyter nbconvert --to script notebooks/01-exploration.ipynb --output-dir converted
-sed -n '1,160p' converted/01-exploration.py
+head -160 converted/01-exploration.py
 ```
 
 Use nbconvert when you need a one-time extraction or an audit snapshot of what the notebook currently contains. The next step is still human judgment. Functions that define reusable behavior move to `src/my_project/`. Commands that should run from a clean shell become scripts. Plotting and interpretation can remain in the notebook. This keeps the conversion from becoming a mechanical dump where every cell becomes permanent just because a tool exported it.
@@ -863,8 +869,38 @@ You do not need a real model for this exercise. The point is to practice the pro
 ```bash
 mkdir -p notebook-refactor-demo/{notebooks,src/my_project,data/raw,outputs/predictions,outputs/reports,tests}
 touch notebook-refactor-demo/src/my_project/__init__.py
-touch notebook-refactor-demo/README.md notebook-refactor-demo/requirements.txt
+touch notebook-refactor-demo/README.md
 find notebook-refactor-demo -maxdepth 3 -type d | sort
+```
+
+- [ ] Add project metadata so the `src/` package can be installed and tests can import it by name.
+
+```bash
+cat > notebook-refactor-demo/pyproject.toml <<'EOF'
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notebook-refactor-demo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+EOF
+
+(cd notebook-refactor-demo && .venv/bin/python -m pip install -e ".[dev]")
 ```
 
 - [ ] Add a raw input file under `data/raw/` instead of hardcoding the only copy of the data inside a notebook.
@@ -914,7 +950,7 @@ def predict_label(text: str) -> str:
     return "needs_review"
 
 
-def predict_rows(features: list[dict[str, object]]) -> list[dict[str, str]]:
+def predict_rows(features: list[dict[str, object]]) -> list[dict[str, object]]:
     predictions = []
     for item in features:
         text = str(item["text"])
@@ -959,7 +995,7 @@ if __name__ == "__main__":
 
 ```bash
 cd notebook-refactor-demo
-PYTHONPATH=src .venv/bin/python src/my_project/run_baseline.py
+.venv/bin/python src/my_project/run_baseline.py
 cat outputs/predictions/baseline.jsonl
 ```
 
@@ -992,8 +1028,8 @@ def test_build_features_counts_words_after_normalization() -> None:
 - [ ] Rerun the script twice and confirm the project does not depend on notebook cell order or hidden kernel memory.
 
 ```bash
-PYTHONPATH=src .venv/bin/python src/my_project/run_baseline.py
-PYTHONPATH=src .venv/bin/python src/my_project/run_baseline.py
+.venv/bin/python src/my_project/run_baseline.py
+.venv/bin/python src/my_project/run_baseline.py
 find src data outputs notebooks tests -maxdepth 3 -type f | sort
 ```
 
