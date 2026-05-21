@@ -150,7 +150,36 @@ FORBIDDEN = (
 # Reverse map: incident label → slug
 LABEL_TO_SLUG = {label: slug for slug, (_, label) in CANONICALS.items()}
 
+# xref markers MUST live in prose (not inside fenced/inline code), since the
+# code-stripping pass below blanks code regions before xref-near scans run. A
+# marker placed inside a fenced block would be silently erased and the gate
+# would still fire — by design (xrefs are reader-facing prose anchors, not
+# code-sample annotations). The test suite locks this invariant.
 XREF_RE = re.compile(r"<!--\s*incident-xref:\s*([a-z0-9\-]+)\s*-->", re.IGNORECASE)
+
+# Fenced ```code``` and inline `code` are stripped before regex scanning so that
+# incident patterns matched inside HCL/YAML/Python/etc. samples don't trip the
+# gate. The replacement keeps the same character count (and newlines) so that
+# `has_xref_near` offsets remain valid. Closes #1343 — the FP class where a
+# Terraform `variable "aws_region"` block with `description = "S3 exercise"` +
+# `default = "us-east-1"` matched `AWS.{0,80}S3.{0,80}us-east-1` as the canonical
+# 2017 outage anchor. The incident-xref marker convention is for prose; if a
+# real incident genuinely needs to be named inside a code sample, lift the
+# narrative into prose with a proper canonical or xref.
+_FENCED_CODE_RE = re.compile(r"```.*?```", flags=re.DOTALL)
+# Scope limitation: only single-backtick `inline` is blanked. Double-backtick
+# delimiters (`` `lit` ``) survive — practically rare in the curriculum and
+# would only matter if an author wraps a vendor+service+region triple in one.
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+
+
+def _blank_code_preserving_offsets(text: str) -> str:
+    """Replace fenced and inline code with spaces (newlines preserved)."""
+    def _blank(m: re.Match) -> str:
+        return "".join(c if c == "\n" else " " for c in m.group(0))
+    text = _FENCED_CODE_RE.sub(_blank, text)
+    text = _INLINE_CODE_RE.sub(_blank, text)
+    return text
 
 
 def relpath(p: Path) -> str:
@@ -172,9 +201,10 @@ def scan_for_violations() -> tuple[list[dict], int]:
     violations: list[dict] = []
     for path in files:
         try:
-            text = path.read_text(encoding="utf-8")
+            raw = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
+        text = _blank_code_preserving_offsets(raw)
         rel = relpath(path)
         for incident_label, patterns in INCIDENTS.items():
             for pat in patterns:
@@ -188,7 +218,7 @@ def scan_for_violations() -> tuple[list[dict], int]:
                         "file": rel,
                         "incident": incident_label,
                         "kind": "forbidden",
-                        "snippet": _snippet(text, m),
+                        "snippet": _snippet(raw, m),
                         "remediation": "Replace with a concept-led 'Why This Module Matters' section per docs/audits/2026-05-04-incident-canonicals.md (option (c)). No fabricated incidents.",
                     })
                     break
@@ -227,9 +257,10 @@ def scan_for_violations() -> tuple[list[dict], int]:
     files_per_incident: dict[str, list[str]] = {}
     for path in files:
         try:
-            text = path.read_text(encoding="utf-8")
+            raw = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
+        text = _blank_code_preserving_offsets(raw)
         for incident_label, patterns in INCIDENTS.items():
             if incident_label in FORBIDDEN or incident_label in LABEL_TO_SLUG:
                 continue

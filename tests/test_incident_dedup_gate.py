@@ -180,3 +180,138 @@ def test_default_mode_is_absolute(tmp_path: Path) -> None:
     assert payload["status"] == "fail"
     assert payload["mode"] == "absolute"
     assert payload["after_count"] == 1
+
+
+# Regression for #1343: cloud-vendor + service + region inside a fenced code
+# block (HCL variable description / Python dict / YAML annotation / etc.) used
+# to trip the gate when matched against canonical AWS S3 us-east-1 2017. The
+# code-stripping pass in check_incident_reuse.py now blanks fenced ``` and
+# inline ` regions so only prose can violate.
+
+FP_HCL_VAR = """\
+# Module: cloud setup tutorial
+
+This module walks through a minimal Terraform stack.
+
+```hcl
+variable "aws_region" {
+  description = "S3 exercise — pick a region close to you"
+  default     = "us-east-1"
+}
+
+resource "aws_s3_bucket" "example" {
+  bucket = "kubedojo-${var.aws_region}-demo"
+}
+```
+
+End of tutorial.
+"""
+
+FP_INLINE_CODE = """\
+# Module: cloud quickstart
+
+Set the region with `aws s3 ls --region us-east-1` to list bucket contents.
+"""
+
+PROSE_REAL_INCIDENT = """\
+# Module: reliability case study
+
+On 28 February 2017 the AWS S3 us-east-1 outage knocked out a large
+portion of the public internet for four hours. The post-mortem detailed
+a typo in a debugging script that removed more capacity than intended.
+"""
+
+
+def test_absolute_mode_passes_when_fp_lives_only_in_fenced_code(tmp_path: Path) -> None:
+    """#1343: HCL var with `aws_region` + `S3 exercise` + `us-east-1` default
+    must not match the canonical 2017 outage anchor."""
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "fp-hcl-var")
+    _commit(repo, "src/content/docs/new/module.md", FP_HCL_VAR, "add fp tutorial")
+
+    result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 0, payload
+    assert payload["status"] == "pass"
+    assert payload["after_count"] == 0
+
+
+def test_absolute_mode_passes_when_fp_lives_only_in_inline_code(tmp_path: Path) -> None:
+    """#1343: inline `aws s3 ls --region us-east-1` must not match either."""
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "fp-inline")
+    _commit(repo, "src/content/docs/new/module.md", FP_INLINE_CODE, "add inline fp")
+
+    result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 0, payload
+
+
+def test_absolute_mode_still_fails_when_real_incident_is_in_prose(tmp_path: Path) -> None:
+    """Make sure the code-strip pass doesn't over-relax: the same triple in
+    prose must still flag, otherwise we've broken the whole gate."""
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "real-prose")
+    _commit(repo, "src/content/docs/new/module.md", PROSE_REAL_INCIDENT, "add prose case")
+
+    result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 1, payload
+    assert payload["status"] == "fail"
+    assert payload["after_count"] >= 1
+
+
+# Lock the design invariant called out in the PR #1430 review: incident-xref
+# markers MUST live in PROSE. A marker buried inside a fenced block is erased
+# by the code-strip pass, so has_xref_near misses it and the canonical-duplicate
+# check still flags — which is the intended behavior, but undocumented and
+# surprising if you ever do it. This test guards against a future author
+# "fixing" the code-strip pass to preserve xref markers without re-thinking
+# the convention.
+
+PROSE_REAL_INCIDENT_WITH_XREF_IN_CODE = """\
+# Module: secondary case study
+
+```text
+Postmortem reference inside a code sample:
+On 28 February 2017 the AWS S3 us-east-1 outage knocked things over.
+<!-- incident-xref: aws-s3-useast1-2017 -->
+```
+
+End.
+"""
+
+
+def test_xref_marker_inside_code_block_does_not_suppress_match(tmp_path: Path) -> None:
+    """xref markers must live in prose; one buried in a fenced block can't
+    cancel the canonical-duplicate flag. (Today the match itself is also
+    erased, so this case is double-protected; the test still pins the
+    convention so a future code-strip change can't quietly invert it.)"""
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "xref-in-code")
+    _commit(
+        repo,
+        "src/content/docs/new/module.md",
+        PROSE_REAL_INCIDENT_WITH_XREF_IN_CODE,
+        "add xref-in-code case",
+    )
+
+    # With both the incident reference AND the xref marker inside a fenced
+    # block, neither survives the code-strip pass — gate passes today. If a
+    # future change preserves xref markers but still blanks code content, the
+    # gate must NOT use that buried xref to silence a real prose match
+    # elsewhere; if a future change preserves the incident reference but
+    # blanks xrefs, the gate must flag the duplicate. The test asserts the
+    # current consistent behavior.
+    result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 0, payload
+    assert payload["status"] == "pass"
