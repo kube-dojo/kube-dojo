@@ -14,14 +14,10 @@ import yaml
 
 from . import schema
 from .models import model_by_canonical
-from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, dispatch_prompt
+from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, DispatchResult, dispatch_prompt
 from .scorers import respected_inline_return
 
 GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
-# refactoring is listed here so it routes through the prose-lane judge path
-# the day RefactoringScorer gains an llm_judge_prompt. Today its judge prompt
-# returns None and the function returns early before the PROSE_LANES guard
-# fires — so this membership is forward-declaration, not active behavior.
 PROSE_LANES: frozenset[str] = frozenset(
     {
         "orchestrating",
@@ -446,7 +442,15 @@ class RefactoringScorer:
         response: str,
         ground_truth: dict[str, Any],
     ) -> str | None:
-        return None
+        return _judge_prompt(
+            "refactoring",
+            response,
+            (
+                "Score whether the refactor preserves the requested behavior, "
+                "reduces complexity, and remains testable."
+            ),
+            ground_truth,
+        )
 
 
 class SummarizationScorer:
@@ -753,23 +757,40 @@ def _latest_response_path(conn: Any, cell_id: str) -> Path:
     return _response_path_from_dispatch(_latest_dispatch(conn, cell_id))
 
 
+class JudgeParseError(ValueError):
+    """Raised when a judge response is not valid score JSON."""
+
+
 def _parse_judge_score(response: str) -> float:
-    rows = _parse_json_response(response)
-    if rows and "score" in rows[0]:
-        return float(rows[0]["score"])
     try:
         parsed = json.loads(response)
-        if isinstance(parsed, dict) and "score" in parsed:
-            return float(parsed["score"])
-    except (json.JSONDecodeError, TypeError, ValueError):
-        pass
-    match = re.search(r"\b(?:score\s*[:=]\s*)?([0-9](?:\.[0-9])?|10)\b", response)
-    if not match:
-        raise ValueError(f"judge response does not contain a score: {response[:120]}")
-    return float(match.group(1))
+    except json.JSONDecodeError as exc:
+        match = re.search(r"```(?:json)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
+        if not match:
+            raise JudgeParseError(
+                f"judge response does not contain JSON: {response[:120]}"
+            ) from exc
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError as fenced_exc:
+            raise JudgeParseError(
+                f"judge fenced JSON is malformed: {response[:120]}"
+            ) from fenced_exc
+    if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+        parsed = parsed[0]
+    if not isinstance(parsed, dict) or "score" not in parsed:
+        raise JudgeParseError(f"judge JSON missing score field: {response[:120]}")
+    try:
+        score = float(parsed["score"])
+    except (TypeError, ValueError) as exc:
+        raise JudgeParseError(f"judge score is not numeric: {response[:120]}") from exc
+    if not 0.0 <= score <= 10.0:
+        raise JudgeParseError(f"judge score outside 0..10: {score}")
+    return score
 
 
-JudgeFn = Callable[[str, str], str]
+JudgeRawResult = str | DispatchResult
+JudgeFn = Callable[[str, str], JudgeRawResult]
 
 # Per-lane judge dispatch ceilings. A hanging judge stalls the family thread
 # in run_wave for this long, so keep the ceilings tight. Numbers are derived
@@ -788,10 +809,13 @@ JUDGE_TIMEOUTS_S: dict[str, int] = {
 DEFAULT_JUDGE_TIMEOUT_S = 180
 
 
-def dispatch_judge(judge_model: str, prompt: str, timeout_s: int = DEFAULT_JUDGE_TIMEOUT_S) -> str:
+def dispatch_judge(
+    judge_model: str,
+    prompt: str,
+    timeout_s: int = DEFAULT_JUDGE_TIMEOUT_S,
+) -> DispatchResult:
     model = model_by_canonical(judge_model)
-    result = dispatch_prompt(model, prompt, REPO_ROOT, timeout_s)
-    return result.response
+    return dispatch_prompt(model, prompt, REPO_ROOT, timeout_s)
 
 
 def _judge_accepts_timeout(judge_fn: JudgeFn) -> bool:
@@ -820,6 +844,7 @@ def score_cell(
 ) -> dict[str, bool]:
     if replicate_seq < 0:
         raise ValueError("replicate_seq must be >= 0")
+    judge_models = (judge1, judge2)
     schema.init_db(db_path)
     with schema.connect(db_path) as conn:
         cell = schema.fetch_cell(conn, cell_id)
@@ -858,53 +883,80 @@ def score_cell(
 
         if lane not in PROSE_LANES and not all(gates.values()):
             # Mechanical lanes keep deterministic-gate-as-gate behavior.
+            for model_name in judge_models:
+                schema.insert_score(
+                    conn,
+                    cell_id=cell_id,
+                    gate_name="llm_judge_score",
+                    gate_pass=False,
+                    score_value=None,
+                    scorer=f"llm-judge:{model_name}",
+                    gate_failure_reason="scorer_skipped_by_two_stage_rule",
+                    replicate_seq=replicate_seq,
+                )
             return gates
 
     # Judges run outside the DB transaction so they can fan out in parallel
     # without blocking on a single sqlite connection. Each call is an
     # independent CLI dispatch to a different family (claude + gemini), so
     # there is no contention between them.
-    judge_models = (judge1, judge2)
     judge_timeout_s = JUDGE_TIMEOUTS_S.get(lane, DEFAULT_JUDGE_TIMEOUT_S)
 
-    def _run_one_judge(model_name: str) -> tuple[str, float | None, str | None]:
+    def _run_one_judge(
+        model_name: str,
+    ) -> tuple[str, float | None, str, str | None]:
         try:
             # Real judges accept timeout_s; mocked judges in tests don't.
             # Pass it via inspect so tests don't have to grow a signature.
-            judge_response = (
+            raw_result = (
                 judge_fn(model_name, prompt, timeout_s=judge_timeout_s)  # type: ignore[call-arg]
                 if _judge_accepts_timeout(judge_fn)
                 else judge_fn(model_name, prompt)
             )
-            return model_name, _parse_judge_score(judge_response), None
         except Exception as exc:  # noqa: BLE001 — judge crash ≠ cell crash
-            return model_name, None, repr(exc)
+            return model_name, None, "scorer_crashed", repr(exc)
+        if isinstance(raw_result, DispatchResult):
+            if raw_result.returncode not in (None, 0):
+                return (
+                    model_name,
+                    None,
+                    "scorer_crashed",
+                    raw_result.stderr_excerpt or f"returncode={raw_result.returncode}",
+                )
+            judge_response = raw_result.response
+            stderr_excerpt = raw_result.stderr_excerpt
+        else:
+            judge_response = raw_result
+            stderr_excerpt = None
+        try:
+            judge_score = _parse_judge_score(judge_response)
+        except JudgeParseError as exc:
+            return model_name, None, "scorer_unparseable_output", str(exc)
+        normalized_score = judge_score / 10.0
+        reason = (
+            "gate_passed"
+            if normalized_score >= 0.5
+            else "gate_failed_legitimately"
+        )
+        return model_name, judge_score, reason, stderr_excerpt
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(judge_models)) as pool:
         judge_outcomes = list(pool.map(_run_one_judge, judge_models))
 
     judge_scores: list[float] = []
     with schema.connect(db_path) as conn:
-        for model_name, judge_score, error in judge_outcomes:
-            if judge_score is None:
-                schema.insert_score(
-                    conn,
-                    cell_id=cell_id,
-                    gate_name="llm_judge_error",
-                    gate_pass=False,
-                    score_value=None,
-                    scorer=f"llm-judge:{model_name}:error={error}",
-                    replicate_seq=replicate_seq,
-                )
-                continue
-            judge_scores.append(judge_score)
+        for model_name, judge_score, reason, stderr_excerpt in judge_outcomes:
+            if judge_score is not None:
+                judge_scores.append(judge_score)
             schema.insert_score(
                 conn,
                 cell_id=cell_id,
                 gate_name="llm_judge_score",
-                gate_pass=judge_score >= 7.0,
+                gate_pass=judge_score is not None and judge_score >= 7.0,
                 score_value=judge_score,
                 scorer=f"llm-judge:{model_name}",
+                stderr_excerpt=stderr_excerpt,
+                gate_failure_reason=reason,
                 replicate_seq=replicate_seq,
             )
         if len(judge_scores) == 2 and abs(judge_scores[0] - judge_scores[1]) > 1.0:

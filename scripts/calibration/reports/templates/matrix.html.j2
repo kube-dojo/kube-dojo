@@ -42,7 +42,7 @@
           <td class="heat-{{ bucket }}" title="{{ cell.cell_id }}">
             <a href="per-model/{{ cell.canonical_string | replace('/', '_') | replace('@', '_') }}.html">{{ cell.canonical_string }}</a>
             <span class="score">{{ "%.0f"|format(cell.deterministic_score * 100) }}%</span>
-            {% if cell.llm_score is not none %}<span>judge {{ "%.1f"|format(cell.llm_score) }}</span>{% endif %}
+            <span>judge {% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</span>
           </td>
         {% else %}
           <td class="missing">not run</td>

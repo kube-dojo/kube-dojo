@@ -110,10 +110,19 @@ def _per_model_link(model: str, label: str | None = None) -> str:
     return f'<a href="per-model/{_href(model)}.html"><code>{_h(text)}</code></a>'
 
 
-def load_cell_stats(db_path: Path) -> list[CellStats]:
+def load_cell_stats(
+    db_path: Path,
+    *,
+    include_deterministic_gates: bool = False,
+) -> list[CellStats]:
+    scorer_filter = (
+        ""
+        if include_deterministic_gates
+        else "AND s.scorer LIKE 'llm-judge:%'"
+    )
     with _connect(db_path) as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
               s.cell_id,
               c.lane,
@@ -126,6 +135,7 @@ def load_cell_stats(db_path: Path) -> list[CellStats]:
             FROM scores AS s
             JOIN cells AS c ON c.cell_id = s.cell_id
             WHERE s.score_value IS NOT NULL
+              {scorer_filter}
             ORDER BY c.lane, c.canonical_string, c.fixture_id, s.gate_name, s.scorer
             """
         ).fetchall()
@@ -257,6 +267,7 @@ def render_report(
     candidates: list[dict[str, Any]],
     out_path: Path,
     report_date: str,
+    include_deterministic_gates: bool = False,
 ) -> str:
     stats_by_cell = {row.cell_id: row for row in cell_stats}
     coverage_rows = build_coverage(candidates, stats_by_cell)
@@ -283,6 +294,11 @@ def render_report(
         str(out_path.relative_to(REPO_ROOT))
         if out_path.is_relative_to(REPO_ROOT)
         else str(out_path)
+    )
+    scorer_scope = (
+        "all scorer rows"
+        if include_deterministic_gates
+        else "LLM-judge scorer rows only"
     )
 
     return f"""<!doctype html>
@@ -313,11 +329,11 @@ def render_report(
 <body>
 
 <h1>Stability variance report</h1>
-<p class="meta">{report_date} &middot; {len(cell_stats)} scored cells &middot; {len(candidates)} stability candidates &middot; replicate_seq={", ".join(str(seq) for seq in replicate_seqs) or "none"} &middot; output=<code>{_h(report_rel)}</code></p>
+<p class="meta">{report_date} &middot; {len(cell_stats)} scored cells &middot; {len(candidates)} stability candidates &middot; {scorer_scope} &middot; replicate_seq={", ".join(str(seq) for seq in replicate_seqs) or "none"} &middot; output=<code>{_h(report_rel)}</code></p>
 
 <h2>1. Headline variance floor</h2>
 <div class="tldr">
-  <strong>Variance floor.</strong> Across all scored cells in <code>calibration/v1/ledger.db</code>, per-cell unit-normalized <code>score_value</code> standard deviation averages <strong>{_fmt(headline_mean)}</strong>, with median <strong>{_fmt(headline_median)}</strong> and p95 <strong>{_fmt(headline_p95)}</strong>.
+  <strong>Variance floor.</strong> Across {scorer_scope} in <code>calibration/v1/ledger.db</code>, per-cell unit-normalized <code>score_value</code> standard deviation averages <strong>{_fmt(headline_mean)}</strong>, with median <strong>{_fmt(headline_median)}</strong> and p95 <strong>{_fmt(headline_p95)}</strong>.
 </div>
 <table>
   <thead><tr><th>Metric</th><th>Value</th></tr></thead>
@@ -350,7 +366,7 @@ def render_report(
 </table>
 
 <h2>4. Methodology</h2>
-<p>Scorer-disagreement is the <code>max(unit_score) - min(unit_score)</code> span across all score rows for a cell, with <code>llm_judge_score</code> divided by 10 and deterministic gates clamped to the same 0..1 scale. Replicate-variance is the standard deviation after repeated dispatches of the lane-boundary candidates selected near the pass/fail midpoint, and the coverage table shows which of those 42 cells have enough scored samples to trust that estimate. The headline variance floor aggregates every scored cell, not just candidates, and serves as the current noise estimate for the model fleet.</p>
+<p>Scorer-disagreement is the <code>max(unit_score) - min(unit_score)</code> span across {scorer_scope} for a cell, with <code>llm_judge_score</code> divided by 10 and deterministic gates clamped to the same 0..1 scale when <code>--include-deterministic-gates</code> is enabled. Replicate-variance is the standard deviation after repeated dispatches of the lane-boundary candidates selected near the pass/fail midpoint, and the coverage table shows which of those 42 cells have enough scored samples to trust that estimate. The headline variance floor aggregates every scored cell in scope, not just candidates, and serves as the current noise estimate for the model fleet.</p>
 
 <h2>5. Links</h2>
 <ul>
@@ -382,6 +398,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Output HTML path. Default: calibration/v1/reports/<date>/stability.html.",
     )
+    parser.add_argument(
+        "--include-deterministic-gates",
+        action="store_true",
+        help="Include deterministic gate rows in variance calculations and top disagreement.",
+    )
     return parser
 
 
@@ -395,13 +416,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     out_path = args.out or default_out_path(str(args.date))
 
-    cell_stats = load_cell_stats(args.db_path)
+    cell_stats = load_cell_stats(
+        args.db_path,
+        include_deterministic_gates=bool(args.include_deterministic_gates),
+    )
     candidates = load_candidates(args.candidates)
     rendered = render_report(
         cell_stats=cell_stats,
         candidates=candidates,
         out_path=out_path,
         report_date=str(args.date),
+        include_deterministic_gates=bool(args.include_deterministic_gates),
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(rendered, encoding="utf-8")

@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS scores (
   scorer TEXT NOT NULL,
   replicate_seq INTEGER NOT NULL DEFAULT 0,
   stderr_excerpt TEXT,
+  gate_failure_reason TEXT,
   scored_at TEXT NOT NULL,
   PRIMARY KEY (cell_id, gate_name, scorer)
 );
@@ -149,6 +150,7 @@ def init_db(db_path: Path | str) -> None:
             {
                 "replicate_seq": "INTEGER NOT NULL DEFAULT 0",
                 "stderr_excerpt": "TEXT",
+                "gate_failure_reason": "TEXT",
             },
         )
 
@@ -313,6 +315,7 @@ def insert_score(
     scorer: str = "deterministic",
     replicate_seq: int = 0,
     stderr_excerpt: str | None = None,
+    gate_failure_reason: str | None = None,
     scored_at: str | None = None,
 ) -> None:
     scorer = _scorer_for_replicate(scorer, replicate_seq)
@@ -320,13 +323,14 @@ def insert_score(
         """
         INSERT INTO scores (
           cell_id, gate_name, gate_pass, score_value, scorer, stderr_excerpt,
-          replicate_seq, scored_at
+          gate_failure_reason, replicate_seq, scored_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(cell_id, gate_name, scorer) DO UPDATE SET
           gate_pass=excluded.gate_pass,
           score_value=excluded.score_value,
           stderr_excerpt=excluded.stderr_excerpt,
+          gate_failure_reason=excluded.gate_failure_reason,
           replicate_seq=excluded.replicate_seq,
           scored_at=excluded.scored_at
         """,
@@ -337,6 +341,7 @@ def insert_score(
             score_value,
             scorer,
             stderr_excerpt,
+            gate_failure_reason,
             replicate_seq,
             scored_at or utc_now_iso(),
         ),
