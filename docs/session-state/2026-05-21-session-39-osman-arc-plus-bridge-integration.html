@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 39 — Osman arc shipped, codex catches sonnet on R2/R3, ab bridge integration in flight</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-done { background: #d4edda; color: #155724; }
+  .pill-pending { background: #fff3cd; color: #856404; }
+  .pill-flight { background: #d1ecf1; color: #0c5460; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>Session 39 — Osman 3-arc shipped, codex catches sonnet on R2/R3, ab bridge integration</h1>
+
+<p class="meta">
+  2026-05-21 ~11:30 → 2026-05-21 ~15:55 local (~4h 25m) · driver: claude opus 4.7 inline ·
+  predecessor: <a href="2026-05-21-session-38-zodchiii-patterns-plus-challenge-round.html">session 38</a>
+</p>
+
+<p>
+User signals:
+</p>
+<blockquote>
+"orientate, read lsat session handoff and continue also time to do git hygene soon"<br>
+"why do you wnt to do a session handoff?" (pushback on reflex handoff at midpoint)<br>
+"btw i upgaded gemini to ultraa again ther isa cheaper version so we can use agy"<br>
+"yo ucannot do things paralel ?" (nudge to fan out parallel work)<br>
+"how is the benchamrs looking ?"<br>
+"was flash 3.5 high and low successfull ?"<br>
+"what is the flash 3.5 prompt for long content wrting ?"<br>
+"did you implement ask-agy for ab? learn ukrainian already did it."<br>
+"need to be able to ask qwen and deepseek as well"<br>
+"we have lots of issues prs etc pls activily manage them."<br>
+"and soon we have to do a session handoff"
+</blockquote>
+
+<h2>TL;DR</h2>
+
+<p>Session 39 was the long-form delivery session that took session 38's calibration framework PR through to merge, shipped the entire 3-module Ahmad Osman LLM-inference mini-arc (Modules A/B/C = #1377/#1378/#1379 → PRs #1386/#1388/#1389), uncovered four distinct multi-round review patterns where Codex caught bugs Sonnet missed, traced a real calibration-framework prompt-leak (issue #1390) to its source via the Wave-C/D response files, confirmed Flash-3.5-High collapses on long-form content generation as a model limitation rather than a scoring artifact, and dispatched a bridge-CLI integration to add <code>ask-agy / ask-qwen / ask-deepseek</code> parity in <code>scripts/ai_agent_bridge/</code>.</p>
+
+<p><strong>5 PRs merged + 1 in flight (bridge integration). 3 issues closed + 3 filed. 5 new memories + 1 update. Working tree clean. 0 worktrees beyond primary at session end.</strong></p>
+
+<h2>1. PRs landed</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Squash commit</th><th>Subject</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1376">#1376</a></td>
+  <td><code>7c582ba3</code></td>
+  <td>feat(calibration): framework hardening + Wave C/D + new lanes + challenge-round fixes</td>
+  <td>Squashed 6 commits (R1 + 2 fixup + R3 fixup commits). 3 review rounds — codex R1 + R2 + R3 caught bugs sonnet R1/R2 missed. See §3.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1385">#1385</a></td>
+  <td><code>00739746</code></td>
+  <td>refactor(scripts): _Results dataclass in check_site_health.py</td>
+  <td>Codex R1 caught truthiness-vs-key-presence STATS regression. 1-fixup-round, merged clean.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1386">#1386</a></td>
+  <td><code>abbfaf83</code></td>
+  <td>feat: Module 1.6 GPU Memory Hierarchy and Bandwidth Math for LLM Inference (Osman A)</td>
+  <td>5892 body words, 16 sources. agy R1 + sonnet R1 independently caught the GB200 372→384 GB error. 2 fixup rounds (sonnet R2 needed because his nit-fix broke verifier gates).</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1389">#1389</a></td>
+  <td><code>b8ca3a09</code></td>
+  <td>feat: Module 1.8 Benchmarking LLM Inference (Osman C)</td>
+  <td>5181 body words, 15 sources. Sonnet caught TPOT/ITL conflation + benchmark_serving.py-vs-vllm-bench-serve inverted relationship — 2 real factual must-fixes. 1 fixup round.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1388">#1388</a></td>
+  <td><code>8cce8660</code></td>
+  <td>feat: Module 1.7 Production-Tier LLM Inference Engines (Osman B)</td>
+  <td>5117 body words, 22 sources. Sonnet R1 caught AMD/ROCm decision-tree gap + backward Next Module. Sonnet R2 caught Mermaid node-ID collision in R1 fix. 2 fixup rounds + a rebase after merge-conflict against #1389. See §4 for the worktree-cleanup mistake.</td>
+</tr>
+<tr>
+  <td>(in flight)</td>
+  <td>—</td>
+  <td>feat(bridge): ab CLI ask-agy / ask-qwen / ask-deepseek parity</td>
+  <td>Codex gpt-5.5 dispatched ~15:50. Ports learn-ukrainian's <code>_agy.py</code> (242 lines) + creates <code>_qwen.py</code> and <code>_deepseek.py</code>. Wires 3 subparsers + handlers into <code>_cli.py</code>. Adds <code>agy</code> + <code>deepseek</code> to send/ack-all choices.</td>
+</tr>
+</tbody></table>
+
+<h2>2. Issues activity</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Action</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1377">#1377</a></td><td>Closed</td><td>Module A merged in PR #1386</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1378">#1378</a></td><td>Closed (after reopen)</td><td>Module B merged in PR #1388. Closed prematurely once, reopened after merge-conflict surfaced, finally closed when PR landed.</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1379">#1379</a></td><td>Closed</td><td>Module C merged in PR #1389</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1384">#1384</a> NEW</td><td>Filed</td><td>TTT (Telegraph/Teach/Test) pedagogical framework — captured during hygiene; the orphan <code>src/content/docs/k8s/cka/rbac.md</code> (322 lines) flagged in session 36 was finally traced. See §5.</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1387">#1387</a> NEW</td><td>Filed</td><td>Hook false-positive: <code>block-bugfix-merge-without-regression-test.sh</code> fires on <code>feat:</code> PRs with <code>(#N)</code> in title OR <code>Closes #N</code> in body. <code>--admin</code> doesn't bypass (PreToolUse).</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1390">#1390</a> NEW</td><td>Filed</td><td>Calibration framework leak: content-writing-long prompt allowed sonnet + gpt-5.4-mini to write to <strong>primary curriculum tree</strong> during Wave A/B/C/D runs. Source of session-36 stray <code>rbac.md</code>. See §5.</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1350">#1350</a></td><td>Commented (progress)</td><td>gemini-cli → agy migration Phase 2 partial advance via in-flight bridge PR.</td></tr>
+</tbody></table>
+
+<h2>3. Codex-catches-Sonnet-misses pattern (multiple R2/R3 instances)</h2>
+
+<p>Session 38 piloted the challenge-round pattern with a single 4th-agent adversarial review. Session 39 produced FOUR more instances where Codex caught real bugs that Sonnet either missed or partial-fixed:</p>
+
+<ol>
+<li><strong>PR #1376 R2 → codex caught preflight_probe still accepted non-OK responses</strong> after sonnet's R1 APPROVE_WITH_NITS. Codex direct-tested <code>"OK, I cannot help with that."</code> and got <code>ok=True</code>. Also caught judge-infra-failures-silently-writing-score-0.0.</li>
+<li><strong>PR #1376 R3 → codex caught two regressions introduced by R2 fixup itself</strong>: (a) preflight_probe's new startswith-with-punctuation branch still accepts <code>OK, I cannot help...</code>; (b) pareto.py's <code>contextlib.closing</code> wrap was added but subsequent <code>conn.execute</code> calls were outside the <code>with</code> block — codex repro'd <code>sqlite3.ProgrammingError</code>. Sonnet R2 had said APPROVE.</li>
+<li><strong>PR #1385 R1 → codex caught truthiness-vs-key-presence STATS regression</strong>: the dataclass refactor changed <code>if "key" in stats:</code> to <code>if value:</code>, silently dropping computed-but-zero stats from STATS output. Behavior-preserving claim was wrong by ~0.1%.</li>
+<li><strong>PR #1388 R2 → sonnet (not codex) caught Mermaid node-ID collision</strong>: the R1 fixup added an AMD/ROCm branch but reused node ID <code>I</code> for two different labels. Mermaid renders the last definition, silently dropping the ROCm caveat text. Excellent rendering-aware catch from sonnet.</li>
+</ol>
+
+<p><strong>Memory write:</strong> <code>feedback_sonnet_round2_partial_verification.md</code> — Sonnet R2 verifies that requested code <em>shapes</em> are present but doesn't end-to-end verify the wrapped code works. Pair with codex/runtime-tested reviewer for execution-correctness.</p>
+
+<h2>4. The premature-worktree-cleanup mistake</h2>
+
+<p>When merging PR #1388, I chained <code>gh pr merge --squash --delete-branch --admin && git worktree remove ... && git branch -D ...</code> without checking that the merge succeeded. It failed with <code>GraphQL: Pull Request has merge conflicts</code> because PR #1389 had just landed and touched the same <code>index.md</code> + <code>changelog.md</code>. By the time I noticed:</p>
+
+<ul>
+<li>Issue #1378 was already closed (had to reopen)</li>
+<li>Local worktree was deleted (had to <code>git worktree add ... origin/&lt;branch&gt;</code> to recreate)</li>
+<li>Local branch was deleted (recreated as tracking branch)</li>
+</ul>
+
+<p>Recovery took ~5 minutes: recreate worktree, fetch latest main, rebase, resolve 2 conflict files manually, force-push-with-lease, retry merge, re-close issue.</p>
+
+<p><strong>Memory write:</strong> <code>feedback_verify_merge_before_worktree_cleanup.md</code> — always check <code>gh pr merge</code> result before cleanup. When merging multiple PRs touching shared files (<code>index.md</code>, <code>changelog.md</code>), rebase second-branch onto main between merges.</p>
+
+<h2>5. The calibration-leak trace: how the stray rbac.md got into primary tree</h2>
+
+<p>Session 36 carryover #7 flagged <code>src/content/docs/k8s/cka/rbac.md</code> as an "investigate stray" — 52 KB hand-drafted K8s 1.35 RBAC content of unknown origin. It sat untouched through sessions 37 + 38. Session 39 git-hygiene discarded it ("not the current pedagogical direction") and filed <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1384">#1384</a> to capture the TTT framework idea.</p>
+
+<p>An hour later, while investigating Flash-3.5-High's content-writing-long collapse, the source became clear. The fixture prompt at <code>scripts/calibration/prompts/v1/content-writing-long/kubedojo-rbac-module.md</code> ends with "Return the full module Markdown" but doesn't explicitly forbid writes to disk. Two models (<strong>claude-sonnet-4-6</strong> and <strong>gpt-5.4-mini</strong>) interpreted "make the module exist" as a write-to-disk instruction:</p>
+
+<blockquote>
+<strong>gpt-5.4-mini (688-byte response):</strong> "The full module is in [module-1.6-rbac.md](/Users/.../src/content/docs/k8s/cka/part1-cluster-architecture/module-1.6-rbac.md). Verifier result: T0 with 5239 body words..."
+<br><br>
+<strong>claude-sonnet-4-6 (822-byte response):</strong> "The module is self-contained and drops directly into <code>src/content/docs/k8s/cka/part1-cluster-architecture/module-1.6-rbac.md</code>..."
+</blockquote>
+
+<p>Both models wrote to the real CKA module path during calibration. The scorer correctly penalized them (link-summary fails verifier gates), but the side effect was unsandboxed writes to primary tree. The orphan <code>rbac.md</code> + the TTT-pedagogy modifications to <code>module-1.6-rbac.md</code> that I reverted earlier in the session were both calibration responses leaking through.</p>
+
+<p><strong>Filed as <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1390">#1390</a></strong> with 3 fix options: prompt-side ("DO NOT write to disk"), dispatch-side (tmp-worktree sandbox), scorer-side (<code>respected_inline_return</code> gate).</p>
+
+<h2>6. Flash-3.5-High content-writing-long collapse — root cause is real</h2>
+
+<p>The Wave C/D calibration data showed Flash-3.5-High at 0.00 judge score on <code>content-writing-long</code> — concerning. Inspection of the response file (<code>calibration/v1/2026-05-21/responses/content-writing-long-kubedojo-rbac-module-gemini-3.5-flash-high@high-2026-05-21.md</code>, 41 lines) revealed it's a "<strong>I will start by analyzing the directory structure / I will list the contents / I will check verifier flags...</strong>" planning trail — agy's TUI conversational mode dumped into the response. The model never transitioned from planning to writing the module.</p>
+
+<p>Comparison across all 14 models on the same prompt:</p>
+
+<table>
+<thead><tr><th>Model</th><th>Response lines</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td>gpt-5.3-codex-spark</td><td>1215</td><td>Full module, frontmatter onward</td></tr>
+<tr><td>gemini-3.1-flash-lite-preview</td><td>1105</td><td>Full module</td></tr>
+<tr><td>qwen3.6-plus</td><td>993</td><td>Full module</td></tr>
+<tr><td>gpt-5.5</td><td>730</td><td>Full module</td></tr>
+<tr><td>claude-haiku-4-5</td><td>580</td><td>Full module</td></tr>
+<tr><td>deepseek-v4-pro</td><td>497</td><td>Full module</td></tr>
+<tr><td>claude-opus-4-7</td><td>389</td><td>Full module</td></tr>
+<tr><td>deepseek-v4-flash</td><td>370</td><td>Full module</td></tr>
+<tr><td>gemini-3.1-pro-preview</td><td>325</td><td>Full module</td></tr>
+<tr><td>grok-4.3</td><td>156</td><td>Short module</td></tr>
+<tr><td><strong>gemini-3.5-flash-high</strong></td><td><strong>41</strong></td><td><strong>"I will..." planning, NO module</strong></td></tr>
+<tr><td><strong>claude-sonnet-4-6</strong></td><td><strong>16</strong></td><td><strong>Summary table only (wrote module to disk)</strong></td></tr>
+<tr><td><strong>gpt-5.4-mini</strong></td><td><strong>7</strong></td><td><strong>Link-to-disk-path only (wrote to disk)</strong></td></tr>
+<tr><td><strong>qwen3.6 (non-plus)</strong></td><td><strong>0</strong></td><td><strong>Total empty failure</strong></td></tr>
+</tbody></table>
+
+<p><strong>Implication:</strong> Flash-3.5-High via agy's headless dispatch is unfit for long-form content writing — it gets stuck in "I will..." planning and never produces the artifact. The Pareto-ranking (cost/quality $0.0464/q) is misleading because the one-lane 0.00 score drags the average down. Re-Pareto-ing with that lane excluded might move Flash-3.5-High higher in the cheap-tier ranking — worth a stability re-run.</p>
+
+<h2>7. agy session: from quota-out to OAuth-expiry to back-in-rotation</h2>
+
+<p>Three distinct agy states observed in one session:</p>
+
+<ol>
+<li><strong>~13:15 quota-exhausted</strong> on first PR #1376 review attempt: <code>ok=False, elapsed=3s, response_chars=0, stderr=null</code>. User confirmed "agy out of usage … back in 1h 30m". Memory written: <code>feedback_agy_rate_limit_detection.md</code>.</li>
+<li><strong>~13:30 Ultra-upgrade recovery</strong>: user upgraded Gemini to Ultra (cheaper tier — "ther isa cheaper version"). Smoke test passed: <code>OK: True, elapsed=6s, resp_chars=2, response="OK"</code>.</li>
+<li><strong>~13:35 OAuth-expired</strong> mid-PR-#1388-review: <code>ok=True, elapsed=32s, response_chars=847</code> but the body was the OAuth auth-prompt URL itself ("Authentication required. Please visit the URL to log in: https://accounts.google.com/o/oauth2/auth?...") plus "Error: authentication timed out." after the headless dispatch's 30s OAuth window expired. Distinct from the quota-exhaust signature.</li>
+</ol>
+
+<p>Memory updated with both failure shapes + the Ultra-upgrade implication that the historical 1h-30m wait estimate is too pessimistic.</p>
+
+<h2>8. Memory writes</h2>
+
+<table>
+<thead><tr><th>Memory</th><th>Type</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td><code>feedback_agy_rate_limit_detection.md</code></td><td>NEW + updated</td><td>Two failure shapes: quota-exhaust (3s/0/null) and OAuth-expiry (32s/847/auth-prompt-URL). Fallback ladder: codex → deepseek → inline-claude.</td></tr>
+<tr><td><code>feedback_sonnet_round2_partial_verification.md</code></td><td>NEW</td><td>Sonnet R2 verifies shapes are present, doesn't end-to-end verify. Pair with codex/runtime for execution correctness.</td></tr>
+<tr><td><code>feedback_bugfix_merge_hook_false_positive.md</code></td><td>NEW</td><td>Hook fires on <code>feat:</code> PRs with <code>(#N)</code>/<code>Closes #N</code>. <code>--admin</code> doesn't bypass. Workaround: edit PR.</td></tr>
+<tr><td><code>feedback_verify_merge_before_worktree_cleanup.md</code></td><td>NEW</td><td>Check <code>gh pr merge</code> result BEFORE worktree-remove + branch-D. Sibling PRs touching shared files (<code>index.md</code>/<code>changelog.md</code>) produce stale-base conflicts.</td></tr>
+<tr><td><code>feedback_deepseek_hallucinates_on_gh_schemas.md</code></td><td>Updated</td><td>Added second failure mode: long-content-review stream-of-consciousness shell loop, never produces verdict, partial hallucination of file frontmatter that doesn't match actual content.</td></tr>
+</tbody></table>
+
+<h2>9. End state</h2>
+
+<ul>
+<li>Branch <code>main</code> at <code>8cce8660</code> (PR #1388 squash).</li>
+<li>Working tree clean.</li>
+<li>1 worktree active: <code>.worktrees/ab-bridge-agents</code> — codex dispatch in flight on <code>feat/ab-bridge-agy-qwen-deepseek</code>.</li>
+<li>0 open PRs (the in-flight bridge work will open as a PR when codex completes).</li>
+<li>23 → 23 open issues (3 closed today, 3 filed today, net 0). Active triage on #1350 with progress comment.</li>
+<li>Memory: 4 NEW + 1 updated TOP-PRIORITY entries.</li>
+<li>Service health: 0 errors, only pre-existing warnings.</li>
+</ul>
+
+<h2>10. Carryovers — next session</h2>
+
+<ol>
+<li><strong>Land the in-flight bridge PR</strong> (<code>feat/ab-bridge-agy-qwen-deepseek</code>). Codex was still dispatching at handoff write-time. Needs cross-family review (sonnet) + merge.</li>
+<li><strong>Phase 2 of gemini→agy migration (#1350)</strong>: extend <code>dispatch_388_pilot.py</code> cascade with <code>agy</code> as a supported <code>KUBEDOJO_388_PRIMARY_REVIEWER</code> value alongside claude/gemini/qwen/deepseek. Small change after bridge PR.</li>
+<li><strong>Fix the bugfix-hook false-positive (#1387)</strong>: narrow <code>_lib_pr_check.py:check_regression_test</code> to <code>is_fix_title</code> only. Drop the title-<code>(#N)</code> and body-keyword paths.</li>
+<li><strong>Fix the calibration leak (#1390)</strong>: prompt-side fix (5 min, add "DO NOT write to disk" to the content-writing-long prompt) + scorer-side <code>respected_inline_return</code> gate (~30 min).</li>
+<li><strong>CKS rewrites continuation</strong>: 5.4 Admission Controllers, 6.1 Audit Logging, 6.2 Falco, 6.3 Container Investigation. 155 critical-quality modules remain. Same codex gpt-5.5 + dual sonnet+agy review pattern when agy is reachable.</li>
+<li><strong>Stability runs</strong>: pick 3-5 high-variance cells per model, run 3× to compute variance. Re-Pareto Flash-3.5-High with content-writing-long lane excluded (since the failure is structural, not noise).</li>
+<li><strong>Per-language test harness</strong> for calibration code lanes (~1 day infra; user-deferred).</li>
+<li><strong>Real-execution mcp-use lane</strong> — wire learn-ukrainian RAG MCP server (port 8766) for actual tool execution.</li>
+<li><strong>Re-fire harness-following on v2 fixture</strong> (<code>claude-md-context-cks-tweak</code>) once bridge PR lands.</li>
+<li><strong>Optionally close challenge-agent's remaining deferrals from session 38</strong>: delete <code>scheduler.py</code> + <code>test_scheduler.py</code> (dead code), extract <code>_alias_recall</code> helper, add <code>DispatchOutcome</code> dataclass.</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip (claude work moves inline in this terminal) · 2026-06-18 drop gemini adapter (agy migration Phase 3) · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>11. References</h2>
+
+<ul>
+<li>Predecessor: <a href="2026-05-21-session-38-zodchiii-patterns-plus-challenge-round.html">session 38</a></li>
+<li>Calibration ledger: <code>calibration/v1/ledger.db</code> (168 cells across 14 models × 12 lanes)</li>
+<li>Calibration responses: <code>calibration/v1/2026-05-21/responses/</code></li>
+<li>Pareto report (CLI): <code>python -m scripts.calibration.pareto --db-path calibration/v1/ledger.db --format text</code></li>
+<li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/</code></li>
+<li>learn-ukrainian bridge source (port reference): <code>/Users/krisztiankoos/projects/learn-ukrainian/scripts/ai_agent_bridge/_agy.py</code></li>
+</ul>
+
+</body>
+</html>
