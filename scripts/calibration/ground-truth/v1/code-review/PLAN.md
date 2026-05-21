@@ -7,16 +7,16 @@
 
 ## Target
 
-- Target count: 5 fixtures.
+- Target count: 4 fixtures.
 - Current count: 2 fixtures.
-- Add 3 fixtures so the lane covers the full review surface from correctness through security and maintainability.
+- Add 2 fixtures so the lane covers the full review surface from correctness through security and maintainability.
 - Keep planted findings explicit, with tight hallucination terms so models are rewarded for finding real issues instead of generic review noise.
 
 ## Variety dimensions
 
 - Bugfix archetype: cover a small diff that fixes one bug but introduces a subtle behavioral regression.
 - Refactor archetype: cover a readability or structure change where the reviewer must preserve behavior and catch an accidental contract change.
-- Security archetype: keep `pr-1333-security-yaml.yaml` as one security-oriented fixture and add another only if it exercises a different threat model.
+- Security archetype: keep `pr-1333-security-yaml.yaml` as the security-oriented fixture for this expansion pass.
 - Feature archetype: use the Go leader-election fixture as a feature implementation review with concurrency and Kubernetes semantics.
 - Include one fixture with tests changed in the diff, so reviewers must check whether the tests actually protect the intended behavior.
 

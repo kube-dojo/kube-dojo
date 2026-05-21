@@ -10,6 +10,7 @@
 - Current count: 1 fixture.
 - Add 4 fixtures covering positive and negative cases across Kubernetes, AWS, security, certification blueprints, and multi-sentence claims.
 - Require source-backed verdicts rather than model-memory answers.
+- Methodology: use bundled source excerpts for reproducibility, with pinned Kubernetes 1.35, AWS, and IETF documentation snapshots rather than live web lookup.
 
 ## Variety dimensions
 
@@ -27,7 +28,6 @@
 
 ## Open questions
 
-- Should fact-check fixtures require live web access, bundled source excerpts, or both for repeatability?
 - How should the rubric distinguish `FALSE`, `UNSUPPORTED`, and `MISLEADING` across different claim families?
 - Who refreshes source links when Kubernetes, AWS, security guidance, or certification blueprints change?
 

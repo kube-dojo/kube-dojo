@@ -23,7 +23,7 @@
 
 - Passing answers identify the core design constraints, risks, rollback path, and integration points named in the fixture.
 - Strong answers score `judge_score>=7` on the lane rubric and avoid invented infrastructure or unsupported product claims.
-- For any fixture with deterministic checks, `pytest_exit=0` or the equivalent verifier pass should be required before judge scoring is treated as sufficient.
+- For any fixture with deterministic checks, deterministic verifier pass IS the gate; LLM judge scoring runs only after `pytest_exit=0` or the equivalent verifier passes.
 
 ## Open questions
 

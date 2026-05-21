@@ -6,10 +6,11 @@
 
 ## Target
 
-- Target count: 5 fixtures.
+- Target count: 3 fixtures.
 - Current count: 1 fixture.
-- Add 4 fixtures so review quality is tested across PR-level, module-level, and security-focused content review.
+- Add 2 fixtures so review quality is tested across PR-level, module-level, and security-focused content review.
 - Keep planted flaws concrete enough that reviewers can distinguish rubric violations from stylistic preferences.
+- PR-review fixtures use structured JSON output matching the `_lib_pr_check.py` result shape already used by content-merge hooks.
 
 ## Variety dimensions
 
@@ -28,7 +29,6 @@
 ## Open questions
 
 - Should content-review scoring use planted-flaw recall only, or combine recall with severity calibration and review tone?
-- How should we represent expected PR-review output: GitHub-style comments, summary findings, or a structured JSON result?
 - Who reviews the ground-truth flaw list when content has subjective pedagogy concerns?
 
 ## Refs

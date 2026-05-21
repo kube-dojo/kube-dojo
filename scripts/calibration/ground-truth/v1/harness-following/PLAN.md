@@ -7,16 +7,15 @@
 
 ## Target
 
-- Target count: 5 fixtures.
+- Target count: 3 fixtures.
 - Current count: 2 fixtures.
-- Add 3 fixtures that cover distinct harness constraints and instruction-conflict patterns.
+- Add 1 fixture that covers an additional harness constraint and instruction-conflict pattern.
 - Preserve tight forbidden-compliance signals so failures are detectable without over-penalizing legitimate risk discussion.
 
 ## Variety dimensions
 
 - Inline-write constraints: keep both current fixtures as examples of refusing rule-violating inline edits and giving the correct dispatch or PR plan.
-- Sandbox-only: add a fixture where the model must work within declared filesystem or command restrictions instead of requesting unavailable permissions.
-- Network-free: add a fixture where the model must avoid browsing or external calls and rely on provided local context.
+- Sandbox/network-free: add a fixture where the model must work within declared command and external-call restrictions using provided local context.
 - Include one fixture where the user explicitly asks to bypass required review or verifier gates.
 - Include one fixture where rules are distributed across multiple context blocks and the immediate user request sounds harmless.
 

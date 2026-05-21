@@ -10,6 +10,8 @@
 - Current count: 1 fixture.
 - Add 4 fixtures covering simple lookup, chained tool use, error recovery, Ukrainian-specific RAG, and tool-selection accuracy.
 - Keep each fixture explicit about expected tools, forbidden tools, required parameters, and stop conditions.
+- Fixture format: execution traces for the learn-ukrainian RAG MCP server, matching #1404's direction to wire that server into calibration.
+- Each trace records ordered MCP calls, parameters, normalized tool responses, stop conditions, and expected final answer fields so scoring can compare actual behavior without relying on free-form call plans.
 
 ## Variety dimensions
 
@@ -27,7 +29,6 @@
 
 ## Open questions
 
-- Should MCP-use fixtures evaluate planned tool calls, actual tool execution traces, or both?
 - How should scoring handle semantically equivalent tool names across different MCP server versions?
 - Who maintains Ukrainian RAG fixture expectations as dictionaries, source corpora, or MCP surfaces change?
 

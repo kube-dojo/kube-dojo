@@ -10,6 +10,7 @@
 - Target count: 5 fixtures.
 - Current count: 2 fixtures.
 - Add 3 fixtures so the lane covers common Kubernetes and systems failure classes beyond storage/quota diagnosis.
+- The brief listed 4 failure classes, but quota/config mismatch stays as a distinct fifth case because exact arithmetic and scoped remediation catch a different failure mode from topology, CrashLoop, OOM, and deadlock diagnosis.
 - Keep each fixture anchored in logs, manifests, events, traces, or code snippets that make the root cause discoverable.
 
 ## Variety dimensions
