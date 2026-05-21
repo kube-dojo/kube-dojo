@@ -829,6 +829,495 @@ spec:
 
 ---
 
+## MirrorMaker2 for DR and Multi-Region
+
+MirrorMaker2 (MM2) is Kafka's cross-cluster replication engine, built on Kafka Connect and managed in Strimzi via the `KafkaMirrorMaker2` CRD. Unlike the original MirrorMaker 1, MM2 tracks consumer group offsets bidirectionally, handles topic renaming to prevent message loops in active-active configurations, and uses three internal connectors: a **source connector** (replicates records), a **checkpoint connector** (translates consumer group offsets), and a **heartbeat connector** (monitors pipeline liveness).
+
+### KafkaMirrorMaker2 CRD Configuration
+
+A production MM2 deployment replicating from a `us-east` cluster to `us-west`:
+
+```yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: mm2-east-to-west
+  namespace: kafka
+spec:
+  version: 3.9.0
+  replicas: 2
+  connectCluster: "us-west"      # The cluster that hosts the Connect worker pods
+  clusters:
+    - alias: "us-east"
+      bootstrapServers: east-kafka-bootstrap.kafka-east.svc.cluster.local:9093
+      tls:
+        trustedCertificates:
+          - secretName: east-cluster-ca-cert
+            pattern: "*.crt"
+      authentication:
+        type: scram-sha-512
+        username: mm2-east-user
+        passwordSecret:
+          secretName: mm2-east-user
+          password: password
+    - alias: "us-west"
+      bootstrapServers: west-kafka-bootstrap.kafka-west.svc.cluster.local:9093
+      tls:
+        trustedCertificates:
+          - secretName: west-cluster-ca-cert
+            pattern: "*.crt"
+      authentication:
+        type: scram-sha-512
+        username: mm2-west-user
+        passwordSecret:
+          secretName: mm2-west-user
+          password: password
+  mirrors:
+    - sourceCluster: "us-east"
+      targetCluster: "us-west"
+      topicsPattern: "payments\\..*|orders\\..*|user-events"
+      groupsPattern: "analytics-.*|reporting-.*"
+      sourceConnector:
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          sync.topic.acls.enabled: "false"
+      checkpointConnector:
+        config:
+          checkpoints.topic.replication.factor: 3
+          sync.group.offsets.enabled: "true"          # Write translated offsets to __consumer_offsets on target
+          sync.group.offsets.interval.seconds: "60"
+      heartbeatConnector:
+        config:
+          heartbeats.topic.replication.factor: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+```
+
+`connectCluster` must match one of the `alias` values. The MM2 Connect workers run inside the target cluster — the cluster receiving the replicated data.
+
+### Topic Naming: Default Prefix vs. Identity Policy
+
+By default, MM2 prepends the source cluster alias to every replicated topic name to prevent infinite loops in active-active configurations:
+
+- `user-events` on `us-east` → `us-east.user-events` on `us-west`
+
+MM2 also creates three internal bookkeeping topics on the target cluster:
+
+| Internal Topic | Purpose |
+|---------------|---------|
+| `mm2-offset-syncs.us-east.internal` | Maps source partition offsets to target offsets |
+| `us-east.checkpoints.internal` | Stores translated consumer group committed offsets |
+| `us-east.heartbeats` | 1-second heartbeat confirming the pipeline is live |
+
+To replicate without renaming — for strictly one-directional DR where consumer code should be identical on both clusters — use the `IdentityReplicationPolicy`:
+
+```yaml
+sourceConnector:
+  config:
+    replication.policy.class: "org.apache.kafka.connect.mirror.IdentityReplicationPolicy"
+```
+
+> **Trade-off:** `IdentityReplicationPolicy` simplifies consumer configuration but makes bidirectional active-active setups dangerous — both sides would replicate the same topics endlessly. Use it only when you guarantee replication runs in one direction only.
+
+### Offset Translation and Consumer Failover
+
+With `sync.group.offsets.enabled: true`, the checkpoint connector continuously writes translated consumer group offsets to the target cluster's `__consumer_offsets` topic. A consumer group that was reading from `us-east` can reconnect to `us-west` and resume from the correct position with no code changes.
+
+```bash
+# Verify all three MM2 connectors are in RUNNING state
+kubectl -n kafka get kafkamirrormaker2 mm2-east-to-west \
+  -o jsonpath='{.status.connectors[*].connector.state}'
+
+# Confirm checkpoint topic created on target
+kubectl -n kafka exec -it west-kafka-0 -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+    --list | grep checkpoints
+
+# Inspect translated consumer group offsets on target cluster
+kubectl -n kafka exec -it west-kafka-0 -- \
+  bin/kafka-consumer-groups.sh \
+    --bootstrap-server localhost:9092 \
+    --group analytics-orders \
+    --describe
+```
+
+### Monitoring Replication Lag
+
+MM2 exposes JMX metrics through the Connect worker. With Strimzi's JMX Prometheus Exporter configured, these key metrics surface:
+
+| Metric | What It Measures | Alert Threshold |
+|--------|-----------------|-----------------|
+| `kafka_connect_mirror_source_connector_replication_latency_ms` | End-to-end lag from source produce to target produce | `> 30000` ms |
+| `kafka_connect_worker_connector_count` | Active connectors (expect 3: source, checkpoint, heartbeat) | `< 3` |
+| `kafka_connect_worker_task_count` | Active tasks across all connectors | Sustained drop from baseline |
+| `kafka_connect_mirror_source_connector_record_count` | Records replicated per second | `= 0` for more than 1 min |
+
+A PromQL alert:
+
+```yaml
+- alert: KafkaMirrorMaker2ReplicationLag
+  expr: kafka_connect_mirror_source_connector_replication_latency_ms > 30000
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "MM2 replication lag exceeds 30s — DR readiness degraded"
+    description: "kubectl -n kafka get kafkamirrormaker2 to inspect connector states"
+```
+
+### Topology Patterns
+
+| Topology | Description | Use When |
+|----------|-------------|----------|
+| **Active-Passive** | Source cluster handles all writes; target is a read-only replica | Simple DR — RPO in minutes, RTO via manual cutover |
+| **Active-Active** | Both clusters accept writes; MM2 replicates bidirectionally using the default prefix policy | Multi-region writes where local-latency matters more than operational simplicity |
+| **Hub-and-Spoke** | Edge clusters replicate to a central hub in one direction only | IoT regional clusters feeding a central analytics platform |
+
+### Regional Outage Recovery Procedure
+
+1. Confirm the source is unreachable and the heartbeat topic has gone stale on the target:
+   ```bash
+   kubectl -n kafka get kafkamirrormaker2 mm2-east-to-west \
+     -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}'
+   ```
+2. Scale consumer Deployments to point at the target cluster bootstrap servers.
+3. If `sync.group.offsets.enabled` was set, consumer groups resume at the translated offset automatically on reconnect. Otherwise, reset offsets by timestamp:
+   ```bash
+   kubectl -n kafka exec -it west-kafka-0 -- \
+     bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+       --group analytics-orders --reset-offsets \
+       --to-datetime 2026-05-22T00:00:00.000 --execute --all-topics
+   ```
+4. After source recovery, replay messages produced to the target during the outage back to the source using a short-lived MM2 deployment in the reverse direction with a time-bounded `topicsPattern`.
+
+---
+
+## Partition Reassignment
+
+Kafka's partition assignment is fixed at topic creation time. Over a cluster's lifetime, this assignment drifts: brokers are added or decommissioned, traffic patterns shift, rack-awareness requirements are added retroactively. Partition reassignment realigns replicas and leaders across brokers to restore balance.
+
+### When to Reassign
+
+| Trigger | Symptom | Goal |
+|---------|---------|------|
+| **Broker decommission** | Target broker still holds partition leaders | Move all replicas off before draining the node |
+| **Capacity imbalance** | One broker at 90%+ while others idle | Redistribute replicas and leaders evenly |
+| **Rack-awareness retrofit** | Replicas of the same partition share one AZ | Regenerate assignment with rack constraints |
+| **New broker added** | New broker shows 0 partitions | Move a subset of partitions to the new broker |
+
+### kafka-reassign-partitions.sh: Generate, Execute, Verify
+
+The tool runs in three distinct phases. Always save the "current assignment" output from `--generate` before executing — it is your rollback plan.
+
+**Phase 1 — Generate a plan** (moving topics off broker 0 during decommission):
+
+```bash
+# Describe which topics to reassign
+cat > /tmp/topics-to-move.json <<'EOF'
+{"topics": [{"topic": "user-events"}, {"topic": "payments.order.completed"}], "version": 1}
+EOF
+
+# Generate a plan targeting brokers 1, 2, 3
+kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-reassign-partitions.sh \
+    --bootstrap-server localhost:9092 \
+    --topics-to-move-json-file /tmp/topics-to-move.json \
+    --broker-list "1,2,3" \
+    --generate
+```
+
+The tool prints two JSON blocks: the current assignment (save it for rollback) and the proposed assignment. Save the proposed block as `reassignment.json`:
+
+```json
+{
+  "version": 1,
+  "partitions": [
+    {"topic": "user-events", "partition": 0, "replicas": [1, 2, 3], "log_dirs": ["any","any","any"]},
+    {"topic": "user-events", "partition": 1, "replicas": [2, 3, 1], "log_dirs": ["any","any","any"]}
+  ]
+}
+```
+
+**Phase 2 — Execute with a bandwidth throttle** (50 MB/s prevents the replication burst from saturating inter-broker links):
+
+```bash
+kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-reassign-partitions.sh \
+    --bootstrap-server localhost:9092 \
+    --reassignment-json-file /tmp/reassignment.json \
+    --execute \
+    --throttle 52428800    # 50 MB/s in bytes
+```
+
+The throttle sets `leader.replication.throttled.rate` and `follower.replication.throttled.rate` on every affected broker and topic. To adjust mid-reassignment, re-run `--execute` with the same JSON and a new `--throttle` value.
+
+**Phase 3 — Verify and release the throttle:**
+
+```bash
+kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-reassign-partitions.sh \
+    --bootstrap-server localhost:9092 \
+    --reassignment-json-file /tmp/reassignment.json \
+    --verify
+```
+
+> **Critical:** Running `--verify` after completion automatically removes the throttle configuration from broker configs. If you skip this step, the throttle persists and silently caps all future intra-cluster replication until you clear it manually with `kafka-configs.sh`. Always run `--verify` to clean up.
+
+### KafkaRebalance CRD vs kafka-reassign-partitions.sh
+
+| Approach | Use When | Avoid When |
+|----------|----------|------------|
+| **`kafka-reassign-partitions.sh`** | Precise, one-off decommissions; exact control of final partition placement; small numbers of topics | Many topics and partitions — manual JSON planning is error-prone at scale |
+| **`KafkaRebalance` (Cruise Control)** | Routine load balancing; adding or removing brokers at scale; ongoing cluster health | Clusters with ≤ 3 brokers, or when exact deterministic partition placement is required |
+
+### Reading Partition-Leader Skew
+
+Diagnose the distribution before deciding whether to reassign:
+
+```bash
+# Per-partition leader, replicas, and ISR state
+kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-topics.sh \
+    --bootstrap-server localhost:9092 \
+    --topic user-events \
+    --describe
+
+# Example skewed output — broker 0 leads every partition:
+# Topic: user-events  Partition: 0  Leader: 0  Replicas: 0,1,2  Isr: 0,1,2
+# Topic: user-events  Partition: 1  Leader: 0  Replicas: 0,2,1  Isr: 0,2,1
+# Topic: user-events  Partition: 2  Leader: 0  Replicas: 0,1,2  Isr: 0,1,2
+
+# Count leader assignments per broker across all topics
+kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe \
+  | awk '/^\tTopic:/ {print $6}' | sort | uniq -c | sort -rn
+```
+
+The `KafkaTopic` status also reflects partition state after the Topic Operator reconciles it:
+
+```bash
+kubectl -n kafka get kafkatopic user-events -o jsonpath='{.status.replicasChange}'
+```
+
+### Validating In-Sync Replicas During Reassignment
+
+A reassignment temporarily adds a new replica that is not yet in-sync, raising the under-replicated partition count. Monitor this — if the count stays elevated, the throttle is too aggressive or a replica is not catching up:
+
+```bash
+# Stream under-replicated partitions during the operation
+watch -n 5 'kubectl -n kafka exec -it production-kafka-0 -- \
+  bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+    --describe --under-replicated-partitions'
+```
+
+> **Stop and think**: With `min.insync.replicas: 2` and a 3-replica topic, if a reassignment temporarily adds a 4th replica (now in-progress) and one of the 3 original replicas goes offline mid-move, how many in-sync replicas remain and can producers with `acks=all` still write?
+
+---
+
+## Cruise Control for Continuous Rebalancing
+
+Manual reassignment fixes specific, one-off problems. Cruise Control solves the ongoing problem: even after careful initial deployment, Kafka clusters drift toward imbalance as traffic patterns change, topics are added, and producer volumes shift. Cruise Control models your cluster continuously and generates rebalancing proposals — and can execute them automatically — to maintain broker health without manual intervention.
+
+### Architecture
+
+Cruise Control runs as a separate Pod alongside your Kafka cluster. You enable it by adding `cruiseControl: {}` to the `Kafka` CR:
+
+```yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: production
+  namespace: kafka
+spec:
+  kafka:
+    # ... existing config ...
+  cruiseControl:
+    config:
+      num.metric.fetchers: 1
+      metric.sampler.class: com.linkedin.kafka.cruisecontrol.monitor.sampling.CruiseControlMetricsReporterSampler
+    jvmOptions:
+      -Xms: "512m"
+      -Xmx: "1g"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+```
+
+The five components of the Cruise Control pipeline:
+
+```mermaid
+flowchart LR
+    MR["Metrics Reporter\n(JAR on every broker)"]
+    LM["Load Monitor\n(workload model)"]
+    GO["Goal Optimizer\n(proposals)"]
+    EX["Executor\n(applies moves)"]
+    AD["Anomaly Detector\n(self-healing)"]
+
+    MR -->|"internal\nmetrics topic"| LM
+    LM --> GO
+    GO --> EX
+    AD --> GO
+```
+
+- **Metrics Reporter** — a JAR Strimzi installs on every broker; samples JMX metrics (CPU, network in/out, disk, replication bytes) into an internal Kafka topic
+- **Load Monitor** — reads the metrics topic and builds a per-partition workload model, refreshed every 15 minutes by default
+- **Goal Optimizer** — evaluates the workload model against configured goals and generates partition-movement proposals; hard goals must be satisfied, soft goals are best-effort
+- **Executor** — applies approved proposals as a throttle-aware sequence of replica additions, removals, and leader elections
+- **Anomaly Detector** — monitors for broker failures, goal violations, disk failures, and metric anomalies; can trigger automatic self-healing proposals
+
+### Rebalancing with the KafkaRebalance CRD
+
+Strimzi intentionally locks down Cruise Control's REST API — all rebalancing goes through the `KafkaRebalance` CRD and the `strimzi.io/rebalance` annotation:
+
+```yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaRebalance
+metadata:
+  name: full-cluster-rebalance
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: production
+spec:
+  mode: full
+  goals:
+    - RackAwareGoal
+    - ReplicaDistributionGoal
+    - LeaderReplicaDistributionGoal
+    - NetworkInboundUsageDistributionGoal
+    - NetworkOutboundUsageDistributionGoal
+    - DiskUsageDistributionGoal
+  concurrentPartitionMovementsPerBroker: 5
+  replicationThrottle: 52428800    # 50 MB/s
+```
+
+**Rebalance modes:**
+
+| Mode | What It Does |
+|------|-------------|
+| `full` | Reoptimize the entire cluster — leaders and replicas across all brokers |
+| `add-brokers` | Move partitions onto newly added brokers listed in `.spec.brokers` |
+| `remove-brokers` | Drain a broker before decommission — list it in `.spec.brokers` |
+| `rebalance-disks` | Balance partition data across disks on JBOD storage nodes |
+
+### The Rebalance State Machine
+
+```mermaid
+flowchart LR
+    A[New] --> B[PendingProposal]
+    B -->|"Cruise Control\ngenerates"| C[ProposalReady]
+    C -->|"annotate: approve"| D[Rebalancing]
+    D -->|complete| E[Ready]
+    C -->|"annotate: refresh"| B
+    D -->|"annotate: stop"| F[Stopped]
+    B --> G[NotReady]
+    D --> G
+```
+
+```bash
+# 1. Apply the KafkaRebalance CR
+kubectl apply -f rebalance.yaml
+
+# 2. Watch state progress (New → PendingProposal → ProposalReady)
+kubectl -n kafka get kafkarebalance full-cluster-rebalance -w
+
+# 3. Inspect the proposal summary before approving
+kubectl -n kafka describe kafkarebalance full-cluster-rebalance
+
+# 4. Approve and start execution
+kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
+  strimzi.io/rebalance=approve --overwrite
+
+# 5. Stop an in-progress rebalance
+kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
+  strimzi.io/rebalance=stop --overwrite
+
+# 6. Force a fresh proposal (after cluster state changes)
+kubectl -n kafka annotate kafkarebalance full-cluster-rebalance \
+  strimzi.io/rebalance=refresh --overwrite
+```
+
+> **Note:** Cruise Control needs at least one full 15-minute sampling window of broker metrics before generating a reliable proposal. On a fresh cluster, proposals generated before this window closes may be suboptimal or propose unnecessary partition moves.
+
+### Goal Selection
+
+Cruise Control maintains three tiers of goals. Hard goals form a hard constraint — a proposal that violates any of them is rejected outright. Soft goals are optimized on a best-effort basis:
+
+| Goal | Default Tier | What It Ensures |
+|------|-------------|-----------------|
+| `RackAwareGoal` | Hard | Replicas of each partition span multiple racks/AZs |
+| `ReplicaCapacityGoal` | Hard | No broker exceeds the configured maximum replica count |
+| `DiskCapacityGoal` | Hard | No broker disk exceeds configured maximum utilization |
+| `NetworkInboundCapacityGoal` | Hard | No broker network inbound exceeds capacity |
+| `NetworkOutboundCapacityGoal` | Hard | No broker network outbound exceeds capacity |
+| `ReplicaDistributionGoal` | Soft | Replica count evenly distributed across brokers |
+| `LeaderReplicaDistributionGoal` | Soft | Partition leaders evenly distributed (reduces CPU and connection skew) |
+| `DiskUsageDistributionGoal` | Soft | Disk utilization balanced across brokers |
+
+`skipHardGoalCheck: true` bypasses hard goal validation — use only when an imbalanced cluster needs emergency relief and hard goals cannot currently be satisfied (e.g., not enough brokers to satisfy rack-awareness after a failure).
+
+### Self-Healing via Anomaly Detection
+
+Configure Cruise Control to auto-remediate cluster anomalies:
+
+<!-- code-verified-against: cruise-control@e30eaf352c31511241f4dfae457fbcb77022a9c6
+     SelfHealingNotifier.java line 60: BROKER_FAILURE_SELF_HEALING_THRESHOLD_MS_CONFIG = "broker.failure.self.healing.threshold.ms"
+     AnomalyDetectorConfig.java line 111: ANOMALY_DETECTION_GOALS_CONFIG = "anomaly.detection.goals" (confirmed)
+     SelfHealingNotifier.java line 54: SELF_HEALING_BROKER_FAILURE_ENABLED_CONFIG = "self.healing.broker.failure.enabled" (confirmed)
+     Default auto-fix threshold is 30 min; 300000 ms = 5 min tightens the gate. -->
+```yaml
+spec:
+  cruiseControl:
+    config:
+      anomaly.detection.goals: >
+        com.linkedin.kafka.cruisecontrol.analyzer.goals.RackAwareGoal,
+        com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaCapacityGoal
+      self.healing.enabled: "true"
+      self.healing.broker.failure.enabled: "true"
+      broker.failure.self.healing.threshold.ms: "300000"    # Wait 5 min before acting (default: 30 min)
+```
+
+| Anomaly | What Triggers It | Default Action |
+|---------|-----------------|---------------|
+| **Broker failure** | Broker becomes unreachable | Triggers a `remove-brokers` style rebalance |
+| **Goal violation** | Current assignment violates a hard goal | Generates a `full` rebalance proposal |
+| **Disk failure** | A JBOD disk becomes unavailable | Triggers a `rebalance-disks` proposal |
+| **Metric anomaly** | Unusual deviation in CPU/network/disk metrics | Alerts only — no auto-action by default |
+
+### Production Tuning
+
+| Parameter | Recommended | Why |
+|-----------|-------------|-----|
+| `concurrentPartitionMovementsPerBroker` | 2–5 | Limits network pressure on producers/consumers during rebalancing |
+| `replicationThrottle` | 50–100 MB/s | Prevents replication bursts from saturating inter-broker bandwidth |
+| Cruise Control `-Xmx` | 1–2 Gi | Required for clusters with 1000+ partitions; default 512 Mi causes GC pressure |
+
+Set the JVM heap in the `Kafka` CR:
+
+```yaml
+spec:
+  cruiseControl:
+    jvmOptions:
+      -Xms: "512m"
+      -Xmx: "1g"
+```
+
+### When NOT to Use Cruise Control
+
+- **Clusters with ≤ 3 brokers** — not enough variance to produce meaningful optimization proposals; overhead outweighs benefit.
+- **When exact deterministic partition placement is required** — Cruise Control optimizes toward goals, not toward a specific layout. Use `kafka-reassign-partitions.sh` when you need partition 5 of `payments` to land on broker 2 exactly.
+- **Before the first metrics window has closed** — proposals generated in the first 15 minutes of a cluster's life are based on incomplete data and may trigger unnecessary moves.
+- **When the `KafkaRebalance` state machine is not monitored** — a rebalance in `NotReady` state stops silently without notifying anyone. Alert on `.status.conditions[type=Ready].status != True` or you will believe you're rebalancing when execution has halted.
+
+---
+
 ## Common Mistakes
 
 | Mistake | Why It Happens | What To Do Instead |
@@ -1097,6 +1586,26 @@ You have completed this exercise when you:
 - [ ] Ran low-latency producer benchmark and recorded results
 - [ ] Compared throughput vs latency trade-offs with actual numbers
 - [ ] Ran a consumer benchmark and measured consumption throughput
+
+---
+
+## Sources
+
+**MirrorMaker2 and Cross-Cluster Replication:**
+- [KIP-382: MirrorMaker 2.0](https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0) — The Kafka Improvement Proposal that redesigned MirrorMaker on top of Kafka Connect, enabling active-active topologies and consumer group offset translation.
+- [Strimzi Blog: Introducing MirrorMaker 2](https://strimzi.io/blog/2020/03/30/introducing-mirrormaker2/) — Explains MM2's internal connector model, topic naming conventions, and offset tracking in a Strimzi context.
+- [Strimzi Docs: Deploying KafkaMirrorMaker2](https://strimzi.io/docs/operators/latest/full/deploying.html) — Official Strimzi operator reference for the `KafkaMirrorMaker2` CRD and connector configuration.
+
+**Partition Reassignment:**
+- [Apache Kafka Documentation: Expanding a Cluster](https://kafka.apache.org/documentation/#basic_ops_cluster_expansion) — Canonical reference for `kafka-reassign-partitions.sh`, JSON plan format, throttle configuration, and verification.
+
+**Cruise Control:**
+- [LinkedIn Engineering Blog: Introducing Kafka Cruise Control Frontend](https://www.linkedin.com/blog/engineering/open-source/introducing-kafka-cruise-control-frontend) — LinkedIn's original introduction of Cruise Control, covering its architecture (Load Monitor, Goal Optimizer, Executor, Anomaly Detector) and the motivation for continuous automated rebalancing at scale.
+- [Strimzi Blog: Cruise Control and Automated Rebalancing](https://strimzi.io/blog/2020/06/15/cruise-control/) — Explains the `KafkaRebalance` CRD, the annotation-driven state machine, and goal configuration within a Strimzi cluster.
+
+**KRaft and Kafka Internals:**
+- [KIP-500: Replace ZooKeeper with a Self-Managed Metadata Quorum](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum) — The proposal that eliminated ZooKeeper from Kafka by introducing the Raft-based controller quorum used in all modern Kafka deployments.
+- [KIP-227: Introduce Incremental FetchRequests to Increase Partition Scalability](https://cwiki.apache.org/confluence/display/KAFKA/KIP-227%3A+Introduce+Incremental+FetchRequests+to+Increase+Partition+Scalability) — The fetch protocol improvement that makes large partition counts (as used in multi-region MM2 setups) operationally feasible.
 
 ---
 

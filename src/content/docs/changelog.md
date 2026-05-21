@@ -8,6 +8,8 @@ sidebar:
 
 ## May 2026
 
+- **Kafka on Kubernetes: MirrorMaker2, partition reassignment, and Cruise Control.** [Module 1.2: Apache Kafka on Kubernetes (Strimzi)](/platform/disciplines/data-ai/data-engineering/module-1.2-kafka/) expanded with three new operator-grade sections covering `KafkaMirrorMaker2` CRD configuration for DR and multi-region topologies (offset translation, heartbeat/checkpoint connectors, active-active vs active-passive patterns), `kafka-reassign-partitions.sh` three-phase workflow (generate/execute/verify with bandwidth throttling), and Cruise Control continuous rebalancing via the `KafkaRebalance` CRD (state machine, goal tiers, self-healing anomaly detection, production tuning). Issue #1324.
+
 - **AI Infrastructure inference benchmarking.** [Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping](/ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking/) teaches TTFT, TPOT, percentile latency, structured vLLM benchmark runs, workload-aware load shaping, serving-parameter tuning, and bandwidth-math validation for production inference stacks.
 
 - **Production LLM inference engine selection.** [Production-Tier LLM Inference Engines: Decision Framework](/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines/) maps ExLlamaV2/V3, vLLM, SGLang, TensorRT-LLM, NVIDIA Dynamo, TGI, LMDeploy, MLC LLM, and OpenVINO to hardware tiers, workload classes, migration paths, and production failure modes.
