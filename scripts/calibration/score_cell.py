@@ -807,7 +807,10 @@ def score_cell(
     judge1: str = "claude-sonnet-4-6",
     judge2: str = "gemini-3.5-flash-high",
     judge_fn: JudgeFn = dispatch_judge,
+    replicate_seq: int = 0,
 ) -> dict[str, bool]:
+    if replicate_seq < 0:
+        raise ValueError("replicate_seq must be >= 0")
     schema.init_db(db_path)
     with schema.connect(db_path) as conn:
         cell = schema.fetch_cell(conn, cell_id)
@@ -817,7 +820,12 @@ def score_cell(
         lane = str(cell["lane"])
         scorer = SCORERS[lane]
         gates = scorer.deterministic_gates(response, ground_truth)
-        schema.insert_scores(conn, cell_id=cell_id, gates=gates)
+        schema.insert_scores(
+            conn,
+            cell_id=cell_id,
+            gates=gates,
+            replicate_seq=replicate_seq,
+        )
 
         prompt = scorer.llm_judge_prompt(response, ground_truth)
         if prompt is None:
@@ -861,6 +869,7 @@ def score_cell(
                     gate_pass=False,
                     score_value=None,
                     scorer=f"llm-judge:{model_name}:error={error}",
+                    replicate_seq=replicate_seq,
                 )
                 continue
             judge_scores.append(judge_score)
@@ -871,6 +880,7 @@ def score_cell(
                 gate_pass=judge_score >= 7.0,
                 score_value=judge_score,
                 scorer=f"llm-judge:{model_name}",
+                replicate_seq=replicate_seq,
             )
         if len(judge_scores) == 2 and abs(judge_scores[0] - judge_scores[1]) > 1.0:
             schema.insert_score(
@@ -880,6 +890,7 @@ def score_cell(
                 gate_pass=False,
                 score_value=abs(judge_scores[0] - judge_scores[1]),
                 scorer="deterministic",
+                replicate_seq=replicate_seq,
             )
     return gates
 
@@ -890,6 +901,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--judge1", default="claude-sonnet-4-6")
     parser.add_argument("--judge2", default="gemini-3.5-flash-high")
+    parser.add_argument("--replicate-seq", type=int, default=0)
     return parser
 
 
@@ -900,6 +912,7 @@ def main(argv: list[str] | None = None) -> int:
         db_path=args.db_path,
         judge1=args.judge1,
         judge2=args.judge2,
+        replicate_seq=args.replicate_seq,
     )
     print(json.dumps(gates, sort_keys=True))
     return 0
