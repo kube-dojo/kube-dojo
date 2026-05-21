@@ -1267,6 +1267,11 @@ Cruise Control maintains three tiers of goals. Hard goals form a hard constraint
 
 Configure Cruise Control to auto-remediate cluster anomalies:
 
+<!-- code-verified-against: cruise-control@e30eaf352c31511241f4dfae457fbcb77022a9c6
+     SelfHealingNotifier.java line 60: BROKER_FAILURE_SELF_HEALING_THRESHOLD_MS_CONFIG = "broker.failure.self.healing.threshold.ms"
+     AnomalyDetectorConfig.java line 111: ANOMALY_DETECTION_GOALS_CONFIG = "anomaly.detection.goals" (confirmed)
+     SelfHealingNotifier.java line 54: SELF_HEALING_BROKER_FAILURE_ENABLED_CONFIG = "self.healing.broker.failure.enabled" (confirmed)
+     Default auto-fix threshold is 30 min; 300000 ms = 5 min tightens the gate. -->
 ```yaml
 spec:
   cruiseControl:
@@ -1276,7 +1281,7 @@ spec:
         com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaCapacityGoal
       self.healing.enabled: "true"
       self.healing.broker.failure.enabled: "true"
-      self.healing.broker.failure.threshold.ms: "300000"    # Wait 5 min before acting
+      broker.failure.self.healing.threshold.ms: "300000"    # Wait 5 min before acting (default: 30 min)
 ```
 
 | Anomaly | What Triggers It | Default Action |
