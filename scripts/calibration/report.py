@@ -164,9 +164,9 @@ def render_reports(
     out_dir: Path | None = None,
     run_date: str | None = None,
 ) -> list[Path]:
-    run_date = run_date or _latest_run_date(db_path)
+    if run_date is None:
+        run_date = _latest_run_date(db_path) or "latest"
     summaries = load_summaries_for_run(db_path, run_date=run_date)
-    run_date = run_date or "latest"
     out_dir = out_dir or report_dir_for_run(run_date)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "per-lane").mkdir(exist_ok=True)

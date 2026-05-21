@@ -319,6 +319,7 @@ def insert_score(
     scored_at: str | None = None,
 ) -> None:
     scorer = _scorer_for_replicate(scorer, replicate_seq)
+    # Upsert keeps automatic run_cell scoring idempotent with later score_cell reruns.
     conn.execute(
         """
         INSERT INTO scores (

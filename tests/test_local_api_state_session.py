@@ -61,7 +61,7 @@ def _seed_handoffs(repo_root: Path) -> None:
     _write(repo_root / "docs" / "session-state" / "handoff-without-prefix.html", "<h1>Ignored</h1>")
 
 
-def _seed_benchmark_reports(repo_root: Path) -> None:
+def _seed_benchmark_reports(repo_root: Path, *, score_offset_s: int = 42) -> None:
     _write(
         repo_root / "calibration" / "v1" / "reports" / "2026-05-20" / "index.html",
         "<title>Previous</title>",
@@ -91,7 +91,7 @@ def _seed_benchmark_reports(repo_root: Path) -> None:
                 ("cell-3", "model-b", "architecting"),
             ],
         )
-        scored_at = datetime.fromtimestamp(rendered_at + 42, UTC).isoformat()
+        scored_at = datetime.fromtimestamp(rendered_at + score_offset_s, UTC).isoformat()
         conn.executemany(
             "INSERT INTO scores (cell_id, scored_at) VALUES (?, ?)",
             [("cell-1", scored_at), ("cell-2", scored_at), ("cell-2", scored_at)],
@@ -220,6 +220,16 @@ def test_latest_benchmarks_returns_report_tree_and_ledger_counts(tmp_path: Path)
             "render_url": "http://127.0.0.1:8768/artifacts/calibration/v1/reports/2026-05-20/index.html",
         }
     ]
+
+
+def test_latest_benchmarks_reports_negative_staleness_when_html_is_newer(tmp_path: Path) -> None:
+    _seed_benchmark_reports(tmp_path, score_offset_s=-10)
+
+    status, body, content_type = local_api.route_request(tmp_path, "/api/benchmarks/latest")
+
+    assert status == 200
+    assert content_type == "application/json; charset=utf-8"
+    assert body["latest"]["staleness_seconds"] < 0
 
 
 def test_latest_benchmarks_empty_reports_tree_returns_empty_payload(tmp_path: Path) -> None:

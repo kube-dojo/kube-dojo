@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from scripts.calibration import report, run_cell, schema
+import pytest
+
+from scripts.calibration import report, run_cell, schema, score_cell
 from scripts.calibration.run_cell import DispatchResult
 
 RUN_DATE = "2026-05-21"
@@ -59,6 +61,20 @@ def _latest_scored_at(db_path: Path) -> str:
     return str(row["scored_at"])
 
 
+def _score_count(db_path: Path) -> int:
+    with schema.connect(db_path) as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM scores").fetchone()
+    assert row is not None
+    return int(row["count"])
+
+
+def _only_cell_id(db_path: Path) -> str:
+    with schema.connect(db_path) as conn:
+        rows = conn.execute("SELECT cell_id FROM cells").fetchall()
+    assert len(rows) == 1
+    return str(rows[0]["cell_id"])
+
+
 def test_run_cell_auto_renders_report_newer_than_scores(
     tmp_path,
     monkeypatch,
@@ -87,6 +103,37 @@ def test_run_cell_no_render_suppresses_report(tmp_path, monkeypatch):
     assert run_cell.main(_run_cell_args(db_path, output_root, "--no-render")) == 0
 
     assert not (output_root / "reports" / RUN_DATE / "index.html").exists()
+
+
+def test_run_cell_skips_render_on_dispatch_failure(monkeypatch, tmp_path):
+    db_path = tmp_path / "ledger.db"
+    output_root = tmp_path / "calibration" / "v1"
+
+    def fail_run_cell(**kwargs):
+        raise RuntimeError("dispatch failed")
+
+    monkeypatch.setattr(run_cell, "run_cell", fail_run_cell)
+
+    with pytest.raises(RuntimeError, match="dispatch failed"):
+        run_cell.main(_run_cell_args(db_path, output_root))
+
+    assert not (output_root / "reports" / RUN_DATE / "index.html").exists()
+
+
+def test_run_cell_score_then_separate_score_cell_does_not_double_insert(
+    tmp_path,
+    monkeypatch,
+):
+    db_path = tmp_path / "ledger.db"
+    output_root = tmp_path / "calibration" / "v1"
+    _install_fake_run_cell(monkeypatch)
+
+    assert run_cell.main(_run_cell_args(db_path, output_root, "--no-render")) == 0
+    before = _score_count(db_path)
+
+    score_cell.score_cell(cell_id=_only_cell_id(db_path), db_path=db_path)
+
+    assert _score_count(db_path) == before
 
 
 def test_render_reports_idempotent_without_new_scores(tmp_path, monkeypatch):

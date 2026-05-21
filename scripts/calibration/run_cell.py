@@ -419,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     from . import report, score_cell
 
+    # score inserts are upserts, so explicit score_cell reruns do not duplicate rows.
     score_cell.score_cell(
         cell_id=cell_id,
         db_path=args.db_path,
