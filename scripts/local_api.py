@@ -4216,6 +4216,7 @@ def _render_top_nav(active: str) -> str:
         ("quality", "/quality", "Quality"),
         ("pipeline", "/pipeline", "Pipeline"),
         ("activity", "/activity", "Activity"),
+        ("benchmarks", "/benchmarks", "Benchmarks"),
         ("channels", "/channels", "Channels"),
         ("decisions", "/decisions", "Decisions"),
         ("health", "/health", "Health"),
@@ -4285,6 +4286,7 @@ _ARTIFACT_ASSET_TYPES = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".gif": "image/gif",
+    ".json": "application/json; charset=utf-8",
     ".woff2": "font/woff2",
 }
 _ARTIFACT_SECTION_SPECS = (
@@ -5097,6 +5099,7 @@ def _build_benchmark_files(repo_root: Path, report_dir: Path) -> dict[str, Any]:
         "index": _benchmark_file_url_if_present(repo_root, report_dir, "index.html"),
         "matrix": _benchmark_file_url_if_present(repo_root, report_dir, "matrix.html"),
         "wave_ab": _benchmark_file_url_if_present(repo_root, report_dir, "wave-ab-report.html"),
+        "stability": _benchmark_file_url_if_present(repo_root, report_dir, "stability.html"),
         "per_lane": _benchmark_html_file_urls(repo_root, report_dir / "per-lane"),
         "per_model": _benchmark_html_file_urls(repo_root, report_dir / "per-model"),
     }
@@ -5156,6 +5159,165 @@ def build_latest_benchmarks(repo_root: Path) -> dict[str, Any]:
         "predecessors": [_benchmark_report_summary(repo_root, path) for path in report_dirs[1:11]],
         "total_runs": len(report_dirs),
     }
+
+
+def _benchmark_report_tile(label: str, href: str | None, subtitle: str = "") -> str:
+    safe_label = html.escape(label)
+    safe_subtitle = html.escape(subtitle) if subtitle else ""
+    subtitle_html = f'<span class="bench-tile-sub">{safe_subtitle}</span>' if safe_subtitle else ""
+    if not href:
+        return (
+            '<span class="bench-tile disabled">'
+            f'<span class="bench-tile-title">{safe_label}</span>'
+            '<span class="bench-tile-sub">not generated</span></span>'
+        )
+    safe_href = html.escape(href, quote=True)
+    return (
+        f'<a class="bench-tile" href="{safe_href}">'
+        f'<span class="bench-tile-title">{safe_label}</span>{subtitle_html}</a>'
+    )
+
+
+def _benchmark_label_from_url(url: str) -> str:
+    stem = Path(urlsplit(url).path).stem
+    return stem or url
+
+
+def _benchmark_index_href(run: dict[str, Any]) -> str | None:
+    directory = run.get("directory")
+    if not isinstance(directory, str) or not directory:
+        return None
+    return f"/artifacts/{directory}/index.html"
+
+
+def _render_benchmarks_page(repo_root: Path) -> str:
+    payload = build_latest_benchmarks(repo_root)
+    latest = payload.get("latest") if isinstance(payload.get("latest"), dict) else None
+    if latest is None:
+        return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmarks - KubeDojo Local Monitor</title>
+  <link rel="stylesheet" href="/static/design-system.css" />
+</head>
+<body>
+{_render_top_nav("benchmarks")}
+<main class="wrap">
+  <header class="hero">
+    <div><h1>Benchmarks</h1><div class="sub">Calibration report dashboard.</div></div>
+  </header>
+  <section class="kpi"><div class="label">Latest run</div><div class="value">No runs</div><div class="sub">No calibration reports found.</div></section>
+</main>
+</body></html>"""
+
+    files = latest.get("files") if isinstance(latest.get("files"), dict) else {}
+    ledger = latest.get("ledger") if isinstance(latest.get("ledger"), dict) else {}
+    date = str(latest.get("date") or "unknown")
+    cells_scored = ledger.get("cells_scored", 0)
+    cells_total = ledger.get("cells_total", 0)
+    models = ledger.get("models", 0)
+    lanes = ledger.get("lanes", 0)
+    summary = f"{cells_scored}/{cells_total} cells scored × {models} models × {lanes} lanes ({date})"
+    top_tiles = "\n".join(
+        [
+            _benchmark_report_tile("Index", files.get("index"), "run overview"),
+            _benchmark_report_tile("Matrix", files.get("matrix"), "lane × model grid"),
+            _benchmark_report_tile("Wave AB", files.get("wave_ab"), "paired comparison"),
+            _benchmark_report_tile("Stability", files.get("stability"), "replicate variance"),
+        ]
+    )
+    lane_tiles = "\n".join(
+        _benchmark_report_tile(_benchmark_label_from_url(url), url)
+        for url in files.get("per_lane", []) or []
+        if isinstance(url, str)
+    )
+    model_tiles = "\n".join(
+        _benchmark_report_tile(_benchmark_label_from_url(url), url)
+        for url in files.get("per_model", []) or []
+        if isinstance(url, str)
+    )
+    predecessors = payload.get("predecessors") if isinstance(payload.get("predecessors"), list) else []
+    history_rows = "\n".join(
+        f'<li><a href="{html.escape(href, quote=True)}">{html.escape(str(run.get("date") or "unknown"))}</a></li>'
+        for run in predecessors
+        if isinstance(run, dict) and (href := _benchmark_index_href(run))
+    )
+    history_html = f'<ul class="bench-history">{history_rows}</ul>' if history_rows else '<p class="empty-state">No prior runs</p>'
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Benchmarks - KubeDojo Local Monitor</title>
+  <link rel="stylesheet" href="/static/design-system.css" />
+  <style>
+    .bench-head {{ display:flex; justify-content:space-between; gap:20px; align-items:flex-end; background:var(--surface-0); border:1px solid var(--border); border-radius:var(--radius); padding:20px 22px; margin-bottom:20px; }}
+    .bench-head h1 {{ margin:0 0 4px; font-size:26px; letter-spacing:0; }}
+    .bench-summary {{ color:var(--accent); font-size:15px; font-weight:800; text-align:right; }}
+    .bench-run-date {{ color:var(--fg-dim); font-size:12px; text-align:right; margin-top:4px; }}
+    .bench-kpis {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:22px; }}
+    .bench-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin:12px 0 22px; }}
+    .bench-grid.compact {{ grid-template-columns:repeat(auto-fit,minmax(138px,1fr)); }}
+    .bench-tile {{ min-height:68px; display:flex; flex-direction:column; justify-content:center; gap:4px; padding:13px 14px; background:var(--surface-0); border:1px solid var(--border); border-radius:8px; color:var(--text); text-decoration:none; }}
+    .bench-tile:hover {{ background:var(--surface-1); text-decoration:none; }}
+    .bench-tile.disabled {{ color:var(--fg-dim); opacity:.72; }}
+    .bench-tile-title {{ font-weight:800; overflow-wrap:anywhere; }}
+    .bench-tile-sub {{ color:var(--fg-dim); font-size:12px; }}
+    .bench-section h2 {{ margin-top:24px; }}
+    .bench-history {{ list-style:none; margin:10px 0 24px; padding:0; display:flex; gap:8px; flex-wrap:wrap; }}
+    .bench-history a {{ display:inline-flex; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface-0); font-size:13px; }}
+    .bench-methodology {{ margin-top:30px; padding-top:18px; border-top:1px solid var(--border); color:var(--fg-dim); font-size:13px; }}
+    @media (max-width:720px) {{ .bench-head {{ align-items:flex-start; flex-direction:column; }} .bench-summary,.bench-run-date {{ text-align:left; }} .bench-kpis {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} }}
+  </style>
+</head>
+<body>
+{_render_top_nav("benchmarks")}
+<main class="wrap">
+  <section class="bench-head">
+    <div>
+      <h1>Benchmarks</h1>
+      <div class="sub">Curated calibration report dashboard for the latest model-and-lane run.</div>
+    </div>
+    <div>
+      <div class="bench-summary">{html.escape(summary)}</div>
+      <div class="bench-run-date">Run date {html.escape(date)}</div>
+    </div>
+  </section>
+
+  <div class="bench-kpis">
+    <div class="kpi"><div class="label">Cells scored</div><div class="value">{html.escape(str(cells_scored))}</div><div class="sub">of {html.escape(str(cells_total))} cells</div></div>
+    <div class="kpi"><div class="label">Models</div><div class="value">{html.escape(str(models))}</div><div class="sub">per run</div></div>
+    <div class="kpi"><div class="label">Lanes</div><div class="value">{html.escape(str(lanes))}</div><div class="sub">evaluation lanes</div></div>
+    <div class="kpi"><div class="label">Latest run</div><div class="value">{html.escape(date)}</div><div class="sub">{html.escape(str(payload.get("total_runs", 0)))} total runs</div></div>
+  </div>
+
+  <section class="bench-section">
+    <h2>Top Reports</h2>
+    <div class="bench-grid">{top_tiles}</div>
+  </section>
+
+  <section class="bench-section">
+    <h2>Per-Lane Reports</h2>
+    <div class="bench-grid compact">{lane_tiles or '<p class="empty-state">No per-lane reports</p>'}</div>
+  </section>
+
+  <section class="bench-section">
+    <h2>Per-Model Reports</h2>
+    <div class="bench-grid compact">{model_tiles or '<p class="empty-state">No per-model reports</p>'}</div>
+  </section>
+
+  <section class="bench-section">
+    <h2>History</h2>
+    {history_html}
+  </section>
+
+  <footer class="bench-methodology">
+    The calibration dashboard tracks a {html.escape(str(lanes))}-lane × {html.escape(str(models))}-model × ~2-scorer shape, with each run publishing the aggregate index, matrix, wave-ab comparison, stability report, per-lane slices, and per-model slices. The raw stability selector output is available as <a href="/artifacts/calibration/v1/reports/stability-candidates.json">stability-candidates.json</a>.
+  </footer>
+</main>
+</body></html>"""
 
 
 def build_state_manifest() -> dict[str, Any]:
@@ -5256,12 +5418,19 @@ def build_state_manifest() -> dict[str, Any]:
             },
             {
                 "category": "benchmarks",
+                "ui": "/benchmarks",
                 "entries": [
                     {
                         "name": "Latest calibration benchmark report",
                         "path": "/api/benchmarks/latest",
                         "purpose": "Latest calibration report artifact plus predecessor reports and ledger coverage counts.",
                         "type": "api",
+                    },
+                    {
+                        "name": "Benchmarks dashboard",
+                        "path": "/benchmarks",
+                        "purpose": "Curated UI for the latest calibration run, report slices, and predecessor history.",
+                        "type": "html",
                     },
                 ],
             },
@@ -7018,6 +7187,16 @@ def render_health_page_html() -> str:
 def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DEFAULT_FEEDBACK_ISSUE) -> str:
     autopilot = _load_autopilot_v3_health(repo_root)
     autopilot_label = html.escape(_autopilot_v3_badge(autopilot))
+    benchmarks = build_latest_benchmarks(repo_root)
+    benchmark_latest = benchmarks.get("latest") if isinstance(benchmarks.get("latest"), dict) else {}
+    benchmark_ledger = (
+        benchmark_latest.get("ledger") if isinstance(benchmark_latest.get("ledger"), dict) else {}
+    )
+    benchmark_date = html.escape(str(benchmark_latest.get("date") or "n/a"))
+    benchmark_cells = html.escape(
+        f"{benchmark_ledger.get('cells_scored', 0)}/{benchmark_ledger.get('cells_total', 0)}"
+    )
+    benchmark_models = html.escape(str(benchmark_ledger.get("models", 0)))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -7045,9 +7224,9 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     .summary-head {{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; border-bottom:1px solid var(--border); }}
     .summary-title {{ display:flex; align-items:center; gap:9px; font-size:13px; font-weight:700; }}
     .summary-icon {{ width:20px; height:20px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; }}
-    .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card {{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; min-height:78px; padding:15px 16px; color:var(--text); text-decoration:none; }}
-    .op-summary-card,.pipeline-summary-card {{ grid-template-columns:repeat(3,minmax(82px,1fr)) auto; }}
-    .op-summary-card:hover,.quality-summary-card:hover,.pipeline-summary-card:hover,.activity-summary-card:hover,.channels-summary-card:hover {{ background:rgba(255,255,255,0.02); }}
+    .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card {{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; min-height:78px; padding:15px 16px; color:var(--text); text-decoration:none; }}
+    .op-summary-card,.pipeline-summary-card,.benchmarks-summary-card {{ grid-template-columns:repeat(3,minmax(82px,1fr)) auto; }}
+    .op-summary-card:hover,.quality-summary-card:hover,.pipeline-summary-card:hover,.activity-summary-card:hover,.channels-summary-card:hover,.benchmarks-summary-card:hover {{ background:rgba(255,255,255,0.02); }}
     .op-summary-value,.pipeline-summary-value,.summary-value {{ display:block; font-size:23px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums; }}
     .op-summary-label,.pipeline-summary-label,.summary-label {{ display:block; margin-top:5px; color:var(--text-dim); font-size:10px; font-weight:800; letter-spacing:0; text-transform:uppercase; }}
     .quality-summary-title {{ display:block; color:var(--text-dim); font-size:10px; font-weight:800; letter-spacing:0; text-transform:uppercase; margin-bottom:6px; }}
@@ -7060,8 +7239,8 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     .activity-summary-time {{ color:var(--text-dim); font-size:11px; white-space:nowrap; }}
     .activity-summary-text {{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
     .op-summary-link,.quality-summary-link,.pipeline-summary-link,.activity-summary-link,.summary-link {{ color:var(--accent); font-size:13px; font-weight:800; white-space:nowrap; }}
-    @media (max-width:860px) {{ .summary-grid {{ grid-template-columns:1fr; }} .op-summary-card,.pipeline-summary-card {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .op-summary-link,.pipeline-summary-link {{ justify-self:start; }} }}
-    @media (max-width:640px) {{ .main {{ padding:16px; }} .header-inner {{ padding:16px; align-items:flex-start; flex-direction:column; }} .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card {{ grid-template-columns:1fr; }} .quality-summary-counts,.summary-copy,.health-summary-copy {{ white-space:normal; }} }}
+    @media (max-width:860px) {{ .summary-grid {{ grid-template-columns:1fr; }} .op-summary-card,.pipeline-summary-card,.benchmarks-summary-card {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .op-summary-link,.pipeline-summary-link {{ justify-self:start; }} }}
+    @media (max-width:640px) {{ .main {{ padding:16px; }} .header-inner {{ padding:16px; align-items:flex-start; flex-direction:column; }} .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card {{ grid-template-columns:1fr; }} .quality-summary-counts,.summary-copy,.health-summary-copy {{ white-space:normal; }} }}
   </style>
 </head>
 <body>
@@ -7088,6 +7267,11 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
       <section class="summary-shell">
         <div class="summary-head"><div class="summary-title"><span class="summary-icon" style="background:var(--accent-muted);color:var(--accent);">P</span>Pipeline</div><span class="panel-badge" id="pipeline-summary-badge">&nbsp;</span></div>
         <a class="pipeline-summary-card" href="/pipeline"><span><span class="pipeline-summary-value" id="pipeline-queue-depth">0</span><span class="pipeline-summary-label">Queue</span></span><span><span class="pipeline-summary-value" id="pipeline-inflight">0</span><span class="pipeline-summary-label">Active</span></span><span><span class="pipeline-summary-value">{autopilot_label}</span><span class="pipeline-summary-label">Autopilot</span></span><span class="pipeline-summary-link">View pipeline &rarr;</span></a>
+      </section>
+
+      <section class="summary-shell">
+        <div class="summary-head"><div class="summary-title"><span class="summary-icon" style="background:var(--teal-muted);color:var(--teal);">B</span>Benchmarks</div><span class="panel-badge">Latest</span></div>
+        <a class="benchmarks-summary-card" href="/benchmarks"><span><span class="summary-value">{benchmark_cells}</span><span class="summary-label">Cells scored</span></span><span><span class="summary-value">{benchmark_models}</span><span class="summary-label">Models</span></span><span><span class="summary-value">{benchmark_date}</span><span class="summary-label">Latest run</span></span><span class="summary-link">View benchmarks &rarr;</span></a>
       </section>
 
       <section class="summary-shell">
@@ -7979,6 +8163,7 @@ def build_api_schema() -> dict[str, Any]:
             },
             {"path": "/quality", "desc": "Full-quality board and per-module summary table", "content_type": "text/html"},
             {"path": "/pipeline", "desc": "Pipeline v2 queue, recent events, and autopilot v3 health", "content_type": "text/html"},
+            {"path": "/benchmarks", "desc": "Calibration benchmark dashboard", "content_type": "text/html"},
             {"path": "/activity", "desc": "Activity feed with client-side track and agent filters", "content_type": "text/html"},
             {"path": "/health", "desc": "Runtime services, worktrees, and missing-module operational health", "content_type": "text/html"},
             {"path": "/healthz", "desc": "Liveness probe"},
@@ -8181,6 +8366,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         except (TypeError, ValueError):
             tail = 30
         return 200, render_pipeline_page_html(repo_root, tail=tail), "text/html; charset=utf-8"
+    if path == "/benchmarks":
+        return 200, _render_benchmarks_page(repo_root), "text/html; charset=utf-8"
     if path == "/activity":
         return 200, render_activity_page_html(), "text/html; charset=utf-8"
     if path == "/health":
