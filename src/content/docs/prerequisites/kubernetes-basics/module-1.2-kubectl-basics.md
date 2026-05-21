@@ -331,7 +331,6 @@ The safest operators are not the ones who never type destructive commands. They 
 Day-to-day Kubernetes debugging usually follows a small set of commands rather than an encyclopedic tour of the CLI. `kubectl logs` answers what the container wrote to stdout and stderr. [`kubectl exec` lets you run a command inside the container](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_exec/) when the image contains the tools you need. [`kubectl port-forward` creates a temporary local tunnel through the API server](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_port-forward/) so you can reach an internal pod or service without exposing it publicly.
 
 ```bash
-# Logs: the first thing you check when an app misbehaves
 # Logs: the first thing to check when an app misbehaves.
 kubectl logs nginx # current container output
 kubectl logs nginx -f # follow output while behavior evolves
@@ -341,8 +340,7 @@ kubectl logs nginx -c sidecar # inspect sidecar container logs
 kubectl logs nginx --previous # inspect terminated instance logs
 kubectl logs -l app=web --tail=50 # combine pod selector with latest logs
 
-# Exec: run commands inside the container
-# Run a command inside the container.
+# Exec: run a command inside the container.
 kubectl exec nginx -- ls /etc/nginx
 # Open an interactive shell when available.
 kubectl exec -it nginx -- sh
