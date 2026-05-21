@@ -134,11 +134,11 @@ jobs:
   scan:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Render manifests
         run: kubectl kustomize deploy/overlays/prod > rendered.yaml
       - name: Run kubesec
-        uses: controlplaneio/kubesec-action@master
+        uses: controlplaneio/kubesec-action@43d0ddff5ffee89a6bb9f29b64cd865411137b14  # v0.0.2
         with:
           input: rendered.yaml
           format: json
@@ -406,7 +406,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Render Kubernetes manifests
         run: kubectl kustomize deploy/overlays/prod > rendered.yaml
       - name: Trivy image and IaC scan
