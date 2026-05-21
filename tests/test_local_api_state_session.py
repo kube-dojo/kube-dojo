@@ -68,6 +68,7 @@ def _seed_benchmark_reports(repo_root: Path) -> None:
     _write(latest / "index.html", "<title>Latest</title>")
     _write(latest / "matrix.html", "<title>Matrix</title>")
     _write(latest / "wave-ab-report.html", "<title>Wave AB</title>")
+    _write(latest / "stability.html", "<title>Stability</title>")
     _write(latest / "per-lane" / "architecting.html", "<title>Architecting</title>")
     _write(latest / "per-model" / "gpt-5.html", "<title>GPT-5</title>")
 
@@ -113,7 +114,9 @@ def test_state_manifest_contains_benchmarks_category(tmp_path: Path) -> None:
     assert status == 200
     benchmarks = [category for category in body["categories"] if category["category"] == "benchmarks"]
     assert benchmarks
+    assert benchmarks[0]["ui"] == "/benchmarks"
     assert benchmarks[0]["entries"][0]["path"] == "/api/benchmarks/latest"
+    assert benchmarks[0]["entries"][1]["path"] == "/benchmarks"
 
 
 def test_state_manifest_entries_are_well_formed(tmp_path: Path) -> None:
@@ -192,6 +195,7 @@ def test_latest_benchmarks_returns_report_tree_and_ledger_counts(tmp_path: Path)
         "index": "/artifacts/calibration/v1/reports/2026-05-21/index.html",
         "matrix": "/artifacts/calibration/v1/reports/2026-05-21/matrix.html",
         "wave_ab": "/artifacts/calibration/v1/reports/2026-05-21/wave-ab-report.html",
+        "stability": "/artifacts/calibration/v1/reports/2026-05-21/stability.html",
         "per_lane": ["/artifacts/calibration/v1/reports/2026-05-21/per-lane/architecting.html"],
         "per_model": ["/artifacts/calibration/v1/reports/2026-05-21/per-model/gpt-5.html"],
     }
