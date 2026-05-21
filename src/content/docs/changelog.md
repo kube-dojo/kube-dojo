@@ -8,6 +8,8 @@ sidebar:
 
 ## May 2026
 
+- **AI Infrastructure bandwidth math.** [GPU Memory Hierarchy and Bandwidth Math for LLM Inference](/ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math/) teaches HBM/GDDR/DRAM/NVLink/PCIe tradeoffs, arithmetic intensity, decode tokens-per-second prediction, and benchmark validation before engine or GPU selection.
+
 - **2026-05-19** feat(content): module 3.1 LLM-Native Stack on Kubernetes — first module of synthesis-apps mini-arc (T2-7).
 
 - **Platform Toolkits / IaC Tools**: Module 7.11 HCP Terraform Workflow Operations (#1304 Wave 2, T2-23, ~2091 lines).
