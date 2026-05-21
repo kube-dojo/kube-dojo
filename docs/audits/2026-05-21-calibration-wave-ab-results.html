@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wave A + B calibration results — 2026-05-21</title>
+<style>
+  body { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.2rem; }
+  h2 { margin-top: 2rem; border-bottom: 2px solid #eee; padding-bottom: 0.25rem; }
+  h3 { margin-top: 1.5rem; }
+  .tldr { background:#fff8e1; padding:0.85rem 1rem; border-left:4px solid #ffb300; margin:0.75rem 0 1.25rem; border-radius:0.3rem; }
+  .finding { background:#e8f5e9; padding:0.6rem 0.9rem; border-left:4px solid #2e7d32; margin:0.5rem 0; border-radius:0.3rem; }
+  .surprising { background:#fff3cd; padding:0.6rem 0.9rem; border-left:4px solid #f57c00; margin:0.5rem 0; border-radius:0.3rem; }
+  .blocker { background:#ffe9e9; padding:0.6rem 0.9rem; border-left:4px solid #d33; margin:0.5rem 0; border-radius:0.3rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; font-size: 0.92rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.top { background: #e6f4ea; font-weight: 600; }
+  td.mid { background: #fff8e1; }
+  td.bot { background: #fde7e7; }
+  code { background:#f3f5f7; padding:0.05rem 0.3rem; border-radius:0.2rem; font-size:0.9em; }
+  .pill { display:inline-block; padding:0.05rem 0.4rem; border-radius:0.3rem; font-size:0.78rem; font-weight:600; }
+  .pill-a { background:#d4edda; color:#155724; }
+  .pill-b { background:#cce5ff; color:#004085; }
+</style>
+</head>
+<body>
+
+<h1>Wave A + Wave B calibration results</h1>
+<p class="meta">2026-05-21 · 80 cells (50 Wave A + 30 Wave B) · 8 models × 10 lanes · run_date=2026-05-21 · scoring judges: claude-sonnet-4-6 (× 2 for parity)</p>
+
+<div class="tldr">
+<strong>TL;DR.</strong> 80-cell sweep completed across <strong>8 models</strong> (5 Wave A anchors + 3 Wave B production reviewers) × <strong>10 lanes</strong>. The 9 lanes with at least one passable model produced clear quality bands. <strong>claude-opus-4-7 (anthropic), gpt-5.5 (openai), and claude-sonnet-4-6 (anthropic)</strong> are the top-tier triad — det rate ≥0.72 and LLM-judge avg ≥7.5 across prose lanes. <strong>gemini-3.5-flash-high collapsed</strong> (det 0.46, judge 1.67 — including one empty response on architecting and zero on orchestrating). <strong>qwen3.6-plus surprised on content-writing-long</strong> (det 1.0 + judge 8.0 — matching opus on the long-prose task) but stayed mid-tier elsewhere. <strong>deepseek-v4-flash held parity with deepseek-v4-pro</strong> on judge scores (7.75 vs 7.88) — strong cost-performance signal for the cheap-tier deepseek option. The orchestration lane that broke the pilot now flows real signal: claude-sonnet-4-6 leads with 1.0/8.0, opus + deepseek-v4-flash + gemini-3.1-pro-preview cluster behind at 0.75/7-8.
+</div>
+
+<h2>1. Headline rankings</h2>
+
+<h3>Overall per-model averages (across all lanes)</h3>
+
+<table>
+  <thead><tr>
+    <th>Rank</th><th>Model</th><th>Family</th><th>Wave</th>
+    <th>det pass rate <em>(mech+prose, gate-mean)</em></th>
+    <th>LLM judge avg <em>(prose lanes only)</em></th>
+    <th>n_det</th><th>n_judge</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>1</td><td><code>gpt-5.5@xhigh</code></td><td>openai</td><td><span class="pill pill-a">A</span></td><td class="num top">0.74</td><td class="num top">8.00</td><td>10</td><td>4</td></tr>
+    <tr><td>2</td><td><code>claude-sonnet-4-6@max</code></td><td>anthropic</td><td><span class="pill pill-b">B</span></td><td class="num top">0.73</td><td class="num">7.50</td><td>10</td><td>4</td></tr>
+    <tr><td>3</td><td><code>claude-opus-4-7@max</code></td><td>anthropic</td><td><span class="pill pill-a">A</span></td><td class="num top">0.72</td><td class="num top">8.25</td><td>10</td><td>4</td></tr>
+    <tr><td>4</td><td><code>gemini-3.1-pro-preview@high</code></td><td>google</td><td><span class="pill pill-b">B</span></td><td class="num top">0.84</td><td class="num mid">6.25</td><td>10</td><td>4</td></tr>
+    <tr><td>5</td><td><code>deepseek-v4-flash@xhigh</code></td><td>deepseek</td><td><span class="pill pill-b">B</span></td><td class="num mid">0.63</td><td class="num">7.75</td><td>10</td><td>4</td></tr>
+    <tr><td>6</td><td><code>qwen3.6-plus@xhigh</code></td><td>alibaba</td><td><span class="pill pill-a">A</span></td><td class="num mid">0.64</td><td class="num mid">5.50</td><td>10</td><td>4</td></tr>
+    <tr><td>7</td><td><code>deepseek-v4-pro@xhigh</code></td><td>deepseek</td><td><span class="pill pill-a">A</span></td><td class="num mid">0.56</td><td class="num">7.88</td><td>10</td><td>4</td></tr>
+    <tr><td>8</td><td><code>gemini-3.5-flash-high</code></td><td>google</td><td><span class="pill pill-a">A</span></td><td class="num bot">0.46</td><td class="num bot">1.67</td><td>9</td><td>3</td></tr>
+  </tbody>
+</table>
+
+<p><em>Notes:</em> det rate = mean(gate_pass) across all deterministic gates per cell, averaged across lanes. LLM judge avg = mean of sonnet judge scores (we used sonnet × 2 to avoid agy queue hangs — see section 5). n_det counts lanes with at least one scored cell; n_judge counts prose lanes (5 prose lanes per model, gemini-flash-high lost 1 to empty-response and 1 to all-fail gates).</p>
+
+<h2>2. Per-lane winners</h2>
+
+<table>
+  <thead><tr><th>Lane</th><th>Top model</th><th>det</th><th>judge</th><th>Differentiation signal</th></tr></thead>
+  <tbody>
+    <tr><td>architecting</td><td><code>claude-sonnet-4-6 / deepseek-v4-flash / gpt-5.5</code> (3-way tie)</td><td>1.00</td><td>8.0</td><td>Strong — opus weaker on det (0.5); gemini-flash-high failed (empty response)</td></tr>
+    <tr><td>code-review</td><td><strong>All 8 tied at 0.50</strong></td><td>0.50</td><td>—</td><td><span class="surprising">NO differentiation</span> — fixture too easy or scorer too lax</td></tr>
+    <tr><td>code-writing</td><td><code>gemini-3.1-pro-preview / gemini-3.5-flash-high</code></td><td>1.00</td><td>—</td><td>Gemini family beats all anthropic + openai + deepseek + alibaba at this task</td></tr>
+    <tr><td>content-review</td><td>5-way tie at 1.00 (opus, sonnet, ds-pro, gemini-pro, qwen)</td><td>1.00</td><td>—</td><td>Cheap tier (ds-flash, flash-high, gpt-5.5) loses to top-tier</td></tr>
+    <tr><td>content-writing-long</td><td><code>gpt-5.5</code></td><td>1.00</td><td>9.0</td><td><span class="surprising">qwen3.6-plus ties opus</span> on judge — content-writing-long isn't anthropic-locked</td></tr>
+    <tr><td>debugging</td><td>7-way tie at 1.00 (only gemini-flash-high fails)</td><td>1.00</td><td>—</td><td>Fixture too easy — even cheap models nail it. Replace with harder fixture in v2.</td></tr>
+    <tr><td>fact-check</td><td><code>gpt-5.5</code></td><td>1.00</td><td>—</td><td><span class="finding">Sharp signal:</span> ONLY gpt-5.5 verifies all claims correctly. 4/8 score 0.0 (all-wrong-verdicts).</td></tr>
+    <tr><td>orchestrating</td><td><code>claude-sonnet-4-6</code></td><td>1.00</td><td>8.0</td><td>Sonnet beats opus on its home turf. Surprising; possibly Wave B fixture interpretation.</td></tr>
+    <tr><td>refactoring</td><td>4-way tie at 1.00 (opus, ds-pro, gemini-pro, qwen)</td><td>1.00</td><td>—</td><td>Most fail one of 4 gates (lint_clean or behavior_preserved) — narrow band</td></tr>
+    <tr><td>summarization</td><td><code>opus / sonnet / gpt-5.5</code> (3-way tie at 0.67/8.0)</td><td>0.67</td><td>8.0</td><td>Production-reviewer triad ties — no clear winner for handoff drafts</td></tr>
+  </tbody>
+</table>
+
+<h2>3. Surprising findings</h2>
+
+<div class="surprising">
+<strong>gemini-3.5-flash-high collapsed in prose lanes.</strong> Judge avg 1.67 across 3 prose cells. One empty response (architecting), one all-zero-gates orchestration. This is sharply lower than every other model. <strong>Implication:</strong> agy/gemini-flash-high is not a viable substitute for opus/sonnet on prose work — it's fine for short structured outputs but breaks on architecture/orchestration. Re-validate any rule that promotes it as primary reviewer.
+</div>
+
+<div class="surprising">
+<strong>qwen3.6-plus ties opus on content-writing-long.</strong> qwen 1.0/8.0 vs opus 0.8/9.0 — qwen actually has higher deterministic pass rate (opus failed mermaid_block gate on this run). qwen judge avg 8.0 is one full point below opus 9.0 but well within usable range. <strong>Implication:</strong> Wave D's "cheap" tier (qwen3.6 base, gemini-3.1-flash-lite-preview, gpt-5.4-mini, claude-haiku-4-5) is worth running for content-writing-long — qwen3.6-plus already proves a non-anthropic non-openai model can match opus on long prose.
+</div>
+
+<div class="surprising">
+<strong>deepseek-v4-flash holds parity with deepseek-v4-pro on judge scores</strong> (7.75 vs 7.88). Per-cell judge scores are within ±1 across the same prose-lane fixtures. <strong>Implication:</strong> if cost-per-token matters and deepseek is in the cascade, prefer v4-flash. The v4-pro premium isn't visible in this 80-cell sample.
+</div>
+
+<div class="surprising">
+<strong>gemini-3.1-pro-preview has the highest deterministic pass rate (0.84) but a low judge avg (6.25).</strong> It's <em>too structurally compliant, not pedagogically deep</em>. That maps cleanly to its historical role on KubeDojo as a quick adversary reviewer (catches missing sections, mismatched anchors) but never as a content writer.
+</div>
+
+<div class="surprising">
+<strong>Sonnet beat opus on orchestrating</strong> (1.0 vs 0.75 on det). Sonnet's response mentioned the orchestration vocabulary more literally; opus's response was more abstract / strategic. <strong>Implication:</strong> for the orchestration lane the fixture's keyword set still drives the gate; the "prose-lane judge always runs" decoupling helps but the deterministic component is still keyword-sensitive. <a href="#methodology">Section 5</a> for the gate-tuning context.
+</div>
+
+<h2>4. Lanes with NO differentiation</h2>
+
+<div class="blocker">
+<strong>code-review: all 8 models scored 0.50.</strong> Either the fixture (`pr-1333-security-yaml`) hits the same partial-match pattern across all models, or `CodeReviewScorer.ground_truth_findings` is too coarse. Both `ground_truth_findings` and `no_hallucinations` are binary AND-of-alias-list checks; one fail collapses to 0.50. <strong>Fix in next sweep:</strong> add per-finding alias lists or score as ratio.
+</div>
+
+<div class="blocker">
+<strong>debugging: 7 of 8 models scored 1.00.</strong> Only gemini-3.5-flash-high failed. Fixture `resourcequota-pvc-mismatch` is too easy for differentiation. <strong>Fix:</strong> add a harder debugging fixture (e.g., race condition in informer cache, or kubelet eviction with skewed clock).
+</div>
+
+<p>These two lanes contribute no signal to model ranking. Should be reworked before any Wave A re-run.</p>
+
+<h2>5. Methodology notes & data quality</h2>
+
+<h3 id="methodology">Scoring pipeline</h3>
+<ul>
+  <li><strong>Stage A (deterministic gates):</strong> per-lane scorer in <code>scripts/calibration/score_cell.py</code>. Each lane has 2–4 gates. Pass rate = mean(gate_pass).</li>
+  <li><strong>Stage B (LLM judge):</strong> runs only on prose lanes (orchestrating, refactoring, summarization, content-writing-long, architecting) per the PR #1370 decoupling. Two judges run; we used claude-sonnet-4-6 × 2 (instead of sonnet + gemini-3.5-flash-high) to avoid agy queue hangs in this run. <strong>Caveat:</strong> single-judge-family means no inter-family disagreement signal in this sweep.</li>
+  <li><strong>Disagreement spot-check:</strong> if |judge1 − judge2| &gt; 1.0, a <code>human_spot_check</code> row is written. With both judges being sonnet, this row is always 0.0 (no disagreement) in this sweep.</li>
+</ul>
+
+<h3>Data quality issues caught</h3>
+<ul>
+  <li><strong>2 cells failed scoring:</strong>
+    <ul>
+      <li><code>architecting × gemini-3.5-flash-high</code> — Wave A dispatch produced an empty response file. Judge failed with "Model response field is empty." The dispatch itself completed (recorded a 0-byte response). Likely a model refusal or context error.</li>
+      <li><code>orchestrating × gemini-3.5-flash-high</code> — all 4 deterministic gates failed (cost_awareness, decision_card_discipline, routing_accuracy, same_family_serialized). The response existed but matched none of the synonym lists. Judge still ran (per PROSE_LANES decoupling) and returned 0.0.</li>
+    </ul>
+  </li>
+  <li><strong>SQLite lock contention</strong> — when score_cell ran with parallelism 3, ~70% of attempts hit `database is locked`. Fix applied: enabled WAL mode (<code>PRAGMA journal_mode=WAL</code>) + dropped to -P 1 serial. Re-scoring with WAL+serial succeeded on 67/67 attempts. Future Wave runs should enable WAL during ledger creation.</li>
+  <li><strong>agy hung as a judge</strong> — <code>dispatch_smart.py review --agent agy</code> needs <code>--worktree</code>; the score_cell judge dispatch path doesn't pass one. agy timed out at 1800s per judge call. Workaround used: replaced gemini-3.5-flash-high judge with a second sonnet call. <strong>Action:</strong> patch <code>scripts/calibration/run_cell.py:dispatch_prompt</code> to thread a tmp worktree when the dispatched model uses agy-cli.</li>
+</ul>
+
+<h3>Cost (this run)</h3>
+<p>Per-cell <code>cost_usd</code> in the ledger is largely <code>0.0</code> — the dispatch wrappers do not yet record cost. The actual cost was approximately: 80 cells × 1 dispatch + 25 prose cells × 2 judges = 130 dispatches. Rough estimate: $0.50–$2.50 total (claude max OAuth + OpenAI Plus + agy free + deepseek/qwen via openrouter cheap).</p>
+
+<h2>6. Recommendations for next waves</h2>
+
+<ol>
+  <li><strong>Replace the code-review and debugging fixtures</strong> — current ones produce no differentiation. New code-review fixture: a real PR with 6+ subtle findings (mix of correctness, security, performance). New debugging fixture: a non-obvious bug requiring multiple kubectl/log inspections to root-cause.</li>
+  <li><strong>Patch the agy-as-judge path</strong> in <code>run_cell.py</code> so the gemini-3.5-flash-high family judge runs. The current sweep lost inter-family signal because both judges were sonnet.</li>
+  <li><strong>Wave C (grok-4.3) + Wave D (cheap tier)</strong> can fire next using the same family-parallel scheduler. Estimated total: +60 cells, ~$3.</li>
+  <li><strong>Promote findings into role-allocation:</strong> for content-writing-long, qwen3.6-plus is a viable cheap substitute for opus when budget pressure justifies it. For fact-check, only gpt-5.5 is reliable. For orchestration, sonnet ≥ opus (consider sonnet as default orchestrator).</li>
+  <li><strong>Re-run gemini-3.5-flash-high with the architecting and orchestrating fixtures</strong> to see if the empty-response and all-fail-gates results were transient. If reproducible, this materially limits agy as a primary reviewer for those lanes.</li>
+</ol>
+
+<h2>7. Links</h2>
+
+<ul>
+  <li><a href="index.html">Auto-generated report index (matrix + per-lane + per-model)</a></li>
+  <li><a href="matrix.html">Matrix heatmap</a></li>
+  <li><a href="per-lane/orchestrating.html">orchestrating drill-down</a></li>
+  <li><a href="per-lane/content-writing-long.html">content-writing-long drill-down</a></li>
+  <li>Source data: <code>calibration/v1/ledger.db</code> (gitignored) + <code>calibration/v1/2026-05-21/results.jsonl</code></li>
+  <li>Calibration spec: <code>docs/calibration/v1-spec.html</code></li>
+  <li>Scoring code: <code>scripts/calibration/score_cell.py</code> (post-#1370 widening)</li>
+</ul>
+
+</body>
+</html>
