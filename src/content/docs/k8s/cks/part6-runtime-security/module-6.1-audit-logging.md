@@ -41,7 +41,7 @@ For this module, keep one question in your head: "Which request would I need to 
 
 ## Audit Event Lifecycle
 
-An audit event begins when the API server receives a request and ends after the backend receives the stage records selected by policy. Kubernetes defines four audit stages: `RequestReceived` before the request is delegated to a handler, `ResponseStarted` after response headers are sent for long-running requests, `ResponseComplete` after the response body is complete, and `Panic` when request handling panics. Most policies omit `RequestReceived` because it duplicates many high-volume requests, but long-running requests such as watch or exec can make `ResponseStarted` evidence useful. ([Kubernetes Audit](https://v1-35.docs.kubernetes.io/docs/tasks/debug/debug-cluster/audit/), [Audit Event API](https://v1-35.docs.kubernetes.io/docs/reference/config-api/apiserver-audit.v1/))
+An audit event begins when the API server receives a request and ends after the backend receives the stage records selected by policy. Kubernetes defines four audit stages: `RequestReceived` before the request is delegated to a handler, `ResponseStarted` emitted only for long-running requests such as watch or exec, once response headers are sent, `ResponseComplete` after the response body is complete, and `Panic` when request handling panics. Most policies omit `RequestReceived` because it duplicates many high-volume requests, but long-running requests such as watch or exec can make `ResponseStarted` evidence useful. ([Kubernetes Audit](https://v1-35.docs.kubernetes.io/docs/tasks/debug/debug-cluster/audit/), [Audit Event API](https://v1-35.docs.kubernetes.io/docs/reference/config-api/apiserver-audit.v1/))
 
 ```mermaid
 sequenceDiagram
@@ -224,6 +224,7 @@ source = '''
 type = "aws_s3"
 inputs = ["parse_audit_json"]
 bucket = "company-kubernetes-audit"
+# %F = strftime YYYY-MM-DD; supported in Vector S3 sink key_prefix.
 key_prefix = "cluster=prod-us/date=%F/"
 compression = "gzip"
 encoding.codec = "json"
@@ -441,7 +442,7 @@ rules:
   - level: Metadata
 EOF
 
-sed -n '1,120p' /tmp/cks-audit-policy.yaml
+cat /tmp/cks-audit-policy.yaml
 ```
 
 Use the review questions below against the policy. Which rule captures `kubectl get secret db -n prod`? Which rule captures a RoleBinding patch? Which rule captures exec? Which rule captures a health probe? Which sensitive request would still be captured only at the catch-all level? Answering these questions from top to bottom is the habit that prevents first-match mistakes in both CKS tasks and production reviews.
