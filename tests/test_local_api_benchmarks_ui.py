@@ -56,7 +56,7 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _seed_benchmark_reports(repo_root: Path) -> None:
+def _seed_benchmark_reports(repo_root: Path, *, include_stability: bool = True) -> None:
     _write(
         repo_root / "calibration" / "v1" / "reports" / "2026-05-20" / "index.html",
         "<title>Previous</title>",
@@ -65,8 +65,9 @@ def _seed_benchmark_reports(repo_root: Path) -> None:
     _write(latest / "index.html", "<title>Latest</title>")
     _write(latest / "matrix.html", "<title>Matrix</title>")
     _write(latest / "wave-ab-report.html", "<title>Wave AB</title>")
-    _write(latest / "stability.html", "<title>Stability</title>")
-    _write(repo_root / "calibration" / "v1" / "reports" / "stability-candidates.json", "[]")
+    if include_stability:
+        _write(latest / "stability.html", "<title>Stability</title>")
+        _write(repo_root / "calibration" / "v1" / "reports" / "stability-candidates.json", "[]")
     for lane in LANES:
         _write(latest / "per-lane" / f"{lane}.html", f"<title>{lane}</title>")
     for model in MODELS:
@@ -103,6 +104,18 @@ def test_benchmarks_page_renders_latest_report_dashboard(tmp_path: Path) -> None
     assert "12 lanes" in body
     assert 'href="/artifacts/calibration/v1/reports/2026-05-21/per-lane/code-review.html"' in body
     assert 'href="/artifacts/calibration/v1/reports/2026-05-21/stability.html"' in body
+
+
+def test_benchmarks_page_disables_missing_stability_report(tmp_path: Path) -> None:
+    _seed_benchmark_reports(tmp_path, include_stability=False)
+
+    status, body, content_type = local_api.route_request(tmp_path, "/benchmarks")
+
+    assert status == 200
+    assert content_type == "text/html; charset=utf-8"
+    assert '<span class="bench-tile disabled">' in body
+    assert 'href="/artifacts/calibration/v1/reports/2026-05-21/stability.html"' not in body
+    assert "stability-candidates.json" not in body
 
 
 def test_benchmarks_top_nav_link_appears_on_existing_ui_routes(tmp_path: Path) -> None:

@@ -5245,6 +5245,13 @@ def _render_benchmarks_page(repo_root: Path) -> str:
         if isinstance(run, dict) and (href := _benchmark_index_href(run))
     )
     history_html = f'<ul class="bench-history">{history_rows}</ul>' if history_rows else '<p class="empty-state">No prior runs</p>'
+    stability_candidates_html = ""
+    if files.get("stability"):
+        stability_candidates_html = (
+            ' The raw stability selector output is available as '
+            '<a href="/artifacts/calibration/v1/reports/stability-candidates.json">'
+            "stability-candidates.json</a>."
+        )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -5314,7 +5321,7 @@ def _render_benchmarks_page(repo_root: Path) -> str:
   </section>
 
   <footer class="bench-methodology">
-    The calibration dashboard tracks a {html.escape(str(lanes))}-lane × {html.escape(str(models))}-model × ~2-scorer shape, with each run publishing the aggregate index, matrix, wave-ab comparison, stability report, per-lane slices, and per-model slices. The raw stability selector output is available as <a href="/artifacts/calibration/v1/reports/stability-candidates.json">stability-candidates.json</a>.
+    The calibration dashboard tracks a {html.escape(str(lanes))}-lane × {html.escape(str(models))}-model × ~2-scorer shape, with each run publishing the aggregate index, matrix, wave-ab comparison, stability report, per-lane slices, and per-model slices.{stability_candidates_html}
   </footer>
 </main>
 </body></html>"""
