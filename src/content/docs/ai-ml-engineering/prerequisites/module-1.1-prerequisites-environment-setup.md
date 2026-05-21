@@ -66,9 +66,11 @@ The following bootstrap uses `pyenv` only for interpreter selection and uses `ve
 mkdir -p ai-env-lab
 cd ai-env-lab
 
+pyenv install --skip-existing 3.12.8
 pyenv local 3.12.8
 python -m venv .venv
 source .venv/bin/activate
+# Windows: .venv\Scripts\activate
 
 python -m pip install --upgrade pip
 python -c "import sys; print(sys.prefix); print(sys.version)"
@@ -125,7 +127,6 @@ Use `uv` when the project benefits from fast creation, locking, syncing, and too
 uv init --bare
 uv venv .venv
 uv add ipykernel numpy pandas python-dotenv
-uv lock
 uv sync
 ```
 
@@ -160,7 +161,7 @@ flowchart LR
     G --> H[Run process-level verification]
 ```
 
-For NVIDIA systems, distinguish the driver from the CUDA Toolkit and from Python packages that consume CUDA. The CUDA installation guide states that the toolkit can be installed through distribution-specific packages or a distribution-independent runfile, and it documents the default runfile toolkit location under `/usr/local/cuda-13.0` with a `/usr/local/cuda` symbolic link for that release. It also documents `PATH` and `LD_LIBRARY_PATH` setup for runfile installations. That means a project note should record whether CUDA came from system packages, a runfile path, Conda packages, or Python wheels, because each choice changes where you inspect failures. ([NVIDIA CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/))
+For NVIDIA systems, distinguish the driver from the CUDA Toolkit and from Python packages that consume CUDA. The CUDA installation guide states that the toolkit can be installed through distribution-specific packages or a distribution-independent runfile, and it documents the default runfile toolkit location under `/usr/local/cuda-<version>` (for the selected toolkit release) with a `/usr/local/cuda` symbolic link for that release. It also documents `PATH` and `LD_LIBRARY_PATH` setup for runfile installations. That means a project note should record whether CUDA came from system packages, a runfile path, Conda packages, or Python wheels, because each choice changes where you inspect failures. ([NVIDIA CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/))
 
 For AMD systems, distinguish ROCm runtime packages from Python packages that call ROCm-enabled libraries. AMD's Linux installation documentation describes ROCm installation options, native package installation, runtime packages, and post-install path configuration such as `/opt/rocm-<version>/bin` and ROCm library paths. If a Python import cannot see the GPU, the first question is whether the ROCm runtime and device access are visible to the process, not whether the notebook cell was re-run enough times. ([AMD ROCm installation for Linux](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/), [AMD ROCm post-installation](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/post-install.html))
 
@@ -221,6 +222,8 @@ python -m pip install ipykernel
 python -m ipykernel install --user --name ai-env-lab --display-name "Python (ai-env-lab)"
 ```
 
+On containers or shared machines, `python -m ipykernel install --sys-prefix ...` is the more portable alternative because it writes the kernelspec into the active environment prefix instead of the user's Jupyter data directory.
+
 Visual Studio Code adds a different boundary because the editor, integrated terminal, test runner, debugger, and language server can each surface Python environment state. The VS Code Python documentation describes interpreter selection through the command palette and discovery of workspace-local `.venv` directories. Commit portable workspace settings only when they avoid machine-specific paths, and prefer environment folder names like `.venv` that the extension can discover in the workspace. ([VS Code Python environments](https://code.visualstudio.com/docs/python/environments))
 
 ```json
@@ -253,9 +256,11 @@ The safest first project workflow is intentionally boring. Choose the interprete
 mkdir -p ai-env-lab
 cd ai-env-lab
 
+pyenv install --skip-existing 3.12.8
 pyenv local 3.12.8
 python -m venv .venv
 source .venv/bin/activate
+# Windows: .venv\Scripts\activate
 
 python -m pip install --upgrade pip pip-tools
 cat > requirements.in <<'EOF'
@@ -270,6 +275,8 @@ pip-sync requirements.txt
 python -m ipykernel install --user --name ai-env-lab --display-name "Python (ai-env-lab)"
 python -c "import sys; print(sys.prefix)"
 ```
+
+On containers or shared machines, replace `--user` with `--sys-prefix` so the kernelspec stays inside the active environment prefix.
 
 After the baseline works, add complexity one boundary at a time. If you need Conda or micromamba, create a separate branch of the setup notes rather than mutating the `venv` workflow in place. If you need CUDA or ROCm, record the vendor install path, runtime evidence, and Python package compatibility separately from application dependencies. If you need Jupyter, register the kernel from the environment after dependencies are installed. Every additional layer should leave evidence that can be checked by a teammate. ([Conda environment management](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html), [micromamba user guide](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html), [NVIDIA CUDA installation guide for Linux](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/), [AMD ROCm installation for Linux](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/))
 
