@@ -451,6 +451,48 @@ def dispatch_deepseek_review(pr_num: int, module_path: str, slug: str):
     return text, classify_verdict(text)
 
 
+def dispatch_agy_review(pr_num: int, module_path: str, slug: str):
+    """Cross-family review via Agy (Antigravity CLI — Google).
+
+    Agy is the gemini-cli replacement for Google One / unpaid tier; rolls out
+    fully on 2026-06-18 per #1350. Run-time:
+    - mode=danger required (dispatch_smart enforces this for agy)
+    - no `model=` arg — agy picks model via its TUI panel (env override:
+      KUBEDOJO_AGY_MODEL; adapter default gemini-3.5-flash-high)
+    - rate-limit signature is distinct from gemini-cli (separate counter),
+      so agy can run as a peer reviewer alongside gemini without sharing
+      the OAuth quota.
+
+    Failure shapes and how they surface to the cascade:
+    - Quota-exhausted: invoke returns ok=False, response="" — this function
+      returns ("", "UNCLEAR") (classify_verdict on the empty string).
+    - OAuth-expired: invoke returns ok=True with body containing the
+      auth-prompt URL and "authentication timed out" — classify_verdict
+      finds no VERDICT line, returns "UNCLEAR".
+    - Exception inside invoke (network/transport failure, adapter crash):
+      caught below, returns (None, "ERROR").
+    All three cases let the cascade fall to the next reviewer; the
+    distinction matters only when reading dispatch logs after a failure.
+    """
+    log({"event": "agy_review_start", "pr": pr_num, "module": module_path})
+    try:
+        result = invoke(
+            agent_name="agy",
+            prompt=gemini_review_prompt(pr_num, module_path),  # reuse same prompt
+            mode="danger",  # required for agy in headless dispatch
+            cwd=REPO,
+            task_id=f"388-pilot-review-agy-{slug}",
+            entrypoint="dispatch",
+            hard_timeout=900,
+        )
+    except Exception as e:  # noqa: BLE001
+        log({"event": "agy_review_error", "pr": pr_num, "error": repr(e)})
+        return None, "ERROR"
+    text = result.response or ""
+    log({"event": "agy_review_done", "pr": pr_num, "ok": result.ok, "response_excerpt": text[-2000:]})
+    return text, classify_verdict(text)
+
+
 def classify_verdict(text: str) -> str:
     """Classify a gemini review into APPROVE / APPROVE_WITH_NITS / NEEDS CHANGES / UNCLEAR.
 
@@ -504,6 +546,15 @@ def build_reviewer_cascade(primary_reviewer: str) -> list[tuple[str, Callable]]:
             ("qwen", dispatch_qwen_review),
             ("gemini", dispatch_gemini_review),
             ("claude", dispatch_claude_review),
+        ]
+    if primary_reviewer == "agy":
+        # agy → claude → qwen. Gemini is on a SHARED Google OAuth pool with
+        # agy pre-2026-06-18 (separate counter on Google side but auth-flow
+        # collisions can still happen) — fall to claude first.
+        return [
+            ("agy", dispatch_agy_review),
+            ("claude", dispatch_claude_review),
+            ("qwen", dispatch_qwen_review),
         ]
     # default: gemini
     return [
@@ -634,7 +685,7 @@ def main(argv: list[str] | None = None) -> int:
                 log({"event": "module_skip", "module": module_path, "reason": "pr_creation_failed"})
                 continue
         # Reviewer cascade. Primary defaults to claude; override via
-        # KUBEDOJO_388_PRIMARY_REVIEWER (gemini | claude | qwen | deepseek).
+        # KUBEDOJO_388_PRIMARY_REVIEWER (gemini | claude | qwen | deepseek | agy).
         # Cascade order is always primary → claude → qwen/deepseek fallback
         # depending on the configured primary.
         primary = os.environ.get("KUBEDOJO_388_PRIMARY_REVIEWER", "claude").lower()
