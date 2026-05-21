@@ -1230,10 +1230,19 @@ def _handle_discuss(args) -> int:
         print(f"   root message: {root_id[:12]} / thread {correlation_id[:12]}")
         print()
 
-    session_field_map = {
+    # Session-less agents (agy / qwen / deepseek) map to all-None tuples;
+    # the per-agent branch at "if agent_name in {claude, gemini}" later
+    # in this function correctly skips session persistence for them, and
+    # `stored_session.get(None)` returns None which feeds the resume-skip
+    # path. Required to prevent KeyError when ab discuss --with picks
+    # one of these agents.
+    session_field_map: dict[str, tuple[str | None, str | None, str | None]] = {
         "claude": ("claude_session_id", "claude_cwd", "claude_sandbox_mode"),
         "gemini": ("gemini_session_id", "gemini_cwd", "gemini_sandbox_mode"),
         "codex": ("codex_session_id", "codex_cwd", "codex_sandbox_mode"),
+        "agy": (None, None, None),
+        "qwen": (None, None, None),
+        "deepseek": (None, None, None),
     }
     resume_thread_session: dict[str, str | None] = {}
     if args.resume_thread:
