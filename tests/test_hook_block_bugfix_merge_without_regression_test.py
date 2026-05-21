@@ -288,10 +288,11 @@ def test_fix_pr_with_test_in_files_but_unreadable_is_denied(tmp_path: Path) -> N
     assert "Could not read regression test file" in result.stderr
 
 
-def test_fix_pr_with_fixes_issue_keyword_recognized(tmp_path: Path) -> None:
-    # GitHub-recognized closing keywords include `Fixes issue #N` patterns
-    # — the issue ref regex should match this so the hook treats it as a
-    # bugfix PR.
+def test_non_fix_title_with_fixes_keyword_in_body_is_allowed(tmp_path: Path) -> None:
+    # Issue #1387: the body-keyword path used to trigger the hook on any PR
+    # containing "Fixes #N" / "Closes #N", which blocked feat:/chore:/docs:
+    # PRs that close feature-request issues. The trigger is now narrowed to
+    # `fix:` title prefix only; body keywords no longer trigger.
     pr = {
         "body": (
             "Fixes issue #1212 — restores the seed JSON on inject failure.\n"
@@ -307,8 +308,49 @@ def test_fix_pr_with_fixes_issue_keyword_recognized(tmp_path: Path) -> None:
         fixture_files=None,
         tmp_path=tmp_path,
     )
-    assert result.returncode == 2
-    assert "missing a 'Regression test:' line" in result.stderr
+    assert result.returncode == 0, result.stderr
+
+
+def test_feat_pr_with_paren_issue_ref_in_title_is_allowed(tmp_path: Path) -> None:
+    # Issue #1387 regression: a `feat:` PR that closes a feature-request
+    # issue via the squash-merge `(#N)` convention used to trigger the
+    # bugfix-hook because the title-`(#N)` regex populated `issue_refs`
+    # which alone activated the gate. Now only `fix:` titles trigger.
+    pr = {
+        "body": "Adds Module 1.6 GPU Memory Hierarchy and Bandwidth Math.\n",
+        "files": [
+            {"path": "src/content/docs/platform/llm-inference/module-1.6-gpu-memory.md"},
+        ],
+        "headRefOid": "abc123",
+        "title": "feat: Module 1.6 GPU Memory Hierarchy and Bandwidth Math (#1377)",
+        "number": 9111,
+    }
+    result = run_hook(
+        "gh pr merge 9111 --squash",
+        pr_json=pr,
+        fixture_files=None,
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_feat_pr_with_closes_in_body_is_allowed(tmp_path: Path) -> None:
+    # Issue #1387 regression: `feat:` PR closing a feature-request issue
+    # with `Closes #N` in body used to trigger the gate. Now allowed.
+    pr = {
+        "body": "Adds a new helper.\n\nCloses #1377.\n",
+        "files": [{"path": "scripts/helper.py"}],
+        "headRefOid": "abc123",
+        "title": "feat: add helper",
+        "number": 9112,
+    }
+    result = run_hook(
+        "gh pr merge 9112 --squash",
+        pr_json=pr,
+        fixture_files=None,
+        tmp_path=tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_git_show_fallback_exercises_subprocess_when_no_fixture(tmp_path: Path) -> None:
