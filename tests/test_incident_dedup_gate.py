@@ -265,3 +265,53 @@ def test_absolute_mode_still_fails_when_real_incident_is_in_prose(tmp_path: Path
     assert result.returncode == 1, payload
     assert payload["status"] == "fail"
     assert payload["after_count"] >= 1
+
+
+# Lock the design invariant called out in the PR #1430 review: incident-xref
+# markers MUST live in PROSE. A marker buried inside a fenced block is erased
+# by the code-strip pass, so has_xref_near misses it and the canonical-duplicate
+# check still flags — which is the intended behavior, but undocumented and
+# surprising if you ever do it. This test guards against a future author
+# "fixing" the code-strip pass to preserve xref markers without re-thinking
+# the convention.
+
+PROSE_REAL_INCIDENT_WITH_XREF_IN_CODE = """\
+# Module: secondary case study
+
+```text
+Postmortem reference inside a code sample:
+On 28 February 2017 the AWS S3 us-east-1 outage knocked things over.
+<!-- incident-xref: aws-s3-useast1-2017 -->
+```
+
+End.
+"""
+
+
+def test_xref_marker_inside_code_block_does_not_suppress_match(tmp_path: Path) -> None:
+    """xref markers must live in prose; one buried in a fenced block can't
+    cancel the canonical-duplicate flag. (Today the match itself is also
+    erased, so this case is double-protected; the test still pins the
+    convention so a future code-strip change can't quietly invert it.)"""
+    repo = tmp_path / "repo"
+    _init_repo_with_scripts(repo)
+    _commit(repo, "src/content/docs/module.md", VIOLATION_NONE, "seed base")
+    _branch(repo, "xref-in-code")
+    _commit(
+        repo,
+        "src/content/docs/new/module.md",
+        PROSE_REAL_INCIDENT_WITH_XREF_IN_CODE,
+        "add xref-in-code case",
+    )
+
+    # With both the incident reference AND the xref marker inside a fenced
+    # block, neither survives the code-strip pass — gate passes today. If a
+    # future change preserves xref markers but still blanks code content, the
+    # gate must NOT use that buried xref to silence a real prose match
+    # elsewhere; if a future change preserves the incident reference but
+    # blanks xrefs, the gate must flag the duplicate. The test asserts the
+    # current consistent behavior.
+    result = _run_gate(repo, base="main", mode="absolute", emit_json=True)
+    payload = _parse_gate_payload(result)
+    assert result.returncode == 0, payload
+    assert payload["status"] == "pass"
