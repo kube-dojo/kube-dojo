@@ -132,6 +132,9 @@ def check_regression_test(pr_json: str, fixture_dir: str) -> tuple[str, str]:
     body = pr.get("body") or ""
 
     is_fix_title = bool(re.match(r"^fix(\([^)]+\))?:", title, re.IGNORECASE))
+    if not is_fix_title:
+        return ("PASS", "not a bugfix PR (title does not start with 'fix:')")
+
     issue_refs: set[str] = set()
     for match in re.finditer(
         r"(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\s*(?:issue\s*)?[:#]?\s*#(\d+)",
@@ -141,9 +144,6 @@ def check_regression_test(pr_json: str, fixture_dir: str) -> tuple[str, str]:
         issue_refs.add(match.group(1))
     for match in re.finditer(r"\(#(\d+)\)", title):
         issue_refs.add(match.group(1))
-
-    if not is_fix_title and not issue_refs:
-        return ("PASS", "not a bugfix PR (no fix: title, no Fixes/Closes ref)")
 
     test_paths: list[str] = []
     for raw in body.splitlines():
