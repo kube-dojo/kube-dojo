@@ -226,7 +226,11 @@ def test_log_filter_silent_on_small_dispatch_log(tmp_path: Path) -> None:
 
 
 def test_log_filter_warns_on_large_dispatch_response_txt(tmp_path: Path) -> None:
-    """Large dispatch_responses/*.txt → hook emits advisory warning."""
+    """Large dispatch_responses/*.txt → hook emits advisory warning.
+
+    Note the .txt branch suggests grep/tail (NOT jq, since the file is plain
+    text and jq would parse-fail). The jq advisory only fires for .jsonl.
+    """
     primary = tmp_path / "kubedojo"
     primary.mkdir()
     response_file = primary / "logs" / "dispatch_responses" / "run-001.txt"
@@ -237,7 +241,9 @@ def test_log_filter_warns_on_large_dispatch_response_txt(tmp_path: Path) -> None
 
     assert result.returncode == 0
     assert "hookSpecificOutput" in result.stdout
-    assert "jq" in result.stdout
+    # .txt files get tail/grep alternatives (plain-text), not jq
+    assert "tail " in result.stdout or "grep" in result.stdout
+    assert "jq " not in result.stdout
 
 
 def test_log_filter_skips_non_log_file(tmp_path: Path) -> None:

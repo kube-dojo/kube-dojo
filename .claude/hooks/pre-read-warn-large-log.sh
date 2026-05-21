@@ -42,12 +42,21 @@ fi
 
 FILE_KB=$((FILE_SIZE / 1024))
 
-MSG="Log file ${FILE_PATH} is ${FILE_KB} KB — reading it whole will flood context.
+if [[ "${FILE_PATH}" == *.jsonl ]]; then
+  MSG="Log file ${FILE_PATH} is ${FILE_KB} KB — reading it whole will flood context.
 Consider targeted queries instead:
   jq 'select(.status==\"error\")' \"${FILE_PATH}\" | head -20    # filter errors
   jq -r '.module_key' \"${FILE_PATH}\" | sort | uniq -c           # module counts
   tail -n 20 \"${FILE_PATH}\" | jq '.'                            # recent entries
 Proceeding with Read — this is advisory only."
+else
+  MSG="Log file ${FILE_PATH} is ${FILE_KB} KB — reading it whole will flood context.
+Consider targeted queries instead (plain-text response file):
+  tail -n 100 \"${FILE_PATH}\"                                    # recent output
+  grep -nE 'VERDICT|BLOCKERS|ERROR' \"${FILE_PATH}\"              # extract verdict/errors
+  head -n 50 \"${FILE_PATH}\"                                     # opening summary
+Proceeding with Read — this is advisory only."
+fi
 
 jq -n --arg msg "$MSG" \
   '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":$msg}}'
