@@ -40,6 +40,7 @@ Before starting this toolkit:
 | 7.15 | [Helm vs Ansible vs Go Operator Decision Framework](module-7.15-helm-ansible-go-operator-decision/) | `[COMPLEX]` | ~90 min |
 | 7.16 | [Production Ansible Operator Patterns](module-7.16-production-ansible-operator-patterns/) | `[EXPERT]` | ~120 min |
 | 7.17 | [Testing Ansible Operators with Molecule and Kuttl](module-7.17-testing-ansible-operators/) | `[COMPLEX]` | ~100 min |
+| 7.14 | [AWX, Tower, and Event-Driven Ansible (EDA) Integration](module-7.14-awx-tower-eda/) | `[COMPLEX]` | ~120 min |
 
 ## Learning Outcomes
 
@@ -61,6 +62,7 @@ After completing this toolkit, you will be able to:
 14. **Operate Ansible Operators in production** — Status conditions, finalizer safety, idempotency at scale, CRD upgrade strategies, leader election, OLM bundles, and operator observability
 15. **Master advanced watches.yaml patterns** — Multi-CRD operators, namespace scoping, cluster-scoped RBAC, watchDependentResources + blacklist filtering, finalizer mapping, selector filters, and worker concurrency tuning via ANSIBLE_WORKERS
 16. **Test Ansible Operators** — Design a layered test strategy using Molecule (role-level unit and integration), Kuttl (end-to-end CRD reconciliation), and operator-sdk scorecard (OLM bundle validation)
+13. **Operate centralized Ansible automation** — Deploy AWX Operator, configure job templates, credentials, and dynamic Kubernetes inventory; wire Event-Driven Ansible rulebooks to react to cluster events via AWX webhooks
 
 ## Tool Selection Guide
 
@@ -117,6 +119,13 @@ WHICH IAC TOOL?
      • Worked examples: cert-manager (Helm), MinIO (Ansible), Crossplane (Go)
      • OperatorHub.io capability level requirements per style
      • Migration paths from Helm → Ansible → Go
+
+"I need centralized Ansible automation with UI, RBAC, and event-driven response"
+└──▶ AWX (open-source) or AAP (Red Hat enterprise)
+     • AWX Operator installs AWX on Kubernetes
+     • Job templates, credentials, dynamic inventory
+     • EDA rulebooks react to Kubernetes API events
+     • AAP adds support contract, EDA Controller, Automation Hub
 
 "I want Terraform without HashiCorp licensing concerns"
 └──▶ OpenTofu
@@ -281,6 +290,11 @@ Module 7.17: Testing Ansible Operators with Molecule and Kuttl
      │  Molecule role-level unit and integration tests
      │  Kuttl E2E CRD reconciliation tests
      ▼
+Module 7.14: AWX, Tower, and EDA Integration
+     │
+     │  Centralized automation controller
+     │  Event-Driven Ansible on Kubernetes
+     ▼
 [Toolkit Complete] → Apply to production
 ```
 
@@ -304,6 +318,7 @@ Module 7.17: Testing Ansible Operators with Molecule and Kuttl
 | Helm vs Ansible vs Go Decision | Build all three operator styles against the same WebApp CRD on kind; compare line counts, debugging, and capability ceilings |
 | Production Ansible Operator Patterns | Deploy operator with HA leader election, create 100 CRs, inject leader transition, measure reconciliation latency |
 | Testing Ansible Operators | Molecule delegated + docker + kind scenarios, Kuttl E2E create/delete assertions on kind |
+| AWX + EDA | Deploy AWX Operator on kind, register a Kubernetes credential, and write an EDA rulebook that reacts to Pod events |
 
 ## Related Tracks
 

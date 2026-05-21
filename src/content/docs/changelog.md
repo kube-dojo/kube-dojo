@@ -15,6 +15,9 @@ sidebar:
 - **Platform Toolkits / IaC Tools**: Module 7.13 Advanced watches.yaml Patterns — multi-CRD operators, WATCH_NAMESPACE scoping, cluster-scoped RBAC, watchDependentResources + blacklist filtering, finalizer mapping, selector filters, and performance tuning via ANSIBLE_WORKERS (#1356, T2-13 Wave 2).
 
 - **Platform Toolkits / IaC Tools**: Module 7.17 Testing Ansible Operators with Molecule and Kuttl (#1360, T2-13 arc complete) — Molecule delegated + docker + kind driver scenarios, Kuttl TestStep/TestAssert/errors.yaml E2E tests, operator-sdk scorecard, GitHub Actions matrix pipeline, coverage measurement, 8-row common mistakes table, 6 scenario-based quiz questions, hands-on lab with 4 tasks (~700 content lines).
+
+- **Platform Toolkits / IaC Tools**: Module 7.14 AWX, Tower, and Event-Driven Ansible (EDA) Integration (#1357 — AWX Operator architecture, AAP vs AWX vs standalone decision matrix, EDA rulebooks on Kubernetes via ansible.eda.webhook + informer-forwarder pattern, webhook integration with Alertmanager and GitHub Actions, credential management, k8s_info + add_host inventory pattern, operator-as-AWX-job pattern, production deployment and backup strategy, ~450 lines of prose content).
+
 - **AI Infrastructure inference benchmarking.** [Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping](/ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking/) teaches TTFT, TPOT, percentile latency, structured vLLM benchmark runs, workload-aware load shaping, serving-parameter tuning, and bandwidth-math validation for production inference stacks.
 
 - **Production LLM inference engine selection.** [Production-Tier LLM Inference Engines: Decision Framework](/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines/) maps ExLlamaV2/V3, vLLM, SGLang, TensorRT-LLM, NVIDIA Dynamo, TGI, LMDeploy, MLC LLM, and OpenVINO to hardware tiers, workload classes, migration paths, and production failure modes.
