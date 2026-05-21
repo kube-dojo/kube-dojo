@@ -6,10 +6,6 @@ This folder contains Claude Code slash commands and skills for the KubeDojo proj
 
 ```
 claude_extensions/
-├── commands/           # Slash commands (user-invoked)
-│   ├── review-module.md
-│   ├── review-part.md
-│   └── verify-technical.md
 ├── skills/             # Skills (auto-invoked by Claude)
 │   ├── module-quality-reviewer.md
 │   ├── cka-expert.md
@@ -17,35 +13,12 @@ claude_extensions/
 └── README.md
 ```
 
-## Commands vs Skills
-
-| Type | Invocation | Best For |
-|------|------------|----------|
-| **Commands** | User types `/command` | Specific tasks on demand |
-| **Skills** | Claude auto-detects when relevant | Background knowledge, standards |
-
-## Available Commands
-
-### `/review-module [path]`
-Review a single module against quality standards.
-
-```
-/review-module docs/cka/part0-environment/module-0.1-cluster-setup.md
-```
-
-### `/review-part [directory]`
-Review all modules in a part for consistency.
-
-```
-/review-part docs/cka/part0-environment/
-```
-
-### `/verify-technical [path]`
-Verify technical accuracy of commands and YAML.
-
-```
-/verify-technical docs/cka/part1-cluster-architecture/module-1.3-helm.md
-```
+Slash commands (`/review-module`, `/review-part`, `/verify-technical`)
+were retired 2026-05-21: the production review workflow runs through
+`scripts/dispatch_smart.py review --agent sonnet|agy|codex`, the
+deterministic verifier is `scripts/quality/verify_module.py`, and the
+cross-family review protocol lives in `docs/review-protocol.md`. Skills
+below are still active.
 
 ## Available Skills
 
@@ -87,27 +60,6 @@ The deploy script only copies changed files, making it fast and safe to run repe
 4. **Deploy** to `.claude/` when ready to use
 
 The `.claude/` directory is gitignored—it's the "installed" version.
-
-## Creating New Commands
-
-1. Create `claude_extensions/commands/your-command.md`
-2. Add YAML frontmatter with description
-3. Write the prompt/instructions
-4. Deploy to `.claude/commands/`
-5. Restart Claude Code
-
-Example:
-```markdown
----
-description: Brief description of what this command does
----
-
-# Command Title
-
-Instructions for Claude when this command is invoked...
-
-$ARGUMENTS contains any arguments passed to the command.
-```
 
 ## Creating New Skills
 

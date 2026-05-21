@@ -46,8 +46,6 @@ curl -s --max-time 2 "http://127.0.0.1:8768/api/activity?limit=30"
 
 **Orientation punch-line**: `curl -s --max-time 2 http://127.0.0.1:8768/api/orient` returns the single primary action + up to 3 alternatives + blockers/alerts in ~1.3 KB. Use this when the briefing is overkill.
 
-*Endpoints planned for protocol parity with learn-ukrainian Monitor API (not yet shipped):* `/api/rules?format=markdown`, `/api/comms/inbox?agent=X`. Tracked as T2.2 in the gap inventory.
-
 Standalone session = main orchestrator. Drive the queue; ask only on irreversible or ambiguous actions.
 
 Full agent recipe: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
@@ -61,11 +59,7 @@ Full agent recipe: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
 ## Multi-agent deliberation (`ab discuss`)
 
-For high-leverage decisions (architecture, threshold freezes, contested NEEDS CHANGES, strategic bets affecting 100+ modules), use `scripts/ab discuss <channel> --with claude,codex,gemini --max-rounds 3`. **Framing: distributed deliberation, not quorum** — LLM priors correlate, voting is theater. Surface disagreement + option space, don't pretend democracy.
-
-Convention: each agent ends its turn with `[AGREE]` / `[OPTION X]` / `[DEFER]`. On disagreement OR multi-option output, orchestrator (claude) emits a **Decision Card** (see `.claude/rules/decision-card.md`). Convergence → no card, just proceed.
-
-**Cold-start step**: scan `docs/decisions/pending/` before starting work — pending decisions go there when user is AFK.
+For high-leverage decisions only (architecture, threshold freezes, contested NEEDS CHANGES, bets affecting 100+ modules). Use `scripts/ab discuss <channel> --with claude,codex,gemini --max-rounds 3`. See `.claude/rules/decision-card.md` for the full protocol (deliberation not quorum; emit a Decision Card on disagreement only). Scan `docs/decisions/pending/` at cold start.
 
 ## Project Overview
 
@@ -103,17 +97,14 @@ npx astro preview          # preview built site
 | File | Purpose |
 |------|---------|
 | `STATUS.md` | Current work, progress, blockers |
-| `CLAUDE.md` | This file — project overview |
-| `.claude/rules/` | Scoped rules (quality, translation, checklist, Gemini) |
+| `.claude/rules/` | Scoped rules (quality, translation, decision-card, etc.) |
 | `.claude/settings.json` | Shared permissions (committed) |
 | `.claude/settings.local.json` | Personal overrides (gitignored) |
 | `docs/pedagogical-framework.md` | Educational research & guidelines |
 | `docs/quality-rubric.md` | 1-5 rubric for module/lab quality |
-| `docs/quality-audit-results.md` | Audit of 31 modules (2026-04-03) |
 | `scripts/prompts/module-writer.md` | Standard prompt for module creation |
-| `scripts/dispatch.py` | Direct CLI dispatch for Gemini/Claude |
+| `scripts/dispatch.py` / `scripts/dispatch_smart.py` | CLI dispatchers |
 | `astro.config.mjs` | Starlight config (sidebar, i18n, theme) |
-| `package.json` | Node.js dependencies |
 
 ## Curriculum Structure
 
@@ -130,24 +121,12 @@ src/content/docs/          # English content (648 files)
     └── k8s/ckad/
 ```
 
-## Commands Available
-
-- `/review-module [path]` — Review single module quality
-- `/review-part [dir]` — Review entire part for consistency
-- `/verify-technical [path]` — Verify commands and YAML accuracy
-
 ## Practice Environment Approach
 
 - **Lightweight**: kind/minikube for most exercises
 - **Multi-node**: kubeadm only when topic requires
 - **Mock exams**: Questions + self-assessment, not simulation
 - **Recommend killer.sh** for realistic exam simulation
-
-## Three-Pass Exam Strategy
-
-1. **Pass 1**: Quick wins (1-3 min) first
-2. **Pass 2**: Medium tasks (4-6 min)
-3. **Pass 3**: Complex with remaining time
 
 ## Git Workflow
 
@@ -159,5 +138,3 @@ src/content/docs/          # English content (648 files)
 ## Links
 
 - **Repo**: https://github.com/kube-dojo/kube-dojo.github.io
-- **Writer Prompt**: `scripts/prompts/module-writer.md`
-- **Gemini Dispatch**: `scripts/dispatch.py`
