@@ -362,6 +362,8 @@ Hypothetical scenario: A platform team struggles with configuration drift across
 
 In the scenario, recovery succeeds because a senior engineer uses `git reflog` to find the object ID that `HEAD` had pointed to before the rebase, then restores the missing manifest from that commit. The deeper lesson is not "never delete branches." The lesson is that Git recovery depends on reachability and time. Reflogs preserve recent movements of refs, unreachable objects may survive until pruning, and a calm investigation can often recover what a rushed force-push would make harder to explain.
 
+Operator incidents usually combine bad ref hygiene with pressure to clean up. A local recovery branch named `tmp` protects a rollback commit only until someone deletes it without writing down the object ID; a `git fsck` "dangling commit" line is then evidence to inspect, not noise to delete. Inspect the object with `git cat-file`, recover the path through trees or reflog entries, create a deliberately named temporary branch, and postpone `git gc` or `git repack` until you know whether the repository needs recovery or only size reduction. Git's refs, reflog, fsck, garbage collection, and repack documentation describe separate mechanisms, so your incident note should also separate pointer hygiene, object reachability, content recovery, and storage maintenance. ([Pro Git: Git References](https://git-scm.com/book/en/v2/Git-Internals-Git-References), [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog), [Git documentation: git-fsck](https://git-scm.com/docs/git-fsck), [Git documentation: git-gc](https://git-scm.com/docs/git-gc), [Git documentation: git-repack](https://git-scm.com/docs/git-repack))
+
 Designing a safe recovery plan starts by freezing evidence. Do not run aggressive garbage collection, do not prune immediately, and do not force-push a guessed fix over the top of the shared branch. First, inspect `HEAD`, branch refs, reflog entries, and object existence. Then create a protective branch or tag pointing at any suspicious commit before you continue. A branch name costs almost nothing, and it can preserve a commit long enough for the team to inspect it carefully.
 
 A practical recovery note should record both commands and interpretations. For example, "reflog entry `HEAD@{2}` pointed to the commit before the rebase" is more useful than "I found an old commit," because another engineer can verify the evidence. Likewise, "the branch ref moved from one object ID to another during the force-push" is better than "main changed." Git gives you exact identifiers; use them in incident notes so the team can distinguish facts from guesses and reconstruct the sequence later.
@@ -507,6 +509,9 @@ Check out the previous commit by object ID to enter detached `HEAD`, make a smal
 - [Git documentation: git-rev-parse](https://git-scm.com/docs/git-rev-parse)
 - [Git documentation: gitrevisions](https://git-scm.com/docs/gitrevisions)
 - [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog)
+- [Git documentation: git-fsck](https://git-scm.com/docs/git-fsck)
+- [Git documentation: git-gc](https://git-scm.com/docs/git-gc)
+- [Git documentation: git-repack](https://git-scm.com/docs/git-repack)
 - [Git documentation: hash-function-transition (SHA-256)](https://git-scm.com/docs/hash-function-transition)
 - [Kubernetes documentation: ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
 
