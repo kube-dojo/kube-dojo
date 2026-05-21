@@ -25,6 +25,7 @@ That means not every module should be read in pure numeric order if your immedia
 | 1.4 | [Local Inference Stack for Learners](/ai-ml-engineering/ai-infrastructure/module-1.4-local-inference-stack-for-learners/) |
 | 1.5 | [Home AI Operations and Cost Model](/ai-ml-engineering/ai-infrastructure/module-1.5-home-ai-operations-cost-model/) |
 | 1.6 | [GPU Memory Hierarchy and Bandwidth Math for LLM Inference](/ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math/) |
+| 1.8 | [Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping](/ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking/) |
 
 ## Suggested Paths
 
