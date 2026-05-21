@@ -204,18 +204,7 @@ def preflight_probe(
             )
             response_text = (result.response or "").strip()
             lower_response = response_text.lower()
-            alpha_only = "".join(ch for ch in lower_response if ch.isalnum())
-            if not (
-                alpha_only == "ok"
-                or (
-                    lower_response.startswith("ok")
-                    and (
-                        len(lower_response) == 2
-                        or lower_response[2].isspace()
-                        or lower_response[2] in string.punctuation
-                    )
-                )
-            ):
+            if lower_response.rstrip(string.punctuation + string.whitespace) != "ok":
                 raise RuntimeError(
                     "preflight probe expected an 'OK' response; got "
                     f"{response_text!r} from {model.canonical_string}"

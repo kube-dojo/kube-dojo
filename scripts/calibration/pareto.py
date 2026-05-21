@@ -75,50 +75,50 @@ def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> li
             )
             slot["cells"].append(c["cell_id"])
 
-    for canonical, slot in by_model.items():
-        for cell_id in slot["cells"]:
-            det = conn.execute(
-                "SELECT AVG(CAST(gate_pass AS REAL)) FROM scores "
-                "WHERE cell_id=? AND scorer='deterministic' AND gate_name != 'human_spot_check'",
-                (cell_id,),
-            ).fetchone()[0]
-            if det is not None:
-                slot["det_passes"].append(float(det))
-            for j in conn.execute(
-                "SELECT score_value FROM scores WHERE cell_id=? AND gate_name='llm_judge_score'",
-                (cell_id,),
-            ).fetchall():
-                if j["score_value"] is not None and float(j["score_value"]) > 0:
-                    slot["judge_scores"].append(float(j["score_value"]))
-            latency = conn.execute(
-                "SELECT latency_s FROM dispatches WHERE cell_id=? ORDER BY dispatch_ts DESC LIMIT 1",
-                (cell_id,),
-            ).fetchone()
-            if latency and latency["latency_s"] is not None:
-                slot["total_lat"] += float(latency["latency_s"])
+        for canonical, slot in by_model.items():
+            for cell_id in slot["cells"]:
+                det = conn.execute(
+                    "SELECT AVG(CAST(gate_pass AS REAL)) FROM scores "
+                    "WHERE cell_id=? AND scorer='deterministic' AND gate_name != 'human_spot_check'",
+                    (cell_id,),
+                ).fetchone()[0]
+                if det is not None:
+                    slot["det_passes"].append(float(det))
+                for j in conn.execute(
+                    "SELECT score_value FROM scores WHERE cell_id=? AND gate_name='llm_judge_score'",
+                    (cell_id,),
+                ).fetchall():
+                    if j["score_value"] is not None and float(j["score_value"]) > 0:
+                        slot["judge_scores"].append(float(j["score_value"]))
+                latency = conn.execute(
+                    "SELECT latency_s FROM dispatches WHERE cell_id=? ORDER BY dispatch_ts DESC LIMIT 1",
+                    (cell_id,),
+                ).fetchone()
+                if latency and latency["latency_s"] is not None:
+                    slot["total_lat"] += float(latency["latency_s"])
 
-    out: list[ModelPareto] = []
-    for canonical, slot in by_model.items():
-        det = statistics.mean(slot["det_passes"]) if slot["det_passes"] else 0.0
-        judge = statistics.mean(slot["judge_scores"]) if slot["judge_scores"] else 0.0
-        quality = det + (judge / 10.0)
-        rate = COST_PER_SECOND_USD.get(canonical, DEFAULT_COST_PER_SECOND)
-        cost = slot["total_lat"] * rate
-        # Below the quality floor, the model is producing empty / refused
-        # responses — fast and cheap, but not useful. Sentinel infinity sinks
-        # it to the bottom of the rank instead of rewarding it.
-        cpq = float("inf") if quality < quality_floor else cost / max(quality, 0.01)
-        out.append(
-            ModelPareto(
-                canonical_string=canonical,
-                cells=len(slot["cells"]),
-                total_latency_s=slot["total_lat"],
-                total_cost_usd=cost,
-                quality_score=quality,
-                cost_per_quality=cpq,
+        out: list[ModelPareto] = []
+        for canonical, slot in by_model.items():
+            det = statistics.mean(slot["det_passes"]) if slot["det_passes"] else 0.0
+            judge = statistics.mean(slot["judge_scores"]) if slot["judge_scores"] else 0.0
+            quality = det + (judge / 10.0)
+            rate = COST_PER_SECOND_USD.get(canonical, DEFAULT_COST_PER_SECOND)
+            cost = slot["total_lat"] * rate
+            # Below the quality floor, the model is producing empty / refused
+            # responses — fast and cheap, but not useful. Sentinel infinity sinks
+            # it to the bottom of the rank instead of rewarding it.
+            cpq = float("inf") if quality < quality_floor else cost / max(quality, 0.01)
+            out.append(
+                ModelPareto(
+                    canonical_string=canonical,
+                    cells=len(slot["cells"]),
+                    total_latency_s=slot["total_lat"],
+                    total_cost_usd=cost,
+                    quality_score=quality,
+                    cost_per_quality=cpq,
+                )
             )
-        )
-    return sorted(out, key=lambda m: m.cost_per_quality)
+        return sorted(out, key=lambda m: m.cost_per_quality)
 
 
 def render_pareto_html(rows: Iterable[ModelPareto]) -> str:
