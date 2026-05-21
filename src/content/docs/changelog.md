@@ -10,6 +10,8 @@ sidebar:
 
 - **AI Infrastructure inference benchmarking.** [Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping](/ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking/) teaches TTFT, TPOT, percentile latency, structured vLLM benchmark runs, workload-aware load shaping, serving-parameter tuning, and bandwidth-math validation for production inference stacks.
 
+- **Production LLM inference engine selection.** [Production-Tier LLM Inference Engines: Decision Framework](/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines/) maps ExLlamaV2/V3, vLLM, SGLang, TensorRT-LLM, NVIDIA Dynamo, TGI, LMDeploy, MLC LLM, and OpenVINO to hardware tiers, workload classes, migration paths, and production failure modes.
+
 - **AI Infrastructure bandwidth math.** [GPU Memory Hierarchy and Bandwidth Math for LLM Inference](/ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math/) teaches HBM/GDDR/DRAM/NVLink/PCIe tradeoffs, arithmetic intensity, decode tokens-per-second prediction, and benchmark validation before engine or GPU selection.
 
 - **2026-05-19** feat(content): module 3.1 LLM-Native Stack on Kubernetes — first module of synthesis-apps mini-arc (T2-7).
