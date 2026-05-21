@@ -61,7 +61,7 @@ The API-first learner may be blocked first by RAM, package environment mess, dis
 | Embeddings and RAG experiments | RAM, storage, embeddings throughput | CPU or GPU acceleration | very realistic on one machine |
 | Notebook-heavy data exploration | RAM, storage | CPU, browser overhead | realistic if memory is not starved |
 | Quantized LLM inference | VRAM | RAM, storage, thermals | realistic with the right single GPU |
-| Small LoRA-style fine-tuning | VRAM, cooling | storage, RAM, job duration | realistic on selected single-GPU desktops |
+| Small LoRA-style fine-tuning | VRAM, storage | RAM, job duration | realistic on selected single-GPU desktops |
 | Large model training | multi-GPU bandwidth, storage fabric, budget | operations overhead | usually cloud or lab infrastructure |
 
 This table is intentionally workload-first. It prevents the common mistake of treating all AI work as the same hardware problem. A learner building API-backed features can make excellent progress without local GPU investment. A learner studying local inference needs to care about model size, quantization, context length, and VRAM capacity much earlier.
@@ -90,13 +90,13 @@ The diagram shows why workstation design is not solved by one purchase. Each tas
 
 #### VRAM: The First Hard Wall For Local Models
 
-VRAM is the memory physically attached to the GPU. For modern local model work, it is often the first hard wall because a model either fits comfortably, fits with compromises, or does not fit in a useful way. When it does not fit, the system may [fall back to slower memory paths](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes), reduce context length, lower batch size, use heavier quantization, or fail with out-of-memory errors.
+VRAM is the memory physically attached to the GPU. For modern local model work, it is often the first hard wall because a model either fits comfortably, fits with compromises, or does not fit in a useful way. When it does not fit, the system may reduce context length, lower batch size, [use heavier quantization to reduce memory requirements](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes), fall back to slower memory paths, or fail with out-of-memory errors.
 
 VRAM affects model size, quantization choices, [batch size](https://huggingface.co/docs/transformers/v4.53.3/en/perf_train_gpu_one), sequence length, and whether small fine-tuning is realistic. A developer running a tiny local model for code completion has different needs from someone testing longer-context inference, embedding batches, or LoRA-style adaptation. The key is to treat VRAM as capacity planning rather than a trophy number.
 
 A useful beginner mistake to avoid is comparing GPUs only by raw compute. Compute matters after the workload fits. If the model, context, and batch do not fit in memory, theoretical speed becomes secondary. This is similar to having a fast truck that cannot carry the load you need to move.
 
-That is why local LLM sizing often starts with memory capacity before peak math numbers. NVIDIA lists the GeForce RTX 4090 with [24 GB of GDDR6X memory](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/), while the workstation-class RTX A6000 datasheet lists [48 GB of GDDR6 memory with ECC](https://www.nvidia.com/en-gb/products/workstations/quadro/rtx-a6000/). The operator decision is not "A6000 is better" or "4090 is faster." The decision is whether your target model, context length, batch behavior, and tolerance for used workstation hardware make 48 GB of VRAM more valuable than consumer GPU speed and price. A learner who repeatedly hits out-of-memory failures at acceptable quantization settings has a memory-capacity problem. A learner whose target models fit comfortably may care more about cost, thermals, software support, and daily usability.
+That is why local LLM sizing often starts with memory capacity before peak math numbers. NVIDIA lists the GeForce RTX 4090 with [24 GB of GDDR6X memory](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/), while the workstation-class RTX A6000 datasheet lists [48 GB of GDDR6 memory with ECC](https://www.nvidia.com/en-us/products/workstations/rtx-a6000/). The operator decision is not "A6000 is better" or "4090 is faster." The decision is whether your target model, context length, batch behavior, and tolerance for used workstation hardware make 48 GB of VRAM more valuable than consumer GPU speed and price. A learner who repeatedly hits out-of-memory failures at acceptable quantization settings has a memory-capacity problem. A learner whose target models fit comfortably may care more about cost, thermals, software support, and daily usability.
 
 Apple Silicon changes the wording but not the capacity question. Apple lists Mac mini M4 systems with [unified memory configurations up to 64 GB on M4 Pro](https://support.apple.com/en-us/121555), and MacBook Pro M4 Max systems with [unified memory configurations up to 128 GB](https://support.apple.com/en-us/121553). Unified memory is shared by the CPU, GPU, operating system, applications, and model runtime, so it should not be read as the same thing as dedicated VRAM on a discrete GPU. The useful question is still operational: after the OS, browser, editor, notebooks, and services take their share, does the model workload have enough remaining memory to run predictably?
 
@@ -131,6 +131,8 @@ The storage lesson is simple: assume growth. The first model download is interes
 #### Thermals And Noise: Sustained Load Is The Real Test
 
 AI workloads often run longer than ordinary desktop tasks. A laptop or compact desktop may perform well for a short benchmark but throttle during repeated inference, embeddings over a large corpus, or a multi-hour fine-tuning run. Sustained load reveals whether the machine is truly useful for learning.
+
+For a single home LoRA session, storage pressure can arrive before heat; thermals become decisive when runs repeat or last for hours.
 
 Thermals are not cosmetic. Heat affects clocks, stability, component lifespan, fan noise, and whether the machine can share a room with you during a long job. A workstation that is technically fast but too loud to run while you study is not a good learning tool. A quiet, stable system that runs at a predictable speed often beats a more powerful system that constantly throttles.
 
@@ -614,18 +616,15 @@ Write one final paragraph using this format: "For the next stage, I will choose 
 ## Sources
 
 - [huggingface.co: bitsandbytes](https://huggingface.co/docs/transformers/en/quantization/bitsandbytes) — The Transformers bitsandbytes documentation explicitly says quantization reduces memory requirements and makes large models easier to fit on limited hardware.
-- [huggingface.co: perf train gpu one](https://huggingface.co/docs/transformers/main/en/perf_train_gpu_one) — The official Transformers GPU training guide states that batch size affects memory usage and that the feasible batch size depends on the GPU.
-- [huggingface.co: reducing memory usage](https://huggingface.co/docs/trl/reducing_memory_usage) — The TRL memory guide explains that large max_length values can spike memory usage and lead to OOM errors.
 - [arxiv.org: 2305.14314](https://arxiv.org/abs/2305.14314) — The QLoRA paper shows that quantized LoRA-style fine-tuning can reduce memory use enough to make single-GPU fine-tuning feasible.
 - [huggingface.co: perf train gpu one](https://huggingface.co/docs/transformers/v4.53.3/en/perf_train_gpu_one) — The official Transformers GPU training guide directly states that batch size affects memory usage and that viable batch size depends on the GPU and data type.
 - [huggingface.co: reducing memory usage](https://huggingface.co/docs/trl/en/reducing_memory_usage) — The TRL memory guide explicitly says large `max_length` values can spike memory usage and cause OOM errors.
 - [huggingface.co: trainer](https://huggingface.co/docs/transformers/v4.55.4/trainer) — The Transformers Trainer docs explicitly describe checkpoint directories and built-in training logging behavior.
 - [huggingface.co: checkpoint](https://huggingface.co/docs/peft/en/developer_guides/checkpoint) — The PEFT checkpoint guide directly documents that `save_pretrained()` stores adapter files and configuration separately from the base model.
 - [nvidia.com: RTX 4090 specifications](https://www.nvidia.com/en-us/geforce/graphics-cards/40-series/rtx-4090/) — NVIDIA lists the GeForce RTX 4090 with 24 GB of GDDR6X memory and publishes its CUDA core and clock specifications.
-- [nvidia.com: RTX A6000 specifications](https://www.nvidia.com/en-gb/products/workstations/quadro/rtx-a6000/) — NVIDIA lists the RTX A6000 workstation GPU with 48 GB of GDDR6 memory with ECC.
+- [nvidia.com: RTX A6000 specifications](https://www.nvidia.com/en-us/products/workstations/rtx-a6000/) — NVIDIA lists the RTX A6000 workstation GPU with 48 GB of GDDR6 memory with ECC.
 - [nvidia.com: nvidia-smi documentation](https://docs.nvidia.com/deploy/nvidia-smi/index.html) — NVIDIA documents `nvidia-smi` as the System Management Interface for monitoring and managing supported NVIDIA GPUs.
 - [amd.com: AMD SMI documentation](https://rocm.docs.amd.com/projects/amdsmi/en/latest/) — AMD documents AMD SMI as the successor to ROCm SMI for AMD GPU management workflows.
-- [amd.com: MI300X GPU documentation](https://instinct.docs.amd.com/projects/amdgpu-docs/en/latest/gpu-partitioning/mi300x/overview.html) — AMD's Instinct documentation describes MI300X as a large-memory accelerator for high-throughput LLM and AI workloads.
 - [apple.com: Mac mini 2024 technical specifications](https://support.apple.com/en-us/121555) — Apple lists Mac mini M4 and M4 Pro unified memory and SSD configuration options.
 - [apple.com: MacBook Pro 2024 technical specifications](https://support.apple.com/en-us/121553) — Apple lists M4 Pro and M4 Max unified memory configurations, GPU options, and memory bandwidth.
 - [kernel.org: NVMe subsystem documentation](https://docs.kernel.org/nvme/index.html) — The Linux kernel documentation describes the NVMe subsystem and host-driver policy.
