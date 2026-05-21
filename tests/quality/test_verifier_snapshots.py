@@ -102,6 +102,32 @@ class TestDenylist:
 
 
 # ---------------------------------------------------------------------------
+# Shell-metachar regression tests (blocker from sonnet R1 review)
+# ---------------------------------------------------------------------------
+
+class TestShellMetacharDenial:
+    def test_pipe_with_delete_is_denied(self):
+        # Piped command: shlex sees cmd='kubectl', sub='get' → allowlist passes
+        # without the metachar check.  The metachar check must fire first.
+        assert not is_allowed("kubectl get pods | xargs kubectl delete pod")
+
+    def test_redirect_to_file_is_denied(self):
+        assert not is_allowed("kubectl get pods > /tmp/dump.yaml")
+
+    def test_semicolon_chain_with_rm_is_denied(self):
+        assert not is_allowed("kubectl version ; rm -rf /tmp")
+
+    def test_kubectl_delete_with_dry_run_client_is_allowed(self):
+        assert is_allowed("kubectl delete -f manifest.yaml --dry-run=client")
+
+    def test_kubectl_delete_without_dry_run_is_denied(self):
+        assert not is_allowed("kubectl delete -f manifest.yaml")
+
+    def test_command_substitution_is_denied(self):
+        assert not is_allowed("echo $(kubectl get pods -o name)")
+
+
+# ---------------------------------------------------------------------------
 # Timeout handling
 # ---------------------------------------------------------------------------
 

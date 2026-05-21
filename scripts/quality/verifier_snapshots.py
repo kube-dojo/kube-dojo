@@ -27,6 +27,12 @@ _RUNNABLE_LANGS = {"bash", "sh", "shell", "zsh"}
 # Tokens that are always denied regardless of surrounding context.
 _DENY_WORDS = {"rm", "kill", "drop", "truncate"}
 
+# Matches any shell metacharacter that enables command chaining, redirection,
+# or command substitution.  A line containing any of these is rejected before
+# the allowlist is consulted so that piped/chained invocations (e.g.
+# "kubectl get pods | xargs kubectl delete") cannot bypass per-command checks.
+_SHELL_METACHAR_RE = re.compile(r'[|;&<>`]|\$\(')
+
 CMD_TIMEOUT = 30
 
 
@@ -101,6 +107,17 @@ def _has_flag(tokens: list[str], *flags: str) -> bool:
     return False
 
 
+def _has_shell_metachar(line: str) -> bool:
+    """True when the line contains a shell metacharacter making it unsafe to execute.
+
+    Catches pipes (|), semicolons (;), &&/||, background (&), redirections
+    (> >> <), backtick command substitution, and $() command substitution.
+    A piped command like "kubectl get pods | xargs kubectl delete pod" would
+    otherwise pass is_allowed() because shlex sees cmd='kubectl', sub='get'.
+    """
+    return bool(_SHELL_METACHAR_RE.search(line))
+
+
 def _has_deny_token(tokens: list[str]) -> bool:
     """True when any token is an unconditionally-denied word or flag."""
     for tok in tokens:
@@ -156,6 +173,8 @@ def _k3d_allowed(tokens: list[str]) -> bool:
 
 def is_allowed(line: str) -> bool:
     """Return True when this shell line is safe to snapshot."""
+    if _has_shell_metachar(line):
+        return False
     toks = _tokens(line)
     if not toks:
         return False

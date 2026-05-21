@@ -37,9 +37,17 @@ well-defined error output when a cluster is absent.**
 
 ### Denylist (always blocked, regardless of allowlist match)
 
+- **Shell metacharacters** — any line containing `|`, `;`, `&&`, `||`, `&`,
+  `>`, `>>`, `<`, `` ` ``, or `$(` is rejected before the allowlist is
+  consulted.  This closes the pipe-bypass class: `kubectl get pods | xargs
+  kubectl delete pod` would otherwise pass the allowlist check because
+  `shlex.split` presents `cmd='kubectl'`, `sub='get'` to `is_allowed`, hiding
+  the destructive second command entirely.  Redirection (`> file`) and command
+  substitution (`` `...` `` / `$(...)`) are denied for the same reason.
 - Any token that is `--force`
 - Bare commands `rm`, `kill`, `drop`, `truncate`
-- `kubectl delete` without `--dry-run=client` (handled in allowlist logic)
+- `kubectl delete` without `--dry-run=client` (handled in allowlist logic;
+  `kubectl delete` *with* `--dry-run=client` and no metacharacters is allowed)
 - Any command not in {kubectl, helm, kind, k3d} is implicitly denied
 
 ### Snapshot format
