@@ -82,8 +82,8 @@ Inspecting `.git` is safe when you read files and use plumbing commands, but it 
 
 A common war-room mistake is to run increasingly dramatic porcelain commands before establishing which layer is wrong. For example, `git reset --hard` changes the index and working tree to match a commit, which is useful only if you already know that the target commit is correct and local edits are disposable. If the real issue is that `HEAD` is detached or a branch ref moved, a hard reset can erase useful evidence. Diagnosis begins by identifying the layer, not by trying commands from memory.
 
-## Git Objects: Blobs, Trees, and Commits
-Git is fundamentally a content-addressable object database with version-control behavior built on top. The three object types you will inspect most often are blobs, trees, and commits. A blob stores file content, a tree stores names and modes that connect paths to blobs or other trees, and a commit stores a root tree plus history metadata. Once you can compare those roles, Git history stops looking like magic and starts looking like linked records.
+## Git Objects: Blobs, Trees, Commits, and Tags
+Git is fundamentally a content-addressable object database with version-control behavior built on top. The object types you will inspect most often are blobs, trees, commits, and annotated tags. A blob stores file content, a tree stores names and modes that connect paths to blobs or other trees, a commit stores a root tree plus history metadata, and an annotated tag stores release metadata that points at another object. Once you can compare those roles, Git history stops looking like magic and starts looking like linked records.
 
 The most important distinction is that filenames do not live in blobs. A blob answers the question, "What bytes did this file content contain?" A tree answers, "Which names existed in this directory, what modes did they have, and which objects did they point to?" A commit answers, "Which root tree represented the project, who recorded it, when, with what message, and which parent commits came before it?" Keeping those questions separate prevents a lot of confusion during recovery.
 
@@ -118,6 +118,8 @@ You'll see a new file inside `.git/objects/`. Its path uses the first two hexade
 
 Now, let's use a plumbing command to inspect this blob object. Plumbing commands are low-level commands designed for scripts, diagnostics, and Git's own internals. Porcelain commands, such as `git add` and `git commit`, are the human-friendly layer. A strong engineer can use both layers without pretending one is superior; porcelain is safer for routine work, while plumbing is clearer when you need to prove what exists.
 
+`git add` already called the equivalent of `git hash-object -w` internally; running it manually here is for inspection. The command is idempotent and returns the same hash whether or not the blob already exists.
+
 ```bash
 # Get the SHA-1 hash of the staged file
 BLOB_HASH=$(git hash-object -w configmap.yaml)
@@ -127,7 +129,7 @@ echo "Blob Hash: $BLOB_HASH"
 git cat-file -p "$BLOB_HASH"
 ```
 
-**Expected Output (similar to):**
+**Expected Output (similar to):** The printed blob content should match `configmap.yaml` exactly and include no filename, path, or commit metadata.
 
 ```
 Blob Hash: 9d8c... (your hash will be different)
@@ -176,7 +178,7 @@ TREE_HASH=$(git cat-file -p "$COMMIT_HASH" | grep tree | awk '{print $2}')
 git cat-file -p "$TREE_HASH"
 ```
 
-**Expected Output (similar to):**
+**Expected Output (similar to):** The root tree output maps the filename to a blob object ID and file mode, without storing file content inline.
 
 ```
 100644 blob 9d8c...	configmap.yaml
@@ -211,6 +213,33 @@ Here, the `tree` line points to the root tree object for this commit. If this we
 > **Stop and think**: Which approach would you choose here: `git log` or `git cat-file -p <commit_hash>` to quickly inspect the commit message of the latest commit, and why?
 
 For everyday work, `git log -1` is the better porcelain command because it formats history for humans and handles common display concerns. For internals work, `git cat-file -p <commit_hash>` proves exactly what object Git stored and makes the tree and parent links visible. The senior habit is not to memorize one "right" command; it is to choose the layer that answers the question with the least ambiguity.
+
+#### Annotated Tags Are Objects Too
+Annotated tags are the fourth core object type. Unlike a lightweight tag, which is only a ref file under `.git/refs/tags/`, an annotated tag creates a tag object that can carry a tagger identity, message, and a pointer to the object being named.
+
+```bash
+# Create an annotated tag object
+git tag -a v1.0 -m "first stable"
+
+# Inspect the tag ref and object type
+TAG_HASH=$(git rev-parse v1.0)
+git cat-file -t "$TAG_HASH"
+git cat-file -p "$TAG_HASH"
+```
+
+**Expected Output (similar to):** The object type appears first; the pretty-printed tag then shows the commit target, tag name, tagger, and release message.
+
+```
+tag
+object 2f1a...
+type commit
+tag v1.0
+tagger Your Name <your.email@example.com> 1678886400 +0000
+
+first stable
+```
+
+The `object` line points to the commit being tagged, while the tag object itself has its own identity. A lightweight tag such as `git tag quick-test HEAD` skips that object and writes only a ref name pointing directly at the commit, which is useful for local labels but weaker for release evidence.
 
 ## The Index: Staging as a Proposed Commit
 The staging area, also known as the index, is a crucial intermediate step between your working directory and repository history. It is a binary file at `.git/index` that stores the paths, modes, object IDs, and metadata Git will use for the next commit. It is not a copy of your working directory, and it is not the same as `HEAD`. It is a proposed snapshot that can be inspected, updated, and committed.
@@ -321,7 +350,36 @@ graph TD
 
 In this preserved diagram, the commit objects point backward through history while also pointing down to root trees. The root trees point to file content directly or to nested directory trees, and those nested trees point to more blobs. The colors are visual aids, but the operational meaning is the arrows: a reachable branch tip keeps its commit reachable, that commit keeps its tree reachable, and the tree keeps its blobs reachable.
 
+Git can render the operator's view of that same DAG directly when you need the graph in a terminal during branch diagnosis:
+
+```bash
+git log --oneline --graph --all
+```
+
+This command walks commit objects, draws parent links, and shows every reachable branch and tag tip included by `--all`. The picture is less complete than the object diagram because it focuses on commits instead of trees and blobs, but it is the view you use during real branch diagnosis.
+
 Packfiles add an important implementation wrinkle without changing the logical model. Loose objects begin as individual compressed files, but Git later packs many objects together for disk efficiency and transfer speed. Inside a packfile, Git may delta-compress similar objects against each other, which is why someone may say Git stores differences. For diagnosis, keep the logical object model first, then remember that the physical storage may be optimized underneath.
+
+Look first, repack second, because size work should begin with evidence rather than cleanup. Before changing repository storage, measure it with `git count-objects -v`:
+
+```bash
+git count-objects -v
+```
+
+**Expected Output (similar to):** The exact numbers depend on repository history, but these fields separate loose objects, packed objects, and unrecognized garbage.
+
+```
+count: 42
+size: 168
+in-pack: 1204
+packs: 3
+size-pack: 8120
+prune-packable: 2
+garbage: 0
+size-garbage: 0
+```
+
+The `count` line is the loose-object count, which some tools label `loose-objects`. `in-pack` counts objects already stored in packfiles, `size-pack` reports packfile disk usage in KiB, and `garbage` counts files under `.git/objects` that Git does not recognize as valid objects. If the numbers show a real storage problem, `git repack -a -d` rewrites packs and drops redundant loose objects in one pass, but it belongs after diagnosis rather than in the first recovery reflex.
 
 That layered view prevents two opposite mistakes. One mistake is to deny that packfiles store deltas internally, which makes Git's disk usage and network transfer behavior seem mysterious. The other mistake is to reason about history as if commits are patches rather than snapshots, which makes restore operations seem harder than they are. A commit names a complete project tree even if Git stored some underlying bytes efficiently. When you ask for `git show <commit>:configmap.yaml`, Git reconstructs the blob content through the object database and presents the file as it existed in that snapshot.
 
@@ -333,6 +391,21 @@ The integrity tradeoff is also worth stating carefully. Hashes make accidental c
 
 ## Refs, `HEAD`, and Recovery Thinking
 Branches in Git are lightweight references to commits, not separate copies of your project. A branch name such as `main` usually lives under `.git/refs/heads/` or inside packed refs, and its value is the object ID of the commit at the branch tip. When you create a new branch, Git writes a new name that points to an existing commit. When you commit on that branch, Git writes new objects and moves the branch name to the new commit.
+
+Small repositories often store refs as loose files, but Git can also consolidate them into `.git/packed-refs`. You rarely need to run `git pack-refs --all` yourself because `git gc` may do this during housekeeping, but the file still shows names mapped to object IDs:
+
+```bash
+git pack-refs --all
+cat .git/packed-refs
+```
+
+**Expected Output (similar to):** The packed file is still readable text, with comments first and one object ID plus ref name per entry.
+
+```
+# pack-refs with: peeled fully-peeled sorted
+2f1a... refs/heads/main
+9abc... refs/tags/v1.0
+```
 
 `HEAD` is the special pointer that tells Git what you currently have checked out. In the common case, it is a symbolic reference such as `ref: refs/heads/main`, which means new commits should advance the `main` branch. In detached `HEAD` state, it points directly to a commit instead of to a branch name. Detached `HEAD` is not corruption; it is a normal state for CI builds, tag inspection, and historical debugging, but new commits made there need a branch or tag if you want to keep them.
 
@@ -362,7 +435,18 @@ Hypothetical scenario: A platform team struggles with configuration drift across
 
 In the scenario, recovery succeeds because a senior engineer uses `git reflog` to find the object ID that `HEAD` had pointed to before the rebase, then restores the missing manifest from that commit. The deeper lesson is not "never delete branches." The lesson is that Git recovery depends on reachability and time. Reflogs preserve recent movements of refs, unreachable objects may survive until pruning, and a calm investigation can often recover what a rushed force-push would make harder to explain.
 
+Operator incidents usually combine bad ref hygiene with pressure to clean up. A local recovery branch named `tmp` protects a rollback commit only until someone deletes it without writing down the object ID; a `git fsck` "dangling commit" line is then evidence to inspect, not noise to delete. Inspect the object with `git cat-file`, recover the path through trees or reflog entries, create a deliberately named temporary branch, and postpone `git gc` or `git repack` until you know whether the repository needs recovery or only size reduction. Git's refs, reflog, fsck, garbage collection, and repack documentation describe separate mechanisms, so your incident note should also separate pointer hygiene, object reachability, content recovery, and storage maintenance. ([Pro Git: Git References](https://git-scm.com/book/en/v2/Git-Internals-Git-References), [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog), [Git documentation: git-fsck](https://git-scm.com/docs/git-fsck), [Git documentation: git-gc](https://git-scm.com/docs/git-gc), [Git documentation: git-repack](https://git-scm.com/docs/git-repack))
+
 Designing a safe recovery plan starts by freezing evidence. Do not run aggressive garbage collection, do not prune immediately, and do not force-push a guessed fix over the top of the shared branch. First, inspect `HEAD`, branch refs, reflog entries, and object existence. Then create a protective branch or tag pointing at any suspicious commit before you continue. A branch name costs almost nothing, and it can preserve a commit long enough for the team to inspect it carefully.
+
+Only after recovery is complete, and after every suspicious commit has either been preserved or deliberately rejected, should you deliberately shorten the recovery window and prune storage:
+
+```bash
+git reflog expire --expire=now --all
+git gc --prune=now
+```
+
+The `expire` command cuts the reflog window so `prune` can actually reclaim formerly recoverable objects. That pairing is appropriate for a controlled cleanup after the team has preserved or rejected every suspicious object, not while the investigation is still active.
 
 A practical recovery note should record both commands and interpretations. For example, "reflog entry `HEAD@{2}` pointed to the commit before the rebase" is more useful than "I found an old commit," because another engineer can verify the evidence. Likewise, "the branch ref moved from one object ID to another during the force-push" is better than "main changed." Git gives you exact identifiers; use them in incident notes so the team can distinguish facts from guesses and reconstruct the sequence later.
 
@@ -487,6 +571,8 @@ Run `git hash-object configmap.yaml` twice without changing the file and confirm
 <details><summary>Solution for task 5</summary>
 
 Check out the previous commit by object ID to enter detached `HEAD`, make a small commit, and inspect `cat .git/HEAD`. Before switching away, create a branch name at the current commit with `git branch recovered-detached-work HEAD`. Then switch back to `main` and verify that `cat .git/refs/heads/recovered-detached-work` contains the preserved commit ID. The success condition is that no useful commit depends only on detached `HEAD`.
+
+For a related unreachable-object check, create a throwaway branch with one commit that is not merged anywhere, delete that branch, and run `git fsck --unreachable`. The success condition is that you can identify the dangling commit or blob as recoverable evidence before any reflog expiration or pruning.
 </details>
 
 ### Success Criteria
@@ -507,8 +593,10 @@ Check out the previous commit by object ID to enter detached `HEAD`, make a smal
 - [Git documentation: git-rev-parse](https://git-scm.com/docs/git-rev-parse)
 - [Git documentation: gitrevisions](https://git-scm.com/docs/gitrevisions)
 - [Git documentation: git-reflog](https://git-scm.com/docs/git-reflog)
+- [Git documentation: git-fsck](https://git-scm.com/docs/git-fsck)
+- [Git documentation: git-gc](https://git-scm.com/docs/git-gc)
+- [Git documentation: git-repack](https://git-scm.com/docs/git-repack)
 - [Git documentation: hash-function-transition (SHA-256)](https://git-scm.com/docs/hash-function-transition)
-- [Kubernetes documentation: ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
 
 ## Next Module
 Next, continue to [Module 2: The Art of the Branch](../module-2-advanced-merging/) to practice branch movement, merge structure, and conflict recovery with the object model you built here.
