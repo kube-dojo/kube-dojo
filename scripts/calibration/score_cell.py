@@ -730,6 +730,10 @@ def _judge_prompt(
 def load_ground_truth(lane: str, fixture_id: str) -> dict[str, Any]:
     path = GROUND_TRUTH_ROOT / lane / f"{fixture_id}.yaml"
     if not path.exists():
+        legacy_path = GROUND_TRUTH_ROOT / lane / f"{fixture_id}.legacy.yaml"
+        if legacy_path.exists():
+            path = legacy_path
+    if not path.exists():
         raise FileNotFoundError(f"missing calibration ground truth: {path}")
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(payload, dict):

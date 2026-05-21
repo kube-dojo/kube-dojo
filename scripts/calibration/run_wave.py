@@ -38,7 +38,7 @@ LANE_FIXTURES: dict[str, str] = {
     "refactoring": "check-site-health-refactor",
     "summarization": "session-34-handoff",
     "mcp-use": "define-the-word-in-uk",
-    "harness-following": "inline-write-falco-module",
+    "harness-following": "claude-md-context-cks-tweak",
 }
 
 

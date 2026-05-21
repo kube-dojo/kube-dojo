@@ -19,12 +19,13 @@
 <p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
 <table>
   <thead>
-    <tr><th>Lane</th><th>Deterministic</th><th>LLM judge</th><th>Confidence vs actual</th><th>Cell</th></tr>
+    <tr><th>Lane</th><th>Fixture</th><th>Deterministic</th><th>LLM judge</th><th>Confidence vs actual</th><th>Cell</th></tr>
   </thead>
   <tbody>
     {% for cell in cells %}
     <tr>
       <td><a href="../per-lane/{{ cell.lane }}.html">{{ cell.lane }}</a></td>
+      <td>{{ cell.fixture_id }}</td>
       <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
       <td>{% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</td>
       <td><span class="confidence">{{ cell.effort_confidence }}</span> effort signal vs {{ "%.0f"|format(cell.deterministic_score * 100) }}% deterministic</td>
@@ -35,4 +36,3 @@
 </table>
 </body>
 </html>
-

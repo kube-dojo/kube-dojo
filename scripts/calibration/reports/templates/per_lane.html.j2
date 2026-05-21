@@ -19,12 +19,13 @@
 <p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
 <table>
   <thead>
-    <tr><th>Model</th><th>Family</th><th>Effort</th><th>Deterministic</th><th>LLM judge</th><th>Response</th></tr>
+    <tr><th>Model</th><th>Fixture</th><th>Family</th><th>Effort</th><th>Deterministic</th><th>LLM judge</th><th>Response</th></tr>
   </thead>
   <tbody>
     {% for cell in cells %}
     <tr>
       <td>{{ cell.canonical_string }}</td>
+      <td>{{ cell.fixture_id }}</td>
       <td>{{ cell.family }}</td>
       <td><span class="pill">{{ cell.effort_requested }} / {{ cell.effort_confidence }}</span></td>
       <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
@@ -36,4 +37,3 @@
 </table>
 </body>
 </html>
-
