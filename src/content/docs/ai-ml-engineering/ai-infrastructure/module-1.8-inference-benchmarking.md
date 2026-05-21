@@ -37,7 +37,9 @@ The first benchmarking habit is to name the question before naming the metric. A
 
 Time to first token, usually written TTFT, measures how long the user waits before seeing the first generated token. It includes request queueing, tokenization, prompt prefill, scheduler delay, and generation of the first output token. TTFT is the metric that decides whether a streaming interface feels alive. A low output-token rate can still feel tolerable if TTFT is quick, but a high TTFT makes the product feel frozen even when the rest of the response streams quickly.
 
-Time per output token, usually written TPOT or inter-token latency, measures the spacing between generated tokens after the first token appears. TPOT is the user's reading-speed metric. If TTFT is the restaurant host greeting you, TPOT is the pace at which plates arrive at the table. A system with good TTFT and poor TPOT starts confidently, then visibly stalls through the answer. A system with poor TTFT and good TPOT waits too long, then catches up after the user has already lost patience.
+Time per output token (TPOT) is the per-request average decode speed: (e2e_latency − ttft) / output_token_count. It is the user's reading-speed metric at the workload level. Inter-token latency (ITL) is the gap between each successive generated token within a single response, and its p99 captures within-response stalls. A response that pauses once mid-stream can still have moderate TPOT but high p99 ITL.
+
+TPOT and ITL answer different operational questions, which is why vLLM reports both through `--percentile-metrics ttft,tpot,itl`.
 
 End-to-end latency measures the time from request submission to final token received. It matters for non-streaming APIs, offline jobs, and batch workflows where the user or downstream system only cares when the whole answer is done. It is less helpful by itself for streaming chat because it blends the first-token wait with the decode stream. Two responses can have the same end-to-end latency and feel completely different if one starts immediately and drips slowly while the other waits, then streams quickly.
 
@@ -99,9 +101,11 @@ sequenceDiagram
     Engineer->>Client: run warm-up requests outside the measured window
     loop each workload row
         Client->>Server: send requests with fixed input/output/concurrency settings
+        Note over Client,Server: TTFT = request send -> first token received
         Server->>GPU: schedule prefill, decode, and KV-cache operations
         GPU-->>Server: return generated tokens and timing behavior
         Server-->>Client: stream tokens until each request finishes
+        Note over Client,Server: TPOT = per-request mean decode speed; ITL = per-response token gap; p99 ITL flags stalls within the response
         Client->>Report: store TTFT, TPOT, throughput, percentiles, and metadata
     end
     Engineer->>Report: compare measured results with bandwidth prediction
@@ -131,7 +135,7 @@ The cost dimension should be recorded in the same table as performance. Add hard
 
 ## 3. Run a Structured vLLM Serving Benchmark
 
-vLLM's current documentation points users to `vllm bench serve` for online serving throughput, while the historical `benchmarks/benchmark_serving.py` file in the repository now acts as a compatibility pointer to the CLI. The issue for this module explicitly asks for the source-tree script invocation because many teams still have runbooks, older branches, or copied commands using that path. In a new setup, prefer the CLI; in a source checkout, keep the old path visible so you can recognize both forms.
+vLLM's current documentation points users to `vllm bench serve` for online serving throughput, while the canonical benchmark implementation is still `benchmarks/benchmark_serving.py` in the repository; the `vllm bench serve` command is a thin CLI wrapper that calls that implementation. The issue for this module explicitly asks for the source-tree script invocation because many teams still have runbooks, older branches, or copied commands using that path. In a new setup, prefer the CLI; in a source checkout, keep the old path visible so you can recognize both forms.
 
 The server must already be running before the client benchmark starts. That separation matters because model loading is not serving latency, and including it in every run makes the data useless for tuning. Start the server once, wait until it is ready, send warm-up requests that are not counted, then run the measured workload rows. Record the server command beside every result because engine flags define the experiment.
 
@@ -149,6 +153,7 @@ vllm serve meta-llama/Meta-Llama-3.1-8B-Instruct \
 Use a small warm-up before the measured run. Warm-up reduces noise from one-time initialization, CUDA graph capture, tokenizer setup, memory allocation, and cache population. It does not mean you should hide cold-cache behavior forever. It means you should measure cold and warm cases deliberately instead of mixing them accidentally in the same row.
 
 ```bash
+# warmup — output intentionally discarded (no --save-result flag)
 vllm bench serve \
   --backend vllm \
   --base-url http://127.0.0.1:8000 \
@@ -188,6 +193,7 @@ Now run the same shape with the source-tree compatibility path when your environ
 The command uses the random dataset because it lets you control input and output lengths without needing a private production trace. That is useful for isolating bottlenecks, but it is not a replacement for traffic replay. Random tokens do not reproduce conversation turns, retrieval context, function-call schemas, or stop-sequence behavior. Treat the random dataset as the wind tunnel and production replay as the road test.
 
 Prefix-cache testing needs a separate run because the result is only meaningful when you know whether prefixes repeat. vLLM's benchmark options include random prefix length controls in recent versions, and SGLang exposes its own serving benchmark for parity testing. The exact flag names can change across releases, so pin the engine version in your notes and store the benchmark command with the result file. A benchmark without the version is not reproducible.
+If vllm bench serve rejects `--random-prefix-len` in your version, use the `benchmark_serving.py` invocation shown above (the canonical implementation always supports it).
 
 ```bash
 vllm bench serve \
@@ -353,8 +359,8 @@ If every metric passes, stop. Record the baseline, pin the versions, and move on
 
 ## Did You Know?
 
-- vLLM's current `benchmarks/benchmark_serving.py` file in the main repository is a small compatibility wrapper that tells users to run `vllm bench serve`, which is why modern runbooks should record both the old path and the current CLI form.
-- NVIDIA's NIM benchmarking documentation defines ITL as TPOT and explicitly separates it from TTFT so that decode behavior is not blurred with the first-token path.
+- vLLM's `benchmarks/benchmark_serving.py` file in the `vllm-project/vllm` repository is the canonical ~1000-line benchmark implementation, while `vllm bench serve` is a thin CLI wrapper around it. Both produce identical JSON output, so labs in this module can use either invocation interchangeably.
+- NVIDIA's NIM benchmarking documentation defines ITL as TPOT, and this is an NVIDIA NIM naming convention. Different vendors collapse the distinction. When comparing benchmarks across NIM and vLLM, confirm the metric definitions before drawing conclusions.
 - MLPerf Inference separates benchmark scenarios and availability categories, which is a reminder that a result is only comparable when the load pattern and system category are comparable.
 - Chatbot Arena is a model-quality benchmark based on pairwise human preference, not an inference-latency benchmark, so it can help choose what to serve but not how many GPUs the service needs.
 
