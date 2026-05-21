@@ -20,6 +20,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 REPO_ROOT = Path(__file__).parent.parent
 DOCS_DIR = REPO_ROOT / "src" / "content" / "docs"
@@ -30,9 +31,9 @@ CONFIG_FILE = REPO_ROOT / "astro.config.mjs"
 class _Results:
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    total_files: int = 0
-    module_count: int = 0
-    links_checked: int = 0
+    total_files: Optional[int] = None
+    module_count: Optional[int] = None
+    links_checked: Optional[int] = None
 
 
 _results = _Results()
@@ -100,6 +101,7 @@ def check_frontmatter():
     """Check all .md files have valid Starlight frontmatter."""
     print("\n 1. Frontmatter validation...")
     missing_fm = missing_title = missing_order = 0
+    _results.total_files = 0
 
     for md in sorted(_iter_markdown_files()):
         _results.total_files += 1
@@ -494,11 +496,11 @@ def main():
     print(f"RESULTS: {e_count} errors, {w_count} warnings")
 
     parts = []
-    if _results.total_files:
+    if _results.total_files is not None:
         parts.append(f"{_results.total_files} files")
-    if _results.module_count:
+    if _results.module_count is not None:
         parts.append(f"{_results.module_count} modules")
-    if _results.links_checked:
+    if _results.links_checked is not None:
         parts.append(f"{_results.links_checked} links checked")
     if parts:
         print(f"STATS:   {', '.join(parts)}")
