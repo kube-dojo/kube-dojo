@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 43 — Ansible T2-13 arc complete + 24→14 issue drain + 13 PRs merged</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0 }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .merged { background: #d4edda; color: #155724 }
+  .blocker { background: #f8d7da; color: #721c24 }
+  .nit { background: #fff3cd; color: #856404 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style>
+</head>
+<body>
+
+<h1>Session 43 — Ansible T2-13 arc complete + 24→14 issue drain</h1>
+<p class="meta">2026-05-21 evening → 2026-05-22 early AM (CEST). User AFK at 00:30. 13 PRs merged, 10 GH issues closed, peak ~12 parallel sonnet dispatches.</p>
+
+<h2>Headline</h2>
+<p>Started session because the user said "we have too many issues piling up". Open issue count 24 at start. Drove a 13-PR drain: 5-module Ansible T2-13 Wave 2 sub-arc fully landed (modules 7.13–7.17), 2 infra bugs fixed (incident-dedup FP class #1343, quality hooks #1380, verifier snapshots #1382), 1 doc rule (fresh-session-after-interview #1381), kafka follow-up #1324, 2 cleanups (chaos xref to unblock dedup gate, kubectl-basics + users-permissions T0 raises carried in from session 42). End state: 14 open issues, clean workspace, 0 worktrees beyond primary.</p>
+
+<h2>PRs merged (13)</h2>
+<table>
+<tr><th>PR</th><th>Subject</th><th>Closes</th></tr>
+<tr><td>#1428</td><td>chore(linux): raise Users &amp; Permissions to T0/T1</td><td>—</td></tr>
+<tr><td>#1429</td><td>chore(prereq): raise kubectl Basics to T0/T1</td><td>—</td></tr>
+<tr><td>#1430</td><td>fix(check_incident_reuse): strip fenced/inline code before regex scan</td><td>#1343</td></tr>
+<tr><td>#1431</td><td>docs(rules): add fresh-session-after-interview rule</td><td>#1381</td></tr>
+<tr><td>#1432</td><td>feat(quality): scoped stdout snapshots for verify_module (Phase 1)</td><td>#1382</td></tr>
+<tr><td>#1433</td><td>feat(hooks): post-write Python autoformat + pre-read large-log warning</td><td>#1380</td></tr>
+<tr><td>#1434</td><td>feat(content): module-1.2-kafka follow-up — MirrorMaker2 + partition reassignment + Cruise Control</td><td>#1324</td></tr>
+<tr><td>#1435</td><td>feat(content): Module 7.15 — Helm vs Ansible vs Go Operator Decision Framework</td><td>#1358</td></tr>
+<tr><td>#1436</td><td>fix(reliability): xref Netflix Chaos Monkey to canonical (unblock incident-dedup gate)</td><td>—</td></tr>
+<tr><td>#1437</td><td>feat(content): Module 7.16 — Production Ansible Operator patterns</td><td>#1359</td></tr>
+<tr><td>#1438</td><td>feat(content): Module 7.14 — AWX, Tower, EDA integration</td><td>#1357</td></tr>
+<tr><td>#1439</td><td>feat(content): Module 7.13 — Advanced watches.yaml patterns</td><td>#1356</td></tr>
+<tr><td>#1440</td><td>feat(content): Module 7.17 — Testing Ansible Operators with Molecule + Kuttl</td><td>#1360</td></tr>
+</table>
+
+<h2>Sonnet R1 caught real factual blockers across the arc</h2>
+<p>Every Ansible-content PR had R1 NEEDS_CHANGES with concrete factual blockers — none were rubber-stamps. Pattern is worth noting because <strong>sonnet writing operator-grade content fabricates technical field names and plugin names</strong>:</p>
+<ul>
+  <li><strong>PR #1437 (Module 7.16):</strong> claimed metav1.Condition has <code>severity</code> field. Actual k8s.io/apimachinery type has <code>observedGeneration</code>. Also claimed controller-runtime workers can process the same CR key concurrently — false, queue is per-key exclusive. Sources list omitted the API Conventions URL the prose cited as authoritative.</li>
+  <li><strong>PR #1438 (Module 7.14):</strong> <code>ansible.eda.k8s</code> source plugin <strong>does not exist</strong> in ansible/event-driven-ansible v2.12.0 (verified plugin list: alertmanager, aws_cloudtrail, aws_sqs_queue, azure_service_bus, file, file_watch, generic, journald, kafka, pg_listener, range, tick, url_check, webhook). Plus <code>kubernetes.core.k8s</code> inventory plugin was removed in v6.0.0. Plus <code>kubectl apply -k github.com/ansible/awx-operator/config/default?ref=2.19.1</code> silently pulls <code>:latest</code> image (kustomization.yaml has <code>newTag: latest</code>) — exactly the pinning anti-pattern the module's own Common Mistakes warns against.</li>
+  <li><strong>PR #1439 (Module 7.13):</strong> <code>dependentWatches</code> and <code>numWorkers</code> are not documented watches.yaml fields. SDK reference table only has: blacklist, watchDependentResources (boolean), selector, manageStatus, reconcilePeriod, watchClusterScopedResources, finalizer, snakeCaseParameters, maxRunnerArtifacts, watchAnnotationsChanges. Worker concurrency is controlled via <code>ANSIBLE_WORKERS</code> env or <code>--max-concurrent-reconciles</code> flag, not per-entry in watches.yaml.</li>
+  <li><strong>PR #1440 (Module 7.17):</strong> kuttl 02-delete-cr step had <code>assert.yaml</code> with collectors only — collectors gather diagnostic info on failure, do NOT assert absence. The actual absence-check mechanism is <code>errors.yaml</code>. Plus the envtest sidecar section was factually wrong (<code>setup-envtest use</code> downloads binaries but doesn't start an API server; doesn't generate a kubeconfig). Removed envtest section, replaced with expanded Molecule driver comparison.</li>
+  <li><strong>PR #1434 (kafka):</strong> <code>self.healing.broker.failure.threshold.ms</code> doesn't exist in Cruise Control. Actual key from <code>SelfHealingNotifier.java:60</code> is <code>broker.failure.self.healing.threshold.ms</code>. Wrong key → CC silently ignores it, falls back to default ~30min threshold.</li>
+  <li><strong>PR #1435 (Module 7.15):</strong> "When Ansible Operator Wins" examples cited NVIDIA Network Operator + MinIO Operator — both are Go operators in production. Replaced with AWX Operator (verified Ansible SDK at <code>ansible/awx-operator</code>) + a hypothetical vendor-playbook archetype framed explicitly as illustrative.</li>
+</ul>
+
+<h2>New TOP PRIORITY memory candidate</h2>
+<p><strong><code>feedback_sonnet_fabricates_operator_field_names.md</code></strong> — When sonnet writes operator-grade content (Ansible Operator SDK, controller-runtime, kuttl, EDA, Cruise Control, k8s APIs), it fabricates plausible-sounding field names and plugin identifiers that don't exist in upstream. Sonnet R1 caught 100% of these on its own outputs in session 43. Mitigation: always require sonnet R1 with explicit "verify against upstream Go/Java source / SDK reference" instructions on operator-grade content; never merge without the R1 verify-against-upstream catch.</p>
+
+<h2>Issue triage outcome (24 → 14, 10 closed)</h2>
+<table>
+<tr><th>Issue</th><th>Title (truncated)</th><th>Resolution</th></tr>
+<tr><td>#1343</td><td>incident-dedup gate FP class</td><td>PR #1430 (code-block stripping helper)</td></tr>
+<tr><td>#1324</td><td>module-1.2-kafka MirrorMaker2 follow-up</td><td>PR #1434 (+506 lines, 3 new H2)</td></tr>
+<tr><td>#1356</td><td>Module 7.13 watches.yaml patterns</td><td>PR #1439</td></tr>
+<tr><td>#1357</td><td>Module 7.14 AWX/Tower/EDA</td><td>PR #1438</td></tr>
+<tr><td>#1358</td><td>Module 7.15 Helm vs Ansible vs Go</td><td>PR #1435</td></tr>
+<tr><td>#1359</td><td>Module 7.16 production patterns</td><td>PR #1437</td></tr>
+<tr><td>#1360</td><td>Module 7.17 Molecule + Kuttl</td><td>PR #1440 (closes T2-13 arc)</td></tr>
+<tr><td>#1380</td><td>quality hooks (zodchii #2)</td><td>PR #1433 (Phase 1 — .py autoformat + log-warn)</td></tr>
+<tr><td>#1381</td><td>fresh-session-after-interview rule</td><td>PR #1431</td></tr>
+<tr><td>#1382</td><td>verify_module stdout snapshots</td><td>PR #1432 (Phase 1 — opt-in --snapshot)</td></tr>
+</table>
+
+<h3>Open issues remaining (14)</h3>
+<p>Calibration follow-ups + date-bound migrations + large epics:</p>
+<ul>
+  <li><strong>#1401</strong> — calibration v1 Phase 2 agy calibration (date-bound 2026-06-18)</li>
+  <li><strong>#1402</strong> — calibration v1 per-language test harness</li>
+  <li><strong>#1404</strong> — calibration v1 real-execution mcp-use lane</li>
+  <li><strong>#1350</strong> — gemini-cli → agy migration (date-bound 2026-06-18)</li>
+  <li><strong>#1384</strong> — TTT pedagogical framework (captured idea, not active scope)</li>
+  <li><strong>#1299</strong> — independent gap analysis epic</li>
+  <li><strong>#197</strong> — On-Premises track practitioner expansion (epic)</li>
+  <li><strong>#143</strong> — Ukrainian translation full coverage (epic)</li>
+  <li><strong>#14</strong> — Curriculum monitoring &amp; official sources (permanent tracker)</li>
+  <li><strong>#393, #386, #384, #383, #373</strong> — old epics (post-#388 enrichment, lab quality audit, expansion plan verify-and-fill, UK re-sync, composite liveness probes)</li>
+</ul>
+
+<h2>Operational lessons</h2>
+<h3>Parallel content fan-out hits changelog + index.md serial conflicts</h3>
+<p>5 sibling PRs in <code>iac-tools/</code> all touched the same <code>changelog.md</code> and <code>index.md</code>. After the first 2 merged, every later PR needed a rebase with the same 4-region conflict shape. Auto-resolution script (keep both sides via regex sub on <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD\n(.*?)(?:\|\|\|\|\|\|\| .*?\n)?=======\n(.*?)&gt;&gt;&gt;&gt;&gt;&gt;&gt; ...\n</code>) worked reliably and saved ~5 minutes per rebase. Captured here so the next sibling-PR fan-out can reuse it inline.</p>
+
+<h3>Codex usage cap → claude-sonnet fallback path</h3>
+<p>Codex hit ChatGPT cap at ~00:25 CEST. All 6 initial content dispatches (architect class, gpt-5.5) failed instantly with empty 0-char responses + "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 12:49 AM." Refired identical briefs via <code>dispatch_smart.py draft --agent claude</code> (sonnet, draft class, workspace-write, 3600s) — all 6 completed successfully. Codex came back at ~00:49 CEST (24-min cap) but by then sonnet was halfway through. Lesson: <code>dispatch_smart.py draft --agent claude</code> is a viable fallback when codex caps — sonnet produces T0-passing content at 5000+ body words in 10-15 min, matching codex gpt-5.5 quality per recent calibration.</p>
+
+<h3>AI-gate-is-the-gate held — sonnet R1 caught everything</h3>
+<p>Every content PR had a sonnet R1 review (sonnet reviewing sonnet, same family) and caught real factual blockers. The single-family review was sufficient to surface fabrications. Validates the cheap shortcut of staying within sonnet for autonomous overnight runs when codex is capped.</p>
+
+<h3>Incident-dedup gate uncovered pre-existing prose violation</h3>
+<p>After PR #1430 landed (code-block stripping), the absolute-mode dedup gate started failing on every new PR with "Remaining violations: 1 — Netflix Chaos Monkey in module-2.1-what-is-reliability.md". The pre-existing violation was actual prose retelling the Chaos Monkey story while the canonical lives in module-1.1-chaos-principles. Fixed via one-line PR #1436 (replace retelling with pointer + <code>&lt;!-- incident-xref: netflix-chaos-monkey --&gt;</code>). Gate now clean. Likely there's more pre-existing prose drift the new code-strip pass exposes — sweep recommended next session.</p>
+
+<h2>End state</h2>
+<ul>
+  <li><strong>Workspace:</strong> clean, 0 worktrees beyond primary, 0 open PRs, main at <code>a846be3b</code></li>
+  <li><strong>Open issues:</strong> 14 (was 24 at start; 10 closed via Closes #N)</li>
+  <li><strong>Branches:</strong> 9 prunable local branches deleted as part of cleanup</li>
+  <li><strong>T2-13 Wave 2 arc:</strong> COMPLETE (5 modules: 7.13/7.14/7.15/7.16/7.17 all merged)</li>
+  <li><strong>Critical-quality module count:</strong> not refreshed; will surface in next briefing</li>
+</ul>
+
+<h2>NEXT SESSION</h2>
+<ol>
+  <li><strong>Write the new memory</strong> <code>feedback_sonnet_fabricates_operator_field_names.md</code> as TOP PRIORITY — captures the single biggest signal from this session.</li>
+  <li><strong>Incident-dedup sweep</strong> — now that PR #1430 strip-pass is live, the gate may surface more pre-existing prose violations beyond the Chaos Monkey one. Run <code>scripts/check_incident_reuse.py --json</code> and triage.</li>
+  <li><strong>Rubric-critical rewrites continuing</strong> — briefing top: K8S Cnpa Module 1.3 (just merged in session 42 as #1426 actually — confirm), K8S Finops Fundamentals, K8S Finops in Practice, KCSA 4.4 Supply Chain Threats, Linux Foundations Services &amp; Logs (also just merged session 42 as #1425 — confirm). Re-pull briefing and pick the actual current top 5.</li>
+  <li><strong>Platform Engineering backlog</strong> — 110 modules remaining (28 Foundations + 46 Disciplines + 36 Toolkits). Sustained multi-session campaign.</li>
+  <li><strong>Calibration v1 follow-ups</strong> — #1402 per-language test harness (~1 day infra); #1404 real-execution mcp-use lane wired to learn-ukrainian RAG port 8766; #1401 Phase 2 agy calibration (date-bound 2026-06-18).</li>
+  <li><strong>Old epics surface</strong> — #197 On-Prem expansion, #143 Ukrainian translation, #14 monitoring (permanent), #393 AI history enrichment, #386 lab quality audit, #384 expansion plan, #383 UK re-sync, #373 composite liveness probes, #1299 gap analysis — all are roadmap-tracking, not actionable in one session, but worth surfacing for user prioritization.</li>
+  <li><strong>Date-bound:</strong> 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip · 2026-06-18 drop gemini adapter + agy Phase 3 + #1350 + #1401 unblock window closes · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+</body>
+</html>
