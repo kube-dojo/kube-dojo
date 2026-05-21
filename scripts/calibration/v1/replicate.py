@@ -38,9 +38,6 @@ def load_candidates(path: Path, max_cells: int) -> list[dict[str, Any]]:
     raw_candidates = payload["candidates"] if isinstance(payload, dict) else payload
     candidates: list[dict[str, Any]] = []
     for candidate in raw_candidates:
-        if str(candidate["lane"]) == "mcp-use":
-            logging.warning("skipping mcp-use candidate %s", candidate["cell_id"])
-            continue
         candidates.append(candidate)
         if len(candidates) >= max_cells:
             break

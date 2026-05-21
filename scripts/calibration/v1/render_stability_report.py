@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import sys
+from collections import defaultdict
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
@@ -12,19 +14,20 @@ from typing import Any
 from urllib.parse import quote
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-REPORT_DATE = "2026-05-21"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.calibration import schema  # noqa: E402
+from scripts.calibration.v1._common import unit_score  # noqa: E402
+
 DEFAULT_DB_PATH = REPO_ROOT / "calibration" / "v1" / "ledger.db"
 DEFAULT_CANDIDATES_PATH = (
     REPO_ROOT / "calibration" / "v1" / "reports" / "stability-candidates.json"
 )
-DEFAULT_OUT_PATH = (
-    REPO_ROOT
-    / "calibration"
-    / "v1"
-    / "reports"
-    / REPORT_DATE
-    / "stability.html"
-)
+
+
+def default_out_path(report_date: str) -> Path:
+    return REPO_ROOT / "calibration" / "v1" / "reports" / report_date / "stability.html"
 
 
 @dataclass(frozen=True)
@@ -65,18 +68,6 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def _parse_scores(value: str | None) -> list[float]:
-    if value is None:
-        return []
-    return [float(part) for part in value.split(",") if part]
-
-
-def _parse_replicate_seqs(value: str | None) -> tuple[int, ...]:
-    if value is None:
-        return ()
-    return tuple(sorted({int(part) for part in value.split(",") if part}))
 
 
 def _mean(values: list[float]) -> float:
@@ -129,36 +120,53 @@ def load_cell_stats(db_path: Path) -> list[CellStats]:
               c.fixture_id,
               c.canonical_string,
               c.effort_requested,
-              COUNT(s.score_value) AS n_scores,
-              AVG(s.score_value) AS mean_score,
-              GROUP_CONCAT(s.score_value) AS score_values,
-              GROUP_CONCAT(DISTINCT s.replicate_seq) AS replicate_seqs
+              s.gate_name,
+              s.score_value,
+              s.replicate_seq
             FROM scores AS s
             JOIN cells AS c ON c.cell_id = s.cell_id
             WHERE s.score_value IS NOT NULL
-            GROUP BY s.cell_id
-            ORDER BY c.lane, c.canonical_string, c.fixture_id
+            ORDER BY c.lane, c.canonical_string, c.fixture_id, s.gate_name, s.scorer
             """
         ).fetchall()
 
-    stats: list[CellStats] = []
+    grouped: dict[str, dict[str, str]] = {}
+    values_by_cell: dict[str, list[float]] = defaultdict(list)
+    replicate_seqs_by_cell: dict[str, set[int]] = defaultdict(set)
     for row in rows:
-        values = _parse_scores(row["score_values"])
+        cell_id = str(row["cell_id"])
+        grouped.setdefault(
+            cell_id,
+            {
+                "cell_id": cell_id,
+                "lane": str(row["lane"]),
+                "fixture_id": str(row["fixture_id"]),
+                "canonical_string": str(row["canonical_string"]),
+                "effort_requested": str(row["effort_requested"]),
+            },
+        )
+        raw_value = float(row["score_value"])
+        values_by_cell[cell_id].append(unit_score(str(row["gate_name"]), raw_value))
+        replicate_seqs_by_cell[cell_id].add(int(row["replicate_seq"]))
+
+    stats: list[CellStats] = []
+    for cell_id, cell in grouped.items():
+        values = values_by_cell[cell_id]
         if not values:
             continue
         stats.append(
             CellStats(
-                cell_id=str(row["cell_id"]),
-                lane=str(row["lane"]),
-                fixture_id=str(row["fixture_id"]),
-                canonical_string=str(row["canonical_string"]),
-                effort_requested=str(row["effort_requested"]),
-                n_scores=int(row["n_scores"]),
-                mean=float(row["mean_score"]),
+                cell_id=cell["cell_id"],
+                lane=cell["lane"],
+                fixture_id=cell["fixture_id"],
+                canonical_string=cell["canonical_string"],
+                effort_requested=cell["effort_requested"],
+                n_scores=len(values),
+                mean=_mean(values),
                 stddev=pstdev(values),
                 score_min=min(values),
                 score_max=max(values),
-                replicate_seqs=_parse_replicate_seqs(row["replicate_seqs"]),
+                replicate_seqs=tuple(sorted(replicate_seqs_by_cell[cell_id])),
             )
         )
     return stats
@@ -248,6 +256,7 @@ def render_report(
     cell_stats: list[CellStats],
     candidates: list[dict[str, Any]],
     out_path: Path,
+    report_date: str,
 ) -> str:
     stats_by_cell = {row.cell_id: row for row in cell_stats}
     coverage_rows = build_coverage(candidates, stats_by_cell)
@@ -280,7 +289,7 @@ def render_report(
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Stability variance report - {REPORT_DATE}</title>
+<title>Stability variance report - {report_date}</title>
 <style>
   body {{ max-width: 1200px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; }}
   h1 {{ margin-bottom: 0.25rem; }}
@@ -304,11 +313,11 @@ def render_report(
 <body>
 
 <h1>Stability variance report</h1>
-<p class="meta">{REPORT_DATE} &middot; {len(cell_stats)} scored cells &middot; {len(candidates)} stability candidates &middot; replicate_seq={", ".join(str(seq) for seq in replicate_seqs) or "none"} &middot; output=<code>{_h(report_rel)}</code></p>
+<p class="meta">{report_date} &middot; {len(cell_stats)} scored cells &middot; {len(candidates)} stability candidates &middot; replicate_seq={", ".join(str(seq) for seq in replicate_seqs) or "none"} &middot; output=<code>{_h(report_rel)}</code></p>
 
 <h2>1. Headline variance floor</h2>
 <div class="tldr">
-  <strong>Variance floor.</strong> Across all scored cells in <code>calibration/v1/ledger.db</code>, per-cell raw <code>score_value</code> standard deviation averages <strong>{_fmt(headline_mean)}</strong>, with median <strong>{_fmt(headline_median)}</strong> and p95 <strong>{_fmt(headline_p95)}</strong>.
+  <strong>Variance floor.</strong> Across all scored cells in <code>calibration/v1/ledger.db</code>, per-cell unit-normalized <code>score_value</code> standard deviation averages <strong>{_fmt(headline_mean)}</strong>, with median <strong>{_fmt(headline_median)}</strong> and p95 <strong>{_fmt(headline_p95)}</strong>.
 </div>
 <table>
   <thead><tr><th>Metric</th><th>Value</th></tr></thead>
@@ -341,7 +350,7 @@ def render_report(
 </table>
 
 <h2>4. Methodology</h2>
-<p>Scorer-disagreement is the raw <code>max(score_value) - min(score_value)</code> span across all score rows for a cell, so it highlights cells where gates or judges disagree inside the current ledger. Replicate-variance is the standard deviation after repeated dispatches of the lane-boundary candidates selected near the pass/fail midpoint, and the coverage table shows which of those 42 cells have enough scored samples to trust that estimate. The headline variance floor aggregates every scored cell, not just candidates, and serves as the current noise estimate for the model fleet; mixed deterministic and LLM-judge scales should be read as variance flags rather than absolute grades.</p>
+<p>Scorer-disagreement is the <code>max(unit_score) - min(unit_score)</code> span across all score rows for a cell, with <code>llm_judge_score</code> divided by 10 and deterministic gates clamped to the same 0..1 scale. Replicate-variance is the standard deviation after repeated dispatches of the lane-boundary candidates selected near the pass/fail midpoint, and the coverage table shows which of those 42 cells have enough scored samples to trust that estimate. The headline variance floor aggregates every scored cell, not just candidates, and serves as the current noise estimate for the model fleet.</p>
 
 <h2>5. Links</h2>
 <ul>
@@ -362,28 +371,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--candidates", type=Path, default=DEFAULT_CANDIDATES_PATH)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT_PATH)
+    parser.add_argument(
+        "--date",
+        default=schema.today_iso(),
+        help="Report date used in the output path and HTML title. Default: today.",
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output HTML path. Default: calibration/v1/reports/<date>/stability.html.",
+    )
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     if not args.db_path.exists():
-        print(f"error: ledger not found: {args.db_path}")
+        print(f"error: ledger not found: {args.db_path}", file=sys.stderr)
         return 2
     if not args.candidates.exists():
-        print(f"error: candidates JSON not found: {args.candidates}")
+        print(f"error: candidates JSON not found: {args.candidates}", file=sys.stderr)
         return 2
+    out_path = args.out or default_out_path(str(args.date))
 
     cell_stats = load_cell_stats(args.db_path)
     candidates = load_candidates(args.candidates)
     rendered = render_report(
         cell_stats=cell_stats,
         candidates=candidates,
-        out_path=args.out,
+        out_path=out_path,
+        report_date=str(args.date),
     )
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(rendered, encoding="utf-8")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(rendered, encoding="utf-8")
 
     stddevs = [row.stddev for row in cell_stats]
     top_three = sorted(
@@ -396,7 +417,7 @@ def main() -> int:
             row.fixture_id,
         ),
     )[:3]
-    print(f"wrote {args.out}")
+    print(f"wrote {out_path}")
     print(f"mean stddev: {_fmt(_mean(stddevs) if stddevs else 0.0)}")
     print(f"median stddev: {_fmt(median(stddevs) if stddevs else 0.0)}")
     print(f"p95 stddev: {_fmt(_percentile(stddevs, 95.0))}")

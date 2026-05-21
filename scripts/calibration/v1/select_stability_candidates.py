@@ -15,6 +15,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.calibration.v1._common import unit_score  # noqa: E402
+
 DEFAULT_DB_PATH = REPO_ROOT / "calibration" / "v1" / "ledger.db"
 DEFAULT_OUT_PATH = REPO_ROOT / "calibration" / "v1" / "reports" / "stability-candidates.json"
 DIAGNOSTIC_GATES = frozenset({"human_spot_check", "llm_judge_error"})
@@ -31,13 +33,6 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def _unit_score(gate_name: str, score_value: float) -> float:
-    """Map mixed ledger scores onto a pass/fail-like 0..1 scale."""
-    if gate_name == "llm_judge_score":
-        return max(0.0, min(1.0, score_value / 10.0))
-    return max(0.0, min(1.0, score_value))
 
 
 def _mean(values: list[float]) -> float:
@@ -104,7 +99,7 @@ def load_cell_scores(
             ScoreSample(
                 gate_name=gate_name,
                 raw_value=raw_value,
-                unit_value=_unit_score(gate_name, raw_value),
+                unit_value=unit_score(gate_name, raw_value),
             )
         )
 
@@ -215,8 +210,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--exclude-lane",
         action="append",
-        default=["mcp-use"],
-        help="Lane to exclude from replicate selection. Repeatable.",
+        default=None,
+        help=(
+            "Lane to exclude from replicate selection. Repeatable. "
+            "Default: ['mcp-use']."
+        ),
     )
     return parser
 
@@ -232,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.db_path.exists():
         print(f"error: ledger not found: {args.db_path}", file=sys.stderr)
         return 2
+    if args.exclude_lane is None:
+        args.exclude_lane = ["mcp-use"]
 
     payload = build_payload(
         db_path=args.db_path,
