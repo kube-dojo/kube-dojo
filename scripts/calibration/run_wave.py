@@ -354,6 +354,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip in-line scoring; dispatch only.",
     )
     parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Skip rendering calibration HTML reports after a successful sweep.",
+    )
+    parser.add_argument(
         "--skip-preflight",
         action="store_true",
         help=(
@@ -445,7 +450,23 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 + "\n",
             )
-    return 0 if ok == len(results) else 1
+    if ok != len(results):
+        return 1
+    if not args.no_render:
+        from . import report
+
+        out_dir = report.report_dir_for_run(run_date, output_root=args.output_root)
+        print(f"rendering calibration reports to {out_dir}", file=sys.stderr)
+        written = report.render_reports(
+            db_path=args.db_path,
+            out_dir=out_dir,
+            run_date=run_date,
+        )
+        print(
+            f"rendered calibration reports: {len(written)} file(s)",
+            file=sys.stderr,
+        )
+    return 0
 
 
 if __name__ == "__main__":

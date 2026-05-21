@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import sqlite3
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,13 +61,16 @@ def _seed_handoffs(repo_root: Path) -> None:
     _write(repo_root / "docs" / "session-state" / "handoff-without-prefix.html", "<h1>Ignored</h1>")
 
 
-def _seed_benchmark_reports(repo_root: Path) -> None:
+def _seed_benchmark_reports(repo_root: Path, *, score_offset_s: int = 42) -> None:
     _write(
         repo_root / "calibration" / "v1" / "reports" / "2026-05-20" / "index.html",
         "<title>Previous</title>",
     )
     latest = repo_root / "calibration" / "v1" / "reports" / "2026-05-21"
-    _write(latest / "index.html", "<title>Latest</title>")
+    latest_index = latest / "index.html"
+    _write(latest_index, "<title>Latest</title>")
+    rendered_at = datetime(2026, 5, 21, 12, 0, tzinfo=UTC).timestamp()
+    os.utime(latest_index, (rendered_at, rendered_at))
     _write(latest / "matrix.html", "<title>Matrix</title>")
     _write(latest / "wave-ab-report.html", "<title>Wave AB</title>")
     _write(latest / "stability.html", "<title>Stability</title>")
@@ -77,7 +82,7 @@ def _seed_benchmark_reports(repo_root: Path) -> None:
     conn = sqlite3.connect(ledger_path)
     try:
         conn.execute("CREATE TABLE cells (cell_id TEXT, model_id TEXT, lane TEXT)")
-        conn.execute("CREATE TABLE scores (cell_id TEXT)")
+        conn.execute("CREATE TABLE scores (cell_id TEXT, scored_at TEXT)")
         conn.executemany(
             "INSERT INTO cells (cell_id, model_id, lane) VALUES (?, ?, ?)",
             [
@@ -86,9 +91,10 @@ def _seed_benchmark_reports(repo_root: Path) -> None:
                 ("cell-3", "model-b", "architecting"),
             ],
         )
+        scored_at = datetime.fromtimestamp(rendered_at + score_offset_s, UTC).isoformat()
         conn.executemany(
-            "INSERT INTO scores (cell_id) VALUES (?)",
-            [("cell-1",), ("cell-2",), ("cell-2",)],
+            "INSERT INTO scores (cell_id, scored_at) VALUES (?, ?)",
+            [("cell-1", scored_at), ("cell-2", scored_at), ("cell-2", scored_at)],
         )
         conn.commit()
     finally:
@@ -206,6 +212,7 @@ def test_latest_benchmarks_returns_report_tree_and_ledger_counts(tmp_path: Path)
         "models": 2,
         "lanes": 2,
     }
+    assert body["latest"]["staleness_seconds"] == 42.0
     assert body["predecessors"] == [
         {
             "date": "2026-05-20",
@@ -213,6 +220,16 @@ def test_latest_benchmarks_returns_report_tree_and_ledger_counts(tmp_path: Path)
             "render_url": "http://127.0.0.1:8768/artifacts/calibration/v1/reports/2026-05-20/index.html",
         }
     ]
+
+
+def test_latest_benchmarks_reports_negative_staleness_when_html_is_newer(tmp_path: Path) -> None:
+    _seed_benchmark_reports(tmp_path, score_offset_s=-10)
+
+    status, body, content_type = local_api.route_request(tmp_path, "/api/benchmarks/latest")
+
+    assert status == 200
+    assert content_type == "application/json; charset=utf-8"
+    assert body["latest"]["staleness_seconds"] < 0
 
 
 def test_latest_benchmarks_empty_reports_tree_returns_empty_payload(tmp_path: Path) -> None:

@@ -45,10 +45,25 @@ def _safe_filename(value: str) -> str:
 
 
 def load_summaries(db_path: Path) -> list[CellSummary]:
+    return load_summaries_for_run(db_path)
+
+
+def load_summaries_for_run(
+    db_path: Path,
+    *,
+    run_date: str | None = None,
+) -> list[CellSummary]:
     schema.init_db(db_path)
     with schema.connect(db_path) as conn:
+        cells_sql = "SELECT * FROM cells"
+        params: tuple[str, ...] = ()
+        if run_date is not None:
+            cells_sql += " WHERE run_date = ?"
+            params = (run_date,)
+        cells_sql += " ORDER BY run_date, lane, canonical_string"
         cells = conn.execute(
-            "SELECT * FROM cells ORDER BY run_date, lane, canonical_string"
+            cells_sql,
+            params,
         ).fetchall()
         scores = conn.execute(
             "SELECT * FROM scores ORDER BY cell_id, gate_name, scorer"
@@ -107,6 +122,23 @@ def load_summaries(db_path: Path) -> list[CellSummary]:
     return summaries
 
 
+def _latest_run_date(db_path: Path) -> str | None:
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        row = conn.execute("SELECT MAX(run_date) AS run_date FROM cells").fetchone()
+    if row is None or row["run_date"] is None:
+        return None
+    return str(row["run_date"])
+
+
+def report_dir_for_run(
+    run_date: str,
+    *,
+    output_root: Path = DEFAULT_OUTPUT_ROOT,
+) -> Path:
+    return output_root / "reports" / run_date
+
+
 def _matrix_context(summaries: list[CellSummary]) -> dict[str, Any]:
     models = [model.canonical_string for model in ANCHORS]
     lanes = [lane for lane in LANES if any(cell.lane == lane for cell in summaries)]
@@ -130,10 +162,12 @@ def render_reports(
     *,
     db_path: Path = DEFAULT_DB_PATH,
     out_dir: Path | None = None,
+    run_date: str | None = None,
 ) -> list[Path]:
-    summaries = load_summaries(db_path)
-    run_date = summaries[0].run_date if summaries else "latest"
-    out_dir = out_dir or DEFAULT_OUTPUT_ROOT / run_date / "reports"
+    if run_date is None:
+        run_date = _latest_run_date(db_path) or "latest"
+    summaries = load_summaries_for_run(db_path, run_date=run_date)
+    out_dir = out_dir or report_dir_for_run(run_date)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "per-lane").mkdir(exist_ok=True)
     (out_dir / "per-model").mkdir(exist_ok=True)
@@ -252,12 +286,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Render calibration reports")
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--run-date")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    for path in render_reports(db_path=args.db_path, out_dir=args.out_dir):
+    for path in render_reports(
+        db_path=args.db_path,
+        out_dir=args.out_dir,
+        run_date=args.run_date,
+    ):
         print(path)
     return 0
 

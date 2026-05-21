@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict, is_dataclass
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
@@ -5144,6 +5145,39 @@ def _build_benchmark_ledger(repo_root: Path) -> dict[str, Any]:
     return ledger
 
 
+def _latest_benchmark_staleness_seconds(repo_root: Path, report_dir: Path) -> float | None:
+    index_path = report_dir / "index.html"
+    db_path = repo_root / _BENCHMARK_LEDGER_REL
+    if not index_path.is_file() or not db_path.is_file():
+        return None
+
+    try:
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        row = conn.execute("SELECT MAX(scored_at) FROM scores").fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+    if row is None or row[0] is None:
+        return None
+
+    try:
+        scored_at = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if scored_at.tzinfo is None:
+        scored_at = scored_at.replace(tzinfo=UTC)
+    try:
+        rendered_at = index_path.stat().st_mtime
+    except OSError:
+        return None
+    return float(scored_at.timestamp() - rendered_at)
+
+
 def build_latest_benchmarks(repo_root: Path) -> dict[str, Any]:
     report_dirs = _benchmark_report_dirs(repo_root)
     if not report_dirs:
@@ -5153,6 +5187,7 @@ def build_latest_benchmarks(repo_root: Path) -> dict[str, Any]:
     latest: dict[str, Any] = _benchmark_report_summary(repo_root, latest_dir)
     latest["files"] = _build_benchmark_files(repo_root, latest_dir)
     latest["ledger"] = _build_benchmark_ledger(repo_root)
+    latest["staleness_seconds"] = _latest_benchmark_staleness_seconds(repo_root, latest_dir)
 
     return {
         "latest": latest,
@@ -5430,7 +5465,7 @@ def build_state_manifest() -> dict[str, Any]:
                     {
                         "name": "Latest calibration benchmark report",
                         "path": "/api/benchmarks/latest",
-                        "purpose": "Latest calibration report artifact plus predecessor reports and ledger coverage counts.",
+                        "purpose": "Latest calibration report artifact plus predecessor reports, ledger coverage counts, and render staleness.",
                         "type": "api",
                     },
                     {
@@ -8199,7 +8234,7 @@ def build_api_schema() -> dict[str, Any]:
             },
             {
                 "path": "/api/benchmarks/latest",
-                "desc": "Latest calibration benchmark report, predecessor reports, and ledger coverage counts",
+                "desc": "Latest calibration benchmark report, predecessor reports, ledger coverage counts, and render staleness",
                 "content_type": "application/json",
             },
             {

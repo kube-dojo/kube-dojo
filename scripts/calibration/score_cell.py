@@ -6,6 +6,7 @@ import concurrent.futures
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Protocol
@@ -14,7 +15,13 @@ import yaml
 
 from . import schema
 from .models import model_by_canonical
-from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, DispatchResult, dispatch_prompt
+from .run_cell import (
+    DEFAULT_DB_PATH,
+    DEFAULT_OUTPUT_ROOT,
+    REPO_ROOT,
+    DispatchResult,
+    dispatch_prompt,
+)
 from .scorers import respected_inline_return
 
 GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
@@ -976,10 +983,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Score one calibration cell")
     parser.add_argument("--cell-id", required=True)
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
+    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--judge1", default="claude-sonnet-4-6")
     parser.add_argument("--judge2", default="gemini-3.5-flash-high")
     parser.add_argument("--replicate-seq", type=int, default=0)
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Skip rendering calibration HTML reports after scoring.",
+    )
     return parser
+
+
+def _cell_run_date(db_path: Path, cell_id: str) -> str:
+    with schema.connect(db_path) as conn:
+        return str(schema.fetch_cell(conn, cell_id)["run_date"])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -992,6 +1010,21 @@ def main(argv: list[str] | None = None) -> int:
         replicate_seq=args.replicate_seq,
     )
     print(json.dumps(gates, sort_keys=True))
+    if not args.no_render:
+        from . import report
+
+        run_date = _cell_run_date(args.db_path, args.cell_id)
+        out_dir = report.report_dir_for_run(run_date, output_root=args.output_root)
+        print(f"rendering calibration reports to {out_dir}", file=sys.stderr)
+        written = report.render_reports(
+            db_path=args.db_path,
+            out_dir=out_dir,
+            run_date=run_date,
+        )
+        print(
+            f"rendered calibration reports: {len(written)} file(s)",
+            file=sys.stderr,
+        )
     return 0
 
 
