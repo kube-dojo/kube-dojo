@@ -56,6 +56,7 @@ from agent_runtime.result import Result
 # ── argparse registration ────────────────────────────────────────────
 
 _DISCUSSION_CLARIFICATION_MODES = {
+    "agy": "danger",
     "claude": "bypass",
     "gemini": "yolo",
     "codex": "danger",
@@ -64,6 +65,7 @@ _DISCUSSION_CLARIFICATION_MODES = {
 }
 
 _DISCUSSION_RUNTIME_MODES = {
+    "agy": "danger",
     "claude": "read-only",
     "gemini": "workspace-write",
     "codex": "danger",
@@ -160,6 +162,8 @@ def _agent_discuss_defaults(agent_name: str) -> tuple[str, str]:
 
 def _agent_runtime_mode(agent_name: str, sandbox_mode: str | None) -> str:
     """Map persisted `*_sandbox_mode` into runtime `mode`."""
+    if agent_name == "agy":
+        return "danger"
     if agent_name == "codex":
         return "danger"
     if agent_name == "claude":
