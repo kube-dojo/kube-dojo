@@ -12,693 +12,482 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 0.4: Services & Logs Demystified
+> **Complexity**: `[QUICK]` - Operator practice for Linux services, unit files, and log evidence
+>
+> **Time to Complete**: 45-50 minutes
+>
+> **Prerequisites**: [Module 0.3: Process & Resource Survival Guide](../module-0.3-processes-resources/), a Linux VM or lab host with `sudo`, and comfort reading command output under time pressure
 
-This is an **Everyday Linux Use** module with `[QUICK]` complexity and an estimated completion time of 40 minutes. It assumes you can already inspect processes, read basic command output, and use `sudo` carefully when a command changes system state.
+## What You'll Be Able to Do
 
-## Prerequisites
+After completing this module, you will be able to operate Linux services as supervised workloads with auditable log trails rather than as background commands that merely happen to be running.
 
-Before starting this module, make sure the process and resource survival skills from the previous lesson are fresh enough that service output will feel connected to the processes underneath it.
-- **Required**: [Module 0.3: Process & Resource Survival Guide](../module-0.3-processes-resources/)
-- **Helpful**: Have a Linux system available (VM, WSL, or native) with `sudo` access
+1. **Analyze** a service's current state by connecting `systemctl status`, unit metadata, dependency relationships, cgroups, and recent journal entries.
+2. **Diagnose** service startup, crash, reload, boot-order, and logging failures with a repeatable flow that works on Ubuntu 24.04, RHEL 9, and Debian 12.
+3. **Configure** operator-safe unit behavior with `ExecStartPre`, `ExecStart`, `ExecStartPost`, service `Type=`, `Restart=`, `WantedBy=`, and drop-in overrides.
+4. **Apply** structured journal queries that filter by unit, time range, boot, priority, output format, and journal fields before escalating to syslog or external log agents.
+5. **Compare** node-level service logs, forwarded host logs, and Kubernetes container logs so you choose `journalctl`, a syslog destination, or `kubectl logs` for the evidence you need.
 
-## Learning Outcomes
+## Why Services and Logs Matter Together
 
-After this module, you will be able to perform these service operations and explain your reasoning in a troubleshooting note, not merely repeat command syntax from memory.
-- **Diagnose** a failing service by combining `systemctl status`, unit-file clues, and recent `journalctl` entries.
-- **Compare** one-off background commands with supervised systemd services and choose the safer operating model.
-- **Evaluate** whether a service should be started, stopped, enabled, disabled, restarted, or reloaded for a given scenario.
-- **Implement** a repeatable log-investigation workflow using unit, boot, time-range, priority, and output-format filters.
-- **Explain** how systemd, unit files, journald, syslog forwarding, and Kubernetes v1.35+ node services fit together during troubleshooting.
+Every important Linux daemon is both a process and an evidence source. `systemd` starts as PID 1, supervises units, tracks their processes in cgroups, and exposes service state through `systemctl`; `systemd-journald` collects messages from service stdout and stderr, syslog, the native journal protocol, audit where configured, and kernel sources, then stores entries for `journalctl` to query. An operator who only knows process commands can see that a PID exists, but cannot prove why it started, why it stopped, whether it returns after reboot, or which log fields describe the failure. ([systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-## Why This Module Matters
+That coupling matters during incidents because service state without logs is a traffic light with no witness statement, while logs without the owning unit are unscoped noise. `systemctl status nginx.service` tells you whether systemd loaded the unit, which process is main, whether the unit is failed, and which recent journal lines systemd attached to that unit. `journalctl -u nginx.service --since=-1h --until=now -o json` turns the same unit boundary into structured evidence that can be filtered, exported, or handed to a teammate. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [Journal Fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html))
 
-At a regional payment processor, an overnight kernel patch looked routine until the monitoring dashboard went silent for a cluster of database hosts. The databases were still accepting connections, SSH worked, and disk space was healthy, but the monitoring agent had been started manually during a previous incident and never enabled for boot. For two hours, the team had no reliable host-level metrics while a busy settlement window was underway, and the incident report estimated more than $180,000 in delayed reconciliation work, overtime, and customer-support churn from a failure that came down to one missing systemd command.
+Treat this as operator practice, not SysAdmin trivia. The real decision is rarely "how do I restart nginx?" It is "should I reload, restart, stop, mask, inspect the unit, read the last boot, check dependency ordering, preserve volatile journal data, or move up to Kubernetes container logs?" The same host can contain a web service, a log forwarder, `containerd`, `kubelet`, and user services, so the operator's job is to locate the layer that owns the symptom before mutating it. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/))
 
-That kind of failure feels unfair when you are new to Linux because the machine looks alive from the outside. A shell command can start a program, `ps` can show a process, and a quick smoke test can pass, yet the service may still be absent after a reboot or may die silently after a crash. Production Linux work depends on a different mental model: important background programs are not merely processes, they are supervised services with explicit lifecycle rules, dependency ordering, restart behavior, resource controls, and logs captured in a central journal.
+## Systemd Architecture for Operators
 
-This module bridges the gap from "I can run a command" to "I can operate a server." You will learn how systemd acts as the service manager, how unit files describe what systemd should do, and how journald records the evidence you need when something fails. The same habits apply when debugging classic services like nginx and SSH, and they also apply when a Kubernetes v1.35+ node has kubelet or containerd problems underneath the cluster API.
-
-The practical payoff is speed under pressure. When a service is down, you will not need to search the web for random restart recipes or copy commands from an old chat thread. You will know which layer owns the process, where the declared behavior lives, and which log query can prove whether your fix worked. That confidence matters because service outages usually combine a technical fault with a time constraint.
-
-## From Processes to Services
-
-In Module 0.3, you learned to inspect running processes and stop the ones that were wasting CPU or memory. That skill is still essential, but it is only half of the operational story because most server programs are meant to outlive your terminal. A web server, database, SSH daemon, log forwarder, container runtime, or kubelet should start during boot, keep running without a human session, report its output somewhere durable, and restart according to a clear policy when it crashes.
-
-Running a command in the background is like leaving a note on the kitchen counter that says dinner is in the oven. It may work while everyone remembers the note, but it gives you no guarantee that the oven is still on after a power loss, no record of who changed the temperature, and no one assigned to notice if dinner burns. A service manager is closer to a restaurant shift manager: it knows who is scheduled, when dependencies are ready, where logs go, and what to do when a worker disappears.
-
-| Running a Command | Running a Service |
-|-------------------|-------------------|
-| Dies when you close the terminal | Survives terminal closure and reboots |
-| No automatic restart on crash | Restarts automatically if it fails |
-| Logs go to your terminal (and get lost) | Logs captured and stored by journald |
-| You have to manage it manually | systemd manages it for you |
-| No dependency ordering | Starts after its dependencies are ready |
-
-The table is not saying that background commands are useless. They are fine for short experiments, temporary diagnostics, or a one-time copy job where a human is watching the result. The danger starts when a team treats a shell trick as if it were an operating contract, because the shell trick does not encode boot behavior, health supervision, dependency ordering, or log retention in a way another operator can inspect at three in the morning.
-
-A **daemon** is just a background process that does not need an interactive terminal. The traditional Unix naming convention often adds a trailing `d`, which is why you see `sshd` for remote access, `httpd` for Apache, `containerd` for containers, and `journald` for logs. The naming pattern is helpful, but it is not a rule; `kubelet` does not end in `d`, yet on a Kubernetes node it behaves like a critical daemon supervised by systemd.
-
-The useful distinction is ownership. A process is something the kernel is currently executing, while a service is an operating-system promise about how that process should be launched, tracked, stopped, and observed. If the process exits, the kernel can report that fact, but systemd decides whether the exit was expected and whether another process should replace it. That is why process skills and service skills reinforce each other instead of competing.
-
-**systemd** is the init system and service manager on most modern Linux distributions. It starts as PID 1, which means it is the first userspace process created by the kernel, and then it becomes responsible for bringing the machine from early boot into a usable operating state. It starts services, tracks their process groups, records status, applies configured resource controls, coordinates dependencies, and exposes a management interface through the `systemctl` command.
+The Linux kernel starts one first userspace process, and on the distributions targeted in this module that process is systemd running as PID 1. PID 1 is special because it is responsible for bringing the system toward a requested target, starting and stopping units, managing dependencies, tracking service processes, and handling unit lifecycle state. When you ask `systemctl` a question, you are asking the service manager for its model of the machine, not merely scanning a process table. ([systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
 ```mermaid
-flowchart TD
-    systemd["systemd (PID 1)<br/>The Shift Manager"]
-    
-    systemd --> sshd["sshd<br/>(remote access)"]
-    systemd --> nginx["nginx<br/>(web server)"]
-    systemd --> containerd["containerd<br/>(container runtime)"]
-    systemd --> kubelet["kubelet<br/>(k8s agent)"]
-    systemd --> chronyd["chronyd<br/>(time sync)"]
-    systemd --> rsyslog["rsyslog<br/>(log forwarder)"]
-
-    classDef note fill:#f9f9f9,stroke:#333,stroke-dasharray: 5 5;
-    Note["If any of these crash -> systemd restarts them<br/>On boot -> systemd starts them in the right order"]:::note
-    systemd -.-> Note
+stateDiagram-v2
+    [*] --> inactive
+    inactive --> activating: start job accepted
+    activating --> active: start command succeeded
+    activating --> failed: start command, timeout, or dependency failed
+    active --> reloading: reload job when supported
+    reloading --> active: reload completed
+    active --> deactivating: stop or restart job
+    deactivating --> inactive: process stopped cleanly
+    active --> failed: crash or watchdog failure
+    failed --> activating: restart policy or manual restart
+    failed --> inactive: reset-failed plus stop condition
 ```
 
-The diagram shows why service troubleshooting is a root skill for higher-level platforms. When Kubernetes says a node is `NotReady`, the visible symptom may be a cluster condition, but the underlying cause is often a Linux service such as kubelet, containerd, a CNI helper, or a DNS resolver. If you alias `kubectl` as `k`, as many operators do with `alias k=kubectl`, remember that `k logs` helps with pod output while `journalctl -u kubelet` helps with the node agent itself; those are related views, not replacements for each other.
-
-Pause and predict: if `k get nodes` reports that a Kubernetes v1.35+ node is not ready, but `systemctl status kubelet` says the service is failed, which layer should you investigate first and why? The practical answer is the Linux service layer, because the cluster API is reporting a symptom from above while systemd and journald can show why the node agent stopped reporting in the first place.
+`systemctl list-dependencies` is the safe way to start reading the graph before changing it. Dependencies and ordering are separate concepts: `Wants=` and `Requires=` pull units into the transaction with different failure strength, while `After=` and `Before=` order jobs that are already part of the transaction. A unit can require another unit without being ordered after it, and a unit can be ordered after another unit without pulling it in, so a boot-order incident often needs both `systemctl list-dependencies` and `systemctl show -p Wants -p Requires -p After -p Before <unit>`. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
 ```bash
-alias k=kubectl
-k get nodes
+systemctl list-dependencies nginx.service
+systemctl list-dependencies --reverse nginx.service
+systemctl show -p Wants -p Requires -p After -p Before nginx.service
+systemd-analyze critical-chain nginx.service
 ```
 
-This mental model also explains why service names matter. When you ask systemd for `nginx`, it resolves that request to a unit named `nginx.service`, reads the unit metadata, and manages the processes that belong to that unit. You are no longer hunting for a random PID and guessing what launched it; you are asking the supervisor for the declared object that owns the lifecycle.
+The `.wants/` and `.requires/` directories are how enablement and package integration become visible on disk. When a unit is enabled for a target, systemd creates a symlink in a directory such as `multi-user.target.wants/`, and the unit manual documents those directories as dependency hooks that avoid editing the target file itself. That is why `systemctl is-enabled` and `systemctl cat` are stronger evidence than memory when a service vanishes after reboot. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-There is also a documentation benefit. A named service gives teammates a shared handle they can use in runbooks, alerts, dashboards, and postmortems. "Check `nginx.service`" is clearer than "find the web process and see if it looks right." Clear names reduce handoff friction because everyone can ask systemd the same question and compare the same fields.
+Targets are named synchronization points rather than long-running services. A server usually boots toward `multi-user.target`, a graphical host toward `graphical.target`, and emergency workflows toward special targets; target units group other units and establish ordering points. The operator trap is assuming a target behaves like a daemon with a process. It usually does not. It represents a system state and a dependency boundary. ([systemd.target](https://www.freedesktop.org/software/systemd/man/latest/systemd.target.html), [systemd.special](https://www.freedesktop.org/software/systemd/man/latest/systemd.special.html))
 
-## Managing Services with systemctl
+| Unit type | What it represents | Operator question it answers | Example command |
+|---|---|---|---|
+| `.service` | A supervised service process or one-shot action | Which command started, stopped, reloaded, or failed? | `systemctl status ssh.service` |
+| `.socket` | A listening socket that can activate a service | Did a connection start the daemon on demand? | `systemctl status systemd-journald.socket` |
+| `.timer` | A scheduled activation source | Which scheduled unit runs, and when is the next run? | `systemctl list-timers --all` |
+| `.target` | A grouping and ordering point | Which units define this boot or mode boundary? | `systemctl list-dependencies multi-user.target` |
+| `.mount` | A mounted filesystem managed as a unit | Did a filesystem dependency block service startup? | `systemctl status var-log.mount` |
+| `.path` | A path watcher that activates another unit | Did a file change trigger the action? | `systemctl status apt-daily-upgrade.path` |
+| `.slice` | A resource-management cgroup branch | Which services share this resource boundary? | `systemctl status system.slice` |
 
-`systemctl` is the command-line control surface for systemd, and most daily service work starts with a status check. A good status check is not just a yes-or-no question; it tells you whether the unit file loaded correctly, whether the service is enabled for boot, whether the process is currently active, which PID systemd considers the main process, and which recent log lines may explain the current state. Treat `systemctl status` as the service's medical chart, not just a traffic light.
+Unit types are not naming trivia. They tell you which part of the service manager owns activation, ordering, resource control, or evidence. A socket-activated daemon may look "inactive" until traffic arrives, a timer-backed job may fail only during its scheduled activation, and a mount unit may be the reason a service that works after boot fails during boot. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html), [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html), [systemd.path](https://www.freedesktop.org/software/systemd/man/latest/systemd.path.html), [systemd.slice](https://www.freedesktop.org/software/systemd/man/latest/systemd.slice.html))
 
-```bash
-# Check if nginx is running
-systemctl status nginx
-```
+### Reading the Transaction Graph Under Pressure
 
-The example output below is worth reading slowly because each field answers a different operational question. Do not worry about memorizing every line; focus on learning where systemd reports load state, current activity, process identity, resource usage, and the cgroup tree that ties related processes together.
+When systemd starts or stops a unit, it builds a transaction. That transaction contains jobs for the requested unit and for units pulled in by dependencies. It then checks ordering rules, conflicts, and job validity before the change happens. This is why a single `start` command can produce messages about several units. The manager is resolving a graph, not launching one process in isolation. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-```
-● nginx.service - A high performance web server
-     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; preset: enabled)
-     Active: active (running) since Mon 2026-03-24 10:00:00 UTC; 2h ago
-       Docs: man:nginx(8)
-    Process: 1234 ExecStartPre=/usr/sbin/nginx -t -q -g daemon on;... (code=exited, status=0/SUCCESS)
-   Main PID: 1235 (nginx)
-      Tasks: 3 (limit: 4677)
-     Memory: 5.2M
-        CPU: 32ms
-     CGroup: /system.slice/nginx.service
-             ├─1235 "nginx: master process /usr/sbin/nginx ..."
-             ├─1236 "nginx: worker process" "" "" "" "" "" ...
-             └─1237 "nginx: worker process" "" "" "" "" "" ...
-```
+Read dependency words as different promises. `Wants=` is a weak pull because the requesting unit can still start when the wanted unit fails. `Requires=` is stronger because a required unit failure can stop the dependent unit's start transaction. `Requisite=` is stricter because the other unit must already be active. `BindsTo=` ties lifetime more closely, so disappearance of the bound unit can stop the dependent unit. `PartOf=` is useful for grouped stop and restart behavior. These words carry incident meaning. They describe what systemd is allowed to do when reality changes. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
-Pause and predict: look at the `Active:` line in the output above. It says `active (running)`, so what would you expect to see if the process had crashed during startup, and how would the `Main PID` field change? A crashed service usually moves toward `failed`, `inactive`, or an exited state, and the main PID may be absent because systemd has no live process to supervise.
+Ordering words answer a different question. `After=` does not mean "start this dependency." It means "if both jobs are present, run this job later." `Before=` means the opposite ordering relation. A unit that needs a database usually needs both a pull-in relationship and an ordering relationship. The pull-in says the database belongs in the transaction. The ordering says the worker should not start first. Missing either side creates a different failure mode. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
-| Field | What It Tells You |
-|-------|-------------------|
-| `Loaded: loaded` | The unit file exists and was read successfully |
-| `enabled` | Will start automatically on boot |
-| `Active: active (running)` | Currently running right now |
-| `Main PID: 1235` | The main process ID |
-| `Tasks: 3` | Number of processes/threads |
-| `Memory: 5.2M` | Current memory usage |
-| `CGroup` | The process tree for this service |
+Use the graph to explain surprising status output. A service can be inactive because its socket is the active unit. A maintenance script can be inactive because a successful `oneshot` command already finished. A service can fail because a mount unit failed earlier. A target can be active without owning a process. The process table alone does not show those relationships. The unit graph does. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.target](https://www.freedesktop.org/software/systemd/man/latest/systemd.target.html))
 
-The colored dot at the start of the status output is useful when you are scanning quickly, but the text beside it is the part you should trust in notes and incident reports. Green active output means the current service process is running, white inactive output means it is stopped without necessarily being broken, and red failed output means systemd tried something and recorded a failure. In all three cases, the next question is not "what color is it" but "what state transition got us here."
+Service names also hide implicit units. A path such as `/var/log` maps to `var-log.mount`. A swap device maps to a swap unit. A device can appear as a device unit. A slice represents a cgroup branch for resource control. During incidents, these non-service units matter because applications often depend on filesystems, sockets, timers, and resource boundaries. If the dependency is not a process, `ps` cannot show it. `systemctl status` and `systemctl list-dependencies` can. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.slice](https://www.freedesktop.org/software/systemd/man/latest/systemd.slice.html))
 
-Status output can also mislead you if you stop at the headline. A service may be active but unhealthy at the application layer, or failed because a pre-start validation command caught a bad configuration before the main process launched. Read the few journal lines embedded in status, then use `journalctl` for more context. The status page points you toward the evidence; it does not replace the evidence.
+The safest graph check starts broad, then narrows. First ask which unit wanted the service with `systemctl list-dependencies --reverse`. Then ask what the service wants with `systemctl list-dependencies`. After that, inspect the exact properties with `systemctl show`. The three views catch different mistakes. The reverse graph finds unexpected owners. The forward graph finds missing dependencies. The property view distinguishes pull-in relationships from ordering relationships. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-State-changing commands should be chosen based on the operational effect you want, not based on habit. Starting a service creates a current process if it is stopped, stopping a service intentionally removes it from service, restarting stops and starts it as a hard lifecycle transition, and reloading asks a running process to re-read configuration without necessarily dropping active work. Those verbs sound similar until you operate a load balancer, database, or API that has real users connected.
+This graph view is also how you avoid accidental outage amplification. Stopping a service may stop nothing else, or it may stop related units through `PartOf=`. Masking a unit may block a dependency chain that another team assumes is available. Restarting a target can restart many services at once. Before acting on a shared host, prove the blast radius with the graph. Then write the exact unit name in your incident notes. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-```bash
-# Start a stopped service
-sudo systemctl start nginx
+### Unit-Type Semantics in Real Incidents
 
-# Stop a running service
-sudo systemctl stop nginx
+The unit suffix often tells you the first command to run. For a `.service`, inspect lifecycle and process state. For a `.socket`, inspect listeners and activation. For a `.timer`, inspect the next and last trigger. For a `.mount`, inspect filesystem readiness and ordering. For a `.slice`, inspect resource ownership rather than application health. This small habit prevents false conclusions during noisy incidents. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html), [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html))
 
-# Restart (stop + start) -- use when config changes need a full restart
-sudo systemctl restart nginx
+A socket-activated service is a common example. The service may show inactive because no connection has arrived. The socket unit may still be active and listening. Restarting the service can do nothing useful if the socket owns the listener. The correct first pass is `systemctl status name.socket name.service`. Then read the journal for both units in the same time window. ([systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-# Reload -- gracefully reload config without dropping connections
-# Not all services support this
-sudo systemctl reload nginx
+A timer-backed job has a different shape. The service may fail for seconds, then return to inactive after the failed run ends. The timer remains the scheduler. `systemctl status backup.service` may show old failure text, while `systemctl list-timers --all` explains when the next attempt will run. For scheduled jobs, inspect both the timer and the service. The timer owns cadence. The service owns execution. ([systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-# Restart only if already running (safe in scripts)
-sudo systemctl try-restart nginx
-```
+Mount and path units also change triage. A service that fails at boot may be healthy after login because the filesystem later appears. A path-triggered unit may run only after a file change, so inactivity can be normal. A slice can show resource grouping for many services, but it does not prove any one application is healthy. The operator move is to match the unit type to the evidence type before making a change. ([systemd.mount](https://www.freedesktop.org/software/systemd/man/latest/systemd.mount.html), [systemd.path](https://www.freedesktop.org/software/systemd/man/latest/systemd.path.html), [systemd.slice](https://www.freedesktop.org/software/systemd/man/latest/systemd.slice.html))
 
-Before running a restart during a real incident, ask what kind of work the service is holding. A stateless metrics sidecar may tolerate a quick restart, while a web server serving long downloads, an HAProxy process with thousands of active sessions, or a database accepting writes deserves more care. If the unit exposes `ExecReload`, a reload often lets the service adopt configuration changes while preserving existing connections, although support depends on the service design.
+## Unit File Anatomy
 
-The restart-versus-reload decision is a small example of operational judgment. Use the bullets below as a starting rule, then check the unit file and service documentation when the service carries user traffic or state that could be disrupted.
-
-- **restart** kills the process and starts a new one. Connections are dropped. Use when you need a clean slate.
-- **reload** sends a signal, usually SIGHUP, telling the process to re-read its config. Existing connections stay alive. Use when you just changed a config file and the service supports it.
-
-```bash
-# Tip: try graceful reload first and fall back to restart
-sudo systemctl reload-or-restart nginx
-```
-
-Enabling and starting are the pair that most often confuses new operators because one affects the current boot and the other affects future boots. `systemctl start nginx` makes nginx run now, but it says nothing about what should happen next Tuesday after the kernel is patched and the server reboots. `systemctl enable nginx` creates the boot-time relationship, but it does not have to create a running process immediately unless you add `--now`.
-
-```bash
-# Enable nginx to start on boot
-sudo systemctl enable nginx
-
-# Disable -- won't start on boot (but still running if already started)
-sudo systemctl disable nginx
-
-# Enable AND start in one command
-sudo systemctl enable --now nginx
-
-# Disable AND stop in one command
-sudo systemctl disable --now nginx
-
-# Check if a service is enabled
-systemctl is-enabled nginx
-# Output: enabled  (or: disabled, static, masked)
-```
-
-What does "enable" actually do? It creates a symbolic link in the directory for a target such as `multi-user.target`, which is the normal multi-user server state. The link tells systemd that when the system reaches that target, this service should be pulled in too, so boot behavior becomes visible on disk instead of living in someone's memory. That is why an incident review should check both `systemctl status` and `systemctl is-enabled` when a service matters after reboot.
-
-```
-/etc/systemd/system/multi-user.target.wants/nginx.service →
-  /lib/systemd/system/nginx.service
-```
-
-Listing commands help you move from one service to the whole machine. During an incident, `systemctl --failed` is often the fastest way to discover that the visible application problem is not isolated, while `list-units` and `list-unit-files` distinguish running service instances from installed unit definitions. That distinction matters when a service exists on disk but is intentionally disabled, masked, templated, or only activated by another unit.
-
-A useful operator habit is to ask two questions whenever you touch a service. First, what state do I want right now? Second, what state do I want after the next boot? Those questions map directly to `start` or `stop` for the current moment and `enable` or `disable` for future boot behavior. Many service incidents are really mismatches between those two answers.
-
-```bash
-# Show all running services
-systemctl list-units --type=service --state=running
-
-# Show all failed services (great for troubleshooting)
-systemctl --failed
-
-# Show all installed services (running and stopped)
-systemctl list-unit-files --type=service
-```
-
-The key habit is to record both the service action and its intent. "Restarted nginx" is less useful than "reloaded nginx to apply a backend change without dropping existing sessions" or "disabled the experimental worker so it does not return after reboot." Service commands are small, but the intent behind them is what keeps handoffs clear and prevents the same outage from repeating after the next maintenance window.
-
-War story: a platform team once chased a flaky internal dashboard for several days because the service looked healthy whenever someone checked it manually. The real issue appeared only after weekly host reboots, when a disabled metrics proxy failed to return. The fix was one enablement command, but the lesson was larger. A service can pass a live check and still fail the operational requirement if nobody verifies boot behavior.
-
-## Why systemd and Not Just nohup?
-
-`nohup` and a trailing ampersand are tempting because they let you walk away from a terminal while a command continues running. For a personal compile, a long archive operation, or a quick experiment on a lab machine, that may be acceptable. For a production application, it leaves too many questions unanswered: who restarts the process after a crash, where does output go, what starts it after reboot, what resource controls apply, and how does the next operator discover the intended lifecycle?
-
-```bash
-# The nohup approach -- fragile
-nohup python /opt/myapp/app.py > /var/log/myapp.log 2>&1 &
-
-# What happens when it crashes at 3 AM?
-# Nothing. It stays dead. You get paged. You cry.
-```
-
-The fragile part is not that `nohup` is technically broken. The fragile part is that it converts a service decision into an unstructured shell side effect. The PID is not tied to a named unit, a restart policy is not encoded, boot ordering is not declared, and logging depends on redirection that might be mistyped, rotated incorrectly, or overwritten by a future command.
-
-```bash
-# The systemd approach -- robust
-sudo systemctl start myapp
-
-# What happens when it crashes at 3 AM?
-# systemd restarts it automatically.
-# Logs are captured in journald.
-# You sleep peacefully.
-```
-
-| Feature | nohup | systemd Service |
-|---------|-------|-----------------|
-| Survives logout | Yes | Yes |
-| Survives reboot | No | Yes (if enabled) |
-| Auto-restart on crash | No | Yes |
-| Log management | Manual | Automatic (journald) |
-| Resource limits | Manual (ulimit) | Built-in (cgroups) |
-| Dependency ordering | None | Full support |
-| Status monitoring | `ps` + guessing | `systemctl status` |
-
-The comparison is also about team cognition. When an operator sees a systemd unit, they can inspect it, ask whether it is enabled, read recent logs, and reason about dependencies in a standard format. When they see a bare process launched from an old shell, they have to reconstruct intent from history files, open file descriptors, process ancestry, or guesswork, and those clues are often gone by the time the incident begins.
-
-This is why many teams treat service units as part of deployment hygiene. Even a small internal tool benefits from a clear start command, a working directory, environment handling, restart limits, and journal integration. Those details may feel formal for a small script, but they make the tool boring to operate. Boring is what you want from background software that supports something more important.
-
-The bottom line is practical: `nohup` is fine for a quick one-off task, but anything that matters should be a service. That does not mean you need to write a custom unit in this module, but you do need to recognize when a background command is being asked to carry production reliability. If a program must survive reboot, restart after failure, preserve logs, or coordinate with the network, it belongs under systemd supervision.
-
-## Reading Unit Files Without Writing Them Yet
-
-Every service has a **unit file** that tells systemd how to manage it, and reading that file is one of the fastest ways to stop guessing. The unit file answers questions that status output only hints at: what command starts the service, what command validates configuration first, what signal reload uses, what dependencies influence ordering, and which target pulls the service in during boot. You do not need to write unit files yet, but you should be able to read one calmly during troubleshooting.
-
-```bash
-# View the unit file for nginx
-systemctl cat nginx
-```
+Read unit files before editing them. `systemctl cat <unit>` prints the vendor unit and any drop-ins in the order systemd applies them, which avoids the distribution-path differences between `/usr/lib/systemd/system`, `/lib/systemd/system`, and `/etc/systemd/system`. Use `systemctl edit <unit>` for local drop-ins because the unit manual documents drop-in directories as the supported way to override packaged units without modifying vendor files. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
 
 ```ini
 [Unit]
-Description=A high performance web server and reverse proxy server
-Documentation=man:nginx(8)
-After=network.target remote-fs.target nss-lookup.target
-StartLimitIntervalSec=0
+Description=Example payment worker
+Documentation=man:payment-worker(8)
+Wants=network-online.target
+After=network-online.target postgresql.service
 
 [Service]
-Type=forking
-PIDFile=/run/nginx.pid
-ExecStartPre=/usr/sbin/nginx -t -q -g 'daemon on; master_process on;'
-ExecStart=/usr/sbin/nginx -g 'daemon on; master_process on;'
-ExecReload=/bin/sh -c "/bin/kill -s HUP $MAINPID"
-ExecStop=-/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx.pid
-TimeoutStopSec=5
-KillMode=mixed
+Type=notify
+ExecStartPre=/usr/bin/test -r /etc/payment-worker/config.yaml
+ExecStart=/usr/local/bin/payment-worker --config /etc/payment-worker/config.yaml
+ExecStartPost=/usr/bin/logger -t payment-worker "service entered start path"
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=90s
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-The `[Unit]` section describes identity and ordering. `Description` is the human label you see in status output, `Documentation` points to the manual or project docs, and `After` tells systemd to order this service after other units. A common beginner mistake is to treat `After=` as if it means "requires"; it does not. Ordering says when to start relative to another unit, while requirement relationships such as `Wants=` or `Requires=` describe what should be pulled in.
+The `[Unit]` section describes identity, documentation, dependencies, and ordering. The `[Service]` section describes how systemd starts, reloads, stops, tracks, times out, and restarts the process. The `[Install]` section is not used during normal runtime; it tells `systemctl enable` which symlinks to create when the unit is installed into a target or alias relationship. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-Think of ordering like a boarding line and requirements like an invitation list. `After=network.target` says this unit should board after the network target in the same transaction, but it does not automatically invite the network target to the transaction. Requirement directives decide what gets pulled in. Ordering directives decide relative timing once the participants are present.
+`ExecStartPre=` is for checks or setup that must finish before the main process starts, `ExecStart=` is the command that defines the service's start action, and `ExecStartPost=` runs after the start command is considered complete. A pre-start validation failure is often a good failure because it prevents a bad configuration from becoming a live process. A post-start hook should be treated carefully because it can make the unit's activation look failed even when the main daemon launched. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-| Directive | Meaning |
-|-----------|---------|
-| `Description` | Human-readable name shown in `systemctl status` |
-| `After` | Start this service *after* these other units |
-| `Documentation` | Where to find help |
+| Service type | When systemd considers the service started | Best operator fit | Common failure clue |
+|---|---|---|---|
+| `simple` | Immediately after the main process is forked by systemd | Foreground daemons that do not signal readiness | App accepts traffic before it is actually ready |
+| `exec` | After the executable was successfully invoked | Safer foreground services where missing binaries should fail clearly | Bad path or permission fails at start boundary |
+| `forking` | After the parent exits and a child continues | Legacy daemons that self-daemonize | Wrong PID file or parent exits before child is ready |
+| `oneshot` | After all configured commands complete | Setup, migration, or maintenance tasks | Unit is inactive after success unless `RemainAfterExit=yes` |
+| `notify` | After the service sends readiness through `sd_notify` | Modern daemons that can report readiness precisely | Service starts but never sends READY before timeout |
+| `dbus` | After the configured bus name appears | D-Bus activated services | Bus name never acquired |
+| `idle` | Delayed until other jobs are dispatched | Low-priority console-noise reduction | Misused for real dependency ordering |
 
-The `[Service]` section describes execution. `ExecStart` is the command systemd runs, `ExecStartPre` is a pre-flight check, `ExecReload` is how reload works if the service supports it, and `Restart=` controls automatic recovery behavior. When a service fails quickly after a configuration edit, `ExecStartPre` is often the clue because many packages run a syntax check before replacing a working process with a broken one.
+For `Type=notify`, the daemon must call `sd_notify` with `READY=1`; if it does not, the unit times out during activation.
 
-| Directive | Meaning |
-|-----------|---------|
-| `Type` | How systemd tracks the process (`simple`, `forking`, `oneshot`) |
-| `ExecStart` | The command to run |
-| `ExecStartPre` | Command to run before starting (e.g., config test) |
-| `ExecReload` | Command for `systemctl reload` |
-| `ExecStop` | Command for `systemctl stop` |
-| `Restart` | When to auto-restart (`always`, `on-failure`, `no`) |
+Choose the service type from the program's readiness behavior, not from preference. A `simple` service can be healthy for a process that starts quickly and handles its own readiness, but a payment API or node agent that needs initialization should expose readiness with `Type=notify` or a service-specific mechanism when supported. A legacy daemon that double-forks belongs under `Type=forking` only if systemd can still identify the main process reliably. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-The `[Install]` section explains boot behavior. If the unit says `WantedBy=multi-user.target`, enabling the service creates a link from the target's `.wants` directory to the unit file. That is why the install section matters even though it does not directly start the current process: it declares how the unit participates in future boots.
+The service type is where many "it started, but it is not ready" outages begin. With `Type=simple`, systemd considers the service started almost immediately. That may be acceptable for a local cache. It is risky for an API that must open databases, warm schemas, or load certificates before traffic arrives. With `Type=notify`, the daemon can report readiness after its own checks pass. The unit state then tracks application readiness more closely. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-| Directive | Meaning |
-|-----------|---------|
-| `WantedBy` | Which target pulls in this service (usually `multi-user.target`) |
+Do not use dependency ordering as a fake readiness check. `After=postgresql.service` only waits for PostgreSQL's start job, not for every schema, migration, or application-level dependency. If the worker needs a specific database table, make the worker validate that condition. Put the validation in the application, or use a small `ExecStartPre=` command when the check is safe and deterministic. That makes the failure explicit in the unit journal. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
-The `Restart=` directive deserves special attention because it is the difference between a process that dies once and a service that tries to heal itself. `Restart=on-failure` is common for long-running daemons because a nonzero exit, signal, timeout, or watchdog failure should trigger recovery, while an intentional `systemctl stop` should not be treated as a crash. `Restart=always` is more aggressive and can be useful, but it can also hide crash loops if you do not watch the journal.
+`ExecStartPre=` should fail loudly when the main process would only fail later. A missing config file, unreadable certificate, or unavailable required directory is a good pre-start failure. A long network wait is usually a bad pre-start failure because it can block boot and hide the real owner. Keep pre-start commands short. Make their messages clear. Then `systemctl status` shows the check that failed before the daemon launched. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-Restart policies should be paired with observability. Automatic recovery is valuable when a transient network error or rare crash would otherwise leave a service dead, but a rapid restart loop can consume CPU, flood logs, or mask a broken release. The journal will usually show repeated start attempts and failures. When you see that pattern, stop treating restart as a fix and start treating it as evidence.
+`ExecStartPost=` needs even more care. It runs after the start action is considered complete, yet it still belongs to the service activation path. A broken notification command can make a successful daemon look failed. A slow post-start migration can keep the unit activating long after the main process is present. When a status output says the main process exists but the unit failed, inspect every `ExecStart*` command. The journal usually names the command that returned the failing status. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-Before running this on a real host, what output do you expect from `systemctl cat sshd` or `systemctl cat cron` on your distribution? Try to predict which command starts the service, which target enables it at boot, and whether reload is supported. Then compare your prediction to the unit file and notice how much operational behavior is declared in plain text.
+Restart policy should match the failure domain. A stateless web worker often benefits from `Restart=on-failure`. A schema migration usually should not restart forever. A daemon with a watchdog must actually send watchdog notifications, or `Restart=on-watchdog` creates a loop. Use `StartLimitIntervalSec=` and `StartLimitBurst=` when a failed service can flood dependencies. A restart policy is part of the operational design, not a decoration. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-When you edit a unit file later in your Linux journey, you will need `sudo systemctl daemon-reload` before systemd uses the changed file. This module focuses on reading rather than authoring, but the reload step appears in troubleshooting because operators often fix a unit on disk and then wonder why the old resource limit or command still appears in status. The reason is simple: systemd cached the unit definition and must be told to re-read it.
+When you inherit a unit, inspect the exit contract before changing restarts. `SuccessExitStatus=` can make selected nonzero exits count as clean. `RestartPreventExitStatus=` can block restarts for specific exit codes. `RestartForceExitStatus=` can force restarts for others. These settings are useful for precise programs. They are also easy to miss during triage. `systemctl show -p SuccessExitStatus -p RestartPreventExitStatus -p RestartForceExitStatus <unit>` makes them visible. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
 
-## Viewing Logs with journalctl
+Restart policy is an operating contract. `Restart=no` means systemd will not automatically replace the process, `on-failure` restarts after non-clean exits and timeouts, `on-abnormal` narrows the trigger to abnormal termination, `on-abort` focuses on uncaught signal termination, `on-watchdog` reacts to watchdog timeouts, and `always` restarts after almost every exit path. The right policy depends on whether a restart hides damage, preserves availability, or creates a crash loop that erases evidence. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
-Services are much easier to diagnose when their output goes somewhere predictable, and journald is the collector that systemd uses for service stdout, stderr, kernel messages, and structured metadata. You read that journal with `journalctl`, which can feel overwhelming at first because it can show everything the machine has recorded. The trick is to narrow the journal by unit, boot, time, priority, and output format until the evidence matches the question you are asking.
+| Restart policy | Use when | Avoid when | First triage command |
+|---|---|---|---|
+| `no` | A one-shot task should leave success or failure visible | A long-running daemon must self-heal after crashes | `systemctl status <unit>` |
+| `on-failure` | Availability matters and failed exits are safe to retry | Repeated failure can corrupt state or flood dependencies | `journalctl -u <unit> -p warning..alert` (in syslog numbering, lower means more severe: `alert=1`, `warning=4`) |
+| `on-abnormal` | You only want signal, timeout, or watchdog-style recovery | Normal nonzero exits should also recover | `systemctl show -p NRestarts <unit>` |
+| `on-abort` | A signal abort should be treated as crash recovery | Exit-code failures also need restart | `coredumpctl list <unit>` |
+| `on-watchdog` | The daemon participates in watchdog health checks | The daemon cannot send watchdog notifications | `journalctl -u <unit> | grep -i watchdog` |
+| `always` | The process is a resilient worker whose exit is never desired | Manual stop or bad config should remain stopped for investigation | `systemctl reset-failed <unit>` only after notes |
 
-```bash
-# View ALL logs (careful -- this can be huge)
-journalctl
-
-# View logs and jump to the end (most recent)
-journalctl -e
-
-# Follow logs in real time (like tail -f)
-journalctl -f
-```
-
-Starting with all logs is rarely the best move during an outage because the machine may have thousands of unrelated messages. The most useful filter for service work is `-u`, which means unit, because it connects logs to the same systemd object you inspected with `systemctl status`. Once you filter by unit, the log stream becomes an incident timeline for that service instead of a haystack of every kernel, cron, SSH, package, and application message on the host.
-
-Good log reading starts with a hypothesis. If you think a service failed during boot, use `-b` and a unit filter. If you think a deployment broke it ten minutes ago, use a short `--since` window. If you think noisy access logs are hiding a crash, add a priority filter. Each filter should remove irrelevant information while preserving the evidence needed to confirm or reject your hypothesis.
+After editing a unit file or drop-in, run `systemctl daemon-reload` before expecting systemd to use the new configuration. Then use `systemd-analyze verify` when available to catch syntax and dependency mistakes, and inspect `systemctl cat` again so the evidence shows the effective unit rather than the file you think systemd read. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
 ```bash
-# Logs for nginx only
-journalctl -u nginx
-
-# Logs for ssh daemon
-journalctl -u sshd
-
-# Follow nginx logs in real time
-journalctl -u nginx -f
+sudo systemctl edit payment-worker.service
+sudo systemctl daemon-reload
+systemd-analyze verify /etc/systemd/system/payment-worker.service
+systemctl cat payment-worker.service
+systemctl show -p Type -p Restart -p ExecStart payment-worker.service
 ```
 
-Try it now: run `journalctl -b -p err` on your system. This shows error-level logs since your last boot, which often reveals failed timers, denied permissions, or services that recovered before you noticed them. If you find entries you do not understand, resist the urge to fix everything at once; first connect each error to a unit and decide whether it is current, historical, harmless, or part of the symptom you are investigating.
+## Operator Triage Flow
 
-Limiting output prevents log reading from becoming scrolling theater. `-n` gives you recent context, `-f` keeps the stream open for live observation, and `--no-pager` makes output friendlier for scripts or copy-paste into incident notes. A common workflow is to read the last small chunk, perform one service action, then follow new entries to verify whether the expected state transition happened.
+Use the same first five commands until you have a reason to branch: status, effective unit, recent unit logs, boot timing, and failed units. This flow is fast because every command answers a different question: what systemd thinks now, what systemd was told to do, what the service wrote, whether boot ordering was slow or blocked, and whether the symptom is part of a larger host failure. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html))
 
 ```bash
-# Show only the last 20 log lines
-journalctl -u nginx -n 20
-
-# Show only the last 50 lines and follow new ones
-journalctl -u nginx -n 50 -f
+UNIT=nginx.service
+systemctl status "$UNIT"
+systemctl cat "$UNIT"
+journalctl -u "$UNIT" --since=-1h --until=now
+systemd-analyze blame | head -20
+systemctl list-failed
 ```
 
-Time filters are how you turn "something broke overnight" into a bounded question. `--since "1 hour ago"` is useful during active incidents, `--since today` works for daily checks, and explicit ranges are better for postmortems because they make your evidence reproducible. `-b` narrows the view to the current boot, which is often exactly what you want after a restart because it removes stale failures from previous operating sessions.
+`systemctl status` is the live chart: load state, active state, substate, main PID, recent logs, and cgroup membership. `systemctl cat` is the contract: vendor unit plus local overrides. `journalctl -u` is the evidence trail: timestamps, messages, priorities, structured fields, and boot boundaries. `systemd-analyze blame` is not a universal root-cause tool, but it is useful when the incident is "boot was slow" or "service was late after reboot." `systemctl list-failed` prevents tunnel vision by showing other failed units on the same host. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html))
 
 ```bash
-# Logs from the last hour
-journalctl -u nginx --since "1 hour ago"
-
-# Logs from today
-journalctl -u nginx --since today
-
-# Logs from a specific time range
-journalctl -u nginx --since "2026-03-24 09:00" --until "2026-03-24 10:00"
-
-# Logs since last boot
-journalctl -u nginx -b
+journalctl -u nginx.service --since "2026-05-21 08:00" --until "2026-05-21 09:00"
+journalctl -u nginx.service -b -p warning..alert
+journalctl -u nginx.service --since=-1h --until=now -o json | jq -r '.PRIORITY, .MESSAGE'
+journalctl _PID=1234 --since=-10m
+systemctl show -p MainPID -p ExecMainStatus -p NRestarts nginx.service
 ```
 
-Combining filters is where `journalctl` becomes an investigative tool rather than a log viewer. If nginx has been running all day, a unit filter alone might still show access noise, reload messages, worker lifecycle messages, and routine notices. Adding a time window, a line limit, and sometimes a priority filter gives you the smallest useful evidence set, which is exactly what you want when another engineer needs to review your reasoning.
+Branch only after the first pass. If status shows `failed` and the journal shows `ExecStartPre` failed, validate configuration before restarting. If the unit is enabled but inactive after boot, inspect install links and dependencies. If the service is active but the application is unavailable, move to ports, sockets, application health checks, and upstream dependencies. If the unit crash loops under `Restart=always`, preserve journal evidence before resetting failures or changing policy. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+The restart-versus-reload decision deserves a written reason. `restart` stops and starts the service, while `reload` runs the unit's reload action if it exists; `reload-or-restart` asks systemd to reload when possible and restart otherwise. For web servers and proxies with active connections, a reload often applies configuration with less disruption, but support depends on the daemon and the unit's `ExecReload=`. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
 
 ```bash
-# Last 30 nginx log lines from today, then follow new ones
-journalctl -u nginx --since today -n 30 -f
-
-# All error-level logs for any service in the last hour
-journalctl -p err --since "1 hour ago"
+systemctl show -p ExecReload nginx.service
+sudo systemctl reload nginx.service
+sudo systemctl reload-or-restart nginx.service
+sudo systemctl try-restart nginx.service
 ```
 
-Priority filtering works because log entries carry severity metadata. The names map to numeric syslog levels where `emerg` is the highest severity and `debug` is the most verbose. `journalctl -p err` includes errors and more severe entries, so it is useful when you need to cut through informational noise without losing critical failure evidence.
+### Worked Outage: Pre-Start Failure
 
-| Priority | Keyword | What It Means |
-|----------|---------|---------------|
-| 0 | emerg | System is unusable |
-| 1 | alert | Immediate action needed |
-| 2 | crit | Critical conditions |
-| 3 | err | Error conditions |
-| 4 | warning | Warning conditions |
-| 5 | notice | Normal but significant |
-| 6 | info | Informational |
-| 7 | debug | Debug-level messages |
+Imagine an edge proxy is down after a certificate rotation. Start with `systemctl status nginx.service`. The status shows `failed`, an `ExecStartPre=` command, and a nonzero exit status. Do not restart yet. Read the effective unit with `systemctl cat nginx.service`. Then query the same unit journal with `journalctl -u nginx.service --since=-30m --until=now`. The status gave the symptom. The unit file gives the contract. The journal gives the exact failed check. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-Output format matters when the audience changes. Human-readable short output is comfortable in a terminal, precise timestamps are better when correlating events with monitoring, and JSON output is useful when another tool needs to parse fields reliably. Do not reach for JSON because it looks advanced; reach for it when the next step is structured filtering with a tool such as `jq` or when a postmortem needs exact timestamps and metadata.
+In this outage, the pre-start command might be `nginx -t`. The journal might say a certificate path is unreadable. That is better than a live proxy accepting traffic with a broken reload. The resolution is not "keep restarting." The resolution is to fix the certificate path or permissions, run the validation command directly, reload the daemon state if the unit changed, and then start the service. After recovery, save the status and journal window in the ticket. Those lines prove the cause and the fix. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-```bash
-# No pager -- good for piping to other commands
-journalctl -u nginx --no-pager
+The same flow works for custom workers. If `ExecStartPre=/usr/bin/test -r /etc/worker/config.yaml` fails, the service never reaches the main command. That is a configuration outage, not a process crash. Keep the service stopped until the file exists and is readable by the right user. Then start once and confirm the journal contains the successful activation path. A single clean start is stronger evidence than many blind retries.
 
-# JSON output -- good for parsing with jq
-journalctl -u nginx -o json-pretty -n 5
+### Worked Outage: Boot-Only Race
 
-# Short output with precise timestamps
-journalctl -u nginx -o short-precise
-```
+Now imagine a worker fails only after reboot, but a manual restart succeeds. That symptom usually means the boot graph differs from the steady-state graph. Query the previous boot before changing anything. Use `journalctl -b -1 -u payment-worker.service`. Then inspect `systemctl is-enabled payment-worker.service` and `systemctl show -p Wants -p Requires -p After payment-worker.service`. Finish with `systemd-analyze critical-chain payment-worker.service`. These commands keep the evidence tied to the failed boot. ([journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html))
 
-There is one more operational wrinkle: journald can be volatile or persistent depending on distribution defaults and configuration. If logs are stored only in memory, a reboot removes older journal entries, which can make post-crash diagnosis painful. Persistent journal storage keeps records under `/var/log/journal`, and many teams enable it on servers where boot failures, node crashes, or intermittent hardware events need to be investigated after the machine returns.
+The journal may show the worker started before a mounted secrets directory was ready. The manual restart succeeds because the mount already exists. Adding `After=var-lib-secrets.mount` may order the worker later, but it does not pull the mount into the transaction. Add the correct dependency relationship only if the worker truly requires that mount. Then keep the ordering relation beside it. Reboot a lab host or maintenance window node to prove the fix. A manual restart is not enough evidence for a boot-only failure. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemd.mount](https://www.freedesktop.org/software/systemd/man/latest/systemd.mount.html))
 
-Persistent logging has tradeoffs, so it is still an engineering choice. Stored journals consume disk space, need retention controls, and may contain sensitive operational details that deserve the same access discipline as other logs. The value is that you can investigate what happened before the reboot that cleared the symptom. For servers with on-call expectations, that evidence is usually worth managing deliberately.
+A similar race appears with network readiness. `network.target` often means the network stack exists, not that a remote dependency is reachable. If the daemon needs a remote database during start, prefer application retry logic. If the operating contract really needs online network state, inspect the distribution's `network-online.target` behavior and the service that declares it reached. Record the tradeoff because waiting for online networking can slow boot. ([systemd.special](https://www.freedesktop.org/software/systemd/man/latest/systemd.special.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
-## Putting It All Together: A Troubleshooting Workflow
+### Worked Outage: Crash Loop With Evidence Loss Risk
 
-Experienced Linux operators tend to debug services in a loop, not in a single command. They first ask systemd for current state, then ask journald for recent evidence, then make the smallest reasonable change, then check state and logs again. This rhythm prevents two common incident mistakes: guessing from memory without reading evidence, and making multiple changes before you know which one mattered.
+A crash loop is noisy, but the first move is still evidence preservation. `systemctl status api.service` may show repeated restarts and a recent exit code. `systemctl show -p NRestarts -p ExecMainStatus -p ExecMainCode api.service` gives machine-readable counters. `journalctl -u api.service --since=-15m -o short-iso` gives the sequence. If the unit uses `Restart=always`, new attempts can quickly push useful messages out of a small volatile journal. Export the relevant window before changing restart policy. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+The resolution path depends on the first failure, not the last line. If the first error is "address already in use," inspect sockets and competing units. If it is "permission denied," inspect the service user and file labels. If it is "configuration parse failed," validate the config offline. Once you have a likely fix, stop the loop, apply the fix, run `systemctl daemon-reload` if the unit changed, and start the unit once. Finish by checking the journal from the fix time forward. This avoids mistaking a temporary quiet period for recovery. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
+
+## Journald as Structured Evidence
+
+The journal is not just a text file with timestamps. Journal entries carry fields such as `MESSAGE`, `PRIORITY`, `_SYSTEMD_UNIT`, `_PID`, `_UID`, `_GID`, `_HOSTNAME`, `_BOOT_ID`, `_TRANSPORT`, `SYSLOG_IDENTIFIER`, and many others documented in the journal-fields manual. This is why `journalctl -o json` is valuable: a receiver or an operator can filter on fields instead of parsing human-formatted text. ([Journal Fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
 ```mermaid
-flowchart TD
-    S1["Step 1: Is it running?<br/>systemctl status myservice"]
-    S2["Step 2: If not, what happened?<br/>journalctl -u myservice -n 50"]
-    S3["Step 3: Try to start it<br/>sudo systemctl start myservice"]
-    S4["Step 4: If it fails immediately, check logs again<br/>journalctl -u myservice -n 20 --no-pager"]
-    S5["Step 5: Fix the config/issue, then restart<br/>sudo systemctl restart myservice"]
-    S6["Step 6: Confirm it is healthy<br/>systemctl status myservice"]
-
-    S1 --> S2
-    S2 --> S3
-    S3 --> S4
-    S4 --> S5
-    S5 --> S6
+flowchart LR
+    P[Service process] -->|stdout and stderr| J[systemd-journald]
+    S[syslog API or /dev/log] --> J
+    K[Kernel messages] --> J
+    J -->|volatile store| R[/run/log/journal/]
+    J -->|persistent store| V[/var/log/journal/]
+    J -->|journalctl filters and JSON| O[Operator evidence]
+    J -->|ForwardToSyslog| X[rsyslog or syslog daemon]
+    J -->|journal upload| U[remote journal receiver]
+    J -->|agent reads journal| A[Vector, Fluent Bit, or Alloy to Loki/Elasticsearch/etc.]
+    X --> D[Durable log storage]
+    U --> D
+    A --> D
 ```
 
-The flowchart is intentionally simple because a reliable troubleshooting loop beats a clever one-liner. `systemctl status` tells you what systemd thinks, `journalctl -u` tells you what the service reported, a start or restart tests whether the condition is still present, and a final status check confirms the service reached the intended state. If the unit fails immediately, the second journal read is usually more useful than the first because it captures the fresh failure caused by your test.
+Persistence is an explicit design choice. The journald configuration manual documents `Storage=volatile`, `persistent`, `auto`, and `none`, and it documents size controls such as `SystemMaxUse=`, `RuntimeMaxUse=`, `SystemKeepFree=`, and related retention knobs. On a host where journal data matters after a reboot or crash, confirm whether the journal is stored under `/var/log/journal` or only under `/run/log/journal`, then record the retention policy as part of the incident baseline. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), [Red Hat: systemd journal role](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/automating_system_administration_by_using_rhel_system_roles/configuring-the-systemd-journal-by-using-the-journald-rhel-system-role_automating-system-administration-by-using-rhel-system-roles))
 
-Consider a realistic nginx failure after someone edits configuration. The status output may say the service failed, while the unit file shows an `ExecStartPre` syntax check, and the journal shows the exact config line that failed validation. If you jump straight to restarting repeatedly, you create noise; if you read the unit and journal together, you learn that the service is protecting you from replacing a known-good process with a broken configuration.
+```bash
+journalctl --disk-usage
+journalctl --list-boots
+journalctl -b -1 -u ssh.service
+sudo journalctl --vacuum-time=14d
+sudo journalctl --vacuum-size=2G
+```
 
-The same workflow applies to kubelet, containerd, etcd, chronyd, sshd, and custom application services. The names change, but the questions do not: is the service loaded, is it enabled when it needs to survive reboot, is it active now, what command starts it, what dependencies matter, what did it log recently, and what changed immediately before failure? Those questions keep your debugging grounded when dashboards, alerts, and human pressure are all competing for attention.
+Do not treat vacuum commands as harmless cleanup during an investigation. They delete old journal data according to the requested boundary, which may be correct for disk pressure but wrong for evidence preservation. First export the relevant range with `journalctl -u <unit> --since ... --until ... -o json` or `journalctl --output=export` if another system needs native journal import. Then vacuum only the data you can afford to remove. ([journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html))
 
-Use the loop even when the fix seems obvious. If a service is stopped, start it, but then read the logs that explain why it stopped. If a service is failed, restart it, but then confirm whether the failure returns. If a reload succeeds, read enough journal output to prove the new configuration was accepted. The loop turns command execution into diagnosis.
+Priorities are filters, not conclusions. A high-priority message may be noisy during a known maintenance action, and an `info` message may contain the only command-line clue before a crash. Start broad enough to understand the sequence, then narrow with `-p warning..alert`, `_SYSTEMD_UNIT=`, `_PID=`, `_BOOT_ID=`, and time boundaries. The journal-fields manual is your map when a text search starts missing evidence. ([Journal Fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-For postmortems, write the loop as a short timeline. Include the initial status, the most relevant journal line, the command you ran, and the verification result. That style avoids vague phrases like "service was broken" and replaces them with facts another engineer can audit. It also teaches future responders which observation mattered most.
+## Forwarding and Durable Storage
 
-## Patterns & Anti-Patterns
+Local journals are excellent for first response, but they are not the same as centralized retention. `systemd-journald` can forward messages to a syslog socket when configured, and RHEL documentation describes a common RHEL path where journald collects messages and forwards them to Rsyslog for further processing. Set `ForwardToSyslog=yes` in `/etc/systemd/journald.conf` or a drop-in to enable this path. The POSIX syslog interface remains a classic logging boundary, but the operator question is where the durable copy lives and which fields survive the hop. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), [syslog(3)](https://man7.org/linux/man-pages/man3/syslog.3.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
 
-For this introductory module, the most useful pattern is evidence-first service operation. Start by reading `systemctl status`, then read the unit-specific journal, then choose the least disruptive lifecycle action that matches the evidence. This works because it ties every command to a question, which means your incident notes can explain why you reloaded instead of restarted, enabled instead of started, or inspected the unit file instead of killing a PID.
+Remote journal transport is another option when you want systemd-native fields across hosts. `systemd-journal-upload` sends journal events to a remote endpoint, and the systemd manuals document the upload service alongside journal remote components. This keeps journal semantics closer to the source than plain text syslog, but it still requires an intentional receiver, authentication design, retention policy, and failure monitoring. ([systemd-journal-upload.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-upload.service.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
-The pattern scales because it is independent of service complexity. A tiny cron replacement, an nginx reverse proxy, and kubelet on a Kubernetes node all expose status, unit metadata, and journal output through the same manager. You will still need service-specific knowledge for deeper fixes, but the first pass stays consistent. Consistency is valuable when incidents cross team boundaries.
+The classic journald-to-rsyslog path is still common on enterprise hosts. Journald receives stdout, stderr, kernel, syslog, and native journal messages. With forwarding enabled, a syslog daemon can receive messages from the journal path and apply mature routing rules. Rsyslog can write local files, send over the network, and integrate with existing compliance tooling. The tradeoff is field fidelity. Plain syslog lines can lose structured journal fields unless the pipeline preserves them deliberately. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [syslog(3)](https://man7.org/linux/man-pages/man3/syslog.3.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
 
-The matching anti-pattern is process hunting without supervisor context. Teams fall into it when they are comfortable with `ps`, `top`, and `kill`, but have not internalized that systemd may intentionally restart a process they kill manually. The better alternative is to manage intentional state through `systemctl`, then use process tools as supporting evidence when you need CPU, memory, file descriptor, or cgroup details.
+The journald-to-agent path is more flexible for modern observability stacks. Vector's `journald` source and Fluent Bit's `systemd` input can read journal entries, attach labels, transform fields, and send to many destinations. Grafana Alloy can scrape system journal entries for Loki-style pipelines. These agents can preserve `_SYSTEMD_UNIT`, priority, host, and boot fields when configured well. They can also drop fields, relabel units poorly, or back up under load when configured poorly. Test the mapping before the incident. ([Vector journald source](https://vector.dev/docs/reference/configuration/sources/journald/), [Fluent Bit systemd input](https://docs.fluentbit.io/manual/pipeline/inputs/systemd), [Grafana Alloy Linux monitoring](https://grafana.com/docs/grafana-cloud/send-data/alloy/monitor/monitor-linux/))
 
-Another pattern is to treat boot behavior as a separate acceptance criterion. After installing a service, verify both the current state and the enabled state, because "running now" and "returns after maintenance" are different promises. The anti-pattern is celebrating a successful manual start while forgetting that a future reboot will erase the apparent fix, which is exactly how monitoring agents, backup workers, and custom data collectors disappear after patch windows.
+The journal-remote path is narrower and more systemd-native. `systemd-journal-upload` can send journal data to a remote receiver, and the remote side can store journal data with field semantics closer to the source. This is attractive when operators want journal-native querying and fewer text parsing assumptions. It is less attractive when the organization already standardizes on a log router or SIEM schema. The design question is not which tool sounds newest. The design question is which path preserves the evidence your responders need. ([systemd-journal-upload.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-upload.service.html), [systemd-journal-remote.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-remote.service.html), [Journal Fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html))
 
-## When You'd Use This vs Alternatives
+Use a simple comparison before choosing a path.
 
-Use systemd when a program must behave like part of the server: it should start at boot, restart according to policy, log through the journal, expose status, and coordinate with dependencies. Use a shell background job only when the task is temporary, low risk, and supervised by the person who launched it. Use a terminal multiplexer such as `tmux` when you need an interactive long-running session, but do not confuse that with production service management.
+| Forwarding pattern | Strong fit | Main risk | Evidence check |
+|---|---|---|---|
+| Journald to rsyslog | Sites with mature syslog routing, local file policy, or compliance archives | Structured fields may become formatted text | Can the central record keep unit, host, priority, and boot identity? |
+| Journald to Vector, Fluent Bit, or Alloy | Cloud-native log pipelines with labels, transforms, and many outputs | Agent backpressure or field mapping can hide host evidence | Can a query filter by `_SYSTEMD_UNIT` after ingestion? |
+| Journald to journal-remote | Teams that want systemd-native journal semantics off host | Receiver, transport security, and retention need explicit operation | Can `journalctl` or an equivalent reader query the remote copy by field? |
 
-Use `systemctl reload` when the service explicitly supports a graceful configuration reload and preserving connections matters. Use `systemctl restart` when the service needs a clean process, when reload is unsupported, or when the change affects startup-only behavior. Use `journalctl -u service` when you need service evidence, and use application-specific logs or `k logs` when the failure is inside a pod or program that writes its own separate log stream.
+Forwarding also changes failure handling. If rsyslog is down, journald may still have local data. If the agent is down, the host journal may be the only source until the agent recovers. If the remote receiver is down, upload queues and retry behavior must be monitored. Always define the local retention window separately from the central retention window. A central outage should not erase the only local witness after one reboot. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html))
 
-Use `systemctl cat` when the question is about declared behavior rather than current behavior. Status tells you what happened recently, but the unit file tells you what should happen by design. That difference matters for dependency failures, reload support, restart policy, working directories, and boot targets. Many investigations become shorter once you stop guessing and read the contract.
+Modern log agents often sit at the journald boundary. Fluent Bit has a `systemd` input, Vector has a `journald` source, and Grafana Alloy documents Linux integrations that scrape systemd journal entries for Loki pipelines. These tools are not replacements for first-response `journalctl`; they are shipping and transformation paths that need field mapping, labels, backpressure behavior, and retention tested before an outage. ([Fluent Bit systemd input](https://docs.fluentbit.io/manual/pipeline/inputs/systemd), [Vector journald source](https://vector.dev/docs/reference/configuration/sources/journald/), [Grafana Alloy Linux monitoring](https://grafana.com/docs/grafana-cloud/send-data/alloy/monitor/monitor-linux/))
 
-Which approach would you choose here and why: a data collector starts successfully after installation, must run after every reboot, and occasionally exits when a remote API times out. A plain background command can launch it today, but a systemd unit with enablement, dependency ordering, journald logs, and a measured restart policy is the right operational answer because the requirement is reliability over time, not just execution once.
+When forwarding, preserve the unit boundary. A central store that keeps `unit=nginx.service`, `_HOSTNAME`, boot ID, priority, and timestamp can answer operator questions quickly. A central store that only keeps formatted message text may force responders back onto the host during the incident, which fails if the host is gone, rebooted, or under disk pressure. ([Journal Fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html), [Vector journald source](https://vector.dev/docs/reference/configuration/sources/journald/), [Grafana Alloy Linux monitoring](https://grafana.com/docs/grafana-cloud/send-data/alloy/monitor/monitor-linux/))
+
+## Containers, Kubelet, and Node Logs
+
+Container logging changes the first command, not the evidence discipline. Kubernetes documentation describes containerized applications writing logs to stdout and stderr, the node logging agent or runtime making those logs available, and `kubectl logs` retrieving the current or previous container log stream. That means application container output belongs first to `kubectl logs`, while node services such as `kubelet`, `containerd`, CRI-O, CNI helpers, and host log agents often belong first to `journalctl -u <unit>`. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/))
+
+```bash
+kubectl logs -n payments deploy/api --since=30m
+kubectl logs -n payments pod/api-7d9d8f6f9b-2v6rm -c app --previous
+journalctl -u kubelet --since=-30m -p info..alert
+journalctl -u containerd --since=-30m
+```
+
+Use the layer that owns the failure. If a Pod's application is throwing exceptions, `kubectl logs` gives the container stream. If the kubelet cannot create sandboxes, mount volumes, rotate container logs, or report node readiness, `journalctl -u kubelet` is the node-agent evidence. If a container runtime is unhealthy, `journalctl -u containerd` or the runtime's service name is usually closer to root cause than the Pod log. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+The difference matters during node incidents. `kubectl logs` may fail when the kubelet is down or the node cannot serve the log request, while the local journal may still contain the kubelet error that explains the failure. Conversely, a healthy kubelet journal does not mean the application wrote useful stdout or stderr. Keep both paths in the runbook and record which one supplied the evidence. ([kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), [Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/))
+
+Container runtime log capture and the systemd journal answer different ownership questions. The container runtime captures the application's stdout and stderr stream according to the Kubernetes logging architecture. The kubelet exposes those streams through the node API that backs `kubectl logs`. Systemd journals the host services that make that machinery work. That includes `kubelet`, the container runtime, node log agents, and many CNI or CSI helpers when they run as services. Use the application stream for application behavior. Use the journal for node-agent behavior. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+This split matters when a Pod is `CrashLoopBackOff`. The previous container log may show the application exception. `kubectl describe pod` may show the restart reason and events. The kubelet journal may only show that it restarted the container according to policy. That is normal. Do not turn a clean kubelet journal into a node diagnosis. Start with `kubectl logs --previous`, then move outward only when the workload evidence points to node involvement. ([kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), [Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/))
+
+The opposite pattern is just as common. If every Pod on a node cannot start, the application logs may be empty because containers never reached user code. The kubelet journal may show image pull failures, sandbox creation failures, volume mount errors, or runtime connection errors. The container runtime journal may show a lower-level storage or shim problem. In that case, `kubectl logs` is the wrong first evidence source. The node services own the failure. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+Log rotation also differs by layer. Kubernetes manages container log files on the node according to kubelet behavior and node configuration. Journald manages its own storage under runtime or persistent journal directories. A central log agent may read one path, both paths, or neither path correctly. During a retention review, verify which source feeds the central store. Then test a restarted container, a kubelet restart, and a reboot. Those three events expose most incorrect assumptions about node logging. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html))
+
+A useful node runbook states the evidence boundary in one line. For application stdout and stderr, use `kubectl logs` and include `--previous` during restarts. For kubelet decisions, use `journalctl -u kubelet` with the same time window. For runtime failures, use the runtime service journal. For host log forwarding, inspect the log agent unit and its destination. That boundary keeps responders from arguing about tools while the outage clock is running. ([kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
+
+## Common Operator Tasks
+
+Use graceful reload before restart when the daemon and unit support it and the service carries live traffic. The evidence path is `systemctl show -p ExecReload <unit>`, then `systemctl reload <unit>`, then a journal query for reload messages. If there is no reload path, `reload-or-restart` expresses the fallback clearly, but you should still note that a restart may drop connections or reset in-memory state depending on the daemon. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
+
+Use transient units for one-shot debugging when the command should be supervised, logged, and cleaned up. `systemd-run` can create transient service and scope units, set properties, collect unit state after exit, and route output into the journal. That is safer than a mystery shell background job because the debug action gets a unit name, logs, resource properties, and a lifecycle visible to the next operator. ([systemd-run](https://www.freedesktop.org/software/systemd/man/latest/systemd-run.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
+
+```bash
+sudo systemd-run --unit=debug-dns --collect \
+  /usr/bin/bash -lc 'date; getent hosts example.com; sleep 5'
+
+journalctl -u debug-dns.service
+systemctl status debug-dns.service
+```
+
+User services use a per-user service manager and the `--user` flag. They are appropriate for desktop sessions, developer tools, and per-user background jobs, but they are not a substitute for system services that must run before login, bind privileged ports, own host-level dependencies, or participate in machine boot. The unit manual documents separate user unit search paths, so always include `--user` in notes when the service belongs to a user manager. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
+
+```bash
+systemctl --user list-units --type=service
+systemctl --user status my-dev-agent.service
+journalctl --user -u my-dev-agent.service --since=today
+```
+
+Socket activation is useful when demand should start the service. A `.socket` unit owns the listening socket, and the service starts when a connection arrives, which can reduce idle footprint and make dependencies implicit. The operator caution is that a service may be intentionally inactive until traffic arrives, so check both the socket unit and service unit before calling it down. ([systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
+
+## Boot Policy, Masking, and Presets
+
+Current state and boot policy are separate decisions. `systemctl start` and `systemctl stop` affect the unit now, while `systemctl enable` and `systemctl disable` affect how the unit is pulled into future boot targets through install-time symlinks. `systemctl enable --now` is explicit when both decisions should change together, and `systemctl disable --now` is explicit when a service should stop now and stay out of the next normal boot. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
+
+```bash
+systemctl is-active nginx.service
+systemctl is-enabled nginx.service
+sudo systemctl enable --now nginx.service
+sudo systemctl disable --now nginx.service
+```
+
+Do not confuse `disabled`, `static`, and `masked`. A disabled unit has no enablement symlink but can still be started manually or pulled in by another dependency. A static unit has no install section for normal enablement and is usually activated by another unit. A masked unit is linked to `/dev/null`, so systemd refuses activation even when a user or dependency tries to start it. Mask only when the operating intent is "this must not start." ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
+
+```bash
+systemctl list-unit-files --type=service | sed -n '1,25p'
+sudo systemctl mask debug-worker.service
+systemctl status debug-worker.service
+sudo systemctl unmask debug-worker.service
+```
+
+Presets are distribution or site policy, not the same as an operator's immediate incident decision. Packages and images can ship preset rules that define whether units should be enabled by default, and `systemctl preset` applies that policy. During triage, record whether you used `enable`, `disable`, `mask`, or `preset` because those commands express different intent and leave different evidence for the next boot. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [Red Hat: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings))
+
+| Boot command | Current process impact | Future boot impact | Operator intent |
+|---|---|---|---|
+| `start` | Starts now | No direct change | Test or restore current availability |
+| `enable` | No direct start unless `--now` is used | Adds install symlink policy | Return after reboot |
+| `disable` | No direct stop unless `--now` is used | Removes install symlink policy | Do not return by default |
+| `mask` | Prevents manual and dependency activation | Prevents activation until unmasked | Block a dangerous or replaced unit |
+| `preset` | Applies preset policy | Follows distribution or site default | Reconcile package policy after install |
+
+Before closing a service incident, write down both the current state and the next-boot policy. That one sentence prevents the classic failure where a manually restored daemon disappears during the next kernel patch reboot. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
+
+## Triage Drills
+
+If a service fails only after reboot, inspect enablement, target links, dependency ordering, and the previous boot's journal before restarting it manually. A manual restart can hide the boot-time race because network, mounts, or databases may already be ready. Use `journalctl -b -1 -u <unit>`, `systemctl is-enabled <unit>`, `systemctl list-dependencies --reverse <unit>`, and `systemd-analyze critical-chain <unit>` before changing the unit. ([journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html))
+
+If a service keeps returning after someone kills its PID, explain ownership before changing state. The kernel delivered the signal, but systemd still owns the service policy and may restart it under `Restart=`. The operator command is `systemctl stop <unit>` when the desired state is stopped, followed by `disable --now` only when the desired boot policy also changes. ([systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
+
+If logs disappear after reboot, inspect journal persistence rather than blaming `journalctl`. `journalctl --list-boots` shows whether older boots are available, `journalctl --disk-usage` shows current journal footprint, and `journald.conf` decides whether data should live in runtime or persistent storage. If centralized retention is required, prove forwarding or agent ingestion before the next incident. ([journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html))
+
+If a unit edit seems ignored, suspect the effective configuration path. Use `systemctl cat`, check drop-in ordering, run `systemctl daemon-reload`, and inspect `systemctl show` for the property you changed. Editing a vendor file, forgetting daemon reload, or creating a drop-in with the wrong section header are common causes that status alone will not explain. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
 
 ## Did You Know?
 
-- **The word "daemon" comes from Greek mythology and early Unix culture.** Maxwell's daemon was an 1860s thought experiment about a tiny background worker, and BSD Unix later adopted the term for background processes; that is why names like `sshd`, `httpd`, and `systemd-journald` still carry the convention.
-- **systemd manages much more than services.** On a typical server it may coordinate login sessions, temporary files, timers, mounts, sockets, DNS resolution, network setup, time synchronization, and more than 100 units, which is why `systemctl list-units` often shows far more than application daemons.
-- **journald can preserve logs across reboots when persistent storage is enabled.** With `Storage=persistent` or an existing `/var/log/journal` directory, journal records can survive restart, which is critical when the important clue happened before the last crash.
-- **A boot-time dependency mistake can look like an application bug.** If a service starts before networking is online, it may fail with "Network is unreachable" and then work perfectly when restarted later, because the root problem is startup ordering rather than code.
+- Systemd separates dependency pull-in from ordering, so `After=` can order a service after PostgreSQL without starting PostgreSQL for that transaction. ([systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html))
+- A masked unit is linked to `/dev/null`, which is why systemd refuses activation even when a dependency tries to start it. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html))
+- Journald can store logs under `/run/log/journal` for volatile data or `/var/log/journal` for persistent data, depending on storage policy. ([journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html))
+- Kubernetes workload logs and node service journals are different evidence paths, so `kubectl logs` and `journalctl -u kubelet` should answer different incident questions. ([Kubernetes Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/), [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html))
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Forgetting `sudo` for start/stop | State-changing operations require privileges, so `systemctl start` fails with permission denied | Use `sudo systemctl start service` or `sudo systemctl stop service` for lifecycle changes |
-| Confusing `enable` with `start` | "Running now" and "starts on boot" sound similar but are stored differently | Use `systemctl enable --now service` when you need both current execution and boot persistence |
-| Not checking logs after a failure | People guess from the last change instead of reading the service's recorded evidence | Run `journalctl -u service -n 30 --no-pager` immediately after a failed start or restart |
-| Using `kill` instead of `systemctl stop` | systemd may interpret the process exit as a crash and restart it under the unit policy | Use `sudo systemctl stop service` when the desired state is intentionally stopped |
-| Editing a unit file without daemon-reload | systemd keeps the old unit definition in memory until told to re-read unit files | Run `sudo systemctl daemon-reload`, then restart the service and verify the new status |
-| Running production apps with nohup | A shell trick does not encode restart policy, boot behavior, dependency ordering, or journal integration | Create or use a proper systemd service unit for anything that must operate reliably |
-| Ignoring reload support | Restarting a busy service can drop active work when a graceful reload would have applied the change | Check `systemctl cat service` for `ExecReload`, then use `reload-or-restart` when appropriate |
+| Mistake | Why it hurts | Better operator move |
+|---|---|---|
+| Restarting first and reading logs second | Restart can erase volatile process state and move the journal timeline past the original failure | Capture status, effective unit, and recent journal entries first |
+| Treating `After=` as a requirement | Ordering alone does not pull the other unit into the transaction | Pair ordering with `Wants=` or `Requires=` when the dependency must be started |
+| Editing packaged unit files directly | Package updates can replace vendor units and reviewers cannot distinguish local intent | Use `systemctl edit` drop-ins and record the reason |
+| Assuming active means healthy | systemd can know the process is running while the application is unhealthy | Combine service state with logs, ports, health checks, and dependency status |
+| Vacuuming journals under pressure without export | Evidence needed for incident review can be deleted | Export the relevant time range, then vacuum according to retention policy |
+| Using `kubectl logs` for node agents | Pod logs do not explain kubelet or runtime service failures | Use `journalctl -u kubelet` or the runtime unit for node service evidence |
 
 ## Quiz
 
-<details><summary>Scenario 1: You started `datadog-agent` manually, the host rebooted after patching, and monitoring disappeared even though SSH and the database are healthy. What did you forget, and why did the failure wait until reboot?</summary>
+<details>
+<summary>`payment-worker.service` failed during boot, but `sudo systemctl restart payment-worker` now succeeds. What should you inspect before declaring it fixed?</summary>
 
-You forgot to enable the service for boot with `systemctl enable datadog-agent`, or to use `systemctl enable --now datadog-agent` when installing it. `systemctl start` only creates a running process during the current boot, while enablement creates the target relationship systemd reads during future boots. The failure waited until reboot because nothing was wrong with the running process before maintenance; the missing part was the boot contract. A good post-fix check verifies both `systemctl status datadog-agent` and `systemctl is-enabled datadog-agent`.
-
+Inspect the previous boot's unit journal, dependency graph, and critical chain before trusting the manual restart. The successful manual restart only proves the service works after the machine is already up. The likely fault is boot timing, missing `Wants=` or `Requires=`, missing `After=`, a mount dependency, or a network readiness assumption that is no longer true after boot.
 </details>
 
-<details><summary>Scenario 2: HAProxy is serving thousands of active sessions, and you just added a backend server to its configuration. Why is a blind `systemctl restart haproxy` risky, and what should you try first?</summary>
+<details>
+<summary>A teammate added `After=postgresql.service` to a worker unit, but PostgreSQL still does not start when the worker starts. What concept did they miss?</summary>
 
-A restart stops the current process and starts a new one, which can interrupt active sessions even if the new configuration is valid. If HAProxy supports reload on that system, `sudo systemctl reload haproxy` or `sudo systemctl reload-or-restart haproxy` is the safer first move because it asks the service to re-read configuration more gracefully. You should still check the unit file for `ExecReload` and read recent journal entries afterward. The reasoning is not that restart is always bad; it is that the lifecycle action should match the traffic risk.
-
+They added ordering without a requirement. `After=` says "if both jobs are in the transaction, order this one later." It does not pull PostgreSQL into the transaction. The worker needs an appropriate `Wants=` or `Requires=` relationship when starting PostgreSQL is part of the worker's operating contract, plus `After=` when ordering also matters.
 </details>
 
-<details><summary>Scenario 3: Developers can reproduce a `payment-processor` error only during test transactions. Which journal command gives you recent context and then streams new unit logs live?</summary>
+<details>
+<summary>An nginx config change is ready on a busy edge host. Why is `systemctl reload nginx` usually a better first command than `systemctl restart nginx`?</summary>
 
-Use `journalctl -u payment-processor -n 20 -f`. The unit filter removes unrelated machine logs, the line limit gives immediate context before the test starts, and follow mode keeps the terminal open for new entries. This is better than `journalctl -f` alone because a busy host may be writing many unrelated events at the same time. After the test, you can rerun with `--since` and `--until` if you need a bounded record for an incident note.
-
+Reload uses the unit's reload action when it exists, commonly asking the daemon to re-read configuration without a full stop-start cycle. Restart is a harder lifecycle transition and can drop active work depending on the service. The operator move is to inspect `ExecReload=`, run reload, then confirm the journal and application health.
 </details>
 
-<details><summary>Scenario 4: You edited `/etc/systemd/system/backup-worker.service` to raise a memory limit, restarted the service, and status still shows the old value. What step did you miss?</summary>
+<details>
+<summary>`journalctl -u api.service --since=-1h` shows thousands of entries. Which filters help narrow the evidence without losing the unit boundary?</summary>
 
-You missed `sudo systemctl daemon-reload`. systemd reads unit definitions into memory, so editing the file on disk does not automatically replace the manager's cached view. After `daemon-reload`, restart the service again and verify the status or cgroup settings reflect the new limit. The important lesson is to separate "file saved" from "service manager re-read the file" when unit behavior changes.
-
+Keep `-u api.service`, add a precise `--since` and `--until` window, filter by priority with `-p warning..alert`, limit to the current or previous boot with `-b` or `-b -1`, and switch to `-o json` when fields such as `_PID`, `SYSLOG_IDENTIFIER`, or `_BOOT_ID` matter. Avoid a plain text grep until you know which field you are trying to match.
 </details>
 
-<details><summary>Scenario 5: nginx stopped overnight, but `journalctl -u nginx --since yesterday` shows a huge amount of routine traffic. How do you narrow the evidence to likely failures?</summary>
+<details>
+<summary>A Pod is crash looping, but `journalctl -u kubelet` is clean for the same time window. What does that tell you, and what should you read next?</summary>
 
-Add a priority filter, such as `journalctl -u nginx --since yesterday -p err`. The `-p err` option includes error-level entries and more severe messages, which removes normal informational noise while preserving likely failure evidence. If the output is still too broad, add an explicit `--until` time based on monitoring or user reports. You are narrowing by unit, time, and severity so the remaining entries answer the incident question.
-
+It suggests the node agent may be healthy enough and the problem may be inside the container or workload configuration. Read `kubectl logs <pod> --previous`, current `kubectl logs`, `kubectl describe pod`, and events for the workload. Keep the kubelet journal in the timeline, but do not force a node-level diagnosis when the application log owns the failure.
 </details>
 
-<details><summary>Scenario 6: A custom `data-fetcher` fails during boot with "Network is unreachable" but works when restarted later. What is structurally missing from the unit file?</summary>
+<details>
+<summary>A one-time diagnostic command must run as root, survive terminal disconnect, and leave logs for the next responder. Why is `systemd-run` better than `nohup ... &`?</summary>
 
-The unit likely lacks network ordering such as `After=network-online.target`, and depending on distribution setup it may also need a relationship that pulls the online target into the boot transaction. systemd starts independent services in parallel to boot quickly, so a network-using program can run before routes or addresses are ready if no ordering is declared. The later manual restart succeeds because the network has finished coming up by then. This is a service dependency problem, not necessarily an application bug.
-
+`systemd-run` creates a transient unit that systemd can name, track, log, and clean up. The command's output enters the journal under that unit, and `systemctl status` can show its lifecycle. A background shell command may keep running, but it does not create an inspected service contract or a clean unit boundary for evidence.
 </details>
 
-<details><summary>Scenario 7: A developer kills a runaway `inventory-sync` PID with `kill -9`, but the process returns with a new PID seconds later. Why did that happen, and what command expresses the intended state?</summary>
+## Hands-On Practice
 
-systemd was supervising the service and interpreted the killed process as an unexpected failure, so the unit's restart policy created a replacement process. `kill -9` only talks to the process; it does not tell the service manager that the desired state is stopped. The correct command is `sudo systemctl stop inventory-sync`, followed by `systemctl status inventory-sync` to verify it is intentionally inactive. If it must not return after reboot either, also disable it.
+- [ ] On Ubuntu 24.04, RHEL 9, or Debian 12, choose a harmless installed unit such as `ssh.service`, `cron.service`, or `nginx.service`, then capture `systemctl status`, `systemctl cat`, and `systemctl show -p Type -p Restart -p ExecStart`. ([systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html), [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html))
+- [ ] Run `systemctl list-dependencies <unit>` and `systemctl list-dependencies --reverse <unit>`, then write one paragraph explaining which target or service pulls the unit into the boot graph.
+- [ ] Query `journalctl -u <unit> --since=-1h --until=now -o json` and identify the fields that would survive cleanly into a central log store.
+- [ ] Create a transient debug unit with `systemd-run --collect`, inspect its journal, and explain why it is easier to audit than a background shell job.
+- [ ] Check `journalctl --list-boots` and `journalctl --disk-usage`, then decide whether the host's journal policy is acceptable for post-reboot incident review.
+- [ ] If you have a Kubernetes node, compare `kubectl logs` for a workload with `journalctl -u kubelet` for the node agent and note which question each command answered.
 
-</details>
-
-## Hands-On Exercise
-
-### Managing nginx from Boot to Logs
-
-**Objective**: Install nginx, manage its lifecycle with systemctl, investigate its logs with journalctl, and connect every command you run to a specific service-management question.
-
-**Environment**: Any Linux system with `apt` (Ubuntu/Debian). If using a different distribution, replace `apt install` with your package manager.
-
-This exercise deliberately uses nginx because it has visible status changes, a real unit file, reload behavior, and journal entries that are easy to observe. If you cannot install packages on your current machine, use an existing service such as `sshd`, `cron`, or `systemd-resolved` for the read-only status and journal tasks, then skip the install and port-listening checks. The learning goal is not nginx itself; the goal is to practice the lifecycle and evidence loop until the commands feel connected.
-
-Take notes as you work. For each step, write the command, the state you expected, and the evidence that confirmed or contradicted it. This slows the lab slightly, but it makes the practice far more useful. Real troubleshooting is not measured by how many commands you can run; it is measured by whether each command reduces uncertainty.
-
-#### Step 1: Install nginx
+Use this safe sequence on a disposable lab host with nginx installed. It reads state, exercises reload-or-restart, creates a transient unit, and inspects the resulting logs without changing boot enablement.
 
 ```bash
-# Update package lists and install nginx
-sudo apt update && sudo apt install -y nginx
+UNIT=nginx.service
+systemctl status "$UNIT"
+systemctl cat "$UNIT"
+journalctl -u "$UNIT" --since=-30m --until=now
+
+systemctl show -p ExecReload "$UNIT"
+sudo systemctl reload-or-restart "$UNIT"
+journalctl -u "$UNIT" --since=-5m
+
+sudo systemd-run --unit=service-log-probe --collect \
+  /usr/bin/bash -lc 'echo probe-start; systemctl is-active nginx.service; echo probe-end'
+
+systemctl status service-log-probe.service
+journalctl -u service-log-probe.service
 ```
-
-#### Step 2: Check the Status
-
-```bash
-# See if nginx is running after install
-systemctl status nginx
-```
-
-You should see `Active: active (running)` on a normal Debian or Ubuntu installation because nginx starts automatically after installation. If your system shows a different state, read the recent journal entries before continuing, because the difference itself is useful practice.
-
-#### Step 3: Stop nginx
-
-```bash
-# Stop the service
-sudo systemctl stop nginx
-
-# Verify it stopped
-systemctl status nginx
-# Should show: Active: inactive (dead)
-
-# Confirm nothing is listening on port 80
-sudo ss -tlnp | grep :80
-# Should show no output
-```
-
-#### Step 4: Start nginx
-
-```bash
-# Start it again
-sudo systemctl start nginx
-
-# Verify it is running
-systemctl status nginx
-# Should show: Active: active (running)
-
-# Confirm port 80 is open
-sudo ss -tlnp | grep :80
-# Should show nginx listening
-```
-
-#### Step 5: Restart nginx
-
-```bash
-# Restart (stop + start)
-sudo systemctl restart nginx
-
-# Check the PID changed (proves it actually restarted)
-systemctl status nginx
-# Note the Main PID -- it should be different from Step 4
-```
-
-#### Step 6: View Recent Logs
-
-```bash
-# Show the last 20 log entries for nginx
-journalctl -u nginx -n 20
-
-# You should see entries for the stop, start, and restart you just did
-# Look for lines like:
-#   Stopping A high performance web server...
-#   Stopped A high performance web server.
-#   Starting A high performance web server...
-#   Started A high performance web server.
-```
-
-#### Step 7: Follow Logs in Real Time
-
-```bash
-# In one terminal, follow nginx logs
-journalctl -u nginx -f
-
-# In another terminal, restart nginx to see live log entries
-sudo systemctl restart nginx
-
-# You should see the restart events appear in real time
-# Press Ctrl+C to stop following
-```
-
-#### Step 8: Enable on Boot
-
-```bash
-# Check if nginx is currently enabled for boot
-systemctl is-enabled nginx
-# On Ubuntu, this likely shows "enabled" (installed services are often enabled by default)
-
-# If it shows "disabled", enable it:
-sudo systemctl enable nginx
-
-# Verify
-systemctl is-enabled nginx
-# Should show: enabled
-```
-
-#### Step 9: View the Unit File
-
-```bash
-# Read nginx's unit file to understand how it is managed
-systemctl cat nginx
-
-# Look for:
-#   - What command it runs (ExecStart)
-#   - What it depends on (After=)
-#   - How it handles reload (ExecReload)
-```
-
-### Solutions
-
-<details><summary>Solution guidance for lifecycle checks</summary>
-
-The exact process IDs and timestamps will differ on every system, so judge success by state transitions rather than matching output byte for byte. After stopping nginx, `systemctl status nginx` should show an inactive state and `ss` should not show nginx listening on port 80. After starting or restarting nginx, status should return to active and `ss` should show a listener. The restart step should produce a different main PID because restart replaces the process.
-
-</details>
-
-<details><summary>Solution guidance for log checks</summary>
-
-The journal should show stop, start, and restart messages generated by systemd and nginx around the time you performed the actions. If you do not see entries, add `--since "10 minutes ago"` or `--no-pager` to make the output easier to inspect. In follow mode, new entries should appear immediately after the second terminal restarts nginx. The important habit is to connect each service action to the evidence it leaves behind.
-
-</details>
-
-<details><summary>Solution guidance for unit-file reading</summary>
-
-In the unit output, find `ExecStart` for the command that launches nginx, `ExecReload` for graceful reload behavior, and `WantedBy=multi-user.target` for boot enablement. You may also see `ExecStartPre`, which validates configuration before the main service starts. If your distribution stores units in a different path, trust `systemctl cat nginx` because it shows the active unit content systemd uses.
-
-</details>
-
-### Success Criteria
-
-- [ ] nginx installed and initially running
-- [ ] Successfully stopped nginx and verified it was inactive
-- [ ] Successfully started nginx and verified it was active
-- [ ] Restarted nginx and confirmed the PID changed
-- [ ] Viewed the last 20 log entries with `journalctl -u nginx -n 20`
-- [ ] Followed logs in real time with `journalctl -u nginx -f` and saw restart events
-- [ ] Confirmed nginx is enabled on boot with `systemctl is-enabled nginx`
-- [ ] Read the unit file with `systemctl cat nginx` and identified ExecStart
-
-When you finish, write down the shortest reliable troubleshooting loop you used. It should include a status check, a unit-specific journal query, one lifecycle action, and a verification step. That note becomes your personal runbook pattern for the next service you investigate, whether it is nginx on a lab VM or kubelet on a Kubernetes node.
 
 ## Next Module
 
-In **[Module 0.5: Everyday Networking Tools](../module-0.5-networking-tools/)**, you will learn how to check network connectivity, inspect open ports, and troubleshoot DNS, which are the essential networking commands every Linux user needs after they can manage services and read logs.
+In **[Module 0.5: Everyday Networking Tools](../module-0.5-networking-tools/)**, you will connect service state to network evidence: listening ports, DNS resolution, route selection, TLS checks, and connectivity tests.
 
-## Further Reading
+## Sources
 
-- [systemd for Administrators (Lennart Poettering's Blog Series)](https://0pointer.de/blog/projects/systemd-for-admins-1.html)
-- [journalctl Man Page](https://www.freedesktop.org/software/systemd/man/journalctl.html)
-- [systemctl Man Page](https://www.freedesktop.org/software/systemd/man/systemctl.html)
-- [Understanding Systemd Units and Unit Files (DigitalOcean)](https://www.digitalocean.com/community/tutorials/understanding-systemd-units-and-unit-files)
-- [systemd.unit Man Page](https://www.freedesktop.org/software/systemd/man/systemd.unit.html)
-- [systemd.service Man Page](https://www.freedesktop.org/software/systemd/man/systemd.service.html)
-- [journald.conf Man Page](https://www.freedesktop.org/software/systemd/man/journald.conf.html)
-- [systemd.special Man Page](https://www.freedesktop.org/software/systemd/man/systemd.special.html)
-- [Ubuntu Manpage: systemctl](https://manpages.ubuntu.com/manpages/noble/man1/systemctl.1.html)
-- [Red Hat Enterprise Linux: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings)
-- [Kubernetes Node Components](https://kubernetes.io/docs/concepts/overview/components/#node-components)
+- [systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.html) - documents systemd as the system and service manager, PID 1 behavior, unit concepts, and manager responsibilities.
+- [systemd.unit](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html) - documents unit-file syntax, unit types, dependency directives, drop-ins, load paths, aliases, and `.wants/` or `.requires/` directories.
+- [systemd.service](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html) - documents `[Service]`, service `Type=`, `ExecStart*`, `ExecReload=`, restart behavior, timeouts, and service lifecycle semantics.
+- [systemctl](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html) - documents status, start, stop, reload, restart, enable, disable, list, show, cat, edit, failed-unit, and user-manager operations.
+- [systemd.special](https://www.freedesktop.org/software/systemd/man/latest/systemd.special.html) and [systemd.target](https://www.freedesktop.org/software/systemd/man/latest/systemd.target.html) - document target units and standard synchronization points.
+- [systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html), [systemd.timer](https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html), [systemd.mount](https://www.freedesktop.org/software/systemd/man/latest/systemd.mount.html), [systemd.path](https://www.freedesktop.org/software/systemd/man/latest/systemd.path.html), and [systemd.slice](https://www.freedesktop.org/software/systemd/man/latest/systemd.slice.html) - document non-service unit types used in operator triage.
+- [systemd-analyze](https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html) and [systemd-run](https://www.freedesktop.org/software/systemd/man/latest/systemd-run.html) - document boot timing analysis, unit verification, transient units, and supervised diagnostic commands.
+- [journalctl](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), [systemd journal fields](https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields.html), [systemd-journald.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html), and [journald.conf](https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html) - document journal querying, structured fields, transports, storage modes, forwarding, and retention controls.
+- [systemd-journal-upload.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-upload.service.html), [systemd-journal-remote.service](https://www.freedesktop.org/software/systemd/man/latest/systemd-journal-remote.service.html), and [syslog(3)](https://man7.org/linux/man-pages/man3/syslog.3.html) - document remote journal upload, remote journal receiving, and the classic syslog application interface.
+- [Red Hat Enterprise Linux 9: Managing systemd](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/configuring_basic_system_settings/managing-systemd_configuring-basic-system-settings), [Ubuntu Server glossary](https://ubuntu.com/server/docs/reference/glossary/), and [Debian Reference: System initialization](https://www.debian.org/doc/manuals/debian-reference/ch03.en.html) - provide distribution documentation for systemd and journal concepts on common production Linux families.
+- [Fluent Bit systemd input](https://docs.fluentbit.io/manual/pipeline/inputs/systemd), [Vector journald source](https://vector.dev/docs/reference/configuration/sources/journald/), and [Grafana Alloy Linux monitoring](https://grafana.com/docs/grafana-cloud/send-data/alloy/monitor/monitor-linux/) - document journald ingestion by common log agents.
+- [Kubernetes v1.35 Logging Architecture](https://v1-35.docs.kubernetes.io/docs/concepts/cluster-administration/logging/) and [kubectl logs](https://v1-35.docs.kubernetes.io/docs/reference/kubectl/generated/kubectl_logs/) - document container stdout/stderr logging, node logging behavior, and the `kubectl logs` command.
