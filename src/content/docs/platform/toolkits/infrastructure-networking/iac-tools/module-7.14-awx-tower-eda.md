@@ -80,8 +80,23 @@ The AWX Operator installs from a kustomization that points to the operator's `co
 kubectl create namespace awx
 
 # Deploy AWX Operator 2.19.1 (pairs with AWX 24.6.1)
-kubectl apply -k github.com/ansible/awx-operator/config/default?ref=2.19.1 \
-  -n awx
+# The upstream config/manager/kustomization.yaml ships with newTag: latest even at a tagged
+# ref — a direct `kubectl apply -k github.com/...?ref=2.19.1` deploys :latest, not 2.19.1.
+# Use a local overlay to pin the manager image to the release tag.
+# code-verified-against: ansible/awx-operator tag 2.19.1 config/manager/kustomization.yaml
+mkdir awx-operator-overlay
+cat > awx-operator-overlay/kustomization.yaml <<'EOF'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: awx
+resources:
+  - github.com/ansible/awx-operator/config/default?ref=2.19.1
+images:
+  - name: quay.io/ansible/awx-operator
+    newTag: "2.19.1"
+EOF
+
+kubectl apply -k awx-operator-overlay/
 
 # Wait for the operator controller to become available
 kubectl rollout status deployment/awx-operator-controller-manager \
@@ -168,64 +183,92 @@ Event-Driven Ansible is a different execution model from the traditional push-or
 
 The core artifact in EDA is the **rulebook**. A rulebook is a YAML file that declares one or more rule sets, each containing sources, rules, conditions, and actions. The structure is intentionally readable: a source generates events, rules decide what each event means, and actions decide what to do about it.
 
+<!-- code-verified-against: ansible/event-driven-ansible v2.12.0 event_source plugins — no upstream k8s source exists; see https://github.com/ansible/event-driven-ansible/tree/main/extensions/eda/plugins/event_source/ -->
+
+> **Note on Kubernetes event sources**: As of `ansible.eda` 2.12.0, no upstream Kubernetes watch source plugin exists. The verified source list is: `alertmanager`, `aws_cloudtrail`, `aws_sqs_queue`, `azure_service_bus`, `file`, `file_watch`, `generic`, `journald`, `kafka`, `pg_listener`, `range`, `tick`, `url_check`, `webhook`. The recommended pattern uses `ansible.eda.webhook` as the EDA receiver combined with a separate Kubernetes informer process that watches the API and POSTs structured events to the webhook endpoint. (The community collection `sabre1041.eda` provides an experimental Kubernetes source, but it is not part of the upstream release.)
+
+The two-component pattern separates responsibilities cleanly: a Kubernetes-native informer Deployment holds cluster credentials and watch logic; the EDA rulebook holds event evaluation logic and remains cluster-agnostic — multiple informers from different clusters can POST to the same webhook endpoint.
+
 ```yaml
-# pod-monitor.yml
+# pod-monitor.yml — webhook-based Kubernetes event integration
+# code-verified-against: ansible/event-driven-ansible v2.12.0 sources
 ---
 - name: Kubernetes pod monitoring ruleset
   hosts: all
   sources:
-    - ansible.eda.k8s:
-        api_version: v1
-        kind: Pod
-        namespaces:
-          - production
-          - staging
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5001
   rules:
     - name: Detect OOM-killed containers
       condition: >
-        event.type == "MODIFIED" and
-        event.resource.status is defined and
-        event.resource.status.containerStatuses is defined and
-        event.resource.status.containerStatuses[0].lastState is defined and
-        event.resource.status.containerStatuses[0].lastState.terminated is defined and
-        event.resource.status.containerStatuses[0].lastState.terminated.reason == "OOMKilled"
+        event.payload.event_type is defined and
+        event.payload.event_type == "MODIFIED" and
+        event.payload.reason is defined and
+        event.payload.reason == "OOMKilled"
       action:
         run_job_template:
           name: "investigate-oom-event"
           organization: "Default"
           job_args:
             extra_vars:
-              pod_name: "{{ event.resource.metadata.name }}"
-              namespace: "{{ event.resource.metadata.namespace }}"
-              node: "{{ event.resource.spec.nodeName }}"
+              pod_name: "{{ event.payload.pod_name }}"
+              namespace: "{{ event.payload.namespace }}"
+              node: "{{ event.payload.node }}"
 ```
 
-The `ansible.eda.k8s` source plugin connects to the Kubernetes API server and streams watch events using the same long-poll mechanism as `kubectl get pods -w`. Every create, update, and delete event on the watched resources produces an event object that flows through the rule engine. The event structure mirrors the Kubernetes watch event format: `event.type` is `"ADDED"`, `"MODIFIED"`, or `"DELETED"`, and `event.resource` is the complete Kubernetes object at the time of the event.
+The companion Kubernetes informer translates watch events into structured POST payloads. Deployed as a Deployment with a service account that has `get`, `list`, and `watch` on Pods in the target namespaces:
 
-The rule condition uses a Jinja-compatible expression engine that navigates nested event fields. Complex conditions require care because a Pod MODIFIED event fires for many reasons — readiness probe state changes, container restart count increments, label patches from controllers — and your condition must be specific enough to match only the events that actually require action. Writing a condition that fires on every MODIFIED event in a busy production namespace floods the action queue with unwanted job launches.
+```python
+# pod-event-forwarder.py — deployed as a Kubernetes Deployment
+# Watches Pods with a label selector and POSTs structured events to the EDA webhook.
+import os, requests
+from kubernetes import client, config, watch
+
+config.load_incluster_config()
+v1 = client.CoreV1Api()
+EDA_WEBHOOK_URL = os.environ["EDA_WEBHOOK_URL"]  # http://rulebook-runner-svc.eda-lab:5001/
+
+for event in watch.Watch().stream(
+    v1.list_pod_for_all_namespaces,
+    label_selector="app.kubernetes.io/part-of=payments"
+):
+    pod = event["object"]
+    for cs in (pod.status.container_statuses or []):
+        if cs.last_state and cs.last_state.terminated:
+            requests.post(EDA_WEBHOOK_URL, json={
+                "event_type": event["type"],
+                "pod_name": pod.metadata.name,
+                "namespace": pod.metadata.namespace,
+                "node": pod.spec.node_name,
+                "reason": cs.last_state.terminated.reason,
+            }, timeout=5)
+```
+
+The `label_selector` in the forwarder limits which Pods the informer watches — this performs the equivalent of server-side label filtering, keeping event volume low before events reach the rule engine. Different informer Deployments can use different selectors to target different teams or tiers without changing the rulebook.
+
+The `ansible.eda.webhook` source populates `event.payload` with the POST body dictionary. The rule condition navigates those fields. It must guard against missing keys — a Pod MODIFIED event with no container restart status yet does not include `reason` — and must be specific enough to match only events that require action. A condition that fires on every `event_type == "MODIFIED"` without a specific status field check floods the action queue exactly as a broad condition on any source does.
 
 ```text
-EVENT FLOW IN EDA
+EVENT FLOW IN EDA (webhook + Kubernetes informer pattern)
 
- Event Source              Rule Engine                   Action
-─────────────            ─────────────────             ──────────────
- k8s API watch ─event──▶  event.type == "MODIFIED"?
-                                │ No ──▶ discard
-                                │ Yes
-                                ▼
-                           containerStatuses[0]
-                           .lastState.terminated
-                           .reason == "OOMKilled"?
-                                │ No ──▶ discard
-                                │ Yes
-                                ▼
-                           run_job_template         ──▶  AWX job launch
-                           "investigate-oom-event"       (job ID returned)
+ Kubernetes Side                               EDA Side
+──────────────────────────────────────────    ──────────────────────────────────────
+                                              
+ k8s watch API ──event──▶  Pod informer ──HTTP POST──▶  ansible.eda.webhook
+ (label_selector filter)   (forwarder)    (structured       source → Rule Engine
+                                           payload)               │
+                                                                   ▼
+                                                          event.payload.reason
+                                                          == "OOMKilled"?
+                                                               │ No ──▶ discard
+                                                               │ Yes
+                                                               ▼
+                                                        run_job_template ──▶ AWX job launch
+                                                        "investigate-oom-event"
 ```
 
-The `ansible.eda.k8s` source plugin exposes additional filtering options that reduce unnecessary event volume before events even reach the rule engine. The `label_selectors` field accepts a list of Kubernetes label selector strings, so a rulebook can watch only Pods carrying `app.kubernetes.io/part-of: payments` rather than all Pods across a namespace. The `field_selectors` field filters by resource fields such as `status.phase=Running`, which is useful when you only care about running Pods and want to suppress ADDED events for Pods still in Pending. Each filter is applied server-side by the Kubernetes API, not client-side in the rulebook process, which means high-volume namespaces produce far fewer round trips to the rule engine when filters are tight.
-
-Throttling is the mechanism that prevents a condition from firing a job launch on every matching event when the underlying issue is persistent. Ansible-rulebook supports a `throttle` modifier on the `action` block:
+Throttling applies to webhook-sourced rulebooks exactly as it applies to any source. Ansible-rulebook's `throttle` modifier limits how frequently the same rule can fire for the same resource:
 
 ```yaml
       action:
@@ -235,11 +278,11 @@ Throttling is the mechanism that prevents a condition from firing a job launch o
           throttle:
             once_within: 5m
             group_by_attributes:
-              - event.resource.metadata.name
-              - event.resource.metadata.namespace
+              - event.payload.pod_name
+              - event.payload.namespace
 ```
 
-The `once_within: 5m` clause tells the rule engine to suppress duplicate firings for the same `(pod_name, namespace)` tuple within a five-minute window. Without throttle, a Pod that is OOM-killed and immediately restarted generates a new MODIFIED event on each restart cycle, launching a job for every restart rather than once per incident.
+The `once_within: 5m` clause suppresses duplicate firings for the same `(pod_name, namespace)` tuple within a five-minute window. Without throttle, a Pod that OOM-kills and restarts repeatedly generates a POST for every restart cycle, launching a job per restart rather than once per incident.
 
 The **EDA Controller** (eda-server) is the managed service that runs rulebooks persistently, tracks activations, provides a web UI for managing rulebook deployments, and integrates with AWX for job template launches. On a cluster running AWX without AAP, you can deploy eda-server from the `ansible/eda-server` repository, though the deployment requires more manual configuration than the AWX Operator because eda-server is not yet packaged as a Kubernetes Operator with the same install convenience. Teams running AAP get the EDA Controller as a managed, supported component.
 
@@ -273,6 +316,9 @@ spec:
             - --inventory
             - /inventory/hosts.yml
             - --verbose
+          ports:
+            - containerPort: 5001
+              protocol: TCP
           volumeMounts:
             - name: rulebooks
               mountPath: /rules
@@ -285,11 +331,24 @@ spec:
         - name: inventory
           configMap:
             name: eda-inventory
+---
+# Service so the Kubernetes informer forwarder can POST events to the webhook source
+apiVersion: v1
+kind: Service
+metadata:
+  name: rulebook-runner-svc
+  namespace: eda-lab
+spec:
+  selector:
+    app: rulebook-runner
+  ports:
+    - port: 5001
+      targetPort: 5001
 ```
 
-The service account bound to this Deployment needs `get`, `list`, and `watch` on the resource kinds the rulebook watches. For Pod monitoring, the service account needs `pods` in the target namespaces. For node-level monitoring, it needs `nodes` at the cluster scope.
+In the webhook-based pattern, the rulebook runner Deployment itself does not need Kubernetes API access — it only listens for HTTP POSTs. The companion informer forwarder Deployment (which watches the k8s API and POSTs events) needs `get`, `list`, and `watch` on the resource kinds it monitors. For Pod monitoring, the forwarder service account needs the `pods` verb in the target namespaces; for node-level monitoring, `nodes` at cluster scope.
 
-Pause and predict: the `ansible.eda.k8s` source uses the in-cluster service account token to watch the Kubernetes API, and the `run_job_template` action calls the AWX REST endpoint. When these are two separate authentication contexts, what happens if either credential expires mid-run? The rulebook process exits with an authentication error on the affected leg. The k8s source will terminate when the token expires (long-lived tokens from Secret-based service accounts do not expire, but projected token volumes do rotate). The AWX API call fails if the token stored in the rulebook configuration or environment variable is revoked. Design credential rotation and the rulebook restart strategy before deploying to production.
+Pause and predict: the webhook-based pattern has two separate authentication contexts — the Kubernetes informer forwarder uses its in-cluster service account token to watch the API, and the rulebook's `run_job_template` action uses an AWX API token to launch jobs. What happens if either credential expires mid-run? The forwarder exits with an API authentication error and stops POSTing events; the rulebook keeps running but receives no new events until the forwarder restarts. The AWX API call fails if the token is revoked, and the `run_job_template` action returns a 401 error that ansible-rulebook logs as a rule action failure. Design credential rotation and restart policies for both the informer and the rulebook Deployment before deploying to production.
 
 ## Webhook Integration: Alertmanager, GitHub Actions, and Argo Events
 
@@ -309,8 +368,12 @@ AWX validates that the caller's token has permission to launch the specific temp
 
 **Alertmanager to AWX**: Prometheus Alertmanager routes alerts to a generic webhook receiver that POSTs the alert payload to a configured URL. AWX does not natively parse Alertmanager's JSON schema, so the cleanest integration is an EDA rulebook with the `ansible.eda.alertmanager` source. The rulebook receives the alert payload from Alertmanager, maps the alert fields to AWX extra_vars in the rule action, and invokes the job template directly. This keeps the translation logic in Ansible's domain.
 
+The `ansible.eda.alertmanager` source plugin binds to port 5000 by default. In production, front the endpoint with TLS termination (Ingress with TLS, or service mesh mTLS) so the webhook token is not transmitted in cleartext; the `http://` URL in the example is for in-cluster lab use only.
+
 ```yaml
 # Alertmanager receiver configuration pointing at EDA webhook listener
+# Production: use https:// with TLS termination at Ingress or service mesh layer
+# code-verified-against: ansible.eda alertmanager source default port 5000
 receivers:
   - name: eda-webhook-receiver
     webhook_configs:
@@ -408,35 +471,47 @@ For standalone operators, the credential story is simpler but less centralized. 
 
 ## Kubernetes Inventory Plugins
 
-AWX job templates execute Ansible against an inventory of hosts. For Kubernetes-centric automation, the hosts are often not traditional SSH-reachable servers; they are Kubernetes resources — nodes, namespaces, Pods with labels — or abstract targets representing cluster-level concepts. The `kubernetes.core.k8s` inventory plugin provides a dynamic inventory source that generates Ansible hosts from Kubernetes resources at job execution time.
+AWX job templates execute Ansible against an inventory of hosts. For Kubernetes-centric automation, the hosts are often not traditional SSH-reachable servers; they are Kubernetes resources — nodes, namespaces, Pods with labels — or abstract targets representing cluster-level concepts.
 
-The inventory plugin is configured via an inventory source in AWX that points to an inventory plugin configuration file stored in a Source Control project repository. The plugin queries the cluster using the Kubernetes credential attached to the job template and builds host groups from resource metadata.
+> **Note**: The `kubernetes.core.k8s` inventory plugin was removed in `kubernetes.core` v6.0.0 (latest: v6.4.0). The recommended replacement is the `kubernetes.core.k8s_info` module combined with `ansible.builtin.add_host`, which builds dynamic in-memory host groups within the playbook itself.
+<!-- code-verified-against: kubernetes.core collection changelog v6.0.0 — k8s inventory plugin removed; use kubernetes.core.k8s_info + ansible.builtin.add_host -->
+
+The `k8s_info + add_host` pattern queries the cluster at job execution time using the Kubernetes credential attached to the template and builds host groups from resource metadata in a pre-task play:
 
 ```yaml
-# k8s_inventory.yml — committed to the AWX project's Git repository
-plugin: kubernetes.core.k8s
-connections:
-  - kubeconfig: "{{ lookup('env', 'K8S_AUTH_KUBECONFIG') }}"
-groups:
-  nodes:
-    key: kubernetes_type
-    value: node
-  namespaces:
-    key: kubernetes_type
-    value: namespace
-keyed_groups:
-  - key: labels
-    prefix: label
-compose:
-  node_name: name
-  node_ready: >-
-    status.conditions
-    | selectattr('type', 'eq', 'Ready')
-    | map(attribute='status')
-    | first
+# dynamic-k8s-inventory.yml — inline inventory pattern replacing the removed kubernetes.core.k8s plugin
+# code-verified-against: kubernetes.core v6.4.0 docs
+- name: Build dynamic Kubernetes inventory
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Query pods with team label
+      kubernetes.core.k8s_info:
+        kind: Pod
+        label_selectors:
+          - "team = payments"
+          - "env = production"
+      register: payment_pods
+
+    - name: Add pods to dynamic group
+      ansible.builtin.add_host:
+        name: "{{ item.metadata.name }}"
+        groups: label_team_payments
+        pod_namespace: "{{ item.metadata.namespace }}"
+        pod_node: "{{ item.spec.nodeName }}"
+        pod_labels: "{{ item.metadata.labels }}"
+      loop: "{{ payment_pods.resources }}"
+
+- name: Operate on payment pods
+  hosts: label_team_payments
+  gather_facts: false
+  tasks:
+    - name: Process pod
+      ansible.builtin.debug:
+        msg: "Processing {{ inventory_hostname }} on node {{ pod_node }}"
 ```
 
-The `kubeconfig` field references an environment variable injected by the Kubernetes credential type attached to the job template. The plugin queries the cluster and builds a dynamic inventory that the playbook can then iterate over. A playbook targeting the `label_team_payments` group selects exactly the pods with `team: payments` labels, without hardcoding hostnames or namespace lists.
+A playbook targeting the `label_team_payments` group operates on exactly the Pods with `team: payments` labels, without hardcoding hostnames or namespace lists. The `k8s_info` query runs at job start so the inventory reflects cluster state at execution time.
 
 For targeted fact gathering within a playbook rather than via a full inventory source, the `kubernetes.core.k8s_info` module queries resources on demand. A role that needs to know all failing Pods before deciding which certificates to rotate can look them up inline:
 
@@ -598,7 +673,7 @@ spec:
 
 ## Patterns and Anti-Patterns
 
-**Pattern: Inventory groups from Kubernetes labels.** Instead of hardcoding host groups in static inventory files, use the kubernetes.core.k8s inventory plugin with keyed groups derived from resource labels. Teams that apply `team: payments`, `env: production`, or `tier: cache` labels to their workloads can target job templates to `label_team_payments` or `label_env_production` groups without editing inventory configuration. This scales to dozens of teams and namespaces without inventory file sprawl, and the inventory updates automatically as labels change or resources are added.
+**Pattern: Inventory groups from Kubernetes labels.** Instead of hardcoding host groups in static inventory files, use the `kubernetes.core.k8s_info` module with `ansible.builtin.add_host` to build dynamic groups from resource labels at job execution time. Teams that apply `team: payments`, `env: production`, or `tier: cache` labels to their workloads can target job templates to `label_team_payments` or `label_env_production` groups without editing static inventory files. As of `kubernetes.core` v6.0.0, this `k8s_info + add_host` pattern replaces the removed `kubernetes.core.k8s` inventory plugin.
 
 **Pattern: Credential-per-cluster.** Register a separate Kubernetes credential in AWX for each cluster the job templates may target. Grant each cluster's service account only the minimum RBAC needed for the job templates it supports. This creates a clean audit trail showing which credential was used for which job, makes credential rotation cluster-by-cluster straightforward, and prevents a compromise of one cluster's credentials from automatically propagating to others.
 
@@ -653,7 +728,7 @@ The pattern you pick today does not have to be permanent. Many teams start with 
 
 - The AWX Operator is itself an Ansible Operator built with Operator SDK. Its `watches.yaml` maps the `AWX` custom resource to Ansible roles that install and configure the AWX application components. Reading the operator's own roles in the `ansible/awx-operator` GitHub repository shows exactly how a production Ansible Operator manages a stateful multi-component application — the patterns from Module 7.12 applied at real scale.
 
-- The `ansible.eda.k8s` source plugin streams events over an HTTP long-poll connection to the Kubernetes watch API. A rulebook watching a high-velocity namespace like `kube-system` during a cluster upgrade can receive thousands of events per minute. Rule conditions are evaluated synchronously in the rulebook engine process; a slow or blocking condition expression can cause the engine to fall behind the event stream and drop events without warning.
+- As of `ansible.eda` 2.12.0, the upstream `ansible/event-driven-ansible` collection ships no Kubernetes watch source plugin. The full upstream source list is `alertmanager`, `aws_cloudtrail`, `aws_sqs_queue`, `azure_service_bus`, `file`, `file_watch`, `generic`, `journald`, `kafka`, `pg_listener`, `range`, `tick`, `url_check`, and `webhook`. Kubernetes-originated events reach EDA via a companion informer that POSTs to `ansible.eda.webhook`. A high-velocity informer (watching `kube-system` during a cluster upgrade) can generate thousands of POSTs per minute; rule conditions are evaluated synchronously in the rulebook engine, so a slow condition expression causes the engine to fall behind the event stream and drop events without warning.
 
 ## Common Mistakes
 
@@ -666,7 +741,7 @@ The pattern you pick today does not have to be permanent. Many teams start with 
 | Scaling task replicas without monitoring PostgreSQL connections | Each Celery worker maintains a database connection pool; doubling replicas can exhaust PostgreSQL `max_connections` | Monitor `pg_stat_activity` connection counts before scaling; tune `max_connections` in the PostgreSQL configuration or add PgBouncer as a connection pooler |
 | Accessing `event.resource.status` fields on DELETED events | DELETED events do not carry the full resource status; conditions that navigate status subfields throw evaluation errors | Guard status field access with `is defined` checks or narrow the condition with `event.type != "DELETED"` before accessing status paths |
 | Registering the job runner with broad RBAC | Getting started quickly favors `cluster-admin`; the permission is never narrowed | Apply least-privilege RBAC from day one: enumerate the namespaces and verbs the job templates actually use, then create a targeted ClusterRole |
-| Not pinning the AWX Operator version in the kustomization | Using `?ref=main` fetches the latest commit on every apply, which may include breaking component version changes | Always pin to a specific release tag such as `?ref=2.19.1` and update deliberately after reading the release notes and testing in a non-production cluster |
+| Not pinning the AWX Operator image in the kustomization | Using `?ref=main` OR a tagged `?ref=2.19.1` still deploys `:latest` because `config/manager/kustomization.yaml` ships `newTag: latest` even at a tagged ref (verified at 2.19.1) | Use a local kustomize overlay that pins both the manifests ref and the image tag (`images: - name: quay.io/ansible/awx-operator, newTag: "2.19.1"`); apply from the local overlay directory, not directly from the remote URL |
 
 ## Quiz: Self-Check
 
@@ -678,9 +753,9 @@ The PostgreSQL PVC used `local-path` or `hostPath` storage, so the database was 
 </details>
 
 <details>
-<summary>You write an EDA rulebook targeting all Pods in the `production` namespace with the condition `event.type == "MODIFIED"`. After enabling it, the AWX job queue fills completely and all job execution stalls. What happened and what are the correct steps to fix it?</summary>
+<summary>You write an EDA rulebook that receives all Pod events from a Kubernetes informer forwarder with the condition `event.payload.event_type == "MODIFIED"`. After enabling it, the AWX job queue fills completely and all job execution stalls. What happened and what are the correct steps to fix it?</summary>
 
-The condition matches every MODIFIED event on every Pod in production, which fires for readiness probe state changes, container restart count increments, annotation patches from admission controllers, resource version bumps from the control plane, and label changes from operators. In a busy namespace this generates hundreds of events per minute, each triggering a job template launch. The queue fills faster than workers can drain it. The fix has two parts: first, narrow the condition to the specific state you care about — for example, checking `event.resource.status.containerStatuses[0].lastState.terminated.reason == "OOMKilled"` with appropriate `is defined` guards — so only truly actionable events pass the rule. Second, test the refined condition against a namespace with representative production traffic volume before re-enabling, using the `--verbose` flag of ansible-rulebook to observe what fraction of events the condition matches.
+The condition matches every MODIFIED event for every Pod in production. The informer fires for readiness probe state changes, container restart count increments, annotation patches from admission controllers, resource version bumps from the control plane, and label changes from operators. In a busy namespace this generates hundreds of POSTs per minute, each triggering a job template launch. The queue fills faster than workers can drain it. The fix has two parts: first, narrow the condition to the specific state you care about — for example, checking `event.payload.reason == "OOMKilled"` with an `is defined` guard — so only truly actionable events pass the rule. Second, test the refined condition against a namespace with representative production traffic volume before re-enabling, using the `--verbose` flag of ansible-rulebook to observe what fraction of events the condition matches.
 
 </details>
 
@@ -708,7 +783,7 @@ The team should choose Ansible Automation Platform. The existing Red Hat Enterpr
 <details>
 <summary>An EDA rulebook's `run_job_template` action fires successfully when a Pod enters a failing state — the AWX job launches and completes — but the Pod continues failing, another MODIFIED event fires, and another job launches. This loop continues indefinitely. How would you prevent runaway launches for the same resource?</summary>
 
-This is an EDA throttling and deduplication problem. The rulebook engine does not natively deduplicate events for the same resource between consecutive rule firings. Several approaches address it. First, refine the condition to match only the first occurrence of the failure state rather than any presence of it: match `event.resource.status.containerStatuses[0].restartCount == 1` instead of `>= 1` so only the transition to the first restart triggers the action. Second, use ansible-rulebook's `throttle` action modifier to limit how frequently the same rule can fire within a time window. Third, design the triggered job template to annotate the Pod with `automation.example.com/investigating: "true"`, then add an exclusion to the rulebook condition: only fire if that annotation is not present. The annotation approach creates a machine-readable and human-readable record directly on the resource that both operators and subsequent automation can observe, and it survives rulebook restarts because the annotation persists in the Kubernetes API.
+This is an EDA throttling and deduplication problem. The rulebook engine does not natively deduplicate events for the same resource between consecutive rule firings. Several approaches address it. First, refine the condition to match only the first occurrence of the failure state rather than any presence of it: structure the informer forwarder payload to include a `restart_count` field, then match `event.payload.restart_count == 1` instead of `>= 1` so only the transition to the first restart triggers the action. Second, use ansible-rulebook's `throttle` action modifier to limit how frequently the same rule can fire within a time window for the same resource (`group_by_attributes: [event.payload.pod_name, event.payload.namespace]`). Third, design the triggered job template to annotate the Pod with `automation.example.com/investigating: "true"`, then add an exclusion to the rulebook condition: only fire if that annotation is not present. The annotation approach creates a machine-readable and human-readable record directly on the resource that both operators and subsequent automation can observe, and it survives rulebook restarts because the annotation persists in the Kubernetes API.
 
 </details>
 
@@ -752,8 +827,22 @@ If `kubectl cluster-info` shows a different context, run `kubectl config use-con
 kubectl create namespace awx
 
 # Deploy AWX Operator 2.19.1
-kubectl apply -k github.com/ansible/awx-operator/config/default?ref=2.19.1 \
-  -n awx
+# The upstream config/manager/kustomization.yaml ships newTag: latest even at a tagged ref;
+# create a local overlay to pin the image to 2.19.1 explicitly.
+# code-verified-against: ansible/awx-operator tag 2.19.1 config/manager/kustomization.yaml
+mkdir awx-operator-overlay
+cat > awx-operator-overlay/kustomization.yaml <<'EOF'
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: awx
+resources:
+  - github.com/ansible/awx-operator/config/default?ref=2.19.1
+images:
+  - name: quay.io/ansible/awx-operator
+    newTag: "2.19.1"
+EOF
+
+kubectl apply -k awx-operator-overlay/
 
 # Wait for the operator controller to become available
 kubectl rollout status deployment/awx-operator-controller-manager \
@@ -885,7 +974,7 @@ The API server endpoint for in-cluster access is `https://kubernetes.default.svc
 
 ### Task 6: Write a Minimal EDA Rulebook (Stretch)
 
-Install ansible-rulebook locally and run a rulebook that watches for Pod creation events in a test namespace.
+Install ansible-rulebook locally and run a webhook-based rulebook that fires on incoming HTTP POST events. Use `curl` to simulate a Kubernetes-originated event without needing a full informer forwarder.
 
 ```bash
 # Install ansible-rulebook locally (Python 3.9+ required)
@@ -894,23 +983,24 @@ pip install ansible-rulebook ansible-runner
 # Install the EDA collection
 ansible-galaxy collection install ansible.eda
 
-# Create the rulebook
+# Create the rulebook — uses ansible.eda.webhook (verified in ansible.eda 2.12.0)
+# code-verified-against: ansible/event-driven-ansible v2.12.0 sources
 cat <<'EOF' > pod-watch-rulebook.yml
 ---
-- name: Log new pods in lab namespace
+- name: Log pod events from webhook
   hosts: localhost
   sources:
-    - ansible.eda.k8s:
-        api_version: v1
-        kind: Pod
-        namespaces:
-          - eda-lab
+    - ansible.eda.webhook:
+        host: 127.0.0.1
+        port: 5001
   rules:
     - name: Log pod creation
-      condition: event.type == "ADDED"
+      condition: >
+        event.payload.event_type is defined and
+        event.payload.event_type == "ADDED"
       action:
         debug:
-          msg: "New pod created: {{ event.resource.metadata.name }} in {{ event.resource.metadata.namespace }}"
+          msg: "New pod created: {{ event.payload.pod_name }} in {{ event.payload.namespace }}"
 EOF
 
 # Create a minimal inventory
@@ -929,18 +1019,25 @@ ansible-rulebook \
   --inventory localhost-inventory.yml \
   --verbose &
 
-# Create a Pod to trigger the rule
-kubectl run test-pod --image=nginx:1.27-alpine -n eda-lab --restart=Never
+# Wait for the webhook listener to start
+sleep 3
 
-# Check the rulebook output
-sleep 5
-kubectl delete pod test-pod -n eda-lab
+# Simulate a Kubernetes pod creation event via curl
+curl -s -X POST http://127.0.0.1:5001/ \
+  -H "Content-Type: application/json" \
+  -d '{"event_type": "ADDED", "pod_name": "test-pod", "namespace": "eda-lab", "node": "kind-worker"}'
+
+# Check the rulebook output — should log the pod name
+sleep 2
+
+# Stop the rulebook background process
+kill %1 2>/dev/null
 ```
 
 <details>
 <summary>Hint for Task 6</summary>
 
-If `ansible-rulebook` exits immediately, the `ansible.eda.k8s` source is trying to use the KUBECONFIG from your environment. Confirm `kubectl get pods -n eda-lab` works before running the rulebook. If events do not appear, verify the `eda-lab` namespace exists and that the Pod was created after the rulebook started watching — the source only captures events that occur while the connection is active.
+If `ansible-rulebook` exits immediately, check that port 5001 is not already in use (`lsof -i :5001`). If the `curl` POST returns a connection error, wait an extra second for the webhook listener to bind — the delay between starting `ansible-rulebook` and the webhook source binding the port is typically 1–2 seconds. If the rulebook output shows "received event" but the rule does not fire, verify that the JSON payload keys match the condition field names exactly (`event_type`, not `type`).
 
 </details>
 
