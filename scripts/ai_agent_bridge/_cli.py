@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent_runtime import usage as runtime_usage
 
+from ._agy import ask_agy
 from ._broker import bridge_status, broker_cleanup
 from ._claude import ask_claude, process_for_claude
 from ._codex import (
@@ -18,6 +19,7 @@ from ._codex import (
 )
 from ._config import GEMINI_DEFAULT_MODEL, GEMINI_REVIEW_MODEL
 from ._db import get_db
+from ._deepseek import ask_deepseek
 from ._gemini import ask_gemini, converse_gemini, process_and_respond
 from ._messaging import (
     acknowledge,
@@ -29,6 +31,7 @@ from ._messaging import (
 )
 from ._model import check_model
 from ._prompts import build_review_message
+from ._qwen import ask_qwen
 
 try:
     from dispatch import GEMINI_WRITER_MODEL
@@ -337,7 +340,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # inbox
     inbox_parser = subparsers.add_parser("inbox", help="Check inbox for messages")
-    inbox_parser.add_argument("--for", dest="for_llm", default="gemini", choices=['gemini', 'claude', 'codex'],
+    inbox_parser.add_argument("--for", dest="for_llm", default="gemini", choices=['gemini', 'claude', 'codex', 'qwen', 'agy', 'deepseek'],
                              help="Check inbox for which agent (default: gemini)")
 
     # read
@@ -347,7 +350,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # send
     send_parser = subparsers.add_parser("send", help="Send message to another agent")
     send_parser.add_argument("content", help="Message content")
-    send_parser.add_argument("--to", dest="to_llm", default="claude", choices=['claude', 'gemini', 'codex', 'qwen'],
+    send_parser.add_argument("--to", dest="to_llm", default="claude", choices=['claude', 'gemini', 'codex', 'qwen', 'agy', 'deepseek'],
                             help="Target agent (default: claude)")
     send_parser.add_argument("--from", dest="from_llm", default="gemini",
                             help="Sender agent name (default: gemini)")
@@ -363,7 +366,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # ack-all
     ack_all_parser = subparsers.add_parser("ack-all", help="Acknowledge ALL unread messages for an agent")
-    ack_all_parser.add_argument("agent", choices=['claude', 'gemini', 'codex', 'qwen'], help="Agent whose inbox to clear")
+    ack_all_parser.add_argument("agent", choices=['claude', 'gemini', 'codex', 'qwen', 'agy', 'deepseek'], help="Agent whose inbox to clear")
 
     # conversation
     conv_parser = subparsers.add_parser("conversation", help="Get conversation history")
@@ -464,6 +467,63 @@ def _build_parser() -> argparse.ArgumentParser:
                                    help="Skip auto-posting review to GitHub issue")
     ask_gemini_parser.add_argument("--review", action="store_true",
                                    help="Prepend canonical review protocol to the message")
+
+    # ask-agy
+    ask_agy_parser = subparsers.add_parser("ask-agy", help="Send message AND invoke Agy (one-step)")
+    ask_agy_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_agy_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_agy_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_agy_parser.add_argument("--data", help="Path to data file to attach")
+    ask_agy_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                help="Force new session even if one exists")
+    ask_agy_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                help="Sender agent family. Default: gemini")
+    ask_agy_parser.add_argument("--from-model", dest="from_model",
+                                help="Exact sender model ID")
+    ask_agy_parser.add_argument("--to-model", dest="to_model",
+                                help="Target model ID")
+    ask_agy_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                help="Run sync without timeout")
+    ask_agy_parser.add_argument("--review", action="store_true",
+                                help="Prepend docs/review-protocol.md")
+
+    # ask-qwen
+    ask_qwen_parser = subparsers.add_parser("ask-qwen", help="Send message AND invoke Qwen (one-step)")
+    ask_qwen_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_qwen_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_qwen_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_qwen_parser.add_argument("--data", help="Path to data file to attach")
+    ask_qwen_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                 help="Force new session even if one exists")
+    ask_qwen_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                 help="Sender agent family. Default: gemini")
+    ask_qwen_parser.add_argument("--from-model", dest="from_model",
+                                 help="Exact sender model ID")
+    ask_qwen_parser.add_argument("--to-model", dest="to_model",
+                                 help="Target model ID")
+    ask_qwen_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                 help="Run sync without timeout")
+    ask_qwen_parser.add_argument("--review", action="store_true",
+                                 help="Prepend docs/review-protocol.md")
+
+    # ask-deepseek
+    ask_deepseek_parser = subparsers.add_parser("ask-deepseek", help="Send message AND invoke DeepSeek (one-step)")
+    ask_deepseek_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_deepseek_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_deepseek_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_deepseek_parser.add_argument("--data", help="Path to data file to attach")
+    ask_deepseek_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                     help="Force new session even if one exists")
+    ask_deepseek_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                     help="Sender agent family. Default: gemini")
+    ask_deepseek_parser.add_argument("--from-model", dest="from_model",
+                                     help="Exact sender model ID")
+    ask_deepseek_parser.add_argument("--to-model", dest="to_model",
+                                     help="Target model ID")
+    ask_deepseek_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                     help="Run sync without timeout")
+    ask_deepseek_parser.add_argument("--review", action="store_true",
+                                     help="Prepend docs/review-protocol.md")
 
     # converse — multi-turn conversation with Gemini
     converse_parser = subparsers.add_parser("converse", help="Multi-turn conversation with Gemini (includes history)")
@@ -569,6 +629,12 @@ def _dispatch_command(args):
         _handle_ask_codex(args)
     elif args.command == "ask-gemini":
         _handle_ask_gemini(args)
+    elif args.command == "ask-agy":
+        _handle_ask_agy(args)
+    elif args.command == "ask-qwen":
+        _handle_ask_qwen(args)
+    elif args.command == "ask-deepseek":
+        _handle_ask_deepseek(args)
     elif args.command == "converse":
         content = sys.stdin.read() if args.content == "-" else args.content
         converse_gemini(content, args.task_id, args.model,
@@ -642,6 +708,39 @@ def _handle_ask_gemini(args):
                         not args.review)
     if result is None:
         sys.exit(1)
+
+
+def _handle_ask_agy(args):
+    """Handle ask-agy subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_agy(content, args.task_id, args.type, data,
+            args.new_session, args.from_llm, args.from_model,
+            args.to_model, args.no_timeout, args.review)
+
+
+def _handle_ask_qwen(args):
+    """Handle ask-qwen subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_qwen(content, args.task_id, args.type, data,
+             args.new_session, args.from_llm, args.from_model,
+             args.to_model, args.no_timeout, args.review)
+
+
+def _handle_ask_deepseek(args):
+    """Handle ask-deepseek subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_deepseek(content, args.task_id, args.type, data,
+                 args.new_session, args.from_llm, args.from_model,
+                 args.to_model, args.no_timeout, args.review)
 
 
 def main():

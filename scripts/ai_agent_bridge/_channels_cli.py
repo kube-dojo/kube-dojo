@@ -56,6 +56,7 @@ from agent_runtime.result import Result
 # ── argparse registration ────────────────────────────────────────────
 
 _DISCUSSION_CLARIFICATION_MODES = {
+    "agy": "danger",
     "claude": "bypass",
     "gemini": "yolo",
     "codex": "danger",
@@ -64,6 +65,7 @@ _DISCUSSION_CLARIFICATION_MODES = {
 }
 
 _DISCUSSION_RUNTIME_MODES = {
+    "agy": "danger",
     "claude": "read-only",
     "gemini": "workspace-write",
     "codex": "danger",
@@ -160,6 +162,8 @@ def _agent_discuss_defaults(agent_name: str) -> tuple[str, str]:
 
 def _agent_runtime_mode(agent_name: str, sandbox_mode: str | None) -> str:
     """Map persisted `*_sandbox_mode` into runtime `mode`."""
+    if agent_name == "agy":
+        return "danger"
     if agent_name == "codex":
         return "danger"
     if agent_name == "claude":
@@ -1226,10 +1230,19 @@ def _handle_discuss(args) -> int:
         print(f"   root message: {root_id[:12]} / thread {correlation_id[:12]}")
         print()
 
-    session_field_map = {
+    # Session-less agents (agy / qwen / deepseek) map to all-None tuples;
+    # the per-agent branch at "if agent_name in {claude, gemini}" later
+    # in this function correctly skips session persistence for them, and
+    # `stored_session.get(None)` returns None which feeds the resume-skip
+    # path. Required to prevent KeyError when ab discuss --with picks
+    # one of these agents.
+    session_field_map: dict[str, tuple[str | None, str | None, str | None]] = {
         "claude": ("claude_session_id", "claude_cwd", "claude_sandbox_mode"),
         "gemini": ("gemini_session_id", "gemini_cwd", "gemini_sandbox_mode"),
         "codex": ("codex_session_id", "codex_cwd", "codex_sandbox_mode"),
+        "agy": (None, None, None),
+        "qwen": (None, None, None),
+        "deepseek": (None, None, None),
     }
     resume_thread_session: dict[str, str | None] = {}
     if args.resume_thread:
@@ -1237,7 +1250,7 @@ def _handle_discuss(args) -> int:
         missing_resumable: list[str] = []
         for agent_name in with_agents:
             session_field = session_field_map[agent_name][0]
-            if not resume_thread_session.get(session_field):
+            if session_field is None or not resume_thread_session.get(session_field):
                 missing_resumable.append(agent_name)
 
         if missing_resumable:
