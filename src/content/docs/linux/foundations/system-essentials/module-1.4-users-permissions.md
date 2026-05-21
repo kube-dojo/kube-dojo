@@ -55,6 +55,7 @@ getent passwd appsvc
 getent group deploy
 id appsvc
 grep -E '^(passwd|group|shadow|sudoers|subid):' /etc/nsswitch.conf
+# sudoers appears only when sudo NSS integration such as sudo-ldap is configured.
 ```
 
 Ubuntu Server 24.04 operators commonly use `adduser` and `addgroup` wrappers for human accounts because they create homes and prompt for profile details. RHEL 9 examples commonly use the lower-level shadow-utils commands directly. Both styles end at the same kernel model, so the operational difference is not theological. Use the distro's supported account tooling, verify the numeric identity, and avoid editing the files by hand unless you are recovering a broken system with a second privileged session open.
@@ -136,7 +137,7 @@ The ordinary triad selects exactly one class for a given file access: owner, gro
 | `2775` | `rwxrwsr-x` | Shared project directory | setgid makes new entries inherit directory group |
 
 The setuid, setgid, and sticky bits are small fields with large consequences. A setuid executable runs with the file owner's effective UID, which is why setuid root binaries are high-value audit targets. A setgid executable runs with the file group's effective GID, while a setgid directory causes newly created entries to inherit the directory's group, which is usually the right design for shared release or data directories. The sticky bit on a world-writable directory such as `/tmp` prevents a user from deleting another user's entry unless the user owns the file, owns the directory, or has the required privilege. Kubernetes Pod Security Standards call out set-user-ID and
-set-group-ID file modes as privilege escalation examples when requiring `allowPrivilegeEscalation: false`. ([Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/))
+set-group-ID file modes as privilege escalation examples when requiring `allowPrivilegeEscalation: false`. ([Kubernetes Pod Security Standards](https://v1-35.docs.kubernetes.io/docs/concepts/security/pod-security-standards/))
 
 ```bash
 sudo install -d -o root -g deploy -m 2775 /srv/app/releases
@@ -171,6 +172,8 @@ sudo setfacl -m g:deploy:rwX,d:g:deploy:rwX /srv/app/current
 getfacl -p /srv/app/current
 ```
 
+Uppercase `X` in `rwX` is intentional. It grants execute/search permission only on directories or on files that already have an execute bit, so a recursive ACL can preserve directory traversal without accidentally making ordinary data files executable.
+
 Use ACLs when the exception is real and narrow. If one service account needs write access to one directory tree but should not become a member of a broad group, a named-user ACL is clearer than adding that service account to `deploy`, `wheel`, or a container runtime group. If every member of a team should collaborate on every file created under a path, a setgid directory plus group mode is simpler than dozens of named ACLs. Default ACLs are good for inheritance on shared directories, but they are not a policy engine. They do not magically repair existing files, and they do not cross every remote filesystem or container mount in the same way. Test the mounted path from the
 workload identity before you call the design complete.
 
@@ -182,7 +185,7 @@ ACLs also interact with backups, image builds, and cross-filesystem moves. A tar
 ## Evaluate Capabilities Instead of Treating Root as One Bit
 
 Linux capabilities are the modern answer to the all-or-nothing root model. The `capabilities(7)` page explains that Linux divides privileges traditionally associated with the superuser into distinct per-thread units. That is why a non-root process can bind a privileged port with `CAP_NET_BIND_SERVICE`, why a process with `CAP_DAC_OVERRIDE` can bypass file read/write/execute checks, and why `CAP_SYS_ADMIN` is treated as dangerous: the manual describes it as overloaded and lists broad administrative operations such as mount and namespace-sensitive operations. Kubernetes manifests omit the `CAP_` prefix when listing capabilities, but the kernel names keep the prefix.
-([capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html), [Kubernetes Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/))
+([capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html), [Kubernetes Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/))
 
 | Capability | Common legitimate need | Why drop by default |
 |---|---|---|
@@ -195,20 +198,21 @@ Linux capabilities are the modern answer to the all-or-nothing root model. The `
 | `CAP_SYS_PTRACE` | Debuggers and profilers that inspect other processes | It can expose process memory and secrets across process boundaries |
 | `CAP_SETUID` / `CAP_SETGID` | Programs that intentionally switch identity | They can create surprising identity transitions after admission review |
 
-File capabilities let you grant a narrow privilege to an executable without making it setuid root. That is useful for a small, reviewed binary and dangerous for a generic interpreter or shell. `getcap` and `setcap` are the operational tools, while `/proc/<pid> /status` exposes process capability bitmaps such as `CapEff`. Kubernetes documents that you can inspect those bitmaps inside a container and that manifest capability names omit `CAP_`. The operator rule is simple: prefer dropping all capabilities and adding back one documented capability only when the workload's behavior proves it. Do not add `SYS_ADMIN` to make a mysterious permission problem disappear.
-([Kubernetes Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/))
+File capabilities let you grant a narrow privilege to an executable without making it setuid root. That is useful for a small, reviewed binary and dangerous for a generic interpreter or shell. `getcap` and `setcap` are the operational tools, while `/proc/<pid>/status` exposes process capability bitmaps such as `CapEff`. Kubernetes documents that you can inspect those bitmaps inside a container and that manifest capability names omit `CAP_`. The operator rule is simple: prefer dropping all capabilities and adding back one documented capability only when the workload's behavior proves it. Do not add `SYS_ADMIN` to make a mysterious permission problem disappear.
+([Kubernetes Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/))
 
 ```bash
 getcap -r /usr/bin /usr/local/bin 2>/dev/null
 sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/web-listener
 getcap /usr/local/bin/web-listener
 grep '^Cap' /proc/1/status
+capsh --decode="$(awk '/^CapEff:/ {print $2}' /proc/1/status)"
 ```
 
 Capabilities also explain why UID `0` remains special even after the kernel split root privileges. When a process runs as UID `0` in the initial user namespace, its capability sets can include powerful permissions unless the runtime, service manager, or executable transition drops them. When a process is UID `0` inside a non-initial user namespace, the capabilities are scoped to resources governed by that namespace. The user namespace man page states that a process can have UID `0` inside a user namespace while having an ordinary unprivileged UID outside, with full privileges inside the namespace but not outside. That distinction is the reason rootless containers can be
 safer than rootful containers without pretending that "root in a container" is harmless. ([user_namespaces(7)](https://man7.org/linux/man-pages/man7/user_namespaces.7.html))
 
-Capability review should include all sets, not only the one visible in a manifest. The kernel credentials documentation distinguishes permitted, inheritable, effective, and bounding sets, and Kubernetes shows how to inspect process capability bitmaps under `/proc/1/status`. The effective set is what the task can currently use, while the bounding set limits what can be gained later across an executable transition. That is why `allowPrivilegeEscalation: false` matters beside capability drops: it reduces surprise from setuid, setgid, and file-capability transitions after the container has started. When a runtime alert reports a shell in a container, the difference between
+Capability review should include all sets, not only the one visible in a manifest. The kernel credentials documentation distinguishes permitted, inheritable, effective, and bounding sets, and Kubernetes shows how to inspect process capability bitmaps under `/proc/1/status`. The ambient set (`CapAmb`) carries capabilities that are inherited by child processes across exec without needing file capabilities, which matters for rootless container runtimes. ([capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html)) The effective set is what the task can currently use, while the bounding set limits what can be gained later across an executable transition. That is why `allowPrivilegeEscalation: false` matters beside capability drops: it reduces surprise from setuid, setgid, and file-capability transitions after the container has started. When a runtime alert reports a shell in a container, the difference between
 `CapEff=0` for dangerous bits and a broad effective capability set changes the containment priority. A shell without `SYS_ADMIN`, `DAC_OVERRIDE`, `NET_ADMIN`, or `SYS_PTRACE` is still serious, but it has fewer immediate host and peer-process options.
 
 ## Evaluate sudo, PAM, and Policy Files
@@ -231,7 +235,7 @@ sudo -l -U releasebot
 
 `NOPASSWD` is not automatically wrong. It can be appropriate for noninteractive automation that runs one constrained command and already has a separate authentication boundary. It is risky when used for human convenience, broad command sets, or commands that can invoke shells, editors, pagers, package managers, scripting languages, or file writes to arbitrary paths. `PASSWD` gives you a fresh authentication checkpoint and a better human audit moment. Command restriction gives you the real boundary. The worst pattern is combining `NOPASSWD` with `ALL` and then trying to recover safety through convention.
 
-Auditability lives in several places. `sudo` logs accepted and rejected commands through its configured event logging path, while `auditd` is the userspace component of the Linux Audit system that writes audit records to disk and works with `auditctl`, `ausearch`, and `aureport`. For high-risk hosts, watch changes to sudoers drop-ins and privileged account files with audit rules, and preserve sudo logs centrally so local tampering is not the only record. This is especially important when sudo grants deployment powers that can modify running services or secrets. ([auditd(8)](https://man7.org/linux/man-pages/man8/auditd.8.html))
+Auditability has two separate concerns. First, audit sudo policy changes with auditd file watches on `/etc/sudoers.d` and other privileged account files. These rules catch write and attribute changes to policy files; they do not prove which sudo commands a user executed. `auditd` is the userspace component of the Linux Audit system that writes audit records to disk and works with `auditctl`, `ausearch`, and `aureport`. ([auditd(8)](https://man7.org/linux/man-pages/man8/auditd.8.html))
 
 ```bash
 sudo auditctl -w /etc/sudoers.d -p wa -k sudoers-policy
@@ -240,16 +244,44 @@ sudo auditctl -w /etc/shadow -p wa -k identity-files
 sudo ausearch -k sudoers-policy
 ```
 
+Second, audit sudo command executions through sudoers event logging. Use `Defaults logfile=/var/log/sudo.log` when you want a dedicated sudo log, or configure sudo's syslog facility in the sudoers `Defaults` block and ship those records centrally. This is especially important when sudo grants deployment powers that can modify running services or secrets. ([sudoers(5)](https://www.man7.org/linux/man-pages/man5/sudoers.5.html))
+
+```text
+# /etc/sudoers.d/logging
+Defaults logfile=/var/log/sudo.log
+# Or, on syslog-based hosts:
+Defaults syslog=authpriv
+```
+
 The files everyone forgets often explain behavior that account and mode bits do not. `/etc/login.defs` defines site-specific defaults for the shadow password suite, including UID/GID ranges, password aging defaults, home directory mode, and a fallback login retry setting that PAM usually overrides. PAM is the configurable authentication and session framework used by programs such as `login`, `su`, `sudo`, and SSH-related stacks; `/etc/pam.d/` machine configuration overrides vendor defaults with the same service name. `/etc/security/limits.conf` and `/etc/security/limits.d/*.conf` are read by `pam_limits` to set login-session resource limits such as open files, processes,
 core size, and even `nonewprivs`. ([login.defs(5)](https://man7.org/linux/man-pages/man5/login.defs.5.html), [PAM(8)](https://man7.org/linux/man-pages/man8/pam.8.html), [limits.conf(5)](https://man7.org/linux/man-pages/man5/limits.conf.5.html))
+
+### Read PAM Stacks, Not Just PAM Names
+
+A PAM file is a stack, not a list of suggestions. Each non-comment line starts with a management group, then a control flag, then a module. The management groups answer different questions: `auth` proves the caller's identity, `account` checks whether that identity may use the service now, `password` changes credentials, and `session` prepares or tears down the login session. The simple control flags are review signals: `required` must pass but lets the stack continue, `requisite` fails immediately on failure, `sufficient` can return success early if no previous required module has failed, and `optional` usually matters only when no stronger rule decides the result. ([pam.d(5)](https://man7.org/linux/man-pages/man5/pam.d.5.html))
+
+```text
+# /etc/pam.d/sshd excerpt (illustrative; distro files vary)
+# management  control     module             arguments
+auth          required    pam_env.so
+auth          requisite   pam_faillock.so    preauth silent audit deny=5 unlock_time=900
+auth          sufficient  pam_unix.so        try_first_pass
+auth          required    pam_faillock.so    authfail audit deny=5 unlock_time=900
+account       required    pam_unix.so
+password      required    pam_unix.so
+session       optional    pam_motd.so
+session       required    pam_limits.so
+```
+
+The dangerous pattern is a permissive module with a strong-looking control flag in the wrong position. `auth sufficient pam_permit.so` before `pam_unix.so` is a trap: `pam_permit` always succeeds, and `sufficient` can short-circuit the rest of the stack, so the real password check may never run. A hardened stack puts real checks first, makes failures count, and uses modules such as `pam_faillock.so` to record repeated failures and slow brute-force attempts. During review, ask three questions: which management group makes the decision, which control flag can short-circuit the stack, and which module actually enforces the security property? ([pam_permit(8)](https://man7.org/linux/man-pages/man8/pam_permit.8.html), [pam_faillock(8)](https://man7.org/linux/man-pages/man8/pam_faillock.8.html))
 
 These policy files are not interchangeable. `login.defs` shapes defaults used by account tools and selected login behavior, but PAM usually owns live authentication and session decisions. `limits.conf` applies per login session through `pam_limits`; it does not retroactively change already-running daemons, and it does not replace cgroups for service resource control. Sudoers controls privileged command execution after authentication; it does not decide whether SSH accepts a key or whether a password has expired. During reviews, keep a small map of which layer is responsible for which decision. That map prevents contradictory fixes, such as changing `PASS_MAX_DAYS` in
 `login.defs` while the actual password policy is enforced by PAM modules, or raising `nofile` in `limits.conf` while the failing process is a systemd service that never passed through a PAM login session.
 
 ## Implement Kubernetes SecurityContext and User Namespace Patterns
 
-Kubernetes security context fields are Linux identity and privilege knobs expressed in YAML. `runAsUser` sets the UID used by container processes unless overridden by image or container-level settings. `runAsGroup` sets the primary GID. `runAsNonRoot` asks the kubelet to reject a container that would run as UID `0`, but it is not a substitute for choosing a known numeric UID. `fsGroup` adds a supplementary group intended for mounted volumes and may cause ownership or permission changes depending on volume type and policy. `allowPrivilegeEscalation: false` directly controls the Linux `no_new_privs` flag for the container process, and the `PR_SET_NO_NEW_PRIVS` man page
-explains that once set, `execve` will not grant privileges through setuid, setgid, or file capability transitions. `readOnlyRootFilesystem: true` mounts the image root read-only, pushing writes into declared volumes. ([Kubernetes Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/), [PR_SET_NO_NEW_PRIVS](https://man7.org/linux/man-pages/man2/PR_SET_NO_NEW_PRIVS.2const.html))
+Kubernetes security context fields are Linux identity and privilege knobs expressed in YAML. `runAsUser` sets the UID used by container processes unless overridden by image or container-level settings. `runAsGroup` sets the primary GID. `runAsNonRoot` asks the kubelet to reject a container that would run as UID `0`, but it is not a substitute for choosing a known numeric UID. `fsGroup` adds a supplementary group intended for mounted volumes and may cause ownership or permission changes depending on volume type and policy. `fsGroupChangePolicy: OnRootMismatch` tells the kubelet to skip repeated recursive ownership changes when the volume root already matches, which matters on large volumes. `allowPrivilegeEscalation: false` directly controls the Linux `no_new_privs` flag for the container process, and the `PR_SET_NO_NEW_PRIVS` man page
+explains that once set, `execve` will not grant privileges through setuid, setgid, or file capability transitions. `readOnlyRootFilesystem: true` mounts the image root read-only, pushing writes into declared volumes. ([Kubernetes Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/), [PR_SET_NO_NEW_PRIVS](https://man7.org/linux/man-pages/man2/PR_SET_NO_NEW_PRIVS.2const.html))
 
 ```yaml
 apiVersion: v1
@@ -287,7 +319,7 @@ spec:
 ```
 
 The YAML does not make storage semantics disappear. If a PVC arrives as `root:root` with mode `0755`, a UID `10001` process still cannot write unless the volume plugin, `fsGroup` handling, init setup, image ownership, or ACLs produce a writable group or owner path. Pod Security Standards Restricted policy goes further than "not root": it requires privilege escalation to be false, containers to run as non-root, `runAsUser` not to be zero when set, seccomp to be `RuntimeDefault` or `Localhost`, and capabilities to drop `ALL` while only allowing `NET_BIND_SERVICE` back. That policy language is Kubernetes admission vocabulary for the Linux mechanics you already learned.
-([Kubernetes Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/))
+([Kubernetes Pod Security Standards](https://v1-35.docs.kubernetes.io/docs/concepts/security/pod-security-standards/))
 
 ```mermaid
 flowchart LR
@@ -485,8 +517,11 @@ kubectl delete namespace users-perms-lab
 - [man7: auditd(8)](https://man7.org/linux/man-pages/man8/auditd.8.html) - Linux Audit userspace daemon, rules, auditctl, ausearch, and audit log responsibilities.
 - [man7: login.defs(5)](https://man7.org/linux/man-pages/man5/login.defs.5.html) - shadow suite defaults including UID/GID ranges, password policy, home mode, and login settings.
 - [man7: PAM(8)](https://man7.org/linux/man-pages/man8/pam.8.html) - Linux-PAM service configuration and auth/account/password/session management groups.
+- [man7: pam.d(5)](https://man7.org/linux/man-pages/man5/pam.d.5.html) - PAM service file syntax, management groups, and control flag behavior.
+- [man7: pam_permit(8)](https://man7.org/linux/man-pages/man8/pam_permit.8.html) - PAM module that always returns success and is unsafe before real authentication checks.
+- [man7: pam_faillock(8)](https://man7.org/linux/man-pages/man8/pam_faillock.8.html) - PAM module for recording authentication failures and enforcing temporary lockouts.
 - [man7: limits.conf(5)](https://man7.org/linux/man-pages/man5/limits.conf.5.html) - `pam_limits` syntax for login-session resource limits and `nonewprivs`.
 - [man7: PR_SET_NO_NEW_PRIVS](https://man7.org/linux/man-pages/man2/PR_SET_NO_NEW_PRIVS.2const.html) - kernel `no_new_privs` behavior across `execve`, fork, and clone.
-- [Kubernetes: Configure a Security Context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/) - `runAsUser`, `runAsGroup`, `fsGroup`, capabilities, `allowPrivilegeEscalation`, and read-only root filesystem behavior.
-- [Kubernetes: Pod Security Standards](https://kubernetes.io/docs/concepts/security/pod-security-standards/) - Baseline and Restricted controls for non-root users, privilege escalation, seccomp, and capability drops.
+- [Kubernetes v1.35: Configure a Security Context](https://v1-35.docs.kubernetes.io/docs/tasks/configure-pod-container/security-context/) - `runAsUser`, `runAsGroup`, `fsGroup`, capabilities, `allowPrivilegeEscalation`, and read-only root filesystem behavior.
+- [Kubernetes v1.35: Pod Security Standards](https://v1-35.docs.kubernetes.io/docs/concepts/security/pod-security-standards/) - Baseline and Restricted controls for non-root users, privilege escalation, seccomp, and capability drops.
 - [RHEL 9: Building, running, and managing containers](https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html-single/building_running_and_managing_containers/index) - rootless Podman setup, `/etc/subuid`, `/etc/subgid`, and rootless container limitations.
