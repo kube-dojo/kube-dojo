@@ -128,7 +128,7 @@ def _infer_cwd_from_task_id(task_id: str, repo_root: Path) -> Path | None:
     if not worktrees_root.exists():
         return None
     for worktree in worktrees_root.iterdir():
-        if worktree.is_dir() and worktree.name in task_id:
+        if worktree.is_dir() and task_id.startswith(worktree.name):
             return _normalize(worktree)
     return None
 
@@ -141,21 +141,21 @@ def _collect_touched_paths(
     paths.extend(_paths_from_tool_uses(_row_get(dispatch, "tool_uses")))
 
     task_id = str(_row_get(dispatch, "task_id", "") or "")
-    for text_path in _candidate_response_paths(dispatch, task_id, repo_root):
+    for text_path in _candidate_response_paths(task_id, repo_root):
         if text_path.exists():
             paths.extend(_paths_from_text(text_path.read_text(encoding="utf-8")))
     return paths
 
 
 def _candidate_response_paths(
-    dispatch: Mapping[str, Any],
     task_id: str,
     repo_root: Path,
 ) -> list[Path]:
-    candidates = [_response_path(dispatch, repo_root)]
+    candidates = []
     if task_id:
-        smart_response = repo_root / "logs" / "dispatch_responses" / f"{task_id}.txt"
-        candidates.append(smart_response)
+        candidates.append(
+            repo_root / "logs" / "dispatch_responses" / f"{task_id}.txt"
+        )
     return _dedupe_paths(candidates)
 
 
@@ -286,6 +286,8 @@ def _is_unsafe_path(
         path = (cwd or repo_root) / path
     resolved = _normalize(path)
 
+    # Protected repo prefixes are checked before safe roots so a bad cwd
+    # inference cannot convert src/docs/scripts writes into allowed artifacts.
     repo_rel = _relative_to_or_none(resolved, _normalize(repo_root))
     raw_rel = raw_path.replace("\\", "/").lstrip("./")
     if _is_protected_repo_path(raw_rel):

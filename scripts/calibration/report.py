@@ -10,11 +10,11 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import schema
+from .constants import DETERMINISTIC_SCORERS
 from .models import ANCHORS, LANES
 from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "reports" / "templates"
-DETERMINISTIC_SCORERS = {"deterministic", "respected_inline_return"}
 
 
 @dataclass(frozen=True)

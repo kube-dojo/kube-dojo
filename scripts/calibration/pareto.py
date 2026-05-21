@@ -21,6 +21,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from .constants import DETERMINISTIC_SCORERS
+except ImportError:  # direct script execution path
+    from constants import DETERMINISTIC_SCORERS
+
 # Per-second USD rate. Rough — these are observed billing receipts divided by
 # observed total latency across the Wave A+B + session-37 ledger as of
 # 2026-05-21. Anthropic Max / Codex Pro / agy on Google One run on subscription
@@ -58,7 +63,6 @@ class ModelPareto:
 
 
 QUALITY_FLOOR = 1.0  # det 0.5 + judge 5.0/10 — below this, the model is not useful
-DETERMINISTIC_SCORERS = ("deterministic", "respected_inline_return")
 
 
 def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> list[ModelPareto]:
