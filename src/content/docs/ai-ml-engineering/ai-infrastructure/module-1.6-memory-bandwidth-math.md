@@ -576,6 +576,10 @@ Success criteria:
 - [ ] The validation benchmark is classified as single-stream decode, interactive concurrency, or offline aggregate throughput.
 - [ ] The final recommendation names the bottleneck that drove the hardware and engine shortlist.
 
+## Next Module
+
+Continue to [High-Performance LLM Inference: vLLM and sglang](module-1.3-vllm-sglang-inference/) to apply bandwidth math to concrete inference-engine behavior, batching, and KV-cache management. (Module 1.7 on production-tier inference-engine decision frameworks is in development — tracked as issue #1378.)
+
 ## Sources
 
 - [NVIDIA H100 GPU specifications](https://www.nvidia.com/en-us/data-center/h100/)
