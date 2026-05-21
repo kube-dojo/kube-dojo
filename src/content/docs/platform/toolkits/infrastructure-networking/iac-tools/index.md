@@ -259,7 +259,6 @@ Module 7.12: Ansible Operator SDK Fundamentals
      │  Map CRDs to Ansible roles
      │  Build a minimum viable operator
      ▼
-<<<<<<< HEAD
 Module 7.15: Helm vs Ansible vs Go Operator Decision Framework
      │
      │  12-axis decision matrix

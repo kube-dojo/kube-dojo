@@ -24,11 +24,11 @@ This module also requires comfort reading Kubernetes RBAC manifests. You need to
 
 After completing this module, you will be able to:
 
-- **Design** a `watches.yaml` file with multiple CRD entries, selecting role vs playbook dispatch, per-entry reconcile periods, and explicit dependent watch lists for each resource type.
+- **Design** a `watches.yaml` file with multiple CRD entries, selecting role vs playbook dispatch, per-entry reconcile periods, and the correct `watchDependentResources` and `blacklist` controls per entry.
 - **Implement** per-namespace operator scoping using the `WATCH_NAMESPACE` environment variable and articulate the RBAC boundary shift when switching between namespace-scoped and cluster-wide modes.
 - **Diagnose** watch-related reconciliation failures by correlating operator logs, CR status conditions, RBAC denial events, and the specific watches.yaml field responsible for the behavior.
 - **Configure** finalizer mappings in `watches.yaml` and evaluate whether a given cleanup scenario requires a dedicated finalizer role, a deletion-timestamp branch in the main role, or Kubernetes garbage collection alone.
-- **Tune** operator reconciliation throughput by adjusting `numWorkers`, blacklisting high-churn child resource kinds, choosing `reconcilePeriod` values appropriate to each resource's external drift rate, and deciding when `dependentWatches` outperforms `watchDependentResources`.
+- **Tune** operator reconciliation throughput by controlling worker concurrency via the `ANSIBLE_WORKERS` environment variable or `--max-concurrent-reconciles` flag, blacklisting high-churn child resource kinds, and choosing `reconcilePeriod` values appropriate to each resource's external drift rate.
 
 ---
 
@@ -36,7 +36,7 @@ After completing this module, you will be able to:
 
 Hypothetical scenario: a platform team builds their first Ansible Operator to manage a single `DatabaseBackup` custom resource. Everything works in staging. Six months later, the same operator binary needs to manage a second resource type (`BackupSchedule`), serve two product teams with separate namespace boundaries, clean up S3 prefixes when a CR is deleted, and stop burning API server quota on every pod scheduling event in a busy cluster. The single-entry out-of-the-box `watches.yaml` cannot carry any of that weight without deliberate configuration.
 
-Advanced watch configuration is where operators grow from prototypes into production infrastructure. The choices you make in `watches.yaml`—whether to run cluster-wide or namespace-scoped, whether to trust `watchDependentResources` or enumerate specific `dependentWatches`, whether to attach a finalizer or rely on Kubernetes garbage collection alone—determine the operator's security blast radius, its behavior under deletion, and its performance envelope under load. Getting these wrong means either over-privileged controllers that are a compliance liability or under-configured controllers that miss configuration drift and leave orphaned cloud resources behind after CRs are deleted.
+Advanced watch configuration is where operators grow from prototypes into production infrastructure. The choices you make in `watches.yaml`—whether to run cluster-wide or namespace-scoped, whether to enable `watchDependentResources` with a `blacklist` or disable it entirely, whether to attach a finalizer or rely on Kubernetes garbage collection alone—determine the operator's security blast radius, its behavior under deletion, and its performance envelope under load. Getting these wrong means either over-privileged controllers that are a compliance liability or under-configured controllers that miss configuration drift and leave orphaned cloud resources behind after CRs are deleted.
 
 This module treats `watches.yaml` as a contract between your operator's control loop and the Kubernetes API server. Every field in that file is a deliberate engineering decision, not a default to leave untouched. You will leave with a complete mental model of how each field interacts with the others, a decision framework for scoping, performance, and cleanup that applies to any Ansible Operator project, and a hands-on lab that exercises all the patterns together on a real kind cluster.
 
@@ -49,7 +49,7 @@ graph TD
     WY["watches.yaml\n(YAML list)"] --> E1["Entry: CRD-A\nrole: app-role\nreconcilePeriod: 5m"]
     WY --> E2["Entry: CRD-B\nplaybook: cleanup.yml\nfinalizer: ..."]
 
-    E1 --> DW["dependentWatches\n[Deployment, Service]"]
+    E1 --> DW["watchDependentResources\n+ blacklist exclusions"]
     E1 --> NS["WATCH_NAMESPACE\nsingle / cluster-wide"]
     E2 --> FIN["finalizer.role: cleanup\nruns on deletionTimestamp"]
 
@@ -58,7 +58,7 @@ graph TD
 
     NS --> RBAC["Role (namespace)\nvs ClusterRole (cluster)"]
 
-    WY --> PERF["Performance knobs\nnumWorkers, blacklist\nmanageStatus, selector"]
+    WY --> PERF["Performance knobs\nANSIBLE_WORKERS, blacklist\nmanageStatus, selector"]
 
     E1 --> SEL["selector.matchLabels\nfilters watched CRs"]
     E2 --> CS["watchClusterScopedResources\nfor Node, PV, ClusterRole..."]
@@ -224,27 +224,35 @@ The `blacklist` field addresses this by excluding specific resource kinds from t
 
 Excluding `Event` and `Pod` from the dependent watch is almost always correct for operators managing Kubernetes workloads. Events are high-churn informational records written by many controllers. Pods cycle through status changes continuously during scheduling, image pulling, probe evaluation, and graceful termination. Neither kind represents configuration drift that the Ansible role needs to correct—the meaningful desired state lives in the Deployment spec, not in individual Pod status fields. Blacklisting both resources significantly reduces reconciliation frequency in busy clusters without changing the operator's behavior for any spec-level drift.
 
-`dependentWatches` takes the opposite approach from `blacklist`. Rather than excluding certain kinds from a broad watch, it specifies an explicit allowlist of secondary resource kinds to watch, requiring `watchDependentResources: false`:
+The `watchDependentResources` flag is boolean: `true` means watch ALL owned resources, `false` means watch none. There is no per-kind allowlist in `watches.yaml`—the SDK does not support specifying a subset of owned kinds to watch. The `blacklist` field is the only filtering mechanism available when `watchDependentResources: true`, and it operates by exclusion: you list kinds you do NOT want to trigger reconciliation, not kinds you do. For an operator where only Deployment and Service spec changes represent meaningful drift, the correct pattern is to enable the broad watch and then blacklist everything high-churn:
 
+<!-- code-verified-against: https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/ -->
 ```yaml
 - version: v1alpha1
   group: platform.example.com
   kind: WebApp
   role: webapp
-  watchDependentResources: false
-  dependentWatches:
-  - version: v1
-    group: apps
-    kind: Deployment
+  watchDependentResources: true
+  blacklist:
   - version: v1
     group: ""
-    kind: Service
+    kind: Event
+  - version: v1
+    group: ""
+    kind: Pod
+  - version: v1
+    group: ""
+    kind: ConfigMap
+  - version: v1
+    group: ""
+    kind: Secret
 ```
 
-With this configuration, only changes to `Deployment` and `Service` objects owned by this CR trigger reconciliation. ConfigMaps, Secrets, Events, Pods, and any other child kinds the role happens to create are ignored for watch purposes. This is the precision approach: you enumerate exactly which secondary resource changes represent meaningful state transitions that the Ansible role should respond to. It requires more initial design thought but produces predictable and auditable reconciliation behavior. When a new resource kind is added to the role in a future version, it does not automatically start triggering reconciliation—a team member must consciously decide whether to add it to `dependentWatches`, which is the right default for a production system.
+With this configuration, Deployment and Service changes owned by the CR still trigger reconciliation (they are not blacklisted), while Events, Pods, ConfigMaps, and Secrets are excluded. The trade-off versus a hypothetical allowlist is that any new child kind the role creates in a future version will trigger reconciliation until someone explicitly adds it to the blacklist. For an operator under active development, periodically auditing whether newly-added resource kinds belong in the blacklist is the correct discipline. Setting `watchDependentResources: false` entirely is appropriate only when the role creates no Kubernetes-native children whose spec drift the operator cares about—for example, a role that only manages external cloud resources.
 
 The `reconcilePeriod` field serves a different concern entirely: detecting and correcting external drift that Kubernetes events cannot capture. If an Ansible role creates a managed resource in a cloud provider—an RDS instance, a Route 53 record, an IAM policy—changes to those cloud resources never generate Kubernetes events. Setting `reconcilePeriod: 15m` causes the operator to re-reconcile every 15 minutes regardless of events, detecting and correcting external drift within that window:
 
+<!-- code-verified-against: https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/ -->
 ```yaml
 - version: v1alpha1
   group: platform.example.com
@@ -252,16 +260,15 @@ The `reconcilePeriod` field serves a different concern entirely: detecting and c
   role: cloud-database
   reconcilePeriod: 15m
   watchDependentResources: false
-  dependentWatches: []
 ```
 
 For purely Kubernetes-native resources where the watch covers all meaningful changes, `reconcilePeriod: 0s` is correct and wastes no reconciliation cycles. The choice of period should be driven by the external drift rate and the recovery time objective for that resource type—not by a desire to "be safe" with a short period across all entries. A 30-second reconcile period on a CRD with 500 instances generates 1,000 reconciliations per minute, which the Ansible runner process pool typically cannot sustain without queuing.
 
-The telemetry signal that reveals a reconcile period is causing overload is a flat, clock-like reconciliation rate that does not correlate with cluster activity. If the operator exposes Prometheus metrics via `--metrics-bind-address`, the counter `controller_runtime_reconcile_total{controller="<kind>"}` should grow at a steady rate equal to `CR_count ÷ reconcilePeriod`. Deviations above this baseline indicate that dependent watches or event storms are layering on top of the timer. The diagnostic procedure is to temporarily set `reconcilePeriod: 0s` on the suspect entry and observe whether the reconciliation rate drops toward zero; if the rate stays elevated, event-driven triggers rather than timers are the dominant source, and the fix is a narrower `dependentWatches` list or an expanded `blacklist`.
+The telemetry signal that reveals a reconcile period is causing overload is a flat, clock-like reconciliation rate that does not correlate with cluster activity. If the operator exposes Prometheus metrics via `--metrics-bind-address`, the counter `controller_runtime_reconcile_total{controller="<kind>"}` should grow at a steady rate equal to `CR_count ÷ reconcilePeriod`. Deviations above this baseline indicate that dependent watch events or event storms are layering on top of the timer. The diagnostic procedure is to temporarily set `reconcilePeriod: 0s` on the suspect entry and observe whether the reconciliation rate drops toward zero; if the rate stays elevated, event-driven triggers rather than timers are the dominant source, and the fix is an expanded `blacklist` or setting `watchDependentResources: false`.
 
-Scaling to ten thousand or more custom resources under timer-driven reconciliation requires explicit capacity planning that the default configuration does not provide. At 10,000 CRs with a `reconcilePeriod: 30m`, the timer generates 333 reconciliations per minute—one every 0.18 seconds—sustained continuously regardless of cluster activity. With `numWorkers: 1` and an Ansible role that takes 500 milliseconds per run (a reasonable estimate for roles with one or two API calls), the worker saturates at two reconciliations per second maximum, meaning the full CR population cycles in 83 minutes rather than the configured 30. The queue depth grows monotonically under these conditions. The remediation has three levers: lengthen the period if the external drift rate allows, raise `numWorkers` if CR reconciliations are independent of each other, or optimize the role's no-op path. A well-tuned no-op path—a single `kubernetes.core.k8s_info` task to read current state followed by `meta: end_play` when desired state already matches—can complete in under 100 milliseconds, delivering a five-times throughput improvement without touching worker count.
+Scaling to ten thousand or more custom resources under timer-driven reconciliation requires explicit capacity planning that the default configuration does not provide. At 10,000 CRs with a `reconcilePeriod: 30m`, the timer generates 333 reconciliations per minute—one every 0.18 seconds—sustained continuously regardless of cluster activity. With a single worker (the default when `ANSIBLE_WORKERS` is unset) and an Ansible role that takes 500 milliseconds per run (a reasonable estimate for roles with one or two API calls), the worker saturates at two reconciliations per second maximum, meaning the full CR population cycles in 83 minutes rather than the configured 30. The queue depth grows monotonically under these conditions. The remediation has three levers: lengthen the period if the external drift rate allows, raise the worker count via `ANSIBLE_WORKERS` or `--max-concurrent-reconciles` if CR reconciliations are independent of each other, or optimize the role's no-op path. A well-tuned no-op path—a single `kubernetes.core.k8s_info` task to read current state followed by `meta: end_play` when desired state already matches—can complete in under 100 milliseconds, delivering a five-times throughput improvement without touching worker count.
 
-The interaction between `reconcilePeriod` and `dependentWatches` compounds. Configuring both a non-zero period and broad dependent watches means reconciliation fires from two independent sources: event-driven from child changes and timer-driven from the period. On a cluster with many CRs, the queues grow faster than the workers process them. The rule: use `reconcilePeriod` for resources with external state that cannot be observed through Kubernetes events; use `dependentWatches` for purely Kubernetes-native resources whose drift is detectable through the watch API; avoid combining a short period with broad dependent watches.
+The interaction between `reconcilePeriod` and `watchDependentResources` compounds. Configuring both a non-zero period and `watchDependentResources: true` without a comprehensive `blacklist` means reconciliation fires from two independent sources: event-driven from child changes and timer-driven from the period. On a cluster with many CRs, the queues grow faster than the workers process them. The rule: use `reconcilePeriod` for resources with external state that cannot be observed through Kubernetes events; disable `watchDependentResources` for purely external operators where no Kubernetes-native drift needs event-driven detection; avoid combining a short period with broad dependent watches and a minimal blacklist.
 
 ---
 
@@ -365,17 +372,25 @@ The `selector` field supports the full Kubernetes label selector syntax, includi
 
 This selector watches resources in `production` or `canary` environments while excluding any resource labeled `skip-operator`—a useful pattern for emergency bypass when a CR needs to be pinned outside operator control temporarily without deleting it.
 
-The `numWorkers` field controls how many concurrent Ansible runner processes the operator spawns for a given CRD entry. The default is 1, meaning reconciliation requests for that CRD are processed serially: one CR is fully reconciled before the next begins. Serial processing is the correct default because concurrent Ansible runs against different CRs in the same namespace can produce race conditions when both roles modify the same ConfigMap or Secret. Raising `numWorkers` is appropriate when CRs are demonstrably independent and reconciliation takes long enough—due to external API calls or long-running Ansible tasks—that the single worker becomes a latency bottleneck:
+Ansible operator worker concurrency is controlled at the operator binary level, not per `watches.yaml` entry. The two levers are the `ANSIBLE_WORKERS` environment variable on the manager Pod and the `--max-concurrent-reconciles` flag passed to the manager process. Both apply globally across all CRD entries the operator manages. The default is 1, meaning all reconciliation requests across all entries share one worker pool processed serially. Raising the worker count is appropriate when CRs across different entries are demonstrably independent and reconciliation takes long enough—due to external API calls or long-running Ansible tasks—that the single worker becomes a latency bottleneck:
 
+<!-- code-verified-against: https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/ -->
 ```yaml
-- version: v1alpha1
-  group: platform.example.com
-  kind: WebApp
-  role: webapp
-  numWorkers: 3
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+        - name: ANSIBLE_WORKERS
+          value: "3"
 ```
 
-The API server rate limit, not CPU, is almost always the binding constraint when raising `numWorkers`. Each concurrent worker issues Kubernetes API calls for every task that uses `kubernetes.core.k8s` or `kubernetes.core.k8s_info`. At three workers, API call frequency triples for that CRD. Monitor the operator's API server request rate and watch for 429 `TooManyRequests` responses in the operator logs before raising `numWorkers` above 3. A value above 5 rarely improves throughput in practice because the API server backpressure dominates.
+The API server rate limit, not CPU, is almost always the binding constraint when raising worker count. Each concurrent worker issues Kubernetes API calls for every task that uses `kubernetes.core.k8s` or `kubernetes.core.k8s_info`. At three workers, API call frequency triples. Monitor the operator's API server request rate and watch for 429 `TooManyRequests` responses in the operator logs before raising the count above 3. A value above 5 rarely improves throughput in practice because the API server backpressure dominates.
 
 The `manageStatus` field determines whether the SDK writes `status.conditions` after each Ansible runner invocation. When `manageStatus: true` (the default), the operator automatically records whether the run succeeded and when the last reconcile occurred. When `manageStatus: false`, the status subresource is untouched by the SDK; the Ansible role owns it entirely through explicit `kubernetes.core.k8s` tasks that update the status. Using both simultaneously—`manageStatus: true` and status-writing tasks in the role—creates a last-writer-wins conflict that produces inconsistent status conditions. Choose one ownership model per entry and document the decision in the watches.yaml comment for the team.
 
@@ -386,7 +401,7 @@ The `manageStatus` field determines whether the SDK writes `status.conditions` a
 | Pattern | When to Use | Why It Works |
 |---------|-------------|--------------|
 | Namespace-scoped with `WATCH_NAMESPACE` | Single-tenant operators, per-team deployments | Least-privilege RBAC; blast radius limited to one namespace |
-| Explicit `dependentWatches` allowlist | Well-understood reconciliation dependencies | Predictable reconciliation frequency; no surprise triggers from new child resource kinds |
+| `watchDependentResources: false` for external-only operators | Roles managing only cloud API resources with no k8s-native children | Eliminates spurious event-driven reconciliation; drift detection handled entirely by `reconcilePeriod` |
 | Separate finalizer role | Cleanup with more than three tasks or external resources | Separation of concerns; cleanup role tested independently |
 | Non-zero `reconcilePeriod` for external resources | Resources with cloud API-managed state | Safety net for drift that Kubernetes events cannot capture |
 | Selector-based operator segmentation | Multiple operator instances sharing one CRD | Independent operator deployments per tier; no cross-tier queue interference |
@@ -394,12 +409,12 @@ The `manageStatus` field determines whether the SDK writes `status.conditions` a
 
 | Anti-Pattern | Why It Fails | Better Alternative |
 |--------------|-------------|-------------------|
-| `watchDependentResources: true` without blacklist | Events and Pod status changes trigger constant reconciliation on busy clusters | Add `blacklist` for `Event` and `Pod`; prefer explicit `dependentWatches` |
+| `watchDependentResources: true` without blacklist | Events and Pod status changes trigger constant reconciliation on busy clusters | Add `blacklist` for `Event` and `Pod`; expand blacklist as new high-churn child kinds are added |
 | `reconcilePeriod: 30s` on every entry | Reconciliation storm proportional to CR count; API server throttles operator | Use `0s` for Kubernetes-native resources; non-zero period only where external drift exists |
 | `ClusterRole` for a namespace-scoped operator | One bug or exploit has cluster-wide read access | Set `WATCH_NAMESPACE`; use a namespace-scoped `Role` with a `RoleBinding` |
 | Finalizer without idempotent cleanup role | Network failures during cleanup cause the role to fail on retry; CR stuck in `Terminating` | Use `state: absent` with `ignore_errors: true`; verify cleanup tasks are safe to run multiple times |
 | Both `manageStatus: true` and role-managed status | SDK and role write the same status fields; last-writer-wins produces inconsistent conditions | Pick one ownership model; set `manageStatus: false` when the role manages status |
-| `numWorkers: 10` without rate limit testing | API server returns 429; operator enters exponential backoff; CR reconciliation lags | Start at 1–3; load test with realistic CR counts; monitor for 429 responses |
+| `ANSIBLE_WORKERS=10` without rate limit testing | API server returns 429; operator enters exponential backoff; CR reconciliation lags | Start at 1–3 workers; load test with realistic CR counts; monitor for 429 responses |
 | Selector on a shared CRD without label enforcement | New CRs created without the required label are silently ignored forever | Enforce labels via a mutating admission webhook or CRD schema defaulting |
 
 ---
@@ -412,11 +427,11 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 |----------|--------|-------|
 | Does the role create cluster-scoped resources (StorageClass, ClusterRole, PV)? | Add `watchClusterScopedResources: true`; add `ClusterRole` rules | Keep `watchClusterScopedResources: false`; namespace-scope is sufficient |
 | Is the operator serving a single namespace or tenant? | Set `WATCH_NAMESPACE` to that namespace; use `Role` + `RoleBinding` | Leave `WATCH_NAMESPACE` empty; use `ClusterRole` + `ClusterRoleBinding` |
-| Do you know exactly which child resource changes should trigger reconciliation? | Use `watchDependentResources: false` + explicit `dependentWatches` list | Use `watchDependentResources: true` + `blacklist` for Event and Pod |
+| Does the role create Kubernetes-native children whose spec drift the operator should correct? | Use `watchDependentResources: true` + `blacklist` for Event and Pod | Set `watchDependentResources: false`; rely solely on `reconcilePeriod` for drift detection |
 | Does the role create external resources (S3, RDS, IAM, DNS)? | Set `reconcilePeriod` matching external drift rate (5–30m) | Set `reconcilePeriod: 0s` (purely event-driven) |
 | Does deletion require cleanup of external resources or ordered teardown? | Add `finalizer.name` + `finalizer.role` for complex cleanup | Rely on Kubernetes garbage collection via owner references |
 | Does the operator share this CRD with another operator instance? | Add `selector.matchLabels` with a labeling convention; enforce via admission | No selector needed |
-| Is reconciliation latency a bottleneck (runs >30s for independent CRs)? | Raise `numWorkers` to 2–3; monitor for 429 API errors | Keep `numWorkers: 1` (default) |
+| Is reconciliation latency a bottleneck (runs >30s for independent CRs)? | Raise `ANSIBLE_WORKERS` to 2–3; monitor for 429 API errors | Leave `ANSIBLE_WORKERS` unset (default: 1) |
 | Does the role manage status manually via `kubernetes.core.k8s`? | Set `manageStatus: false` | Leave `manageStatus: true` (default) |
 
 ---
@@ -425,7 +440,7 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 
 1. The `watches.yaml` format is a translation layer over [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime), the same Go library that powers Kubebuilder operators. Every field in `watches.yaml` maps to a configuration option in controller-runtime's `Manager` or `Builder` types. This means every performance characteristic and behavior documented for Go operators in the controller-runtime documentation applies equally to Ansible operators running on the same manager infrastructure.
 
-2. The `blacklist` field in `watches.yaml` predates the `dependentWatches` allowlist and exists primarily for backward compatibility with operators that were built before explicit allowlists were available. The Operator SDK maintainers have signaled in GitHub issues that `dependentWatches` with `watchDependentResources: false` is the preferred pattern for new operators, because an explicit allowlist is auditable and does not silently grow as the role adds new child resource types in future versions.
+2. The `blacklist` and `watchDependentResources` fields are the only knobs `watches.yaml` exposes for controlling which owned resource changes trigger reconciliation. There is no allowlist mechanism in the SDK—`watchDependentResources` is a boolean (all or none), and `blacklist` lets you exclude specific kinds from triggering re-queues while still granting them owner references for garbage collection. The implication: if you add a new high-churn child kind to a role, it automatically starts triggering reconciliation for every parent CR until someone explicitly adds it to the blacklist. Reviewing the blacklist whenever new resource kinds are added to a role is the correct discipline.
 
 3. When a CR enters deletion (its `deletionTimestamp` is set), Kubernetes prevents the API server from processing further `DELETE` requests on the object until all finalizer strings are removed. If the finalizer role fails repeatedly and the operator crashes or cannot recover, the CR becomes permanently stuck in `Terminating` state. No amount of `kubectl delete` calls on a `Terminating` object makes it go away—only removing the finalizer string via `kubectl patch` does. Document this escape hatch explicitly in the runbook for every operator that uses finalizers, because the first time a production CR gets stuck is always during an incident.
 
@@ -437,13 +452,13 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 
 | Mistake | Why It Happens | How to Fix It |
 |---------|---------------|---------------|
-| Setting `watchDependentResources: true` and `dependentWatches` simultaneously | Confusion about which field takes precedence | Use one or the other; `dependentWatches` requires `watchDependentResources: false` to be meaningful—if both are set, `watchDependentResources: true` overrides the explicit list |
+| Setting `watchDependentResources: true` without a `blacklist` in a busy cluster | Assuming the broad watch is harmless; not anticipating high-churn child kinds like Pod and Event | Add a `blacklist` for Event and Pod at minimum; audit whether other child kinds (ConfigMap, Secret) also need blacklisting |
 | Leaving `WATCH_NAMESPACE` empty in production | `operator-sdk init` generates empty `WATCH_NAMESPACE` as a permissive default | Set a specific namespace for tenant operators; require the variable to be explicitly set in the Deployment manifest and fail fast at startup if missing |
 | Forgetting `watchClusterScopedResources: true` for roles that create cluster-scoped children | Works in staging with `cluster-admin` credentials; fails with a least-privilege service account | Add the flag and corresponding `ClusterRole` rules; test with a restricted `ServiceAccount` that mirrors production |
 | Finalizer cleanup role that does not handle already-deleted resources | External resources are gone after the first cleanup attempt; subsequent retries fail hard; CR stuck in `Terminating` | Use `state: absent` with `ignore_errors: true` on all deletion tasks; verify idempotency by running the role twice on a test CR |
 | `manageStatus: true` with role-managed status tasks | SDK and role both write `status.conditions`; last-writer-wins produces unexpected conditions visible to users | Set `manageStatus: false` when the role writes any status field; ensure the role writes all status fields on every run |
 | Non-zero `reconcilePeriod` on a high-CR-count namespace-scoped deployment | 500 CRs × 1-minute period = 500 reconciliations/minute from timers alone; API server throttles the operator | Audit all `watches.yaml` entries with non-zero periods; use periods matching actual external drift frequency, not a conservative safety margin |
-| `numWorkers > 3` without 429 monitoring | API server rate limiting causes backoff that is invisible without log monitoring | Enable API server error logging in the operator; alert on 429 responses; validate `numWorkers` with a load test before production |
+| `ANSIBLE_WORKERS` above 3 without 429 monitoring | API server rate limiting causes backoff that is invisible without log monitoring | Enable API server error logging in the operator; alert on 429 responses; validate worker count with a load test before production |
 | Using a `selector` without enforcing labels at admission | CRs created without the required labels are silently ignored; users see no error and no reconciliation | Add a mutating admission webhook or CRD schema default values to ensure the label is always present on new CRs |
 
 ---
@@ -453,7 +468,7 @@ The central decision when configuring a `watches.yaml` entry is the trust and bl
 <details>
 <summary>Your operator manages `DatabaseBackup` CRs with `watchDependentResources: true`. You notice the operator reconciles every 2–3 seconds for the same CR even when no user is touching it. The Deployment it created is healthy and not changing spec. What is the most likely cause, and how do you verify and fix it?</summary>
 
-The most likely cause is that Pod and Event objects owned by the Deployment are generating high-frequency status updates that trigger reconciliation via the dependent watch. Every pod readiness probe check, pod scheduling decision, and controller-written Event generates a watch event that the operator receives and enqueues as a reconciliation request for the parent CR. To verify, look at the operator's reconciliation log messages for the triggering resource kind and name—the SDK logs which resource enqueued the request, so you will see something like `Reconciling DatabaseBackup triggered by Pod/...`. To fix, add a `blacklist` entry for `Event` and `Pod`, or switch from `watchDependentResources: true` to `watchDependentResources: false` with an explicit `dependentWatches` list containing only `Deployment` and `Service`. This eliminates the churn without changing drift detection for the resources that actually matter.
+The most likely cause is that Pod and Event objects owned by the Deployment are generating high-frequency status updates that trigger reconciliation via the dependent watch. Every pod readiness probe check, pod scheduling decision, and controller-written Event generates a watch event that the operator receives and enqueues as a reconciliation request for the parent CR. To verify, look at the operator's reconciliation log messages for the triggering resource kind and name—the SDK logs which resource enqueued the request, so you will see something like `Reconciling DatabaseBackup triggered by Pod/...`. To fix, add a `blacklist` entry for `Event` and `Pod`. This eliminates the churn without changing drift detection for the resources that actually matter—Deployment spec changes remain unwatched (not blacklisted) and continue to trigger reconciliation.
 
 </details>
 
@@ -474,7 +489,7 @@ The most likely explanation is that the finalizer role succeeded on the first at
 <details>
 <summary>You have a `watches.yaml` with two entries: `AppService` (reconcilePeriod 0s, `watchDependentResources: true`, no blacklist) and `AppConfig` (reconcilePeriod 0s, `watchDependentResources: false`). During a batch creation of 50 `AppService` CRs, `AppConfig` CRs stop being reconciled for several minutes. Explain why, and propose a fix.</summary>
 
-The Ansible runner process pool is shared across all entries in `watches.yaml`. When 50 `AppService` CRs are created simultaneously, they flood the reconciliation queue with creation events plus a cascade of Pod and Event events from `watchDependentResources: true`. With `numWorkers: 1` (the default), only one `AppService` reconciliation runs at a time, each taking several seconds. The queue grows faster than it drains, and because the queue is shared with `AppConfig` events, those events wait at the back of the combined queue. `AppConfig` reconciliation effectively pauses until the `AppService` burst clears. The fix has two parts: first, add a `blacklist` for `Event` and `Pod` in the `AppService` entry to eliminate the cascade of secondary events from the batch creation. Second, raise `numWorkers` to 3 for `AppService` so concurrent reconciliation drains the queue faster during bursts, while keeping `AppConfig` at 1 since its events are low-frequency. Monitor API server error rates after the change.
+The Ansible runner process pool is shared across all entries in `watches.yaml`. When 50 `AppService` CRs are created simultaneously, they flood the reconciliation queue with creation events plus a cascade of Pod and Event events from `watchDependentResources: true`. With a single worker (the default when `ANSIBLE_WORKERS` is unset), only one reconciliation runs at a time, each taking several seconds. The queue grows faster than it drains, and because the queue is shared with `AppConfig` events, those events wait at the back of the combined queue. `AppConfig` reconciliation effectively pauses until the `AppService` burst clears. The fix has two parts: first, add a `blacklist` for `Event` and `Pod` in the `AppService` entry to eliminate the cascade of secondary events from the batch creation. Second, set `ANSIBLE_WORKERS=3` on the manager Pod to drain the reconciliation queue faster during bursts. Monitor API server error rates after the change to ensure the increased concurrency does not trigger 429 throttling.
 
 </details>
 
@@ -546,14 +561,14 @@ Overwrite the generated `watches.yaml` with a configuration that exercises the p
   kind: PlatformApp
   role: platformapp
   reconcilePeriod: 5m
-  watchDependentResources: false
-  dependentWatches:
-  - version: v1
-    group: apps
-    kind: Deployment
+  watchDependentResources: true
+  blacklist:
   - version: v1
     group: ""
-    kind: Service
+    kind: Event
+  - version: v1
+    group: ""
+    kind: Pod
   manageStatus: true
   selector:
     matchLabels:
@@ -574,7 +589,7 @@ Overwrite the generated `watches.yaml` with a configuration that exercises the p
 <details>
 <summary>Why these values for each entry?</summary>
 
-`PlatformApp` uses explicit `dependentWatches` for Deployment and Service because those are the only child resources whose spec changes represent meaningful drift. The 5-minute `reconcilePeriod` acts as a safety net for manual edits. The `selector` enables future multi-tier operation. The finalizer ensures the cleanup role runs before the CR disappears. `PlatformConfig` is purely Kubernetes-native with ConfigMap children; `reconcilePeriod: 0s` and no dependent watches means it reconciles only on direct spec changes, consuming minimal reconciliation capacity.
+`PlatformApp` uses `watchDependentResources: true` with a `blacklist` for Event and Pod. This means Deployment and Service changes (not blacklisted) still trigger reconciliation for drift detection, while the high-churn Event and Pod kinds do not. The 5-minute `reconcilePeriod` acts as a safety net for manual edits. The `selector` enables future multi-tier operation. The finalizer ensures the cleanup role runs before the CR disappears. `PlatformConfig` is purely Kubernetes-native with ConfigMap children; `reconcilePeriod: 0s` and `watchDependentResources: false` means it reconciles only on direct spec changes, consuming minimal reconciliation capacity.
 
 </details>
 
@@ -712,13 +727,13 @@ Open a second terminal to stream the operator logs during the reconciliation tes
 kubectl logs -n platform-system -l control-plane=controller-manager -f
 ```
 
-Once the initial reconciliation completes and the Deployment appears in `platform-tenants`, simulate configuration drift by manually overriding the replica count. This is the exact scenario that `dependentWatches` is designed to catch without waiting for the `reconcilePeriod` timer:
+Once the initial reconciliation completes and the Deployment appears in `platform-tenants`, simulate configuration drift by manually overriding the replica count. This is the exact scenario that `watchDependentResources: true` is designed to catch without waiting for the `reconcilePeriod` timer:
 
 ```bash
 kubectl scale deployment demo-app-app -n platform-tenants --replicas=3
 ```
 
-Verify that the operator restores the replica count. Because `dependentWatches` includes Deployment, the scale event triggers a reconciliation within seconds rather than waiting for the 5-minute `reconcilePeriod`—this is the core behavioral difference between event-driven and timer-driven reconciliation paths:
+Verify that the operator restores the replica count. Because Deployment is not in the `blacklist`, the scale event triggers a reconciliation within seconds rather than waiting for the 5-minute `reconcilePeriod`—this is the core behavioral difference between event-driven and timer-driven reconciliation paths:
 
 ```bash
 kubectl get deployment demo-app-app -n platform-tenants -o jsonpath='{.spec.replicas}'
@@ -727,7 +742,7 @@ kubectl get deployment demo-app-app -n platform-tenants -o jsonpath='{.spec.repl
 <details>
 <summary>Expected behavior and timing</summary>
 
-Because `dependentWatches` includes Deployment, the scale event triggers reconciliation quickly—usually within a few seconds. The operator re-applies the role with `spec.replicas: 1`, restoring the Deployment to one replica. If you had used `watchDependentResources: false` with no `dependentWatches`, the operator would only detect the drift after the 5-minute `reconcilePeriod`.
+Because Deployment is not in the `blacklist` and `watchDependentResources: true`, the scale event triggers reconciliation quickly—usually within a few seconds. The operator re-applies the role with `spec.replicas: 1`, restoring the Deployment to one replica. If you had set `watchDependentResources: false`, the operator would only detect the drift after the 5-minute `reconcilePeriod`.
 
 </details>
 
