@@ -902,7 +902,7 @@ These are the patterns that look reasonable but lead to unreliable systems:
 
 - **The first software reliability model** was created by [John Musa at Bell Labs in 1975](https://en.wikipedia.org/wiki/John_D._Musa). He applied hardware reliability mathematics to software, founding the field of software reliability engineering. His insight: software bugs follow statistical patterns just like hardware failures.
 
-- **Netflix popularized the "Chaos Monkey" approach**, randomly killing production instances to ensure their systems could handle failures. Why the name? Because it's like having a monkey loose in your data center, randomly unplugging things. This evolved into chaos engineering—deliberately injecting failures to build confidence. If you haven't tested a failure, you don't know if you can survive it.
+- **Netflix popularized the "Chaos Monkey" approach** — see the [chaos engineering canonical module](../../disciplines/reliability-security/chaos-engineering/module-1.1-chaos-principles/) for the full story. The principle that matters here: if you haven't tested a failure, you don't know if you can survive it. <!-- incident-xref: netflix-chaos-monkey -->
 
 - [**The Space Shuttle had five redundant computers**](https://en.wikipedia.org/wiki/Space_Shuttle) running different software written by different teams. Why? A single bug could kill astronauts. The fifth computer ran entirely different software to protect against systematic bugs. This is the ultimate "defense in depth."
 
