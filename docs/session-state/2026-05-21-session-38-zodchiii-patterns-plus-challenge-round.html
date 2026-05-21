@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 38 — Wave C/D PR landing + zodchiii patterns + challenge-round pilot</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-done { background: #d4edda; color: #155724; }
+  .pill-pending { background: #fff3cd; color: #856404; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>Session 38 — Wave C/D PR landed + zodchiii patterns + challenge-round pilot</h1>
+
+<p class="meta">
+  2026-05-21 ~10:00 → 2026-05-21 ~12:30 local (~2h 30m) · driver: claude opus 4.7 inline ·
+  predecessor: <a href="2026-05-21-session-37-calibration-framework-hardening.md">session 37</a>
+</p>
+
+<p>
+User signals:
+</p>
+<blockquote>
+"orientate then continue from last session handoff [...] we should add to the test how the model is using mcps and following the harness if possible as well"<br>
+"we should use more often the /code-review command imo"<br>
+"do we need to redo some earlier test because of bugs maybe > ie gemini 3.5 flash ? or deepseek ? lets add different kind of languages: python, nodejs, java, rust, go. do you have other siggestions ?"<br>
+"we still should use grok, ie when i give you a x.com link you should call grok through hermes to get the content. voila!"<br>
+"please scedule both a b and c for writing ok ?"<br>
+"next off the record i want you to review this and find if we are missing any best practice [...] https://x.com/zodchiii/...the dude is mssing the -p issue coming soon but still wort cehcking it"<br>
+"we should try out all those 7 things you suggest no ?"<br>
+"verify module and revire module are obsolote, we dhould delete them no ?"
+</blockquote>
+
+<h2>TL;DR</h2>
+
+<p>Session 38 was the cleanup + pattern-adoption pass that followed session 37's heavy calibration work. Three PRs (#1376, #1377, #1378, #1379 — issues) plus 4 follow-on issues from a zodchiii Claude Code patterns critique. PR #1376 (the calibration hardening PR from session 37) gained two surprise bug-fix commits from a <strong>challenge-round pilot</strong> that found bugs the original 3-agent <code>/code-review</code> pass missed. Six obsolete slash-command files retired. CLAUDE.md trimmed from 163 → 146 lines. Used the new grok-for-x.com routing twice; worked first try both times.</p>
+
+<h2>1. PRs landed / files affected</h2>
+
+<table>
+<thead><tr><th>PR / commit</th><th>Subject</th><th>Status</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1376">#1376</a> cbce5235</td>
+  <td>feat(calibration): framework hardening + 2 new lanes + Wave C/D sweep</td>
+  <td><span class="pill pill-done">OPEN — pending review</span></td>
+</tr>
+<tr>
+  <td>#1376 9715318d (fix-up)</td>
+  <td>fix(calibration): 2 bugs from challenge-round pilot — OrchestratingScorer empty-set, preflight_probe response validation</td>
+  <td><span class="pill pill-done">pushed</span></td>
+</tr>
+<tr>
+  <td>#1376 6b3fe0be (fix-up)</td>
+  <td>chore: retire obsolete /review-module, /review-part, /verify-technical slash commands + propagate CLAUDE.md trim</td>
+  <td><span class="pill pill-done">pushed</span></td>
+</tr>
+</tbody></table>
+
+<p>Final PR shape: 25 files changed, +2479 / -148. Tests: 35 pass (was 34 + new empty-routes regression test). Lint clean.</p>
+
+<h2>2. Issues filed</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Topic</th><th>Tracks</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1377">#1377</a></td>
+  <td>Module A — GPU Memory Hierarchy and Bandwidth Math for LLM Inference</td>
+  <td>Osman series gap-plan (Module A)</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1378">#1378</a></td>
+  <td>Module B — Production-Tier LLM Inference Engines: Decision Framework</td>
+  <td>Osman series gap-plan (Module B) · depends #1377</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1379">#1379</a></td>
+  <td>Module C — Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping</td>
+  <td>Osman series gap-plan (Module C) · depends #1378</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1380">#1380</a></td>
+  <td>Quality hooks (auto-format + log-filter)</td>
+  <td>zodchiii pattern #6</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1381">#1381</a></td>
+  <td>Fresh-session-after-interview rule</td>
+  <td>zodchiii pattern #2</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1382">#1382</a></td>
+  <td>Stdout snapshots in verify_module.py</td>
+  <td>zodchiii pattern #6 (verification + recording)</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1383">#1383</a></td>
+  <td>Claude Code plugin marketplace scan</td>
+  <td>zodchiii pattern #5</td>
+</tr>
+</tbody></table>
+
+<h2>3. The challenge-round pilot (highest-value finding)</h2>
+
+<p>Session 37 ran a 3-agent <code>/code-review</code> pass (reuse / quality / efficiency) on the calibration changes. I implemented 5 findings and deferred 3. Session 38 piloted the zodchiii "challenge round" pattern — spawn a 4th adversarial agent to challenge the original reviewers AND the orchestrator's deferral decisions.</p>
+
+<p><strong>Challenge agent found 2 real bugs the 3 primary reviewers missed:</strong></p>
+
+<ol>
+<li><strong>OrchestratingScorer empty-set inconsistency.</strong> Empty <code>expected_routes</code> set <code>routing_ratio = 0.0</code>, collapsing <code>routing_accuracy</code> to False for every model. Every other ratio scorer (CodeReview, McpUse, HarnessFollowing, Summarization) treats empty as vacuous pass = 1.0. Latent bug: fires on any future fixture shipping without routes. Fixed in 9715318d + regression test added.</li>
+<li><strong>preflight_probe response validation.</strong> <code>dispatch_prompt</code> raises on empty response, but the probe didn't validate that the response was substantive. A model returning "I cannot help with that" would still pass preflight. Fixed in 9715318d — added <code>response_text.strip()</code> check + capture first 80 chars into the result dict for human inspection.</li>
+</ol>
+
+<p>The challenge agent also pushed back on three of my deferral decisions:</p>
+<ul>
+<li><strong>Reuse #1 (FamilyParallelScheduler dead code) — DEFER UPHELD by orchestrator but flagged as "dead-code-with-paperwork."</strong> The challenge agent argued strongly for deletion. Not done this session — would be a separate clean-up PR.</li>
+<li><strong>Reuse #2 (recall-ratio helper) — challenge agent counted 6 callers, not 2 as orchestrator claimed.</strong> The "wait for third lane" trigger is already 6×. Not done this session (~30-min refactor, separate PR).</li>
+<li><strong>Quality #5 (DispatchOutcome dataclass) — challenge agent argued ~12 LOC for a type-checkable return shape.</strong> Not done this session.</li>
+</ul>
+
+<p><strong>Verdict:</strong> the challenge-round pattern is worth keeping. One pilot pass found two real bugs + raised three legitimate deferral pushbacks, for ~3 min of agent time. Recommend running it on every non-trivial PR going forward.</p>
+
+<h2>4. zodchiii pattern adoption status</h2>
+
+<table>
+<thead><tr><th>#</th><th>Pattern</th><th>Action this session</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>CLAUDE.md as engineering manager</td><td><span class="pill pill-done">TRIMMED</span> — 163 → 146 lines, removed T2.2 aspirational endpoints, dedupe Links, drop Three-Pass Exam Strategy (unreferenced), drop stale audit + package.json rows from Key Files.</td></tr>
+<tr><td>2</td><td>Interview pattern (then fresh session)</td><td><span class="pill pill-pending">ISSUED</span> — <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1381">#1381</a></td></tr>
+<tr><td>3</td><td>Writer/reviewer separation (challenge round)</td><td><span class="pill pill-done">PILOTED</span> — found 2 bugs the 3-reviewer pass missed; documented as durable practice.</td></tr>
+<tr><td>4</td><td>Skills as folders</td><td><span class="pill pill-done">RESOLVED</span> — the candidates I planned to migrate (/verify-module, /review-module, /verify-technical) were obsolete; deleted instead. 6 files removed. No new skill folders needed.</td></tr>
+<tr><td>5</td><td>Plugins from marketplace</td><td><span class="pill pill-pending">ISSUED</span> — <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1383">#1383</a></td></tr>
+<tr><td>6a</td><td>Quality hooks (auto-format + log-filter)</td><td><span class="pill pill-pending">ISSUED</span> — <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1380">#1380</a></td></tr>
+<tr><td>6b</td><td>Verification skills with output recording</td><td><span class="pill pill-pending">ISSUED</span> — <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1382">#1382</a></td></tr>
+<tr><td>7</td><td>Batch operations with headless mode</td><td><span class="pill pill-done">ALREADY DONE</span> — run_wave.py (session 37) + dispatch_smart.py + codex exec.</td></tr>
+</tbody></table>
+
+<h2>5. Memory writes this session</h2>
+
+<ul>
+<li><code>feedback_use_code_review_command_often.md</code> — user asked twice for routine <code>/code-review</code> on non-trivial changes. <code>high</code> effort for money-burning paths. Added to TOP PRIORITY.</li>
+<li><code>feedback_grok_for_x_dot_com_links.md</code> — x.com / twitter.com URLs route through grok-4.3 over hermes; native X integration that no other adapter has. Coverage beats benchmark score for this specific capability. Added to TOP PRIORITY.</li>
+</ul>
+
+<p>The grok-for-x rule paid off twice this session — fetched the 3-part Ahmad Osman series and the @zodchiii post, both first-try.</p>
+
+<h2>6. End state</h2>
+
+<ul>
+<li>Branch: <code>session-37-calibration-framework-hardening</code> at <code>6b3fe0be</code>. PR <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1376">#1376</a> open with 3 commits.</li>
+<li>Tests: 35 pass; lint clean.</li>
+<li>Worktrees: <code>.worktrees/session-37-calibration</code> still in use (commit needed to delete it post-merge).</li>
+<li>Open issues filed this session: 7 (#1377-#1383).</li>
+<li>Memory: 2 new TOP PRIORITY entries.</li>
+</ul>
+
+<h2>7. Carryovers — next session</h2>
+
+<ol>
+<li><strong>Land PR #1376</strong> — needs cross-family review per <code>docs/review-protocol.md</code>. Suggest sonnet + agy (or codex if user prefers).</li>
+<li><strong>Pick up Osman Module A (#1377)</strong> — first of a 3-module mini-arc. Codex gpt-5.5 + dual sonnet/agy review.</li>
+<li><strong>CKS rewrites continuation</strong> — 5.4 Admission Controllers, 6.1 Audit Logging, 6.2 Falco, 6.3 Container Investigation. 155 critical-quality modules still in queue.</li>
+<li><strong>Per-language test harness for calibration</strong> — blocks the language-fixture sweep the user requested earlier. ~1 day infra.</li>
+<li><strong>Stability runs</strong> — pick 3-5 high-variance cells per model and run them 3× to compute variance.</li>
+<li><strong>Real-execution mcp-use lane</strong> — wire learn-ukrainian RAG MCP server (port 8766) for actual tool execution.</li>
+<li><strong>Re-fire harness-following on v2 fixture</strong> (<code>claude-md-context-cks-tweak</code>) once PR #1376 merges.</li>
+<li><strong>Optionally close challenge-agent's remaining deferral pushbacks</strong> — delete <code>scheduler.py</code> + <code>test_scheduler.py</code>; extract <code>_alias_recall</code> helper; <code>DispatchOutcome</code> dataclass. ~30-45 min separate PR.</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip (claude work moves inline in this terminal) · 2026-06-18 drop gemini adapter (agy migration Phase 3).</li>
+</ol>
+
+<h2>8. References</h2>
+
+<ul>
+<li>Predecessor: <code>docs/session-state/2026-05-21-session-37-calibration-framework-hardening.md</code></li>
+<li>Wave C/D audit: <code>docs/audits/2026-05-21-calibration-wave-cd-results.html</code></li>
+<li>Osman gap-plan: <code>docs/research/2026-05-21-ahmad-osman-local-llm-series-gap-plan.html</code></li>
+<li>PR #1376: <a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1376">github.com/kube-dojo/kube-dojo.github.io/pull/1376</a></li>
+<li>Calibration framework: <code>scripts/calibration/</code></li>
+<li>Calibration v1 spec: <code>docs/calibration/v1-spec.html</code></li>
+</ul>
+
+</body>
+</html>

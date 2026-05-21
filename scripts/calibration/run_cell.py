@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import subprocess
+import tempfile
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -131,6 +134,23 @@ def build_dispatch_plan(model: CalibrationModel) -> DispatchPlan:
     )
 
 
+@contextlib.contextmanager
+def _effective_cwd(model: CalibrationModel, default_cwd: Path) -> Iterator[Path]:
+    """Yield the working directory the model's CLI should run from.
+
+    agy-cli scans its `cwd` aggressively on startup (project context, conversation
+    history). Pointing it at REPO_ROOT during judge-only dispatches makes the call
+    hang past 1800s. A throwaway tempdir gives agy an empty workspace and keeps
+    its latency in the expected sub-minute range. Other CLIs continue to run from
+    `default_cwd` (REPO_ROOT) where they can reach the verifier scripts.
+    """
+    if model.provider_cli == "agy-cli":
+        with tempfile.TemporaryDirectory(prefix="calibration-agy-") as tmp:
+            yield Path(tmp)
+    else:
+        yield default_cwd
+
+
 def dispatch_prompt(
     model: CalibrationModel,
     prompt: str,
@@ -142,52 +162,53 @@ def dispatch_prompt(
     prompt = f"{plan.prompt_prefix}{prompt}"
     start = time.monotonic()
 
-    if plan.kind == "subprocess":
-        proc = subprocess.run(
-            list(plan.argv),
-            input=prompt,
-            text=True,
-            capture_output=True,
-            cwd=cwd,
-            timeout=timeout_s,
-            check=False,
-        )
-        latency_s = time.monotonic() - start
-        response = (proc.stdout or "").strip()
-        stderr_excerpt = (proc.stderr or "").strip()[:500] or None
-        if proc.returncode != 0 or not response:
-            raise RuntimeError(
-                f"dispatch failed for {model.canonical_string} "
-                f"(rc={proc.returncode}): {stderr_excerpt or 'empty response'}"
+    with _effective_cwd(model, cwd) as effective_cwd:
+        if plan.kind == "subprocess":
+            proc = subprocess.run(
+                list(plan.argv),
+                input=prompt,
+                text=True,
+                capture_output=True,
+                cwd=effective_cwd,
+                timeout=timeout_s,
+                check=False,
             )
-        return DispatchResult(
-            response=response,
-            task_id=task_id,
-            latency_s=latency_s,
-            returncode=proc.returncode,
-            stderr_excerpt=stderr_excerpt,
-        )
+            latency_s = time.monotonic() - start
+            response = (proc.stdout or "").strip()
+            stderr_excerpt = (proc.stderr or "").strip()[:500] or None
+            if proc.returncode != 0 or not response:
+                raise RuntimeError(
+                    f"dispatch failed for {model.canonical_string} "
+                    f"(rc={proc.returncode}): {stderr_excerpt or 'empty response'}"
+                )
+            return DispatchResult(
+                response=response,
+                task_id=task_id,
+                latency_s=latency_s,
+                returncode=proc.returncode,
+                stderr_excerpt=stderr_excerpt,
+            )
 
-    if plan.kind == "runtime" and plan.agent_name:
-        result = runner.invoke(
-            plan.agent_name,
-            prompt,
-            mode=plan.mode,
-            cwd=cwd,
-            model=plan.model,
-            task_id=task_id,
-            entrypoint="calibration",
-            hard_timeout=timeout_s,
-            tool_config={"isolated": True},
-        )
-        return DispatchResult(
-            response=result.response,
-            task_id=task_id,
-            latency_s=result.duration_s,
-            cost_usd=result.usage_record.get("cost_usd"),
-            returncode=result.returncode,
-            stderr_excerpt=result.stderr_excerpt,
-        )
+        if plan.kind == "runtime" and plan.agent_name:
+            result = runner.invoke(
+                plan.agent_name,
+                prompt,
+                mode=plan.mode,
+                cwd=effective_cwd,
+                model=plan.model,
+                task_id=task_id,
+                entrypoint="calibration",
+                hard_timeout=timeout_s,
+                tool_config={"isolated": True},
+            )
+            return DispatchResult(
+                response=result.response,
+                task_id=task_id,
+                latency_s=result.duration_s,
+                cost_usd=result.usage_record.get("cost_usd"),
+                returncode=result.returncode,
+                stderr_excerpt=result.stderr_excerpt,
+            )
 
     raise NotImplementedError(f"unknown dispatch plan kind: {plan.kind}")
 

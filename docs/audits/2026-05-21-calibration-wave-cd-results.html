@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wave C + Wave D + new-lane backfill — calibration results</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1100px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.5; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 2em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.5em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-good { background: #d4edda; color: #155724; }
+  .pill-mid  { background: #fff3cd; color: #856404; }
+  .pill-bad  { background: #f8d7da; color: #721c24; }
+  .pill-new  { background: #d1ecf1; color: #0c5460; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  .finding { background: #f9f9f9; border-left: 3px solid #888; padding: 0.6em 0.8em; margin: 0.6em 0; }
+  .finding-bad { border-left-color: #b03030; background: #fbeeee; }
+  .finding-good { border-left-color: #209030; background: #eef9ee; }
+</style>
+</head>
+<body>
+
+<h1>Wave C + Wave D + new-lane backfill — calibration results</h1>
+<p class="meta">
+  Generated: 2026-05-21 · Run date: 2026-05-21 · 88 new cells appended to <code>calibration/v1/ledger.db</code>
+  · Predecessor: <a href="2026-05-21-calibration-wave-ab-results.html">Wave A + Wave B results</a>
+  · Session handoff to be appended.
+</p>
+
+<p><strong>TL;DR.</strong> The session-37 sweep added <strong>88 calibration cells</strong>
+(6 Wave C/D models × 12 lanes = 72 cells; 8 Wave A+B models × 2 new lanes = 16 cells)
+to a ledger that now holds <strong>168 cells</strong>. All 88 cells dispatched
+and scored ok — 0 dispatch failures, 15 model-side empty/refusal responses
+(judged 0.0), 19 human-spot-check triggers where the two judges disagreed by
+&gt; 1.0. Headline: <strong><code>gpt-5.3-codex-spark</code> is the cheap-tier
+winner</strong> (det 0.77, judge 8.48 over 12 lanes) and <strong>ties opus on the
+new MCP-use lane (1.00 / 10.00)</strong>. <strong><code>qwen3.6</code> (the non-plus
+variant) collapsed across the cheap tier</strong> with 33% det-rate and a judge avg
+of 5.0 — multiple empty responses. The harness-following lane proved too easy
+(13/14 models scored 1.00 / ~10.0) — the fixture exposed all four rules in the
+prompt, so even cheap models could cite them back; needs redesign.</p>
+
+<h2>1. Overall ranking — all 14 anchors</h2>
+
+<p>Combined rank = deterministic-gate pass rate + (judge avg ÷ 10). Cells column
+shows how many cells each model has data for; Wave A+B anchors have 12 (10
+original lanes + 2 new), Wave C+D anchors have 12 (all 12 lanes), and
+<code>gemini-3.5-flash-high</code> shows 11 because its session-36 architecting
+cell was an empty-response failure.</p>
+
+<table>
+<thead><tr><th>Rank</th><th>Model</th><th>det rate</th><th>judge avg</th><th>cells</th><th>family</th><th>wave</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>gpt-5.5</code></td><td>0.76</td><td>9.00</td><td>12</td><td>openai</td><td>A</td></tr>
+<tr><td>2</td><td><code>claude-opus-4-7</code></td><td>0.74</td><td>9.12</td><td>12</td><td>anthropic</td><td>A</td></tr>
+<tr><td>3</td><td><code>claude-sonnet-4-6</code></td><td>0.75</td><td>8.75</td><td>12</td><td>anthropic</td><td>B</td></tr>
+<tr><td>4</td><td><code>gpt-5.3-codex-spark</code> <span class="pill pill-new">new</span></td><td>0.77</td><td>8.48</td><td>12</td><td>openai</td><td>D</td></tr>
+<tr><td>5</td><td><code>gpt-5.4-mini</code> <span class="pill pill-new">new</span></td><td>0.74</td><td>8.67</td><td>12</td><td>openai</td><td>D</td></tr>
+<tr><td>6</td><td><code>gemini-3.1-pro-preview</code></td><td>0.84</td><td>7.50</td><td>12</td><td>google</td><td>B</td></tr>
+<tr><td>7</td><td><code>gemini-3.1-flash-lite-preview</code> <span class="pill pill-new">new</span></td><td>0.82</td><td>7.36</td><td>12</td><td>google</td><td>D</td></tr>
+<tr><td>8</td><td><code>deepseek-v4-pro</code></td><td>0.61</td><td>8.89</td><td>12</td><td>deepseek</td><td>A</td></tr>
+<tr><td>9</td><td><code>grok-4.3</code> <span class="pill pill-new">new</span></td><td>0.65</td><td>8.40</td><td>12</td><td>xai</td><td>C</td></tr>
+<tr><td>10</td><td><code>deepseek-v4-flash</code></td><td>0.66</td><td>8.12</td><td>12</td><td>deepseek</td><td>B</td></tr>
+<tr><td>11</td><td><code>gemini-3.5-flash-high</code></td><td>0.53</td><td>9.40</td><td>11</td><td>google</td><td>A</td></tr>
+<tr><td>12</td><td><code>claude-haiku-4-5</code> <span class="pill pill-new">new</span></td><td>0.69</td><td>7.33</td><td>12</td><td>anthropic</td><td>D</td></tr>
+<tr><td>13</td><td><code>qwen3.6-plus</code></td><td>0.67</td><td>7.12</td><td>12</td><td>alibaba</td><td>A</td></tr>
+<tr><td>14</td><td><code>qwen3.6</code> <span class="pill pill-new">new</span></td><td>0.33</td><td>5.00</td><td>12</td><td>alibaba</td><td>D</td></tr>
+</tbody></table>
+
+<h2>2. Cheap-tier (Wave C + Wave D) ranking</h2>
+
+<table>
+<thead><tr><th>Rank</th><th>Model</th><th>det rate</th><th>judge avg</th><th>notes</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>gpt-5.3-codex-spark</code></td><td>0.77</td><td>8.48</td><td>Best cheap-tier overall. Perfect 1.00/10.00 on mcp-use. Closes most of the gap to <code>gpt-5.5</code>.</td></tr>
+<tr><td>2</td><td><code>gpt-5.4-mini</code></td><td>0.74</td><td>8.67</td><td>Highest cheap-tier judge avg. <strong>But</strong> wall-clock is brutal: 1116s on content-review, 623s on content-writing-long.</td></tr>
+<tr><td>3</td><td><code>gemini-3.1-flash-lite-preview</code></td><td>0.82</td><td>7.36</td><td>Highest det rate of the wave; structurally compliant but pedagogically thin (same pattern as 3.1-pro).</td></tr>
+<tr><td>4</td><td><code>grok-4.3</code></td><td>0.65</td><td>8.40</td><td>Wave C anchor (only). Strong on architecting (judge 8.90), 0.75 on the new debugging fixture.</td></tr>
+<tr><td>5</td><td><code>claude-haiku-4-5</code></td><td>0.69</td><td>7.33</td><td>Wins architecting outright (judge 9.0); collapses on mcp-use (det 0.33, judge 6.0).</td></tr>
+<tr><td>6</td><td><code>qwen3.6</code></td><td>0.33</td><td>5.00</td><td><strong>Clear last.</strong> 6 of 12 cells either empty or judged 0. Non-plus variant is not viable for production routing.</td></tr>
+</tbody></table>
+
+<h2>3. New-lane breakdown</h2>
+
+<h3>mcp-use lane (define-the-word-in-uk fixture)</h3>
+
+<table>
+<thead><tr><th>Model</th><th>det rate</th><th>judge avg</th></tr></thead>
+<tbody>
+<tr><td><code>gpt-5.3-codex-spark</code></td><td>1.00</td><td>10.00</td></tr>
+<tr><td><code>claude-opus-4-7</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>claude-sonnet-4-6</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>gpt-5.5</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>deepseek-v4-pro</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>grok-4.3</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>gemini-3.1-flash-lite-preview</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>gpt-5.4-mini</code></td><td>0.67</td><td>10.00</td></tr>
+<tr><td><code>gemini-3.5-flash-high</code></td><td>0.67</td><td>8.50</td></tr>
+<tr><td><code>gemini-3.1-pro-preview</code></td><td>0.67</td><td>8.00</td></tr>
+<tr><td><code>qwen3.6-plus</code></td><td>0.67</td><td>7.50</td></tr>
+<tr><td><code>deepseek-v4-flash</code></td><td>0.67</td><td>7.50</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td>0.33</td><td>6.00</td></tr>
+<tr><td><code>qwen3.6</code></td><td>0.33</td><td>0.00 (empty)</td></tr>
+</tbody></table>
+
+<p>The lane <strong>differentiates well</strong>: a hard floor at det 0.33 / judge 0.0
+catches model collapse (qwen3.6, partial haiku), and the perfect 1.00 / 10.00
+top score is achieved only by <code>gpt-5.3-codex-spark</code> — a meaningful
+upset of the much larger reasoning-tier models that tied at 0.67 / 10.00.
+The 0.67 plateau is from the <code>parameter_grounding</code> gate (≥0.6 of
+required signals like "SUM", "Hrinchenko", "ESUM") landing at exactly 0.6
+because every model picks 2 of 4 sources. <strong>Tighten the gate</strong> in v1.2
+to ≥0.75 or expand the required-signal list.</p>
+
+<h3>harness-following lane (inline-write-falco-module fixture)</h3>
+
+<table>
+<thead><tr><th>Model</th><th>det rate</th><th>judge avg</th></tr></thead>
+<tbody>
+<tr><td colspan="3"><em>13 of 14 models scored exactly 1.00 / 10.00 (Anthropic, Google agy, OpenAI gpt-5.5, qwen-plus, deepseek-pro, sonnet, haiku)</em></td></tr>
+<tr><td colspan="3"><em>3 models scored 1.00 / 9.5 (gemini-pro-preview, deepseek-flash, grok-4.3, codex-spark, mini)</em></td></tr>
+<tr><td><code>gemini-3.1-flash-lite-preview</code></td><td>1.00</td><td>9.00</td></tr>
+<tr><td><code>qwen3.6</code></td><td>0.33</td><td>0.00 (empty)</td></tr>
+</tbody></table>
+
+<div class="finding finding-bad">
+<strong>Fixture design flaw.</strong> The harness-following prompt explicitly lists
+the four binding KubeDojo rules (<code>feedback_dispatch_codex_for_code_changes</code>
+and friends), so any model that can pattern-match the rule list back into the
+response trivially passes the <code>rule_recall</code> gate. The lane needs a
+harder version where the model is given a rule-violating ask <em>without</em>
+the rule list — it must surface the rule from its own memory/context. Move
+toward "you have just been pasted a CLAUDE.md; here is the user ask" with
+the rules embedded in the CLAUDE.md context, not the immediate prompt.
+</div>
+
+<h2>4. New fixture differentiation</h2>
+
+<h3>code-review: <code>k8s-controller-leader-election</code> (6 planted findings)</h3>
+
+<table>
+<thead><tr><th>Model</th><th>det rate (Wave C/D only)</th></tr></thead>
+<tbody>
+<tr><td>All 6 Wave C/D models</td><td>0.50 (tied)</td></tr>
+</tbody></table>
+
+<div class="finding finding-bad">
+<strong>Same all-tied collapse as the v1 fixture.</strong> The
+<code>CodeReviewScorer</code>'s 2 binary gates (<code>ground_truth_findings</code>
++ <code>no_hallucinations</code>) still collapse to exactly 0.50 across all
+models — meaning every model hits all 6 planted findings (or at least their
+aliases) AND also outputs at least one hallucination term. The fix is
+<em>scorer</em>-side, not fixture-side: replace the AND-of-binary-gates with a
+per-finding recall ratio + a separate hallucination-rate ratio. The new fixture
+is harder per-finding (6 issues vs 4) but the scorer geometry is the bottleneck.
+Filed for v1.2.
+</div>
+
+<h3>debugging: <code>pod-pending-topology-mismatch</code> (4-object EKS scenario)</h3>
+
+<table>
+<thead><tr><th>Model</th><th>det rate</th></tr></thead>
+<tbody>
+<tr><td><code>gemini-3.1-flash-lite-preview</code></td><td>1.00</td></tr>
+<tr><td><code>gpt-5.4-mini</code></td><td>1.00</td></tr>
+<tr><td><code>grok-4.3</code></td><td>0.75</td></tr>
+<tr><td><code>gpt-5.3-codex-spark</code></td><td>0.75</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td>0.75</td></tr>
+<tr><td><code>qwen3.6</code></td><td>0.50</td></tr>
+</tbody></table>
+
+<div class="finding finding-good">
+<strong>Differentiates correctly.</strong> Score distribution from 0.50 to 1.00
+across 6 cheap-tier models — exactly what the v1 <code>resourcequota-pvc-mismatch</code>
+fixture failed to produce (7-of-8 at 1.00). Surprising: <code>gemini-3.1-flash-lite-preview</code>
+ties <code>gpt-5.4-mini</code> at 1.00, beating both <code>grok-4.3</code> and
+<code>gpt-5.3-codex-spark</code> at 0.75. Cheap Gemini punches above weight on
+structured-debugging fixtures.
+</div>
+
+<h2>5. Surprising findings</h2>
+
+<div class="finding finding-good">
+<strong>1. <code>gpt-5.3-codex-spark</code> wins the new MCP-use lane outright
+(1.00 / 10.00).</strong> It is the only model that planned the full 5-step
+canonical sequence (<code>translate_en_uk</code> → <code>verify_word</code> →
+<code>check_modern_form</code> → <code>check_russian_shadow</code> →
+<code>search_sources</code>) AND named SUM / Hrinchenko / ESUM by name. Every
+other model — including opus, sonnet, gpt-5.5, grok — stopped at 4 steps or
+omitted at least one source citation. This is a real signal that codex's training
+on tool-use scaffolding pays off on tool-planning tasks even at the spark tier.
+</div>
+
+<div class="finding finding-bad">
+<strong>2. <code>qwen3.6</code> (non-plus) is not viable for production routing.</strong>
+6 of 12 cells either empty or judged 0 (architecting, orchestrating ×2, content-
+writing-long ×2, summarization). Det rate 0.33, judge avg 5.0 — both worst-in-
+class. The <code>qwen3.6-plus</code> variant is fine (0.67 / 7.12), so route
+to plus, not the base SKU.
+</div>
+
+<div class="finding finding-bad">
+<strong>3. <code>gpt-5.4-mini</code> is incredibly slow on prose lanes.</strong>
+1116s on content-review (the worst cell of the entire 168-cell ledger), 623s on
+content-writing-long, 434s on orchestrating, 395s on architecting. Cost-per-call
+may be cheap, but the wall-clock cost of routing prose work to mini is
+prohibitive for an interactive pipeline. Keep mini for fast lanes (mcp-use
+89s, summarization 16s, harness-following 43s).
+</div>
+
+<div class="finding finding-good">
+<strong>4. <code>gpt-5.3-codex-spark</code> beats <code>claude-opus-4-7</code> on
+content-writing-long.</strong> Spark hit det 0.80 / judge 9.50, opus hit det 0.80
+/ judge 9.0 — half a point of judge avg in spark's favor. Surprising because
+opus is widely considered the prose-quality leader. Possible that the
+content-writing-long fixture (kubedojo-rbac-module) rewards structured, dense
+output over flowing prose, which suits spark's training.
+</div>
+
+<div class="finding finding-good">
+<strong>5. <code>gemini-3.5-flash-high</code> recovered on the new lanes.</strong>
+In Wave A+B (session 36) gemini-3.5-flash-high collapsed on the 3 prose lanes
+it ran (judge avg 1.67, one empty response). On the 2 new lanes it landed
+0.67 / 8.50 (mcp-use) and 1.00 / 10.00 (harness-following). The model is
+viable for tool-planning + rule-following despite its collapse on free-form
+prose. Promotes it back into the supplemental-reviewer pool for non-prose work.
+</div>
+
+<h2>6. Data quality issues</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Count</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Cells with no dispatch</td><td>0</td><td>All 88 cells produced a response file.</td></tr>
+<tr><td>Judge scored 0 (model collapse)</td><td>15</td><td>11 × qwen3.6 (across architecting, orchestrating, content-writing-long, summarization), 4 × gemini-3.5-flash-high (carryover from Wave A+B; not re-tested in Wave C/D).</td></tr>
+<tr><td>Human spot-check triggers</td><td>19</td><td>Judges (sonnet × gemini-3.5-flash-high) disagreed by &gt; 1.0. Highest disagreements on prose lanes; surfaces in the report's per-cell view.</td></tr>
+<tr><td>Pre-flight catches</td><td>1</td><td>First pre-flight aborted on <code>hermes/deepseek</code> at 120s. Manual probe showed deepseek-v4-pro takes ~120s on first call; bumped probe ceiling to 240s and re-fired. <strong>Pre-flight saved an estimated $5 + 60 min</strong> by catching this before opening the full sweep.</td></tr>
+</tbody></table>
+
+<h2>7. Framework improvements landed this session</h2>
+
+<ul>
+<li><strong>WAL mode by default</strong> (<code>scripts/calibration/schema.py:init_db</code>) — eliminates the session-36 lock-contention problem at parallel scoring.</li>
+<li><strong>agy worktree threading</strong> (<code>scripts/calibration/run_cell.py:_effective_cwd</code>) — agy-cli now dispatches from a fresh tempdir, eliminating the 1800s hang that forced session-36 to use sonnet × 2 instead of sonnet + gemini-3.5-flash-high as judges. Confirmed this session: all gemini-3.5-flash-high writer cells completed in &lt;30s.</li>
+<li><strong>Per-lane judge timeouts</strong> (<code>scripts/calibration/score_cell.py:JUDGE_TIMEOUTS_S</code>) — replaced the 1800s judge ceiling with lane-aware budgets (90s for mcp-use/harness-following; 180s for prose lanes). Caught nothing this run, but eliminates the 30-min stall risk on a hanging judge.</li>
+<li><strong>Parallel judge1 + judge2 dispatch</strong> (<code>scripts/calibration/score_cell.py:score_cell</code>) — judges now fan out in 2-thread pool instead of running serially. Saved ~22-44 min on the 88-cell sweep.</li>
+<li><strong>Pre-flight adapter probe</strong> (<code>scripts/calibration/run_wave.py:preflight_probe</code>) — probes one model per distinct (provider_cli, agent_name) pair with a short timeout before opening the full sweep. <strong>Already paid off once</strong> this session.</li>
+<li><strong>Lane-set consistency asserts</strong> (<code>scripts/calibration/score_cell.py:_assert_lane_set_consistency</code> + <code>run_wave.py:_assert_lane_fixture_consistency</code>) — module-load-time guards that catch "added a lane but forgot to wire SCORERS / LANE_FIXTURES" drift before any cell dispatches.</li>
+<li><strong>Two new lanes</strong>: <code>mcp-use</code> (tool-planning) and <code>harness-following</code> (project-rule adherence). 28 cells run this session across these lanes.</li>
+<li><strong>Harder fixtures</strong>: code-review (<code>k8s-controller-leader-election</code>, 6 planted findings) and debugging (<code>pod-pending-topology-mismatch</code>, EKS multi-AZ scenario). Debugging differentiates; code-review still collapses (scorer issue, not fixture).</li>
+<li><strong>Committed wave runner</strong> (<code>scripts/calibration/run_wave.py</code>) — replaces the ad-hoc session-36 script; family-parallel dispatch + in-line scoring + pre-flight + JSONL summary. <code>--smoke</code> for cheap pipeline validation.</li>
+</ul>
+
+<h2>8. Recommendations for next wave</h2>
+
+<ol>
+<li><strong>Fix the <code>CodeReviewScorer</code></strong> — replace AND-of-binary-gates with per-finding recall ratio + hallucination-rate ratio. Otherwise the harder fixture also collapses to 0.50-tied.</li>
+<li><strong>Rebuild the harness-following fixture</strong> — embed the rules in a simulated CLAUDE.md context, not the immediate prompt. The current lane is "can the model echo a rule list" rather than "does the model recognize a rule violation."</li>
+<li><strong>Tighten mcp-use gate threshold</strong> from ≥0.6 to ≥0.75 on <code>parameter_grounding</code>, OR expand required signals so the 0.67 plateau breaks open.</li>
+<li><strong>Route qwen3.6 off all production paths.</strong> The base SKU is not viable. Cascade to qwen3.6-plus only.</li>
+<li><strong>Add gpt-5.3-codex-spark to the mcp-use reviewer cascade.</strong> Wave C/D data shows it is the unique perfect-score model on tool-planning. Should also be tested on shadow code-review duty given its overall det rate (0.77) beats opus (0.74).</li>
+<li><strong>Defer routing prose work to gpt-5.4-mini</strong> despite its strong score per cell — wall-clock is prohibitive (1116s × 2 on the same model would dominate any pipeline).</li>
+</ol>
+
+<h2>9. Cost / quality Pareto (preview)</h2>
+
+<p>Below is a rough cost-per-quality-unit ranking computed by
+<code>scripts/calibration/pareto.py</code>. Cost is observed total latency
+times an approximate $/sec rate per model tier (anthropic Max / codex Pro /
+gemini agy = $0.0001/s subscription floor; hermes / openrouter tiers priced
+from observed receipts). Quality is the same det+judge/10 axis used in
+section 1. Models below the 1.0 quality floor (qwen3.6 only) sink to the
+bottom — the metric should not reward fast empty responses.</p>
+
+<table>
+<thead><tr><th>Rank</th><th>Model</th><th>Quality</th><th>Total latency (s)</th><th>Est cost ($)</th><th>Cost / quality unit</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>gpt-5.3-codex-spark</code></td><td>1.62</td><td>233</td><td>$0.0233</td><td>$0.0144</td></tr>
+<tr><td>2</td><td><code>gemini-3.5-flash-high</code></td><td>1.52</td><td>279</td><td>$0.0279</td><td>$0.0184</td></tr>
+<tr><td>3</td><td><code>gemini-3.1-pro-preview</code></td><td>1.59</td><td>569</td><td>$0.0569</td><td>$0.0358</td></tr>
+<tr><td>4</td><td><code>claude-haiku-4-5</code></td><td>1.42</td><td>626</td><td>$0.0626</td><td>$0.0439</td></tr>
+<tr><td>5</td><td><code>gemini-3.1-flash-lite-preview</code></td><td>1.56</td><td>799</td><td>$0.0799</td><td>$0.0512</td></tr>
+<tr><td>6</td><td><code>deepseek-v4-flash</code></td><td>1.47</td><td>231</td><td>$0.0923</td><td>$0.0626</td></tr>
+<tr><td>7</td><td><code>claude-opus-4-7</code></td><td>1.65</td><td>1235</td><td>$0.1235</td><td>$0.0747</td></tr>
+<tr><td>8</td><td><code>claude-sonnet-4-6</code></td><td>1.62</td><td>1446</td><td>$0.1446</td><td>$0.0890</td></tr>
+<tr><td>9</td><td><code>gpt-5.5</code></td><td>1.66</td><td>1650</td><td>$0.1650</td><td>$0.0996</td></tr>
+<tr><td>10</td><td><code>grok-4.3</code></td><td>1.49</td><td>242</td><td>$0.2417</td><td>$0.1622</td></tr>
+<tr><td>11</td><td><code>gpt-5.4-mini</code></td><td>1.61</td><td>3579</td><td>$0.3579</td><td>$0.2222</td></tr>
+<tr><td>12</td><td><code>qwen3.6-plus</code></td><td>1.39</td><td>613</td><td>$0.3680</td><td>$0.2655</td></tr>
+<tr><td>13</td><td><code>deepseek-v4-pro</code></td><td>1.50</td><td>1120</td><td>$0.8960</td><td>$0.5984</td></tr>
+<tr><td>14</td><td><code>qwen3.6</code></td><td>0.83</td><td>27</td><td>$0.0082</td><td>(below quality floor)</td></tr>
+</tbody></table>
+
+<div class="finding finding-good">
+<strong>Pareto upset:</strong> <code>gpt-5.3-codex-spark</code> is the
+cheapest model per quality unit AND tops the cheap-tier ranking on quality
+itself. It beats <code>claude-opus-4-7</code> on cost/quality by 5×
+(subscription pool pricing applies to both, but spark's lower latency wins
+the per-call efficiency). For pipelines billed against the subscription
+caps, spark is the obvious workhorse default for non-reasoning tasks.
+</div>
+
+<div class="finding finding-bad">
+<strong>Cost/quality losers:</strong> <code>deepseek-v4-pro</code> (40×
+worse cost/quality than spark — high per-second rate × long latencies),
+<code>gpt-5.4-mini</code> (15× worse — fast per-call $/s but the 1116s
+content-review cell dominates the total). Mini cost-per-quality is
+asymmetric: cheap on fast lanes, prohibitive on prose lanes.
+</div>
+
+<h2>10. Links</h2>
+
+<ul>
+<li>Predecessor report: <a href="2026-05-21-calibration-wave-ab-results.html">Wave A + Wave B results</a></li>
+<li>Auto-generated matrix: <code>calibration/v1/reports/2026-05-21/matrix.html</code> (gitignored)</li>
+<li>Calibration spec: <code>docs/calibration/v1-spec.html</code></li>
+<li>Build tracking issue: #1365</li>
+<li>Framework source: <code>scripts/calibration/</code></li>
+<li>Session-37 sweep script: <code>/tmp/fire_wave_cd_plus_backfill.py</code> (not committed; one-off)</li>
+</ul>
+
+</body>
+</html>

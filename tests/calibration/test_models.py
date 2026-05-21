@@ -6,7 +6,10 @@ from scripts.calibration.models import ANCHORS, LANES, model_by_canonical, model
 def test_anchor_registry_has_locked_models_and_lanes():
     assert len(ANCHORS) == 14
     assert len({model.canonical_string for model in ANCHORS}) == 14
-    assert len(LANES) == 10
+    # Wave A/B shipped with 10 lanes; Wave C added mcp-use and harness-following.
+    assert len(LANES) == 12
+    assert "mcp-use" in LANES
+    assert "harness-following" in LANES
     assert model_by_canonical("claude-opus-4-7").effort_mechanism == "native_flag"
     assert model_by_canonical("gpt-5.5").effort_requested == "xhigh"
     assert model_by_canonical("grok-4.3").effort_confidence == "unknown"

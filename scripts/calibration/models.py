@@ -203,6 +203,12 @@ LANES = (
     "debugging",
     "refactoring",
     "summarization",
+    # Added Wave C/D — tool-use planning and project-rule adherence.
+    # Both are text-only (the model plans tool calls / cites rules; we do
+    # not execute the planned tools). See scripts/calibration/prompts/v1/
+    # mcp-use/ and harness-following/ for fixtures.
+    "mcp-use",
+    "harness-following",
 )
 
 

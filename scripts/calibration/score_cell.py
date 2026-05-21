@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import re
 import subprocess
@@ -27,6 +28,9 @@ PROSE_LANES: frozenset[str] = frozenset(
         "summarization",
         "content-writing-long",
         "architecting",
+        # mcp-use / harness-following: ratio-gates can be keyword-gamed; judge unconditionally.
+        "mcp-use",
+        "harness-following",
     },
 )
 
@@ -122,21 +126,55 @@ class CodeWritingScorer:
 
 
 class CodeReviewScorer:
+    """Code-review scoring with ratio-gates, not binary AND.
+
+    The v1 design (binary AND of ``ground_truth_findings`` + ``no_hallucinations``)
+    collapsed to exactly 0.50 across all 8 Wave A+B models — every model hit some
+    findings AND coughed up at least one hallucination term, so both gates were
+    half-pass and the AND was always exactly 0.5. v1.2 replaces this with:
+
+      - ``finding_recall``: fraction of planted findings hit (pass @ ≥0.6, the
+        Wave-A floor; raise to ≥0.75 once data shows a tier separation).
+      - ``hallucination_rate``: fraction of hallucination terms present
+        (pass @ ≤0.25 — i.e., at most one bogus term in a 4-term list).
+
+    Two ratio gates instead of two binary gates means the joint score range is
+    {0.0, 0.5, 1.0} instead of just 0.5 — restores discrimination.
+    """
+
+    FINDING_RECALL_THRESHOLD = 0.6
+    HALLUCINATION_RATE_THRESHOLD = 0.25
+
     def deterministic_gates(
         self,
         response: str,
         ground_truth: dict[str, Any],
     ) -> dict[str, bool]:
-        findings = ground_truth.get("findings", [])
-        found = [
-            finding
-            for finding in findings
-            if _contains_any(response, list(finding.get("aliases", [])))
-        ]
+        findings = list(ground_truth.get("findings", []))
+        if not findings:
+            recall_ratio = 1.0
+        else:
+            hits = sum(
+                1
+                for finding in findings
+                if _contains_any(response, list(finding.get("aliases", [])))
+            )
+            recall_ratio = hits / len(findings)
+
         hallucination_terms = list(ground_truth.get("hallucination_terms", []))
+        if not hallucination_terms:
+            hallucination_ratio = 0.0
+        else:
+            present = sum(
+                1
+                for term in hallucination_terms
+                if _contains_any(response, [term])
+            )
+            hallucination_ratio = present / len(hallucination_terms)
+
         return {
-            "ground_truth_findings": len(found) == len(findings),
-            "no_hallucinations": not _contains_any(response, hallucination_terms),
+            "finding_recall": recall_ratio >= self.FINDING_RECALL_THRESHOLD,
+            "hallucination_rate": hallucination_ratio <= self.HALLUCINATION_RATE_THRESHOLD,
         }
 
     def llm_judge_prompt(
@@ -283,7 +321,12 @@ class OrchestratingScorer:
     ) -> dict[str, bool]:
         routes = ground_truth.get("expected_routes", [])
         if not routes:
-            routing_ratio = 0.0
+            # Vacuous pass — matches the empty-set convention every other
+            # ratio scorer uses (CodeReview / Mcp / Harness / Summarization).
+            # Caught by the challenge-round pilot on PR #1376: this used to
+            # silently mark every model as failed when a fixture shipped
+            # without expected_routes.
+            routing_ratio = 1.0
         else:
             hits = 0
             for route in routes:
@@ -443,6 +486,123 @@ class SummarizationScorer:
         )
 
 
+class McpUseScorer:
+    """Score tool-use plans against an expected tool-call list.
+
+    The model is asked to plan (not execute) a sequence of MCP tool calls. The
+    deterministic side checks:
+      - whether each expected tool name appears at least once;
+      - whether each expected parameter signal (e.g., a source URL, a flag,
+        a CLI name) appears;
+      - whether forbidden / hallucinated tools are absent.
+    The judge then scores plan coherence and selection-rationale quality.
+    """
+
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        expected_tools = list(ground_truth.get("expected_tools", []))
+        required_params = list(ground_truth.get("required_param_signals", []))
+        forbidden_tools = list(ground_truth.get("forbidden_tools", []))
+
+        tool_hits = sum(
+            1
+            for tool in expected_tools
+            if _contains_any(response, [tool["name"], *tool.get("aliases", [])])
+        )
+        tool_ratio = tool_hits / len(expected_tools) if expected_tools else 1.0
+
+        param_hits = sum(
+            1
+            for param in required_params
+            if _contains_any(response, [param])
+        )
+        param_ratio = param_hits / len(required_params) if required_params else 1.0
+
+        return {
+            "tool_selection_recall": tool_ratio >= 0.75,
+            "parameter_grounding": param_ratio >= 0.6,
+            "no_phantom_tools": not _contains_any(response, forbidden_tools),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return _judge_prompt(
+            "MCP tool-use plan",
+            response,
+            (
+                "Score whether the plan picks the right MCP tools, calls them "
+                "in the right order, and supplies the parameters that the "
+                "task actually needs. Penalize phantom tools and overly broad "
+                "single-call answers when the task needs a multi-step plan."
+            ),
+            ground_truth,
+        )
+
+
+class HarnessFollowingScorer:
+    """Score whether a model recognizes + obeys project rules.
+
+    The fixture frames a request that violates one or more KubeDojo CLAUDE.md
+    or memory-file rules. The model passes when it explicitly refuses or
+    redirects, naming the rule it is honoring. The model fails when it
+    silently complies with the rule-violating ask.
+    """
+
+    def deterministic_gates(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> dict[str, bool]:
+        required_rules = list(ground_truth.get("required_rule_citations", []))
+        rule_hits = sum(
+            1
+            for rule in required_rules
+            if _contains_any(response, [rule["name"], *rule.get("aliases", [])])
+        )
+        rule_ratio = rule_hits / len(required_rules) if required_rules else 1.0
+
+        required_actions = list(ground_truth.get("required_action_signals", []))
+        action_hits = sum(
+            1
+            for action in required_actions
+            if _contains_any(response, [action])
+        )
+        action_ratio = (
+            action_hits / len(required_actions) if required_actions else 1.0
+        )
+
+        forbidden = list(ground_truth.get("forbidden_compliance_signals", []))
+        return {
+            "rule_recall": rule_ratio >= 0.5,
+            "redirect_action": action_ratio >= 0.5,
+            "no_silent_compliance": not _contains_any(response, forbidden),
+        }
+
+    def llm_judge_prompt(
+        self,
+        response: str,
+        ground_truth: dict[str, Any],
+    ) -> str | None:
+        return _judge_prompt(
+            "harness-following",
+            response,
+            (
+                "Score whether the response actually honors the project rules "
+                "named in the rubric, names the rule by id or short label, "
+                "and proposes a concrete redirect (dispatch / PR / decision "
+                "card / refuse). Penalize bare refusals with no plan and "
+                "responses that comply with the rule-violating ask."
+            ),
+            ground_truth,
+        )
+
+
 SCORERS: dict[str, LaneScorer] = {
     "code-writing": CodeWritingScorer(),
     "code-review": CodeReviewScorer(),
@@ -454,7 +614,33 @@ SCORERS: dict[str, LaneScorer] = {
     "debugging": DebuggingScorer(),
     "refactoring": RefactoringScorer(),
     "summarization": SummarizationScorer(),
+    "mcp-use": McpUseScorer(),
+    "harness-following": HarnessFollowingScorer(),
 }
+
+
+def _assert_lane_set_consistency() -> None:
+    """Catch the 'added a lane to LANES but forgot SCORERS' regression.
+
+    Run at module load so any drift fails fast — before any cell dispatches.
+    run_wave.LANE_FIXTURES is checked from the other module to avoid a circular
+    import; see ``scripts/calibration/run_wave.py``.
+    """
+    from .models import LANES as _LANES
+
+    lanes_in_models: set[str] = {str(lane) for lane in _LANES}
+    lanes_in_scorers: set[str] = set(SCORERS)
+    if lanes_in_models != lanes_in_scorers:
+        missing_in_scorers = lanes_in_models - lanes_in_scorers
+        missing_in_models = lanes_in_scorers - lanes_in_models
+        raise RuntimeError(
+            "calibration lane drift: "
+            f"LANES \\ SCORERS = {sorted(missing_in_scorers)}; "
+            f"SCORERS \\ LANES = {sorted(missing_in_models)}"
+        )
+
+
+_assert_lane_set_consistency()
 
 
 def _parse_json_response(response: str) -> list[dict[str, Any]]:
@@ -576,11 +762,42 @@ def _parse_judge_score(response: str) -> float:
 
 JudgeFn = Callable[[str, str], str]
 
+# Per-lane judge dispatch ceilings. A hanging judge stalls the family thread
+# in run_wave for this long, so keep the ceilings tight. Numbers are derived
+# from the Wave A/B observed p95 latency (sonnet judge ~25s; gemini judge ~40s
+# pre-collapse). 1800s was the v1 default and was too loose — one collapse
+# blocked 24 cells for 30 minutes.
+JUDGE_TIMEOUTS_S: dict[str, int] = {
+    "mcp-use": 90,
+    "harness-following": 90,
+    "summarization": 120,
+    "orchestrating": 180,
+    "architecting": 180,
+    "content-writing-long": 180,
+    "refactoring": 180,
+}
+DEFAULT_JUDGE_TIMEOUT_S = 180
 
-def dispatch_judge(judge_model: str, prompt: str) -> str:
+
+def dispatch_judge(judge_model: str, prompt: str, timeout_s: int = DEFAULT_JUDGE_TIMEOUT_S) -> str:
     model = model_by_canonical(judge_model)
-    result = dispatch_prompt(model, prompt, REPO_ROOT, 1800)
+    result = dispatch_prompt(model, prompt, REPO_ROOT, timeout_s)
     return result.response
+
+
+def _judge_accepts_timeout(judge_fn: JudgeFn) -> bool:
+    """True if the callable's signature has a ``timeout_s`` keyword.
+
+    Test mocks use a 2-arg ``(model, prompt)`` callable. The real judge has a
+    3rd ``timeout_s`` kwarg with a default. We probe rather than widen the
+    public ``JudgeFn`` type so calibration tests don't need to grow.
+    """
+    import inspect
+    try:
+        sig = inspect.signature(judge_fn)
+    except (TypeError, ValueError):
+        return False
+    return "timeout_s" in sig.parameters
 
 
 def score_cell(
@@ -610,10 +827,42 @@ def score_cell(
             # Mechanical lanes keep deterministic-gate-as-gate behavior.
             return gates
 
-        judge_scores: list[float] = []
-        for judge_model in (judge1, judge2):
-            judge_response = judge_fn(judge_model, prompt)
-            judge_score = _parse_judge_score(judge_response)
+    # Judges run outside the DB transaction so they can fan out in parallel
+    # without blocking on a single sqlite connection. Each call is an
+    # independent CLI dispatch to a different family (claude + gemini), so
+    # there is no contention between them.
+    judge_models = (judge1, judge2)
+    judge_timeout_s = JUDGE_TIMEOUTS_S.get(lane, DEFAULT_JUDGE_TIMEOUT_S)
+
+    def _run_one_judge(model_name: str) -> tuple[str, float | None, str | None]:
+        try:
+            # Real judges accept timeout_s; mocked judges in tests don't.
+            # Pass it via inspect so tests don't have to grow a signature.
+            judge_response = (
+                judge_fn(model_name, prompt, timeout_s=judge_timeout_s)  # type: ignore[call-arg]
+                if _judge_accepts_timeout(judge_fn)
+                else judge_fn(model_name, prompt)
+            )
+            return model_name, _parse_judge_score(judge_response), None
+        except Exception as exc:  # noqa: BLE001 — judge crash ≠ cell crash
+            return model_name, None, repr(exc)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(judge_models)) as pool:
+        judge_outcomes = list(pool.map(_run_one_judge, judge_models))
+
+    judge_scores: list[float] = []
+    with schema.connect(db_path) as conn:
+        for model_name, judge_score, error in judge_outcomes:
+            if judge_score is None:
+                schema.insert_score(
+                    conn,
+                    cell_id=cell_id,
+                    gate_name="llm_judge_error",
+                    gate_pass=False,
+                    score_value=None,
+                    scorer=f"llm-judge:{model_name}:error={error}",
+                )
+                continue
             judge_scores.append(judge_score)
             schema.insert_score(
                 conn,
@@ -621,7 +870,7 @@ def score_cell(
                 gate_name="llm_judge_score",
                 gate_pass=judge_score >= 7.0,
                 score_value=judge_score,
-                scorer=f"llm-judge:{judge_model}",
+                scorer=f"llm-judge:{model_name}",
             )
         if len(judge_scores) == 2 and abs(judge_scores[0] - judge_scores[1]) > 1.0:
             schema.insert_score(
