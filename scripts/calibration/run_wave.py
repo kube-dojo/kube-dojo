@@ -69,6 +69,7 @@ class CellSpec:
     lane: str
     fixture_id: str
     model: CalibrationModel
+    replicate_seq: int = 0
 
 
 def select_models(
@@ -108,6 +109,13 @@ def _dispatch_one(
     score: bool,
 ) -> dict:
     started = time.monotonic()
+    cell_id = schema.make_cell_id(
+        lane=spec.lane,
+        fixture_id=spec.fixture_id,
+        canonical_string=spec.model.canonical_string,
+        effort_requested=spec.model.effort_requested,
+        run_date=run_date,
+    )
     try:
         cell_id = run_cell(
             lane=spec.lane,
@@ -117,12 +125,17 @@ def _dispatch_one(
             db_path=db_path,
             output_root=output_root,
             timeout_s=timeout_s,
+            replicate_seq=spec.replicate_seq,
         )
         elapsed = time.monotonic() - started
         scored = False
         if score:
             try:
-                score_cell.score_cell(cell_id=cell_id, db_path=db_path)
+                score_cell.score_cell(
+                    cell_id=cell_id,
+                    db_path=db_path,
+                    replicate_seq=spec.replicate_seq,
+                )
                 scored = True
             except Exception as exc:  # noqa: BLE001 — scoring failure ≠ dispatch failure
                 return {
@@ -131,6 +144,7 @@ def _dispatch_one(
                     "lane": spec.lane,
                     "model": spec.model.canonical_string,
                     "family": spec.model.family,
+                    "replicate_seq": spec.replicate_seq,
                     "elapsed_s": elapsed,
                     "scored": False,
                     "score_error": repr(exc),
@@ -141,6 +155,7 @@ def _dispatch_one(
             "lane": spec.lane,
             "model": spec.model.canonical_string,
             "family": spec.model.family,
+            "replicate_seq": spec.replicate_seq,
             "elapsed_s": elapsed,
             "scored": scored,
         }
@@ -151,6 +166,7 @@ def _dispatch_one(
             "lane": spec.lane,
             "model": spec.model.canonical_string,
             "family": spec.model.family,
+            "replicate_seq": spec.replicate_seq,
             "elapsed_s": time.monotonic() - started,
             "error": repr(exc),
         }

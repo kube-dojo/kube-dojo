@@ -158,7 +158,7 @@ def dispatch_prompt(
     timeout_s: int,
 ) -> DispatchResult:
     plan = build_dispatch_plan(model)
-    task_id = f"calibration-{model.canonical_string}-{int(time.time())}"
+    task_id = f"calibration-{model.canonical_string}-{time.time_ns()}"
     prompt = f"{plan.prompt_prefix}{prompt}"
     start = time.monotonic()
 
@@ -218,11 +218,13 @@ def _paths_for_cell(
     output_root: Path,
     run_date: str,
     cell_id: str,
+    replicate_seq: int = 0,
 ) -> tuple[Path, Path]:
     run_dir = output_root / run_date
     response_dir = run_dir / "responses"
     response_dir.mkdir(parents=True, exist_ok=True)
-    response_path = response_dir / f"{cell_id}.md"
+    suffix = f".replicate-{replicate_seq}" if replicate_seq else ""
+    response_path = response_dir / f"{cell_id}{suffix}.md"
     results_path = run_dir / "results.jsonl"
     return response_path, results_path
 
@@ -242,10 +244,13 @@ def run_cell(
     db_path: Path = DEFAULT_DB_PATH,
     output_root: Path = DEFAULT_OUTPUT_ROOT,
     timeout_s: int = 3600,
+    replicate_seq: int = 0,
     dispatch_fn: DispatchFn = dispatch_prompt,
 ) -> str:
     if lane not in LANES:
         raise ValueError(f"unknown calibration lane: {lane}")
+    if replicate_seq < 0:
+        raise ValueError("replicate_seq must be >= 0")
 
     run_date = run_date or schema.today_iso()
     model = model_by_canonical(canonical_string)
@@ -266,6 +271,7 @@ def run_cell(
         output_root=output_root,
         run_date=run_date,
         cell_id=cell_id,
+        replicate_seq=replicate_seq,
     )
 
     try:
@@ -278,6 +284,7 @@ def run_cell(
                 gate_name="dispatch_completed",
                 gate_pass=False,
                 score_value=0.0,
+                replicate_seq=replicate_seq,
             )
         raise
     except AgentTimeoutError:
@@ -288,6 +295,7 @@ def run_cell(
                 gate_name="dispatch_completed",
                 gate_pass=False,
                 score_value=0.0,
+                replicate_seq=replicate_seq,
             )
         raise
 
@@ -317,6 +325,7 @@ def run_cell(
             "canonical_string": canonical_string,
             "effort_requested": model.effort_requested,
             "run_date": run_date,
+            "replicate_seq": replicate_seq,
             "task_id": result.task_id,
             "response_path": relative_response_path,
             "latency_s": result.latency_s,
@@ -335,6 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--timeout-s", type=int, default=3600)
+    parser.add_argument("--replicate-seq", type=int, default=0)
     return parser
 
 
@@ -348,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
         db_path=args.db_path,
         output_root=args.output_root,
         timeout_s=args.timeout_s,
+        replicate_seq=args.replicate_seq,
     )
     print(cell_id)
     return 0

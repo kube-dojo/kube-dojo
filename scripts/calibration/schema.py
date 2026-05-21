@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS scores (
   gate_pass INTEGER NOT NULL CHECK (gate_pass IN (0, 1)),
   score_value REAL,
   scorer TEXT NOT NULL,
+  replicate_seq INTEGER NOT NULL DEFAULT 0,
   scored_at TEXT NOT NULL,
   PRIMARY KEY (cell_id, gate_name, scorer)
 );
@@ -130,6 +131,22 @@ def init_db(db_path: Path | str) -> None:
         # so this is a one-shot on first init; re-applies are no-ops.
         conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA_SQL)
+        ensure_replicate_seq_column(conn)
+
+
+def ensure_replicate_seq_column(conn: sqlite3.Connection) -> None:
+    columns = {
+        str(row["name"])
+        for row in conn.execute("PRAGMA table_info(scores)").fetchall()
+    }
+    if "replicate_seq" not in columns:
+        conn.execute("ALTER TABLE scores ADD COLUMN replicate_seq INTEGER NOT NULL DEFAULT 0")
+
+
+def _scorer_for_replicate(scorer: str, replicate_seq: int) -> str:
+    if replicate_seq <= 0 or f":replicate-{replicate_seq}" in scorer:
+        return scorer
+    return f"{scorer}:replicate-{replicate_seq}"
 
 
 def build_cell_row(
@@ -260,17 +277,20 @@ def insert_score(
     gate_pass: bool,
     score_value: float | None = None,
     scorer: str = "deterministic",
+    replicate_seq: int = 0,
     scored_at: str | None = None,
 ) -> None:
+    scorer = _scorer_for_replicate(scorer, replicate_seq)
     conn.execute(
         """
         INSERT INTO scores (
-          cell_id, gate_name, gate_pass, score_value, scorer, scored_at
+          cell_id, gate_name, gate_pass, score_value, scorer, replicate_seq, scored_at
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(cell_id, gate_name, scorer) DO UPDATE SET
           gate_pass=excluded.gate_pass,
           score_value=excluded.score_value,
+          replicate_seq=excluded.replicate_seq,
           scored_at=excluded.scored_at
         """,
         (
@@ -279,6 +299,7 @@ def insert_score(
             1 if gate_pass else 0,
             score_value,
             scorer,
+            replicate_seq,
             scored_at or utc_now_iso(),
         ),
     )
@@ -290,6 +311,7 @@ def insert_scores(
     cell_id: str,
     gates: dict[str, bool],
     scorer: str = "deterministic",
+    replicate_seq: int = 0,
 ) -> None:
     for gate_name, gate_pass in gates.items():
         insert_score(
@@ -299,6 +321,7 @@ def insert_scores(
             gate_pass=gate_pass,
             score_value=1.0 if gate_pass else 0.0,
             scorer=scorer,
+            replicate_seq=replicate_seq,
         )
 
 
@@ -321,6 +344,7 @@ def bulk_insert_scores(
     *,
     cell_id: str,
     rows: Iterable[tuple[str, bool, float | None, str]],
+    replicate_seq: int = 0,
 ) -> None:
     for gate_name, gate_pass, score_value, scorer in rows:
         insert_score(
@@ -330,5 +354,5 @@ def bulk_insert_scores(
             gate_pass=gate_pass,
             score_value=score_value,
             scorer=scorer,
+            replicate_seq=replicate_seq,
         )
-
