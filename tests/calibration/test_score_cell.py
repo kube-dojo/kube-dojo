@@ -2,13 +2,44 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 
 from scripts.calibration import schema, score_cell
 from scripts.calibration.models import model_by_canonical
+from scripts.calibration.run_cell import DispatchResult
 
 
 def _completed(returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(args=[], returncode=returncode, stdout="", stderr="")
+
+
+def _seed_cell(
+    tmp_path: Path,
+    *,
+    lane: str,
+    fixture_id: str,
+    response: str,
+) -> tuple[Path, str]:
+    db_path = tmp_path / "ledger.db"
+    response_path = tmp_path / f"{lane}-{fixture_id}.md"
+    response_path.write_text(response, encoding="utf-8")
+    model = model_by_canonical("claude-opus-4-7")
+    row = schema.build_cell_row(
+        lane=lane,
+        fixture_id=fixture_id,
+        model=model,
+        run_date="2026-05-21",
+    )
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell_id = schema.insert_cell(conn, row)
+        schema.insert_dispatch(
+            conn,
+            cell_id=cell_id,
+            task_id="task",
+            response_path=str(response_path),
+        )
+    return db_path, cell_id
 
 
 def test_code_writing_scorer_happy_path(monkeypatch):
@@ -265,31 +296,17 @@ def test_summarization_scorer_happy_path():
 
 
 def test_score_cell_prose_lane_runs_judge_despite_gate_fail(tmp_path):
-    db_path = tmp_path / "ledger.db"
-    response_path = tmp_path / "response.md"
-    response_path.write_text(
-        "Bug fix in scripts/check_links.py mapped to codex debugging. "
-        "security regressions via claude in code-review. module handoff by "
-        "cheap summarization. Fact-check with google. Draft a decision card."
-        " Include a cost estimate.",
-        encoding="utf-8",
-    )
-    model = model_by_canonical("claude-opus-4-7")
-    row = schema.build_cell_row(
+    db_path, cell_id = _seed_cell(
+        tmp_path,
         lane="orchestrating",
         fixture_id="multi-task-routing-brief",
-        model=model,
-        run_date="2026-05-21",
+        response=(
+            "Bug fix in scripts/check_links.py mapped to codex debugging. "
+            "security regressions via claude in code-review. module handoff by "
+            "cheap summarization. Fact-check with google. Draft a decision card."
+            " Include a cost estimate."
+        ),
     )
-    schema.init_db(db_path)
-    with schema.connect(db_path) as conn:
-        cell_id = schema.insert_cell(conn, row)
-        schema.insert_dispatch(
-            conn,
-            cell_id=cell_id,
-            task_id="task",
-            response_path=str(response_path),
-        )
     calls = []
 
     def fake_judge_fn(model_name: str, prompt: str) -> str:
@@ -305,6 +322,211 @@ def test_score_cell_prose_lane_runs_judge_despite_gate_fail(tmp_path):
     )
     assert gates["same_family_serialized"] is False
     assert len(calls) == 2
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT gate_name, scorer, score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ?
+            ORDER BY gate_name, scorer
+            """,
+            (cell_id,),
+        ).fetchall()
+    deterministic_rows = [row for row in rows if row["scorer"] == "deterministic"]
+    judge_rows = [
+        row
+        for row in rows
+        if str(row["scorer"]).startswith("llm-judge:")
+    ]
+    assert len(deterministic_rows) == 4
+    assert len(judge_rows) == 2
+    assert {row["gate_failure_reason"] for row in judge_rows} == {"gate_passed"}
+
+
+def test_score_cell_mechanical_lane_skips_judge_when_gate_fails(
+    tmp_path,
+    monkeypatch,
+):
+    class FakeMechanicalScorer:
+        def deterministic_gates(self, response, ground_truth):
+            return {"mock_gate": False}
+
+        def llm_judge_prompt(self, response, ground_truth):
+            return "judge this mechanical response"
+
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="code-review",
+        fixture_id="pr-1333-security-yaml",
+        response="No findings listed and no real observations.",
+    )
+    monkeypatch.setitem(score_cell.SCORERS, "code-review", FakeMechanicalScorer())
+    calls = []
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        calls.append((model_name, prompt))
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    gates = score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+
+    assert gates == {"mock_gate": False}
+    assert calls == []
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT gate_name, scorer, score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ?
+            ORDER BY gate_name, scorer
+            """,
+            (cell_id,),
+        ).fetchall()
+    deterministic_rows = [row for row in rows if row["scorer"] == "deterministic"]
+    judge_rows = [
+        row
+        for row in rows
+        if str(row["scorer"]).startswith("llm-judge:")
+    ]
+    assert [(row["gate_name"], row["score_value"]) for row in deterministic_rows] == [
+        ("mock_gate", 0.0)
+    ]
+    assert len(judge_rows) == 2
+    assert {row["score_value"] for row in judge_rows} == {None}
+    assert {row["gate_failure_reason"] for row in judge_rows} == {
+        "scorer_skipped_by_two_stage_rule"
+    }
+
+
+def test_score_cell_parseable_judge_sets_failure_reason(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="orchestrating",
+        fixture_id="multi-task-routing-brief",
+        response=(
+            "Python bug -> codex -> debugging. security regressions -> claude -> "
+            "code-review. module handoff -> cheap -> summarization. fact-check -> "
+            "google -> fact-check. Serialize same-family Codex work, include a "
+            "cost estimate, and draft a decision card."
+        ),
+    )
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        score = 8.0 if model_name == "dummy-model-1" else 4.0
+        return json.dumps({"score": score, "rationale": "ok"})
+
+    score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT scorer, score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ? AND gate_name = 'llm_judge_score'
+            ORDER BY scorer
+            """,
+            (cell_id,),
+        ).fetchall()
+    assert [(row["score_value"], row["gate_failure_reason"]) for row in rows] == [
+        (8.0, "gate_passed"),
+        (4.0, "gate_failed_legitimately"),
+    ]
+
+
+def test_score_cell_unparseable_judge_sets_null_score_and_reason(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="orchestrating",
+        fixture_id="multi-task-routing-brief",
+        response=(
+            "Python bug -> codex -> debugging. security regressions -> claude -> "
+            "code-review. module handoff -> cheap -> summarization. fact-check -> "
+            "google -> fact-check. Serialize same-family Codex work, include a "
+            "cost estimate, and draft a decision card."
+        ),
+    )
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        return "score: eight"
+
+    score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ? AND gate_name = 'llm_judge_score'
+            """,
+            (cell_id,),
+        ).fetchall()
+    assert len(rows) == 2
+    assert {row["score_value"] for row in rows} == {None}
+    assert {row["gate_failure_reason"] for row in rows} == {
+        "scorer_unparseable_output"
+    }
+
+
+def test_score_cell_nonzero_judge_returncode_sets_crashed_reason(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="orchestrating",
+        fixture_id="multi-task-routing-brief",
+        response=(
+            "Python bug -> codex -> debugging. security regressions -> claude -> "
+            "code-review. module handoff -> cheap -> summarization. fact-check -> "
+            "google -> fact-check. Serialize same-family Codex work, include a "
+            "cost estimate, and draft a decision card."
+        ),
+    )
+
+    def fake_judge_fn(model_name: str, prompt: str) -> DispatchResult:
+        return DispatchResult(
+            response=json.dumps({"score": 8.0, "rationale": "ignored"}),
+            task_id=f"judge-{model_name}",
+            latency_s=0.1,
+            returncode=2,
+            stderr_excerpt="judge crashed",
+        )
+
+    score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT score_value, gate_failure_reason, stderr_excerpt
+            FROM scores
+            WHERE cell_id = ? AND gate_name = 'llm_judge_score'
+            """,
+            (cell_id,),
+        ).fetchall()
+    assert len(rows) == 2
+    assert {row["score_value"] for row in rows} == {None}
+    assert {row["gate_failure_reason"] for row in rows} == {"scorer_crashed"}
+    assert {row["stderr_excerpt"] for row in rows} == {"judge crashed"}
 
 
 def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
@@ -350,32 +572,18 @@ def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
     assert calls == []
 
 
-def test_score_cell_writes_infra_error_gate_when_judge_fails(tmp_path):
-    db_path = tmp_path / "ledger.db"
-    response_path = tmp_path / "response.md"
-    response_path.write_text(
-        "Bug fix in scripts/check_links.py mapped to codex debugging. "
-        "security regressions via claude in code-review. module handoff by "
-        "cheap summarization. Fact-check with google. Draft a decision card."
-        " Include a cost estimate.",
-        encoding="utf-8",
-    )
-    model = model_by_canonical("claude-opus-4-7")
-    row = schema.build_cell_row(
+def test_score_cell_writes_crashed_reason_when_judge_raises(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
         lane="orchestrating",
         fixture_id="multi-task-routing-brief",
-        model=model,
-        run_date="2026-05-21",
+        response=(
+            "Bug fix in scripts/check_links.py mapped to codex debugging. "
+            "security regressions via claude in code-review. module handoff by "
+            "cheap summarization. Fact-check with google. Draft a decision card."
+            " Include a cost estimate."
+        ),
     )
-    schema.init_db(db_path)
-    with schema.connect(db_path) as conn:
-        cell_id = schema.insert_cell(conn, row)
-        schema.insert_dispatch(
-            conn,
-            cell_id=cell_id,
-            task_id="task",
-            response_path=str(response_path),
-        )
 
     def fake_judge_fn(model_name: str, prompt: str) -> str:
         if model_name == "dummy-model-1":
@@ -392,19 +600,25 @@ def test_score_cell_writes_infra_error_gate_when_judge_fails(tmp_path):
 
     with schema.connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT gate_name, score_value, scorer FROM scores WHERE "
-            "cell_id = ? AND gate_name IN ('llm_judge_score', 'llm_judge_error')",
+            """
+            SELECT gate_name, score_value, scorer, gate_failure_reason, stderr_excerpt
+            FROM scores
+            WHERE cell_id = ? AND gate_name = 'llm_judge_score'
+            """,
             (cell_id,),
         ).fetchall()
 
-    llm_judge_scores = [row for row in rows if row["gate_name"] == "llm_judge_score"]
-    llm_judge_errors = [row for row in rows if row["gate_name"] == "llm_judge_error"]
+    llm_judge_scores = [row for row in rows if row["score_value"] is not None]
+    llm_judge_errors = [row for row in rows if row["score_value"] is None]
 
     assert len(llm_judge_scores) == 1
     assert llm_judge_scores[0]["score_value"] == 8.0
+    assert llm_judge_scores[0]["gate_failure_reason"] == "gate_passed"
     assert len(llm_judge_errors) == 1
-    assert llm_judge_errors[0]["score_value"] is None
-    assert "RuntimeError('judge transport offline')" in llm_judge_errors[0]["scorer"]
+    assert llm_judge_errors[0]["gate_failure_reason"] == "scorer_crashed"
+    assert "RuntimeError('judge transport offline')" in llm_judge_errors[0][
+        "stderr_excerpt"
+    ]
 
 
 def test_mcp_use_scorer_happy_path():

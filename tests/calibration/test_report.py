@@ -44,6 +44,16 @@ def test_report_renders_matrix_per_lane_and_per_model(tmp_path):
     _insert_cell(db_path, "code-writing", "parse-dependabot-cooldown", "claude-opus-4-7", 0.0)
     _insert_cell(db_path, "fact-check", "k8s-1-35-claims", "gpt-5.5", 1.0)
     _insert_cell(db_path, "fact-check", "k8s-1-35-claims", "claude-opus-4-7", 1.0)
+    with schema.connect(db_path) as conn:
+        schema.insert_score(
+            conn,
+            cell_id=cell_id,
+            gate_name="llm_judge_score",
+            gate_pass=False,
+            score_value=None,
+            scorer="llm-judge:dummy",
+            gate_failure_reason="scorer_unparseable_output",
+        )
 
     out_dir = tmp_path / "reports"
     written = report.render_reports(db_path=db_path, out_dir=out_dir)
@@ -60,7 +70,8 @@ def test_report_renders_matrix_per_lane_and_per_model(tmp_path):
     assert out_dir / "matrix.html" in written
     assert cell_id in matrix
     assert "code-writing" in matrix
+    assert "judge n/a" in matrix
     assert "gpt-5.5" in per_lane
+    assert ">n/a</td>" in per_lane
     assert "confidence vs actual" in per_model.lower()
     assert "total_cost=$0.0800" in index
-

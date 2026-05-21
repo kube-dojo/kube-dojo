@@ -33,6 +33,10 @@ def test_schema_initializes_cells_dispatches_scores(tmp_path):
         )
         stored = schema.fetch_cell(conn, cell_id)
         indexes = schema.list_indexes(conn)
+        score_columns = {
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(scores)").fetchall()
+        }
 
     assert cell_id == (
         "code-writing-parse-dependabot-cooldown-"
@@ -47,4 +51,34 @@ def test_schema_initializes_cells_dispatches_scores(tmp_path):
         "idx_cells_run_date",
         "idx_scores_cell",
     }.issubset(indexes)
+    assert "gate_failure_reason" in score_columns
 
+
+def test_schema_gate_failure_reason_migration_is_idempotent(tmp_path):
+    db_path = tmp_path / "ledger.db"
+    with schema.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE scores (
+              cell_id TEXT NOT NULL,
+              gate_name TEXT NOT NULL,
+              gate_pass INTEGER NOT NULL CHECK (gate_pass IN (0, 1)),
+              score_value REAL,
+              scorer TEXT NOT NULL,
+              replicate_seq INTEGER NOT NULL DEFAULT 0,
+              stderr_excerpt TEXT,
+              scored_at TEXT NOT NULL,
+              PRIMARY KEY (cell_id, gate_name, scorer)
+            )
+            """
+        )
+
+    schema.init_db(db_path)
+    schema.init_db(db_path)
+
+    with schema.connect(db_path) as conn:
+        score_columns = [
+            str(row["name"])
+            for row in conn.execute("PRAGMA table_info(scores)").fetchall()
+        ]
+    assert score_columns.count("gate_failure_reason") == 1
