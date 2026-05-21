@@ -92,7 +92,7 @@ param appName string = 'app-orders-prod-eus'
 param planName string = 'asp-orders-prod-eus'
 param logAnalyticsWorkspaceId string
 
-resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
+resource plan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: planName
   location: location
   kind: 'linux'
@@ -121,11 +121,26 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
       healthCheckPath: '/healthz'
       linuxFxVersion: 'NODE|20-lts'
       appSettings: [
-        { name: 'APP_ENV'; value: 'production' }
-        { name: 'WEBSITE_HEALTHCHECK_MAXPINGFAILURES'; value: '3' }
-        { name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'; value: 'true' }
-        { name: 'WEBSITE_SWAP_WARMUP_PING_PATH'; value: '/healthz/ready' }
-        { name: 'WEBSITE_SWAP_WARMUP_PING_STATUSES'; value: '200,202' }
+        {
+          name: 'APP_ENV'
+          value: 'production'
+        }
+        {
+          name: 'WEBSITE_HEALTHCHECK_MAXPINGFAILURES'
+          value: '3'
+        }
+        {
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'true'
+        }
+        {
+          name: 'WEBSITE_SWAP_WARMUP_PING_PATH'
+          value: '/healthz/ready'
+        }
+        {
+          name: 'WEBSITE_SWAP_WARMUP_PING_STATUSES'
+          value: '200,202'
+        }
       ]
     }
   }
@@ -137,8 +152,14 @@ resource logs 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   properties: {
     workspaceId: logAnalyticsWorkspaceId
     logs: [
-      { category: 'AppServiceHTTPLogs'; enabled: true }
-      { category: 'AppServiceConsoleLogs'; enabled: true }
+      {
+        category: 'AppServiceHTTPLogs'
+        enabled: true
+      }
+      {
+        category: 'AppServiceConsoleLogs'
+        enabled: true
+      }
     ]
   }
 }
@@ -233,11 +254,10 @@ az role assignment create \
 az webapp config appsettings set \
   --resource-group rg-appsvc-prod-eus \
   --name app-orders-prod-eus \
-  --slot-settings OrdersDbPassword \
-  --settings "OrdersDbPassword=@Microsoft.KeyVault(SecretUri=https://kv-orders-prod.vault.azure.net/secrets/orders-db-password/)"
+  --slot-settings "OrdersDbPassword=@Microsoft.KeyVault(SecretUri=https://kv-orders-prod.vault.azure.net/secrets/orders-db-password/)"
 ```
 
-Key Vault references are useful when the application still needs a secret value, because an app setting can contain an `@Microsoft.KeyVault(...)` reference and the application reads it like any other setting. The reference uses the system-assigned identity by default, can be configured to use a user-assigned identity, and automatically picks up a newer version within 24 hours when the secret URI is versionless; a configuration change restarts the app and forces an immediate refetch. Microsoft also recommends marking most Key Vault references as slot settings because environments usually have separate vaults. [Key Vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references) document these behaviors and failure modes.
+Key Vault references are useful when the application still needs a secret value, because an app setting can contain an `@Microsoft.KeyVault(...)` reference and the application reads it like any other setting. The reference uses the system-assigned identity by default, can be configured to use a user-assigned identity, and automatically picks up a newer version within 24 hours when the secret URI is versionless; any configuration change restarts the app and forces an immediate refetch. Microsoft also recommends marking most Key Vault references as slot settings because environments usually have separate vaults. [Key Vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references) document these behaviors and failure modes.
 
 Prefer direct Entra authentication when the downstream service supports it. For Azure SQL, the app identity must exist, the SQL server needs an Entra administrator, and the database must create a user for the identity and grant only the required roles. For Blob Storage, Azure RBAC data roles such as Storage Blob Data Contributor or Storage Blob Data Reader authorize data-plane access, and the role scope should be the narrowest useful container, account, resource group, or subscription scope. [App Service to Azure SQL with managed identity](https://learn.microsoft.com/en-us/azure/app-service/tutorial-connect-msi-sql-database) and [Blob access with Microsoft Entra ID](https://learn.microsoft.com/en-us/azure/storage/blobs/authorize-access-azure-active-directory) are the operator references.
 
@@ -272,7 +292,7 @@ flowchart LR
 
 VNet Integration needs subnet planning. The feature requires a dedicated subnet, consumes addresses per plan instance, temporarily doubles address use during some scale operations, and Microsoft recommends enough address space for planned maximum scale plus platform operations. It can route private-only or all outbound traffic depending on routing configuration, and NSGs or route tables on the integration subnet apply only to traffic routed through the integration. If Key Vault, Storage, SQL, or image pulls use private endpoints, DNS must resolve those names to private endpoint addresses from the app's VNet path. [Subnet requirements and routing](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#subnet-requirements) and [private endpoint DNS behavior for outbound calls](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#private-endpoints) are the design guardrails.
 
-Private Endpoint is configured per app slot, and a slot cannot share another slot's private endpoint. The official documentation states that each slot is configured separately, up to 100 private endpoints can be used per slot, and the private endpoint subnet cannot be the same subnet used for VNet Integration. That matters during release design: if a staging slot must be tested privately, it needs its own private endpoint and DNS story. [Private Endpoint for App Service](https://learn.microsoft.com/en-us/azure/app-service/overview-private-endpoint) and [VNet Integration subnet limitations](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#limitations) make this a review item.
+Private Endpoint is configured per app slot, and a slot cannot share another slot's private endpoint. The official documentation states that each slot is configured separately, the current limits table lists 100 private endpoints per app, and the private endpoint subnet cannot be the same subnet used for VNet Integration. That matters during release design: if a staging slot must be tested privately, it needs its own private endpoint and DNS story. [Private Endpoint for App Service](https://learn.microsoft.com/en-us/azure/app-service/overview-private-endpoint) and [VNet Integration subnet limitations](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#limitations) make this a review item.
 
 Access restrictions are still useful even when Private Endpoint is planned. They provide priority-ordered allow and deny rules, support IP ranges, service tags, and selected VNet subnets through service endpoints, and can be applied separately to the SCM/Kudu site. If any allow or deny entries exist, an implicit deny exists at the end unless the unmatched rule action is changed. The service returns HTTP 403 when the source is not allowed, so a sudden 403 after a network change should send the operator to the access-restriction list before blaming application auth. [Access restrictions](https://learn.microsoft.com/en-us/azure/app-service/app-service-ip-restrictions) document the rule order, 512-rule limit, service tags, and SCM-site restrictions.
 
