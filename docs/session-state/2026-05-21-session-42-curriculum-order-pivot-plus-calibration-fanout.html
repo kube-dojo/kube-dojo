@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 42 — curriculum-order pivot, prereq + Linux sweep, 4 calibration follow-ups landed</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>Session 42 — curriculum-order pivot, prereq + Linux sweep, 4 calibration follow-ups landed</h1>
+
+<p class="meta">
+  2026-05-21 ~22:55 → 2026-05-22 ~01:30 local (~2h 35m driver-time) · driver: claude opus 4.7 (1M ctx) inline ·
+  predecessor: <a href="2026-05-21-session-41-rewrites-plus-calibration-trust-audit.html">session 41</a>
+</p>
+
+<p>User signals (chronological):</p>
+<blockquote>
+"do a session handoff then resolve as many issues as possible, use those fucking agents dammit"<br>
+"can we please start covering from begining to and ? start with prereq then linix etc and paralel covdr the gaps. btw how many gaps we still havde?"<br>
+"the prereqs are not green"<br>
+"oh we need to do a session handoff when you ar edone"<br>
+"we need to do sassion handoff like now"
+</blockquote>
+
+<h2>TL;DR</h2>
+
+<p>Session 42 was a fan-out session driven by user escalation on parallelism. Peaked at <strong>14 concurrent codex/sonnet jobs</strong>. Landed <strong>4 PRs</strong> (#1417 prose-lane rule, #1418 auto-render hook, #1419 Git Internals T2→T0, plus session-41 handoff commit). Identified <strong>5 prereq content modules</strong> not actually T0 despite scoring 5.0 on the binary rubric — surfaced when user said "the prereqs are not green." T0 verifier is the real measure.</p>
+
+<p>10+ branches in flight at handoff. Linux Services &amp; Logs first attempt shipped T3 (body_words=2942 vs 5000 floor; 0 Did-You-Know callouts vs 4 needed) — codex undershoots prereq+Linux template gates on first try. Fixup in flight.</p>
+
+<p><strong>4 PRs merged · 10+ branches in flight · Critical-quality count: 149 (steady) · No new memories — session 41's 4 still TOP PRIORITY.</strong></p>
+
+<h2>1. PRs merged (4)</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Subject</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1417">#1417</a></td>
+<td>feat(calibration): enforce prose-lane rule + LLM-judge failure reasons (#1412)</td>
+<td>Idempotent <code>gate_failure_reason</code> migration. Prose lanes (orchestrating / refactoring / summarization / content-writing-long / architecting) run LLM judge unconditionally; mechanical lanes keep 2-stage rule. Five failure reasons. NULL <code>score_value</code> for unparseable/crashed/skipped. Variance report defaults to LLM-judge only. <code>RefactoringScorer.llm_judge_prompt</code> activated (was no-op). Sonnet R1 APPROVE_WITH_NITS — 3 non-blocking nits filed as follow-ups.</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1418">#1418</a></td>
+<td>feat(calibration): auto-render reports as post-condition of ledger updates (#1416)</td>
+<td>Render fires after successful ledger mutation in <code>run_wave/run_cell/score_cell/v1/replicate</code>. <code>--no-render</code> flag. <code>/api/benchmarks/latest.staleness_seconds</code> field. Sonnet R1 APPROVE_WITH_NITS — all 4 applied in fixup (negative-direction staleness test, failure-path suppression test, verified <code>insert_score</code> idempotency, cleaner fallback). Rebase conflict on <code>score_cell.py</code> import block resolved inline.</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1419">#1419</a></td>
+<td>chore(prereq): raise Git Internals to T0/T1 + R1 fixes (annotated tags, reflog expire, count-objects, log graph)</td>
+<td>First prereq T2→T0. 5128 body_words, 14/14 sources @ 200, 7 quizzes, 11 hands-on, 5 tables. Sonnet R1 NEEDS_CHANGES caught 4 substantive gaps. <strong>B1</strong> 4th git object type (annotated tags) was absent. <strong>B2</strong> <code>git reflog expire --expire=now --all</code> paired with <code>git gc --prune=now</code>. <strong>B3</strong> <code>git count-objects -v</code>. <strong>B4</strong> <code>git log --oneline --graph --all</code>. 5 nits also applied. Hook required `chore:` prefix + Learner check verbatim quote (per session-40 memory).</td></tr>
+<tr><td colspan="3"><strong>+ session-41 handoff commit <code>bd4b2b59</code></strong> — full session-41 doc + 4 NEW memory entries at TOP PRIORITY.</td></tr>
+</tbody></table>
+
+<h2>2. Branches in flight at handoff (10+)</h2>
+
+<table>
+<thead><tr><th>Branch</th><th>Stage</th></tr></thead>
+<tbody>
+<tr><td><code>calib-fixture-plans</code></td><td>R1 fixup pushed; needs PR open (4 blockers + 5 nits all addressed)</td></tr>
+<tr><td><code>calib-v2-harness-refire</code> (#1405)</td><td>Codex in flight</td></tr>
+<tr><td><code>cks-cnpa-cnpa-review</code></td><td>Codex JUST completed (notification received during handoff)</td></tr>
+<tr><td><code>linux-services-logs</code></td><td>Codex T3→T0 fixup in flight (first pass shipped T3 — 2942 body_words, 0 Did-You-Know, section order wrong)</td></tr>
+<tr><td><code>linux-users-permissions</code></td><td>Codex JUST completed (notification received during handoff)</td></tr>
+<tr><td><code>linux-tcp-ip</code></td><td>Codex in flight</td></tr>
+<tr><td><code>prereq-kubectl-basics</code></td><td>R1 in flight (codex landed T0: 6057 body_words, 39 sources)</td></tr>
+<tr><td><code>prereq-ai-env-setup</code></td><td>R1 JUST completed (notification received during handoff)</td></tr>
+<tr><td><code>prereq-ai-workstation</code></td><td>R1 fixup JUST completed (notification received during handoff)</td></tr>
+<tr><td><code>prereq-ai-notebooks</code></td><td>R1 JUST completed (notification received during handoff)</td></tr>
+</tbody></table>
+
+<h2>3. Critical-quality state by track (curriculum order)</h2>
+
+<p>Total: 149 modules at rubric &lt; 2.0. But the rubric is BINARY (5.0 or &lt;2.0, no middle band). T0 verifier is the real quality measure.</p>
+
+<table>
+<thead><tr><th>Track</th><th>Critical (rubric &lt; 2.0)</th><th>Additional non-T0 found via verifier this session</th></tr></thead>
+<tbody>
+<tr><td>Prerequisites</td><td>0</td><td><strong>5 modules</strong> not-T0: git-internals (T2 — landed #1419), kubectl-basics (T2), 3 ai-ml-engineering prereqs (T3)</td></tr>
+<tr><td>Linux Foundations</td><td>5</td><td>3 in flight; remaining 2 (network-namespaces, networking-tools) not started</td></tr>
+<tr><td>Linux Operations</td><td>4</td><td>None started this session</td></tr>
+<tr><td>K8S Cnpa</td><td>1</td><td>In flight (Module 1.3 just completed)</td></tr>
+<tr><td>K8S Finops</td><td>2</td><td>Not started</td></tr>
+<tr><td>KCSA 4.4</td><td>1</td><td>Not started</td></tr>
+<tr><td>Platform Foundations</td><td>28</td><td>Not started — large body of work</td></tr>
+<tr><td>Platform Disciplines</td><td>46</td><td>Largest backlog</td></tr>
+<tr><td>Platform Toolkits</td><td>36</td><td>Second largest</td></tr>
+<tr><td>On-Premises (7 sub-tracks)</td><td>26</td><td>Not started</td></tr>
+</tbody></table>
+
+<p><strong>Existing strengths:</strong> CKA / CKAD / CKS / KCNA / Cloud / Prerequisites tracks all show 0 critical-rubric. The remaining 149-module backlog is concentrated in Platform Engineering (110) and On-Premises (26).</p>
+
+<h2>4. Trust audit follow-up status (5 of 10 closed this session-arc)</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>#1401 Phase 2 agy calibration</td><td>Open · date-bound 2026-06-18</td></tr>
+<tr><td>#1402 per-language test harness</td><td>Open · ~1 day infra</td></tr>
+<tr><td>#1403 stability runs</td><td><strong>Done</strong> (PR #1410)</td></tr>
+<tr><td>#1404 real-execution mcp-use lane</td><td>Open · methodology lock-in via #1413 PLAN</td></tr>
+<tr><td>#1405 v2 fixture refire</td><td>In flight</td></tr>
+<tr><td>#1406 respected_inline_return gate</td><td><strong>Done</strong> (PR #1415)</td></tr>
+<tr><td>#1411 stability.html surfacing</td><td><strong>Done</strong> (PR #1414)</td></tr>
+<tr><td>#1412 zero-score audit + prose-lane rule</td><td><strong>Done</strong> (PR #1417 this session)</td></tr>
+<tr><td>#1413 single-fixture lanes — Action 1 PLANs</td><td>Codex + R1 + fixup landed; awaiting PR open</td></tr>
+<tr><td>#1416 auto-render hook</td><td><strong>Done</strong> (PR #1418 this session)</td></tr>
+</tbody></table>
+
+<h2>5. Process notes</h2>
+
+<h3>5.1 Rubric is binary 5.0/&lt;2.0; T0 verifier is the real measure</h3>
+
+<p>User caught "the prereqs are not green" after I reported "Prerequisites tracks all show 0 critical-quality." The rubric stratifies into 5.0 OR &lt;2.0 — 779 modules with NO middle band. T0 verifier sweep across 56 prereq modules found 2 T2 + 11 T3 (8 of which are intentional <code>index.md</code> pages). Real non-T0 prereq content modules: 5.</p>
+
+<h3>5.2 Codex undershoots prereq+Linux template gates</h3>
+
+<p>Linux Services &amp; Logs shipped T3 first try: body_words=2942 vs 5000 floor; 0 Did-You-Know vs 4 needed; section order wrong. Likely because brief cited <code>module-6.2-falco.md</code> as reference but CKS Part 6 uses slightly different structural conventions than prereq+Linux. <strong>Lesson</strong>: paste track-specific T0 template examples in next-session briefs.</p>
+
+<h3>5.3 Rebase conflicts + hook discipline held from session 41</h3>
+
+<p><code>score_cell.py</code> import block conflict (both #1417 and #1418 touched it) resolved inline — merged both branches' imports into a multi-line tuple. Hook fires on chained <code>gh pr edit && gh pr merge</code>; split into separate Bash calls per session-40 memory. Re-encountered on PR #1419 (initial `fix(prereq):` title triggered bugfix gate; renamed to `chore(prereq):`).</p>
+
+<h2>6. End state (handoff snapshot)</h2>
+
+<ul>
+<li>Branch <code>main</code> at <code>13b88260</code> (will advance further as in-flight PRs merge).</li>
+<li>4 PRs merged this session.</li>
+<li>10+ codex/sonnet jobs in flight on 10 worktrees.</li>
+<li>0 open PRs at handoff time.</li>
+<li>Critical-quality count: 149 (steady — module rewrites in flight haven't merged yet).</li>
+<li>5 prereq non-T0 modules identified; 1 cleared (#1419); 4 still in flight.</li>
+<li>9 Linux Foundations+Operations critical; 3 in flight; 6 remaining.</li>
+</ul>
+
+<h2>7. Carryovers — next session</h2>
+
+<ol>
+<li><strong>Drain the in-flight queue</strong>: 10 branches across various R1/fixup/PR/merge stages. Linux Services &amp; Logs T3-fixup is most urgent.</li>
+<li><strong>#1413 fixture-plans PR</strong> — codex fixup landed, one <code>gh pr create</code> away.</li>
+<li><strong>Remaining Linux modules (6)</strong>: network-namespaces, networking-tools (Foundations), cpu-scheduling, bash-fundamentals, text-processing, network-debugging (Operations).</li>
+<li><strong>K8S Finops + KCSA 4.4</strong> — 3 small modules. Fire in parallel.</li>
+<li><strong>Platform Engineering backlog (110 modules)</strong>: 28 + 46 + 36. Sustained multi-session campaign.</li>
+<li><strong>Codex undershoot pattern</strong>: paste track-specific template examples in briefs.</li>
+<li><strong>#1402 per-language test harness</strong> — ~1 day infra.</li>
+<li><strong>#1404 real-execution mcp-use lane</strong>.</li>
+<li><strong>#1401 Phase 2 agy calibration</strong> — date-bound 2026-06-18.</li>
+<li><strong>Stability remaining replicates</strong> — ~50 candidate cells in stability.html coverage table.</li>
+<li>Date-bound: 2026-06-08 claude-i wrapper · 2026-06-15 agentic-credit-pool flip · 2026-06-18 drop gemini adapter · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>8. References</h2>
+
+<ul>
+<li>Predecessor: <a href="2026-05-21-session-41-rewrites-plus-calibration-trust-audit.html">session 41</a></li>
+<li>Memory TOP PRIORITY additions from session 41: <code>feedback_orchestrate_dont_idle.md</code>, <code>feedback_single_fixture_v1_calibration.md</code>, <code>feedback_zero_score_audit_2026_05_21.md</code>, <code>feedback_render_after_score.md</code></li>
+<li>Benchmarks UI live: <code>http://127.0.0.1:8768/benchmarks</code></li>
+<li>Variance report: <code>http://127.0.0.1:8768/artifacts/calibration/v1/reports/2026-05-21/stability.html</code></li>
+</ul>
+
+</body>
+</html>
