@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>harness-following — calibration lane</title>
+<link rel="stylesheet" href="../../design-system.css">
+<style>
+  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  h1 { margin-bottom: 0.25rem; }
+  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
+  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
+  th { background:#f3f5f7; text-align:left; }
+  .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; background:#e0e0ff; color:#1a1a8a; }
+</style>
+</head>
+<body>
+<h1>harness-following</h1>
+<p class="meta">run_date=2026-05-21 · <a href="../matrix.html">matrix</a></p>
+<table>
+  <thead>
+    <tr><th>Model</th><th>Fixture</th><th>Family</th><th>Effort</th><th>Deterministic</th><th>LLM judge</th><th>Response</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>claude-haiku-4-5</td>
+      <td>inline-write-falco-module</td>
+      <td>anthropic</td>
+      <td><span class="pill">default / high</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-claude-haiku-4-5@default-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>claude-opus-4-7</td>
+      <td>inline-write-falco-module</td>
+      <td>anthropic</td>
+      <td><span class="pill">max / high</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-claude-opus-4-7@max-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>claude-sonnet-4-6</td>
+      <td>inline-write-falco-module</td>
+      <td>anthropic</td>
+      <td><span class="pill">max / high</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-claude-sonnet-4-6@max-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>deepseek-v4-pro</td>
+      <td>inline-write-falco-module</td>
+      <td>deepseek</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-deepseek-v4-pro@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.5-flash-high</td>
+      <td>inline-write-falco-module</td>
+      <td>google</td>
+      <td><span class="pill">high / high</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gemini-3.5-flash-high@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.5</td>
+      <td>inline-write-falco-module</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / high</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gpt-5.5@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>qwen3.6-plus</td>
+      <td>inline-write-falco-module</td>
+      <td>alibaba</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-qwen3.6-plus@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>claude-haiku-4-5</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>anthropic</td>
+      <td><span class="pill">default / high</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-claude-haiku-4-5@default-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>deepseek-v4-flash</td>
+      <td>inline-write-falco-module</td>
+      <td>deepseek</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-deepseek-v4-flash@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.1-pro-preview</td>
+      <td>inline-write-falco-module</td>
+      <td>google</td>
+      <td><span class="pill">high / high</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gemini-3.1-pro-preview@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.3-codex-spark</td>
+      <td>inline-write-falco-module</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / medium</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gpt-5.3-codex-spark@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.4-mini</td>
+      <td>inline-write-falco-module</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gpt-5.4-mini@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.5</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / high</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gpt-5.5@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>grok-4.3</td>
+      <td>inline-write-falco-module</td>
+      <td>xai</td>
+      <td><span class="pill">xhigh / unknown</span></td>
+      <td>100%</td>
+      <td>9.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-grok-4.3@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>deepseek-v4-flash</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>deepseek</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-deepseek-v4-flash@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>deepseek-v4-pro</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>deepseek</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-deepseek-v4-pro@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.1-flash-lite-preview</td>
+      <td>inline-write-falco-module</td>
+      <td>google</td>
+      <td><span class="pill">high / low</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-gemini-3.1-flash-lite-preview@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.1-pro-preview</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>google</td>
+      <td><span class="pill">high / high</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gemini-3.1-pro-preview@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.3-codex-spark</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / medium</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gpt-5.3-codex-spark@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gpt-5.4-mini</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>openai</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>9.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gpt-5.4-mini@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>claude-sonnet-4-6</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>anthropic</td>
+      <td><span class="pill">max / high</span></td>
+      <td>100%</td>
+      <td>8.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-claude-sonnet-4-6@max-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.1-flash-lite-preview</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>google</td>
+      <td><span class="pill">high / low</span></td>
+      <td>100%</td>
+      <td>8.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gemini-3.1-flash-lite-preview@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>gemini-3.5-flash-high</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>google</td>
+      <td><span class="pill">high / high</span></td>
+      <td>100%</td>
+      <td>8.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-gemini-3.5-flash-high@high-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>qwen3.6-plus</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>alibaba</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>100%</td>
+      <td>8.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-qwen3.6-plus@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>grok-4.3</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>xai</td>
+      <td><span class="pill">xhigh / unknown</span></td>
+      <td>100%</td>
+      <td>7.5</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-grok-4.3@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>claude-opus-4-7</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>anthropic</td>
+      <td><span class="pill">max / high</span></td>
+      <td>67%</td>
+      <td>10.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-claude-opus-4-7@max-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>qwen3.6</td>
+      <td>claude-md-context-cks-tweak</td>
+      <td>alibaba</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>33%</td>
+      <td>4.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-claude-md-context-cks-tweak-qwen3.6@xhigh-2026-05-21.md</td>
+    </tr>
+    <tr>
+      <td>qwen3.6</td>
+      <td>inline-write-falco-module</td>
+      <td>alibaba</td>
+      <td><span class="pill">xhigh / low</span></td>
+      <td>33%</td>
+      <td>0.0</td>
+      <td>calibration/v1/2026-05-21/responses/harness-following-inline-write-falco-module-qwen3.6@xhigh-2026-05-21.md</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>
