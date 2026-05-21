@@ -89,7 +89,7 @@ The diagram deliberately shows HBM and GDDR as alternative local-memory families
 | RTX 5090 | GDDR7 | 32 GB | 1792 GB/s | Higher consumer bandwidth and capacity, still below B200/H100/MI300X HBM tiers. |
 | H100 SXM | HBM3 | 80 GB | 3.35 TB/s | High decode throughput and more concurrency headroom when engine efficiency is good. |
 | H100 NVL | HBM3 | 94 GB per GPU | 3.9 TB/s | Tuned for larger LLM inference with more memory and strong NVLink pairing. |
-| GB200 superchip | HBM3e | 372 GB across two Blackwell GPUs | 16 TB/s across two GPUs | Rack-scale inference part where bandwidth, capacity, and NVLink are designed together. |
+| GB200 superchip | HBM3e | 384 GB across two Blackwell GPUs | 16 TB/s across two GPUs | Rack-scale inference part where bandwidth, capacity, and NVLink are designed together. |
 | MI300X | HBM3 | 192 GB | 5.3 TB/s | Large-memory HBM option that can hold bigger models or more KV cache per accelerator. |
 | M2 Ultra / M3 Ultra | Unified memory | 192 GB / 512 GB class | 800+ GB/s shared | Attractive for very large local models when capacity matters more than top decode speed. |
 
@@ -594,7 +594,3 @@ Success criteria:
 - [Modal: Run LLM inference at maximum throughput](https://modal.com/docs/examples/vllm_throughput)
 - [Hazy Research: GPUs Go Brrr](https://hazyresearch.stanford.edu/blog/2024-05-12-tk)
 - [vLLM v0.6.0 performance update](https://vllm.ai/blog/2024-09-05-perf-update)
-
-## Next Module
-
-Continue to [High-Performance LLM Inference: vLLM and sglang](module-1.3-vllm-sglang-inference/) to apply bandwidth math to concrete inference-engine behavior, batching, and KV-cache management.
