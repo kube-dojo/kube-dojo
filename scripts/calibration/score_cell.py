@@ -15,6 +15,7 @@ import yaml
 from . import schema
 from .models import model_by_canonical
 from .run_cell import DEFAULT_DB_PATH, REPO_ROOT, dispatch_prompt
+from .scorers import respected_inline_return
 
 GROUND_TRUTH_ROOT = REPO_ROOT / "scripts" / "calibration" / "ground-truth" / "v1"
 # refactoring is listed here so it routes through the prose-lane judge path
@@ -725,10 +726,10 @@ def load_ground_truth(lane: str, fixture_id: str) -> dict[str, Any]:
     return payload
 
 
-def _latest_response_path(conn: Any, cell_id: str) -> Path:
+def _latest_dispatch(conn: Any, cell_id: str) -> Any:
     row = conn.execute(
         """
-        SELECT response_path
+        SELECT *
         FROM dispatches
         WHERE cell_id = ?
         ORDER BY dispatch_ts DESC
@@ -738,10 +739,18 @@ def _latest_response_path(conn: Any, cell_id: str) -> Path:
     ).fetchone()
     if row is None:
         raise FileNotFoundError(f"no dispatch response recorded for {cell_id}")
-    path = Path(row["response_path"])
+    return row
+
+
+def _response_path_from_dispatch(dispatch: Any) -> Path:
+    path = Path(dispatch["response_path"])
     if not path.is_absolute():
         path = REPO_ROOT / path
     return path
+
+
+def _latest_response_path(conn: Any, cell_id: str) -> Path:
+    return _response_path_from_dispatch(_latest_dispatch(conn, cell_id))
 
 
 def _parse_judge_score(response: str) -> float:
@@ -814,7 +823,8 @@ def score_cell(
     schema.init_db(db_path)
     with schema.connect(db_path) as conn:
         cell = schema.fetch_cell(conn, cell_id)
-        response_path = _latest_response_path(conn, cell_id)
+        dispatch = _latest_dispatch(conn, cell_id)
+        response_path = _response_path_from_dispatch(dispatch)
         response = response_path.read_text(encoding="utf-8")
         ground_truth = load_ground_truth(str(cell["lane"]), str(cell["fixture_id"]))
         lane = str(cell["lane"])
@@ -826,6 +836,21 @@ def score_cell(
             gates=gates,
             replicate_seq=replicate_seq,
         )
+        if lane == "content-writing-long":
+            inline_result = respected_inline_return.score_dispatch(
+                dispatch,
+                repo_root=REPO_ROOT,
+            )
+            schema.insert_score(
+                conn,
+                cell_id=cell_id,
+                gate_name=respected_inline_return.GATE_NAME,
+                gate_pass=inline_result.gate_pass,
+                score_value=inline_result.score_value,
+                scorer=respected_inline_return.GATE_NAME,
+                stderr_excerpt=inline_result.stderr_excerpt,
+                replicate_seq=replicate_seq,
+            )
 
         prompt = scorer.llm_judge_prompt(response, ground_truth)
         if prompt is None:

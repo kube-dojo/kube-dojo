@@ -42,6 +42,8 @@ class DispatchResult:
     cost_usd: float | None = None
     returncode: int | None = 0
     stderr_excerpt: str | None = None
+    cwd: str | None = None
+    tool_uses: list[dict[str, object]] | None = None
 
 
 DispatchFn = Callable[[CalibrationModel, str, Path, int], DispatchResult]
@@ -187,6 +189,7 @@ def dispatch_prompt(
                 latency_s=latency_s,
                 returncode=proc.returncode,
                 stderr_excerpt=stderr_excerpt,
+                cwd=str(effective_cwd),
             )
 
         if plan.kind == "runtime" and plan.agent_name:
@@ -208,6 +211,7 @@ def dispatch_prompt(
                 cost_usd=result.usage_record.get("cost_usd"),
                 returncode=result.returncode,
                 stderr_excerpt=result.stderr_excerpt,
+                cwd=str(effective_cwd),
             )
 
     raise NotImplementedError(f"unknown dispatch plan kind: {plan.kind}")
@@ -233,6 +237,42 @@ def _append_jsonl(path: Path, payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _git_dirty_paths(repo_root: Path) -> set[str]:
+    result = subprocess.run(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return set()
+
+    paths: set[str] = set()
+    parts = result.stdout.split(b"\0")
+    i = 0
+    while i < len(parts):
+        entry = parts[i]
+        if not entry:
+            i += 1
+            continue
+        status = entry[:2].decode("utf-8", errors="replace")
+        path = entry[3:].decode("utf-8", errors="replace")
+        if path:
+            paths.add(path)
+        i += 1
+        if "R" in status or "C" in status:
+            if i < len(parts) and parts[i]:
+                paths.add(parts[i].decode("utf-8", errors="replace"))
+            i += 1
+    return paths
 
 
 def run_cell(
@@ -274,6 +314,7 @@ def run_cell(
         replicate_seq=replicate_seq,
     )
 
+    dirty_before = _git_dirty_paths(REPO_ROOT)
     try:
         result = dispatch_fn(model, prompt, REPO_ROOT, timeout_s)
     except subprocess.TimeoutExpired:
@@ -298,6 +339,13 @@ def run_cell(
                 replicate_seq=replicate_seq,
             )
         raise
+    dirty_after = _git_dirty_paths(REPO_ROOT)
+    touched_paths = sorted(dirty_after - dirty_before)
+    git_tool_uses = [
+        {"path": path, "source": "git_status_after_dispatch"}
+        for path in touched_paths
+    ]
+    tool_uses = [*(result.tool_uses or []), *git_tool_uses]
 
     response_path.write_text(result.response, encoding="utf-8")
     try:
@@ -310,6 +358,8 @@ def run_cell(
             cell_id=cell_id,
             task_id=result.task_id,
             response_path=relative_response_path,
+            cwd=result.cwd or str(REPO_ROOT),
+            tool_uses=tool_uses or None,
             latency_s=result.latency_s,
             cost_usd=result.cost_usd,
             returncode=result.returncode,

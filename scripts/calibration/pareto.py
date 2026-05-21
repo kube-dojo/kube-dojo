@@ -21,6 +21,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+try:
+    from .constants import DETERMINISTIC_SCORERS
+except ImportError:  # direct script execution path
+    from constants import DETERMINISTIC_SCORERS
+
 # Per-second USD rate. Rough — these are observed billing receipts divided by
 # observed total latency across the Wave A+B + session-37 ledger as of
 # 2026-05-21. Anthropic Max / Codex Pro / agy on Google One run on subscription
@@ -79,8 +84,9 @@ def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> li
             for cell_id in slot["cells"]:
                 det = conn.execute(
                     "SELECT AVG(CAST(gate_pass AS REAL)) FROM scores "
-                    "WHERE cell_id=? AND scorer='deterministic' AND gate_name != 'human_spot_check'",
-                    (cell_id,),
+                    "WHERE cell_id=? AND scorer IN (?, ?) "
+                    "AND gate_name != 'human_spot_check'",
+                    (cell_id, *DETERMINISTIC_SCORERS),
                 ).fetchone()[0]
                 if det is not None:
                     slot["det_passes"].append(float(det))

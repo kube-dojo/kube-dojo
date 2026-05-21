@@ -10,6 +10,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import schema
+from .constants import DETERMINISTIC_SCORERS
 from .models import ANCHORS, LANES
 from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT
 
@@ -76,7 +77,7 @@ def load_summaries(db_path: Path) -> list[CellSummary]:
         deterministic = [
             int(row["gate_pass"])
             for row in cell_scores
-            if str(row["scorer"]) == "deterministic"
+            if str(row["scorer"]) in DETERMINISTIC_SCORERS
             and str(row["gate_name"]) != "human_spot_check"
         ]
         llm = [
