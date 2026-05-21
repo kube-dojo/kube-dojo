@@ -21,6 +21,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parent / "reports" / "templates"
 class CellSummary:
     cell_id: str
     lane: str
+    fixture_id: str
     canonical_string: str
     run_date: str
     family: str
@@ -109,6 +110,7 @@ def load_summaries_for_run(
             CellSummary(
                 cell_id=str(cell["cell_id"]),
                 lane=str(cell["lane"]),
+                fixture_id=str(cell["fixture_id"]),
                 canonical_string=str(cell["canonical_string"]),
                 run_date=str(cell["run_date"]),
                 family=str(cell["family"]),
