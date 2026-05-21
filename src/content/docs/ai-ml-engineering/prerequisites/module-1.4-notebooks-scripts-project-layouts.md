@@ -7,7 +7,7 @@ sidebar:
 ---
 > **AI/ML Engineering Track** | Complexity: `[MEDIUM]` | Time: 2-3 hours
 ---
-**Reading Time**: 2-3 hours
+**Reading Time**: 2-3 hours, including the refactor exercise, dependency-file inspection, and a clean-shell rerun of the starter project.
 
 **Prerequisites**: Modules 1.1 through 1.3 complete
 
@@ -69,6 +69,21 @@ A pipeline is best when the work has multiple dependent stages and artifact trac
 The arrows are not a maturity ranking where notebooks are childish and pipelines are advanced. They show how responsibility moves as a project becomes less uncertain and more shared.
 
 A solo learning project may stay mostly in notebook and script mode. A team project that feeds a downstream service must usually move key logic into packages and workflows. The right answer depends on risk, not fashion.
+
+```mermaid
+flowchart LR
+    N[Observe in a notebook] --> D{Will someone rerun this?}
+    D -->|No, still exploring| N
+    D -->|Yes, same task again| S[Make a script]
+    S --> R{Is logic reused?}
+    R -->|One command only| S
+    R -->|Several callers need it| P[Move logic into src package]
+    P --> W{Are stages dependent?}
+    W -->|No, scripts are enough| P
+    W -->|Yes, lineage matters| L[Introduce a pipeline]
+```
+
+The diagram is useful because it turns a vague architecture conversation into an operator decision. The question is not "Which tool is more professional?" The question is "What responsibility has this work acquired, and which working mode exposes that responsibility clearly enough for the next person?"
 
 **Stop and think:** if your current AI project disappeared from memory and only the Git repository remained, which steps could another person rerun without asking you what order the notebook cells were executed in?
 
@@ -251,6 +266,82 @@ For beginner projects, a few modules are enough. For senior-level work, the same
 The package should not hide every detail behind abstraction. Premature abstraction can make a small project harder to understand. Move code into a package when reuse, testing, or review pressure appears, not because every notebook cell must immediately become a class.
 
 A useful decision rule is to watch for the second copy. The first version of a helper can live in a notebook while you learn. When another notebook or script needs the same logic, extract it before the two copies evolve differently.
+
+---
+
+## Project Metadata: `pyproject.toml` as the Contract
+
+Once reusable code lives under `src/`, the repository needs a small project contract. That contract is usually `pyproject.toml`, because the Python Packaging User Guide describes it as the place where a project declares build-system requirements and project metadata such as name, Python version requirements, dependencies, optional dependencies, and entry points. The important habit is not memorizing every key. The habit is knowing which choices belong in metadata, which choices belong in runtime configuration, and which choices do not belong in either file. ([PyPA: Writing your pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/), [PyPA: pyproject.toml specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/))
+
+For a notebook-to-script project, `pyproject.toml` should answer three practical questions. What package should be importable from `src/`? Which Python versions and runtime libraries does the project expect? Which development extras let a teammate run notebooks, tests, and linters without guessing from your shell history? Those answers make environment setup reviewable in Git instead of hidden in a long sequence of one-off install commands.
+
+```toml
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notebook-refactor-demo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "jupyterlab>=4",
+  "pytest>=8",
+  "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+```
+
+The `src` layout is not decoration. Setuptools documents package discovery for `src-layout` projects, and that layout helps prevent an accidental import from the repository root from hiding packaging mistakes. If the project installs cleanly and tests import `my_project` through the same package name that notebooks and scripts use, you are testing the project shape that teammates will run instead of testing a lucky local path. ([Setuptools: Package Discovery and Namespace Packages](https://setuptools.pypa.io/en/latest/userguide/package_discovery.html))
+
+```bash
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/python -m pytest
+```
+
+Do not turn `pyproject.toml` into an experiment diary. Model thresholds, dataset snapshots, prompt variants, and output report paths usually belong in command arguments or config files because they change per run. Package names, supported Python versions, and development tool settings belong in `pyproject.toml` because they describe the project environment. That separation keeps metadata stable while still letting experiments vary.
+
+---
+
+## Dependency Hygiene: Pick One Source of Truth
+
+Dependency hygiene is an operational decision before it is a tooling decision. A team gets into trouble when one person edits `requirements.txt`, another person runs `uv add`, a third person uses `pdm add`, and the notebook server contains packages that never appear in the repository. The fix is to choose one source of truth for direct dependencies, one lock or compile artifact policy, and one documented install command. Python's `venv` module supports isolated environments, but isolation only helps if the environment can be recreated from files the project actually tracks. ([Python venv](https://docs.python.org/3/library/venv.html))
+
+| Tooling choice | Dependency source of truth | Reproducibility artifact | Good operator use |
+|---|---|---|---|
+| `uv` project workflow | `pyproject.toml` managed with `uv add` and related project commands | `uv.lock` records the resolved environment | Best when the team wants fast project sync and a lockfile-driven workflow |
+| PDM workflow | `pyproject.toml` managed with `pdm add` and dependency groups | `pdm.lock` records the resolved environment | Best when the team already standardizes on PDM project management |
+| `pip-tools` workflow | `requirements.in`, `pyproject.toml`, or similar input files | compiled `requirements.txt` from `pip-compile` | Best when deployment or platform policy expects pinned requirements files |
+
+The table is not a ranking. It is a warning against mixing ownership. uv documents project dependencies in `pyproject.toml` and project synchronization through its own workflow. PDM documents dependency management through project metadata and groups. pip-tools documents `pip-compile` as the command that compiles pinned requirement output from higher-level dependency inputs. Each approach can be disciplined when the team follows it consistently. Each approach becomes confusing when its generated files are hand-edited by a different workflow. ([uv: Managing Dependencies](https://docs.astral.sh/uv/concepts/projects/dependencies/), [PDM: Manage Dependencies](https://pdm-project.org/latest/usage/dependency/), [pip-tools: pip-compile](https://pip-tools.readthedocs.io/en/stable/cli/pip-compile/))
+
+```bash
+# uv-owned project
+uv add pandas scikit-learn
+uv sync
+
+# PDM-owned project
+pdm add pandas scikit-learn
+pdm install
+
+# pip-tools-owned project
+.venv/bin/python -m piptools compile requirements.in -o requirements.txt
+.venv/bin/python -m piptools sync requirements.txt
+```
+
+For notebook-heavy work, dependency hygiene also protects interpretation. A model metric can change because the data changed, the code changed, or a library version changed. If the dependency state is not documented, the team may spend hours debugging model behavior while the real difference is a silently upgraded parser, tokenizer, dataframe library, or evaluation package. A clean project records the dependency decision near the code so reruns can test the same hypothesis under the same environment boundary.
 
 ---
 
@@ -543,6 +634,38 @@ The senior lesson is that refactoring out of a notebook should be incremental. D
 
 ---
 
+## Notebook-to-Script Conversion
+
+Conversion tools help you cross the bridge from exploration to repeatability, but they do not decide what is production code. Jupyter's conversion documentation points to nbconvert for converting notebook documents, and nbconvert documents command-line conversion to script form. That exported script is useful evidence because it shows the current notebook order in plain text. It is not automatically a clean training program, because notebook cells may still mix imports, plots, markdown assumptions, temporary variables, and hidden filesystem choices. ([Jupyter: Formatting and Conversion](https://docs.jupyter.org/en/latest/projects/conversion.html), [nbconvert Usage](https://nbconvert.readthedocs.io/en/latest/usage.html))
+
+```bash
+mkdir -p converted
+jupyter nbconvert --to script notebooks/01-exploration.ipynb --output-dir converted
+sed -n '1,160p' converted/01-exploration.py
+```
+
+Use nbconvert when you need a one-time extraction or an audit snapshot of what the notebook currently contains. The next step is still human judgment. Functions that define reusable behavior move to `src/my_project/`. Commands that should run from a clean shell become scripts. Plotting and interpretation can remain in the notebook. This keeps the conversion from becoming a mechanical dump where every cell becomes permanent just because a tool exported it.
+
+Jupytext solves a different problem. Its paired-notebook workflow keeps an `.ipynb` file paired with a text representation such as a percent-format Python file or Markdown file. That can make code review easier because teammates can inspect the text form while still opening the notebook interactively. It is most useful when a notebook remains a living exploration document and the team wants reviewable changes without pretending the notebook has already become a script. ([Jupytext: Paired Notebooks](https://jupytext.readthedocs.io/en/latest/paired-notebooks.html))
+
+```bash
+jupytext --set-formats ipynb,py:percent notebooks/01-exploration.ipynb
+jupytext --sync notebooks/01-exploration.ipynb
+git status --short notebooks/
+```
+
+The safe promotion sequence is short. First, restart the kernel and run the notebook top to bottom so the exported text reflects an actual execution path rather than old kernel memory. Second, export or pair the notebook so the current state is reviewable. Third, move repeated or trusted behavior into `src/`, add a script for repeatable execution, and replace notebook copies with imports. Fourth, add a test around behavior that affects results. If any step fails, the failure is information about hidden state that the notebook was masking.
+
+| Situation | Better tool move | Engineering decision |
+|---|---|---|
+| You need a one-time plain-text snapshot of an existing notebook | Export with nbconvert | Review the exported order, then extract only reusable behavior |
+| The notebook remains active but diffs are too noisy | Pair with Jupytext | Keep exploration interactive while reviewing code-like changes in text |
+| The result must run daily or feed another service | Write a script and package functions | Treat the notebook as an inspector, not the execution contract |
+
+Do not measure success by the absence of notebooks. Measure success by whether the project can explain which notebook is exploratory, which script reruns the result, which module owns shared behavior, which config records run choices, and which artifact path contains generated output. That explanation is what turns notebook work into engineering work.
+
+---
+
 ## Decision Points: When to Graduate Work
 
 The hardest part is not knowing that scripts and packages exist. The hardest part is deciding when the current form is no longer enough. Graduation should be based on friction and risk.
@@ -604,7 +727,7 @@ __pycache__/
 
 Be careful with broad ignore rules. Ignoring all `data/` files may be appropriate for sensitive projects, but it can also hide small sample fixtures needed for tests. A better pattern is often to ignore large subdirectories while explicitly allowing safe examples.
 
-Notebook diffs require special attention. JSON notebook files contain metadata, execution counts, and outputs that can dominate a review. Tools such as notebook-aware diffing and output stripping exist because ordinary text diffs are often too noisy for notebooks.
+Notebook diffs require special attention. JSON notebook files contain metadata, execution counts, and outputs that can dominate a review, because the nbformat documentation defines notebooks as structured JSON documents with cells, metadata, and outputs. Tools such as notebook-aware diffing and output stripping exist because ordinary text diffs are often too noisy for notebooks. ([nbformat: Notebook Format](https://nbformat.readthedocs.io/en/latest/format_description.html), [nbdime](https://github.com/jupyter/nbdime), [nbstripout](https://github.com/kynan/nbstripout))
 
 The project should answer three review questions quickly: What behavior changed? What experiment choices changed? Which artifacts were produced by running the project? If a pull request cannot answer those questions, the layout and version-control habits need improvement.
 
@@ -628,13 +751,13 @@ The best AI engineers preserve the speed of exploration while building escape ro
 
 ## Did You Know?
 
-1. [Notebook files are structured documents, not just Python scripts with extra comments.](https://nbformat.readthedocs.io/en/5.3.0/format_description.html) That is why ordinary text diffs can be noisy and why [notebook-aware diff tools](https://github.com/jupyter/nbdime) are useful in collaborative projects.
+1. [Notebook files are structured JSON documents, not just Python scripts with extra comments.](https://nbformat.readthedocs.io/en/latest/format_description.html) That is why ordinary text diffs can be noisy and why [notebook-aware diff tools](https://github.com/jupyter/nbdime) are useful in collaborative projects.
 
-2. Many production incidents that look like model failures begin as data or preprocessing mismatches. Moving preprocessing into reviewed, reusable code makes those mismatches easier to detect before the model is blamed.
+2. [PyPA's `pyproject.toml` guide](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/) treats project metadata and dependencies as project declarations, which is why dependency changes belong in reviewed files rather than only in terminal history.
 
-3. A small sample dataset can be more valuable in Git than a huge real dataset. Safe examples let tests and documentation run anywhere, while large or sensitive data usually belongs in controlled storage.
+3. [Jupytext paired notebooks](https://jupytext.readthedocs.io/en/latest/paired-notebooks.html) let a notebook keep its interactive form while a text representation gives reviewers a cleaner view of code-like changes.
 
-4. The same function can serve exploration and production preparation when it has a stable interface. A notebook can import it for analysis, a script can call it for repeatable runs, and a test can protect its behavior.
+4. [Git's `gitignore` documentation](https://git-scm.com/docs/gitignore) describes ignored files as intentionally untracked files, which is the exact mental model you need for generated outputs, caches, and local environments.
 
 ---
 
@@ -899,5 +1022,16 @@ After completing the exercise, compare your result with the worked example in th
 
 - [Cookiecutter Data Science](https://github.com/drivendataorg/cookiecutter-data-science) — Provides a widely used reference project layout for separating code, data, notebooks, and outputs.
 - [nbstripout](https://github.com/kynan/nbstripout) — Directly supports the module's version-control hygiene advice by stripping notebook outputs and noisy metadata.
-- [nbformat.readthedocs.io: format description.html](https://nbformat.readthedocs.io/en/5.3.0/format_description.html) — The nbformat documentation explicitly describes the official Jupyter Notebook format and its JSON-schema-defined top-level structure.
+- [nbformat.readthedocs.io: format description.html](https://nbformat.readthedocs.io/en/latest/format_description.html) — The nbformat documentation explicitly describes the official Jupyter Notebook format and its JSON-schema-defined top-level structure.
 - [github.com: nbdime](https://github.com/jupyter/nbdime) — The nbdime project directly documents notebook-aware diff and merge commands, supporting the claim that notebook-specific review tooling exists.
+- [Jupyter: Formatting and Conversion](https://docs.jupyter.org/en/latest/projects/conversion.html) — Identifies notebook conversion tooling in the Jupyter project ecosystem, including nbconvert.
+- [nbconvert Usage](https://nbconvert.readthedocs.io/en/latest/usage.html) — Documents command-line notebook conversion, including script export workflows.
+- [Jupytext Paired Notebooks](https://jupytext.readthedocs.io/en/latest/paired-notebooks.html) — Documents pairing `.ipynb` notebooks with text formats for synchronized review.
+- [PyPA: Writing your pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/) — Documents practical project metadata, dependency, optional-dependency, and entry-point declarations.
+- [PyPA: pyproject.toml specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/) — Provides the packaging specification context for `pyproject.toml`.
+- [Setuptools: Package Discovery and Namespace Packages](https://setuptools.pypa.io/en/latest/userguide/package_discovery.html) — Documents package discovery, including the `src` layout used by the module examples.
+- [Python venv](https://docs.python.org/3/library/venv.html) — Documents isolated Python virtual environments and how installed packages are scoped to them.
+- [uv: Managing Dependencies](https://docs.astral.sh/uv/concepts/projects/dependencies/) — Documents uv project dependency management through project metadata and synchronization.
+- [PDM: Manage Dependencies](https://pdm-project.org/latest/usage/dependency/) — Documents PDM dependency management and dependency groups.
+- [pip-tools: pip-compile](https://pip-tools.readthedocs.io/en/stable/cli/pip-compile/) — Documents compiling pinned requirements from dependency input files.
+- [Git: gitignore](https://git-scm.com/docs/gitignore) — Documents intentionally untracked files and ignore-pattern behavior for generated paths.
