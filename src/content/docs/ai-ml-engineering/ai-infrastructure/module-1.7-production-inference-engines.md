@@ -80,7 +80,7 @@ The production-tier landscape is easier to reason about when you stop treating a
 | ExLlamaV3 | 1-4 consumer NVIDIA GPUs | EXL3 quantized models, local OpenAI-compatible serving, emerging multimodal | TabbyAPI recommended server, dynamic batching | Fast-moving project, some features still explicitly missing |
 | vLLM | NVIDIA, AMD, TPU, CPU-adjacent backends depending on support | Broad production default, OpenAI-compatible serving, PagedAttention | Server, metrics, Kubernetes production stack options | Model or feature support can lag cutting-edge architectures |
 | SGLang | NVIDIA, AMD, Intel, TPU, and large GPU clusters depending on backend | Structured outputs, prefix reuse, MoE, disaggregated serving | Server, router/gateway, distributed features | More knobs, more value when workload uses its strengths |
-| TensorRT-LLM | NVIDIA datacenter GPUs | NVIDIA-max performance for supported models and tuned deployments | `trtllm-serve`, Triton backend, NGC-style workflow | Compilation, tuning, and NVIDIA-only assumptions |
+| TensorRT-LLM | NVIDIA datacenter GPUs | NVIDIA-max performance for supported models and tuned deployments, including tensor and pipeline parallelism options | `trtllm-serve`, Triton backend, NGC-style workflow | Compilation, tuning, and NVIDIA-only assumptions |
 | NVIDIA Dynamo | Multi-node GPU clusters | Disaggregated prefill/decode, KV-aware routing, dynamic worker scaling | Distributed runtime and orchestration framework | Adds distributed-system complexity; it is not a small-node default |
 | TGI | NVIDIA and common Hugging Face deployment targets | Simple production serving for popular HF models | Launcher, tracing, Prometheus metrics, tensor parallelism | Less flexible than vLLM/SGLang for some newer optimization paths |
 | LMDeploy | CUDA-focused and OpenMMLab ecosystem | TurboMind, persistent batch, VLM/InternLM-friendly serving | OpenAI-compatible server, metrics, quantization workflows | Model-specific support matrix matters |
@@ -89,13 +89,13 @@ The production-tier landscape is easier to reason about when you stop treating a
 
 ExLlamaV2 is the classic consumer-CUDA specialist. Its README describes EXL2 as a quantization format that supports 2, 3, 4, 5, 6, and 8-bit weights, including mixed bitrates within the model. That matters because a 24 GB card cannot serve large dense models in FP16, but it can sometimes serve aggressive quantized variants that are useful for local chat, small private assistants, or evaluation. The design center is not a public multi-tenant service with rich autoscaling. The design center is making modern consumer NVIDIA GPUs do useful local inference with strong speed and tight VRAM budgets.
 
-ExLlamaV3 keeps that consumer-CUDA center but pushes toward a broader engine shape. The project README describes a new EXL3 format based on QTIP, flexible tensor-parallel and expert-parallel inference for consumer setups, continuous dynamic batching, speculative decoding, 2-8 bit cache quantization, multimodal support, and TabbyAPI as the recommended OpenAI-compatible server. It also lists missing items such as LoRA support and ROCm support. That combination is exactly how you should read a fast-moving specialist: impressive local capability, but production fit depends on whether your required model, adapters, hardware, and observability expectations match the current project surface.
+ExLlamaV3 keeps that consumer-CUDA center but pushes toward a broader engine shape. The project README describes a new EXL3 format based on QTIP (QTIP itself is a published quantization framework, arXiv:2406.11235), with flexible tensor-parallel and expert-parallel inference for consumer setups, continuous dynamic batching, speculative decoding, 2-8 bit cache quantization, multimodal support, and TabbyAPI as the recommended OpenAI-compatible server. It also lists missing items such as LoRA support and ROCm support. That combination is exactly how you should read a fast-moving specialist: impressive local capability, but production fit depends on whether your required model, adapters, hardware, and observability expectations match the current project surface.
 
 vLLM is the broad production default because it combines a simple serving path with real scheduler and KV-cache machinery. The vLLM project describes PagedAttention, advanced scheduling, continuous batching, and a drop-in OpenAI-compatible API. The PagedAttention paper explains why this matters: naive KV cache management wastes memory through fragmentation and redundant duplication, which reduces batch size and throughput. vLLM's production metrics docs expose operational signals through a `/metrics` endpoint on the OpenAI-compatible API server, which is the difference between hoping the scheduler is healthy and actually graphing it.
 
 SGLang is best understood as a runtime for structured language-model programs, not only as another chat server. The SGLang paper describes a frontend language plus runtime, with RadixAttention for KV-cache reuse and compressed finite state machines for faster structured-output decoding. Current SGLang docs emphasize RadixAttention, prefix caching, continuous batching, paged attention, structured outputs, quantization, multi-LoRA batching, and multiple parallelism modes. If your workload is agentic, JSON-heavy, few-shot-heavy, prefix-reuse-heavy, or MoE-heavy, SGLang belongs near the top of the shortlist.
 
-TensorRT-LLM is the "pay the NVIDIA complexity tax for NVIDIA performance" branch. Its documentation describes in-flight batching, also called continuous or iteration-level batching, as a way to interleave context and generation phases for higher throughput. The same documentation covers paged KV cache, chunked context, and INT8 or FP8 KV cache modes. The `trtllm-serve` workflow provides an OpenAI-compatible API and benchmark harnesses, while the Triton TensorRT-LLM backend exposes production deployment patterns such as inflight fused batching. This is powerful, but it is not the most portable or lowest-friction option.
+TensorRT-LLM is the "pay the NVIDIA complexity tax for NVIDIA performance" branch. Its documentation describes in-flight batching, also called continuous or iteration-level batching, as a way to interleave context and generation phases for higher throughput. It also supports tensor and pipeline parallelism in multi-GPU deployments. The same documentation covers paged KV cache, chunked context, and INT8 or FP8 KV cache modes. The `trtllm-serve` workflow provides an OpenAI-compatible API and benchmark harnesses, while the Triton TensorRT-LLM backend exposes production deployment patterns such as inflight fused batching. This is powerful, but it is not the most portable or lowest-friction option.
 
 NVIDIA Dynamo is different because it is not merely another model process. Dynamo's architecture docs describe a high-throughput, low-latency framework for generative and reasoning models in multi-node distributed environments, with support for TensorRT-LLM, vLLM, SGLang, and other backends. The key ideas are disaggregated prefill and decode, dynamic GPU scheduling, LLM-aware routing, accelerated transfer through NIXL, and KV cache offloading. Use Dynamo when the cluster is the hard part. Do not use it to make a single workstation feel more serious.
 
@@ -295,10 +295,12 @@ Use this decision flow as a deterministic first pass. It does not replace benchm
 ```mermaid
 flowchart TD
     A["Define profile: GPUs, model family, context, concurrency, dense/MoE, portability"] --> B{"Must run outside NVIDIA CUDA?"}
+    B -- "Yes: AMD ROCm" --> AMD{"AMD ROCm support needed?"}
+    AMD -- "vLLM or SGLang support required" --> I["vLLM or SGLang with ROCm backend caveat"]
     B -- "Yes: Intel, mobile, browser, Vulkan, WebGPU, NPU" --> C{"Intel server estate?"}
     C -- "Yes" --> D["OpenVINO Model Server baseline"]
     C -- "No" --> E["MLC LLM or WebLLM baseline"]
-    B -- "No: NVIDIA acceptable" --> F{"Consumer GPUs, 1-4 cards, quantized local model?"}
+    B -- "No (NVIDIA CUDA OK)" --> F{"Consumer GPUs, 1-4 cards, quantized local model?"}
     F -- "Yes" --> G{"EXL2 or EXL3 model available?"}
     G -- "Yes" --> H["ExLlamaV3 or ExLlamaV2 with TabbyAPI; compare vLLM/SGLang if concurrency grows"]
     G -- "No" --> I["vLLM or SGLang with supported quantization"]
@@ -498,7 +500,7 @@ Success criteria:
 - [vLLM project overview](https://vllm.ai/)
 - [Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
 - [vLLM production metrics documentation](https://docs.vllm.ai/en/v0.12.0/usage/metrics/)
-- [vLLM automatic prefix caching design](https://docs.vllm.ai/en/v0.8.3/design/automatic_prefix_caching.html)
+- [vLLM automatic prefix caching design](https://docs.vllm.ai/en/latest/design/automatic_prefix_caching.html)
 - [SGLang paper: Efficient Execution of Structured Language Model Programs](https://arxiv.org/abs/2312.07104)
 - [SGLang documentation](https://docs.sglang.io/)
 - [SGLang structured outputs documentation](https://docs.sglang.io/docs/advanced_features/structured_outputs)
@@ -520,4 +522,4 @@ Success criteria:
 
 ## Next Module
 
-Next, go deeper on the most common production baseline in [High-Performance LLM Inference: vLLM and sglang](module-1.3-vllm-sglang-inference/), where you will study PagedAttention, RadixAttention, continuous batching, prefix caching, and structured-generation runtime behavior in more detail.
+Continue with a deeper read on vLLM and SGLang internals in [High-Performance LLM Inference](module-1.3-vllm-sglang-inference/), which complements the production-tier selection covered here.
