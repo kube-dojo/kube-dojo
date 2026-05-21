@@ -279,6 +279,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-cells", type=int, default=70)
     parser.add_argument("--replicates", type=int, default=3)
     parser.add_argument("--timeout-s", type=int, default=1800)
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Skip rendering calibration HTML reports after the replicate sweep.",
+    )
     return parser
 
 
@@ -309,6 +314,21 @@ def main(argv: list[str] | None = None) -> int:
     rendered = json.dumps(summary, indent=2)
     args.summary_out.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
+    if not args.no_render and candidates:
+        from scripts.calibration import report
+
+        for run_date in sorted({str(candidate["run_date"]) for candidate in candidates}):
+            out_dir = report.report_dir_for_run(run_date, output_root=args.output_root)
+            print(f"rendering calibration reports to {out_dir}", file=sys.stderr)
+            written = report.render_reports(
+                db_path=args.db_path,
+                out_dir=out_dir,
+                run_date=run_date,
+            )
+            print(
+                f"rendered calibration reports: {len(written)} file(s)",
+                file=sys.stderr,
+            )
     return 0 if not summary["skipped_cells"] else 1
 
 

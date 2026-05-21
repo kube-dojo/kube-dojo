@@ -5,6 +5,7 @@ import argparse
 import contextlib
 import json
 import subprocess
+import sys
 import tempfile
 import time
 from collections.abc import Iterator
@@ -395,21 +396,46 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--timeout-s", type=int, default=3600)
     parser.add_argument("--replicate-seq", type=int, default=0)
+    parser.add_argument(
+        "--no-render",
+        action="store_true",
+        help="Skip rendering calibration HTML reports after scoring.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    run_date = args.run_date or schema.today_iso()
     cell_id = run_cell(
         lane=args.lane,
         canonical_string=args.canonical_string,
         fixture_id=args.fixture_id,
-        run_date=args.run_date,
+        run_date=run_date,
         db_path=args.db_path,
         output_root=args.output_root,
         timeout_s=args.timeout_s,
         replicate_seq=args.replicate_seq,
     )
+    from . import report, score_cell
+
+    score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=args.db_path,
+        replicate_seq=args.replicate_seq,
+    )
+    if not args.no_render:
+        out_dir = report.report_dir_for_run(run_date, output_root=args.output_root)
+        print(f"rendering calibration reports to {out_dir}", file=sys.stderr)
+        written = report.render_reports(
+            db_path=args.db_path,
+            out_dir=out_dir,
+            run_date=run_date,
+        )
+        print(
+            f"rendered calibration reports: {len(written)} file(s)",
+            file=sys.stderr,
+        )
     print(cell_id)
     return 0
 
