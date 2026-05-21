@@ -36,6 +36,7 @@ Before starting this toolkit:
 | 7.10 | [Nitric](module-7.10-nitric/) | `[MEDIUM]` | 45-50 min |
 | 7.11 | [HCP Terraform Workflow Operations](module-7.11-hcp-terraform-workflows/) | `[COMPLEX]` | 60-70 min |
 | 7.12 | [Ansible Operator SDK Fundamentals](module-7.12-ansible-operator-sdk/) | `[COMPLEX]` | ~90 min |
+| 7.13 | [Advanced watches.yaml Patterns](module-7.13-advanced-watches-yaml/) | `[COMPLEX]` | ~100 min |
 | 7.15 | [Helm vs Ansible vs Go Operator Decision Framework](module-7.15-helm-ansible-go-operator-decision/) | `[COMPLEX]` | ~90 min |
 | 7.16 | [Production Ansible Operator Patterns](module-7.16-production-ansible-operator-patterns/) | `[EXPERT]` | ~120 min |
 
@@ -57,6 +58,7 @@ After completing this toolkit, you will be able to:
 12. **Build Ansible Operators** — Map Kubernetes custom resources to Ansible roles with Operator SDK, `watches.yaml`, `kubernetes.core`, and status-aware reconciliation
 13. **Choose the right operator implementation style** — Score a requirement across twelve decision axes (complexity, state-machine fit, OLM tier, upgrade safety, and more) to select Helm, Ansible, or Go, and plan incremental migrations as requirements grow
 14. **Operate Ansible Operators in production** — Status conditions, finalizer safety, idempotency at scale, CRD upgrade strategies, leader election, OLM bundles, and operator observability
+15. **Master advanced watches.yaml patterns** — Multi-CRD operators, namespace scoping, cluster-scoped RBAC, watchDependentResources + blacklist filtering, finalizer mapping, selector filters, and worker concurrency tuning via ANSIBLE_WORKERS
 
 ## Tool Selection Guide
 
@@ -262,6 +264,11 @@ Module 7.15: Helm vs Ansible vs Go Operator Decision Framework
      │  12-axis decision matrix
      │  Three worked examples, all 3 flavors on kind
      ▼
+Module 7.13: Advanced watches.yaml Patterns
+     │
+     │  Multi-CRD, namespace scoping, finalizers
+     │  blacklist filtering + ANSIBLE_WORKERS tuning
+     ▼
 Module 7.16: Production Ansible Operator Patterns
      │
      │  Status conditions, finalizers, idempotency at scale
@@ -286,6 +293,7 @@ Module 7.16: Production Ansible Operator Patterns
 | Nitric | Multi-cloud notes API deployed everywhere |
 | HCP Terraform | VCS-driven workflow with dynamic credentials and policy gates |
 | Ansible Operator SDK | Build a DemoApp custom resource reconciled by an Ansible role |
+| Advanced watches.yaml | Multi-CRD operator with namespace scoping, blacklist filtering, and finalizer |
 | Helm vs Ansible vs Go Decision | Build all three operator styles against the same WebApp CRD on kind; compare line counts, debugging, and capability ceilings |
 | Production Ansible Operator Patterns | Deploy operator with HA leader election, create 100 CRs, inject leader transition, measure reconciliation latency |
 
