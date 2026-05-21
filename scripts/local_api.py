@@ -4259,8 +4259,13 @@ def _render_skeleton_page(title: str, issue_number: int) -> str:
 </body></html>"""
 
 
+_BENCHMARK_REPORTS_REL = "calibration/v1/reports"
+_BENCHMARK_LEDGER_REL = "calibration/v1/ledger.db"
+_BENCHMARK_REPORT_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 _ARTIFACT_ALLOWED_DIRS = (
     "audit",
+    "calibration/v1/reports",
     "docs/migrations",
     "docs/session-state",
     "docs/decisions",
@@ -4284,6 +4289,7 @@ _ARTIFACT_ASSET_TYPES = {
 }
 _ARTIFACT_SECTION_SPECS = (
     ("Reports", "audit", ("**/*.html", "**/*.md")),
+    ("Calibration reports", "calibration/v1/reports", ("**/*.html",)),
     ("Migrations", "docs/migrations", ("**/*.html", "**/*.md")),
     ("Handoffs", "docs/session-state", ("*.html", "*.md")),
     ("Decisions", "docs/decisions", ("**/*.html", "**/*.md")),
@@ -5044,6 +5050,114 @@ def build_current_session(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _benchmark_report_dirs(repo_root: Path) -> list[Path]:
+    reports_dir = repo_root / _BENCHMARK_REPORTS_REL
+    if not reports_dir.is_dir():
+        return []
+    dirs = [
+        path
+        for path in reports_dir.iterdir()
+        if path.is_dir() and _BENCHMARK_REPORT_DIR_RE.fullmatch(path.name)
+    ]
+    return sorted(dirs, key=lambda path: path.name, reverse=True)
+
+
+def _benchmark_report_summary(repo_root: Path, report_dir: Path) -> dict[str, str]:
+    rel_dir = report_dir.relative_to(repo_root).as_posix()
+    return {
+        "date": report_dir.name,
+        "directory": rel_dir,
+        "render_url": f"http://127.0.0.1:8768/artifacts/{rel_dir}/index.html",
+    }
+
+
+def _benchmark_artifact_url(repo_root: Path, path: Path) -> str:
+    return f"/artifacts/{path.relative_to(repo_root).as_posix()}"
+
+
+def _benchmark_file_url_if_present(repo_root: Path, report_dir: Path, filename: str) -> str | None:
+    path = report_dir / filename
+    if not path.is_file():
+        return None
+    return _benchmark_artifact_url(repo_root, path)
+
+
+def _benchmark_html_file_urls(repo_root: Path, directory: Path) -> list[str]:
+    if not directory.is_dir():
+        return []
+    return [
+        _benchmark_artifact_url(repo_root, path)
+        for path in sorted(directory.glob("*.html"), key=lambda item: item.name)
+        if path.is_file()
+    ]
+
+
+def _build_benchmark_files(repo_root: Path, report_dir: Path) -> dict[str, Any]:
+    return {
+        "index": _benchmark_file_url_if_present(repo_root, report_dir, "index.html"),
+        "matrix": _benchmark_file_url_if_present(repo_root, report_dir, "matrix.html"),
+        "wave_ab": _benchmark_file_url_if_present(repo_root, report_dir, "wave-ab-report.html"),
+        "per_lane": _benchmark_html_file_urls(repo_root, report_dir / "per-lane"),
+        "per_model": _benchmark_html_file_urls(repo_root, report_dir / "per-model"),
+    }
+
+
+def _build_benchmark_ledger(repo_root: Path) -> dict[str, Any]:
+    ledger = {
+        "path": _BENCHMARK_LEDGER_REL,
+        "cells_total": 0,
+        "cells_scored": 0,
+        "models": 0,
+        "lanes": 0,
+    }
+    db_path = repo_root / _BENCHMARK_LEDGER_REL
+    if not db_path.is_file():
+        return ledger
+
+    queries = {
+        "cells_total": "SELECT COUNT(*) FROM cells",
+        "cells_scored": "SELECT COUNT(DISTINCT cell_id) FROM scores",
+        "models": "SELECT COUNT(DISTINCT model_id) FROM cells",
+        "lanes": "SELECT COUNT(DISTINCT lane) FROM cells",
+    }
+    try:
+        conn = sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+    except (OSError, sqlite3.Error):
+        return ledger
+    try:
+        for key, sql in queries.items():
+            row = conn.execute(sql).fetchone()
+            ledger[key] = int(row[0] or 0) if row else 0
+    except sqlite3.Error:
+        return {
+            "path": _BENCHMARK_LEDGER_REL,
+            "cells_total": 0,
+            "cells_scored": 0,
+            "models": 0,
+            "lanes": 0,
+        }
+    finally:
+        conn.close()
+    return ledger
+
+
+def build_latest_benchmarks(repo_root: Path) -> dict[str, Any]:
+    report_dirs = _benchmark_report_dirs(repo_root)
+    if not report_dirs:
+        return {"latest": None, "predecessors": [], "total_runs": 0}
+
+    latest_dir = report_dirs[0]
+    latest: dict[str, Any] = _benchmark_report_summary(repo_root, latest_dir)
+    latest["files"] = _build_benchmark_files(repo_root, latest_dir)
+    latest["ledger"] = _build_benchmark_ledger(repo_root)
+
+    return {
+        "latest": latest,
+        "predecessors": [_benchmark_report_summary(repo_root, path) for path in report_dirs[1:11]],
+        "total_runs": len(report_dirs),
+    }
+
+
 def build_state_manifest() -> dict[str, Any]:
     """Pointer-only index for canonical cold-start state discovery."""
     return {
@@ -5136,6 +5250,17 @@ def build_state_manifest() -> dict[str, Any]:
                         "name": "Artifacts JSON",
                         "path": "/api/artifacts",
                         "purpose": "JSON index of HTML and Markdown artifacts served by the artifacts route.",
+                        "type": "api",
+                    },
+                ],
+            },
+            {
+                "category": "benchmarks",
+                "entries": [
+                    {
+                        "name": "Latest calibration benchmark report",
+                        "path": "/api/benchmarks/latest",
+                        "purpose": "Latest calibration report artifact plus predecessor reports and ledger coverage counts.",
                         "type": "api",
                     },
                 ],
@@ -7881,6 +8006,11 @@ def build_api_schema() -> dict[str, Any]:
                 "content_type": "application/json",
             },
             {
+                "path": "/api/benchmarks/latest",
+                "desc": "Latest calibration benchmark report, predecessor reports, and ledger coverage counts",
+                "content_type": "application/json",
+            },
+            {
                 "path": "/api/briefing/book",
                 "desc": "AI-history book chapter status rollup. Scans chapters/ch-NN-*/status.yaml and groups by Part (1-9). Each part includes status_rollup, owners_seen, tracking_issue, and a per-chapter list with Green/Yellow/Red counts when present.",
             },
@@ -8311,6 +8441,8 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         return 200, build_orient(repo_root), "application/json; charset=utf-8"
     if path == "/api/session/current":
         return 200, build_current_session(repo_root), "application/json; charset=utf-8"
+    if path == "/api/benchmarks/latest":
+        return 200, build_latest_benchmarks(repo_root), "application/json; charset=utf-8"
     if path == "/api/briefing/book":
         return 200, build_book_briefing(repo_root), "application/json; charset=utf-8"
     if path == "/api/cache/stats":
@@ -8540,6 +8672,7 @@ CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/api/schema": (600.0, None),
     "/api/state/manifest": (600.0, None),
     "/api/session/current": (30.0, None),
+    "/api/benchmarks/latest": (30.0, None),
     "/api/status/summary": (10.0, _v_v2_db),
     "/api/missing-modules/status": (30.0, None),
     "/api/activity/recent": (5.0, _v_v2_db),
