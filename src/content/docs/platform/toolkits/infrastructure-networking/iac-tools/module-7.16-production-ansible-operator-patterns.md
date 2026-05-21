@@ -65,13 +65,16 @@ The module assumes you have built and deployed an Ansible Operator through Modul
 
 Every Kubernetes API has two kinds of status data, and confusing them is one of the most common quality gaps in first-generation operators. The first kind is a scalar field: `status.phase`, `status.endpoint`, `status.readyReplicas`. These fields are appropriate for simple, current-state summaries that a human or a quick dashboard can read at a glance. They answer "what is happening right now" and work well when there is only one concurrent observation to report. The second kind is a structured Conditions array, and it is the idiomatic Kubernetes mechanism for communicating multiple concurrent observations about an object's state, each with its own lifecycle, machine-parseable reason code, and timestamp.
 
-The Conditions array convention is documented in the Kubernetes API Conventions specification and used consistently throughout the core API: Deployments carry `Available`, `Progressing`, and `ReplicaFailure` conditions; Nodes carry `Ready`, `DiskPressure`, and `MemoryPressure`; Jobs carry `Complete` and `Failed`. Each entry in the array carries six fields: `type` (a string identifier such as `"Ready"` or `"ReconcileFailed"`), `status` (one of `"True"`, `"False"`, or `"Unknown"`), `reason` (a machine-readable PascalCase token such as `"DeploymentUnavailable"`), `message` (a human-readable explanation suitable for `kubectl get` output and runbook links), `lastTransitionTime` (the RFC3339 timestamp of when the condition's `status` field last changed, not when the condition was last observed), and optionally `severity` for conditions that do not map cleanly to a binary pass/fail.
+The Conditions array convention is documented in the Kubernetes API Conventions specification and used consistently throughout the core API: Deployments carry `Available`, `Progressing`, and `ReplicaFailure` conditions; Nodes carry `Ready`, `DiskPressure`, and `MemoryPressure`; Jobs carry `Complete` and `Failed`. Each entry in the array carries six fields: `type` (a string identifier such as `"Ready"` or `"ReconcileFailed"`), `status` (one of `"True"`, `"False"`, or `"Unknown"`), `reason` (a machine-readable PascalCase token such as `"DeploymentUnavailable"`), `message` (a human-readable explanation suitable for `kubectl get` output and runbook links), `lastTransitionTime` (the RFC3339 timestamp of when the condition's `status` field last changed, not when the condition was last observed), and optionally `observedGeneration` (an `int64` recording the `.metadata.generation` the controller observed when it set this condition, which lets consumers detect stale conditions after a spec change).
+
+<!-- code-verified-against: https://raw.githubusercontent.com/kubernetes/apimachinery/master/pkg/apis/meta/v1/types.go (type Condition struct) and https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md — no severity field exists; observedGeneration is the optional field -->
 
 ```text
 status:
   conditions:
     - type: Ready
       status: "False"
+      observedGeneration: 3        # optional: generation the controller observed
       reason: DeploymentUnavailable
       message: "Deployment demoapp-sample has 0/3 ready replicas"
       lastTransitionTime: "2026-05-15T09:32:11Z"
@@ -134,6 +137,7 @@ The correct approach is to set `manageStatus: false` and publish conditions expl
       conditions:
         - type: Ready
           status: "{{ new_ready_status }}"
+          observedGeneration: "{{ ansible_operator_meta.generation | default(0) | int }}"
           reason: "{{ 'DeploymentReady' if new_ready_status == 'True' else 'DeploymentUnavailable' }}"
           message: >-
             {{
@@ -194,7 +198,8 @@ The ordering level is subtler. Deadlocks happen when two resource types have cir
 
 The phantom deletion pattern is a variant where the controller crashes or loses leadership between removing the external resource and patching the finalizer away. The resource reappears in the reconcile queue on the next watch event. The deletion path runs again, the external resource check returns 404 (it was already removed in the previous partial run), and the finalizer is successfully patched away. This behavior is correct only when the deletion check is idempotent. A deletion role that treats a 404 as a hard error will loop forever on a resource that was partially cleaned up. Always handle absence explicitly with `failed_when: false` and an explicit `when` guard on the cleanup task.
 
-A more dangerous variant appears when multiple reconcile workers hold the same CR simultaneously. The Ansible Operator can run multiple concurrent `ansible-runner` processes, and two workers may both read `deletionTimestamp`, both run the cleanup role, and both attempt to remove the same external resource. The first may succeed and the second may fail with a 404. If the second worker's failure causes the reconcile to error without having patched the finalizer, the CR is stuck. Defence requires idempotent cleanup logic, graceful 404 handling in every delete task, and an understanding that the cleanup role may legitimately run more than once for the same CR instance.
+<!-- code-verified-against: controller-runtime workqueue semantics — the per-key exclusion guarantee means only ONE worker processes a given CR key at a time; the race is sequential (interrupted then retried), not concurrent -->
+A related hazard is the interrupted-reconcile sequence. controller-runtime's workqueue guarantees that a given CR key is processed by at most one worker at a time — two workers cannot simultaneously run the cleanup role for the same CR. The real danger arises when a single worker runs the cleanup role, successfully removes the external resource, and then crashes or loses the leader lease before removing the finalizer. On the next watch event the same CR re-enters the queue, a fresh worker picks it up, and the cleanup role runs again. Because the external resource was already deleted in the previous pass, the second run encounters a 404. This sequential re-execution is expected and correct, but only if the cleanup role treats 404 as a success rather than an error. Defence requires idempotent cleanup logic, graceful 404 handling in every delete task, and the understanding that the cleanup role may legitimately run more than once for the same CR across sequential reconcile passes.
 
 ```yaml
 # watches.yaml with finalizer and deletion role wired
@@ -888,6 +893,7 @@ The drain time should be measurably shorter with 10 concurrent workers compared 
 
 ## Sources
 
+- https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
 - https://sdk.operatorframework.io/docs/building-operators/ansible/
 - https://sdk.operatorframework.io/docs/building-operators/ansible/reference/watches/
 - https://sdk.operatorframework.io/docs/building-operators/ansible/reference/finalizers/
