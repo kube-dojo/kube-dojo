@@ -19,6 +19,9 @@ calibration/v1/*/results.db-shm
 calibration/v1/*/results.jsonl
 calibration/v1/*/responses/
 calibration/v1/*/reports/
+# run_wave restructured the output layout so reports live at the top of v1/
+# rather than under each run_date — also ignore.
+calibration/v1/reports/
 
 # Python bytecode caches
 __pycache__/
@@ -130,6 +133,11 @@ docs/quality-progress.tsv.lock
 .agents/
 .codex/
 .worktrees/
+worktrees/
+
+# agy / Antigravity CLI local state
+.antigravitycli/
+
 batch_state/
 logs/
 .envrc

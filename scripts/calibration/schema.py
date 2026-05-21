@@ -124,6 +124,11 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
 
 def init_db(db_path: Path | str) -> None:
     with connect(db_path) as conn:
+        # WAL mode lets parallel score_cell workers commit concurrently. Without
+        # it, -P > 1 scoring hits ~70% `database is locked` failures during
+        # judge dispatch — see session-36 handoff. journal_mode is persistent,
+        # so this is a one-shot on first init; re-applies are no-ops.
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.executescript(SCHEMA_SQL)
 
 

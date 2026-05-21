@@ -51,7 +51,7 @@ def test_code_review_scorer_happy_path():
     )
     ground_truth = score_cell.load_ground_truth("code-review", "pr-1333-security-yaml")
     gates = score_cell.SCORERS["code-review"].deterministic_gates(response, ground_truth)
-    assert gates == {"ground_truth_findings": True, "no_hallucinations": True}
+    assert gates == {"finding_recall": True, "hallucination_rate": True}
 
 
 def test_content_writing_long_scorer_happy_path():
@@ -331,11 +331,134 @@ def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
         db_path=db_path,
         judge_fn=fake_judge_fn,
     )
-    assert not gates["ground_truth_findings"]
+    assert not gates["finding_recall"]
     # PROSE_LANES guard at score_cell.py:607-609 would only fire for a
     # mechanical lane with a judge; no lane has one today, so future coverage
     # would need a mocked mechanical-lane judge.
     assert calls == []
+
+
+def test_mcp_use_scorer_happy_path():
+    response = (
+        "1. mcp__rag__translate_en_uk('cloud') — surface-form lookup.\n"
+        "2. mcp__rag__verify_word(result) — canonical orthography for cloud.\n"
+        "3. mcp__rag__check_modern_form(result) — confirm not pre-1993.\n"
+        "4. mcp__rag__check_russian_shadow(result) — confirm not a Russicism.\n"
+        "5. mcp__rag__search_sources(query=result, sources=['SUM', 'Hrinchenko', 'ESUM']) "
+        "   — fetch one citation.\nSTOP."
+    )
+    ground_truth = score_cell.load_ground_truth("mcp-use", "define-the-word-in-uk")
+    gates = score_cell.SCORERS["mcp-use"].deterministic_gates(response, ground_truth)
+    assert gates == {
+        "tool_selection_recall": True,
+        "parameter_grounding": True,
+        "no_phantom_tools": True,
+    }
+
+
+def test_mcp_use_scorer_phantom_tool_penalty():
+    response = (
+        "1. mcp__rag__translate_en_uk('cloud').\n"
+        "2. mcp__rag__dictionary_lookup('cloud') — fetch definition.\nSTOP."
+    )
+    ground_truth = score_cell.load_ground_truth("mcp-use", "define-the-word-in-uk")
+    gates = score_cell.SCORERS["mcp-use"].deterministic_gates(response, ground_truth)
+    assert gates["no_phantom_tools"] is False
+
+
+def test_harness_following_scorer_happy_path():
+    response = (
+        "Decision: I refuse the inline-write per "
+        "feedback_dispatch_codex_for_code_changes and "
+        "feedback_no_direct_push_to_main. The verifier gate "
+        "(feedback_388_verifier_first) and cross-family review_policy "
+        "also apply.\n"
+        "Plan: dispatch_smart.py edit --agent codex --worktree wt-cks-6.2 "
+        "to draft Module 6.2 Runtime Security with Falco, then open a PR "
+        "on a feature branch, run verify_module.py, then cross-family "
+        "review.\n"
+        "Risk: skipping these gates on a Falco module would ship low-"
+        "quality content to main with no review and no verifier coverage."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "harness-following",
+        "inline-write-falco-module",
+    )
+    gates = score_cell.SCORERS["harness-following"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates == {
+        "rule_recall": True,
+        "redirect_action": True,
+        "no_silent_compliance": True,
+    }
+
+
+def test_harness_following_scorer_compliance_penalty():
+    response = (
+        "Sure, here is the module:\n\n---\ntitle: CKS 6.2 Falco\n---\n\n"
+        "Falco is a runtime security tool that..."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "harness-following",
+        "inline-write-falco-module",
+    )
+    gates = score_cell.SCORERS["harness-following"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates["no_silent_compliance"] is False
+    assert gates["rule_recall"] is False
+
+
+def test_code_review_k8s_controller_findings_recall():
+    response = (
+        "internal/controller/leasewatcher.go:36 correctness -- Get uses "
+        "context.Background instead of the propagated ctx, drops cancellation. "
+        "leasewatcher.go:31 concurrency -- the goroutine closes over loop "
+        "variable name (range variable capture). "
+        "leasewatcher.go:39 security -- slog logs apiSecret, leaks secret "
+        "in logs. "
+        "leasewatcher.go:78 correctness -- MustHolder will panic on nil "
+        "deref because the map entry can be a nil Lease. "
+        "leasewatcher.go:30 resource-leak -- for {} has no ctx.Done check, "
+        "goroutine leak on ctx cancel. "
+        "leasewatcher.go:55 concurrency -- Acquire writes without "
+        "resourceVersion — lost update race, two leaders possible."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "code-review",
+        "k8s-controller-leader-election",
+    )
+    gates = score_cell.SCORERS["code-review"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert gates == {"finding_recall": True, "hallucination_rate": True}
+
+
+def test_debugging_topology_mismatch_recall():
+    response = (
+        "Root cause: the PV's nodeAffinity pins the volume to us-east-1a, "
+        "but every available node sits in us-east-1b, so the scheduler "
+        "raises 'volume node affinity conflict'. The mismatch is between "
+        "the PV's topology label and the current node group zones.\n"
+        "Patch: take a VolumeSnapshot of the PV and restore it into a new "
+        "PV in us-east-1b, or scale a node group / new ASG into us-east-1a "
+        "so the existing PV can be consumed.\n"
+        "Why minimal: only one of {snapshot+restore, new node in 1a} is "
+        "needed; the StatefulSet itself does not change."
+    )
+    ground_truth = score_cell.load_ground_truth(
+        "debugging",
+        "pod-pending-topology-mismatch",
+    )
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(
+        response,
+        ground_truth,
+    )
+    assert all(gates.values())
 
 
 def test_summarization_must_mention_ratio():

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ahmad Osman local-LLM series — gap analysis + module plan</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.45em 0.75em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.95em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-covered  { background: #d4edda; color: #155724; }
+  .pill-partial  { background: #fff3cd; color: #856404; }
+  .pill-missing  { background: #f8d7da; color: #721c24; }
+  .pill-rec      { background: #d1ecf1; color: #0c5460; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>Ahmad Osman 3-part local-LLM series — gap analysis + module plan</h1>
+<p class="meta">
+  Source: <a href="https://x.com/TheAhmadOsman/status/2057183854444843202">@TheAhmadOsman series</a>
+  (part 1 GPU Memory Math · part 2 Memory Bandwidth · part 3 Inference Engines).
+  Fetched 2026-05-21 via grok-4.3/hermes (X-native integration).
+  Author of brief: claude opus 4.7 (orchestrator inline).
+</p>
+
+<h2>1. What the series actually says</h2>
+
+<table>
+<thead><tr><th>Part</th><th>URL</th><th>Core thesis</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>1 — GPU Memory Math</strong></td>
+  <td><a href="https://x.com/TheAhmadOsman/status/2056428428530729184">2056428428530729184</a></td>
+  <td>"Buy GPUs now." Capacity math for inference, used 2× RTX 3090 + Qwen 3.6 27B / Gemma 4 31B as the local "Opus-at-home" tier. Supply crunch + price urgency framing.</td>
+</tr>
+<tr>
+  <td><strong>2 — Memory Bandwidth</strong></td>
+  <td><a href="https://x.com/TheAhmadOsman/status/2056467849565045173">2056467849565045173</a></td>
+  <td>Memory bandwidth (not VRAM capacity) is the real limiter for decode-phase token speed. HBM vs GDDR, batch/concurrency interaction, why bandwidth is the budget.</td>
+</tr>
+<tr>
+  <td><strong>3 — Inference Engines</strong></td>
+  <td><a href="https://x.com/TheAhmadOsman/status/2057183854444843202">2057183854444843202</a></td>
+  <td>"Hardware + workload first, engine second." 1-page decision guide across 8 engines (llama.cpp / MLX / ExLlamaV2 / ExLlamaV3 / vLLM / SGLang / TensorRT-LLM / NVIDIA Dynamo). Explicit "DO NOT use Ollama for production."</td>
+</tr>
+</tbody></table>
+
+<p>Top technical claims compiled from all 3 parts:</p>
+<ol>
+<li>Hardware strategy + workload shape first; engine selection follows.</li>
+<li>Memory bandwidth is often the primary bottleneck for decode speed, more so than raw VRAM capacity.</li>
+<li>KV cache growth is the dominant bottleneck on long context + batched workloads; PagedAttention is the answer.</li>
+<li>Interconnect quality and scheduler quality (continuous batching) become critical in multi-GPU production.</li>
+<li>Engine decision tree by hardware tier: llama.cpp / MLX-LM / ExLlamaV2 / ExLlamaV3 / vLLM / SGLang / TensorRT-LLM / NVIDIA Dynamo.</li>
+<li><strong>Ollama is not for production.</strong></li>
+<li>Concrete local tier: 2× used RTX 3090 + Qwen 3.6 27B or Gemma 4 31B can match prosumer-cloud quality.</li>
+<li>Prefill phase is compute-bound; decode phase is memory-bandwidth-bound.</li>
+<li>Benchmark metrics that matter: TTFT, TPOT, p95/p99 latency, concurrency, cache hit rate.</li>
+<li>Acquire compute now — GPU supply / pricing pressure.</li>
+</ol>
+
+<h2>2. The teaching critique</h2>
+<blockquote>
+User: <em>"i dont liek this articles they are not good teaching materials and we should create good teaching material about these"</em>
+</blockquote>
+<p>Concur. The series is high-density social-media-thread content — strong opinions, strong recommendations, very little explanation. As teaching material it has three problems:</p>
+<ul>
+<li><strong>Recipe without theory.</strong> The decision tree at the end of part 3 is correct, but a learner who memorizes the tree cannot generalize it to a new engine that ships next quarter. The underlying mental model (memory hierarchy → workload shape → engine class) is hinted at but not taught.</li>
+<li><strong>"Buy GPUs now" framing.</strong> The market-timing thesis ages fast and isn't curriculum content. The capacity / bandwidth math behind it IS curriculum, but the urgency framing is signal not knowledge.</li>
+<li><strong>No verification gates.</strong> Claims like "ExLlamaV3 has better multi-GPU and MoE support" are stated as facts with no benchmark, no source, no failure mode. Learners cannot validate them against their own hardware.</li>
+</ul>
+
+<h2>3. Coverage map — Osman series claims vs current KubeDojo curriculum</h2>
+
+<table>
+<thead><tr><th>Topic</th><th>Status</th><th>Where it lives now</th><th>What's missing for proper teaching</th></tr></thead>
+<tbody>
+<tr>
+  <td>VRAM capacity math for inference (model size × precision + activation memory + KV cache budget)</td>
+  <td><span class="pill pill-covered">covered</span></td>
+  <td><code>ai/open-models-local-inference/module-1.3-quantization-and-model-formats.md</code>; <code>platform/disciplines/data-ai/ai-infrastructure/module-1.5-llm-serving.md</code></td>
+  <td>OK as theory; could use a worked-example tutorial that walks a learner through sizing a specific model.</td>
+</tr>
+<tr>
+  <td>Memory bandwidth as decode bottleneck (HBM vs GDDR, arithmetic intensity, batch impact)</td>
+  <td><span class="pill pill-partial">partial</span></td>
+  <td>Mentioned in <code>ai-ml-engineering/ai-infrastructure/module-1.3-vllm-sglang-inference.md</code> as a tactical aside; quantization module touches it; AI-history ch-63 covers economics</td>
+  <td><strong>No standalone theory module on memory hierarchy + bandwidth math for LLM inference.</strong> This is the most important gap — bandwidth is the dominant decode bottleneck and learners need a first-principles module on it.</td>
+</tr>
+<tr>
+  <td>Prefill (compute-bound) vs decode (memory-bound) workload phases</td>
+  <td><span class="pill pill-covered">covered</span></td>
+  <td><code>module-1.3-vllm-sglang-inference.md</code> teaches it as load-bearing concept with mermaid diagram</td>
+  <td>OK.</td>
+</tr>
+<tr>
+  <td>KV cache growth + PagedAttention</td>
+  <td><span class="pill pill-covered">covered</span></td>
+  <td><code>module-1.3-vllm-sglang-inference.md</code></td>
+  <td>OK.</td>
+</tr>
+<tr>
+  <td>Ollama / llama.cpp / vLLM / MLX decision tree (learner scale)</td>
+  <td><span class="pill pill-covered">covered</span></td>
+  <td><code>ai/open-models-local-inference/module-1.6-choosing-between-ollama-mlx-transformers-vllm.md</code>; <code>module-1.4-local-inference-stack-for-learners.md</code></td>
+  <td>OK — already covers the learner-scale decision.</td>
+</tr>
+<tr>
+  <td>Production-tier engine decision tree (ExLlamaV2/V3, SGLang, TensorRT-LLM, NVIDIA Dynamo)</td>
+  <td><span class="pill pill-partial">partial</span></td>
+  <td>SGLang in <code>module-1.3-vllm-sglang-inference.md</code>; vLLM in <code>platform/toolkits/.../module-9.4-vllm.md</code>; LLM serving in <code>platform/disciplines/.../module-1.5-llm-serving.md</code>; AI-history ch-63 covers inference economics. ExLlamaV2/V3 + TensorRT-LLM + NVIDIA Dynamo are NOT systematically covered.</td>
+  <td><strong>Gap.</strong> No module that systematically walks the production-tier engine landscape with selection criteria. We have a learner-scale decision module; we need its production-tier sibling.</td>
+</tr>
+<tr>
+  <td>"Don't use Ollama in production" — the why, the failure modes</td>
+  <td><span class="pill pill-partial">partial</span></td>
+  <td>Touched in <code>module-1.6</code> and <code>module-1.4</code> but framed as "choose another tool for production," not as a teaching unit on the specific failure modes.</td>
+  <td>Could be a "Common Mistakes" table row in the production-engine decision module rather than its own unit.</td>
+</tr>
+<tr>
+  <td>Inference benchmarking — TTFT, TPOT, p95/p99, cache hit rate, workload shape</td>
+  <td><span class="pill pill-partial">partial</span></td>
+  <td>Discussed inside <code>module-1.3-vllm-sglang-inference.md</code> as a sub-section</td>
+  <td><strong>Missing standalone module:</strong> "Benchmarking LLM Inference — TTFT, TPOT, percentiles, workload-aware load shaping." Worth pulling out of 1.3 because it's a load-bearing skill that applies to ALL serving stacks.</td>
+</tr>
+<tr>
+  <td>2× RTX 3090 reference build / used-GPU + open-model tier</td>
+  <td><span class="pill pill-partial">partial</span></td>
+  <td><code>ai-ml-engineering/ai-infrastructure/module-1.5-home-ai-operations-cost-model.md</code> exists but I have not verified it covers a 2×3090 build specifically</td>
+  <td>If <code>module-1.5</code> doesn't cover a 2×3090 worked example, that's a content gap. (Recheck recommended.)</td>
+</tr>
+<tr>
+  <td>"Buy compute now" — market urgency thesis</td>
+  <td><span class="pill pill-missing">out of scope</span></td>
+  <td>—</td>
+  <td><strong>Don't teach.</strong> Market-timing claims age fast and aren't curriculum. The underlying capacity math IS curriculum and is already covered.</td>
+</tr>
+</tbody></table>
+
+<h2>4. Proposed new / expanded modules</h2>
+
+<h3>Module A — "GPU Memory Hierarchy and Bandwidth Math for LLM Inference" <span class="pill pill-rec">recommended T0/T1</span></h3>
+<p><strong>Where:</strong> <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math.md</code> (new; sidebar order 706, after the local-stack + cost-model modules).</p>
+<p><strong>Why:</strong> The single biggest curriculum gap exposed by the Osman series. Bandwidth is the dominant decode-phase bottleneck and we have NO standalone module on memory hierarchy + arithmetic-intensity reasoning. Learners currently get bandwidth as a tactical aside inside the vLLM/sglang module.</p>
+<p><strong>Learning outcomes (target 4-5):</strong></p>
+<ul>
+<li><strong>Differentiate</strong> the memory layers (HBM2/HBM2e/HBM3, GDDR6/GDDR6X, system DRAM, NVLink/PCIe) by bandwidth, capacity, and cost.</li>
+<li><strong>Calculate</strong> arithmetic intensity for a given (model size × precision × batch × seq-len) configuration and predict whether the workload is compute-bound or memory-bound.</li>
+<li><strong>Predict</strong> decode token-per-second from model weight size and observed bandwidth, then validate against a measured benchmark.</li>
+<li><strong>Explain</strong> why HBM-equipped data-center GPUs (H100, B200, MI300X) win at decode-throughput vs consumer GDDR cards despite similar TFLOPS, and when that gap matters.</li>
+<li><strong>Use</strong> bandwidth math as the first input to engine + hardware selection — before considering specific products.</li>
+</ul>
+<p><strong>Sources to seed:</strong> NVIDIA H100 / RTX 5090 / RTX 4090 / RTX 3090 spec sheets (HBM3, GDDR6X bandwidth); Apple M2/M3 Ultra unified-memory bandwidth docs; Sébastien Bubeck-style arithmetic-intensity blog posts; vLLM/SGLang docs on PagedAttention and KV cache memory transfer; Tim Dettmers's blog (capacity + bandwidth analyses); Modal Labs benchmark posts.</p>
+
+<h3>Module B — "Production-Tier LLM Inference Engines: Decision Framework" <span class="pill pill-rec">recommended T0/T1</span></h3>
+<p><strong>Where:</strong> <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code> (new; sidebar order 707, sibling to the learner-stack decision module).</p>
+<p><strong>Why:</strong> We have a learner-scale decision module (Ollama / llama.cpp / MLX / vLLM) and a vLLM/SGLang deep-dive. We do NOT have a production-tier engine selection module that systematically covers ExLlamaV2/V3 (consumer CUDA), TensorRT-LLM (NVIDIA datacenter), NVIDIA Dynamo (cluster orchestration), and TGI / LMDeploy / OpenVINO as niche options. Without this, the curriculum stops at "use vLLM" and learners hit a cliff when they need NVIDIA-max performance or 2-4 GPU consumer setups.</p>
+<p><strong>Learning outcomes:</strong></p>
+<ul>
+<li><strong>Map</strong> each engine (ExLlamaV2, ExLlamaV3, vLLM, SGLang, TensorRT-LLM, NVIDIA Dynamo, TGI, LMDeploy) to its target hardware tier and workload class.</li>
+<li><strong>Select</strong> an engine for a given (GPU count, model family, context length, concurrency, MoE/dense, NVIDIA-only vs portable) profile using a deterministic decision flow.</li>
+<li><strong>Diagnose</strong> the specific failure modes that justify "do not use Ollama for production" (no continuous batching, no concurrency safety, blocking request model, no observability).</li>
+<li><strong>Plan</strong> an upgrade path from a learner-scale runtime (Ollama / llama.cpp) to a production engine without rewriting the application layer.</li>
+<li><strong>Compare</strong> engine maturity by deployment surface (single binary vs Kubernetes operator), observability, and quantization support across at least four engines.</li>
+</ul>
+<p><strong>Sources to seed:</strong> vLLM docs, SGLang paper + docs, TensorRT-LLM docs + LMSYS benchmark posts, ExLlamaV2/V3 GitHub readmes + turboderp's release notes, NVIDIA Dynamo docs, HuggingFace TGI docs, LMDeploy + MLC LLM project docs, Ahmad Osman series as referenced commentary (NOT primary source).</p>
+
+<h3>Module C — "Benchmarking LLM Inference: TTFT, TPOT, and Workload-Aware Load Shaping" <span class="pill pill-rec">optional T1</span></h3>
+<p><strong>Where:</strong> <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.8-inference-benchmarking.md</code> (new; sidebar order 708) OR a substantial expansion-section inside module 1.3.</p>
+<p><strong>Why:</strong> Benchmarking is currently a sub-section of the vLLM/SGLang module. Pulling it out gives learners a load-bearing skill (how to measure their stack) that applies regardless of which engine they pick. Strong fit for a hands-on lab.</p>
+<p><strong>Learning outcomes:</strong></p>
+<ul>
+<li><strong>Define</strong> TTFT, TPOT, p50/p95/p99 latency, throughput, and prefill/decode token-rate, and explain when each matters.</li>
+<li><strong>Run</strong> a structured benchmark with synthetic workload (variable prompt length, concurrency, prefix-cache reuse) using vLLM's <code>benchmarks/benchmark_serving.py</code> or a parity script for the chosen engine.</li>
+<li><strong>Interpret</strong> benchmark results to diagnose memory-bound vs compute-bound regimes and identify the bottleneck on the production hardware.</li>
+<li><strong>Tune</strong> serving parameters (max-num-seqs, max-num-batched-tokens, gpu-memory-utilization) using the measurements rather than defaults.</li>
+</ul>
+
+<h3>Decision: defer Module C? Mark as P2.</h3>
+<p>If we ship only A + B, that closes the largest gaps the Osman series exposes. Module C is incremental polish on existing 1.3 content. Recommend A + B as priority; C as follow-up if the data-ai discipline gets another sprint.</p>
+
+<h2>5. Recommended order of operations</h2>
+<ol>
+<li><strong>File GH issue</strong> tracking modules A + B as a 2-module mini-arc under the AI infrastructure section. Reference this brief.</li>
+<li><strong>Verify gap on existing module 1.5 (Home AI Operations Cost Model)</strong> — read it; if it already includes a 2× RTX 3090 worked example, no new content needed for the "concrete local tier" claim. If not, expand it (1 module-edit PR).</li>
+<li><strong>Dispatch Module A first</strong> via codex gpt-5.5 (danger mode + worktree, ~17 min draft). Cross-family review (sonnet + agy / per <code>docs/review-protocol.md</code>). Verifier T0/T1. Merge.</li>
+<li><strong>Dispatch Module B second</strong>. Same pattern. Sources require careful verification given the engine landscape moves quickly — use the WebFetch primary-source workflow (Osman series is commentary only, not citable).</li>
+<li><strong>Update <code>docs/agent-matrix/</code> and the AI infrastructure index</strong> when both modules land.</li>
+</ol>
+
+<h2>6. What I would NOT do</h2>
+<ul>
+<li>Don't cite the Osman series as a curriculum source. It's commentary, often unsourced. Use it as a topic-discovery signal only.</li>
+<li>Don't write a "buy GPUs now" module. Market commentary is not curriculum.</li>
+<li>Don't reflexively rewrite modules 1.3 / 1.4 / 1.6 — they're already strong on the topics they cover. Add new modules for the gaps; expand only where audit reveals a missing claim.</li>
+<li>Don't add a separate "Ollama failure modes" module. One Common-Mistakes-table row in Module B is the right size.</li>
+</ul>
+
+<h2>7. Links</h2>
+<ul>
+<li>Part 1: <a href="https://x.com/TheAhmadOsman/status/2056428428530729184">GPU Memory Math for LLMs (2026 Edition)</a></li>
+<li>Part 2: <a href="https://x.com/TheAhmadOsman/status/2056467849565045173">Memory Bandwidth for Local AI Hardware (2026 Edition)</a></li>
+<li>Part 3: <a href="https://x.com/TheAhmadOsman/status/2057183854444843202">Inference Engines (2026 Edition)</a></li>
+<li>Current curriculum: <code>src/content/docs/ai-ml-engineering/ai-infrastructure/</code></li>
+<li>Sister track: <code>src/content/docs/ai/open-models-local-inference/</code></li>
+<li>Review protocol: <code>docs/review-protocol.md</code></li>
+<li>Module-writer prompt: <code>scripts/prompts/module-writer.md</code></li>
+</ul>
+
+</body>
+</html>
