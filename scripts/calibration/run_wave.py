@@ -5,15 +5,6 @@ family; within a family, cells run sequentially (codex models share one
 queue). Cells are scored as they complete; the ledger is the canonical
 record. ``--smoke`` runs a single cell so the harness wiring can be validated
 cheaply before the full sweep fires.
-
-Implementation note: ``scripts/calibration/scheduler.py`` exposes a
-``FamilyParallelScheduler`` that yields cells in round-robin family order
-for a single-worker consumer. This module takes a different shape — one
-thread per family — because we need concurrent CLI subprocess dispatches
-across families, not interleaved yielding to one worker. The two
-implementations enforce the same contract (max 1 in-flight per family); if
-``run_wave`` becomes the only caller in the long run, ``scheduler.py``
-can be retired.
 """
 from __future__ import annotations
 
