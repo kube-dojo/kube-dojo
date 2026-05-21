@@ -1250,7 +1250,7 @@ def _handle_discuss(args) -> int:
         missing_resumable: list[str] = []
         for agent_name in with_agents:
             session_field = session_field_map[agent_name][0]
-            if not resume_thread_session.get(session_field):
+            if session_field is None or not resume_thread_session.get(session_field):
                 missing_resumable.append(agent_name)
 
         if missing_resumable:
