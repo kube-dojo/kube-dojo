@@ -149,3 +149,4 @@ logs/
 .clawpatch/runs/
 .clawpatch/locks/
 .clawpatch/patches/
+calibration/v1/verifier-snapshots/

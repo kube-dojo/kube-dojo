@@ -1841,6 +1841,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-source-check", action="store_true", help="Skip live source reachability checks")
     parser.add_argument("--max-workers", type=int, default=8, help="Max source-check worker threads")
     parser.add_argument("--tier-only", action="store_true", help='Print "path: tier" for fast triage')
+    parser.add_argument(
+        "--snapshot",
+        action="store_true",
+        help=(
+            "Capture stdout from allowlisted kubectl/helm/kind/k3d commands in each module's "
+            "bash code blocks and write dated snapshot files under "
+            "calibration/v1/verifier-snapshots/<module-key>/. Default off; existing CI unaffected."
+        ),
+    )
     args = parser.parse_args(argv)
 
     paths = _collect_paths(args)
@@ -1851,10 +1860,24 @@ def main(argv: list[str] | None = None) -> int:
         if not args.quiet and args.out:
             print(f"verifying {path}", file=sys.stderr)
         records.append(verify(path, skip_source_check=args.skip_source_check, max_workers=args.max_workers))
+        if args.snapshot:
+            _run_snapshot(path, quiet=args.quiet)
     _write_records(records, args.out, args.tier_only)
     if args.summary:
         _print_summary(records)
     return 0
+
+
+def _run_snapshot(path: Path, *, quiet: bool) -> None:
+    # Ensure repo root is on sys.path (verify_module strips "" and its own dir at import time).
+    _root = str(REPO_ROOT)
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    from scripts.quality import verifier_snapshots  # local import to keep default path fast
+
+    snap = verifier_snapshots.snapshot_module(path)
+    if snap and not quiet:
+        print(f"snapshot → {snap}", file=sys.stderr)
 
 
 if __name__ == "__main__":
