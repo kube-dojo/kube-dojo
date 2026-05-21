@@ -344,10 +344,67 @@ def test_score_cell_mechanical_lane_with_no_judge_returns_early(tmp_path):
         judge_fn=fake_judge_fn,
     )
     assert not gates["finding_recall"]
-    # PROSE_LANES guard at score_cell.py:607-609 would only fire for a
+    # PROSE_LANES guard at score_cell.py:826 would only fire for a
     # mechanical lane with a judge; no lane has one today, so future coverage
     # would need a mocked mechanical-lane judge.
     assert calls == []
+
+
+def test_score_cell_writes_infra_error_gate_when_judge_fails(tmp_path):
+    db_path = tmp_path / "ledger.db"
+    response_path = tmp_path / "response.md"
+    response_path.write_text(
+        "Bug fix in scripts/check_links.py mapped to codex debugging. "
+        "security regressions via claude in code-review. module handoff by "
+        "cheap summarization. Fact-check with google. Draft a decision card."
+        " Include a cost estimate.",
+        encoding="utf-8",
+    )
+    model = model_by_canonical("claude-opus-4-7")
+    row = schema.build_cell_row(
+        lane="orchestrating",
+        fixture_id="multi-task-routing-brief",
+        model=model,
+        run_date="2026-05-21",
+    )
+    schema.init_db(db_path)
+    with schema.connect(db_path) as conn:
+        cell_id = schema.insert_cell(conn, row)
+        schema.insert_dispatch(
+            conn,
+            cell_id=cell_id,
+            task_id="task",
+            response_path=str(response_path),
+        )
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        if model_name == "dummy-model-1":
+            raise RuntimeError("judge transport offline")
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT gate_name, score_value, scorer FROM scores WHERE "
+            "cell_id = ? AND gate_name IN ('llm_judge_score', 'llm_judge_error')",
+            (cell_id,),
+        ).fetchall()
+
+    llm_judge_scores = [row for row in rows if row["gate_name"] == "llm_judge_score"]
+    llm_judge_errors = [row for row in rows if row["gate_name"] == "llm_judge_error"]
+
+    assert len(llm_judge_scores) == 1
+    assert llm_judge_scores[0]["score_value"] == 8.0
+    assert len(llm_judge_errors) == 1
+    assert llm_judge_errors[0]["score_value"] is None
+    assert "RuntimeError('judge transport offline')" in llm_judge_errors[0]["scorer"]
 
 
 def test_mcp_use_scorer_happy_path():

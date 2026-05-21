@@ -857,10 +857,10 @@ def score_cell(
                 schema.insert_score(
                     conn,
                     cell_id=cell_id,
-                    gate_name="llm_judge_score",
+                    gate_name="llm_judge_error",
                     gate_pass=False,
-                    score_value=0.0,
-                    scorer=f"llm-judge:{model_name}",
+                    score_value=None,
+                    scorer=f"llm-judge:{model_name}:error={error}",
                 )
                 continue
             judge_scores.append(judge_score)

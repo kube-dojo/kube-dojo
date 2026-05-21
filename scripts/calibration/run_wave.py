@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import string
 import sys
 import time
 from collections import defaultdict
@@ -29,7 +30,7 @@ from pathlib import Path
 
 from . import schema, score_cell
 from .models import ANCHORS, LANES, CalibrationModel, Wave
-from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT, run_cell
+from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT, REPO_ROOT, run_cell
 
 # Lane -> fixture id for Wave C / D. Wave A and B happened to share the same
 # fixtures per lane; we keep that contract here, swapping in the harder code-
@@ -192,24 +193,32 @@ def preflight_probe(
 
     results: list[dict] = []
     for (provider_cli, agent_name), model in seen.items():
+        response_text = ""
         started = time.monotonic()
         try:
             result = dispatch_prompt(
                 model,
                 "Reply with the single word OK.",
-                Path.cwd(),
+                REPO_ROOT,
                 probe_timeout_s,
             )
-            # Validate the response actually said something (post-challenge-
-            # round fix). dispatch_prompt already raises on empty + non-zero
-            # rc, but a model that returns "I cannot help with that" still
-            # gets `ok=True`. The probe shape is tight enough that any non-
-            # empty response demonstrates the adapter is reachable.
             response_text = (result.response or "").strip()
-            if not response_text:
+            lower_response = response_text.lower()
+            alpha_only = "".join(ch for ch in lower_response if ch.isalnum())
+            if not (
+                alpha_only == "ok"
+                or (
+                    lower_response.startswith("ok")
+                    and (
+                        len(lower_response) == 2
+                        or lower_response[2].isspace()
+                        or lower_response[2] in string.punctuation
+                    )
+                )
+            ):
                 raise RuntimeError(
-                    f"preflight probe returned empty response from "
-                    f"{model.canonical_string}"
+                    "preflight probe expected an 'OK' response; got "
+                    f"{response_text!r} from {model.canonical_string}"
                 )
             results.append(
                 {
@@ -235,6 +244,7 @@ def preflight_probe(
                     "model": model.canonical_string,
                     "elapsed_s": time.monotonic() - started,
                     "error": repr(exc),
+                    "response_preview": response_text[:80],
                 }
             )
             print(

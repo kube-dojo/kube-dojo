@@ -14,6 +14,7 @@ cost prediction for production routing.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sqlite3
 import statistics
 from collections.abc import Iterable
@@ -60,19 +61,19 @@ QUALITY_FLOOR = 1.0  # det 0.5 + judge 5.0/10 — below this, the model is not u
 
 
 def compute_pareto(db_path: Path, *, quality_floor: float = QUALITY_FLOOR) -> list[ModelPareto]:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
 
-    cells = conn.execute(
-        "SELECT cell_id, canonical_string FROM cells"
-    ).fetchall()
-    by_model: dict[str, dict] = {}
-    for c in cells:
-        slot = by_model.setdefault(
-            c["canonical_string"],
-            {"cells": [], "det_passes": [], "judge_scores": [], "total_lat": 0.0},
-        )
-        slot["cells"].append(c["cell_id"])
+        cells = conn.execute(
+            "SELECT cell_id, canonical_string FROM cells"
+        ).fetchall()
+        by_model: dict[str, dict] = {}
+        for c in cells:
+            slot = by_model.setdefault(
+                c["canonical_string"],
+                {"cells": [], "det_passes": [], "judge_scores": [], "total_lat": 0.0},
+            )
+            slot["cells"].append(c["cell_id"])
 
     for canonical, slot in by_model.items():
         for cell_id in slot["cells"]:
