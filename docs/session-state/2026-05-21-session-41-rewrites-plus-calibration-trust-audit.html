@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 41 — 4 module rewrites, benchmark UI + serving, stability runs, calibration trust audit</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+  .ok { color: #1a7f1a; font-weight: 600; }
+  .warn { color: #b65f00; font-weight: 600; }
+  .bug { color: #b00; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>Session 41 — 4 module rewrites, benchmark UI + serving, stability runs, calibration trust audit</h1>
+
+<p class="meta">
+  2026-05-21 ~17:10 → 2026-05-21 ~22:55 local (~5h 45m driver-time) · driver: claude opus 4.7 (1M ctx) inline ·
+  predecessor: <a href="2026-05-21-session-40-bridge-landed-plus-cks-rewrites-and-cleanup.html">session 40</a>
+</p>
+
+<p>User signals (chronological):</p>
+<blockquote>
+"read last session handoff and continue"<br>
+"can you activte more agents to work on issues and not just dle ? codex has too much unused slot"<br>
+"please create a the followas and a proper eay of reporting the reports sbout benchmarks. comon why is it not done yet?"<br>
+"YOU ARE TH ORCHESTRATOR . ARE YOU GOING TO DO IT OR SHUDL I REPLACE YOU ?"<br>
+"i dont know how much can we trust these bechmarks" / "also 0 scores are fishy"<br>
+"how is gpt-5.5 50% at code witing an 5.4 mini is better ?"<br>
+"do we want to change agents ? ie introduce 3.5-flash as main reviewer ?"<br>
+"i really need to make sure this is 100% correct: …per-lane/content-review.html"<br>
+"do a session handoff then resolve as many issues as possible"
+</blockquote>
+
+<h2>TL;DR</h2>
+
+<p>Session 41 shipped the full CKS Part 6 runtime-security T0/T1 ladder (6.2 + 6.3 + 6.4 alongside the 6.1 from session 40), one Cloud Azure rewrite (App Service Operator Path), and the entire calibration-trust UX layer: <code>/api/benchmarks/latest</code> + <code>/artifacts/calibration/...</code> + first-class <code>/benchmarks</code> top-nav dashboard. Stability variance runs landed (selector + replicate + report; partial sweep). Scorer-side <code>respected_inline_return</code> gate landed with a sonnet-caught critical false-positive bug fixed.</p>
+
+<p>Mid-session pivot driven by user signals: <strong>stopped queuing only CKS rewrites and started fanning out calibration follow-ups in parallel</strong>. Ran 4–5 concurrent codex dispatches end-to-end while keeping content rewrites flowing.</p>
+
+<p>Late-session deep trust audit on the v1 calibration data uncovered four issues that materially affect how the reports can be used: (1) 10 of 12 lanes have 1 fixture so per-lane rankings don't generalize; (2) 22.1% of scores are <code>0.0</code> with most coming from a known-brittle substring-AND gate that was never enforced-fixed; (3) the variance renderer had a mixed-scale bug that shipped misleading headline numbers until sonnet caught it; (4) 16 on-disk report files were stale because the renderer isn't run after ledger updates.</p>
+
+<p><strong>8 PRs merged · 9 issues filed (#1401–#1406, #1411–#1413, #1416) · 4 critical-quality modules cleared (153 → 149) · 4 new memories.</strong></p>
+
+<h2>1. PRs merged (8)</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Squash commit</th><th>Subject</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1399">#1399</a></td>
+  <td><code>0940b9b0</code></td>
+  <td>chore(cks): rewrite Module 6.2 Runtime Security with Falco to T0/T1</td>
+  <td>Codex gpt-5.5 (13 min) → sonnet R1 APPROVE_WITH_NITS (4 nits — driver-flag notation, priority enum, 404 URL, version-mismatch citation) → fixup. 481 lines, T0, 17/17 sources @ 200.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1400">#1400</a></td>
+  <td><code>03e16c49</code></td>
+  <td>chore(cks): rewrite Module 6.3 Container Investigation to T0/T1</td>
+  <td>Codex gpt-5.5 (23 min) → sonnet R1 APPROVE_WITH_NITS (prose/code isolation-order contradiction + 2 para splits) → fixup. 5021 body_words, T0, 29/29 sources @ 200.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1407">#1407</a></td>
+  <td><code>1c35db67</code></td>
+  <td>feat(local-api): serve calibration reports via /artifacts and add /api/benchmarks/latest</td>
+  <td>Codex gpt-5.5 → sonnet R1 APPROVE (no blockers). +133 LOC local_api.py + 95 LOC tests. Adds <code>calibration/v1/reports</code> to artifact allow-list; new endpoint mirrors <code>/api/session/current</code> shape.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1408">#1408</a></td>
+  <td><code>9162211f</code></td>
+  <td>chore(cloud): rewrite Module 3.14 Azure App Service Operator Path to T0/T1</td>
+  <td>Codex gpt-5.5 → sonnet R1 <strong>NEEDS_CHANGES</strong> (B1 Bicep semicolon syntax error; B2 broken <code>az webapp ... --slot-settings</code> form; N1–N3 staleness). Codex live-verified each nit: kept Key Vault 24h (sonnet's "4h" claim was hallucinated), confirmed 100 PE/app, bumped Bicep API version to <code>2025-03-01</code>. 1100→498 lines, T0, 27/27 sources @ 200.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1409">#1409</a></td>
+  <td><code>2d224caf</code></td>
+  <td>chore(cks): rewrite Module 6.4 Immutable Infrastructure to T0/T1</td>
+  <td>Codex gpt-5.5 → initial T2 (body_words=4975, 25 short of floor) → word-count fixup → T0 5078 body_words. Sonnet R1 NEEDS_CHANGES (bare <code>cosign verify</code> lacks identity flags; <code>golang:1.25</code> may not exist on Docker Hub; name Fulcio+Rekor for keyless) → all 3 applied. <strong>Incident-dedup gate failed</strong> on PR — missing canonical <code>&lt;!-- incident-xref: tesla-2018-cryptojacking --&gt;</code> marker; tiny fix landed. 22 sources @ 200.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1410">#1410</a></td>
+  <td><code>10aefc33</code></td>
+  <td>feat(calibration): v1 stability runs — selector + replicate runner + variance report (#1403)</td>
+  <td>Codex gpt-5.5 — landed 2/3 commits before 40-min timeout (selector + replicate runner). Renderer added via second codex pass. Sonnet R1 NEEDS_CHANGES — B1 critical mixed-scale stats bug (renderer aggregated 0/1 gates with 0/10 judge in <code>pstdev</code> → shipped "mean stddev 1.797" garbage; selector already had <code>_unit_score</code> normalizer that wasn't ported to renderer) + 4 nits. Post-fix headline: median stddev 0.366, p95 0.500. Top-3 disagreement: <code>code-review-pr-1333-security-yaml</code> across 3 models (real lane-boundary disagreement). 79 new dispatches, 196 new scores landed during the sweep; remaining ~50 candidate cells flagged in coverage table.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1414">#1414</a></td>
+  <td><code>ed688e7f</code></td>
+  <td>feat(local-api): first-class /benchmarks dashboard + top-nav + homepage card (#1411)</td>
+  <td>Codex gpt-5.5 → sonnet R1 APPROVE_WITH_NITS (footer link existence-gate, disabled-tile e2e test) → fixup. New <code>/benchmarks</code> route renders run date + ledger summary (168/168 cells × 14 models × 12 lanes) + tiles to index/matrix/wave-ab/stability + per-lane + per-model grids + history + methodology footer. <strong>Benchmarks</strong> entry in top-nav, homepage summary card, manifest entry. <code>/api/benchmarks/latest</code> now includes <code>files.stability</code>. 13 tests added.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1415">#1415</a></td>
+  <td><code>73303715</code></td>
+  <td>feat(calibration): scorer-side respected_inline_return gate on content-writing-long lane (#1406)</td>
+  <td>Codex gpt-5.5 — landed 2/3 commits before 30-min timeout (scorer + tests). Sonnet R1 <strong>NEEDS_CHANGES</strong> — B1 critical: <code>_paths_from_text(response_path)</code> scanned the model's own curriculum prose for path-write keywords; every content-writing-long module mentioning <code>/var/lib/etcd/</code>, <code>/etc/kubernetes/pki/ca.crt</code>, or <code>2>/dev/null</code> would have been 100% false-flagged. Fix: drop <code>response_path</code> from text-scan candidates, keep only <code>logs/dispatch_responses/&lt;task_id&gt;.txt</code> (the action log). Plus 4 nits (DETERMINISTIC_SCORERS dedupe, backwards substring check, test coverage, comment ordering). Regression test added.</td>
+</tr>
+</tbody></table>
+
+<h2>2. Issues filed (9)</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Subject</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1401">#1401</a></td><td>Phase 2 agy calibration on Antigravity-routed gemini-3.1-pro-high + claude-sonnet-4-6-thinking</td><td>Open · date-bound 2026-06-18</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1402">#1402</a></td><td>Per-language test harness for CodeWritingScorer (node/java/rust/go)</td><td>Open · ~1 day infra</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1403">#1403</a></td><td>Stability runs — 3× replicates + variance report</td><td><strong>Done</strong> (PR #1410, partial sweep)</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1404">#1404</a></td><td>Real-execution mcp-use lane via learn-ukrainian RAG MCP server</td><td>Open</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1405">#1405</a></td><td>Re-fire harness-following on v2 fixture (claude-md-context-cks-tweak)</td><td>Open · <strong>now unblocked</strong> (PR #1376 merged)</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1406">#1406</a></td><td>Scorer-side respected_inline_return gate</td><td><strong>Done</strong> (PR #1415)</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1411">#1411</a></td><td>Surface stability.html in /api/benchmarks/latest files dict</td><td><strong>Done</strong> (rolled into PR #1414)</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1412">#1412</a></td><td>22.1% of scores are 0.0 — enforce prose-lane rule + disambiguate LLM-judge zeros + filter variance report</td><td>Open · high leverage</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1413">#1413</a></td><td>10 of 12 lanes have 1 fixture — single-fixture rankings are not generalizable</td><td>Open · <strong>critical-path trust issue</strong></td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1416">#1416</a></td><td>Renderer not auto-fired after ledger updates — 16 reports were stale today</td><td>Open · small fix, high leverage</td></tr>
+</tbody></table>
+
+<h2>3. Trust audit on v1 calibration data (new this session)</h2>
+
+<h3>3.1 Single-fixture lanes — the headline trust problem (#1413)</h3>
+
+<p><strong>10 of 12 lanes have exactly one fixture; the remaining two have two.</strong> A "lane score" is therefore a model's performance on one specific task. The "gpt-5.5 50% code-writing vs gpt-5.4-mini 100%" comparison the user surfaced reduces to "on the <code>parse-dependabot-cooldown</code> Python fixture, gpt-5.5's submission failed pytest while gpt-5-mini's passed" — n=1 anecdote, not a model-capability ranking. v1 calibration is currently a smoke test of the pipeline, not a calibration of the models.</p>
+
+<h3>3.2 22.1% of scores are 0.0; ~half from a KNOWN brittle gate class (#1412)</h3>
+
+<p>155 of 701 scores are exactly 0.0. 140 come from <code>deterministic</code> scorers (legitimate "model failed the gate" OR known-brittle substring-AND on prose); 15 come from LLM judges returning 0/10. The brittleness was already documented in memory <code>feedback_calibration_gate_brittleness.md</code> ("prose lanes run LLM judge unconditionally; deterministic gates advisory") but the rule was never enforced in code. ~78 of 155 zeros come from gates that fall under that rule:</p>
+
+<ul>
+<li><code>must_mention_recall</code>, <code>ground_truth_findings</code>, <code>routing_accuracy</code>, <code>parameter_grounding</code>, <code>citation_grounding</code> (each ~13–14 zeros)</li>
+<li><code>planted_flaw_recall</code>, <code>required_category_ratio</code></li>
+</ul>
+
+<p>The 15 LLM-judge zeros are ambiguous: scorer code does NOT distinguish "judge graded 0/10" from "judge response unparseable, defaulted to 0".</p>
+
+<h3>3.3 Variance report shipped misleading numbers until R1 caught the mixed-scale bug</h3>
+
+<p>The stability renderer aggregated 0/1 deterministic gates and 0/10 LLM-judge scores in the same <code>pstdev</code>/<code>min</code>/<code>max</code>. Initial headline shipped: <code>mean stddev 1.797 / p95 4.409</code> — mathematically impossible on a 0–1 scale. Sonnet R1 caught it in ~3 min. After normalization: <code>mean 0.271 / median 0.366 / p95 0.500</code>. The selector already had <code>_unit_score</code>; renderer just didn't use it. Now extracted to <code>scripts/calibration/v1/__init__.py</code> and shared.</p>
+
+<h3>3.4 16 on-disk reports were stale because renderer isn't run after ledger updates (#1416)</h3>
+
+<p>The page <code>per-lane/content-review.html</code> showed gemini-3.5-flash-high at 50%; ledger had it at 100% (both gates passing). Investigation: 7 of 12 per-lane reports + 8 of 14 per-model reports + matrix.html were stale. Score timestamps were AFTER the HTML mtime. Cause: the renderer (<code>scripts/calibration/report.py</code>) is not invoked as a post-condition of <code>run_wave.py</code>, <code>run_cell.py</code>, or <code>replicate.py</code>. Fresh render now landed at canonical paths; #1416 has the proposed fix to wire automatic post-condition renders.</p>
+
+<h2>4. RBAC fixture investigation — gemini-3.5-flash content-writing-long</h2>
+
+<p>User pushed back on the 0.429 score given "we had bugs with its config" and asked for a re-run. Replicate landed:</p>
+
+<ul>
+<li>Original (147s): 1109 lines, used "Telegraph" pedagogy heading (TTT framework — see issue #1384 captured-idea-only); no mermaid block; no quizzes; no hands-on; no Common Mistakes; no Did-You-Know. <code>verifier_t0_t1 = 0</code>; both judges 0/10.</li>
+<li>Replicate-1 (28s): 793 lines, 4747 words, 1 mermaid block, still TTT sections (Telegraph/Teach/Test/Summary), still 0 quizzes / 0 hands-on / 0 common-mistakes / 0 did-you-know. Verifier T3 (body_words=2241 — half the T0 floor); no T0 elements.</li>
+<li>Same fixture: <strong>gpt-5.5 and qwen3.6-plus tied at 0.986</strong>, both passing the standard template AND both LLM judges (9/10 + 10/10). So the fixture IS satisfiable; gemini-3.5-flash genuinely cannot produce the KubeDojo module template.</li>
+</ul>
+
+<p>Conclusion: the score reports a real model gap (couples model capability with the fixture's TTT/standard-template tension that gpt-5.5 navigated cleanly). <strong>Don't switch main writer to gemini-3.5-flash for content-writing-long.</strong> <strong>Don't switch main reviewer to gemini-3.5-flash</strong> either — no production track record and memory explicitly warns against flash for code/lab reviews. Current pair (codex gpt-5.5 writer + claude-sonnet-4-6 reviewer) is validated by both calibration data AND today's R1 catch rate (sonnet caught ~6 real production bugs across Bicep, cosign, schema math, gate logic, citation cycle, dedup-gate).</p>
+
+<h2>5. Critical bugs caught by sonnet R1 this session</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Bug class</th><th>What would have shipped without the catch</th></tr></thead>
+<tbody>
+<tr><td>#1408</td><td>Bicep object-literal semicolons</td><td><code>az bicep build</code> would reject every example in the Azure module</td></tr>
+<tr><td>#1408</td><td>Broken <code>az webapp ... --slot-settings</code> form</td><td>Silent slot-stickiness break — learner copies command, Key Vault reference is no longer sticky across slot swaps</td></tr>
+<tr><td>#1409</td><td>Bare <code>cosign verify "$IMAGE"</code></td><td>Immediate "no required identity in the verification options" error on every CKS lab attempt</td></tr>
+<tr><td>#1410</td><td>Mixed-scale stddev / disagreement</td><td>Headline variance report would have claimed "mean stddev 1.797" (impossible on 0–1 scale) and routed attention to mcp-use cells flagged for scale mixing not model instability</td></tr>
+<tr><td>#1415</td><td><code>_paths_from_text(response_path)</code> scanning curriculum prose</td><td>Gate would have flagged 100% of content-writing-long cells mentioning <code>/var/lib/etcd/</code>, <code>/etc/kubernetes/pki/ca.crt</code>, <code>2>/dev/null</code>, etc.</td></tr>
+<tr><td>#1409</td><td>Missing <code>&lt;!-- incident-xref: tesla-2018-cryptojacking --&gt;</code> marker</td><td>Incident-dedup CI gate would have blocked all subsequent merges</td></tr>
+</tbody></table>
+
+<h2>6. Dispatch frustrations + recoveries</h2>
+
+<h3>6.1 Codex 40-min timeout patterns</h3>
+
+<p>Two codex jobs timed out at their hard cap: stability runs (after 2/3 commits landed) and respected_inline_return gate (after 2/3 commits landed). Both produced real work before timeout; both salvaged by orchestrator (rebase, push, R1, fixup) without losing state. Recovery pattern: don't re-run timed-out sweeps — render off existing partial state and flag the gap.</p>
+
+<h3>6.2 Stale lock recovery</h3>
+
+<p><code>.git/index.lock</code> stale 0-byte file blocked <code>git pull</code> after a worktree removal. <code>lsof</code> confirmed no holder; <code>rm</code> safe. Documented for future agents.</p>
+
+<h3>6.3 cwd trap struck twice</h3>
+
+<p>Prior <code>cd .worktrees/&lt;branch&gt;</code> persisted into subsequent commands twice this session, once breaking a sonnet R1 dispatch (relative <code>.venv/bin/python</code> failed) and once breaking a verifier invocation. Fix: always pass absolute paths after a cd, OR <code>cd /Users/...</code> back to primary root before dispatching.</p>
+
+<h2>7. Process discipline (orchestrator self-review)</h2>
+
+<p>User pressed orchestration discipline three times mid-session:</p>
+
+<ol>
+<li><em>"can you activte more agents to work on issues and not just dle ? codex has too much unused slot"</em> — caught me single-tracking CKS rewrites with codex idle. Pivoted to parallel fan-out (peaked at 5 concurrent codex/sonnet jobs).</li>
+<li><em>"YOU ARE TH ORCHESTRATOR . ARE YOU GOING TO DO IT OR SHUDL I REPLACE YOU ?"</em> — caught me explaining instead of acting. Acknowledged + immediate parallel action.</li>
+<li><em>"do a session handoff then resolve as many issues as possible"</em> — end-of-session pivot to maximum issue throughput.</li>
+</ol>
+
+<p>Lesson: parallel fan-out should be the default whenever ≥2 issues are independent. Sequential dispatching wastes codex slots. Updated memory <code>feedback_orchestrate_dont_idle.md</code> below.</p>
+
+<h2>8. Memory writes</h2>
+
+<table>
+<thead><tr><th>Memory</th><th>Type</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td><code>feedback_orchestrate_dont_idle.md</code></td><td>NEW</td><td>Parallel dispatch is the default. ≥2 independent issues = ≥2 parallel codex jobs. User feedback 2026-05-21 (3x).</td></tr>
+<tr><td><code>feedback_single_fixture_v1_calibration.md</code></td><td>NEW</td><td>10 of 12 v1 lanes have 1 fixture. Per-lane rankings on v1 do not generalize. Don't change routing based on single-fixture deltas. #1413 is the fixture-expansion track.</td></tr>
+<tr><td><code>feedback_zero_score_audit_2026_05_21.md</code></td><td>NEW</td><td>22.1% of v1 scores are exactly 0.0. ~50% come from a known-brittle substring-AND gate class. LLM-judge zeros are ambiguous (parse-fail vs real-fail). Until #1412 lands: distrust prose-lane scores; trust LLM-judge-only lanes with multiple scorers.</td></tr>
+<tr><td><code>feedback_render_after_score.md</code></td><td>NEW</td><td>Calibration report HTML is rendered manually; ledger updates do not trigger re-render. 16 stale reports today; gemini-3.5-flash-high content-review showed 50% when ledger had 100%. Always cross-check served reports against ledger before claiming trust. #1416 wires the auto-render.</td></tr>
+</tbody></table>
+
+<h2>9. End state</h2>
+
+<ul>
+<li>Branch <code>main</code> at <code>73303715</code> (PR #1415 squash).</li>
+<li>Working tree clean.</li>
+<li>0 worktrees beyond primary (last cleanup post-#1415).</li>
+<li>0 open PRs.</li>
+<li>~28 open issues; 7 new today net (filed 10, closed 3).</li>
+<li>Critical-quality count: 153 → <strong>149</strong> (4 modules cleared: CKS 6.2, 6.3, 6.4, Azure 3.14).</li>
+<li>Local API restarted with venv python (PID 32026); <code>/benchmarks</code> tab serves correctly.</li>
+<li>Calibration reports re-rendered against current ledger (post-staleness fix).</li>
+</ul>
+
+<h2>10. Carryovers — next session</h2>
+
+<ol>
+<li><strong>Cnpa + Finops + KCSA 4.4 + Linux Foundations Services & Logs</strong> — next 4 rubric-critical modules in <code>actions.next</code>.</li>
+<li><strong>#1413 single-fixture lanes</strong> — Action 1: write 12 <code>calibration/v1/fixtures/&lt;lane&gt;/PLAN.md</code> files enumerating target fixtures with variety dimensions. This is the critical-path trust unblock for v1.</li>
+<li><strong>#1412 zero-score brittleness</strong> — enforce prose-lane rule (LLM judge unconditional, deterministic gates advisory); disambiguate LLM-judge zeros via <code>gate_failure_reason</code> column; filter variance report to LLM-judge scorers.</li>
+<li><strong>#1416 auto-render hook</strong> — wire <code>render_reports()</code> as post-condition of run_wave/run_cell/replicate/score_cell. Small.</li>
+<li><strong>#1404 real-execution mcp-use lane</strong> — wire learn-ukrainian RAG MCP server (port 8766) so the lane scores on actual tool execution. Today's data: mcp-use was the noisiest lane in the variance report.</li>
+<li><strong>#1405 v2 fixture refire</strong> — PR #1376 IS MERGED. Re-fire harness-following lane on <code>claude-md-context-cks-tweak</code> v2 fixture for all 14 models.</li>
+<li><strong>#1401 Phase 2 agy calibration</strong> — date-bound by 2026-06-18 gemini-cli flip.</li>
+<li><strong>#1402 per-language test harness</strong> — node/java/rust/go runners for CodeWritingScorer. ~1 day infra.</li>
+<li><strong>Stability remaining replicates</strong> — ~50 candidate cells still need their 3× replicates (visible in <code>stability.html</code> coverage table).</li>
+<li><strong>Re-sweep content-writing-long after #1415</strong> — confirm no current models trip the new respected_inline_return gate.</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip · 2026-06-18 drop gemini adapter · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>11. References</h2>
+
+<ul>
+<li>Predecessor: <a href="2026-05-21-session-40-bridge-landed-plus-cks-rewrites-and-cleanup.html">session 40</a></li>
+<li>Calibration ledger: <code>calibration/v1/ledger.db</code> (701 scores across 168 cells × 14 models × 12 lanes)</li>
+<li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/</code></li>
+<li>CKS rubric ladder: tracked under #1369 (PR #1371–#1374, #1397–#1400, #1409)</li>
+<li>Benchmarks UI: <code>http://127.0.0.1:8768/benchmarks</code></li>
+<li>Variance report: <code>http://127.0.0.1:8768/artifacts/calibration/v1/reports/2026-05-21/stability.html</code></li>
+</ul>
+
+</body>
+</html>
