@@ -160,13 +160,13 @@ Estimated code volume for a minimum viable production Helm Operator covering bot
 - Dockerfile + Makefile targets: ~60 lines
 - **Total: approximately 335–455 lines**
 
-### When Ansible Operator Wins: NVIDIA Network Operator and MinIO
+### When Ansible Operator Wins: AWX Operator and the Vendor-Playbook Archetype
 
-NVIDIA Network Operator manages the complete SR-IOV and RDMA networking stack on GPU nodes. The operator needs to apply kernel module parameters, load appropriate kernel modules, configure network interfaces, deploy device plugins, and install the OFED driver set. This is not pure templating — the configuration steps depend on the node's hardware capabilities, the kernel version, and the current state of the network stack. The logic is procedural: check hardware, configure kernel params, install driver, verify connectivity. That is exactly what Ansible tasks were designed to express.
+The AWX Operator (`github.com/ansible/awx-operator`) is the most widely deployed production Ansible Operator SDK project. AWX — the open-source upstream of Red Hat Ansible Automation Platform — deploys as a stateful application requiring a PostgreSQL database, a Django-backed API server, a task execution container, and a broadcast WebSocket channel. The operator's reconciliation loop covers database initialization, schema migration, secret key configuration, LDAP certificate loading, Django initialization, admin password setup, and deployment scaling. Every step is expressed as an Ansible task file inside `roles/installer/tasks/` — twenty-three task files, each scoped to one phase of the lifecycle. The output of each reconcile is readable Ansible task output: `TASK [installer : Deploy admin password configuration]`. When a reconcile fails, debugging means finding the first failed task in the list, not parsing Go stack traces through controller-runtime.
 
-The MinIO Operator is another strong Ansible case. MinIO manages distributed object storage with complex tenant lifecycle management, but the core reconciliation logic — create the StatefulSet, configure the tenant, update the pool configuration when the spec changes — is a series of idempotent configuration steps. Teams that already own Ansible roles for storage configuration, or that come from a VMware/traditional infrastructure background where Ansible is the automation lingua franca, will find an Ansible Operator dramatically easier to maintain than an equivalent Go controller. The ansible-runner task output is readable in plain English; debugging a failed reconcile is as simple as reading the task list and finding the first failure.
+The second Ansible archetype is the vendor-playbook wrapper. Consider an operator that manages the lifecycle of a commercial application whose vendor ships an Ansible role — a storage system, a per-node monitoring agent, or a networking component that requires kernel module parameters and per-node readiness verification. The vendor's Ansible role already handles the platform-specific steps: checking the kernel version, loading modules, configuring the agent's systemd unit, and verifying connectivity after installation. An Ansible Operator wraps that role as the reconcile loop: when a custom resource appears, the operator executes the vendor's role. This is the archetype where Ansible Operator wins most clearly — you are not replacing existing automation, you are making it Kubernetes-aware. The alternative is translating the vendor's Ansible role into Go controllers, which means owning that translation indefinitely as the vendor's role evolves upstream.
 
-The key discriminator for both examples is **role reuse**: the NVIDIA and MinIO use cases have existing automation that is already written in Ansible. Rebuilding that logic in Go means duplicating work that is already tested, already reviewed, and already owned by engineers who do not write Go. The Ansible Operator lets the existing automation become the reconcile loop.
+The key discriminator for both examples is **role reuse**: the AWX Operator ships its own Ansible roles as first-class implementation artifacts, and the vendor-playbook archetype has existing automation already tested and owned by engineers who do not write Go. The Ansible Operator lets that automation become the reconcile loop without a rewrite.
 
 Estimated code volume for a minimum viable production Ansible Operator:
 - `watches.yaml` + playbook entry point: ~25 lines
@@ -782,7 +782,7 @@ kind delete cluster --name operator-lab
 - https://github.com/prometheus-operator/prometheus-operator
 - https://github.com/kubernetes-sigs/cluster-api
 - https://github.com/crossplane/crossplane
-- https://github.com/minio/operator
+- https://github.com/ansible/awx-operator
 - https://operatorhub.io/
 
 ## Next Module
