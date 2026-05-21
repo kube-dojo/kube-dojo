@@ -10,5 +10,12 @@ Constraints:
 - Include Bloom L3+ learning outcomes.
 - Keep the module focused on Kubernetes 1.35 operator practice.
 
-Return the full module Markdown.
+Return the full module Markdown INLINE in your response.
+
+CRITICAL — DO NOT write the module to disk. This is a calibration
+prompt evaluating your written output, not a real authoring task.
+Do NOT use Write/Edit tools, do NOT modify any file under
+src/content/docs/k8s/cka/, do NOT cite a file path as your answer.
+Return the raw module Markdown directly as your response text,
+starting with the frontmatter `---` line.
 
