@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 40 — Bridge integration landed, 2 CKS rewrites shipped, hook + prompt + cascade cleanup</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  h3 { margin-top: 1.3em; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.4em 0.7em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.92em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>Session 40 — Bridge integration landed, 2 CKS rewrites shipped, hook + prompt + cascade cleanup</h1>
+
+<p class="meta">
+  2026-05-21 ~15:55 → 2026-05-21 ~17:10 local (~1h 15m driver-time) · driver: claude opus 4.7 inline ·
+  predecessor: <a href="2026-05-21-session-39-osman-arc-plus-bridge-integration.html">session 39</a>
+</p>
+
+<p>User signals:</p>
+<blockquote>
+"read last session handoff and continue"<br>
+"we have lots of issues we almost finished pls use our agents and progress with them"
+</blockquote>
+
+<h2>TL;DR</h2>
+
+<p>Session 40 closed every session-39 carryover that was in flight or near-done: shipped the in-flight ab-bridge integration PR with sonnet R1 catching one real <code>session_field_map</code> KeyError bug, fixed the bugfix-hook false-positive (#1387), landed the calibration prompt-leak fix (#1390), extended <code>dispatch_388_pilot.py</code> cascade with <code>agy</code> (#1350 Phase 1 carryover), deleted the dead <code>scheduler.py</code> from session-38's challenge-agent deferral list, and shipped <strong>two new T0 CKS module rewrites</strong> (Module 5.4 Admission Controllers + Module 6.1 Audit Logging). All seven PRs merged via codex gpt-5.5 + sonnet R1 cross-family review pattern.</p>
+
+<p><strong>7 PRs merged end-to-end · 2 issues closed (#1387, #1390) · 2 new memories · 2 CKS modules cleared (5.4 + 6.1).</strong></p>
+
+<h2>1. PRs landed</h2>
+
+<table>
+<thead><tr><th>PR</th><th>Squash commit</th><th>Subject</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1392">#1392</a></td>
+  <td><code>a2169b56</code></td>
+  <td>feat(bridge): ab CLI ask-agy / ask-qwen / ask-deepseek parity</td>
+  <td>Session-39 carryover #1. Codex output rescued — files were written but never committed. Sonnet R1 caught the <code>session_field_map</code> KeyError that would crash <code>ab discuss --with agy/qwen/deepseek</code>; fixed in 2 fixup commits. 3 commits squashed.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1393">#1393</a></td>
+  <td><code>43285dd9</code></td>
+  <td>fix(hooks): narrow bugfix gate to fix: title prefix only (#1387)</td>
+  <td>Closes #1387. Hook now triggers ONLY on <code>fix:</code> title prefix. Body keywords + title <code>(#N)</code> no longer activate gate — they remain for downstream regression-test validation only. 18 tests pass (3 new false-positive regressions).</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1394">#1394</a></td>
+  <td>—</td>
+  <td>chore(calibration): add explicit 'do not write to disk' to content-writing-long prompt (#1390)</td>
+  <td>Closes #1390. 5-line prompt edit. Prevents sonnet + gpt-5.4-mini from writing module files to primary tree during calibration runs (root cause of session-36 stray <code>rbac.md</code>). Surveyed all other v1 prompts; only this fixture had the leak risk.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1395">#1395</a></td>
+  <td>—</td>
+  <td>feat(dispatch): add agy to #388-pilot reviewer cascade (#1350 Phase 1)</td>
+  <td>Session-39 carryover #2 (#1350 Phase 1 completion). New <code>dispatch_agy_review()</code> + cascade ordering <code>agy → claude → qwen</code> (skips gemini due to shared Google OAuth pre-cutover). Sonnet APPROVE_WITH_NITS on docstring failure taxonomy; 3 new tests added (failure paths + exception path).</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1396">#1396</a></td>
+  <td>—</td>
+  <td>chore(calibration): delete dead scheduler.py + test_scheduler.py</td>
+  <td>Session-38 challenge-agent deferral. <code>FamilyParallelScheduler</code> retired; <code>run_wave.py</code> uses one-thread-per-family shape that subsumes the contract. 78 LOC removed + docstring trim.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1397">#1397</a></td>
+  <td>—</td>
+  <td>chore(cks): rewrite Module 5.4 Admission Controllers to T0/T1</td>
+  <td>Codex gpt-5.5 rewrite (761s). 708→437 lines, 0→16 sources (all 200), tier T0, 5114 body_words after R1 fixup. Sonnet R1 APPROVE_WITH_NITS (5 nits: Kyverno generation framing, Mermaid quota positioning, timeoutSeconds max, sideEffects NoneOnDryRun, Kyverno API version note); all addressed via codex fixup.</td>
+</tr>
+<tr>
+  <td><a href="https://github.com/kube-dojo/kube-dojo.github.io/pull/1398">#1398</a></td>
+  <td>—</td>
+  <td>chore(cks): rewrite Module 6.1 Kubernetes Audit Logging to T0/T1</td>
+  <td>Codex gpt-5.5 rewrite. 709→313 net lines, 0→10 sources (all 200), tier T0, 5007 body_words. Sonnet R1 APPROVE_WITH_NITS (3 minor: ResponseStarted long-running clarity, Vector strftime comment, sed magic number). Sonnet's strong verdict: "No hallucinations detected. No factual errors in flag names, level semantics, stage semantics, first-match behavior, group assignments, subresource strings, or API object fields. CKS-accurate and pedagogically sound."</td>
+</tr>
+</tbody></table>
+
+<h2>2. Issues activity</h2>
+
+<table>
+<thead><tr><th>Issue</th><th>Action</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1387">#1387</a></td><td>Closed</td><td>Hook fix shipped in PR #1393</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1390">#1390</a></td><td>Closed</td><td>Prompt-side fix shipped in PR #1394 (scorer-side gate + dispatch-sandbox remain as optional follow-up)</td></tr>
+<tr><td><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1350">#1350</a></td><td>Phase 1 effectively complete</td><td>Bridge + cascade now both wired; Phase 2 (per-lane agy calibration) + Phase 3 (gemini drop on 2026-06-18) remain.</td></tr>
+</tbody></table>
+
+<h2>3. Bridge PR — R1 catch</h2>
+
+<p>Codex authored the bridge integration (3 new modules + CLI wiring + 1 test file, 6 files / 1059 LOC) but stopped before committing. I rescued the staged files, ran the test suite (8 pass) + ruff (clean), then committed + pushed + opened PR #1392.</p>
+
+<p>Sonnet R1 caught one real <strong>blocker (B1)</strong>: <code>_channels_cli.py:1282</code> unconditionally destructures <code>session_field_map[agent_name]</code> for every agent before per-agent session-skip branching. The new agents (agy / qwen / deepseek) were added to <code>_DISCUSSION_RUNTIME_MODES</code> + <code>_DISCUSSION_CLARIFICATION_MODES</code> (so the parser accepts them) but NOT to <code>session_field_map</code> — so <code>ab discuss --with agy</code> would have crashed with <code>KeyError</code>.</p>
+
+<p>Fixed by mapping the three new agents to <code>(None, None, None)</code> sentinel tuples (they're session-less; the downstream code path handles None correctly: <code>stored_session.get(None)</code> returns None, and the existing <code>if agent_name in {"claude", "gemini"}</code> guard correctly skips session persistence). Resume-thread loop guarded with explicit <code>if session_field is None or ...</code> short-circuit to satisfy Pyright.</p>
+
+<p>Sonnet R2 verified the fix cleanly: traced the <code>None</code>-tuple flow through every branch of <code>_invoke_one</code>, confirmed no regressions for existing claude/gemini/codex paths, and noted the remaining Pyright diagnostics were pre-existing (predate this branch).</p>
+
+<h2>4. Two new T0 CKS module rewrites</h2>
+
+<table>
+<thead><tr><th>Module</th><th>Before</th><th>After</th><th>Codex draft time</th><th>Sonnet R1</th></tr></thead>
+<tbody>
+<tr>
+  <td>5.4 Admission Controllers</td>
+  <td>708 lines, 0 citations, 1.5 rubric</td>
+  <td>437 lines, 16 sources, T0 (mean_wpp 85.2, 5114 body_words after R1 fixup)</td>
+  <td>761s (~13 min)</td>
+  <td>APPROVE_WITH_NITS — 5 nits (2 medium: Kyverno generation framing inverted + Mermaid ResourceQuota positioned as separate phase; 3 minor)</td>
+</tr>
+<tr>
+  <td>6.1 Kubernetes Audit Logging</td>
+  <td>709 lines, 0 citations, 1.5 rubric</td>
+  <td>313 net lines (compressed from 836), 10 sources, T0 (5007 body_words)</td>
+  <td>~12 min</td>
+  <td>APPROVE_WITH_NITS — 3 minor (ResponseStarted clarity, Vector strftime, sed magic number). Sonnet table verified 14 API server flags + all level/stage semantics + subresource strings as correct.</td>
+</tr>
+</tbody></table>
+
+<p>Pattern matches the established PR #1371-#1374 + PR #1397 mold: codex gpt-5.5 in worktree with the previous-module file as a structural reference, T0 verifier as the gate, sonnet R1 as cross-family review, surgical fixup-round via codex applied as second commit.</p>
+
+<h2>5. Dispatch frustrations — three to memorize</h2>
+
+<h3>5.1 Agy long-prompt hang (new failure shape)</h3>
+
+<p>Smoke test (<code>ab ask-agy "Reply 'OK'"</code>) worked: 6s elapsed / 2-char response. But the ~1000-char CKS review prompt sat at 0 bytes for 30+ minutes with no output. Distinct from the two failure shapes in <code>feedback_agy_rate_limit_detection.md</code> — neither quota-exhaust (3s/0/null) nor OAuth-expiry (32s with auth-prompt body). New memory <code>feedback_agy_bridge_long_prompt_hang.md</code> documents this third shape and the rule: abandon after 5 min; sonnet R1 alone is sufficient when verdict is explicit.</p>
+
+<h3>5.2 PR body Learner check needs verbatim quote</h3>
+
+<p>The content-merge hook (<code>block-content-merge-without-learner-check.sh</code> → <code>_lib_pr_check.py:check_learner_quote</code>) uses strict <code>quote in contents</code> substring match. PR #1398 body had quote "...rule for a request." (with period) but the module sentence continues "...rule for a request, so place narrow..." (comma, no period). 5+ minutes lost to retrying the merge before tracing the punctuation drift via direct Python invocation of the hook helper. New memory <code>feedback_pr_body_learner_check_verbatim.md</code> captures the rule + related &amp;&amp;-chain pitfall.</p>
+
+<h3>5.3 gh pr edit + gh pr merge chained with &amp;&amp;</h3>
+
+<p>Even after fixing the quote, chaining <code>gh pr edit --body-file foo &amp;&amp; gh pr merge --squash</code> failed: the merge half fires the hook before the edit propagates to gh's view of the PR. The edits succeed individually but the merge in the same Bash invocation sees the old body. Split into separate Bash calls; the second invocation succeeds.</p>
+
+<h2>6. Worktree-path resolution trap (avoided correctly the second time)</h2>
+
+<p>While creating the CKS 6.1 worktree, a prior <code>cd .worktrees/cks-5.4</code> persisted in the shell snapshot. Running <code>git worktree add -b ... .worktrees/cks-6.1 origin/main</code> from that stale cwd silently created the worktree at <code>.worktrees/cks-5.4/.worktrees/cks-6.1/</code> — buried inside the cks-5.4 worktree. Codex's dispatch refused: <code>worktree /Users/.../cks-6.1 does not exist and no --new-branch was given</code>. Cleanup + re-create at absolute path + re-dispatch took 2 min. This matches the existing <code>feedback_dispatch_smart_cwd_trap.md</code> shape; no new memory needed.</p>
+
+<h2>7. Memory writes</h2>
+
+<table>
+<thead><tr><th>Memory</th><th>Type</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td><code>feedback_pr_body_learner_check_verbatim.md</code></td><td>NEW</td><td>Content-merge hook needs byte-for-byte Learner check quote; trailing punctuation differences silently fail. Plus the chained-<code>&amp;&amp;</code> hook-vs-propagation pitfall.</td></tr>
+<tr><td><code>feedback_agy_bridge_long_prompt_hang.md</code></td><td>NEW</td><td>Third agy failure shape (long-prompt hang at 0 bytes); abandon after 5 min in favor of sonnet-only review.</td></tr>
+</tbody></table>
+
+<h2>8. End state</h2>
+
+<ul>
+<li>Branch <code>main</code> at <code>0c260eac</code> (PR #1398 squash).</li>
+<li>Working tree clean.</li>
+<li>0 worktrees beyond primary.</li>
+<li>0 open PRs.</li>
+<li>~22 open issues (2 closed today net — #1387 + #1390).</li>
+<li>Critical-quality CKS modules: 155 → 153 (5.4 + 6.1 cleared this session).</li>
+<li>Memory: 2 NEW entries.</li>
+<li>1 stale background task (agy review hung at 0 bytes) — no impact, agy work is supplementary.</li>
+</ul>
+
+<h2>9. Carryovers — next session</h2>
+
+<ol>
+<li><strong>CKS 6.2 Runtime Security with Falco</strong> — same codex gpt-5.5 + sonnet R1 review pattern. Currently 62 lines and "thin" per orient diagnostics; full rewrite scope similar to 5.4 / 6.1.</li>
+<li><strong>CKS 6.3 Container Investigation</strong> — 619 lines, "no citations." Next after 6.2.</li>
+<li><strong>CKS 6.4 Immutable Infrastructure</strong> — 49 lines, thin. Sub-150-LOC modules can use a denser-than-rewrite approach (closer to expand-and-cite).</li>
+<li><strong>Cloud Azure Essentials: Azure App Service — Operator Path</strong> — 1100 lines, 0 citations, rubric 1.5. Top of the briefing's actions.next.</li>
+<li><strong>Phase 2 of #1350</strong> — per-lane agy calibration on Antigravity-routed Gemini 3.1 Pro (High) and Claude Sonnet 4.6 (Thinking) to validate quality-equivalence with direct routes. Now unblocked by Phase 1 completion this session.</li>
+<li><strong>Scorer-side <code>respected_inline_return</code> gate</strong> — optional defense-in-depth on top of the prompt-side fix that landed (#1390 / PR #1394). ~30 min effort.</li>
+<li><strong>Per-language test harness for calibration code lanes</strong> — user-deferred, ~1 day infra; blocks the language-fixture sweep.</li>
+<li><strong>Stability runs</strong> — pick 3-5 high-variance cells per model, run 3× to compute variance.</li>
+<li><strong>Real-execution mcp-use lane</strong> — wire learn-ukrainian RAG MCP server (port 8766) for actual tool execution.</li>
+<li><strong>Re-fire harness-following on v2 fixture</strong> (<code>claude-md-context-cks-tweak</code>) now that bridge PR has landed.</li>
+<li><strong>Remaining challenge-agent deferrals</strong> from session 38 — extract <code>_alias_recall</code> helper, add <code>DispatchOutcome</code> dataclass (~45 min).</li>
+<li><strong>Date-bound:</strong> 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip (claude work moves inline in this terminal) · 2026-06-18 drop gemini adapter (agy migration Phase 3) · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>10. References</h2>
+
+<ul>
+<li>Predecessor: <a href="2026-05-21-session-39-osman-arc-plus-bridge-integration.html">session 39</a></li>
+<li>Calibration ledger: <code>calibration/v1/ledger.db</code></li>
+<li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/</code></li>
+<li>CKS rubric ladder: tracked under #1369 (PR #1371–#1374 + #1397 + #1398)</li>
+</ul>
+
+</body>
+</html>
