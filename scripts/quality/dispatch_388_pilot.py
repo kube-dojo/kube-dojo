@@ -463,12 +463,16 @@ def dispatch_agy_review(pr_num: int, module_path: str, slug: str):
       so agy can run as a peer reviewer alongside gemini without sharing
       the OAuth quota.
 
-    Failure shapes (session 39):
-    - Quota-exhausted: ok=False, elapsed~3s, response_chars=0, stderr=null
-    - OAuth-expired: ok=True, elapsed~32s, body is auth-prompt URL +
-      "authentication timed out"
-    Both surface as ERROR/UNCLEAR via classify_verdict — the cascade
-    fallback handles either case transparently.
+    Failure shapes and how they surface to the cascade:
+    - Quota-exhausted: invoke returns ok=False, response="" — this function
+      returns ("", "UNCLEAR") (classify_verdict on the empty string).
+    - OAuth-expired: invoke returns ok=True with body containing the
+      auth-prompt URL and "authentication timed out" — classify_verdict
+      finds no VERDICT line, returns "UNCLEAR".
+    - Exception inside invoke (network/transport failure, adapter crash):
+      caught below, returns (None, "ERROR").
+    All three cases let the cascade fall to the next reviewer; the
+    distinction matters only when reading dispatch logs after a failure.
     """
     log({"event": "agy_review_start", "pr": pr_num, "module": module_path})
     try:

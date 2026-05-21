@@ -257,3 +257,66 @@ def test_dispatch_agy_review_uses_danger_mode(monkeypatch: pytest.MonkeyPatch) -
     assert calls[0]["mode"] == "danger"
     assert calls[0]["entrypoint"] == "dispatch"
     assert "model" not in calls[0]  # agy uses TUI-picker, no model= arg
+
+
+@pytest.mark.parametrize(
+    ("ok", "response", "expected_verdict", "expected_text"),
+    [
+        # Quota-exhausted: invoke returns ok=False with empty body.
+        (False, "", "UNCLEAR", ""),
+        # OAuth-expired: invoke returns ok=True but body is the auth-prompt
+        # URL plus a timed-out message; no VERDICT line present.
+        (
+            True,
+            "Authentication required. Please visit the URL to log in: "
+            "https://accounts.google.com/o/oauth2/auth?...\n"
+            "Error: authentication timed out.",
+            "UNCLEAR",
+            "Authentication required. Please visit the URL to log in: "
+            "https://accounts.google.com/o/oauth2/auth?...\n"
+            "Error: authentication timed out.",
+        ),
+    ],
+)
+def test_dispatch_agy_review_failure_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    ok: bool,
+    response: str,
+    expected_verdict: str,
+    expected_text: str,
+) -> None:
+    """Sonnet PR #1395 review: confirm the two documented agy failure
+    shapes (quota-exhaust + OAuth-expiry) surface as UNCLEAR — not ERROR —
+    so the cascade falls through transparently."""
+    from types import SimpleNamespace
+
+    def fake_invoke(**_kwargs):
+        return SimpleNamespace(ok=ok, response=response, stderr_excerpt=None)
+
+    monkeypatch.setattr(pilot, "invoke", fake_invoke)
+    monkeypatch.setattr(pilot, "log", lambda _event: None)
+    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+
+    text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-fail")
+
+    assert verdict == expected_verdict
+    assert text == expected_text
+
+
+def test_dispatch_agy_review_invoke_exception_returns_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exception inside invoke() should bubble up as (None, 'ERROR') —
+    distinct from quota-exhaust (which is ok=False with empty body)."""
+
+    def fake_invoke(**_kwargs):
+        raise RuntimeError("transport failure")
+
+    monkeypatch.setattr(pilot, "invoke", fake_invoke)
+    monkeypatch.setattr(pilot, "log", lambda _event: None)
+    monkeypatch.setattr(pilot, "gemini_review_prompt", lambda *_a, **_kw: "test prompt")
+
+    text, verdict = pilot.dispatch_agy_review(pr_num=1234, module_path="x.md", slug="agy-exc")
+
+    assert text is None
+    assert verdict == "ERROR"
