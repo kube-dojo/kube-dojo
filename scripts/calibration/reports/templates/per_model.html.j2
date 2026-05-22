@@ -12,23 +12,77 @@
   th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
   th { background:#f3f5f7; text-align:left; }
   .confidence { font-weight:700; }
+  .profile { display:grid; grid-template-columns:minmax(0, 1.15fr) minmax(16rem, 0.85fr); gap:1.25rem; align-items:start; margin-top:1rem; }
+  .radar-wrap { overflow-x:auto; }
+  .radar-svg { max-width:100%; height:auto; }
+  .radar-ring { fill:none; stroke:#d8dee4; stroke-width:1; }
+  .radar-axis { stroke:#ccd3da; stroke-width:1; }
+  .radar-label { font-size:10px; fill:#2f3a45; }
+  .radar-score { font-weight:700; fill:#1f2933; }
+  .tag-cloud { display:flex; gap:0.45rem; flex-wrap:wrap; margin:0.35rem 0 0.85rem; }
+  .tag { color:white; border-radius:0.3rem; padding:0.22rem 0.5rem; font-size:0.82rem; font-weight:700; }
+  .empty { color:#687380; font-size:0.9rem; }
+  .score-chip { color:white; font-weight:700; border-radius:0.25rem; padding:0.15rem 0.5rem; white-space:nowrap; }
+  @media (max-width: 760px) { .profile { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <h1>{{ canonical_string }}</h1>
 <p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
+<section class="profile">
+  <div class="radar-wrap">
+    <svg class="radar-svg" width="420" height="420" viewBox="0 0 {{ radar.size }} {{ radar.size }}" role="img" aria-label="Composite score radar chart for {{ canonical_string }}">
+      {% for ring in radar.rings %}
+      <polygon class="radar-ring" points="{{ ring.points }}"></polygon>
+      {% endfor %}
+      {% for axis in radar.axes %}
+      <line class="radar-axis" x1="{{ radar.center }}" y1="{{ radar.center }}" x2="{{ "%.1f"|format(axis.axis_x) }}" y2="{{ "%.1f"|format(axis.axis_y) }}"></line>
+      {% endfor %}
+      <polygon points="{{ radar.polygon_points }}" fill="#0b5cad" fill-opacity="0.3" stroke="#0b5cad" stroke-width="2"></polygon>
+      {% for axis in radar.axes %}
+      <g>
+        <text class="radar-label" x="{{ "%.1f"|format(axis.label_x) }}" y="{{ "%.1f"|format(axis.label_y) }}" text-anchor="{{ axis.anchor }}">
+          <tspan x="{{ "%.1f"|format(axis.label_x) }}">{{ axis.lane }}</tspan>
+          <tspan class="radar-score" x="{{ "%.1f"|format(axis.label_x) }}" dy="12">{{ "%.1f"|format(axis.composite) }}</tspan>
+        </text>
+        <rect x="{{ "%.1f"|format(axis.chip_x) }}" y="{{ "%.1f"|format(axis.chip_y) }}" width="20" height="13" rx="2" fill="{{ axis.color }}"></rect>
+        <text x="{{ "%.1f"|format(axis.chip_text_x) }}" y="{{ "%.1f"|format(axis.chip_text_y) }}" text-anchor="middle" font-size="9" font-weight="700" fill="white">{{ axis.letter }}</text>
+      </g>
+      {% endfor %}
+    </svg>
+  </div>
+  <div>
+    <h2>Strengths</h2>
+    <div class="tag-cloud">
+      {% for cell in strengths %}
+      <span class="tag" style="background:{{ cell.color }}">{{ cell.lane }} {{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>
+      {% else %}
+      <span class="empty">none</span>
+      {% endfor %}
+    </div>
+    <h2>Weaknesses</h2>
+    <div class="tag-cloud">
+      {% for cell in weaknesses %}
+      <span class="tag" style="background:{{ cell.color }}">{{ cell.lane }} {{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>
+      {% else %}
+      <span class="empty">none</span>
+      {% endfor %}
+    </div>
+  </div>
+</section>
 <table>
   <thead>
-    <tr><th>Lane</th><th>Fixture</th><th>Deterministic</th><th>LLM judge</th><th>Confidence vs actual</th><th>Cell</th></tr>
+    <tr><th>Lane</th><th>Fixture</th><th>Composite</th><th>Deterministic</th><th>LLM judge</th><th>Confidence vs actual</th><th>Cell</th></tr>
   </thead>
   <tbody>
     {% for cell in cells %}
     <tr>
       <td><a href="../per-lane/{{ cell.lane }}.html">{{ cell.lane }}</a></td>
       <td>{{ cell.fixture_id }}</td>
+      <td><span class="score-chip" style="background:{{ cell.color }}">{{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>{% if cell.judge_dissent %}<sup style="color:#856404;" title="judges disagreed">⚠</sup>{% endif %}</td>
       <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
       <td>{% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</td>
-      <td><span class="confidence">{{ cell.effort_confidence }}</span> effort signal vs {{ "%.0f"|format(cell.deterministic_score * 100) }}% deterministic</td>
+      <td><span class="confidence">{{ cell.effort_confidence }}</span> effort signal vs {{ "%.1f"|format(cell.composite) }} composite</td>
       <td>{{ cell.cell_id }}</td>
     </tr>
     {% endfor %}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,8 +10,8 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from . import constants
 from . import schema
-from .constants import DETERMINISTIC_SCORERS
 from .models import ANCHORS, LANES
 from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT
 
@@ -29,7 +30,274 @@ class CellSummary:
     effort_confidence: str
     deterministic_score: float
     llm_score: float | None
+    composite: float
+    letter: str
+    color: str
+    gate_pct: float
+    judge_title: str
+    judge_dissent: bool
     response_path: str | None
+
+
+@dataclass(frozen=True)
+class LaneGrade:
+    lane: str
+    composite: float
+    letter: str
+    color: str
+
+
+@dataclass(frozen=True)
+class LaneModelSummary:
+    canonical_string: str
+    composite: float
+    letter: str
+    color: str
+    judge_dissent: bool
+
+
+def _score_row_value(row: Any, key: str) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return getattr(row, key)
+
+
+def _deterministic_rows(score_rows: list[Any]) -> list[Any]:
+    return [
+        row
+        for row in score_rows
+        if _score_row_value(row, "scorer") == "deterministic"
+        and _score_row_value(row, "gate_name") != "human_spot_check"
+    ]
+
+
+def _judge_rows(score_rows: list[Any]) -> list[Any]:
+    return [
+        row
+        for row in score_rows
+        if str(_score_row_value(row, "scorer")).startswith("llm-judge:")
+    ]
+
+
+def _gate_component(score_rows: list[Any]) -> float:
+    det_rows = _deterministic_rows(score_rows)
+    if not det_rows:
+        return 0.0
+
+    has_ratios = any(
+        _score_row_value(row, "score_value") is not None
+        and 0.0 <= float(_score_row_value(row, "score_value")) <= 1.0
+        for row in det_rows
+    )
+    if has_ratios:
+        values = [
+            float(_score_row_value(row, "score_value"))
+            if _score_row_value(row, "score_value") is not None
+            else (1.0 if _score_row_value(row, "gate_pass") else 0.0)
+            for row in det_rows
+        ]
+    else:
+        values = [1.0 if _score_row_value(row, "gate_pass") else 0.0 for row in det_rows]
+    return (sum(values) / len(values)) * 10.0
+
+
+def _parsed_judge_scores(score_rows: list[Any]) -> list[float]:
+    return [
+        float(_score_row_value(row, "score_value"))
+        for row in _judge_rows(score_rows)
+        if _score_row_value(row, "score_value") is not None
+    ]
+
+
+def _judge_title(score_rows: list[Any]) -> str:
+    values: list[str] = []
+    for row in _judge_rows(score_rows):
+        score_value = _score_row_value(row, "score_value")
+        values.append("n/a" if score_value is None else f"{float(score_value):.1f}")
+    return ", ".join(values) if values else "n/a"
+
+
+def letter_grade_for_score(score: float) -> tuple[str, str]:
+    for letter, lower, upper, color in constants.LETTER_GRADE_BANDS:
+        if lower <= score < upper:
+            return letter, color
+    return constants.LETTER_GRADE_BANDS[-1][0], constants.LETTER_GRADE_BANDS[-1][3]
+
+
+def judge_dissent(score_rows: list[Any], lane: str) -> bool:
+    if lane not in constants.PROSE_LANES:
+        return False
+    judge_scores = _parsed_judge_scores(score_rows)
+    if len(judge_scores) < 2:
+        return False
+    return max(judge_scores) - min(judge_scores) > constants.JUDGE_DISSENT_THRESHOLD
+
+
+def composite_score(score_rows: list[Any], lane: str) -> tuple[float, str, str]:
+    gate_component = _gate_component(score_rows)
+    parsed_judge_scores = _parsed_judge_scores(score_rows)
+
+    if lane in constants.MECHANICAL_LANES:
+        composite = gate_component
+    elif lane in constants.PROSE_LANES:
+        if parsed_judge_scores:
+            judge_component = sum(parsed_judge_scores) / len(parsed_judge_scores)
+            composite = (
+                constants.COMPOSITE_GATE_WEIGHT * gate_component
+                + constants.COMPOSITE_JUDGE_WEIGHT * judge_component
+            )
+        else:
+            composite = constants.COMPOSITE_GATE_WEIGHT * gate_component
+    else:
+        composite = gate_component
+
+    composite = max(0.0, min(10.0, composite))
+    letter, color = letter_grade_for_score(composite)
+    return composite, letter, color
+
+
+def _grade_summary(cells: list[CellSummary]) -> dict[str, Any] | None:
+    if not cells:
+        return None
+    score = sum(cell.composite for cell in cells) / len(cells)
+    letter, color = letter_grade_for_score(score)
+    return {"composite": score, "letter": letter, "color": color}
+
+
+def _lane_grades(cells: list[CellSummary]) -> list[LaneGrade]:
+    grouped: dict[str, list[CellSummary]] = defaultdict(list)
+    for cell in cells:
+        grouped[cell.lane].append(cell)
+
+    grades: list[LaneGrade] = []
+    for lane in LANES:
+        summary = _grade_summary(grouped.get(lane, []))
+        if summary is None:
+            continue
+        grades.append(
+            LaneGrade(
+                lane=lane,
+                composite=float(summary["composite"]),
+                letter=str(summary["letter"]),
+                color=str(summary["color"]),
+            )
+        )
+    return grades
+
+
+def _lane_model_summaries(cells: list[CellSummary]) -> list[LaneModelSummary]:
+    grouped: dict[str, list[CellSummary]] = defaultdict(list)
+    for cell in cells:
+        grouped[cell.canonical_string].append(cell)
+
+    summaries: list[LaneModelSummary] = []
+    for model in sorted(grouped):
+        summary = _grade_summary(grouped[model])
+        if summary is None:
+            continue
+        summaries.append(
+            LaneModelSummary(
+                canonical_string=model,
+                composite=float(summary["composite"]),
+                letter=str(summary["letter"]),
+                color=str(summary["color"]),
+                judge_dissent=any(cell.judge_dissent for cell in grouped[model]),
+            )
+        )
+    return summaries
+
+
+def _letter_grade_legend() -> list[dict[str, str]]:
+    legend = []
+    for letter, lower, upper, color in constants.LETTER_GRADE_BANDS:
+        if letter == "A":
+            band = f"{lower:.1f}+"
+        elif letter == "F":
+            band = f"<{upper:.1f}"
+        else:
+            band = f"{lower:.1f}-{upper:.1f}"
+        legend.append({"letter": letter, "band": band, "color": color})
+    return legend
+
+
+def _radar_context(cells: list[CellSummary]) -> dict[str, Any]:
+    size = 480.0
+    center = size / 2.0
+    outer_radius = 130.0
+    label_radius = 188.0
+    cells_by_lane: dict[str, list[CellSummary]] = defaultdict(list)
+    for cell in cells:
+        cells_by_lane[cell.lane].append(cell)
+    axis_count = len(LANES)
+
+    def point_for(index: int, radius: float) -> tuple[float, float]:
+        angle = -math.pi / 2 + (2 * math.pi * index / axis_count)
+        return center + radius * math.cos(angle), center + radius * math.sin(angle)
+
+    rings = []
+    for value in (2, 4, 6, 8, 10):
+        radius = outer_radius * value / 10.0
+        rings.append(
+            {
+                "value": value,
+                "points": " ".join(
+                    f"{x:.1f},{y:.1f}"
+                    for x, y in (point_for(index, radius) for index in range(axis_count))
+                ),
+            }
+        )
+
+    axes = []
+    polygon_points = []
+    for index, lane in enumerate(LANES):
+        summary = _grade_summary(cells_by_lane.get(lane, []))
+        composite = float(summary["composite"]) if summary else 0.0
+        letter = str(summary["letter"]) if summary else letter_grade_for_score(0.0)[0]
+        color = str(summary["color"]) if summary else letter_grade_for_score(0.0)[1]
+        axis_x, axis_y = point_for(index, outer_radius)
+        score_x, score_y = point_for(index, outer_radius * composite / 10.0)
+        label_x, label_y = point_for(index, label_radius)
+        cos_value = math.cos(-math.pi / 2 + (2 * math.pi * index / axis_count))
+        if cos_value < -0.35:
+            anchor = "end"
+            chip_x = label_x - 22.0
+        elif cos_value > 0.35:
+            anchor = "start"
+            chip_x = label_x + 4.0
+        else:
+            anchor = "middle"
+            chip_x = label_x + 16.0
+        chip_x = max(8.0, min(size - 28.0, chip_x))
+        chip_y = label_y + 3.0
+        axes.append(
+            {
+                "lane": lane,
+                "axis_x": axis_x,
+                "axis_y": axis_y,
+                "label_x": max(18.0, min(size - 18.0, label_x)),
+                "label_y": max(18.0, min(size - 18.0, label_y)),
+                "anchor": anchor,
+                "chip_x": chip_x,
+                "chip_y": chip_y,
+                "chip_text_x": chip_x + 10.0,
+                "chip_text_y": chip_y + 10.0,
+                "composite": composite,
+                "letter": letter,
+                "color": color,
+                "missing": summary is None,
+            }
+        )
+        polygon_points.append(f"{score_x:.1f},{score_y:.1f}")
+
+    return {
+        "axes": axes,
+        "rings": rings,
+        "polygon_points": " ".join(polygon_points),
+        "center": center,
+        "outer_radius": outer_radius,
+        "size": size,
+    }
 
 
 def _env() -> Environment:
@@ -90,22 +358,16 @@ def load_summaries_for_run(
     summaries: list[CellSummary] = []
     for cell in cells:
         cell_scores = score_rows[str(cell["cell_id"])]
-        deterministic = [
-            int(row["gate_pass"])
-            for row in cell_scores
-            if str(row["scorer"]) in DETERMINISTIC_SCORERS
-            and str(row["gate_name"]) != "human_spot_check"
-        ]
         llm = [
             float(row["score_value"])
             for row in cell_scores
             if str(row["scorer"]).startswith("llm-judge:")
             and row["score_value"] is not None
         ]
-        deterministic_score = (
-            sum(deterministic) / len(deterministic) if deterministic else 0.0
-        )
+        gate_component = _gate_component(cell_scores)
+        deterministic_score = gate_component / 10.0
         llm_score = sum(llm) / len(llm) if llm else None
+        composite, letter, color = composite_score(cell_scores, str(cell["lane"]))
         summaries.append(
             CellSummary(
                 cell_id=str(cell["cell_id"]),
@@ -118,6 +380,12 @@ def load_summaries_for_run(
                 effort_confidence=str(cell["effort_confidence"]),
                 deterministic_score=deterministic_score,
                 llm_score=llm_score,
+                composite=composite,
+                letter=letter,
+                color=color,
+                gate_pct=gate_component * 10.0,
+                judge_title=_judge_title(cell_scores),
+                judge_dissent=judge_dissent(cell_scores, str(cell["lane"])),
                 response_path=response_paths.get(str(cell["cell_id"])),
             )
         )
@@ -145,17 +413,29 @@ def _matrix_context(summaries: list[CellSummary]) -> dict[str, Any]:
     models = [model.canonical_string for model in ANCHORS]
     lanes = [lane for lane in LANES if any(cell.lane == lane for cell in summaries)]
     by_key = {(cell.lane, cell.canonical_string): cell for cell in summaries}
-    rows = [
-        {
-            "lane": lane,
-            "cells": [by_key.get((lane, model)) for model in models],
-        }
-        for lane in lanes
+    rows = []
+    for lane in lanes:
+        cells = [by_key.get((lane, model)) for model in models]
+        rows.append(
+            {
+                "lane": lane,
+                "cells": cells,
+                "summary": _grade_summary(
+                    [cell for cell in summaries if cell.lane == lane]
+                ),
+            }
+        )
+    model_summaries = [
+        _grade_summary([cell for cell in summaries if cell.canonical_string == model])
+        for model in models
     ]
     return {
         "lanes": lanes,
         "models": models,
         "rows": rows,
+        "model_summaries": model_summaries,
+        "overall_summary": _grade_summary(summaries),
+        "grade_legend": _letter_grade_legend(),
         "total_cells": len(summaries),
     }
 
@@ -188,16 +468,16 @@ def render_reports(
     per_lane_template = env.get_template("per_lane.html.j2")
     lanes = sorted({cell.lane for cell in summaries})
     for lane in lanes:
-        lane_cells = sorted(
-            [cell for cell in summaries if cell.lane == lane],
-            key=lambda cell: (cell.deterministic_score, cell.llm_score or 0.0),
+        lane_models = sorted(
+            _lane_model_summaries([cell for cell in summaries if cell.lane == lane]),
+            key=lambda cell: cell.composite,
             reverse=True,
         )
         path = out_dir / "per-lane" / f"{lane}.html"
         path.write_text(
             per_lane_template.render(
                 lane=lane,
-                cells=lane_cells,
+                cells=lane_models,
                 run_date=run_date,
             ),
             encoding="utf-8",
@@ -211,11 +491,24 @@ def render_reports(
             [cell for cell in summaries if cell.canonical_string == canonical_string],
             key=lambda cell: LANES.index(cell.lane),
         )
+        lane_grades = _lane_grades(model_cells)
+        strengths = sorted(
+            [grade for grade in lane_grades if grade.letter == "A"],
+            key=lambda grade: grade.composite,
+            reverse=True,
+        )
+        weaknesses = sorted(
+            [grade for grade in lane_grades if grade.letter == "F"],
+            key=lambda grade: grade.composite,
+        )
         path = out_dir / "per-model" / f"{_safe_filename(canonical_string)}.html"
         path.write_text(
             per_model_template.render(
                 canonical_string=canonical_string,
                 cells=model_cells,
+                radar=_radar_context(model_cells),
+                strengths=strengths,
+                weaknesses=weaknesses,
                 run_date=run_date,
             ),
             encoding="utf-8",

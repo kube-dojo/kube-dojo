@@ -8,21 +8,36 @@
   body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
   h1 { margin-bottom: 0.25rem; }
   p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
+  .legend-panel { border:1px solid #d8dee4; background:#fbfcfd; padding:0.75rem 0.85rem; margin:0.9rem 0 1rem; border-radius:0.35rem; }
+  .legend-grades { display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; margin-bottom:0.45rem; }
+  .legend-grade { color:white; font-weight:700; border-radius:0.25rem; padding:0.22rem 0.55rem; font-size:0.84rem; }
+  .legend-copy { margin:0.15rem 0; color:#38424d; font-size:0.88rem; }
   table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
   th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.88rem; vertical-align: top; }
   th { background:#f3f5f7; text-align:left; }
-  .score { display:block; font-weight:700; }
+  .score { display:block; font-weight:700; margin-top:0.2rem; }
   .missing { color:#777; background:#f7f7f7; }
   .heat-0 { background:#f8d7da; }
   .heat-1 { background:#fff3cd; }
   .heat-2 { background:#d1ecf1; }
   .heat-3 { background:#d4edda; }
+  .summary-cell { background:#f6f8fa; }
+  .summary-row th, .summary-row td { background:#f3f5f7; }
   a { color:#0b5cad; }
 </style>
 </head>
 <body>
 <h1>Calibration matrix</h1>
 <p class="meta">run_date={{ run_date }} · cells={{ total_cells }}</p>
+<div class="legend-panel">
+  <div class="legend-grades">
+    {% for grade in grade_legend %}
+    <span class="legend-grade" style="background:{{ grade.color }}">{{ grade.letter }} {{ grade.band }}</span>
+    {% endfor %}
+  </div>
+  <p class="legend-copy">Composite = 40% deterministic gates + 60% LLM judges (prose lanes); 100% gates (mechanical lanes).</p>
+  <p class="legend-copy">Hover any cell for the gate-ratio / judge1 / judge2 breakdown.</p>
+</div>
 <table>
   <thead>
     <tr>
@@ -30,6 +45,7 @@
       {% for model in models %}
       <th>{{ model }}</th>
       {% endfor %}
+      <th>Lane mean</th>
     </tr>
   </thead>
   <tbody>
@@ -41,15 +57,42 @@
           {% set bucket = 3 if cell.deterministic_score >= 0.95 else 2 if cell.deterministic_score >= 0.75 else 1 if cell.deterministic_score > 0 else 0 %}
           <td class="heat-{{ bucket }}" title="{{ cell.cell_id }}">
             <a href="per-model/{{ cell.canonical_string | replace('/', '_') | replace('@', '_') }}.html">{{ cell.canonical_string }}</a>
-            <span class="score">{{ "%.0f"|format(cell.deterministic_score * 100) }}%</span>
-            <span>judge {% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</span>
+            <span class="score">
+              <span class="cell-score grade-{{ cell.letter }}" style="background:{{ cell.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="gates={{ "%.0f"|format(cell.gate_pct) }}%, judges=[{{ cell.judge_title }}]">{{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>{% if cell.judge_dissent %}<sup style="color:#856404;" title="judges disagreed">⚠</sup>{% endif %}
+            </span>
           </td>
         {% else %}
           <td class="missing">not run</td>
         {% endif %}
       {% endfor %}
+      <td class="summary-cell">
+        {% if row.summary %}
+        <span class="cell-score grade-{{ row.summary.letter }}" style="background:{{ row.summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="mean composite">{{ "%.1f"|format(row.summary.composite) }} {{ row.summary.letter }}</span>
+        {% else %}
+        n/a
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
+    <tr class="summary-row">
+      <th>Model mean</th>
+      {% for summary in model_summaries %}
+      <td>
+        {% if summary %}
+        <span class="cell-score grade-{{ summary.letter }}" style="background:{{ summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="mean composite">{{ "%.1f"|format(summary.composite) }} {{ summary.letter }}</span>
+        {% else %}
+        n/a
+        {% endif %}
+      </td>
+      {% endfor %}
+      <td>
+        {% if overall_summary %}
+        <span class="cell-score grade-{{ overall_summary.letter }}" style="background:{{ overall_summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="overall mean">{{ "%.1f"|format(overall_summary.composite) }} {{ overall_summary.letter }}</span>
+        {% else %}
+        n/a
+        {% endif %}
+      </td>
+    </tr>
   </tbody>
 </table>
 </body>
