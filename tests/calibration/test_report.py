@@ -259,15 +259,15 @@ def test_report_renders_matrix_per_lane_and_per_model(tmp_path):
     assert out_dir / "matrix.html" in written
     assert cell_id in matrix
     assert "code-writing" in matrix
-    assert 'class="cell-score grade-A"' in matrix
-    assert "10.0 A" in matrix
-    assert "gates=100%, judges=[n/a]" in matrix
-    assert "Lane mean" in matrix
-    assert "Model mean" in matrix
+    assert 'class="grade-pill"' in matrix
+    assert "10.0" in matrix
+    assert ">A<" in matrix
+    assert "gates=100% · judges=[n/a]" in matrix
+    assert "Σ" in matrix
     assert "gpt-5.5" in per_lane
     assert "bar-fill" in per_lane
-    assert "⭐" in per_lane
+    assert "★" in per_lane
     assert "<svg" in per_model
     assert "Strengths" in per_model
-    assert "confidence vs actual" in per_model.lower()
-    assert "total_cost=$0.0800" in index
+    assert "effort signal" in per_model.lower()
+    assert "$0.0800" in index
