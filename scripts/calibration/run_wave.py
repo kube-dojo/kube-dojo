@@ -45,6 +45,7 @@ LANE_FIXTURES: dict[str, list[str]] = {
     ],
     "orchestrating": [
         "multi-task-routing-brief",
+        "schedule-plan-dependency-chain",
         "runbook-followup-status-to-actions",
     ],
     "debugging": ["pod-pending-topology-mismatch"],
