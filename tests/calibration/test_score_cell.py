@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from scripts.calibration import schema, score_cell
+from scripts.calibration import constants, schema, score_cell
 from scripts.calibration.models import model_by_canonical
 from scripts.calibration.run_cell import DispatchResult
 
@@ -1017,3 +1017,123 @@ def test_debugging_scorer_alias_dict_term_shape():
     gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
     assert gates["patch_targets_bug"] is True  # both fix terms hit via aliases + flat
     assert gates["root_cause_identified"] is True
+
+
+def test_content_review_scorer_llm_judge_prompt_is_set():
+    ground_truth = score_cell.load_ground_truth(
+        "content-review",
+        "flawed-module-rubric-review",
+    )
+    prompt = score_cell.SCORERS["content-review"].llm_judge_prompt("...", ground_truth)
+    assert isinstance(prompt, str)
+    assert prompt != ""
+
+
+def test_fact_check_scorer_llm_judge_prompt_is_set():
+    ground_truth = score_cell.load_ground_truth("fact-check", "k8s-1-35-claims")
+    prompt = score_cell.SCORERS["fact-check"].llm_judge_prompt("...", ground_truth)
+    assert isinstance(prompt, str)
+    assert prompt != ""
+
+
+def test_content_review_in_prose_lanes():
+    assert "content-review" in score_cell.PROSE_LANES
+    assert "content-review" in constants.PROSE_LANES
+    assert "content-review" not in constants.MECHANICAL_LANES
+
+
+def test_fact_check_in_prose_lanes():
+    assert "fact-check" in score_cell.PROSE_LANES
+    assert "fact-check" in constants.PROSE_LANES
+    assert "fact-check" not in constants.MECHANICAL_LANES
+
+
+def test_judge_timeouts_cover_new_lanes():
+    assert "content-review" in score_cell.JUDGE_TIMEOUTS_S
+    assert "fact-check" in score_cell.JUDGE_TIMEOUTS_S
+
+
+def test_score_cell_runs_judge_on_content_review_despite_gate_fail(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="content-review",
+        fixture_id="flawed-module-rubric-review",
+        response="No issues listed and no concrete evidence references.",
+    )
+    calls = []
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        calls.append((model_name, prompt))
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    gates = score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+    assert gates["finding_recall"] is False
+    assert len(calls) == 2
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT gate_name, scorer, score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ?
+            ORDER BY gate_name, scorer
+            """,
+            (cell_id,),
+        ).fetchall()
+    deterministic_rows = [row for row in rows if row["scorer"] == "deterministic"]
+    judge_rows = [row for row in rows if str(row["scorer"]).startswith("llm-judge:")]
+    assert len(deterministic_rows) == 2
+    assert len(judge_rows) == 2
+    assert {row["gate_failure_reason"] for row in judge_rows} == {"gate_passed"}
+
+
+def test_score_cell_runs_judge_on_fact_check_despite_gate_fail(tmp_path):
+    db_path, cell_id = _seed_cell(
+        tmp_path,
+        lane="fact-check",
+        fixture_id="k8s-1-35-claims",
+        response=(
+            "[{\"claim_id\":\"C1\",\"verdict\":\"FALSE\"},"
+            "{\"claim_id\":\"C2\",\"verdict\":\"FALSE\"},"
+            "{\"claim_id\":\"C3\",\"verdict\":\"FALSE\"},"
+            "{\"claim_id\":\"C4\",\"verdict\":\"VERIFIED\"},"
+            "{\"claim_id\":\"C5\",\"verdict\":\"VERIFIED\"}]"
+        ),
+    )
+    calls = []
+
+    def fake_judge_fn(model_name: str, prompt: str) -> str:
+        calls.append((model_name, prompt))
+        return json.dumps({"score": 8.0, "rationale": "pass"})
+
+    gates = score_cell.score_cell(
+        cell_id=cell_id,
+        db_path=db_path,
+        judge_fn=fake_judge_fn,
+        judge1="dummy-model-1",
+        judge2="dummy-model-2",
+    )
+    assert gates["verdict_recall"] is False
+    assert len(calls) == 2
+
+    with schema.connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT gate_name, scorer, score_value, gate_failure_reason
+            FROM scores
+            WHERE cell_id = ?
+            ORDER BY gate_name, scorer
+            """,
+            (cell_id,),
+        ).fetchall()
+    deterministic_rows = [row for row in rows if row["scorer"] == "deterministic"]
+    judge_rows = [row for row in rows if str(row["scorer"]).startswith("llm-judge:")]
+    assert len(deterministic_rows) == 2
+    assert len(judge_rows) == 2
+    assert {row["gate_failure_reason"] for row in judge_rows} == {"gate_passed"}

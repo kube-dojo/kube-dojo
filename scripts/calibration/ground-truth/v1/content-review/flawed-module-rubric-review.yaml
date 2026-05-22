@@ -23,3 +23,17 @@ hallucination_terms:
   - "PSA labels"
   - "container runtime"
 
+llm_rubric: |-
+  Return JSON: {"score": 0-10, "rationale": "..."}.
+
+  10 = caught all 8 planted flaws with correct severity and concrete
+       file:line evidence; no hallucinated flaws.
+  8  = caught most flaws (6-7/8); minor verdict/severity miscalibration;
+       no hallucinated flaws.
+  6  = caught half (4-5/8); some verdict reasoning weak; ≤1 hallucinated
+       flaw.
+  4  = caught a few (2-3/8); generic verdicts; multiple hallucinated
+       flaws.
+  2  = missed most planted flaws; review is mostly stylistic noise.
+  0  = approved with no findings, or generated entirely-hallucinated
+       review.

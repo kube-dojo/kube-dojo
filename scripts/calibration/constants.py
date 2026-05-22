@@ -10,6 +10,8 @@ PROSE_LANES = frozenset(
         "summarization",
         "content-writing-long",
         "architecting",
+        "content-review",
+        "fact-check",
         "mcp-use",
         "harness-following",
     )
@@ -18,8 +20,6 @@ MECHANICAL_LANES = frozenset(
     (
         "code-writing",
         "code-review",
-        "content-review",
-        "fact-check",
         "debugging",
     )
 )
