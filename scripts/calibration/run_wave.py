@@ -105,6 +105,7 @@ def build_cells(
     *,
     models: Iterable[CalibrationModel],
     lanes: Iterable[str],
+    fixture_filter: str | None = None,
 ) -> list[CellSpec]:
     cells = []
     for model in models:
@@ -113,6 +114,8 @@ def build_cells(
             if not fixtures:
                 raise KeyError(f"no fixture mapping for lane {lane!r}")
             for fixture_id in fixtures:
+                if fixture_filter is not None and fixture_id != fixture_filter:
+                    continue
                 cells.append(CellSpec(lane=lane, fixture_id=fixture_id, model=model))
     return cells
 
@@ -357,6 +360,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=list(LANES),
         help=f"Lanes to dispatch (default: all {len(LANES)} lanes).",
     )
+    parser.add_argument(
+        "--fixture",
+        help=(
+            "When given, restrict the wave to this single fixture id within "
+            "the selected lane(s). REQUIRED when any selected lane has more "
+            "than 1 fixture in LANE_FIXTURES, per the 1-fixture-per-model-"
+            "per-wave rule (memory: feedback_one_fixture_per_model_per_wave)."
+        ),
+        default=None,
+    )
     parser.add_argument("--run-date", help="ISO date for the cell rows.")
     parser.add_argument("--db-path", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
@@ -394,6 +407,48 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _validate_fixture_arg(
+    args: argparse.Namespace,
+    lanes: Iterable[str],
+) -> tuple[bool, str]:
+    """Enforce 1-fixture-per-model-per-wave rule.
+
+    Returns (ok, error_message). When ok=False, main() exits 2 with the
+    message. Rule: if any selected lane has more than 1 fixture mapped,
+    --fixture MUST be passed to pin the wave to a single fixture.
+    """
+    if args.fixture is None:
+        offending: list[tuple[str, list[str]]] = []
+        for lane in lanes:
+            fixtures = LANE_FIXTURES.get(lane, [])
+            if len(fixtures) > 1:
+                offending.append((lane, fixtures))
+        if offending:
+            lines = [
+                (
+                    "error: 1-fixture-per-model-per-wave rule: the following "
+                    "lane(s) have multiple fixtures and require --fixture <id>:"
+                )
+            ]
+            for lane, fixtures in offending:
+                lines.append(f"  - {lane}: {', '.join(fixtures)}")
+            lines.append(
+                "  Pick one fixture per wave run; run the wave N times for "
+                "N fixtures. Memory: feedback_one_fixture_per_model_per_wave."
+            )
+            return False, "\n".join(lines)
+        return True, ""
+
+    for lane in lanes:
+        fixtures = LANE_FIXTURES.get(lane, [])
+        if args.fixture not in fixtures:
+            return False, (
+                f"error: --fixture {args.fixture!r} is not registered for "
+                f"lane {lane!r}. Valid: {', '.join(fixtures)}"
+            )
+    return True, ""
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     run_date = args.run_date or schema.today_iso()
@@ -409,8 +464,16 @@ def main(argv: list[str] | None = None) -> int:
     if not models:
         print("error: no models matched the filter", file=sys.stderr)
         return 2
+    ok, err = _validate_fixture_arg(args, args.lanes)
+    if not ok:
+        print(err, file=sys.stderr)
+        return 2
 
-    cells = build_cells(models=models, lanes=args.lanes)
+    cells = build_cells(
+        models=models,
+        lanes=args.lanes,
+        fixture_filter=args.fixture,
+    )
     if args.smoke:
         cells = cells[:1]
     if not cells:
