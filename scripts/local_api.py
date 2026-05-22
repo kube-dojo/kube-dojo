@@ -4910,8 +4910,8 @@ def _html_fragment_to_text(fragment: str) -> str:
 
 def _strip_html_noncontent(text: str) -> str:
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
-    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", text, flags=re.IGNORECASE | re.DOTALL)
-    return re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<script\b[^>]*>.*?</script\s*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    return re.sub(r"<style\b[^>]*>.*?</style\s*>", " ", text, flags=re.IGNORECASE | re.DOTALL)
 
 
 def _extract_html_h1(text: str) -> str | None:
@@ -6835,9 +6835,12 @@ def render_quality_module_page_html(repo_root: Path, module_key: str) -> str | N
         if not raw_path:
             return ""
         try:
-            return Path(raw_path).resolve().relative_to(repo_root).as_posix()
+            resolved = Path(raw_path).resolve()
+            return resolved.relative_to(repo_root).as_posix()
         except (OSError, ValueError):
-            return str(raw_path)
+            # Path doesn't exist or escapes repo_root; avoid reflecting arbitrary
+            # user-provided paths into generated HTML.
+            return ""
 
     gate_items = []
     for item in diagnostics:
@@ -9012,6 +9015,7 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             if location is not None:
+                location = _safe_header_value(location)
                 self.send_header("Location", location)
             if 200 <= status_code < 300:
                 self.send_header("ETag", etag)
@@ -9075,6 +9079,7 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
                 if location is not None:
+                    location = _safe_header_value(location)
                     self.send_header("Location", location)
                 if 200 <= status_code < 300:
                     self.send_header("ETag", etag)
