@@ -18,7 +18,7 @@ Dependency: do not dispatch any wave until A and B are verified; do not request 
 Deliver:
 1. Owners: assign each open thread to a model class (codex / sonnet / opus / gemini / claude-haiku / qwen / agy) and lane (debugging / code-review / orchestration / fact-check / summarization / etc.).
 2. Next actions: give concrete commands or PR steps, not vague verbs.
-3. Verification checks: say exactly how each next action is confirmed, using tools such as `gh pr view`, `git ls-remote`, a ledger query, or a named log path.
-4. Escalation points: name the conditions that demote a thread to a Decision Card under `.claude/rules/decision-card.md`.
-5. Same-family serialization: if two threads share a model family and lane, say so and serialize them.
+3. Verification checks: say exactly how each next action is confirmed, naming the specific artifact or query to inspect.
+4. Escalation: which threads warrant policy escalation, and under what specific criteria?
+5. Concurrency policy: identify threads that must not run in parallel, and explain why.
 6. Cost / time budget: give a short estimate for each thread.

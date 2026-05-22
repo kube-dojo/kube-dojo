@@ -7,28 +7,27 @@ required_categories:
   - "next action"
   - "verification"
   - "escalation"
-  - "decision card"
-  - "serialize"
-  - "cost"
-  - "gh pr"
+  - "policy"
+  - "concurrency"
+  - "budget"
   - "ledger"
   - "wave"
-  - "git ls-remote"
+  - "reviewer"
 novel_risk_terms:
-  - "silent push failure"
   - "reviewer starvation"
-  - "stale lease"
   - "missing verification"
   - "orphaned worktree"
+  - "duplicate ledger rows"
+  - "retry replay loop"
 llm_rubric: |-
   Return JSON: {"score": 0-10, "rationale": "..."}.
 
-  Reward explicit owner and lane assignments for every open thread in the status update.
-  Reward concrete next actions with named commands, PR steps, ledger queries, or log paths rather than vague verbs.
-  Reward verification checks that state exactly how completion will be confirmed, such as `gh pr view`, `git ls-remote`, the calibration ledger, or the cited log file.
-  Reward an escalation rule that names a Decision Card and ties it to real criteria from the hand-off, such as live disagreement, multiple viable retry policies, or a high-leverage decision affecting many cells.
-  Reward same-family serialization when two threads share a model family and lane, especially for codex-owned debugging or code-review work.
-  Reward honest per-thread cost and time budgets that preserve the no-wave-run constraint and protect reviewer capacity.
-  Penalize vague actions such as "look at it" or "check the logs" without commands or confirmation criteria.
-  Penalize missing verification steps, parallelism that violates same-family serialization, or dispatching a wave before the stated dependencies are cleared.
-  Penalize fabricating escalation points without a real decision criterion or treating routine one-line fixes as Decision Cards.
+  Reward explicit owner-and-lane assignment for every open thread in the hand-off.
+  Reward concrete next actions naming the specific command, PR step, ledger query, or log path used to advance the thread (not vague verbs).
+  Reward verification checks that name the artifact to inspect (ledger row, remote branch SHA, PR state, named log file).
+  Reward the policy-escalation criterion when the hand-off raises a real tradeoff (e.g., thread D retry policy).
+  Reward concurrency limits when two threads share a model-family + lane bucket, with the reason stated.
+  Reward honest per-thread cost and time budgets that preserve the no-wave-run constraint and reviewer capacity.
+  Penalize vague verbs ("look at it", "check the logs") without a confirmation criterion.
+  Penalize parallelism that violates a stated same-family or reviewer-capacity constraint.
+  Penalize fabricating escalation points without a real decision criterion or treating routine one-line fixes as policy escalations.
