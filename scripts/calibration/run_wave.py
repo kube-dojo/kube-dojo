@@ -29,7 +29,12 @@ from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT, REPO_ROOT, run_cell
 # scripts/calibration/ground-truth/v1/<lane>/PLAN.md.
 LANE_FIXTURES: dict[str, list[str]] = {
     "code-writing": ["parse-dependabot-cooldown"],
-    "code-review": ["k8s-controller-leader-election"],
+    "code-review": [
+        "k8s-controller-leader-election",
+        "pr-1333-security-yaml",
+        "python-cache-ttl-fix-with-regression",
+        "typescript-event-emitter-refactor-with-contract-break",
+    ],
     "content-writing-long": ["kubedojo-rbac-module"],
     "content-review": ["flawed-module-rubric-review"],
     "fact-check": ["k8s-1-35-claims"],
