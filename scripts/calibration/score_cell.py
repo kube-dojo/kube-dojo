@@ -65,6 +65,14 @@ def _contains_any(text: str, terms: list[str]) -> bool:
     return any(term.lower() in lowered for term in terms)
 
 
+def _term_present(text: str, term: "str | dict[str, Any]") -> bool:
+    """Check if a term (flat string or alias-dict) appears in text."""
+    if isinstance(term, dict):
+        aliases = list(term.get("aliases", []))
+        return _contains_any(text, aliases) if aliases else False
+    return _contains_any(text, [term])
+
+
 def _word_count(text: str) -> int:
     return len(re.findall(r"\b[\w'-]+\b", text))
 
@@ -445,20 +453,68 @@ class OrchestratingScorer:
 
 
 class DebuggingScorer:
+    """Debugging-lane scoring with ratio gates instead of binary OR.
+
+    The v1 design used ``_contains_any`` on ``fix_terms`` and
+    ``root_cause_terms`` — a binary OR that fires on ANY single keyword hit.
+    A model that paraphrases ("zone mismatch" vs "topology mismatch") all-fails
+    even when the diagnosis is correct; one incidental keyword all-passes.
+    The ``broad_rewrite_terms`` gate had the same problem inverted: one
+    incidental mention of "delete the PVC" flipped ``minimal_patch`` to False.
+
+    v1.3 replaces all three binary gates with ratio gates (#1441 phase 1.3),
+    mirroring the ContentReviewScorer pattern from PR #1443:
+
+      - ``patch_targets_bug``: fraction of ``fix_terms`` hit (pass @
+        ≥ PATCH_TERM_RECALL_THRESHOLD = 0.5).
+      - ``root_cause_identified``: fraction of ``root_cause_terms`` hit (pass
+        @ ≥ ROOT_CAUSE_RECALL_THRESHOLD = 0.5).
+      - ``minimal_patch``: fraction of ``broad_rewrite_terms`` must be LOW
+        (pass @ ≤ BROAD_REWRITE_THRESHOLD = 0.25 — at most 1-in-4 broad-patch
+        signals present).
+
+    Each term entry can be a flat string or a dict with an ``aliases`` list;
+    ``_term_present`` handles both shapes.  ``tests_pass`` stays deterministic
+    from ``_run_optional_command``.  ``llm_judge_prompt`` returns ``None`` —
+    debugging is a mechanical lane; ratio recall IS truth per #1441.
+    """
+
+    PATCH_TERM_RECALL_THRESHOLD = 0.5
+    ROOT_CAUSE_RECALL_THRESHOLD = 0.5
+    BROAD_REWRITE_THRESHOLD = 0.25
+
     def deterministic_gates(
         self,
         response: str,
         ground_truth: dict[str, Any],
     ) -> dict[str, bool]:
-        patch_ok = _contains_any(response, list(ground_truth.get("fix_terms", [])))
-        root_cause_ok = _contains_any(response, list(ground_truth.get("root_cause_terms", [])))
-        broad_rewrite = _contains_any(response, list(ground_truth.get("broad_rewrite_terms", [])))
+        fix_terms = list(ground_truth.get("fix_terms", []))
+        if not fix_terms:
+            patch_ratio = 1.0
+        else:
+            found = sum(1 for t in fix_terms if _term_present(response, t))
+            patch_ratio = found / len(fix_terms)
+
+        root_terms = list(ground_truth.get("root_cause_terms", []))
+        if not root_terms:
+            root_ratio = 1.0
+        else:
+            found = sum(1 for t in root_terms if _term_present(response, t))
+            root_ratio = found / len(root_terms)
+
+        broad_terms = list(ground_truth.get("broad_rewrite_terms", []))
+        if not broad_terms:
+            broad_ratio = 0.0
+        else:
+            found = sum(1 for t in broad_terms if _term_present(response, t))
+            broad_ratio = found / len(broad_terms)
+
         test_result = _run_optional_command(ground_truth.get("pytest_command"))
         return {
-            "root_cause_identified": root_cause_ok,
-            "patch_targets_bug": patch_ok,
+            "root_cause_identified": root_ratio >= self.ROOT_CAUSE_RECALL_THRESHOLD,
+            "patch_targets_bug": patch_ratio >= self.PATCH_TERM_RECALL_THRESHOLD,
             "tests_pass": test_result,
-            "minimal_patch": not broad_rewrite,
+            "minimal_patch": broad_ratio <= self.BROAD_REWRITE_THRESHOLD,
         }
 
     def llm_judge_prompt(
