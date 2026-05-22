@@ -133,6 +133,8 @@ def _dispatch_one(
     output_root: Path,
     timeout_s: int,
     score: bool,
+    judge1: str,
+    judge2: str,
 ) -> dict:
     started = time.monotonic()
     cell_id = schema.make_cell_id(
@@ -161,6 +163,8 @@ def _dispatch_one(
                     cell_id=cell_id,
                     db_path=db_path,
                     replicate_seq=spec.replicate_seq,
+                    judge1=judge1,
+                    judge2=judge2,
                 )
                 scored = True
             except Exception as exc:  # noqa: BLE001 — scoring failure ≠ dispatch failure
@@ -284,6 +288,8 @@ def run_wave(
     db_path: Path,
     output_root: Path,
     timeout_s: int,
+    judge1: str = "claude-sonnet-4-6",
+    judge2: str = "gemini-3.5-flash-high",
     max_parallel_per_family: int = 1,
     score: bool = True,
 ) -> list[dict]:
@@ -307,6 +313,8 @@ def run_wave(
                 output_root=output_root,
                 timeout_s=timeout_s,
                 score=score,
+                judge1=judge1,
+                judge2=judge2,
             )
             results.append(r)
             status = "ok" if r["ok"] else "FAIL"
@@ -358,6 +366,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         help="Explicit canonical_string filter (overrides --wave).",
+    )
+    parser.add_argument(
+        "--judge1",
+        default="claude-sonnet-4-6",
+        help=(
+            "Judge 1 canonical_string passed through to score_cell. "
+            "Default is the production sonnet judge; override during a "
+            "Claude-throttle window with gemini-3.5-flash-high or codex-gpt-5.5."
+        ),
+    )
+    parser.add_argument(
+        "--judge2",
+        default="gemini-3.5-flash-high",
+        help="Judge 2 canonical_string passed through to score_cell.",
     )
     parser.add_argument(
         "--lanes",
@@ -515,6 +537,8 @@ def main(argv: list[str] | None = None) -> int:
         output_root=args.output_root,
         timeout_s=args.timeout_s,
         score=not args.no_score,
+        judge1=args.judge1,
+        judge2=args.judge2,
     )
 
     ok = sum(1 for r in results if r["ok"])
