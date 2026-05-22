@@ -181,6 +181,27 @@
 
 <p>All LLM-as-judge dispatches are <strong>headless</strong> (<code>claude -p</code>, <code>codex exec</code>, <code>agy-cli</code> subprocess, hermes subprocess). While <code>agy-cli</code> is TUI-controlled for interactive use, the kubedojo adapter (<code>scripts/agent_runtime/adapters/agy.py</code>) invokes it headlessly via subprocess with the model identifier in the brief; the TUI label in the Locked anchor table refers to interactive model-selection, not dispatch invocation. The interactive orchestrator does not grade itself or any other dispatch. This keeps judge runs reproducible across sessions and avoids billing-pool conflation.</p>
 
+<h2>Composite score <span class="pill pill-revised">REVISED</span></h2>
+
+<p>Parent roadmap issue <strong>#1441</strong> adds a render-only <code>0&ndash;10</code> composite score and letter-grade layer on top of the existing score ledger. No SQLite column stores the composite; reports compute it at render time from <code>scores</code> rows.</p>
+
+<p>For each cell, deterministic rows are <code>scorer = "deterministic"</code> excluding <code>human_spot_check</code>. If any deterministic row exposes a ratio-like <code>score_value</code> in <code>[0, 1]</code>, the gate component averages <code>score_value</code> where present and falls back to <code>gate_pass</code> booleans where absent. Otherwise it averages the gate booleans. The result is scaled to <code>0&ndash;10</code>.</p>
+
+<p>Mechanical lanes use the gate component directly. Prose lanes blend the gate component with parsed LLM judge scores: <code>composite = 0.4 * gates + 0.6 * judges</code>. If all prose judges crash or are unparseable, the report keeps only the gate signal and applies the gate weight: <code>composite = 0.4 * gates</code>. Unknown lanes fall back to gates only. The final value is clamped to <code>0&ndash;10</code>.</p>
+
+<table>
+<thead><tr><th>Grade</th><th>Band</th><th>Report color</th></tr></thead>
+<tbody>
+<tr><td><strong>A</strong></td><td><code>8.5+</code></td><td>deep green</td></tr>
+<tr><td><strong>B</strong></td><td><code>7.0&ndash;8.5</code></td><td>green</td></tr>
+<tr><td><strong>C</strong></td><td><code>5.5&ndash;7.0</code></td><td>amber</td></tr>
+<tr><td><strong>D</strong></td><td><code>4.0&ndash;5.5</code></td><td>orange</td></tr>
+<tr><td><strong>F</strong></td><td><code>&lt;4.0</code></td><td>red</td></tr>
+</tbody>
+</table>
+
+<p>The weights, grade bands, and judge-dissent threshold live in <code>scripts/calibration/constants.py</code>. The matrix report renders the same five grade bands as a legend, explains that prose lanes are <code>40%</code> deterministic gates plus <code>60%</code> LLM judges while mechanical lanes are <code>100%</code> gates, and notes that hovering a cell shows the gate ratio and judge breakdown. Prose cells where parsed judges differ by more than <code>2.0</code> show a dissent marker.</p>
+
 <h2>Effort verification methodology</h2>
 
 <ol>

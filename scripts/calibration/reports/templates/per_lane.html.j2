@@ -12,6 +12,10 @@
   th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
   th { background:#f3f5f7; text-align:left; }
   .pill { display:inline-block; padding:0.1rem 0.55rem; border-radius:0.35rem; font-size:0.78rem; font-weight:600; background:#e0e0ff; color:#1a1a8a; }
+  .bar-track { width:100%; min-width:14rem; height:1rem; background:#eceff3; border-radius:0.2rem; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:0.2rem; }
+  .score-chip { color:white; font-weight:700; border-radius:0.25rem; padding:0.15rem 0.5rem; white-space:nowrap; }
+  .rank-star { color:#b77900; font-size:0.85rem; margin-left:0.3rem; }
 </style>
 </head>
 <body>
@@ -19,18 +23,18 @@
 <p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
 <table>
   <thead>
-    <tr><th>Model</th><th>Fixture</th><th>Family</th><th>Effort</th><th>Deterministic</th><th>LLM judge</th><th>Response</th></tr>
+    <tr><th>Model</th><th>Composite</th><th>Grade</th></tr>
   </thead>
   <tbody>
     {% for cell in cells %}
     <tr>
-      <td>{{ cell.canonical_string }}</td>
-      <td>{{ cell.fixture_id }}</td>
-      <td>{{ cell.family }}</td>
-      <td><span class="pill">{{ cell.effort_requested }} / {{ cell.effort_confidence }}</span></td>
-      <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
-      <td>{% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</td>
-      <td>{% if cell.response_path %}{{ cell.response_path }}{% else %}n/a{% endif %}</td>
+      <td>{{ cell.canonical_string }}{% if loop.index <= 3 %}<span class="rank-star" title="top 3">⭐</span>{% endif %}</td>
+      <td>
+        <div class="bar-track" title="mean composite">
+          <div class="bar-fill" style="width:{{ "%.1f"|format(cell.composite * 10.0) }}%; background:{{ cell.color }};"></div>
+        </div>
+      </td>
+      <td><span class="score-chip" style="background:{{ cell.color }}">{{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>{% if cell.judge_dissent %}<sup style="color:#856404;" title="one or more cells had judge disagreement">⚠</sup>{% endif %}</td>
     </tr>
     {% endfor %}
   </tbody>
