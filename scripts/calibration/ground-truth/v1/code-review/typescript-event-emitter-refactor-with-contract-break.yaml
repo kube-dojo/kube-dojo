@@ -1,0 +1,51 @@
+# Fixture source: v1.1 spec lane 2, EventEmitter refactor with contract break.
+# Fixture 4 of phase 3.2, targeting refactor archetype coverage.
+fixture_id: typescript-event-emitter-refactor-with-contract-break
+lane: code-review
+findings:
+  - id: F1
+    aliases:
+      - "pre-handler removal"
+      - "remove before callback"
+      - "resubscribe timing"
+      - "once cleanup before call"
+      - "listener removed too early"
+  - id: F2
+    aliases:
+      - "error bubbles"
+      - "throws out of emit"
+      - "missing try catch"
+      - "no error isolation"
+      - "silent failure removed"
+  - id: F3
+    aliases:
+      - "EventHandler"
+      - "exported type renamed"
+      - "no alias"
+      - "breaking API rename"
+      - "no compatibility type"
+      - "handler type changed"
+  - id: F4
+    aliases:
+      - "resubscribe test removed"
+      - "deleted once resubscribe test"
+      - "test deleted"
+      - "test was removed"
+      - "coverage gap"
+  - id: F5
+    aliases:
+      - "listeners mutated during emit"
+      - "subscribeOnce helper"
+      - "mutated list"
+      - "index-based emit loop"
+      - "reentrant emit"
+      - "iteration over live array"
+hallucination_terms:
+  - "memory leak"
+  - "prototype pollution"
+  - "race condition"
+  - "promise rejection swallowed"
+  - "this-binding leak"
+  - "circular reference"
+  - "stack overflow"
+  - "regex catastrophic backtracking"
