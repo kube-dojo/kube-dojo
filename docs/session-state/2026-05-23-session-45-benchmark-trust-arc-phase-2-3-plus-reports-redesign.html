@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 45 — Benchmark trust arc Phase 1.3 → 3.2 + reports redesign (10 PRs merged)</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0 }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .merged { background: #d4edda; color: #155724 }
+  .blocker { background: #f8d7da; color: #721c24 }
+  .nit { background: #fff3cd; color: #856404 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style>
+</head>
+<body>
+
+<h1>Session 45 — Benchmark trust arc Phase 1.3 → 3.2 + reports redesign</h1>
+<p class="meta">2026-05-22 → 2026-05-23 (CEST). User-driven session continuing the calibration trust work. <strong>10 PRs merged + 93 model dispatches landed</strong>. New 1-fixture-per-model-per-wave rule + judge override + reports redesign.</p>
+
+<h2>Headline</h2>
+<p>Session opened with "orient and continue from last session handoff" → executed the full Phase 1 → Phase 2 → Phase 3 trajectory on #1441 (benchmark trust arc) over 12 hours, then pivoted to a frontend-design pass on the calibration HTML reports. <strong>10 PRs landed end-to-end</strong>:</p>
+
+<table>
+<tr><th>PR</th><th>Subject</th><th>Why it matters</th></tr>
+<tr><td>#1446</td><td>fix(calibration): debugging-scorer ratio gates — phase 1.3</td><td>Last gate-brittle lane; binary OR → ratio gates with thresholds. Closes #1441 Phase 1.</td></tr>
+<tr><td>#1447</td><td>feat(calibration): LLM judges for content-review + fact-check</td><td>Phase 2.1+2.2; both lanes moved from MECHANICAL_LANES → PROSE_LANES.</td></tr>
+<tr><td>#1448</td><td>feat(calibration): architecting +2 fixtures (phase 3.1)</td><td>Decision-card + capacity-planning archetypes per PLAN.md.</td></tr>
+<tr><td>#1449</td><td>refactor(calibration): multi-fixture wave runner</td><td><code>LANE_FIXTURES: dict[str, list[str]]</code>; build_cells expands lane → all fixtures.</td></tr>
+<tr><td>#1450/#1451</td><td>fix(calibration): enforce 1-fixture-per-model-per-wave rule</td><td>USER CORRECTION mid-session; added --fixture CLI gate that refuses implicit multi-fixture sweeps.</td></tr>
+<tr><td>#1452</td><td>feat(calibration): code-review +2 fixtures (phase 3.2)</td><td>Bugfix archetype (cache-TTL) + refactor archetype (event-emitter). Also wired orphan pr-1333-security back into LANE_FIXTURES.</td></tr>
+<tr><td>#1453</td><td>fix(security): close 4 CodeQL alerts on scripts/local_api.py</td><td>1 warning (py/bad-tag-filter) + 3 errors (py/path-injection, 2× py/http-response-splitting).</td></tr>
+<tr><td>#1454</td><td>feat(calibration): --judge1 / --judge2 CLI overrides on run_wave</td><td>Score_cell had the flags but run_wave never threaded them through.</td></tr>
+<tr><td>#1455</td><td>chore(calibration): broaden fixture aliases</td><td>typescript-event-emitter went 27→57 aliases; python-cache-ttl 28→43 to address substring-matcher brittleness at the alias layer.</td></tr>
+<tr><td>#1456</td><td>feat(calibration): Observatory-style design pass</td><td>800-LOC calibration.css; Bricolage Grotesque + Newsreader + JetBrains Mono; sticky matrix headers; radar 480→640. Replaces the broken design-system.css link path.</td></tr>
+</table>
+
+<h2>Push-back that mattered (USER RULES LOCKED THIS SESSION)</h2>
+
+<h3>Rule 1 — 1 fixture per model per wave run</h3>
+<p>After PR #1449 landed the multi-fixture wave runner, I fired <code>--lanes architecting</code> which expanded to <strong>3 fixtures × 14 models = 42 cells in one invocation</strong>. User stopped it: <em>"do not send more than 1 benchmark to a model at a time"</em> → clarified to the stricter interpretation: <em>"1 fixture per model per wave run"</em>. The 42 just-landed cells are still valid data (stateless model dispatches), but the operating procedure was rule-violating. Locked in <code>feedback_one_fixture_per_model_per_wave</code> (TOP PRIORITY memory) and enforced deterministically in PR #1451 — wave runner now refuses multi-fixture sweeps without explicit <code>--fixture &lt;id&gt;</code>.</p>
+
+<h3>Rule 2 — Claude throttle window targets opus, not the family</h3>
+<p>Mid-session I misread a <code>/usage</code> signal as "use sonnet less" and proposed swapping judges away from sonnet. User corrected: <em>"i am cutting back other claude agents so you have enough context for the next 2 days, 23 and 24"</em> — the throttle is to preserve opus orchestration budget (this conversation) by cutting sonnet/claude headless dispatches that share the weekly cap. After the correction I:</p>
+<ul>
+  <li>Routed all subsequent cross-family reviews to <strong>agy</strong> (independent Google AI Pro counter via Antigravity CLI) instead of sonnet</li>
+  <li>Locked the rule in <code>feedback_claude_tier_discipline_opus_is_constrained.md</code> (TOP PRIORITY memory) with a model-by-model action table</li>
+</ul>
+
+<h2>Operational lessons worth keeping</h2>
+
+<h3>Worktree vs primary-tree test surface</h3>
+<p>After stash + worktree create, pytest from the primary tree tested the <em>reverted</em> primary state, falsely reporting "110 passed" when the worktree (with the new templates) actually had a broken test_report.py assertion. Agy ran tests in the worktree and caught it. <strong>Lesson</strong>: always run tests in the worktree where the actual changes live, not the primary tree. The cross-family reviewer doing exactly this caught the regression.</p>
+
+<h3>Hook fires on "Regression test:" body key without "fix:" title</h3>
+<p>The <code>block-bugfix-merge-without-regression-test.sh</code> hook treats ANY PR body with a <code>Regression test:</code> line as a bugfix that must add/modify the named test in the same PR. PR #1455 was data-only YAML; my "Regression test: tests/calibration/test_score_cell.py (existing tests cover...)" line tripped the hook because the path wasn't part of the PR's diff. Two workarounds applied: (a) retitle from <code>fix:</code> to <code>chore:</code>; (b) remove the "Regression test:" body key entirely for genuinely-data-only PRs. Already partially captured in <code>feedback_bugfix_merge_hook_false_positive.md</code> (session 39); this session reinforced the rule.</p>
+
+<h3>Codex flagged "pre-existing failure" that turned out to be cwd/worktree state</h3>
+<p>On PR #1453, codex reported a pre-existing <code>test_quality_queue.py</code> collection failure. Origin/main reproduced cleanly. The failure was worktree-cache state. Agy's later review re-ran tests cleanly. <strong>Pattern</strong>: when a writer agent flags a "pre-existing" failure, verify against <code>origin/main</code> in a fresh worktree before accepting the claim.</p>
+
+<h3>Agy review caught real bug + delivered design-quality feedback in one pass</h3>
+<p>PR #1456 round 1: agy correctly identified the broken test_report.py assertions (block-merge) AND delivered nuanced design NITs (dot-grid pattern subtlety, tabular-nums verification, fonts fallback chain, diagonal-stripe missing-cell pattern). For visual design + integration tests, agy is a strong reviewer. Adds to <code>reference_agy_antigravity_cli</code>.</p>
+
+<h2>Data ops summary — 93 dispatches today</h2>
+
+<table>
+<tr><th>Operation</th><th>Cells</th><th>Cost</th><th>Outcome</th></tr>
+<tr><td>Morning architecting × 3 fixtures × 14 models</td><td>42</td><td>~$0.50</td><td>42/42 ok; rule-violating schedule but data is valid</td></tr>
+<tr><td>Phase 2 judge rescore on content-review + fact-check × 14 models</td><td>28</td><td>~$0.30</td><td>28/28 ok; sonnet + gemini-3.5-flash-high pair</td></tr>
+<tr><td>Gap-fill for deepseek + qwen + grok across mechanical + harness-following lanes</td><td>23</td><td>~$0.20</td><td>23/23 ok; non-claude judges (gemini-flash + gpt-5.5)</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>93</strong></td><td><strong>~$1.00</strong></td><td>Ledger: 168 → 233 → 256 cells</td></tr>
+</table>
+
+<h3>Findings from the 23-cell gap-fill sweep</h3>
+<ul>
+  <li><strong>typescript-event-emitter fixture aliases too narrow</strong> — grok-4.3 caught 5/5 planted findings with file:line citations but <code>finding_recall=0</code> because aliases didn't substring-match natural phrasing ("direct recursion" vs "pre-handler removal", "try/catch" with slash vs "missing try catch"). PR #1455 broadened aliases 27→57.</li>
+  <li><strong>qwen3.6 (non-plus) total collapse</strong> — 0-character responses across 4 lanes (latency ~3s each). Confirms the existing <code>feedback_single_fixture_v1_calibration</code> note; qwen3.6 via hermes OpenRouter has provider-level silent refusal. qwen3.6-plus is fine.</li>
+  <li><strong>debugging × pod-pending-topology</strong> — all 3 models failed <code>patch_targets_bug</code> while passing root_cause_identified + tests_pass. Same alias-brittleness class as typescript fixture; not yet broadened.</li>
+  <li><strong>gemini-flash + gpt-5.5 as judge pair calibrated well</strong> — 0-2 point spread across 5 harness-following cells. Usable Claude-free judge pair.</li>
+</ul>
+
+<h2>Calibration reports redesign (PR #1456) — the visual moment of the session</h2>
+<p>The 3 report templates shipped with broken <code>&lt;link rel="stylesheet" href="../design-system.css"&gt;</code> references (the file was never copied to the output dir, so 404'd). Plus each template had its own 8-25 line inline <code>&lt;style&gt;</code> block with inconsistent typography. <strong>One coherent design pass</strong>:</p>
+<ul>
+  <li><strong>Observatory aesthetic</strong>: deep #050811 bg with cyan-tinted dot-grid texture, Bricolage Grotesque (compressed 75% stretch) display + Newsreader italic accents + JetBrains Mono everywhere for numbers</li>
+  <li><strong>Continuous score-color gradient</strong>: red → amber → cyan apex on letter-grade pills, replacing the 4-bucket heat-N pattern</li>
+  <li><strong>Sticky lane column + sticky model row</strong> on the matrix</li>
+  <li><strong>Radar size 480 → 640</strong> with outer_radius 130 → 145 to fit long lane labels ("content-writing-long") without clipping</li>
+  <li><strong>New <code>calibration.css</code> (800 LOC)</strong> copied to <code>calibration/v1/reports/calibration.css</code> at every render, so all dated subdirs link to <code>../calibration.css</code> with no per-run duplication</li>
+  <li><strong>Index page rewritten as jinja template</strong> (was inline-string in <code>_render_index</code>) with hero composite + letter pill + 2×2 stat-card grid</li>
+</ul>
+<p>Live at <a href="http://127.0.0.1:8768/artifacts/calibration/v1/reports/2026-05-22/index.html">2026-05-22 index</a> showing overall 6.7 GRADE C across 65 cells.</p>
+
+<h2>End state</h2>
+<ul>
+  <li><strong>Workspace:</strong> clean, main at <code>b251f8c1</code></li>
+  <li><strong>Worktrees:</strong> 1 stray (<code>.worktrees/pr-review-tiebreak-policy</code> from a previous session — leaving it untouched)</li>
+  <li><strong>Open issues:</strong> 16 (was 15; +1 = #1450 — closed by PR #1451)</li>
+  <li><strong>Calibration ledger:</strong> 256 cells (was 210); 65 with run_date=2026-05-22 across 4 lanes</li>
+  <li><strong>Critical-quality count:</strong> 144 modules at rubric &lt;2.0 (unchanged — no content rewrites this session)</li>
+  <li><strong>Phase progress on #1441:</strong> Phase 1 ✓ closed, Phase 2 ✓ closed, Phase 3.1 + 3.2 done (4 of 6 lanes still need fixture expansion)</li>
+</ul>
+
+<h2>What's NEXT</h2>
+<ol>
+  <li><strong>Phase 3 slices 3-6</strong> — content-review +2, code-writing +4 languages, content-writing-long +4, refactoring/summarization +1-2 each. Each is its own data PR per PLAN.md; firing each fixture as 1-per-wave per the new rule.</li>
+  <li><strong>Phase 4 — gpt-5.5-xhigh as judge3</strong> on prose lanes (budget-permitting; HOLD per <code>feedback_deepseek_hallucinates_on_gh_schemas</code>).</li>
+  <li><strong>Verify alias-broadening actually helped</strong> — re-fire typescript-event-emitter against 14 models; check if grok-4.3's finding_recall flips N→Y now that aliases include "recursion" + "try/catch" + word-form variants.</li>
+  <li><strong>debugging × pod-pending-topology alias broadening</strong> — same brittleness class; fix_terms aliases need broadening (all 3 models passed root_cause + tests but failed patch_targets_bug).</li>
+  <li><strong>Rubric-critical content rewrites</strong> — K8S FinOps Fundamentals + FinOps in Practice + KCSA 4.4 Supply Chain + Linux Networking Tools + Linux Network Namespaces & veth. 144 critical-rubric modules still in queue.</li>
+  <li><strong>Old epics + carryovers</strong>: #197 / #143 / #14 / #393 / #386 / #384 / #383 / #373 / #1299.</li>
+  <li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip (opus orchestration moves to separate pool — this throttle expires) · 2026-06-18 drop gemini adapter (agy Phase 3) · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>Memory writes this session</h2>
+<ul>
+  <li><code>feedback_one_fixture_per_model_per_wave.md</code> (TOP PRIORITY) — calibration scheduling rule</li>
+  <li><code>feedback_claude_tier_discipline_opus_is_constrained.md</code> (TOP PRIORITY) — opus-vs-Claude-family throttle interpretation, revised after user correction</li>
+</ul>
+
+</body>
+</html>
