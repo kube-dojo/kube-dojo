@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Calibration v1 — Benchmark improvement roadmap</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0 }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .merged  { background: #d4edda; color: #155724 }
+  .blocker { background: #f8d7da; color: #721c24 }
+  .nit     { background: #fff3cd; color: #856404 }
+  .pill-phase1 { background: #cce5ff; color: #004085 }
+  .pill-phase2 { background: #d6eaff; color: #1a3a5c }
+  .pill-phase3 { background: #e8d5ff; color: #4a0080 }
+  .pill-phase4 { background: #fde8d0; color: #7a3000 }
+  .pill-locked    { background: #d4edda; color: #155724 }
+  .pill-candidate { background: #cce5ff; color: #004085 }
+  .pill-hold      { background: #fff3cd; color: #856404 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+  ul.refs li { margin-bottom: 0.3rem }
+</style>
+</head>
+<body>
+
+<h1>Calibration v1 — Benchmark improvement roadmap</h1>
+<p class="meta">Owner: claude opus (orchestrator) · Tracked in <strong>#1441</strong> · Last revised 2026-05-22</p>
+
+<h2>TL;DR</h2>
+<p>
+  The v1 benchmark has 6 lanes working well, 2 with confirmed gate bugs (content-review, fact-check) returning invalid scores, and 2 partial or brittle lanes (debugging, mcp-use).
+  The strategy is: fix broken gates first → add LLM judges only on lanes where judgment fills a gap → expand fixtures to 3+ per lane → evaluate a cross-vendor third judge on prose lanes.
+  Ordering is strict: adding more judges on broken gates doubles spend without resolving signal — the <code>feedback_zero_score_audit_2026_05_21.md</code> audit found 22.1% zero-scores, half traceable to brittle binary-AND substring gates that never reach the LLM judge stage.
+</p>
+
+<h2>Current lane status</h2>
+<table>
+<tr>
+  <th>Lane</th>
+  <th>Gates</th>
+  <th>Judges</th>
+  <th>Fixtures</th>
+  <th>Status</th>
+</tr>
+<tr>
+  <td>architecting</td>
+  <td>ratio + bonus</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>orchestrating</td>
+  <td>ratio + 3 substring (fixed #1376)</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>refactoring</td>
+  <td>tests + lint + loc + behavior</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>summarization</td>
+  <td>must_mention + length + halluc</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>harness-following</td>
+  <td>rule + redirect + no-silent</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>v2 fixture (#1422)</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>content-writing-long</td>
+  <td>T0/T1 + mermaid + topic + no-simply + bloom</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1 (#1413 plan)</td>
+  <td><span class="pill merged">OK</span></td>
+</tr>
+<tr>
+  <td>code-review</td>
+  <td>ratio (fixed #1369)</td>
+  <td>NONE</td>
+  <td>1</td>
+  <td><span class="pill merged">gates-only by design</span></td>
+</tr>
+<tr>
+  <td>code-writing</td>
+  <td>pytest + ruff</td>
+  <td>NONE</td>
+  <td>1</td>
+  <td><span class="pill merged">gates-are-truth by design</span></td>
+</tr>
+<tr>
+  <td>content-review</td>
+  <td>binary AND × 2</td>
+  <td>NONE</td>
+  <td>1</td>
+  <td><span class="pill blocker">BUG — 0.5-collapse (PR queued)</span></td>
+</tr>
+<tr>
+  <td>fact-check</td>
+  <td>binary verdict + citation + parse-fragility</td>
+  <td>NONE</td>
+  <td>1</td>
+  <td><span class="pill blocker">BUG — 4 models at 0% (PR queued)</span></td>
+</tr>
+<tr>
+  <td>debugging</td>
+  <td>4 substring-AND gates</td>
+  <td>NONE</td>
+  <td>1</td>
+  <td><span class="pill nit">BRITTLE</span></td>
+</tr>
+<tr>
+  <td>mcp-use</td>
+  <td>tool + param + phantom (no execution)</td>
+  <td>sonnet + gemini-3.5-flash-high</td>
+  <td>1</td>
+  <td><span class="pill nit">partial (#1404 wires execution)</span></td>
+</tr>
+</table>
+
+<h2>The 4-phase roadmap</h2>
+
+<h3><span class="pill pill-phase1">Phase 1</span> — Fix gates <em>(this week)</em></h3>
+<p>
+  Fix broken deterministic gates before adding any new judges. A judge that runs after a broken gate fires on corrupted input — its output is meaningless and costs real tokens.
+  Template: mirror the ratio-gate fix from <code>code-review</code> (#1369) into the two broken lanes.
+</p>
+<table>
+<tr><th>Step</th><th>Description</th><th>Owner</th><th>Status</th><th>PR</th></tr>
+<tr>
+  <td>1.1</td>
+  <td><strong>content-review ratio gates</strong> — rewrite binary AND × 2 as <code>ContentReviewScorer.finding_recall</code> + <code>hallucination_rate</code> ratio gates; mirrors #1369 pattern</td>
+  <td>claude orchestrator / dispatched</td>
+  <td><span class="pill nit">in flight</span></td>
+  <td>TBD</td>
+</tr>
+<tr>
+  <td>1.2</td>
+  <td><strong>fact-check parse-fragility + verdict_recall</strong> — bundled with 1.1; fix brittle verdict parse + add recall ratio for citation gates</td>
+  <td>claude orchestrator / dispatched</td>
+  <td><span class="pill nit">in flight</span></td>
+  <td>TBD</td>
+</tr>
+<tr>
+  <td>1.3</td>
+  <td><strong>debugging ratio rewrite</strong> — replace 4 substring-AND gates with recall ratio; same antipattern as content-review. ~3 days, next slot after 1.1/1.2</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">queued</span></td>
+  <td>TBD</td>
+</tr>
+</table>
+
+<h3><span class="pill pill-phase2">Phase 2</span> — Add LLM judges where judgment helps <em>(next week)</em></h3>
+<p>
+  Only add judges on lanes where the gate cannot express the signal — where "correct" is a semantic determination, not a deterministic recall check.
+  Mechanical lanes (code-writing, code-review, debugging) are explicitly skipped: pytest / ratio-recall IS truth on those lanes and an LLM judge adds noise, not signal.
+</p>
+<table>
+<tr><th>Step</th><th>Description</th><th>Owner</th><th>Status</th><th>PR</th></tr>
+<tr>
+  <td>2.1</td>
+  <td><strong>content-review: add judge</strong> (sonnet + gemini-3.5-flash-high) for flaw-class semantics. Substring matching "did we mention 'broken citation'?" is not the same as "did the reviewer identify the right severity and call out the right line?"</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">queued — after Phase 1</span></td>
+  <td>TBD</td>
+</tr>
+<tr>
+  <td>2.2</td>
+  <td><strong>fact-check: add judge</strong> for rationale grounding quality on partial-verdict cells. The mechanical recall gate is fine; the rationale quality is judgment, not recall.</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">queued — after Phase 1</span></td>
+  <td>TBD</td>
+</tr>
+<tr>
+  <td>SKIP</td>
+  <td><strong>code-writing / code-review / debugging</strong> — pytest / ratio-recall IS truth. Adding LLM judges adds noise on lanes where the gate is the answer.</td>
+  <td>—</td>
+  <td><span class="pill merged">by design</span></td>
+  <td>—</td>
+</tr>
+</table>
+
+<h3><span class="pill pill-phase3">Phase 3</span> — Fixture expansion <em>(multi-week, slice of #1413)</em></h3>
+<p>
+  Current v1 has 1 fixture per lane on most lanes. Single-fixture rankings do not generalize — per <code>feedback_single_fixture_v1_calibration.md</code> (TOP PRIORITY memory), per-lane rankings on single fixtures must not drive routing changes.
+  Fixture-expansion plans are already drafted; see <code>scripts/calibration/ground-truth/v1/*/PLAN.md</code> per lane.
+</p>
+<table>
+<tr><th>Step</th><th>Description</th><th>Owner</th><th>Status</th><th>PR</th></tr>
+<tr>
+  <td>3.1</td>
+  <td><strong>+2 fixtures per lane</strong> on each of the 6 solid lanes (architecting, orchestrating, refactoring, summarization, harness-following, content-writing-long). Minimum 3 fixtures before any routing decision is treated as stable.</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">queued — after Phase 2</span></td>
+  <td>TBD (#1413 parent)</td>
+</tr>
+<tr>
+  <td>3.2</td>
+  <td><strong>+2 fixtures</strong> on content-review + fact-check + debugging once Phase 1 gate fixes confirm those lanes produce valid scores.</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">blocked on Phase 1</span></td>
+  <td>TBD</td>
+</tr>
+</table>
+
+<h3><span class="pill pill-phase4">Phase 4</span> — Cross-vendor 3rd judge on prose lanes <em>(budget-permitting)</em></h3>
+<p>
+  Add <code>gpt-5.5-xhigh</code> as judge3 on the 4 prose-heavy lanes: architecting, orchestrating, content-writing-long, summarization.
+  This turns the existing 2-judge-disagree gate (<code>|j1-j2| &gt; 1.0</code>) into a 3-judge max-spread — a stronger noise filter.
+  DeepSeek models are explicitly on HOLD: <code>deepseek-v4-pro</code> and <code>deepseek-v4-flash</code> both hallucinate GitHub Actions / Dependabot schema claims during review (3 confirmed cases on PR #1333, session-30 calibration). Judges that hallucinate are worse than no judge — they introduce directional bias, not just noise.
+</p>
+<table>
+<tr><th>Step</th><th>Description</th><th>Owner</th><th>Status</th><th>PR</th></tr>
+<tr>
+  <td>4.1</td>
+  <td><strong>Wire <code>gpt-5.5-xhigh</code> as judge3</strong> on architecting / orchestrating / content-writing-long / summarization. Update disagree-gate logic to max-spread over 3 judges.</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">queued — Phase 3 complete</span></td>
+  <td>TBD</td>
+</tr>
+<tr>
+  <td>4.2</td>
+  <td><strong>Controlled hallucination sweep on DeepSeek</strong> before any HOLD lift. Minimum: structured fixtures across 3 non-GH-schema topics. Lift HOLD only if sweep is clean.</td>
+  <td>claude orchestrator</td>
+  <td><span class="pill nit">HOLD — no timeline</span></td>
+  <td>TBD</td>
+</tr>
+</table>
+
+<h2>Models calibrated AS judges</h2>
+<p>These models are evaluated in their judge role — distinct from models being scored as candidates.</p>
+<table>
+<tr><th>Role</th><th>Model</th><th>Status</th><th>Notes</th></tr>
+<tr>
+  <td>judge1 (current)</td>
+  <td><code>claude-sonnet-4-6</code></td>
+  <td><span class="pill pill-locked">LOCKED</span></td>
+  <td>Default judge; calibration-team-preferred reviewer post-session 30. Scored 5/5 on PR #1333 calibration.</td>
+</tr>
+<tr>
+  <td>judge2 (current)</td>
+  <td><code>gemini-3.5-flash-high</code></td>
+  <td><span class="pill pill-locked">LOCKED</span></td>
+  <td>Routed via <code>agy-cli</code>; matrix shows strong scores (9.5) on content-writing-long.</td>
+</tr>
+<tr>
+  <td>judge3 candidate</td>
+  <td><code>gpt-5.5-xhigh</code></td>
+  <td><span class="pill pill-candidate">CANDIDATE</span></td>
+  <td>Cross-vendor independence; strong on architecting / content-writing-long. Phase 4 only.</td>
+</tr>
+<tr>
+  <td>HOLD</td>
+  <td><code>deepseek-v4-pro</code></td>
+  <td><span class="pill pill-hold">HOLD</span></td>
+  <td>Hallucinates GH Actions / Dependabot schemas during review (3 confirmed cases, session 30). Controlled sweep required before any use as judge.</td>
+</tr>
+<tr>
+  <td>HOLD</td>
+  <td><code>deepseek-v4-flash</code></td>
+  <td><span class="pill pill-hold">HOLD</span></td>
+  <td>Below-pro reliability; defer until v4-pro HOLD lifts.</td>
+</tr>
+</table>
+
+<h2>Cross-references</h2>
+<ul class="refs">
+  <li><strong><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1441">#1441</a></strong> — parent issue: benchmark improvement roadmap</li>
+  <li><strong>#1402</strong> — calibration v1 per-language test harness</li>
+  <li><strong>#1404</strong> — calibration v1 real-execution mcp-use lane (Phase 3 dependency)</li>
+  <li><strong>#1413</strong> — fixture expansion 12-lane plan (Phase 3 parent)</li>
+  <li><strong>#1369</strong> — ratio-gate fix (code-review) — the canonical template for all Phase 1 gate rewrites</li>
+  <li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/feedback_calibration_gate_brittleness.md</code></li>
+  <li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/feedback_single_fixture_v1_calibration.md</code></li>
+  <li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/feedback_zero_score_audit_2026_05_21.md</code></li>
+  <li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/feedback_deepseek_hallucinates_on_gh_schemas.md</code></li>
+  <li>Memory: <code>~/.claude/projects/-Users-krisztiankoos-projects-kubedojo/memory/feedback_quality_ceiling_then_cost_walk_down.md</code></li>
+</ul>
+
+<h2>What this roadmap intentionally does NOT do</h2>
+<p>
+  This roadmap does not promise stability runs or variance analysis — that work is tracked in <strong>#1403</strong> (already merged) and is orthogonal; the variance framework operates independently of which gates are healthy.
+  It does not promise full mcp-use execution wiring; that is owned entirely by <strong>#1404</strong> and will flow into fixture-expansion (Phase 3) once execution is confirmed working.
+  It does not introduce a new scoring framework or composite-score formula — the composite-score work is a sibling PR changing only report rendering, not what is measured or how gates fire.
+  These exclusions are deliberate scope boundaries, not future work items for this roadmap.
+</p>
+
+</body>
+</html>
