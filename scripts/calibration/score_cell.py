@@ -764,8 +764,8 @@ def _assert_lane_set_consistency() -> None:
     """Catch the 'added a lane to LANES but forgot SCORERS' regression.
 
     Run at module load so any drift fails fast — before any cell dispatches.
-    run_wave.LANE_FIXTURES is checked from the other module to avoid a circular
-    import; see ``scripts/calibration/run_wave.py``.
+    run_wave.LANE_FIXTURES is checked from the other module (plus fixture file
+    resolution) to avoid a circular import; see ``scripts/calibration/run_wave.py``.
     """
     from .models import LANES as _LANES
 
