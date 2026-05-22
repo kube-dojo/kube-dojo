@@ -934,3 +934,86 @@ def test_fact_check_scorer_3_of_3_correct_passes():
     response = '[{"claim_id":"C1","verdict":"VERIFIED"},{"claim_id":"C2","verdict":"VERIFIED"},{"claim_id":"C3","verdict":"FALSE"}]'
     gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, gt)
     assert gates["verdict_recall"] is True
+
+
+# ---------------------------------------------------------------------------
+# DebuggingScorer ratio-gate tests (v1.3 fix for #1441 phase 1.3)
+# ---------------------------------------------------------------------------
+
+
+def _debugging_gt() -> dict:
+    """Minimal ground truth: 4 fix terms, 4 root_cause terms, 4 broad_rewrite terms."""
+    return {
+        "fix_terms": ["fix-A", "fix-B", "fix-C", "fix-D"],
+        "root_cause_terms": ["root-A", "root-B", "root-C", "root-D"],
+        "broad_rewrite_terms": ["broad-A", "broad-B", "broad-C", "broad-D"],
+    }
+
+
+def test_debugging_scorer_all_terms_match_minimal_patch():
+    gt = _debugging_gt()
+    # 4/4 fix -> 1.0 >= 0.5; 4/4 root -> 1.0 >= 0.5; 0/4 broad -> 0.0 <= 0.25
+    response = "fix-A fix-B fix-C fix-D root-A root-B root-C root-D"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["root_cause_identified"] is True
+    assert gates["patch_targets_bug"] is True
+    assert gates["minimal_patch"] is True
+
+
+def test_debugging_scorer_half_terms_match_at_threshold():
+    gt = _debugging_gt()
+    # 2/4 fix -> 0.5 >= 0.5 (passes exactly at threshold); 2/4 root -> 0.5 >= 0.5
+    response = "fix-A fix-B root-A root-B"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["root_cause_identified"] is True
+    assert gates["patch_targets_bug"] is True
+
+
+def test_debugging_scorer_one_of_three_fails_recall():
+    gt = {
+        "fix_terms": ["fix-A", "fix-B", "fix-C"],
+        "root_cause_terms": ["root-A", "root-B", "root-C"],
+        "broad_rewrite_terms": [],
+    }
+    # 1/3 fix -> 0.333 < 0.5; 1/3 root -> 0.333 < 0.5
+    response = "fix-A and root-A only"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["patch_targets_bug"] is False
+    assert gates["root_cause_identified"] is False
+
+
+def test_debugging_scorer_broad_rewrite_at_threshold():
+    gt = _debugging_gt()
+    # 1/4 broad -> 0.25 <= 0.25 (passes); plus full fix + root coverage
+    response = "fix-A fix-B fix-C fix-D root-A root-B root-C root-D broad-A"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["minimal_patch"] is True
+
+
+def test_debugging_scorer_broad_rewrite_above_threshold_fails():
+    gt = _debugging_gt()
+    # 2/4 broad -> 0.5 > 0.25 -> minimal_patch=False
+    response = "fix-A fix-B fix-C fix-D root-A root-B root-C root-D broad-A broad-B"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["minimal_patch"] is False
+
+
+def test_debugging_scorer_empty_term_lists_are_vacuous_pass():
+    gt = {"fix_terms": [], "root_cause_terms": [], "broad_rewrite_terms": []}
+    gates = score_cell.SCORERS["debugging"].deterministic_gates("any response", gt)
+    assert gates["patch_targets_bug"] is True
+    assert gates["root_cause_identified"] is True
+    assert gates["minimal_patch"] is True
+
+
+def test_debugging_scorer_alias_dict_term_shape():
+    """_term_present handles dict-with-aliases shape (forward-compat for richer fixtures)."""
+    gt = {
+        "fix_terms": [{"aliases": ["scaled up", "added replicas"]}, "patched"],
+        "root_cause_terms": ["misconfig"],
+        "broad_rewrite_terms": [],
+    }
+    response = "I scaled up the deployment and patched the misconfig"
+    gates = score_cell.SCORERS["debugging"].deterministic_gates(response, gt)
+    assert gates["patch_targets_bug"] is True  # both fix terms hit via aliases + flat
+    assert gates["root_cause_identified"] is True
