@@ -10,6 +10,12 @@ findings:
       - "resubscribe timing"
       - "once cleanup before call"
       - "listener removed too early"
+      - "recursion"
+      - "direct recursion"
+      - "infinite loop"
+      - "recursive call"
+      - "entry.handler called immediately"
+      - "wrapper invoked synchronously"
   - id: F2
     aliases:
       - "error bubbles"
@@ -17,6 +23,14 @@ findings:
       - "missing try catch"
       - "no error isolation"
       - "silent failure removed"
+      - "try/catch"
+      - "try-catch"
+      - "error bubbles out of emit"
+      - "unhandled exception"
+      - "errors propagate"
+      - "caller sees exception"
+      - "removed try-catch"
+      - "no exception handling"
   - id: F3
     aliases:
       - "EventHandler"
@@ -25,6 +39,8 @@ findings:
       - "breaking API rename"
       - "no compatibility type"
       - "handler type changed"
+      - "Handler<T>"
+      - "renamed type"
   - id: F4
     aliases:
       - "resubscribe test removed"
@@ -32,6 +48,14 @@ findings:
       - "test deleted"
       - "test was removed"
       - "coverage gap"
+      - "removed test"
+      - "test was deleted"
+      - "deleted test"
+      - "removed test for"
+      - "lost test coverage"
+      - "test no longer exists"
+      - "dropped test"
+      - "re-subscription test removed"
   - id: F5
     aliases:
       - "listeners mutated during emit"
@@ -40,6 +64,12 @@ findings:
       - "index-based emit loop"
       - "reentrant emit"
       - "iteration over live array"
+      - "mutation during emit"
+      - "mutate during iteration"
+      - "live array"
+      - "mutated mid-iteration"
+      - "iterator invalidation"
+      - "array changed during loop"
 hallucination_terms:
   - "memory leak"
   - "prototype pollution"
