@@ -1,4 +1,5 @@
 """Render HTML calibration reports from the SQLite ledger."""
+
 from __future__ import annotations
 
 import argparse
@@ -98,7 +99,9 @@ def _gate_component(score_rows: list[Any]) -> float:
             for row in det_rows
         ]
     else:
-        values = [1.0 if _score_row_value(row, "gate_pass") else 0.0 for row in det_rows]
+        values = [
+            1.0 if _score_row_value(row, "gate_pass") else 0.0 for row in det_rows
+        ]
     return (sum(values) / len(values)) * 10.0
 
 
@@ -222,10 +225,12 @@ def _letter_grade_legend() -> list[dict[str, str]]:
 
 
 def _radar_context(cells: list[CellSummary]) -> dict[str, Any]:
-    size = 480.0
+    # Wider canvas than the radar geometry needs so long lane labels
+    # ("content-writing-long", "summarization") don't clip on the edges.
+    size = 640.0
     center = size / 2.0
-    outer_radius = 130.0
-    label_radius = 188.0
+    outer_radius = 145.0
+    label_radius = 205.0
     cells_by_lane: dict[str, list[CellSummary]] = defaultdict(list)
     for cell in cells:
         cells_by_lane[cell.lane].append(cell)
@@ -243,7 +248,9 @@ def _radar_context(cells: list[CellSummary]) -> dict[str, Any]:
                 "value": value,
                 "points": " ".join(
                     f"{x:.1f},{y:.1f}"
-                    for x, y in (point_for(index, radius) for index in range(axis_count))
+                    for x, y in (
+                        point_for(index, radius) for index in range(axis_count)
+                    )
                 ),
             }
         )
@@ -454,6 +461,16 @@ def render_reports(
     (out_dir / "per-lane").mkdir(exist_ok=True)
     (out_dir / "per-model").mkdir(exist_ok=True)
 
+    # Copy the shared calibration.css to the reports root (one level above the
+    # dated subdir) so every page can link to ../calibration.css with no
+    # duplicate copies per run_date.
+    import shutil
+
+    css_src = TEMPLATE_DIR / "calibration.css"
+    if css_src.exists():
+        css_dst = out_dir.parent / "calibration.css"
+        shutil.copy2(css_src, css_dst)
+
     env = _env()
     written: list[Path] = []
 
@@ -516,20 +533,36 @@ def render_reports(
         written.append(path)
 
     total_cost = _total_cost(db_path)
-    index_path = out_dir / "index.html"
-    index_path.write_text(
-        _render_index(
-            run_date=run_date,
-            total_cells=len(summaries),
-            total_cost=total_cost,
-            families=sorted({cell.family for cell in summaries}),
-            lanes=lanes,
-            models=models,
-        ),
-        encoding="utf-8",
+    families = sorted({cell.family for cell in summaries})
+    overall_grade = _overall_grade(summaries)
+    index_html = env.get_template("index.html.j2").render(
+        run_date=run_date,
+        total_cells=len(summaries),
+        total_cost=total_cost,
+        families=families,
+        lanes=lanes,
+        models=models,
+        overall=overall_grade,
+        safe_filename=_safe_filename,
     )
+    index_path = out_dir / "index.html"
+    index_path.write_text(index_html, encoding="utf-8")
     written.append(index_path)
     return written
+
+
+def _overall_grade(summaries: list[CellSummary]) -> dict[str, Any]:
+    """Aggregate composite over all summaries, with letter + color for the index hero."""
+    composites = [s.composite for s in summaries if s.composite is not None]
+    if not composites:
+        return {
+            "composite": 0.0,
+            "letter": "F",
+            "color": constants.LETTER_GRADE_BANDS[-1][3],
+        }
+    mean_score = sum(composites) / len(composites)
+    letter, color = letter_grade_for_score(mean_score)
+    return {"composite": mean_score, "letter": letter, "color": color}
 
 
 def _total_cost(db_path: Path) -> float:
@@ -538,43 +571,6 @@ def _total_cost(db_path: Path) -> float:
             "SELECT COALESCE(SUM(cost_usd), 0.0) AS total_cost FROM dispatches"
         ).fetchone()
     return float(row["total_cost"])
-
-
-def _render_index(
-    *,
-    run_date: str,
-    total_cells: int,
-    total_cost: float,
-    families: list[str],
-    lanes: list[str],
-    models: list[str],
-) -> str:
-    family_list = ", ".join(families) if families else "none"
-    lane_links = "\n".join(
-        f'<li><a href="per-lane/{lane}.html">{lane}</a></li>' for lane in lanes
-    )
-    model_links = "\n".join(
-        f'<li><a href="per-model/{_safe_filename(model)}.html">{model}</a></li>'
-        for model in models
-    )
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Calibration reports — {run_date}</title>
-<link rel="stylesheet" href="../design-system.css">
-</head>
-<body>
-<h1>Calibration reports — {run_date}</h1>
-<p class="meta">cells={total_cells} · total_cost=${total_cost:.4f} · families={family_list}</p>
-<p><a href="matrix.html">Matrix heatmap</a></p>
-<h2>Per Lane</h2>
-<ul>{lane_links}</ul>
-<h2>Per Model</h2>
-<ul>{model_links}</ul>
-</body>
-</html>
-"""
 
 
 def build_parser() -> argparse.ArgumentParser:

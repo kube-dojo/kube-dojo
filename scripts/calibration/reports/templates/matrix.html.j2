@@ -3,49 +3,44 @@
 <head>
 <meta charset="utf-8">
 <title>Calibration matrix — {{ run_date }}</title>
-<link rel="stylesheet" href="../design-system.css">
-<style>
-  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
-  h1 { margin-bottom: 0.25rem; }
-  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
-  .legend-panel { border:1px solid #d8dee4; background:#fbfcfd; padding:0.75rem 0.85rem; margin:0.9rem 0 1rem; border-radius:0.35rem; }
-  .legend-grades { display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; margin-bottom:0.45rem; }
-  .legend-grade { color:white; font-weight:700; border-radius:0.25rem; padding:0.22rem 0.55rem; font-size:0.84rem; }
-  .legend-copy { margin:0.15rem 0; color:#38424d; font-size:0.88rem; }
-  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
-  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.88rem; vertical-align: top; }
-  th { background:#f3f5f7; text-align:left; }
-  .score { display:block; font-weight:700; margin-top:0.2rem; }
-  .missing { color:#777; background:#f7f7f7; }
-  .heat-0 { background:#f8d7da; }
-  .heat-1 { background:#fff3cd; }
-  .heat-2 { background:#d1ecf1; }
-  .heat-3 { background:#d4edda; }
-  .summary-cell { background:#f6f8fa; }
-  .summary-row th, .summary-row td { background:#f3f5f7; }
-  a { color:#0b5cad; }
-</style>
+<link rel="stylesheet" href="../calibration.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<h1>Calibration matrix</h1>
-<p class="meta">run_date={{ run_date }} · cells={{ total_cells }}</p>
-<div class="legend-panel">
-  <div class="legend-grades">
-    {% for grade in grade_legend %}
-    <span class="legend-grade" style="background:{{ grade.color }}">{{ grade.letter }} {{ grade.band }}</span>
-    {% endfor %}
+<div class="shell">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow">CALIBRATION&nbsp;OBSERVATORY · {{ run_date }}</div>
+    <h1 class="title">Composite <em>matrix</em></h1>
+    <p class="meta">
+      <span class="meta-kv"><b>{{ total_cells }}</b> cells</span>
+      <span class="meta-kv">run_date <b>{{ run_date }}</b></span>
+      <a href="index.html">index</a>
+    </p>
   </div>
-  <p class="legend-copy">Composite = 40% deterministic gates + 60% LLM judges (prose lanes); 100% gates (mechanical lanes).</p>
-  <p class="legend-copy">Hover any cell for the gate-ratio / judge1 / judge2 breakdown.</p>
+</header>
+
+<div class="legend">
+  <span class="grades">
+    {% for grade in grade_legend %}
+    <span class="legend-grade" style="background:{{ grade.color }};">{{ grade.letter }}&nbsp;{{ grade.band }}</span>
+    {% endfor %}
+  </span>
+  <p class="legend-copy">
+    Composite = <strong>0.4 × gate-pass</strong> + <strong>0.6 × judge mean</strong> (prose lanes); gate-pass only (mechanical lanes). Hover any cell for breakdown. <span class="dissent" style="position:static; display:inline-flex; vertical-align:middle; margin:0 0.3rem;">⚠</span> marks judge dissent &gt; 2.0.
+  </p>
 </div>
-<table>
+
+<div class="matrix-wrap">
+<table class="matrix">
   <thead>
     <tr>
-      <th>Lane</th>
+      <th>Lane&nbsp;/&nbsp;Model</th>
       {% for model in models %}
       <th>{{ model }}</th>
       {% endfor %}
-      <th>Lane mean</th>
+      <th>Σ&nbsp;lane</th>
     </tr>
   </thead>
   <tbody>
@@ -54,46 +49,59 @@
       <th><a href="per-lane/{{ row.lane }}.html">{{ row.lane }}</a></th>
       {% for cell in row.cells %}
         {% if cell %}
-          {% set bucket = 3 if cell.deterministic_score >= 0.95 else 2 if cell.deterministic_score >= 0.75 else 1 if cell.deterministic_score > 0 else 0 %}
-          <td class="heat-{{ bucket }}" title="{{ cell.cell_id }}">
-            <a href="per-model/{{ cell.canonical_string | replace('/', '_') | replace('@', '_') }}.html">{{ cell.canonical_string }}</a>
-            <span class="score">
-              <span class="cell-score grade-{{ cell.letter }}" style="background:{{ cell.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="gates={{ "%.0f"|format(cell.gate_pct) }}%, judges=[{{ cell.judge_title }}]">{{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>{% if cell.judge_dissent %}<sup style="color:#856404;" title="judges disagreed">⚠</sup>{% endif %}
-            </span>
+          <td title="{{ cell.cell_id }} · gates={{ "%.0f"|format(cell.gate_pct) }}% · judges=[{{ cell.judge_title }}]">
+            <a class="model-anchor" href="per-model/{{ cell.canonical_string | replace('/', '_') | replace('@', '_') }}.html" aria-label="{{ cell.canonical_string }} on {{ row.lane }}"></a>
+            <div class="cell-inner">
+              <span class="score-num">{{ "%.1f"|format(cell.composite) }}</span>
+              <span class="grade-pill" style="background:{{ cell.color }};">{{ cell.letter }}</span>
+            </div>
+            {% if cell.judge_dissent %}<span class="dissent" aria-label="judge dissent">⚠</span>{% endif %}
           </td>
         {% else %}
-          <td class="missing">not run</td>
+          <td class="missing"><div class="cell-inner">N/A</div></td>
         {% endif %}
       {% endfor %}
-      <td class="summary-cell">
+      <td class="col-summary">
         {% if row.summary %}
-        <span class="cell-score grade-{{ row.summary.letter }}" style="background:{{ row.summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="mean composite">{{ "%.1f"|format(row.summary.composite) }} {{ row.summary.letter }}</span>
+        <div class="cell-inner">
+          <span class="score-num">{{ "%.1f"|format(row.summary.composite) }}</span>
+          <span class="grade-pill" style="background:{{ row.summary.color }};">{{ row.summary.letter }}</span>
+        </div>
         {% else %}
-        n/a
+        <div class="cell-inner" style="color:var(--obs-text-mute); font-size:11px;">—</div>
         {% endif %}
       </td>
     </tr>
     {% endfor %}
-    <tr class="summary-row">
-      <th>Model mean</th>
+    <tr>
+      <th class="summary-label">Σ&nbsp;model</th>
       {% for summary in model_summaries %}
-      <td>
+      <td class="summary-cell">
         {% if summary %}
-        <span class="cell-score grade-{{ summary.letter }}" style="background:{{ summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="mean composite">{{ "%.1f"|format(summary.composite) }} {{ summary.letter }}</span>
+        <div class="cell-inner">
+          <span class="score-num">{{ "%.1f"|format(summary.composite) }}</span>
+          <span class="grade-pill" style="background:{{ summary.color }};">{{ summary.letter }}</span>
+        </div>
         {% else %}
-        n/a
+        <div class="cell-inner" style="color:var(--obs-text-mute); font-size:11px;">—</div>
         {% endif %}
       </td>
       {% endfor %}
-      <td>
+      <td class="summary-cell" style="background:var(--obs-surface-pop);">
         {% if overall_summary %}
-        <span class="cell-score grade-{{ overall_summary.letter }}" style="background:{{ overall_summary.color }};color:white;font-weight:600;padding:2px 6px;border-radius:3px;" title="overall mean">{{ "%.1f"|format(overall_summary.composite) }} {{ overall_summary.letter }}</span>
+        <div class="cell-inner">
+          <span class="score-num" style="color:var(--obs-accent);">{{ "%.1f"|format(overall_summary.composite) }}</span>
+          <span class="grade-pill" style="background:{{ overall_summary.color }};">{{ overall_summary.letter }}</span>
+        </div>
         {% else %}
-        n/a
+        <div class="cell-inner" style="color:var(--obs-text-mute); font-size:11px;">—</div>
         {% endif %}
       </td>
     </tr>
   </tbody>
 </table>
+</div>
+
+</div>
 </body>
 </html>
