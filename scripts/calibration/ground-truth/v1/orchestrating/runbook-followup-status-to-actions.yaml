@@ -1,0 +1,34 @@
+# Fixture source: v1.1 spec lane 7, runbook follow-up. Phase 3 fixture #3/3 per #1413.
+fixture_id: runbook-followup-status-to-actions
+lane: orchestrating
+required_categories:
+  - "owner"
+  - "lane"
+  - "next action"
+  - "verification"
+  - "escalation"
+  - "decision card"
+  - "serialize"
+  - "cost"
+  - "gh pr"
+  - "ledger"
+  - "wave"
+  - "git ls-remote"
+novel_risk_terms:
+  - "silent push failure"
+  - "reviewer starvation"
+  - "stale lease"
+  - "missing verification"
+  - "orphaned worktree"
+llm_rubric: |-
+  Return JSON: {"score": 0-10, "rationale": "..."}.
+
+  Reward explicit owner and lane assignments for every open thread in the status update.
+  Reward concrete next actions with named commands, PR steps, ledger queries, or log paths rather than vague verbs.
+  Reward verification checks that state exactly how completion will be confirmed, such as `gh pr view`, `git ls-remote`, the calibration ledger, or the cited log file.
+  Reward an escalation rule that names a Decision Card and ties it to real criteria from the hand-off, such as live disagreement, multiple viable retry policies, or a high-leverage decision affecting many cells.
+  Reward same-family serialization when two threads share a model family and lane, especially for codex-owned debugging or code-review work.
+  Reward honest per-thread cost and time budgets that preserve the no-wave-run constraint and protect reviewer capacity.
+  Penalize vague actions such as "look at it" or "check the logs" without commands or confirmation criteria.
+  Penalize missing verification steps, parallelism that violates same-family serialization, or dispatching a wave before the stated dependencies are cleared.
+  Penalize fabricating escalation points without a real decision criterion or treating routine one-line fixes as Decision Cards.

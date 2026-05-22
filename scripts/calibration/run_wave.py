@@ -43,7 +43,10 @@ LANE_FIXTURES: dict[str, list[str]] = {
         "cascade-reviewer-tiebreak-policy",
         "dispatch-pipeline-scaling",
     ],
-    "orchestrating": ["multi-task-routing-brief"],
+    "orchestrating": [
+        "multi-task-routing-brief",
+        "runbook-followup-status-to-actions",
+    ],
     "debugging": ["pod-pending-topology-mismatch"],
     "refactoring": ["check-site-health-refactor"],
     "summarization": ["session-34-handoff"],
