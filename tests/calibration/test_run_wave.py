@@ -287,3 +287,45 @@ def test_build_cells_filter_param_filters_fixtures():
     )
     assert len(cells) == 1
     assert cells[0].fixture_id == "kubedojo-review-override-rfc"
+
+
+# ---------------------------------------------------------------------------
+# --judge1 / --judge2 override (Claude-throttle window mitigation, #1441)
+# ---------------------------------------------------------------------------
+
+
+def test_main_passes_judge_args_through_to_score_cell(monkeypatch):
+    """`--judge1 X --judge2 Y` flows from main → _dispatch_one → score_cell."""
+    from scripts.calibration import run_wave, score_cell as sc_mod
+    captured: dict[str, str] = {}
+
+    def fake_score(*, cell_id, db_path, replicate_seq, judge1, judge2):
+        captured["judge1"] = judge1
+        captured["judge2"] = judge2
+        return {"gate1": True}
+
+    monkeypatch.setattr(sc_mod, "score_cell", fake_score)
+    monkeypatch.setattr(run_wave, "preflight_probe", lambda cells: [{"ok": True} for _ in cells])
+    # Stub the actual model dispatch so we don't burn API calls.
+    monkeypatch.setattr(run_wave, "run_cell", lambda **_kw: "fake-cell-id")
+
+    rc = run_wave.main([
+        "--wave", "A",
+        "--lanes", "code-writing",
+        "--judge1", "gemini-3.5-flash-high",
+        "--judge2", "codex-gpt-5.5",
+        "--no-render",
+        "--smoke",
+    ])
+    assert rc == 0, f"expected exit 0, got {rc}"
+    assert captured.get("judge1") == "gemini-3.5-flash-high"
+    assert captured.get("judge2") == "codex-gpt-5.5"
+
+
+def test_main_default_judges_are_sonnet_plus_gemini_flash():
+    """Default judges match the score_cell production defaults."""
+    from scripts.calibration import run_wave
+    parser = run_wave.build_parser()
+    ns = parser.parse_args(["--wave", "A", "--lanes", "code-writing"])
+    assert ns.judge1 == "claude-sonnet-4-6"
+    assert ns.judge2 == "gemini-3.5-flash-high"
