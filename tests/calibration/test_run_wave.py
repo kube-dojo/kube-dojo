@@ -155,3 +155,135 @@ def test_build_cells_multi_lane_total_count():
     expected = sum(len(run_wave.LANE_FIXTURES[lane]) for lane in lanes)
     cells = run_wave.build_cells(models=[test_model], lanes=lanes)
     assert len(cells) == expected
+
+
+# ---------------------------------------------------------------------------
+# --fixture CLI enforcement (#1450) — 1-fixture-per-model-per-wave rule
+# ---------------------------------------------------------------------------
+
+
+def test_main_rejects_multi_fixture_lane_without_fixture_arg(capsys):
+    """Running --lanes architecting (3 fixtures) without --fixture must exit 2."""
+    from scripts.calibration import run_wave
+
+    rc = run_wave.main(
+        [
+            "--wave", "A",
+            "--lanes", "architecting",
+            "--skip-preflight",
+            "--no-render",
+            "--no-score",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2, f"expected exit 2, got {rc}"
+    assert "1-fixture-per-model-per-wave" in captured.err
+    assert "architecting" in captured.err
+
+
+def test_main_accepts_single_fixture_lane_without_fixture_arg(monkeypatch):
+    """--lanes code-writing (1 fixture) without --fixture remains backward-compatible.
+
+    Stub _dispatch_one to avoid an actual model dispatch — we're only proving
+    the validation gate doesn't reject this shape.
+    """
+    from scripts.calibration import run_wave
+
+    calls: list[run_wave.CellSpec] = []
+
+    def fake_dispatch(spec, **_kwargs):
+        calls.append(spec)
+        return {
+            "ok": True,
+            "cell_id": "fake",
+            "lane": spec.lane,
+            "model": spec.model.canonical_string,
+            "family": spec.model.family,
+            "replicate_seq": 0,
+            "elapsed_s": 0.0,
+            "scored": False,
+        }
+
+    monkeypatch.setattr(run_wave, "_dispatch_one", fake_dispatch)
+    monkeypatch.setattr(run_wave, "preflight_probe", lambda cells: [{"ok": True} for _ in cells])
+    rc = run_wave.main(
+        [
+            "--wave", "A",
+            "--lanes", "code-writing",
+            "--no-render",
+            "--no-score",
+            "--smoke",
+        ]
+    )
+    assert rc == 0, f"expected exit 0, got {rc}"
+    assert len(calls) >= 1
+    assert all(c.fixture_id == "parse-dependabot-cooldown" for c in calls)
+
+
+def test_main_accepts_multi_fixture_lane_with_fixture_arg(monkeypatch):
+    """--lanes architecting --fixture <id> dispatches only that fixture."""
+    from scripts.calibration import run_wave
+
+    calls: list[run_wave.CellSpec] = []
+
+    def fake_dispatch(spec, **_kwargs):
+        calls.append(spec)
+        return {
+            "ok": True,
+            "cell_id": "fake",
+            "lane": spec.lane,
+            "model": spec.model.canonical_string,
+            "family": spec.model.family,
+            "replicate_seq": 0,
+            "elapsed_s": 0.0,
+            "scored": False,
+        }
+
+    monkeypatch.setattr(run_wave, "_dispatch_one", fake_dispatch)
+    monkeypatch.setattr(run_wave, "preflight_probe", lambda cells: [{"ok": True} for _ in cells])
+    rc = run_wave.main(
+        [
+            "--wave", "A",
+            "--lanes", "architecting",
+            "--fixture", "cascade-reviewer-tiebreak-policy",
+            "--no-render",
+            "--no-score",
+            "--smoke",
+        ]
+    )
+    assert rc == 0, f"expected exit 0, got {rc}"
+    assert all(c.fixture_id == "cascade-reviewer-tiebreak-policy" for c in calls)
+
+
+def test_main_rejects_unknown_fixture_id(capsys):
+    """--fixture id that isn't in LANE_FIXTURES[lane] must exit 2 with a clear error."""
+    from scripts.calibration import run_wave
+
+    rc = run_wave.main(
+        [
+            "--wave", "A",
+            "--lanes", "architecting",
+            "--fixture", "does-not-exist",
+            "--no-render",
+            "--no-score",
+            "--smoke",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "does-not-exist" in captured.err
+    assert "Valid:" in captured.err
+
+
+def test_build_cells_filter_param_filters_fixtures():
+    """build_cells with fixture_filter restricts to a single fixture per lane."""
+    from scripts.calibration import models, run_wave
+
+    test_model = next(iter(models.ANCHORS))
+    cells = run_wave.build_cells(
+        models=[test_model],
+        lanes=["architecting"],
+        fixture_filter="kubedojo-review-override-rfc",
+    )
+    assert len(cells) == 1
+    assert cells[0].fixture_id == "kubedojo-review-override-rfc"
