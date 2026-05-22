@@ -35,6 +35,8 @@ PROSE_LANES: frozenset[str] = frozenset(
         # mcp-use / harness-following: ratio-gates can be keyword-gamed; judge unconditionally.
         "mcp-use",
         "harness-following",
+        "content-review",
+        "fact-check",
     },
 )
 
@@ -292,7 +294,19 @@ class ContentReviewScorer:
         response: str,
         ground_truth: dict[str, Any],
     ) -> str | None:
-        return None
+        return _judge_prompt(
+            "content-review",
+            response,
+            (
+                "Score the review's quality at distinguishing real flaws from "
+                "stylistic noise. Reward concrete file:line evidence, correct "
+                "flaw class attribution, and verdict severity that matches the "
+                "actual planted defect. Penalize generic 'looks good' verdicts, "
+                "hallucinated flaws not in the planted set, and missed flaws "
+                "of high severity."
+            ),
+            ground_truth,
+        )
 
 
 class FactCheckScorer:
@@ -341,7 +355,19 @@ class FactCheckScorer:
         response: str,
         ground_truth: dict[str, Any],
     ) -> str | None:
-        return None
+        return _judge_prompt(
+            "fact-check",
+            response,
+            (
+                "Score the rationale-grounding quality of partial-verdict cells. "
+                "Reward primary-source citations (project docs, RFCs, release "
+                "notes), specific dates/versions, and verdict reasoning that "
+                "tracks the actual claim. Penalize unsourced confidence, vague "
+                "'common knowledge' appeals, and citations that don't actually "
+                "support the verdict."
+            ),
+            ground_truth,
+        )
 
 
 class ArchitectingScorer:
@@ -949,6 +975,8 @@ JUDGE_TIMEOUTS_S: dict[str, int] = {
     "architecting": 180,
     "content-writing-long": 180,
     "refactoring": 180,
+    "content-review": 180,
+    "fact-check": 120,
 }
 DEFAULT_JUDGE_TIMEOUT_S = 180
 
