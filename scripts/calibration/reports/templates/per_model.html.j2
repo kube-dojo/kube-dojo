@@ -3,90 +3,114 @@
 <head>
 <meta charset="utf-8">
 <title>{{ canonical_string }} — calibration model</title>
-<link rel="stylesheet" href="../../design-system.css">
-<style>
-  body { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
-  h1 { margin-bottom: 0.25rem; }
-  p.meta { color: #555; font-size: 0.9rem; margin-top: 0.1rem; }
-  table { width:100%; border-collapse: collapse; margin: 0.75rem 0 1.25rem; }
-  th, td { border:1px solid #ddd; padding:0.35rem 0.55rem; font-size:0.92rem; vertical-align: top; }
-  th { background:#f3f5f7; text-align:left; }
-  .confidence { font-weight:700; }
-  .profile { display:grid; grid-template-columns:minmax(0, 1.15fr) minmax(16rem, 0.85fr); gap:1.25rem; align-items:start; margin-top:1rem; }
-  .radar-wrap { overflow-x:auto; }
-  .radar-svg { max-width:100%; height:auto; }
-  .radar-ring { fill:none; stroke:#d8dee4; stroke-width:1; }
-  .radar-axis { stroke:#ccd3da; stroke-width:1; }
-  .radar-label { font-size:10px; fill:#2f3a45; }
-  .radar-score { font-weight:700; fill:#1f2933; }
-  .tag-cloud { display:flex; gap:0.45rem; flex-wrap:wrap; margin:0.35rem 0 0.85rem; }
-  .tag { color:white; border-radius:0.3rem; padding:0.22rem 0.5rem; font-size:0.82rem; font-weight:700; }
-  .empty { color:#687380; font-size:0.9rem; }
-  .score-chip { color:white; font-weight:700; border-radius:0.25rem; padding:0.15rem 0.5rem; white-space:nowrap; }
-  @media (max-width: 760px) { .profile { grid-template-columns:1fr; } }
-</style>
+<link rel="stylesheet" href="../../calibration.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body>
-<h1>{{ canonical_string }}</h1>
-<p class="meta">run_date={{ run_date }} · <a href="../matrix.html">matrix</a></p>
+<div class="shell" style="max-width:1200px;">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow">MODEL&nbsp;PROFILE · {{ run_date }}</div>
+    <h1 class="title">{{ canonical_string }}</h1>
+    <p class="meta">
+      <span class="meta-kv"><b>{{ cells|length }}</b> lanes scored</span>
+      <a href="../matrix.html">matrix</a>
+      <a href="../index.html">index</a>
+    </p>
+  </div>
+</header>
+
 <section class="profile">
+
   <div class="radar-wrap">
-    <svg class="radar-svg" width="420" height="420" viewBox="0 0 {{ radar.size }} {{ radar.size }}" role="img" aria-label="Composite score radar chart for {{ canonical_string }}">
+    <svg class="radar-svg" width="560" height="560" viewBox="0 0 {{ radar.size }} {{ radar.size }}" role="img" aria-label="Composite score radar chart for {{ canonical_string }}">
+      <defs>
+        <radialGradient id="radar-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35"/>
+          <stop offset="60%" stop-color="#38bdf8" stop-opacity="0.12"/>
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+        </radialGradient>
+      </defs>
+
       {% for ring in radar.rings %}
-      <polygon class="radar-ring" points="{{ ring.points }}"></polygon>
+      <polygon class="radar-ring{% if loop.last %} outer{% endif %}" points="{{ ring.points }}"></polygon>
       {% endfor %}
+
       {% for axis in radar.axes %}
       <line class="radar-axis" x1="{{ radar.center }}" y1="{{ radar.center }}" x2="{{ "%.1f"|format(axis.axis_x) }}" y2="{{ "%.1f"|format(axis.axis_y) }}"></line>
       {% endfor %}
-      <polygon points="{{ radar.polygon_points }}" fill="#0b5cad" fill-opacity="0.3" stroke="#0b5cad" stroke-width="2"></polygon>
+
+      <polygon class="radar-polygon" points="{{ radar.polygon_points }}"></polygon>
+
       {% for axis in radar.axes %}
       <g>
         <text class="radar-label" x="{{ "%.1f"|format(axis.label_x) }}" y="{{ "%.1f"|format(axis.label_y) }}" text-anchor="{{ axis.anchor }}">
           <tspan x="{{ "%.1f"|format(axis.label_x) }}">{{ axis.lane }}</tspan>
-          <tspan class="radar-score" x="{{ "%.1f"|format(axis.label_x) }}" dy="12">{{ "%.1f"|format(axis.composite) }}</tspan>
+          <tspan class="radar-score" x="{{ "%.1f"|format(axis.label_x) }}" dy="14">{{ "%.1f"|format(axis.composite) }}</tspan>
         </text>
-        <rect x="{{ "%.1f"|format(axis.chip_x) }}" y="{{ "%.1f"|format(axis.chip_y) }}" width="20" height="13" rx="2" fill="{{ axis.color }}"></rect>
-        <text x="{{ "%.1f"|format(axis.chip_text_x) }}" y="{{ "%.1f"|format(axis.chip_text_y) }}" text-anchor="middle" font-size="9" font-weight="700" fill="white">{{ axis.letter }}</text>
+        <rect x="{{ "%.1f"|format(axis.chip_x) }}" y="{{ "%.1f"|format(axis.chip_y) }}" width="22" height="14" rx="3" fill="{{ axis.color }}"/>
+        <text x="{{ "%.1f"|format(axis.chip_text_x) }}" y="{{ "%.1f"|format(axis.chip_text_y) }}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9.5" font-weight="800" fill="#050811">{{ axis.letter }}</text>
       </g>
       {% endfor %}
     </svg>
   </div>
-  <div>
-    <h2>Strengths</h2>
+
+  <aside class="profile-side">
+    <h2>Strengths · A</h2>
     <div class="tag-cloud">
       {% for cell in strengths %}
-      <span class="tag" style="background:{{ cell.color }}">{{ cell.lane }} {{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>
+      <span class="tag" style="background:{{ cell.color }};">{{ cell.lane }} · {{ "%.1f"|format(cell.composite) }}{{ cell.letter }}</span>
       {% else %}
-      <span class="empty">none</span>
+      <span class="empty">no A-tier lanes</span>
       {% endfor %}
     </div>
-    <h2>Weaknesses</h2>
+
+    <h2>Weaknesses · F</h2>
     <div class="tag-cloud">
       {% for cell in weaknesses %}
-      <span class="tag" style="background:{{ cell.color }}">{{ cell.lane }} {{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>
+      <span class="tag" style="background:{{ cell.color }};">{{ cell.lane }} · {{ "%.1f"|format(cell.composite) }}{{ cell.letter }}</span>
       {% else %}
-      <span class="empty">none</span>
+      <span class="empty">no F-tier lanes</span>
       {% endfor %}
     </div>
-  </div>
+  </aside>
 </section>
-<table>
+
+<table class="detail">
   <thead>
-    <tr><th>Lane</th><th>Fixture</th><th>Composite</th><th>Deterministic</th><th>LLM judge</th><th>Confidence vs actual</th><th>Cell</th></tr>
+    <tr>
+      <th>Lane</th>
+      <th>Fixture</th>
+      <th>Composite</th>
+      <th>Gates</th>
+      <th>Judge</th>
+      <th>Effort signal</th>
+      <th>Cell ID</th>
+    </tr>
   </thead>
   <tbody>
     {% for cell in cells %}
     <tr>
       <td><a href="../per-lane/{{ cell.lane }}.html">{{ cell.lane }}</a></td>
-      <td>{{ cell.fixture_id }}</td>
-      <td><span class="score-chip" style="background:{{ cell.color }}">{{ "%.1f"|format(cell.composite) }} {{ cell.letter }}</span>{% if cell.judge_dissent %}<sup style="color:#856404;" title="judges disagreed">⚠</sup>{% endif %}</td>
-      <td>{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
-      <td>{% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}n/a{% endif %}</td>
-      <td><span class="confidence">{{ cell.effort_confidence }}</span> effort signal vs {{ "%.1f"|format(cell.composite) }} composite</td>
-      <td>{{ cell.cell_id }}</td>
+      <td style="color:var(--obs-text-dim);">{{ cell.fixture_id }}</td>
+      <td>
+        <span class="score-chip" style="background:{{ cell.color }};">
+          {{ "%.1f"|format(cell.composite) }}<span class="letter">{{ cell.letter }}</span>
+        </span>
+        {% if cell.judge_dissent %}<sup class="dissent-sup">⚠</sup>{% endif %}
+      </td>
+      <td style="font-variant-numeric:tabular-nums;">{{ "%.0f"|format(cell.deterministic_score * 100) }}%</td>
+      <td style="font-variant-numeric:tabular-nums;">
+        {% if cell.llm_score is not none %}{{ "%.1f"|format(cell.llm_score) }}{% else %}<span style="color:var(--obs-text-mute);">n/a</span>{% endif %}
+      </td>
+      <td><span class="confidence">{{ cell.effort_confidence }}</span></td>
+      <td style="color:var(--obs-text-mute); font-size:10.5px;">{{ cell.cell_id }}</td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+</div>
 </body>
 </html>
