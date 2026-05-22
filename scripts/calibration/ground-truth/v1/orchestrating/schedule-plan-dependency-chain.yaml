@@ -25,7 +25,6 @@ llm_rubric: |-
   Reward clear separation of parallelizable review/CI waiting time from serialized authoring, review, and merge gates.
   Reward an explicit kill-switch or checkpoint with a fallback action for review queueing, CI runner exhaustion, or weekly-cap exhaustion.
   Reward honest rough time and cost budgets tied to the concrete 18-minute PR gates, 25-minute smoke, 30-minute reviewer SLA, and available agent capacity.
-  Reward using Decision Card vocabulary only when there is a real tradeoff or disagreement to surface.
   Penalize parallel plans that violate the same-family cap, cross-family review rule, reviewer queue limit, or CI runner cap.
   Penalize vague "monitor and adjust" language without a named checkpoint, threshold, or fallback action.
   Penalize ignoring reviewer-stage queueing, hand-waving the weekly cap, or treating a full wave dispatch as part of the fixture-authoring PR.
