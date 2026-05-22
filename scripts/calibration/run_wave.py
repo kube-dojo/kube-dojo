@@ -23,23 +23,30 @@ from . import schema, score_cell
 from .models import ANCHORS, LANES, CalibrationModel, Wave
 from .run_cell import DEFAULT_DB_PATH, DEFAULT_OUTPUT_ROOT, REPO_ROOT, run_cell
 
-# Lane -> fixture id for Wave C / D. Wave A and B happened to share the same
-# fixtures per lane; we keep that contract here, swapping in the harder code-
-# review / debugging fixtures designed in session 37 plus the two new lanes.
-LANE_FIXTURES: dict[str, str] = {
-    "code-writing": "parse-dependabot-cooldown",
-    "code-review": "k8s-controller-leader-election",
-    "content-writing-long": "kubedojo-rbac-module",
-    "content-review": "flawed-module-rubric-review",
-    "fact-check": "k8s-1-35-claims",
-    "architecting": "kubedojo-review-override-rfc",
-    "orchestrating": "multi-task-routing-brief",
-    "debugging": "pod-pending-topology-mismatch",
-    "refactoring": "check-site-health-refactor",
-    "summarization": "session-34-handoff",
-    "mcp-use": "define-the-word-in-uk",
-    "harness-following": "claude-md-context-cks-tweak",
+# Lane -> list of fixture ids the lane currently dispatches against.
+# Architecting has 3 fixtures after Phase 3.1 (PR #1448); the rest are
+# still single-fixture and will grow per the per-lane PLAN.md files in
+# scripts/calibration/ground-truth/v1/<lane>/PLAN.md.
+LANE_FIXTURES: dict[str, list[str]] = {
+    "code-writing": ["parse-dependabot-cooldown"],
+    "code-review": ["k8s-controller-leader-election"],
+    "content-writing-long": ["kubedojo-rbac-module"],
+    "content-review": ["flawed-module-rubric-review"],
+    "fact-check": ["k8s-1-35-claims"],
+    "architecting": [
+        "kubedojo-review-override-rfc",
+        "cascade-reviewer-tiebreak-policy",
+        "dispatch-pipeline-scaling",
+    ],
+    "orchestrating": ["multi-task-routing-brief"],
+    "debugging": ["pod-pending-topology-mismatch"],
+    "refactoring": ["check-site-health-refactor"],
+    "summarization": ["session-34-handoff"],
+    "mcp-use": ["define-the-word-in-uk"],
+    "harness-following": ["claude-md-context-cks-tweak"],
 }
+
+GROUND_TRUTH_ROOT = Path(__file__).parent / "ground-truth" / "v1"
 
 
 def _assert_lane_fixture_consistency() -> None:
@@ -59,6 +66,16 @@ def _assert_lane_fixture_consistency() -> None:
             f"LANES \\ LANE_FIXTURES = {sorted(missing_in_fixtures)}; "
             f"LANE_FIXTURES \\ LANES = {sorted(missing_in_models)}"
         )
+
+    for lane, fixtures in LANE_FIXTURES.items():
+        for fixture_id in fixtures:
+            yaml_path = GROUND_TRUTH_ROOT / lane / f"{fixture_id}.yaml"
+            legacy_path = GROUND_TRUTH_ROOT / lane / f"{fixture_id}.legacy.yaml"
+            if not yaml_path.exists() and not legacy_path.exists():
+                raise RuntimeError(
+                    "missing fixture ground truth: "
+                    f"expected {yaml_path} or {legacy_path}"
+                )
 
 
 _assert_lane_fixture_consistency()
@@ -92,10 +109,11 @@ def build_cells(
     cells = []
     for model in models:
         for lane in lanes:
-            fixture = LANE_FIXTURES.get(lane)
-            if not fixture:
+            fixtures = LANE_FIXTURES.get(lane)
+            if not fixtures:
                 raise KeyError(f"no fixture mapping for lane {lane!r}")
-            cells.append(CellSpec(lane=lane, fixture_id=fixture, model=model))
+            for fixture_id in fixtures:
+                cells.append(CellSpec(lane=lane, fixture_id=fixture_id, model=model))
     return cells
 
 
