@@ -114,3 +114,99 @@ def test_post_response_headers_do_not_split_on_crlf(monkeypatch, tmp_path: Path)
         assert "\n" not in response.getheader("Content-Type", "")
 
     _with_server(tmp_path, request)
+
+
+def test_strip_html_noncontent_handles_script_with_trailing_space() -> None:
+    assert "<x>" not in local_api._strip_html_noncontent("<script>x</script >")
+
+
+def test_strip_html_noncontent_handles_style_with_trailing_space() -> None:
+    assert "<x>" not in local_api._strip_html_noncontent("<style >x</style >")
+
+
+def test_relative_path_returns_empty_for_path_outside_repo_root(
+    monkeypatch: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    module_key = "module-key"
+
+    def fake_find_quality_board_module(_repo_root: Path, _module_key: str) -> dict[str, str]:
+        return {"title": "Module", "track": "prerequisites", "status": "unknown", "score": "100"}
+
+    def fake_build_module_state(_repo_root: Path, _module_key: str) -> dict[str, object]:
+        return {"english_path": "/etc/passwd", "ukrainian_path": None}
+
+    monkeypatch.setattr(local_api, "_find_quality_board_module", fake_find_quality_board_module)
+    monkeypatch.setattr(local_api, "build_module_state", fake_build_module_state)
+
+    html = local_api.render_quality_module_page_html(tmp_path, module_key)
+    assert html is not None
+    assert "/etc/passwd" not in html
+    assert '<a href="//etc/passwd">english</a>' not in html
+
+
+def test_relative_path_returns_empty_for_nonexistent_path(
+    monkeypatch: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    module_key = "module-key"
+
+    def fake_find_quality_board_module(_repo_root: Path, _module_key: str) -> dict[str, str]:
+        return {"title": "Module", "track": "prerequisites", "status": "unknown", "score": "100"}
+
+    def fake_build_module_state(_repo_root: Path, _module_key: str) -> dict[str, object]:
+        return {"english_path": "/totally/made/up/file", "ukrainian_path": None}
+
+    monkeypatch.setattr(local_api, "_find_quality_board_module", fake_find_quality_board_module)
+    monkeypatch.setattr(local_api, "build_module_state", fake_build_module_state)
+
+    html = local_api.render_quality_module_page_html(tmp_path, module_key)
+    assert html is not None
+    assert "/totally/made/up/file" not in html
+    assert "<a href=\"//totally/made/up/file\">english</a>" not in html
+
+
+def test_head_response_sanitizes_crlf_in_location(monkeypatch, tmp_path: Path) -> None:
+    malicious_location = "/ok\r\nX-Injected-Location: 1"
+
+    def fake_serve_request(_repo_root: Path, _path: str):
+        return 302, malicious_location.encode("utf-8"), "text/plain", ""
+
+    monkeypatch.setattr(local_api, "serve_request", fake_serve_request)
+
+    def request(port: int) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("HEAD", "/api/schema")
+        response = conn.getresponse()
+        response.read()
+
+        assert response.status == 302
+        assert response.getheader("Location") == local_api._safe_header_value(malicious_location)
+        assert response.getheader("X-Injected-Location") is None
+        assert "\r" not in response.getheader("Location", "")
+        assert "\n" not in response.getheader("Location", "")
+
+    _with_server(tmp_path, request)
+
+
+def test_get_response_sanitizes_crlf_in_location(monkeypatch, tmp_path: Path) -> None:
+    malicious_location = "/ok\r\nX-Injected-Location: 1"
+
+    def fake_serve_request(_repo_root: Path, _path: str):
+        return 302, malicious_location.encode("utf-8"), "text/plain", ""
+
+    monkeypatch.setattr(local_api, "serve_request", fake_serve_request)
+
+    def request(port: int) -> None:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        conn.request("GET", "/api/schema")
+        response = conn.getresponse()
+        response.read()
+
+        assert response.status == 302
+        assert response.getheader("Location") == local_api._safe_header_value(malicious_location)
+        assert response.getheader("X-Injected-Location") is None
+        assert "\r" not in response.getheader("Location", "")
+        assert "\n" not in response.getheader("Location", "")
+
+    _with_server(tmp_path, request)
