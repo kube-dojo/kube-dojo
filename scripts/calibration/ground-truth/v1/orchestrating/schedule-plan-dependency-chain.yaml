@@ -11,7 +11,6 @@ required_categories:
   - "CI runner cap"
   - "kill-switch"
   - "cost budget"
-  - "decision card"
 novel_risk_terms:
   - "rebase storm"
   - "reviewer starvation"

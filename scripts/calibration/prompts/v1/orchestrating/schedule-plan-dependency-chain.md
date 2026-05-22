@@ -19,4 +19,4 @@ Deliver:
 1. An ordered timeline with dependencies for all five work items.
 2. Which steps are serialized vs parallel and why, naming the binding constraint.
 3. A kill-switch or fallback if review, CI, or the codex weekly cap blocks progress.
-4. A rough cost/time budget. If there is a real tradeoff, use the KubeDojo Decision Card vocabulary: Option A, Option B, disagreement, awaiting.
+4. A rough cost/time budget.
