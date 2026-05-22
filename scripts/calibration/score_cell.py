@@ -229,21 +229,54 @@ class ContentWritingLongScorer:
 
 
 class ContentReviewScorer:
+    """Content-review scoring with ratio-gates, not binary AND.
+
+    The v1 design (binary AND of ``planted_flaw_recall`` + ``review_precision``)
+    collapsed to exactly 0.50 across all 14 Wave A models — every model hit some
+    flaws AND mentioned at least one hallucination term, so both gates were
+    half-pass and the AND was always exactly 0.5. v1.2 replaces this with:
+
+      - ``finding_recall``: fraction of planted flaws hit (pass @ ≥0.6).
+      - ``hallucination_rate``: fraction of hallucination terms present
+        (pass @ ≤0.25 — at most one bogus term in a 4-term list).
+
+    Two ratio gates instead of two binary gates means the joint score range is
+    {0.0, 0.5, 1.0} instead of just 0.5 — restores discrimination.
+    """
+
+    PLANTED_FLAW_RECALL_THRESHOLD = 0.6
+    HALLUCINATION_RATE_THRESHOLD = 0.25
+
     def deterministic_gates(
         self,
         response: str,
         ground_truth: dict[str, Any],
     ) -> dict[str, bool]:
-        flaws = ground_truth.get("planted_flaws", [])
-        found = [
-            flaw
-            for flaw in flaws
-            if _contains_any(response, list(flaw.get("aliases", [])))
-        ]
+        flaws = list(ground_truth.get("planted_flaws", []))
+        if not flaws:
+            recall_ratio = 1.0
+        else:
+            found = sum(
+                1
+                for flaw in flaws
+                if _contains_any(response, list(flaw.get("aliases", [])))
+            )
+            recall_ratio = found / len(flaws)
+
         hallucination_terms = list(ground_truth.get("hallucination_terms", []))
+        if not hallucination_terms:
+            hallucination_ratio = 0.0
+        else:
+            present = sum(
+                1
+                for term in hallucination_terms
+                if _contains_any(response, [term])
+            )
+            hallucination_ratio = present / len(hallucination_terms)
+
         return {
-            "planted_flaw_recall": len(found) == len(flaws),
-            "review_precision": not _contains_any(response, hallucination_terms),
+            "finding_recall": recall_ratio >= self.PLANTED_FLAW_RECALL_THRESHOLD,
+            "hallucination_rate": hallucination_ratio <= self.HALLUCINATION_RATE_THRESHOLD,
         }
 
     def llm_judge_prompt(
@@ -255,6 +288,20 @@ class ContentReviewScorer:
 
 
 class FactCheckScorer:
+    """Fact-check scoring with a ratio verdict gate and robust JSON parsing.
+
+    v1 had two issues:
+      - ``verdict_class_match`` required ALL verdicts correct (binary AND), so a
+        single wrong verdict collapsed the score — same 0.5-floor antipattern as
+        ContentReviewScorer. v1.2 replaces this with ``verdict_recall``: fraction
+        of claims matched (pass @ ≥0.75).
+      - ``_parse_json_response`` failed on prose-prefixed JSON (qwen3.6, grok-4.3,
+        dsv4-flash all prefix the JSON array with a sentence). v1.2 adds a
+        balanced bracket scanner as a third extraction path after fenced-block.
+    """
+
+    VERDICT_RECALL_THRESHOLD = 0.75
+
     def deterministic_gates(
         self,
         response: str,
@@ -277,7 +324,7 @@ class FactCheckScorer:
                 cited += 1
         total = len(expected)
         return {
-            "verdict_class_match": total > 0 and matched == total,
+            "verdict_recall": total > 0 and matched / total >= self.VERDICT_RECALL_THRESHOLD,
             "citation_grounding": total > 0 and cited >= int(ground_truth.get("min_citations", 3)),
         }
 
@@ -656,20 +703,50 @@ _assert_lane_set_consistency()
 
 
 def _parse_json_response(response: str) -> list[dict[str, Any]]:
+    def _to_list(parsed: Any) -> list[dict[str, Any]]:
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, dict)]
+        if isinstance(parsed, dict) and isinstance(parsed.get("claims"), list):
+            return [item for item in parsed["claims"] if isinstance(item, dict)]
+        return []
+
+    # 1. Direct JSON parse.
     try:
-        parsed = json.loads(response)
+        return _to_list(json.loads(response))
     except json.JSONDecodeError:
-        match = re.search(r"```(?:json)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
-        if not match:
-            return []
+        pass
+
+    # 2. Fenced ```json ... ``` block.
+    match = re.search(r"```(?:json)?\s*(.*?)```", response, re.DOTALL | re.IGNORECASE)
+    if match:
         try:
-            parsed = json.loads(match.group(1))
+            return _to_list(json.loads(match.group(1)))
         except json.JSONDecodeError:
-            return []
-    if isinstance(parsed, list):
-        return [item for item in parsed if isinstance(item, dict)]
-    if isinstance(parsed, dict) and isinstance(parsed.get("claims"), list):
-        return [item for item in parsed["claims"] if isinstance(item, dict)]
+            pass
+
+    # 3. Balanced bracket scan — handles prose-prefixed JSON (qwen3.6, grok-4.3,
+    #    dsv4-flash all emit a sentence before the JSON array). Tracks `[`/`]` depth
+    #    only; nested `{}` inside the array do not affect the counter.
+    depth = 0
+    start = -1
+    candidates = 0
+    for i, ch in enumerate(response):
+        if ch == "[":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0 and start != -1:
+                candidates += 1
+                try:
+                    return _to_list(json.loads(response[start : i + 1]))
+                except json.JSONDecodeError:
+                    pass
+                if candidates >= 50:
+                    break
+                start = -1
+
     return []
 
 

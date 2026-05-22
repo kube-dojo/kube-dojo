@@ -120,7 +120,7 @@ def test_content_review_scorer_happy_path():
         response,
         ground_truth,
     )
-    assert gates == {"planted_flaw_recall": True, "review_precision": True}
+    assert gates == {"finding_recall": True, "hallucination_rate": True}
 
 
 def test_fact_check_scorer_happy_path():
@@ -135,7 +135,7 @@ def test_fact_check_scorer_happy_path():
     )
     ground_truth = score_cell.load_ground_truth("fact-check", "k8s-1-35-claims")
     gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, ground_truth)
-    assert gates == {"verdict_class_match": True, "citation_grounding": True}
+    assert gates == {"verdict_recall": True, "citation_grounding": True}
 
 
 def test_architecting_scorer_happy_path():
@@ -806,3 +806,131 @@ def test_score_cell_writes_deterministic_rows(tmp_path):
             (cell_id,),
         ).fetchone()["count"]
     assert count == 2
+
+
+# ---------------------------------------------------------------------------
+# ContentReviewScorer ratio-gate tests (v1.2 fix for #1441 phase 1.1)
+# ---------------------------------------------------------------------------
+
+def _content_review_gt() -> dict:
+    """Minimal ground truth: 4 planted flaws, 4 hallucination terms."""
+    return {
+        "planted_flaws": [
+            {"aliases": ["flaw-A"]},
+            {"aliases": ["flaw-B"]},
+            {"aliases": ["flaw-C"]},
+            {"aliases": ["flaw-D"]},
+        ],
+        "hallucination_terms": ["halluc-X", "halluc-Y", "halluc-Z", "halluc-W"],
+    }
+
+
+def test_content_review_scorer_0_of_4_both_gates_fail():
+    gt = _content_review_gt()
+    # 0 flaws found → recall=0.0 < 0.6; 2/4 hallucination terms → rate=0.5 > 0.25
+    response = "halluc-X and halluc-Y are mentioned but no flaws here"
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(response, gt)
+    assert gates == {"finding_recall": False, "hallucination_rate": False}
+
+
+def test_content_review_scorer_2_of_4_recall_fails_hallucination_ok():
+    gt = _content_review_gt()
+    # 2/4 flaws → recall=0.5 < 0.6; 0/4 hallucination → rate=0.0 ≤ 0.25
+    response = "flaw-A and flaw-B are mentioned"
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(response, gt)
+    assert gates == {"finding_recall": False, "hallucination_rate": True}
+
+
+def test_content_review_scorer_3_of_4_both_gates_pass():
+    gt = _content_review_gt()
+    # 3/4 flaws → recall=0.75 ≥ 0.6; 1/4 hallucination → rate=0.25 ≤ 0.25
+    response = "flaw-A and flaw-B and flaw-C and halluc-X"
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(response, gt)
+    assert gates == {"finding_recall": True, "hallucination_rate": True}
+
+
+def test_content_review_scorer_4_of_4_plus_1_hallucination_passes_at_threshold():
+    gt = _content_review_gt()
+    # 4/4 flaws → recall=1.0 ≥ 0.6; 1/4 hallucination → rate=0.25 exactly ≤ 0.25
+    response = "flaw-A and flaw-B and flaw-C and flaw-D and halluc-X"
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(response, gt)
+    assert gates == {"finding_recall": True, "hallucination_rate": True}
+
+
+def test_content_review_scorer_4_of_4_plus_2_hallucination_fails_rate():
+    gt = _content_review_gt()
+    # 4/4 flaws → recall=1.0 ≥ 0.6; 2/4 hallucination → rate=0.5 > 0.25
+    response = "flaw-A and flaw-B and flaw-C and flaw-D and halluc-X and halluc-Y"
+    gates = score_cell.SCORERS["content-review"].deterministic_gates(response, gt)
+    assert gates == {"finding_recall": True, "hallucination_rate": False}
+
+
+# ---------------------------------------------------------------------------
+# FactCheckScorer parse-fragility tests (v1.2 fix for #1441 phase 1.2)
+# ---------------------------------------------------------------------------
+
+def test_parse_json_response_direct_list():
+    result = score_cell._parse_json_response('[{"claim_id": 1, "verdict": "true"}]')
+    assert len(result) == 1
+    assert result[0]["claim_id"] == 1
+
+
+def test_parse_json_response_prose_plus_fenced():
+    raw = 'Here is my answer:\n\n```json\n[{"claim_id":1,"verdict":"true"}]\n```'
+    result = score_cell._parse_json_response(raw)
+    assert len(result) == 1
+    assert result[0]["verdict"] == "true"
+
+
+def test_parse_json_response_prose_plus_bare_list():
+    raw = (
+        "Based on my analysis, here are the verdicts:\n"
+        '[{"claim_id":1,"verdict":"true"}, {"claim_id":2,"verdict":"false"}]\n'
+        "Additional context follows."
+    )
+    result = score_cell._parse_json_response(raw)
+    assert len(result) == 2
+
+
+def test_parse_json_response_malformed_returns_empty():
+    result = score_cell._parse_json_response("I cannot complete this task")
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# FactCheckScorer verdict_recall ratio tests
+# ---------------------------------------------------------------------------
+
+def _fact_check_gt_3_claims() -> dict:
+    return {
+        "min_citations": 0,
+        "claims": [
+            {"claim_id": "C1", "verdict": "VERIFIED"},
+            {"claim_id": "C2", "verdict": "VERIFIED"},
+            {"claim_id": "C3", "verdict": "FALSE"},
+        ],
+    }
+
+
+def test_fact_check_scorer_0_of_3_correct_fails():
+    gt = _fact_check_gt_3_claims()
+    # All wrong verdicts → matched=0 → 0/3=0.0 < 0.75
+    response = '[{"claim_id":"C1","verdict":"FALSE"},{"claim_id":"C2","verdict":"FALSE"},{"claim_id":"C3","verdict":"VERIFIED"}]'
+    gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, gt)
+    assert gates["verdict_recall"] is False
+
+
+def test_fact_check_scorer_2_of_3_correct_fails():
+    gt = _fact_check_gt_3_claims()
+    # 2/3 = 0.667 < 0.75 → fails
+    response = '[{"claim_id":"C1","verdict":"VERIFIED"},{"claim_id":"C2","verdict":"VERIFIED"},{"claim_id":"C3","verdict":"VERIFIED"}]'
+    gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, gt)
+    assert gates["verdict_recall"] is False
+
+
+def test_fact_check_scorer_3_of_3_correct_passes():
+    gt = _fact_check_gt_3_claims()
+    # 3/3 = 1.0 ≥ 0.75 → passes
+    response = '[{"claim_id":"C1","verdict":"VERIFIED"},{"claim_id":"C2","verdict":"VERIFIED"},{"claim_id":"C3","verdict":"FALSE"}]'
+    gates = score_cell.SCORERS["fact-check"].deterministic_gates(response, gt)
+    assert gates["verdict_recall"] is True
