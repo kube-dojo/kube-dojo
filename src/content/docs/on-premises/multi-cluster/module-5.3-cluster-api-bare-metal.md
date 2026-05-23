@@ -5,589 +5,529 @@ sidebar:
   order: 4
 ---
 
-> **Complexity**: `[ADVANCED]` | Time: 50 minutes
->
-> **Prerequisites**: [Module 5.2: Multi-Cluster Control Planes](../module-5.2-multi-cluster-control-planes/), [Module 2.4: Declarative Bare Metal](../../provisioning/module-2.4-declarative-bare-metal/)
+> **On-Premises Multi-Cluster** | Complexity: `[ADVANCED]` | Time: 55-65 min | Covers Cluster API, Metal3, Ironic, Tinkerbell, BMC inventory, network boot, bootstrap providers, control-plane HA, and day-2 bare-metal lifecycle.
 
----
+## Prerequisites
 
-## Why This Module Matters
+Before starting this module, you should understand multi-cluster control planes, declarative bare-metal provisioning fundamentals, and how management clusters differ from workload clusters in day-2 operations.
+- **Required**: [Module 5.2: Multi-Cluster Control Planes](../module-5.2-multi-cluster-control-planes/)
+- **Required**: [Module 2.4: Declarative Bare Metal](../../provisioning/module-2.4-declarative-bare-metal/)
+- **Helpful**: IPMI or Redfish familiarity, DHCP/PXE basics, and experience running a management Kubernetes cluster
 
-At Deutsche Telekom, managing the underlying infrastructure for edge computing meant operating thousands of distributed Kubernetes clusters across remote cell towers and localized data centers. Prior to adopting declarative infrastructure, their legacy provisioning model required an engineer to manually trigger PXE boots, install operating systems, execute kubeadm bootstrap commands, and configure overlay networks. This imperative workflow meant that provisioning a single remote cluster consumed three full days of engineering effort. When a critical node suffered a hardware failure at a remote edge site, the replacement process demanded up to eight hours of downtime and remote hands to physically identify the server, reconfigure BIOS parameters, reinstall the system, and rejoin the degraded cluster. Such delays incurred massive service degradation costs, frequently exceeding tens of thousands of dollars per incident in SLA penalties and lost operational efficiency.
+## Learning Outcomes
 
-The organization transformed its infrastructure lifecycle by adopting Cluster API (CAPI) paired with the Metal3 infrastructure provider (CAPM3). By treating bare-metal Kubernetes clusters as declarative resources—identical in concept to native Kubernetes Deployments or Services—the operations team defined their desired target state in Git. Once applied, CAPI and Metal3 handled the complex orchestration of communicating with Baseboard Management Controllers (BMCs) to power on servers, push operating system images, and orchestrate cluster joins autonomously.
+After completing this module, you will be able to connect bare-metal hardware lifecycle to the same declarative patterns you use for application Deployments.
+- **Implement** Cluster API with the Metal3 provider to declaratively provision bare-metal Kubernetes clusters from a management cluster.
+- **Design** a multi-cluster lifecycle pipeline that orchestrates provisioning, scale-up, replacement, and chained upgrades through GitOps.
+- **Evaluate** BareMetalHost state transitions during hardware inspection, provisioning, decommissioning, and error recovery.
+- **Diagnose** node failures and configure MachineHealthChecks that remediate hardware safely without cascading outages.
+- **Compare** bare-metal CAPI provisioning against OS-level kubeadm bootstrap and against private-cloud CAPI providers such as CAPV.
 
-The results of this transformation were immediate and profound. The laborious three-day cluster provisioning cycle was reduced to an unattended forty-five-minute operation. More importantly, node failures now trigger autonomous remediation. A dedicated controller detects the unhealthy node, evicts the workload, deprovisions the failed server, and dynamically provisions a replacement from an available pool of spare hardware. The multi-hour outage window shrank to fifteen minutes, eliminating the need for remote hands and drastically cutting the financial impact of hardware degradation. 
+## Why This Module Matters: Declarative Metal Without Remote Hands
 
----
+Hypothetical scenario: a telecommunications edge platform operates hundreds of small Kubernetes clusters on physical servers in cabinets that rarely see a platform engineer. Legacy provisioning required an operator to drive to a site, attach a crash cart, configure BIOS boot order, install Linux from USB, run kubeadm join commands, and verify overlay networking before workloads could land. A single failed disk at a remote rack meant eight hours of truck rolls, SLA penalties, and manual rebuild steps that drifted from the documented runbook because nobody updated the wiki after the last emergency patch.
 
-## What You'll Be Able to Do
+That imperative model collapses when fleet size grows. Cluster API (CAPI) treats clusters and machines as Kubernetes resources reconciled by controllers, the same way Deployments reconcile pods. On bare metal, the Metal3 infrastructure provider (CAPM3) bridges those APIs to Baseboard Management Controllers (BMCs) through OpenStack Ironic or alternative backends such as Tinkerbell. You declare desired node counts, OS images, and Kubernetes versions in Git; controllers power servers on, network-boot inspection or installation images, inject bootstrap data, and join nodes without SSH sessions on the data-center floor.
 
-After completing this module, you will be able to:
+The tradeoff is real: bare-metal CAPI demands upfront investment in DHCP, TFTP or HTTP image hosting, BMC credential hygiene, spare hardware inventory, and network segmentation between management and workload planes. You also inherit Ironic or Tinkerbell as operational dependencies alongside etcd and your CNI, which means provider upgrades become part of the same change-advisory process as Kubernetes minor bumps. Platform maturity therefore includes fluency in out-of-band management, immutable OS images, and MachineHealthCheck safety thresholds—not only kubectl and Helm skills teams already practice on cloud-hosted clusters. This module teaches the architecture and day-2 operations you need before CAPM3 becomes production-critical infrastructure across your entire bare-metal fleet.
 
-1. **Implement** Cluster API with the Metal3 provider to declaratively provision bare-metal Kubernetes clusters.
-2. **Design** a multi-cluster lifecycle pipeline that orchestrates provisioning and zero-downtime chained upgrades through GitOps.
-3. **Evaluate** the state transitions of BareMetalHost resources during hardware inspection, provisioning, and decommissioning.
-4. **Diagnose** node failures and configure MachineHealthChecks to enforce automatic infrastructure remediation safely.
-5. **Compare** the provisioning capabilities, network prerequisites, and operational overhead of bare-metal environments against hypervisor-backed virtualized infrastructure.
+## Cluster API Architecture on Bare Metal
 
----
+Cluster API is a subproject of Kubernetes SIG Cluster Lifecycle. Its mission is declarative cluster lifecycle: create, upgrade, scale, and delete entire Kubernetes clusters using CRDs and controllers on a **management cluster**. The management cluster runs CAPI core controllers plus provider-specific controllers; it should not host tenant application workloads. Workload clusters are downstream environments whose Machines, control planes, and infrastructure objects live as namespaced resources you manage with GitOps or imperative apply—though GitOps is strongly preferred for auditability.
 
-## What You'll Learn
+CAPI separates concerns into provider categories that compose cleanly on bare metal, and understanding each category prevents teams from installing only CAPM3 while forgetting cert-manager or bootstrap providers during management-cluster bring-up.
 
-- The overarching architecture of Cluster API and the organizational structure of Kubernetes SIG Cluster Lifecycle.
-- The distinctions between Infrastructure Providers, Bootstrap Providers, Control Plane Providers, and IPAM Providers.
-- The mechanics of CAPM3 (Metal3) and its integration with OpenStack Ironic for out-of-band hardware management.
-- Techniques for managing a BareMetalHost inventory and understanding its internal state machine.
-- Strategies for configuring MachineHealthCheck controllers to perform automatic node remediation without risking cascading failures.
-- Designing GitOps-driven cluster lifecycle workflows utilizing Flux or ArgoCD with safe pruning policies.
-- Declarative operations for scaling workloads and executing chained Kubernetes version upgrades.
+1. **Infrastructure providers** provision servers. CAPM3 (Metal3) claims BareMetalHost inventory and drives Ironic. CAPT (Tinkerbell) offers an alternative workflow centered on in-cluster provisioning workers. Private-cloud analogs include CAPV (vSphere), CAPO (OpenStack), and CAPA (AWS)—same CAPI objects, different APIs underneath.
+2. **Bootstrap providers** turn a blank server into a Kubernetes node by generating cloud-init, Ignition, or provider-specific bootstrap data. The default is Cluster API Bootstrap Provider Kubeadm (CABPK).
+3. **Control plane providers** manage control plane lifecycle—etcd membership, certificate rotation, rolling upgrades. KubeadmControlPlane (KCP) is the common default.
+4. **IPAM providers** allocate node addresses when static pools are required. Metal3 ships IPAM CRDs (`IPPool`, `IPClaim`, `IPAddress`) under `ipam.metal3.io`.
 
----
-
-## 1. Cluster API Architecture & Ecosystem
-
-Cluster API (CAPI) is not a standalone CNCF project; rather, it is a formal subproject of the Kubernetes SIG Cluster Lifecycle. Its fundamental mission is to bring declarative, Kubernetes-style APIs to the creation, configuration, and management of clusters themselves. By extending the Kubernetes controller pattern, CAPI allows platform engineers to manage the lifecycle of entire fleets of clusters with the same tooling used to manage application pods.
-
-The architectural paradigm relies on a strict separation of concerns between a Management Cluster and multiple Workload Clusters. The Management Cluster is a dedicated Kubernetes environment that runs the CAPI core controllers and provider-specific Custom Resource Definitions (CRDs). It is strictly responsible for managing the state of other clusters and should never host end-user application workloads. The Workload Clusters are the downstream environments created and operated by the Management Cluster.
-
-### The Provider Model
-
-Cluster API separates its operational logic into distinct provider categories:
-
-1. **Infrastructure Providers**: These controllers interact with underlying cloud or hardware APIs to provision computational resources, networks, and load balancers. Examples include Metal3 for bare metal, AWS (CAPA), and vSphere (CAPV).
-2. **Bootstrap Providers**: These controllers are responsible for turning a newly provisioned server into a Kubernetes node. They generate the necessary `cloud-init` or Ignition scripts containing the certificates and join commands. 
-3. **Control Plane Providers**: These controllers manage the complex lifecycle of the Kubernetes control plane, handling etcd quorum, certificate rotation, and safely rolling out minor version upgrades across control plane nodes.
-4. **IPAM Providers**: These controllers exist for IP address management, handling IP address allocations for nodes and abstracting IP management from infrastructure provisioners.
-
-The default and built-in implementation for both the bootstrap and control-plane roles is Kubeadm (officially known as CABPK for the bootstrap provider, and KubeadmControlPlane for the control plane provider).
-
-### Architectural Diagram
+The official CLI is `clusterctl`, which initializes providers, generates cluster templates, and moves resources between management clusters. CAPI relies on mutating and validating webhooks, so **cert-manager** is a hard prerequisite on the management cluster. As of CAPI v1.12.x (January 2026 release series), chained upgrades can span multiple Kubernetes minor versions with intermediate steps computed automatically, and in-place updates reduce full node replacement for some changes. API storage has moved toward `cluster.x-k8s.io/v1beta2`; plan migrations before v1beta1 removal in later releases.
 
 ```mermaid
 flowchart TD
-    subgraph Mgmt[Management Cluster]
-        subgraph Core[CAPI Core Controllers]
-            C[Cluster Controller]
-            M[Machine Controller]
-            MHC[MachineHealthCheck Ctrl]
+    subgraph Mgmt["Management cluster"]
+        subgraph Core["CAPI core"]
+            CC[Cluster controller]
+            MC[Machine controller]
+            MHC[MachineHealthCheck]
         end
-        subgraph Infra[Infrastructure Provider]
-            M3C[Metal3Cluster Controller]
-            M3M[Metal3Machine Controller]
-            I[Ironic Bare-Metal Provisioner\n- IPMI/Redfish\n- PXE boot\n- Inspection]
+        subgraph Infra["CAPM3 + BMO"]
+            M3C[Metal3Cluster]
+            M3M[Metal3Machine]
+            BMO[Bare Metal Operator]
+            IR[Ironic provisioner]
         end
-        subgraph Boot[Bootstrap Provider]
-            K[Kubeadm\n- Generates configs\n- Cloud-init]
-        end
-        subgraph CP[Control Plane Provider]
-            KCP[KubeadmControlPlane\n- CP lifecycle]
+        subgraph Boot["Bootstrap + CP"]
+            CABPK[CABPK / kubeadm]
+            KCP[KubeadmControlPlane]
         end
     end
-    subgraph Wkld[Workload Cluster]
-        N1[CP1]
-        N2[CP2]
-        N3[CP3]
-        N4[W1]
-        N5[W2]
-        N6[W3]
-        N7[W4]
+    subgraph BMC["Out-of-band network"]
+        IPMI[IPMI / Redfish BMCs]
+        PXE[DHCP + iPXE + HTTP/TFTP]
     end
-    Mgmt -- "Creates and manages" --> Wkld
+    subgraph Wkld["Workload cluster"]
+        CP1[Control plane nodes]
+        W1[Worker nodes]
+    end
+    CC --> M3C
+    MC --> M3M
+    M3M --> BMO
+    BMO --> IR
+    IR --> IPMI
+    IR --> PXE
+    CABPK --> CP1
+    CABPK --> W1
+    KCP --> CP1
+    Mgmt --> Wkld
 ```
 
-### Tooling and API Evolution
+Pause and predict: if the management cluster loses connectivity to the BMC network while workload clusters stay healthy, new provisioning, remediation, and chained upgrades stall immediately because CAPM3 cannot power-cycle hosts or attach virtual media, even though running kubelet processes on already-joined nodes continue serving traffic until the next hardware fault forces manual intervention.
 
-The official command-line utility for initializing management clusters, upgrading providers, and moving resources between clusters is `clusterctl`. Because Cluster API heavily utilizes mutating and validating webhooks, `cert-manager` (specifically supporting the `cert-manager.io/v1` API) is a strict, required prerequisite. When running `clusterctl init`, the CLI will automatically detect if cert-manager is absent and install version v1.20.0 by default to ensure webhooks function correctly.
+## Metal3, Ironic, and the BareMetalHost Lifecycle
 
-As the project matures, API versions transition through standard Kubernetes deprecation cycles. The CAPI v1beta2 API was introduced and promoted to the official storage version in CAPI v1.11 (released in August 2025). Consequently, the older v1beta1 API will become unserved from the API server in CAPI v1.14 (targeting August 2026), and will be fully removed in v1.18. The latest stable CAPI release as of April 2026 is v1.12.x (with v1.12.0 having shipped on January 27, 2026, followed by patch releases such as v1.12.2). The v1.13 minor release is scheduled for April 2026.
+Metal3 (CAPM3) is the dominant CAPI infrastructure provider for bare metal. It does not replace Ironic; it embeds Ironic (typically containerized) and exposes Kubernetes-native CRDs through the Bare Metal Operator (BMO). You register each physical server as a `BareMetalHost` (`metal3.io/v1alpha1`) with BMC address, credentials secret, boot MAC, and optional root-device hints so provisioning targets the correct NVMe or RAID volume.
 
-CAPI maintains a strict version support policy: only the two most recent minor releases are actively supported at any given time. Older releases become unsupported immediately upon the release of a new minor version. Within the v1.12 release, the management cluster can run Kubernetes v1.31.x through v1.34.x, while workload clusters can run Kubernetes v1.29.x through v1.34.x (note that Kubernetes v1.32 and below are end-of-life and not recommended for production).
+BMC access uses IPMI (`ipmi://`) or Redfish (`redfish://` or `redfish+https://`). Redfish is preferred on modern Dell iDRAC, HPE iLO, and Lenovo XClarity controllers because credentials travel over HTTPS and virtual media attachment is better supported than legacy IPMI LAN channels. Store BMC secrets in Kubernetes Secrets encrypted at rest, or better, inject them via Sealed Secrets or SOPS so etcd backups never contain plaintext passwords.
 
-One of the most significant operational improvements introduced in CAPI v1.12 is support for in-place updates and chained upgrades. Chained upgrades allow platform engineers to declare a target Kubernetes version that spans multiple minor releases; CAPI will automatically compute and execute the intermediate upgrade steps required to safely reach the destination without violating Kubeadm version skew policies. In-place updates allow modifying cluster resources without full node replacement. Additionally, ClusterClass—a mechanism for templating managed topologies—remains classified as an experimental feature in CAPI v1.12 and strictly requires the `ClusterTopology` feature gate to be enabled on the management cluster.
+The BareMetalHost state machine is the operational heartbeat of bare-metal automation, and every platform on-call rotation should include a printed copy of these states taped beside the BMC jump host until transitions become muscle memory.
 
----
+1. **Registering** — CR created; BMO validates BMC credentials and connectivity.
+2. **Inspecting** — Ironic boots an inspection ramdisk via PXE; CPU, RAM, disks, and NICs are inventoried.
+3. **Available** — Inspection succeeded; host powered off and idle, ready for a Machine claim.
+4. **Provisioning** — CAPI Machine selected this host; Ironic writes the OS image, injects user-data, reboots to disk.
+5. **Provisioned** — Node joined the cluster; host remains allocated to that Machine.
+6. **Deprovisioning** — Machine deleted; disks wiped per policy; host returns toward Available.
+7. **Error** — Unrecoverable failure; requires operator intervention after reviewing BMO and Ironic logs.
 
-## 2. Metal3 and Bare Metal Provisioning
-
-Metal3 (pronounced "metal-cubed") serves as the Cluster API infrastructure provider for bare-metal servers. The project was initially accepted into the CNCF Sandbox in September 2020. Due to massive ecosystem adoption, Metal3.io subsequently became a CNCF Incubating project on August 27, 2025, supported by 57 active contributing organizations.
-
-The current release series for the Metal3 provider is CAPM3 v1.12.x, which is explicitly versioned to track the upstream CAPI release cycle. Like CAPI, CAPM3 strictly maintains support for only the two most recent minor releases; older releases become unsupported immediately.
-
-### The Bare Metal Operator and Ironic
-
-Metal3 does not reinvent hardware provisioning; instead, it leverages OpenStack Ironic as its underlying bare metal provisioning engine. Ironic runs seamlessly inside a container within the Metal3 deployment. The Bare Metal Operator (BMO) acts as the bridge between Kubernetes CRDs and Ironic's declarative API. The BMO operates on its own semantic versioning cycle, with BMO v0.12.x (v0.12.2) currently serving as the stable release, versioned independently from CAPM3 since capm3-v1.1.2.
-
-Ironic provides native out-of-band management support via both IPMI and Redfish protocols. Modern environments heavily favor Redfish, which offers advanced capabilities such as virtual media boot, BIOS settings configuration, and RAID management over a RESTful HTTPS API.
-
-> **Pause and predict**: What would happen if you registered a BareMetalHost with incorrect BMC credentials? At what stage of the lifecycle would the failure be detected?
-
-To manage bare-metal servers, you register them in your management cluster as `BareMetalHost` (BMH) resources using the API group `metal3.io/v1alpha1`.
+Incorrect BMC credentials fail early in **Registering** or **Inspecting** with authentication errors—never silently proceed to provisioning. Skipping inspection saves minutes in labs but hides failed RAM, missing disks, or wrong NIC ordering that explode during first production etcd write.
 
 ```yaml
-# Register a bare-metal server
 apiVersion: metal3.io/v1alpha1
 kind: BareMetalHost
 metadata:
-  name: server-rack1-u10
-  namespace: metal3
+  name: rack2-u14
+  namespace: metal3-system
+  labels:
+    environment: production
+    rack: "2"
 spec:
   online: true
-  bootMACAddress: "aa:bb:cc:dd:ee:01"
+  bootMACAddress: "52:54:00:12:34:56"
   bmc:
-    address: "ipmi://192.168.1.10"      # Or redfish://
-    credentialsName: server-rack1-u10-bmc
-    disableCertificateVerification: true
+    address: "redfish+https://192.168.100.14"
+    credentialsName: rack2-u14-bmc-secret
+    disableCertificateVerification: false
   rootDeviceHints:
-    deviceName: "/dev/nvme0n1"           # Install OS here
-  hardwareProfile: "unknown"              # Let Ironic inspect
+    wwn: "5002538e4020a1b2"
+  hardwareProfile: unknown
 ```
 
-```yaml
-# BMC credentials
-apiVersion: v1
-kind: Secret
-metadata:
-  name: server-rack1-u10-bmc
-  namespace: metal3
-type: Opaque
-stringData:
-  username: admin
-  password: "CHANGE_ME_IN_VAULT"
-```
+Hardware inventory management extends beyond CR creation. Platform teams label hosts by rack, failure domain, CPU generation, and role (`control-plane`, `worker`, `spare`). Machine templates use `hostSelector` to pin control planes to NVMe-backed hosts and workers to denser storage tiers. Maintain at least ten to fifteen percent spare BareMetalHosts powered off but registered; MachineHealthCheck remediation otherwise creates Machines that sit **Pending** forever when no Available host exists.
 
-### The Provisioning State Machine
+## Network Boot: DHCP, iPXE, TFTP, and Image Delivery
 
-The BareMetalHost resource is governed by a rigorous state machine managed by the Bare Metal Operator:
+Bare-metal provisioning is a networking exercise disguised as Kubernetes YAML. When Ironic provisions a host, the server PXE-boots: firmware requests DHCP, receives next-server and filename options, loads iPXE or GRUB, then fetches a kernel and initrd or a full disk image from HTTP, HTTPS, or TFTP. Your provisioning network must be isolated from tenant workloads yet reachable from BMO and Ironic pods on the management cluster.
 
-1. **Registering**: The BMH is created. BMO verifies the syntax and attempts to authenticate against the BMC using the provided credentials.
-2. **Inspecting**: Ironic boots an ephemeral inspection ramdisk on the server to dynamically inventory CPU, RAM, disks, and network interfaces.
-3. **Available**: The server successfully passed inspection and is powered off. This is the stable idle state awaiting a machine claim from CAPI.
-4. **Provisioning**: A Cluster API Machine claims the host. Ironic powers on the server, instructs it to PXE boot, writes the operating system image to the root device, and injects the cloud-init configuration.
-5. **Provisioned**: The operating system boots from local disk, cloud-init executes the Kubeadm join sequence, and the node successfully registers with the workload cluster.
-6. **Deprovisioning**: The Cluster API Machine is deleted. The BMO instructs Ironic to securely wipe the local disks and scrub configuration data.
-7. **Deleting**: The resource is being removed from the Kubernetes API.
-8. **Error**: If any of the above processing states encounter an unrecoverable failure, the host transitions into an error state requiring human intervention.
+Design the provisioning VLAN using the following checklist so PXE, inspection, and deploy phases never compete with tenant traffic for DHCP leases or firewall exceptions.
 
-*Note on Ironic Versions:* Some unofficial community guides suggest that the minimum OpenStack Ironic API version required for Metal3 integration is 1.81 (which corresponds to the OpenStack 2023.1 'Antelope' release). However, administrators must exercise caution, as this specific version requirement is not corroborated by the authoritative Metal3 or Ironic documentation as of this writing. Always validate compatibility empirically before executing infrastructure upgrades.
+- **DHCP scope** reserved for transient PXE clients and predictable for inspection ramdisks; exclude BMC, management-cluster API VIPs, and image-server static addresses.
+- **TFTP or HTTP** serving Ironic deploy kernels and ramdisks; large environments prefer HTTP for speed and checksum validation.
+- **Proxy DHCP** or dedicated provisioning NICs when servers have multiple interfaces—boot interface MAC must match `bootMACAddress`.
+- **Firewall rules** allowing management-cluster nodes to reach BMC subnets on IPMI/Redfish ports without exposing BMCs to corporate LANs.
+- **DNS** for image servers and any post-install registry mirrors referenced in cloud-init.
 
-In addition to hardware provisioning, Metal3 ships an IP Address Manager (IPAM) component that manages static IP allocations for bare-metal nodes via CRDs (such as IPPool, IPClaim, and IPAddress) under the API group `ipam.metal3.io/v1alpha1`.
-
-For organizations evaluating alternatives, Tinkerbell offers its own Cluster API Provider (CAPT) as a different bare-metal infrastructure backend. Its latest tagged release is v0.6.4.
-
----
-
-## 3. Declarative Cluster Creation
-
-Creating a cluster with CAPM3 requires linking the core CAPI resources to their infrastructure-specific counterparts. The Cluster resource references a KubeadmControlPlane and a Metal3Cluster. The MachineDeployment references a Metal3MachineTemplate and a KubeadmConfigTemplate.
+Metal3Machine templates reference OS images by URL, checksum, and format such as qcow2, raw, or iso, and those three fields together are the contract that prevents silent drift when mirror servers rotate artifacts during patch windows.
 
 ```yaml
-# 1. Cluster definition
-apiVersion: cluster.x-k8s.io/v1beta1
-kind: Cluster
-metadata:
-  name: production
-  namespace: clusters
-spec:
-  clusterNetwork:
-    pods:
-      cidrBlocks: ["10.244.0.0/16"]
-    services:
-      cidrBlocks: ["10.96.0.0/12"]
-  controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
-    kind: KubeadmControlPlane
-    name: production-cp
-  infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: Metal3Cluster
-    name: production
-```
-
-```yaml
-# 2. Metal3 cluster config
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-kind: Metal3Cluster
-metadata:
-  name: production
-  namespace: clusters
-spec:
-  controlPlaneEndpoint:
-    host: 10.0.0.100
-    port: 6443
-  noCloudProvider: true
-```
-
-```yaml
-# 3. Control plane (3 nodes, auto-managed)
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
-kind: KubeadmControlPlane
-metadata:
-  name: production-cp
-  namespace: clusters
-spec:
-  replicas: 3
-  version: v1.35.0
-  machineTemplate:
-    infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: Metal3MachineTemplate
-      name: production-cp
-  kubeadmConfigSpec:
-    initConfiguration:
-      nodeRegistration:
-        kubeletExtraArgs:
-          node-labels: "node-role.kubernetes.io/control-plane="
-    joinConfiguration:
-      nodeRegistration:
-        kubeletExtraArgs:
-          node-labels: "node-role.kubernetes.io/control-plane="
-```
-
-```yaml
-# 4. Machine template for control plane
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: Metal3MachineTemplate
 metadata:
-  name: production-cp
-  namespace: clusters
+  name: production-workers-v1
+  namespace: clusters-prod
 spec:
   template:
     spec:
       image:
-        url: "http://10.0.0.50/ubuntu-22.04-k8s.qcow2"
-        checksum: "sha256:abc123..."
+        url: "https://images.internal.example/os/ubuntu-24.04-k8s-v1.35.qcow2"
+        checksum: "sha256:abcdef0123456789..."
         checksumType: sha256
         format: qcow2
       hostSelector:
         matchLabels:
-          role: control-plane
+          role: worker
 ```
+
+Immutable images beat golden-server cloning. Build pipelines produce versioned artifacts with pinned kernel, containerd, and optional hardening profiles; reference them by checksum so reprovisioning recreates identical nodes months later. Mutable “install latest packages on first boot” scripts drift quickly and invalidate disaster-recovery assumptions.
+
+## Bootstrap Providers: kubeadm, Talos, k0s, and RKE2
+
+The bootstrap provider decides what runs on disk after Ironic finishes. **CABPK (kubeadm)** remains the default: it renders cloud-init or Ignition with join tokens, certificate paths, and kubelet configuration. It pairs naturally with **KubeadmControlPlane** for rolling control-plane upgrades. Most CAPM3 documentation and `clusterctl` templates assume this path.
+
+Alternative bootstrap and control-plane combinations trade operational model for immutability, and the following table summarizes when teams pick kubeadm defaults versus Talos, k0s, or RKE2 on bare metal.
+
+| Provider stack | Strength on bare metal | Tradeoff |
+|----------------|------------------------|----------|
+| CABPK + KCP (kubeadm) | Broad docs, chained CAPI upgrades, familiar debugging | Mutable OS; SSH and package drift unless heavily automated |
+| Talos (CABPT / TalosControlPlane) | Immutable, API-only OS; no SSH shell | Different day-2 tooling; hardware support matrix to verify |
+| k0s bootstrap | Lightweight binaries; simple joins | Smaller ecosystem than kubeadm for advanced features |
+| RKE2 bootstrap | Hardened defaults; common in regulated sectors | Rancher-centric workflows; version matrix with CAPI |
+
+Choosing Talos on bare metal eliminates SSH-based break-glass unless you enable emergency maintenance modes, which auditors often appreciate but on-call engineers must practice in game days. kubeadm on Ubuntu or RHEL matches teams coming from private-cloud VM bootstrap (Module 5.1) because the same Ansible patterns can generate image contents before CAPM3 ever powers on the host.
+
+Bootstrap **secrets**—join tokens, bootstrap kubeconfig copies, etcd encryption keys—must never live in plain Git. Use sealed secrets, external secret operators, or short-lived tokens rotated by the management cluster. CAPI stores references in `Machine` bootstrap objects; compromise of the management cluster etcd therefore equals compromise of every downstream cluster join capability. Restrict RBAC on management namespaces, enable audit logging, and segregate production cluster CRs into namespaces with dedicated GitOps deploy keys.
+
+## Control Plane HA on Bare Metal: kube-vip and MetalLB
+
+Bare-metal Kubernetes lacks a cloud provider to assign `LoadBalancer` VIPs for the API server. You must engineer L4 reachability explicitly. Two common patterns appear in on-premises CAPI designs:
+
+**kube-vip** runs as a DaemonSet or static pod on control-plane nodes, participates in leader election, and advertises a virtual IP for the Kubernetes API using ARP (L2) or BGP (L3). Pair kube-vip with KubeadmControlPlane by setting `controlPlaneEndpoint.host` to the VIP in `Cluster` and `Metal3Cluster` specs. kube-vip also advertises Service VIPs when deployed with its cloud-provider component—useful for ingress controllers on bare metal.
+
+**MetalLB** allocates address pools for `Service type: LoadBalancer` from configured IP ranges. It does not replace an API VIP by itself; teams often combine kube-vip for `6443` and MetalLB for application Services. MetalLB speakers announce routes via L2 or BGP depending on datacenter design.
 
 ```yaml
-# 5. Worker MachineDeployment
-apiVersion: cluster.x-k8s.io/v1beta1
-kind: MachineDeployment
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3Cluster
 metadata:
-  name: production-workers
-  namespace: clusters
+  name: edge-prod
+  namespace: clusters-prod
 spec:
-  clusterName: production
-  replicas: 5
-  selector:
-    matchLabels:
-      cluster.x-k8s.io/cluster-name: production
-  template:
-    metadata:
-      labels:
-        cluster.x-k8s.io/cluster-name: production
-    spec:
-      clusterName: production
-      version: v1.35.0
-      bootstrap:
-        configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-          kind: KubeadmConfigTemplate
-          name: production-workers
-      infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-        kind: Metal3MachineTemplate
-        name: production-workers
+  controlPlaneEndpoint:
+    host: 10.10.50.100   # kube-vip VIP on CP VLAN
+    port: 6443
+  noCloudProvider: true
 ```
 
-### Comparing Bare Metal to vSphere
+Without a stable VIP, every control-plane Machine carries its own apiserver address and client kubeconfig breaks when that node is deprovisioned during upgrades or remediation events. Document which VLAN owns the VIP, which switches permit gratuitous ARP, how BGP sessions fail over during rack maintenance, and who between network and platform on-call receives the first page when apiserver TLS errors spike. MetalLB address pools for application Services should be carved from different subnets than API VIPs so a exhausted LoadBalancer pool cannot accidentally consume the control-plane address. Run quarterly failover drills: stop kube-vip on one control-plane node, verify clients reconnect through the VIP, then restore and confirm etcd member list matches Machine inventory in the management cluster.
 
-Organizations frequently operate a mix of bare-metal infrastructure and hypervisor-backed virtual machines. Cluster API Provider vSphere (CAPV) is the analog to CAPM3 for VMware environments. CAPV utilizes `VSphereCluster` and `VSphereMachineTemplate` CRDs to define virtual machine specifications.
+## Troubleshooting the Provisioning Path
 
-| Dimension | CAPM3 (Bare Metal) | CAPV (vSphere) |
-|-----------|-------------------|----------------|
-| Provision time | 5-15 minutes | 2-5 minutes |
-| Prerequisites | Ironic, DHCP, PXE, BMC | vCenter, templates |
-| Node pool | BareMetalHost inventory (fixed) | Unlimited (VM clone) |
-| Rollback | Wipe + reprovision | VM snapshot/rollback |
-| Best for | Maximum perf, no hypervisor tax | Flexibility, fast iteration |
+When a Machine sticks in Provisioning, walk the stack from Git downward instead of restarting random controllers. Confirm the BareMetalHost is Available and matches `hostSelector` labels, then inspect BMO events for BMC authentication or power-state errors. Ironic logs reveal whether DHCP never offered an address, TFTP timed out, or HTTP image download failed checksum validation. Misaligned `bootMACAddress` values produce the maddening symptom of another host receiving the deploy image—always compare LLDP or switch MAC tables against BareMetalHost specs during bring-up.
 
----
+Common failure signatures include **DHCP starvation** when too many hosts PXE simultaneously, **MTU black holes** when provisioning VLAN routes through a tunnel smaller than 1500 bytes, and **clock skew** when BMC timestamps break Redfish session tokens. Keep a laminated runbook beside the provisioning VLAN diagram listing which jump host can run `openstack baremetal node list` equivalents against Ironic, which mirror hosts serve images, and which firewall rule IDs must open for BMC subnets. Platform tickets labeled “Kubernetes broken” during provisioning are usually Layer 2 or out-of-band issues until proven otherwise.
 
-> **Stop and think**: The MachineHealthCheck has a `maxUnhealthy` field set to 40%. Why is this safety valve critical for bare-metal environments? What would happen if it were set to 100% and a network switch failed, making 6 out of 10 nodes appear NotReady?
+After the node joins, failures shift to bootstrap: cloud-init or Ignition must reach the metadata service or static URLs, pull container images, and execute kubeadm join before `nodeStartupTimeout` fires. If join succeeds but Node never Ready, debug CNI next—not CAPM3. Separating provisioning failures from bootstrap failures saves hours because the remediation owner differs: hardware teams own BMC and PXE, platform teams own image contents and join tokens, application teams own pods only after Node Ready is true.
 
-## 4. MachineHealthCheck & Automatic Remediation
+## Metal3 IPAM and Multi-Cluster Fleet Patterns
 
-The capability to self-heal underlying infrastructure is one of the most powerful features provided by Cluster API. The `MachineHealthCheck` (MHC) controller constantly monitors the health conditions of Kubernetes nodes. If a node remains in a `NotReady` state for a configured duration, the MHC safely assumes the node is irrecoverable and orchestrates its replacement.
+When DHCP cannot assign stable node addresses for production records or firewall allow lists, Metal3 IPAM CRDs allocate static IPs from pools tied to clusters or racks. `IPPool` defines ranges; `IPClaim` requests an address for a host; controllers write `IPAddress` objects consumed by templates. Coordinate IPAM with corporate NetBox or Infoblox so Kubernetes node addresses never collide with BMC, VIP, or registry reservations documented in Module 5.1 networking guidance.
+
+Multi-cluster fleet patterns place one management cluster per security zone or one global management cluster with strict namespace isolation. Edge deployments sometimes use management clusters on small VM rings while CAPM3 provisions remote bare metal over routed BMC networks. Central management reduces `clusterctl` sprawl but concentrates blast radius; distribute management when compliance mandates separate etcd for production and lab. Regardless of topology, standardize provider versions, Git repository layout, and BareMetalHost label schemas so engineers transferring between teams read familiar objects.
+
+Fleet observability should export BareMetalHost state counts, Machine phase histograms, and spare inventory gauges into the same Prometheus stack scraping workload clusters. Alert when Available hosts drop below policy thresholds or when any cluster MachineDeployment has unavailable replicas longer than SLO windows. Executives understand “two spares left in Amsterdam” better than opaque `MachinePending` messages in incident bridges.
+
+## cert-manager, clusterctl, and Provider Version Skew
+
+Every CAPI management cluster depends on cert-manager to mint TLS certificates for admission webhooks. Without healthy `cert-manager` pods, `clusterctl init` may appear to succeed while provider controllers crash-loop on webhook timeouts, producing Machines that never leave Pending with cryptic “failed calling webhook” events. Pin cert-manager to versions tested with your CAPI release, document upgrade order—cert-manager first, providers second, core CAPI third—and snapshot webhook CA bundles before upgrades so you can roll back if validation breaks mid-change.
+
+`clusterctl` tracks provider repositories through a local config file. Platform teams should commit provider version pins to Git alongside cluster manifests so disaster recovery rebuilds the same CAPM3, CABPK, and KCP combination that production validated. Skew between management-cluster Kubernetes version and provider-supported versions causes subtle errors: too new a management cluster may serve API groups providers do not yet understand; too old a cluster may lack feature gates required for ClusterClass or in-place updates. The CAPI support policy covers only the two latest minor releases; plan upgrades quarterly rather than letting management infrastructure become unsupported.
+
+When mixing providers—CAPM3 for workers, external load balancers from OpenStack Octavia for legacy Services—document which controllers own which objects so two infrastructure controllers never fight the same annotation keys. Provider version skew across fleet management clusters is acceptable only when Git branches clearly label which site runs which pin; otherwise identical cluster manifests behave differently in two cities, breaking the promise of declarative operations that executives bought when approving bare-metal automation funding.
+
+Operational acceptance criteria for a new CAPM3 site should include a full loop test: register two spares and four production hosts, provision a lab cluster, trigger MachineHealthCheck on one worker by simulating kubelet failure, verify replacement completes within SLO, execute a chained minor upgrade on KubeadmControlPlane, and decommission the lab cluster without orphaning BareMetalHosts in Error state. Only after that loop succeeds should application teams receive production kubeconfig credentials. Skipping the loop produces fleets that look declarative in slide decks but behave imperatively when the first switch failure arrives because nobody validated `maxUnhealthy` thresholds or spare counts under real latency.
+
+Finally, teach application developers the difference between Kubernetes node failure and Machine deletion. When MHC replaces a node, pod names and PVC attachments may change; StatefulSets with local storage need explicit policies about whether bare-metal reprovision preserves disk identity through rootDeviceHints and host selectors. Storage teams using central SAN arrays may prefer CAPV VMs with hot-plug volumes instead of CAPM3 local disks for stateful tiers. Platform engineering maturity is choosing the right tier for each workload rather than forcing every service onto identical bare-metal shapes because CAPI makes provisioning fashionable again.
+
+Document every BMC firmware baseline applied during intake so BareMetalHost labels encode BIOS versions that later explain why some hosts fail secure boot with new signed images. Intake checklists should include power-draw validation, memory pattern tests, and NIC loopback checks before servers ever enter the Available pool. Hardware vendors ship batches with latent defects; inspection ramdisks catch many issues, but burn-in scripts triggered through Ironic extra steps catch intermittent thermal failures that inspection misses. Treat hardware intake as part of the software supply chain, not as facilities paperwork that happens before platform engineering begins.
+
+Run quarterly game days that disable a BMC switch port—not the whole server—to validate monitoring distinguishes link-down from host-down before MachineHealthCheck deletes healthy machines whose kubelet simply lost upstream routing. These exercises expose whether your GitOps repository documents which on-call role owns BMC, Ironic, DHCP, and CAPI reconciliation during combined failures, which is the difference between a fifteen-minute reprovision and a multi-hour war room debating which controller to restart first without a written runbook owner, escalation path, or pre-agreed severity matrix for combined BMC and Kubernetes failures.
+
+## Ironic vs Tinkerbell Provisioning Flows
+
+**Ironic-centric Metal3** suits traditional datacenter racks with BMC on every server. Ironic handles power, boot order, deploy/cleaning steps, and disk erasure. BMO translates BareMetalHost spec changes into Ironic API calls. You operate Ironic as a container alongside BMO; a full OpenStack deployment is not required despite shared lineage.
+
+**Tinkerbell (CAPT)** targets workflow-driven provisioning: DHCP relay, tink-worker actions, and in-cluster microservices orchestrate each boot stage. CAPT fits edge factories or sites standardizing on Tinkerbell’s action pipeline instead of Ironic’s state machine. Release tags such as CAPT v0.6.x track their own compatibility matrix with CAPI versions—validate before mixing CAPM3 management templates with CAPT experiments on the same fleet.
+
+Use the following comparison summary when platform architects choose between CAPM3 with Ironic and CAPT with Tinkerbell for a new datacenter or edge factory rollout.
+
+| Dimension | CAPM3 + Ironic | CAPT + Tinkerbell |
+|-----------|----------------|-------------------|
+| Maturity in CAPI docs | Primary bare-metal path | Growing; workflow-centric |
+| BMC integration | Native via Ironic drivers | Depends on workflow actions |
+| Disk cleaning | Ironic deploy/clean steps | Custom actions |
+| Best fit | IPMI/Redfish servers in DC | Pipeline-heavy edge factories |
+
+Many teams prototype with CAPD (Docker provider) on kind before touching BMC networks; behavioral lessons about MachineDeployments, KubeadmControlPlane rolling order, and MachineHealthCheck thresholds transfer directly even though Docker lacks PXE, disk wiping, and BMC power cycling that define bare-metal incident timelines.
+
+## Integrating Bare-Metal CAPI with Private-Cloud Patterns
+
+Module 5.1 covered private-cloud platforms that supply VMs through OpenStack Nova or VMware vSphere. CAPM3 is not a competitor to those stacks—it occupies the layer below or beside them when maximum performance, GPU passthrough, or licensing avoidance matters. Hybrid architectures frequently run **management clusters on private-cloud VMs** while CAPM3 provisions bare-metal workers at edge sites, or they run production data-plane workers on metal and development clusters on CAPV for fast iteration. The integration point is always the management cluster API: Flux watches Git, applies CAPI objects, and provider controllers call different backends without changing application team kubeconfig distribution.
+
+When comparing economics, include reprovision time in SLA models. A CAPV worker replacement might finish in three minutes if templates and datastores are warm; CAPM3 worker replacement includes secure erase, image download, and join bootstrap that often stretch to fifteen minutes even in healthy networks. MachineHealthCheck timeouts must reflect that reality—setting `nodeStartupTimeout` to three minutes guarantees false-positive remediation loops on bare metal. Conversely, CAPV cannot deliver bare-metal RDMA or low-jitter latency for trading-adjacent workloads; CAPM3 keeps those workloads on physical NICs without SR-IOV complexity through hypervisors.
+
+Identity and secrets integration should mirror private-cloud hygiene: Keystone application credentials for CAPO and vCenter service accounts for CAPV have analogs in BMC vault entries for CAPM3. Rotate all three on the same calendar with distinct runbooks. Backup strategies must capture management-cluster etcd plus BareMetalHost inventory CRs; restoring etcd without BareMetalHost objects leaves Ironic state inconsistent with Kubernetes desired state. Practice restore drills on a isolated management cluster before betting production recovery on untested snapshots.
+
+Platform engineers graduating from Module 5.1 should recognize DHCP, DNS, and IPAM dependencies repeated here with stricter isolation requirements because BMC and PXE traffic is more brittle than guest VM cloud-init. The reward for mastering both modules is a unified GitOps vocabulary: same Cluster API kinds, different infrastructure templates, one audit trail for executives asking how many Kubernetes versions run in the fleet and where spare capacity lives.
+
+## Declarative Cluster Creation and GitOps
+
+A minimal CAPM3 cluster links `Cluster`, `Metal3Cluster`, `KubeadmControlPlane`, `Metal3MachineTemplate`, `MachineDeployment`, and `KubeadmConfigTemplate` objects in the management cluster namespace. The `Cluster` spec wires `controlPlaneRef` to KubeadmControlPlane and `infrastructureRef` to Metal3Cluster; worker pools are separate MachineDeployments so you can scale application nodes without touching control-plane objects. `clusterctl generate cluster` emits starter YAML you refine for host selectors, image URLs, and API VIPs—treat generated files as scaffolding, not production truth, because every datacenter uses different BMC subnets, DNS zones, and disk layouts that templates cannot guess.
+
+GitOps controllers such as Flux or Argo CD sync cluster manifests from Git into the management cluster API. **Disable pruning** on CAPI kustomizations because accidental removal of a cluster directory must not trigger cascading deletion of Machines and BareMetalHost deprovisioning that wipes production disks. Set `prune: false`, pin Flux to tagged releases, and use annotation guards on production clusters so only two-person review can enable destructive sync paths. Healthy change flow looks like: platform engineer opens pull request with version bump or replica change → reviewer checks spare inventory and maintenance window → merge → Flux applies → CAPI reconciles → Ironic reprovisions only when Machine specs actually change, not when unrelated inventory files move.
+
+Scale-up is declarative: increase `MachineDeployment.spec.replicas` and commit; CAPM3 claims Available hosts matching `hostSelector` labels and provisions them in order. Scale-down deletes Machines, triggering deprovision and disk cleaning before hosts return to Available for the next claim. **Replacement** during upgrades creates new Machines before deleting old ones when using rolling strategies on KubeadmControlPlane; workers follow `maxUnavailable` and `maxSurge` semantics analogous to Deployments, except surge consumes physical hosts instead of hypervisor overcommit. Fleet managers should visualize spare inventory alongside replica counts the same way capacity planners watch cloud quotas.
+
+Day-2 chained upgrade example: bump `KubeadmControlPlane.spec.version` from v1.34.x to v1.35.x in Git; CAPI provisions a new control-plane Machine, waits for Ready and etcd health, drains an old member, repeats until complete. If the new node fails `nodeStartupTimeout`, the upgrade halts with legacy nodes still serving—never assume partial failure is safe to ignore or that deleting the stuck Machine manually will unblock etcd without a runbook. Record every upgrade in Git commit messages so auditors correlate Kubernetes version changes with change tickets, and keep management-cluster monitoring alerts on `Machine` phases stuck in Provisioning longer than fifteen minutes.
+
+## CAPI Bare Metal vs kubeadm-on-Metal vs Private-Cloud CAPI
+
+Three patterns confuse teams new to platform engineering, and choosing among them should be a written architecture decision rather than a default inherited from whichever blog post shipped last week. **Imperative kubeadm on each server** remains fastest for a single lab cluster: SSH in, run `kubeadm init`, distribute join tokens, install a CNI, and you are scheduling pods within an hour. That path collapses under fleet scale because nobody tracks which BIOS settings, disk layouts, or kernel flags differ between rack fourteen and rack twenty-two, and truck rolls still dominate incident time when hardware fails without spare inventory.
+
+**CAPI plus CAPM3** introduces Machines, BareMetalHosts, and controllers that reconcile desired node counts against physical inventory. Automated remediation through MachineHealthCheck, Git-audited cluster specs, and chained upgrades justify the upfront cost of DHCP, TFTP or HTTP mirrors, BMC automation, and spare hosts—usually once you operate roughly ten production nodes or geographically distributed sites where remote hands are expensive. **CAPI plus CAPV or CAPO on VMs** uses identical object shapes but provisions Nova instances or vSphere clones in minutes, enables hypervisor snapshots for rollback, and shifts hardware failure modes behind live migration—at the cost of licensing, hypervisor overhead, and private-cloud operational complexity described in Module 5.1.
+
+Private-cloud CAPI providers allocate VMs from vCenter or Nova with quotas and flavors; CAPM3 allocates physical hosts from finite inventory in tens of minutes including disk wipe and inspection. MachineHealthCheck on VMs recreates Machines quickly when templates and storage exist; bare metal needs physical spares or remediation stalls in Pending. GitOps patterns, bootstrap secrets, KubeadmControlPlane upgrades, and Flux directory layouts remain parallel across providers—only infrastructure controllers and capacity math change. Teams running hybrid estates often use CAPV for developer clusters and CAPM3 for latency-sensitive production workers while keeping one management cluster and one Git repository structure.
+
+OS-level automation with Ansible or cloud-init on metal without CAPI still works for small fleets and brownfield migrations. The inflection point arrives when MachineHealthCheck, multi-cluster consistency, and audit trails in Git outweigh maintaining bespoke bash orchestration. CAPI does not remove networking or BMC toil; it channels toil into controllers and CRDs you test once, version in Git, and reuse across dozens of clusters the same way application teams reuse Deployments. Compare explicitly to private-cloud CAPI when finance asks why bare metal still makes sense: cite egress, latency, accelerator passthrough, and licensing avoidance, then document the operational costs you accepted in exchange.
+
+```mermaid
+sequenceDiagram
+    participant Git as Git repository
+    participant Flux as Flux / Argo CD
+    participant CAPI as CAPI controllers
+    participant BMO as Bare Metal Operator
+    participant Ironic as Ironic
+    participant BMC as Server BMC
+
+    Git->>Flux: Merge scale-up PR
+    Flux->>CAPI: Apply MachineDeployment replicas=6
+    CAPI->>BMO: Create Metal3Machine
+    BMO->>Ironic: Select Available BareMetalHost
+    Ironic->>BMC: Power on + PXE boot
+    Ironic->>Ironic: Write OS image + cloud-init
+    Ironic->>CAPI: Node joins cluster
+    CAPI->>Git: Status conditions updated
+```
+
+## Building Immutable OS Images for Production Fleets
+
+Production CAPM3 clusters should treat node OS artifacts the same way application teams treat container images: versioned, scanned, signed, and promoted through environments. A typical pipeline starts from an upstream Ubuntu or RHEL cloud image, applies hardening scripts with Ansible or Packer, pre-installs containerd at the version matching your target Kubernetes minor release, pins kernel packages validated against your NIC firmware matrix, and exports a qcow2 blob to an internal HTTP server fronted by TLS. The Metal3MachineTemplate references that URL plus a sha256 checksum so Ironic refuses to deploy if a mirror serves corrupted bits. When security patches land, rebuild the artifact, bump the template version in Git, and roll workers through MachineDeployment surge semantics rather than SSH-patching running nodes.
+
+Immutable images also simplify compliance evidence. Auditors can diff Packer variable files between builds, correlate image digests with cluster object generations, and verify that emergency break-glass SSH was never enabled on Talos or production Ubuntu profiles. Teams that still golden-image via kickstart on first boot often discover that two “identical” workers diverged after divergent `apt upgrade` timing; CAPI reprovisioning from the same template eliminates that drift class entirely. Keep at least two image versions available during Kubernetes minor upgrades so you can roll forward and roll back without rebuilding from scratch under incident pressure.
+
+Image size affects provisioning SLAs. Large qcow2 files stress HTTP mirrors and extend disk-write phases on slow SATA boot drives; strip documentation locales, man pages, and unused firmware blobs from worker images while keeping control-plane images on faster media with journaling tuned for etcd I/O. Document minimum disk thresholds discovered during Ironic inspection so Machine templates do not target hosts whose root hints point at 480 GB SATA when your image expects NVMe latency for etcd data directories on control-plane roles.
+
+## Day-2 Operations: Scale, Replace, and Chained Upgrades
+
+Day-2 bare-metal operations are where declarative models pay rent or burn down goodwill. **Scale-up** increases `MachineDeployment.spec.replicas`; CAPI creates Machines, CAPM3 claims Available BareMetalHosts matching selectors, and Ironic provisions sequentially or in parallel depending on DHCP capacity and mirror bandwidth. Capacity planning must include concurrent PXE storms: bringing ten workers online at once can saturate TFTP unless HTTP chaining and per-site mirrors exist. **Scale-down** deletes Machines in reverse order; deprovisioning duration dominates wall-clock time because secure erase policies may run multi-pass wipes on SSDs before hosts return to Available.
+
+**Replace** differs from scale when hardware is bad but fleet size stays constant. Operators cordon the Node, delete the Machine object, wait for deprovision, fix or swap hardware, ensure the BareMetalHost returns to Available, then let MachineDeployment recreate the Machine. MachineHealthCheck automates that loop when failures are real node faults—not when the API server is unreachable for environmental reasons. Runbooks should document when to pause MHC during switch maintenance windows so teams do not wipe half the rack because Ready probes timed out together.
+
+**Chained upgrades** in CAPI v1.12 reduce toil when jumping multiple Kubernetes minors: set the KubeadmControlPlane version field to the destination, and controllers compute intermediate versions respecting kubeadm skew policy. On bare metal each hop still means a new control-plane Machine, full disk imaging, and etcd member addition before an old member drains. Schedule maintenance windows longer than VM-based CAPV upgrades because reprovision takes minutes per node, not seconds. Validate kube-vip failover before the first control-plane hop so clients never pin to a member slated for wipe. Worker upgrades follow MachineDeployment rollout parameters; align `maxSurge` with spare host count so you never need six Available hosts when only four spares exist.
+
+Document rollback explicitly. If a new image or Kubernetes version fails halfway, keep previous Metal3MachineTemplate revisions and image URLs in Git tags so you can revert a pull request and reconcile without improvising checksums from memory. Test rollback quarterly; bare-metal rollback is reprovision, not snapshot revert, and teams that only practice forward upgrades discover wipe durations during real incidents.
+
+## Bootstrap Secret Handling and Management Cluster Hardening
+
+The management cluster is a tier-zero asset. It holds kubeconfig secrets for every workload cluster, BMC credentials, join tokens, and sometimes cloud-provider keys if you mix providers. Enable etcd encryption at rest, restrict who can `kubectl delete` cluster-scoped CAPI objects, and separate namespaces per environment (`clusters-dev`, `clusters-prod`) with RBAC bound to GitOps deploy service accounts scoped to a single namespace each. Bootstrap secrets referenced by CABPK should use short-lived tokens where supported; rotate after personnel changes and after any backup restore test that touched etcd.
+
+Never commit base64 secrets to Git. Sealed Secrets or Mozilla SOPS with age keys let you store encrypted manifests in the same repository as cluster definitions while keeping plaintext only on the management cluster after sync. For BMC passwords, prefer a secret manager that injects Kubernetes Secrets via CSI at pod start so BareMetalHost objects only reference secret names. Audit whether your backup product copies management-cluster etcd to object storage without encryption; that backup equals root access to every downstream cluster.
+
+Network policy on the management cluster should limit which pods reach BMC subnets. Only BMO and Ironic components need outbound IPMI or Redfish; application workloads belong on workload clusters entirely. If you run GitOps controllers on the same management cluster, patch them promptly and pin container images by digest. Compromise of Flux on the management cluster with prune misconfiguration is equivalent to compromise of every bare-metal fleet it manages.
+
+## MachineHealthCheck and Safe Remediation
+
+MachineHealthCheck (MHC) watches Node conditions via Machine status. When Ready=False exceeds `timeout`, MHC deletes the Machine if unhealthy fraction stays below `maxUnhealthy`. That deletion triggers drain, deprovision, and replacement—powerful on bare metal, dangerous during network partitions.
+
+Configure MachineHealthCheck thresholds conservatively on bare metal because each remediation triggers disk wipe and reprovision cycles that hypervisor-backed fleets avoid through snapshot rollback.
 
 ```yaml
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineHealthCheck
 metadata:
-  name: production-worker-health
-  namespace: clusters
+  name: prod-workers-mhc
+  namespace: clusters-prod
 spec:
-  clusterName: production
+  clusterName: edge-prod
   selector:
     matchLabels:
-      cluster.x-k8s.io/deployment-name: production-workers
+      cluster.x-k8s.io/deployment-name: edge-prod-workers
   unhealthyConditions:
     - type: Ready
       status: "False"
-      timeout: 300s       # Node NotReady for 5 minutes
+      timeout: 300s
     - type: Ready
       status: "Unknown"
-      timeout: 300s       # Node unreachable for 5 minutes
-  maxUnhealthy: "40%"     # Safety: do not remediate if > 40% nodes are unhealthy
-  nodeStartupTimeout: 600s # New nodes must be Ready within 10 minutes
+      timeout: 300s
+  maxUnhealthy: "40%"
+  nodeStartupTimeout: 600s
 ```
 
-### Remediation Flow
-
-```mermaid
-sequenceDiagram
-    participant Node as Node worker-03
-    participant MHC as MachineHealthCheck
-    participant MD as MachineDeployment
-    participant BMO as BareMetalHost Inventory
-
-    Node-->>MHC: Becomes NotReady
-    Note over MHC: Detects Ready=False for > 300s
-    Note over MHC: Safety check: < 40% unhealthy? (Yes)
-    MHC->>Node: Delete Machine "worker-03"
-    Note over Node: Cordon, drain, deprovision, power off
-    MD-->>MD: Detects replicas=5 but only 4 exist
-    MD->>BMO: Create new Machine "worker-06"
-    BMO-->>MD: Select Available BareMetalHost
-    Note over BMO: Provision OS, join cluster
-    BMO->>Node: New node "worker-06" becomes Ready
-    Note over BMO,Node: Total time: 5-15 mins
-```
-
-It is absolutely vital to maintain spare capacity in your bare-metal inventory. If the MachineHealthCheck triggers a remediation event but all BareMetalHosts are currently allocated, the replacement Machine will remain in a Pending state indefinitely, leaving your cluster permanently degraded until physical hardware is procured.
-
----
-
-> **Pause and predict**: If you store Cluster API manifests in Git and use Flux to sync them, what would happen if someone accidentally deleted the `clusters/production/` directory from the Git repository with `prune: true` enabled in Flux?
-
-## 5. GitOps-Driven Cluster Management
-
-By treating infrastructure strictly as code, organizations can manage multi-cluster environments using GitOps methodologies. Changes to hardware allocation, node scaling, and Kubernetes minor version upgrades are proposed via Pull Requests. Once approved by senior engineers, continuous deployment tools like Flux or ArgoCD synchronize the manifests to the Management Cluster, which then reconciles the downstream Workload Clusters.
-
-```mermaid
-flowchart TD
-    subgraph GitRepo[Git Repository]
-        direction TB
-        C[clusters/production/cluster.yaml]
-        CP[clusters/production/control-plane.yaml]
-        W[clusters/production/workers.yaml]
-        H[clusters/production/health-checks.yaml]
-        I1[inventory/rack1-hosts.yaml]
-        I2[inventory/rack2-hosts.yaml]
-    end
-    subgraph Flux[Flux / ArgoCD]
-        F[Watches git repo]
-        A[Applies changes]
-    end
-    subgraph Mgmt[Management Cluster]
-        CAPI[CAPI Controllers]
-    end
-    GitRepo --> Flux
-    Flux --> Mgmt
-    Mgmt --> |Provisions| Wkld[Workload Clusters]
-
-    Note1[1. Engineer opens PR to scale workers]
-    Note2[2. PR reviewed and merged]
-    Note3[3. Flux applies MachineDeployment]
-    Note4[4. CAPI provisions BareMetalHosts]
-    Note5[5. Audit: git log shows who scaled, when, and why]
-    Note1 -.-> Note2 -.-> Note3 -.-> Note4 -.-> Note5
-```
-
-Because pruning in Flux deletes cluster definitions if they are removed from the repository, potentially destroying your infrastructure, it is critical to disable pruning for CAPI Kustomizations. Always append `prune: false` to ensure that an accidental `git rm` command does not result in the catastrophic deprovisioning of all bare-metal nodes in production.
-
----
+If half your workers share one top-of-rack switch, MHC must **not** remediate all simultaneously—set `maxUnhealthy` to thirty or forty percent so environmental failures surface as infrastructure tickets instead of mass reprovisioning. Complement MHC with BMC power metrics and hardware event logs; NotReady from a faulty PSU looks identical to NotReady from kubelet crash in Kubernetes events alone.
 
 ## Did You Know?
 
-- **The latest stable Cluster API release, v1.12.0, was shipped on January 27, 2026, and officially introduced chained upgrades.** This enables engineers to perform multi-version jumps by allowing the controller to calculate and execute intermediate upgrade steps securely.
-- **Metal3.io was officially accepted as a CNCF Incubating project on August 27, 2025.** At the time of incubation, the project boasted contributions from 57 active organizations, highlighting the massive industry demand for declarative bare-metal provisioning.
-- **The Cluster API v1beta1 API version will be completely unserved from the API server starting in CAPI v1.14, targeting August 2026, and will be fully removed in v1.18.** All manifests must be migrated to the newer v1beta2 storage format before executing this platform upgrade.
-- **Metal3 uses OpenStack Ironic without requiring a full OpenStack deployment.** Ironic runs seamlessly inside a container, giving you bare-metal provisioning capabilities without Nova, Neutron, Keystone, or any other OpenStack service.
-- **Cluster API applies the Kubernetes controller pattern to infrastructure.** Just as a Deployment controller ensures the right number of pods exist, the MachineDeployment controller ensures the right number of nodes exist.
-- **CAPM3 can manage servers from any vendor**—Dell iDRAC, HPE iLO, Supermicro IPMI, Lenovo XClarity—as long as they support IPMI or Redfish. Redfish is replacing IPMI, which sends credentials in plaintext over UDP.
-- **Deutsche Telekom operates one of the largest known bare-metal Cluster API deployments in existence.** Their Das Schiff platform utilizes CAPI to autonomously manage thousands of distributed Kubernetes clusters located at remote edge locations and cell towers worldwide.
-
----
+- **Metal3 became a CNCF Incubating project in August 2025** with contributions from dozens of organizations seeking declarative bare-metal lifecycle compatible with Kubernetes control loops.
+- **Ironic inside Metal3 does not require Nova, Neutron, or Keystone** — only the bare-metal provisioning API and drivers, which lowers the OpenStack footprint compared to full private-cloud stacks.
+- **CAPI v1.12 introduced chained upgrades** so management clusters can compute safe intermediate Kubernetes versions instead of forcing operators to hand-plan every minor hop.
+- **Redfish virtual media attachment** reduces reliance on local PXE infrastructure for some vendors, though DHCP and routing design still dominate multi-rack success.
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| No spare BareMetalHosts | MachineHealthCheck creates replacement Machine but no host is available | Keep 10-15% of inventory as spare (e.g., 2 spares for 15 servers) |
-| BMC credentials in plain Secrets | IPMI/Redfish credentials exposed in etcd | Use SealedSecrets or SOPS encryption for BMC credentials |
-| Pruning enabled in GitOps | Flux deletes cluster resources if removed from git | Set `prune: false` for cluster Kustomizations |
-| `maxUnhealthy` threshold at 100% | Cascading failure: MHC replaces all nodes simultaneously during network partition | Set `maxUnhealthy` to 30-40% to prevent mass remediation |
-| Unversioned OS images | Cannot reproduce node state, drift between nodes | Version OS images, store in HTTP server, reference by checksum |
-| Skipping hardware inspection | CAPI provisions a server with bad RAM or failed disk | Let Ironic inspect all hosts before marking them Available |
-| Imperative manual modifications | Drift between desired state (git) and actual state | All changes via git PRs, never `kubectl edit` on CAPI resources |
-| Missing cert-manager prerequisite | CAPI initialization fails or webhooks crash | Ensure cert-manager v1.20.0 is installed before bootstrapping |
-
----
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| No spare BareMetalHosts | Cost-saving full utilization | Register ten to fifteen percent spares labeled `role: spare`, powered off until needed |
+| BMC secrets in plain Git | Quick lab shortcuts | Use Sealed Secrets or SOPS; rotate after personnel changes |
+| Prune enabled on GitOps kustomizations | Default Flux settings | Set `prune: false` for cluster namespaces; add deletion safeguards |
+| `maxUnhealthy: 100%` | Aggressive auto-healing goals | Cap at thirty to forty percent to survive network partitions |
+| Unversioned OS images | Manual ISO installs | Publish immutable qcow2/raw artifacts with sha256 checksums in templates |
+| Skipping inspection | Impatience in bring-up | Let every host reach Available only after successful inspect |
+| Shared provisioning and tenant VLAN | Cable consolidation | Separate PXE/DHCP domain; document boot NIC MAC per host |
+| Editing CAPI objects with kubectl edit | Incident panic | Revert manual edits; fix Git and reconcile |
 
 ## Quiz
 
-### Question 1
-You operate a data center with 20 bare-metal servers and need to deploy three independent Kubernetes clusters (dev: 3 nodes, staging: 5 nodes, production: 9 nodes). To ensure high availability and resilient operations, how many BareMetalHosts should you register into your inventory, and how many should be strictly labeled as spare?
+<details><summary>Question 1: You register twenty BareMetalHosts for three clusters totaling seventeen nodes. How many spares should stay Available, and why?</summary>
 
-<details>
-<summary>Answer</summary>
+Keep **three spares** (fifteen percent of twenty). Dev, staging, and production allocations consume seventeen hosts; MachineHealthCheck needs unallocated Available hosts to replace failed workers without manual BMC intervention. Spares should stay powered off with `online: false` until claimed to save power, but remain registered in Ironic inventory.
 
-**Register all 20 servers. Keep 3 as spares.**
-
-Allocation breakdown:
-- Dev cluster: 1 CP + 2 workers = 3 nodes
-- Staging cluster: 1 CP + 4 workers = 5 nodes (control plane nodes must always be an odd number to maintain etcd quorum; 2 CP nodes are worse than 1 because a single failure loses quorum).
-- Production cluster: 3 CP + 6 workers = 9 nodes
-- Total active allocation: 17 nodes.
-- Spare allocation: 3 nodes (representing 15% of total hardware).
-
-**Why maintaining 3 spares matters**:
-Maintaining a pool of unallocated spare servers is critical because the MachineHealthCheck relies on them for automatic remediation. When a production worker suffers a hardware failure, the MHC requires an `Available` BareMetalHost to provision as a replacement, and without spares, the replacement Machine remains stuck in `Pending` indefinitely. Furthermore, in the event of localized power supply failures affecting multiple nodes, you require multiple spares to immediately restore full cluster capacity. Finally, if production requires temporary horizontal expansion to handle seasonal traffic bursts, the spares provide immediate capacity without impacting development environments.
-
-```yaml
-# Label spares for easy identification
-apiVersion: metal3.io/v1alpha1
-kind: BareMetalHost
-metadata:
-  name: spare-01
-  labels:
-    role: spare
-spec:
-  online: false  # Keep powered off until needed
-```
 </details>
 
-### Question 2
-Your production MachineHealthCheck is configured with `maxUnhealthy: 40%` covering a fleet of 10 worker nodes. A severe network switch failure occurs, isolating exactly 5 nodes simultaneously. How does the MachineHealthCheck controller respond to this event?
+<details><summary>Question 2: Five of ten workers become NotReady simultaneously during a switch failure. `maxUnhealthy` is forty percent. What does MHC do?</summary>
 
-<details>
-<summary>Answer</summary>
+**No remediation occurs.** Fifty percent unhealthy exceeds the forty percent circuit breaker. This prevents mass deprovision during environmental failures. Operators fix the switch; nodes recover without OS reinstall. Single-host failures below the threshold still trigger replace workflows.
 
-**The MachineHealthCheck will NOT remediate any nodes.** Because 5 out of 10 nodes represents 50% of the fleet, the condition explicitly exceeds the `maxUnhealthy: 40%` circuit breaker threshold.
-
-This is the exact intended safeguard behavior designed to protect your cluster. The threshold prevents catastrophic cascading failures caused by infrastructure anomalies such as a network partition. A switch failure is an environmental network issue, not an underlying host degradation. Attempting to deprovision and reinstall the operating systems on half of your production fleet simultaneously would severely worsen the outage and overload the control plane. Instead, administrators must troubleshoot the infrastructure failure, and once network connectivity is restored, the nodes will organically return to a `Ready` state without requiring reprovisioning.
-
-**What you should do**:
-1. Check the management cluster for MachineHealthCheck events:
-   ```bash
-   kubectl describe machinehealthcheck production-worker-health -n clusters
-   # Events: "Remediation is not allowed, total unhealthy: 50%, max: 40%"
-   ```
-2. Investigate the infrastructure issue (switch, power, network)
-3. Fix the root cause
-4. Nodes recover automatically
-
-**If it were a single node failure** (1 of 10 = 10% < 40%), MHC would remediate: delete the Machine, deprovision the BareMetalHost, and create a replacement.
 </details>
 
-### Question 3
-You merge a Git pull request to upgrade a production workload cluster from Kubernetes v1.34.0 to v1.35.0. Describe the sequence of actions initiated by the KubeadmControlPlane controller. Furthermore, what happens to the older v1.34.0 nodes if the first newly provisioned v1.35.0 control plane node fails to start?
+<details><summary>Question 3: During a KubeadmControlPlane upgrade, the first new v1.35 control-plane Machine stays Provisioning past `nodeStartupTimeout`. What happens to existing v1.34 members?</summary>
 
-<details>
-<summary>Answer</summary>
+The upgrade **stalls**; older control-plane Machines keep serving. CAPI does not delete legacy members until the new Machine reaches Ready and etcd quorum expands safely. Investigate image URL, bootstrap secrets, kube-vip VIP reachability, and Ironic deploy logs before retrying.
 
-**Upgrade process execution:**
-During the upgrade process, CAPI first provisions a fresh Machine running v1.35.0, leaving existing nodes untouched. The BareMetalHost is acquired, the operating system is imaged, and Kubeadm is executed to join the node to the existing cluster logic. The controller rigorously waits for the new node to broadcast a `Ready` condition and verifies that etcd quorum has expanded successfully. Only after validation succeeds does CAPI safely cordon, drain, and terminate one of the legacy v1.34.0 control plane nodes, looping iteratively for each replica.
+</details>
 
-**If the new node fails to start:**
-If the new node fails to start, the controller detects that the newly provisioned node has not reached a `Ready` state within the `nodeStartupTimeout` window. As a result, the rolling upgrade sequence immediately halts to prevent degradation. No legacy nodes are evicted or deleted, ensuring the cluster remains fully functional and actively servicing workloads on the v1.34.0 infrastructure. Administrators must then investigate the failure, resolve the provisioning blocker, and allow CAPI to resume the operation.
+<details><summary>Question 4: An engineer deletes the production cluster directory from Git while Flux uses `prune: true`. What is the bare-metal impact?</summary>
+
+Flux deletes CAPI cluster objects; Machines disappear; BMO deprovisions BareMetalHosts, wiping disks and powering down servers. Production workloads halt. Production kustomizations must use `prune: false` and optional deletion annotations so Git mistakes cannot erase hardware allocation.
+
+</details>
+
+<details><summary>Question 5: Why does CAPM3 require DHCP on a dedicated provisioning network even when servers boot from local disk in production?</summary>
+
+Inspection and provisioning reboot via PXE or iPXE before writing the OS image. Without DHCP next-server and filename options, hosts hang at firmware boot. Production disk boot resumes only after successful deploy; the provisioning network remains lifecycle-critical.
+
+</details>
+
+<details><summary>Question 6: Compare CAPM3 to CAPV for a team already operating vSphere with spare VM capacity.</summary>
+
+**CAPV** provisions clones in minutes, supports snapshots, and abstracts firmware—but adds hypervisor tax. **CAPM3** delivers maximum performance and avoids VMware licensing yet needs BMC, PXE, spares, and longer reprovision times. Hybrid fleets often run production workers on bare metal and dev clusters on CAPV with identical CAPI GitOps patterns.
+
+</details>
+
+<details><summary>Question 7: Talos versus CABPK on bare metal: when would you choose each?</summary>
+
+Choose **Talos** when immutability, no SSH, and API-driven OS configuration align with security policy and your hardware is supported. Choose **CABPK/kubeadm** when teams already standardized on cloud-init, Ubuntu/RHEL hardening, and kubeadm upgrade playbooks from private-cloud VM bootstrap. Wrong answers ignore operational tooling and on-call training costs.
+
+</details>
+
+<details><summary>Question 8: You manage twelve edge clusters from one management cluster using Flux. How should GitOps layout support provisioning, scale-up, and chained upgrades safely?</summary>
+
+Store each cluster as a Kustomize overlay in Git with separate directories per environment, pin provider versions in `clusterctl` config maps, and set **prune: false** on CAPI kustomizations so accidental directory deletes never deprovision hardware. Use pull-request checks that run `kubectl diff` against the management cluster API. Chained upgrades flow by bumping `KubeadmControlPlane.spec.version` in Git; Flux reconciles, CAPI rolls control-plane Machines, then worker MachineDeployments. Scale-up edits `replicas` in the same repo. Spare BareMetalHost inventory lives in a dedicated Git path reviewed by hardware teams. This design separates **provisioning** (inventory CRs) from **cluster shape** (MachineDeployments) so networking teams can add hosts without touching production cluster versions.
+
+</details>
+
+## Hands-On Practical Exercises
+
+**Objective**: Build mental models for CAPI reconciliation, BareMetalHost states, and bootstrap differences without requiring a production BMC network.
+
+**Environment**: Linux workstation with Docker, kind, and clusterctl. Exercise 2 uses public Metal3 documentation. Exercise 3 simulates inventory with kubectl apply on any management cluster.
+
+### Exercise 1: CAPD Management Cluster and Machine Lifecycle
+
+Use the Docker infrastructure provider to observe CAPI Machine phases, controller events, and scale-up behavior before you introduce BMC networks, Ironic containers, and PXE dependencies that complicate every failure signature in production.
 
 ```bash
-# Monitor upgrade progress
-kubectl get machines -n clusters -l cluster.x-k8s.io/cluster-name=production
-# NAME              PHASE         VERSION
-# production-cp-1   Running       v1.34.0   (old, will be removed last)
-# production-cp-2   Running       v1.34.0
-# production-cp-3   Running       v1.34.0
-# production-cp-4   Provisioning  v1.35.0   (new, being created)
-```
-</details>
-
-### Question 4
-A junior platform engineer accidentally executes a `git rm -r clusters/production/` command against the GitOps repository. If the management cluster is utilizing Flux for synchronization with `prune: true` configured on the Customization, what is the consequence?
-
-<details>
-<summary>Answer</summary>
-
-**The entire production cluster will be autonomously and irrevocably destroyed.**
-
-Flux pruning logic dictates that if a manifested resource is discovered within the live cluster but is absent from the authoritative Git tree, the resource must be deleted to match the desired state. While this is acceptable for stateless application Pods, deleting CAPI resources triggers immediate infrastructure deprovisioning cascades. The Bare Metal Operator will acquire the deletion signal, wipe the attached storage drives, and forcibly power off every physical server attached to that cluster. To prevent this catastrophic outcome, administrators must ensure `prune: false` is configured for CAPI Kustomizations, which protects the resources from being deleted if the manifests are accidentally removed.
-
-**With `prune: false`:**
-1. Engineer accidentally deletes files from git
-2. Flux does NOT delete the cluster resources
-3. Cluster continues running
-4. Engineer restores the files in a follow-up commit
-5. No impact
-
-**Additional safety measures**:
-```yaml
-# Add finalizer protection to critical resources
-metadata:
-  annotations:
-    kustomize.toolkit.fluxcd.io/prune: "disabled"
-```
-</details>
-
----
-
-## Hands-On Exercise: Explore Cluster API with Docker Provider
-
-Before attempting bare-metal provisioning on complex hardware, engineers commonly test CAPI architecture utilizing the Docker provider (CAPD). This provider spins up discrete Docker containers that simulate distinct infrastructure "machines."
-
-### Execution Steps
-
-```bash
-# Install clusterctl and create management cluster
-curl -L https://github.com/kubernetes-sigs/cluster-api/releases/latest/download/clusterctl-linux-amd64 -o clusterctl
+curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
 kind create cluster --name capi-mgmt
-
-# Initialize CAPI with Docker provider
 export CLUSTER_TOPOLOGY=true
 clusterctl init --infrastructure docker
-
-# Generate and create a workload cluster
-clusterctl generate cluster dev-cluster \
-  --infrastructure docker \
-  --kubernetes-version v1.35.0 \
+clusterctl generate cluster lab --infrastructure docker \
+  --kubernetes-version v1.30.0 \
   --control-plane-machine-count 1 \
-  --worker-machine-count 2 > dev-cluster.yaml
-kubectl apply -f dev-cluster.yaml
-
-# Watch provisioning and get kubeconfig
+  --worker-machine-count 2 > lab.yaml
+kubectl apply -f lab.yaml
 kubectl get cluster,machines -A
-kubectl wait cluster/dev-cluster --for=condition=Ready --timeout=300s
-clusterctl get kubeconfig dev-cluster > dev-cluster.kubeconfig
-
-# Scale the workload cluster
-kubectl patch machinedeployment dev-cluster-md-0 \
-  --type merge -p '{"spec":{"replicas":3}}'
-
-# Verify the scaling operation
+kubectl wait cluster/lab --for=condition=Ready --timeout=300s
+kubectl patch machinedeployment lab-md-0 --type merge -p '{"spec":{"replicas":3}}'
 kubectl get machines -A
-
-# Cleanup
-kubectl delete cluster dev-cluster
+kubectl delete cluster lab
 kind delete cluster --name capi-mgmt
 ```
 
-### Success Criteria
+- [ ] I initialized a management cluster and observed Machines transition from Provisioning to Running.
+- [ ] I scaled a MachineDeployment and saw a new Machine object appear before the old count changed.
+- [ ] I deleted the cluster and confirmed CAPI removed downstream Machines cleanly.
 
-- [ ] Evaluated prerequisites and successfully provisioned the upstream management cluster using `kind`.
-- [ ] Triggered workload cluster provisioning and validated the existence of exactly one Control Plane and two Worker nodes.
-- [ ] Issued a declarative patch to seamlessly scale the `MachineDeployment` from two to three workers.
-- [ ] Monitored the internal CAPI event loop and observed Machine lifecycles transition from `Pending` to `Provisioning` to `Running`.
-- [ ] Safely deprovisioned both the workload infrastructure and the management environment.
+<details><summary>Expected analysis</summary>
 
----
+CAPD containers mimic Machines without BMC steps, yet MachineDeployment reconciliation matches CAPM3 behavior. Timeouts here often indicate management-cluster resource limits or webhook/cert-manager issues—fix those in kind before debugging Ironic.
+
+</details>
+
+### Exercise 2: Trace BareMetalHost State Transitions
+
+On a lab with Metal3 deployed, or by reading live CRs in a training environment, watch inspection and provisioning complete while capturing events that you will later compare against Ironic logs during real incidents.
+
+```bash
+kubectl get baremetalhosts -A
+kubectl get baremetalhost rack2-u14 -n metal3-system -o jsonpath='{.status.provisioning.state}{"\n"}'
+kubectl describe baremetalhost rack2-u14 -n metal3-system | tail -20
+kubectl get events -n metal3-system --field-selector involvedObject.name=rack2-u14
+```
+
+- [ ] I recorded the state sequence from Registering through Available or Error.
+- [ ] I identified whether failure happened at BMC auth, PXE, or image download from events.
+- [ ] I documented which MAC address and BMC URL the host spec uses.
+
+<details><summary>Expected analysis</summary>
+
+Authentication failures appear early with Redfish 401 messages. PXE failures show DHCP timeouts in Ironic logs. Image failures reference HTTP checksum mismatch. Mapping symptoms to layer prevents misdiagnosing CNI bugs on nodes that never joined.
+
+</details>
+
+### Exercise 3: Compare Bootstrap and API VIP Manifests
+
+Render diffs between kubeadm and Talos template fragments, then configure a Metal3Cluster control-plane endpoint that matches your kube-vip design document before applying anything to production management namespaces.
+
+```bash
+grep -n controlPlaneEndpoint -A2 lab-metal3cluster.yaml || true
+kubectl explain metal3cluster.spec.controlPlaneEndpoint
+kubectl explain kubeadmcontrolplane.spec.version
+# Validate VIP placeholder matches your L2/L3 design document
+ping -c 1 10.10.50.100 || echo "VIP not yet advertised - expected before kube-vip deploy"
+```
+
+- [ ] I set `controlPlaneEndpoint.host` to a documented VIP outside the DHCP pool.
+- [ ] I compared kubeadm join fields in CABPK templates against Talos machine config references.
+- [ ] I listed bootstrap secrets required and marked which must never commit to Git.
+
+<details><summary>Expected analysis</summary>
+
+kube-vip requires the VIP to live on the same L2 domain as control-plane NICs for ARP mode. Bootstrap secrets belong in sealed secrets; only references appear in Git. Talos configs are opaque YAML bundles rather than cloud-init scripts—plan tooling accordingly.
+
+</details>
 
 ## Next Module
 
-You have completed the Multi-Cluster & Platform section. Please proceed to [Module 6.1: Physical Security & Air-Gapped Environments](/on-premises/security/module-6.1-air-gapped/) to learn how to lock down on-premises Kubernetes environments and establish robust physical network security boundaries.
+Continue to [Module 6.1: Physical Security & Air-Gapped Environments](../../security/module-6.1-air-gapped/) to harden on-premises Kubernetes boundaries after your bare-metal fleet provisions declaratively.
+
+## Learner Check
+
+> Cluster API on bare metal extends the Kubernetes reconciliation model to physical servers: BareMetalHost inventory feeds CAPM3 and Ironic for power, PXE, and imaging, bootstrap providers turn disks into kubeadm or Talos nodes, and MachineHealthChecks replace failed hardware only when spare hosts and conservative thresholds allow safe remediation without confusing network partitions for dead servers.
+
+## Sources
+
+- https://cluster-api.sigs.k8s.io/
+- https://github.com/kubernetes-sigs/cluster-api
+- https://github.com/metal3-io/baremetal-operator
+- https://github.com/metal3-io/cluster-api-provider-metal3
+- https://metal3.io/
+- https://docs.openstack.org/ironic/latest/
+- https://tinkerbell.org/docs/
+- https://kube-vip.io/docs/
+- https://metallb.universe.tf/
+- https://cert-manager.io/docs/
+- https://github.com/siderolabs/talos
+- https://docs.rke2.io/
+- https://github.com/k3s-io/k0s
+- https://fluxcd.io/flux/components/kustomize/kustomizations/
