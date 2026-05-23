@@ -73,8 +73,6 @@ flowchart TB
     KW --> NT
 ```
 
-Pause and predict: your OpenStack cloud can boot instances quickly, yet Kubernetes Services of type LoadBalancer stay pending forever. Which two services would you inspect first, and what misconfiguration often explains the symptom? Keystone and Neutron are the usual starting points because the cloud controller must authenticate and create ports on the correct provider network with available addresses from the load balancer subnet pool.
-
 Security groups act as stateful firewalls around instance ports; Kubernetes node security groups must allow kubelet, etcd, and CNI tunnel traffic between members while denying arbitrary corporate clients to kubelet port 10250. Document required rules in Git beside cluster templates so auditors can diff rule changes during penetration test remediations instead of discovering ad hoc holes opened during late-night incidents.
 
 Operational teams should also plan upgrades across the OpenStack control plane independently from Kubernetes minor version bumps. A broken Neutron agent rolling upgrade can strand new node joins while existing workloads keep running, which looks like a Kubernetes failure even though the kubelet is healthy. Document dependency order: Keystone and Galera or PostgreSQL backing stores first, then API services, then hypervisor agents, then Kubernetes cloud provider credentials rotation.
@@ -328,8 +326,8 @@ Use the public OpenStack API quick start documentation to list endpoints for Key
 
 ```bash
 # After sourcing openrc for your project:
-openstack endpoint list --interface public -c ServiceName -c URL
-openstack quota show --project "$(openstack project list -f value -c ID -c Name | head -1)"
+openstack endpoint list --interface public -c "Service Name" -c URL
+openstack quota show --project "$(openstack project list -f value -c ID | head -1)"
 openstack network list
 openstack flavor list
 ```
@@ -422,6 +420,10 @@ A single-node control plane proves bootstrap automation, not production HA. DevS
 ## Next Module
 
 Continue to [Module 5.2: Multi-Cluster Control Planes](./module-5.2-multi-cluster-control-planes/) to compare vCluster, Kamaji, and dedicated control plane strategies once your private cloud foundation can supply reliable VMs, networks, and disks.
+
+## Learner Check
+
+> **Pause and predict**: your OpenStack cloud can boot instances quickly, yet Kubernetes Services of type LoadBalancer stay pending forever. Which two services would you inspect first, and what misconfiguration often explains the symptom? Keystone and Neutron are the usual starting points because the cloud controller must authenticate and create ports on the correct provider network with available addresses from the load balancer subnet pool.
 
 ## Sources
 
