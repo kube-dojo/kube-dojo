@@ -61,6 +61,21 @@ graph TD
     end
 ```
 
+```mermaid
+graph LR
+    subgraph Leaf1
+      LEAF1[Leaf 1] -->|VLAN/VXLAN| LEAF1_HOSTS[Host NICs]
+      LEAF1 -->|ebgp 65010| SPINE1[Spine 1 AS65000]
+      LEAF1 -->|ebgp 65010| SPINE2[Spine 2 AS65000]
+    end
+    subgraph Leaf2
+      LEAF2[Leaf 2] -->|VLAN/VXLAN| LEAF2_HOSTS[Host NICs]
+      LEAF2 -->|ebgp 65011| SPINE1
+      LEAF2 -->|ebgp 65011| SPINE2
+    end
+    SPINE1 -->|ECMP| SPINE2
+```
+
 Closed form intuition for why this works: if each leaf can forward to multiple equal paths, transient congestion can be distributed, and a single link problem has fewer downstream side effects than in hierarchical trees where one bad bridge or uplink can force many unrelated flows into contention.
 
 ## Section 3: ECMP, EBGP, and IBGP under Kubernetes assumptions
@@ -75,7 +90,7 @@ A robust on-prem design usually combines both patterns with explicit prefix filt
 
 Oversubscription is where architecture assumptions become real SLO math. Use this formula:
 
-`Downstream aggregate / Uplink aggregate = Oversubscription ratio`
+`Downstream aggregate / Uplink aggregate = Oversubscription ratio`, where both values are in the same unit (for example both in Gbps).
 
 Example design math for a leaf: at 48x25 GbE down and 6x100 GbE up, oversubscription is 1200/600 = 2:1. At 8:1, path saturation appears earlier and you should only allow it with strong telemetry. At 1:1, routing is resilient but capital intensive. At 4:1, design and operations are often balanced for mixed production.
 
@@ -89,7 +104,7 @@ For practical operations, define whether uplinks are symmetric and whether each 
 
 ## Section 6: Layer 2 vs Layer 3 boundary placement in practice
 
-There are two common boundary models for this module's scope.
+There are two common boundary models for this module's scope, and each produces a different control-plane failure response under pod churn.
 
 Leaf-as-L3 places routing decisions close to hosts and is usually easier for Kubernetes rollout because pod routes and rack mobility stay constrained and observable. Core-as-L3 centralizes route policy and can simplify some global controls, but it increases the blast radius of central path behavior mistakes when workloads move quickly.
 
@@ -155,6 +170,20 @@ For this module, the focus is routed-first with explicit BGP and direct pod rout
 Typical per-node or per-rack prefix models are valid, and both are acceptable when aligned to pod CIDR management and failure procedures. The one hard rule is consistent behavior under node and TOR failure.
 
 If pod prefixes are advertised to TOR/BGP neighbors, your change-control docs must include what happens when one neighbor loses adjacency and which path becomes authoritative while recovery happens.
+
+## Section 14: Kubernetes-aligned routing and underlay behavior
+
+Two pod IP allocation patterns dominate on-prem Kubernetes fabrics:
+
+The first pattern allocates pod CIDRs per node and advertises those prefixes as BGP routes from each rack spine/leaf boundary. This is the cleanest model when you want deterministic host-level telemetry because every advertised route maps to a scheduling and failure domain. You can quickly answer “which rack carries this workload?” from route intent alone.
+
+The second pattern advertises larger aggregate prefixes at the TOR boundary and relies more on underlay policies for scale. This reduces route scale pressure and makes large fleets easier to automate, but it can stretch failure semantics because one routing decision may represent many hosts. Both patterns are valid when the maintenance process and IPAM policy are explicit.
+
+In either model, direct-routed pods should begin with one control-plane rule: route export must be symmetric, constrained, and auditable before scale. A direct adjacency between host-facing TOR and upstream BGP speakers is powerful, but it does not replace good prefix filters, route maps, and rollback behavior when a peer drops.
+
+When Kubernetes control-plane components and workloads scale quickly, ECMP behavior must be paired with pod movement policy. If pod remap happens while ECMP hash inputs are weak, you can see micro-convergence even if all interfaces are healthy. Applying EVPN-VXLAN design decisions for L2-style mobility and routed underlay operation is therefore not a pure design exercise: it is an operations exercise in avoiding non-deterministic churn.
+
+Operationally, keep one hard rule: every routing change that affects pod exposure must be test-driven end to end. Run a single maintenance simulation that removes one TOR, observe ECMP and host ARP/neighbor state, and verify that replica and control traffic both retain bounded paths. If your lab and pipeline cannot model that path, your production incidents will define the missing case first.
 
 ## Did You Know?
 
@@ -405,20 +434,6 @@ For production cutover readiness, make the acceptance condition explicit: no sin
 
 Track the result as a signed-off artifact so the next iteration has a clear baseline and a measurable rollback boundary.
 
-## Section 14: Kubernetes-aligned routing and underlay behavior
-
-Two pod IP allocation patterns dominate on-prem Kubernetes fabrics:
-
-The first pattern allocates pod CIDRs per node and advertises those prefixes as BGP routes from each rack spine/leaf boundary. This is the cleanest model when you want deterministic host-level telemetry because every advertised route maps to a scheduling and failure domain. You can quickly answer “which rack carries this workload?” from route intent alone.
-
-The second pattern advertises larger aggregate prefixes at the TOR boundary and relies more on underlay policies for scale. This reduces route scale pressure and makes large fleets easier to automate, but it can stretch failure semantics because one routing decision may represent many hosts. Both patterns are valid when the maintenance process and IPAM policy are explicit.
-
-In either model, direct-routed pods should begin with one control-plane rule: route export must be symmetric, constrained, and auditable before scale. A direct adjacency between host-facing TOR and upstream BGP speakers is powerful, but it does not replace good prefix filters, route maps, and rollback behavior when a peer drops.
-
-When Kubernetes control-plane components and workloads scale quickly, ECMP behavior must be paired with pod movement policy. If pod remap happens while ECMP hash inputs are weak, you can see micro-convergence even if all interfaces are healthy. Applying EVPN-VXLAN design decisions for L2-style mobility and routed underlay operation is therefore not a pure design exercise: it is an operations exercise in avoiding non-deterministic churn.
-
-Operationally, keep one hard rule: every routing change that affects pod exposure must be test-driven end to end. Run a single maintenance simulation that removes one TOR, observe ECMP and host ARP/neighbor state, and verify that replica and control traffic both retain bounded paths. If your lab and pipeline cannot model that path, your production incidents will define the missing case first.
-
 ## Hands-On Exercise: Three practical labs
 
 ### Task 1: FRR spine-leaf routing lab in containers
@@ -428,49 +443,227 @@ Build a minimal EBGP lab with two spines and two leaves. The purpose is to valid
 ```bash
 mkdir -p /tmp/frr-lab && cd /tmp/frr-lab
 cat > compose.yaml <<'YAML'
+name: frr-datacenter-routing-lab
+
 services:
   spine1:
-    image: frrouting/frr:v10.6.0
+    image: quay.io/frrouting/frr:10.2.1
     container_name: spine1
-    command: sleep infinity
+    hostname: spine1
+    networks:
+      underlay:
+        ipv4_address: 10.0.0.101
+    privileged: true
   spine2:
-    image: frrouting/frr:v10.6.0
+    image: quay.io/frrouting/frr:10.2.1
     container_name: spine2
-    command: sleep infinity
+    hostname: spine2
+    networks:
+      underlay:
+        ipv4_address: 10.0.0.102
+    privileged: true
   leaf1:
-    image: frrouting/frr:v10.6.0
+    image: quay.io/frrouting/frr:10.2.1
     container_name: leaf1
-    command: sleep infinity
+    hostname: leaf1
+    networks:
+      underlay:
+        ipv4_address: 10.0.0.11
+    privileged: true
   leaf2:
-    image: frrouting/frr:v10.6.0
+    image: quay.io/frrouting/frr:10.2.1
     container_name: leaf2
-    command: sleep infinity
+    hostname: leaf2
+    networks:
+      underlay:
+        ipv4_address: 10.0.0.12
+    privileged: true
+
+networks:
+  underlay:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
 YAML
 
 docker compose up -d
+```
 
+Verify per-node underlay addressing by confirming each container keeps its intended /24 underlay identity and returning the expected interface block for all four peers:
+
+```bash
+for n in spine1 spine2 leaf1 leaf2; do
+  echo "### $n ###"
+  docker exec -it "$n" ip -4 addr show dev eth0 | sed -n '2,5p'
+done
+```
+
+Apply FRR IP and BGP configuration to define loopback interfaces, route advertisements, and explicit peer policy in an end-to-end, testable baseline:
+
+```bash
 docker exec -it leaf1 vtysh -c 'configure terminal' \
+  -c 'interface lo' \
+  -c 'ip address 10.255.10.1/32' \
+  -c 'exit' \
+  -c 'ip route 10.10.10.0/24 Null0' \
   -c 'router bgp 65010' \
   -c 'bgp router-id 10.0.0.11' \
   -c 'neighbor 10.0.0.101 remote-as 65000' \
-  -c 'neighbor 10.0.0.102 remote-as 65000'
+  -c 'neighbor 10.0.0.102 remote-as 65000' \
+  -c 'address-family ipv4 unicast' \
+  -c 'neighbor 10.0.0.101 activate' \
+  -c 'neighbor 10.0.0.102 activate' \
+  -c 'network 10.10.10.0/24' \
+  -c 'network 10.255.10.1/32' \
+  -c 'exit-address-family' \
+  -c 'write memory'
 
-docker exec -it leaf1 vtysh -c 'show bgp summary'
+docker exec -it leaf2 vtysh -c 'configure terminal' \
+  -c 'interface lo' \
+  -c 'ip address 10.255.10.2/32' \
+  -c 'exit' \
+  -c 'ip route 10.10.20.0/24 Null0' \
+  -c 'router bgp 65011' \
+  -c 'bgp router-id 10.0.0.12' \
+  -c 'neighbor 10.0.0.101 remote-as 65000' \
+  -c 'neighbor 10.0.0.102 remote-as 65000' \
+  -c 'address-family ipv4 unicast' \
+  -c 'neighbor 10.0.0.101 activate' \
+  -c 'neighbor 10.0.0.102 activate' \
+  -c 'network 10.10.20.0/24' \
+  -c 'network 10.255.10.2/32' \
+  -c 'exit-address-family' \
+  -c 'write memory'
+
+docker exec -it spine1 vtysh -c 'configure terminal' \
+  -c 'interface lo' \
+  -c 'ip address 10.255.0.101/32' \
+  -c 'exit' \
+  -c 'router bgp 65000' \
+  -c 'bgp router-id 10.0.0.101' \
+  -c 'neighbor 10.0.0.11 remote-as 65010' \
+  -c 'neighbor 10.0.0.12 remote-as 65011' \
+  -c 'address-family ipv4 unicast' \
+  -c 'neighbor 10.0.0.11 activate' \
+  -c 'neighbor 10.0.0.12 activate' \
+  -c 'network 10.255.0.101/32' \
+  -c 'exit-address-family' \
+  -c 'write memory'
+
+docker exec -it spine2 vtysh -c 'configure terminal' \
+  -c 'interface lo' \
+  -c 'ip address 10.255.0.102/32' \
+  -c 'exit' \
+  -c 'router bgp 65000' \
+  -c 'bgp router-id 10.0.0.102' \
+  -c 'neighbor 10.0.0.11 remote-as 65010' \
+  -c 'neighbor 10.0.0.12 remote-as 65011' \
+  -c 'address-family ipv4 unicast' \
+  -c 'neighbor 10.0.0.11 activate' \
+  -c 'neighbor 10.0.0.12 activate' \
+  -c 'network 10.255.0.102/32' \
+  -c 'exit-address-family' \
+  -c 'write memory'
+
+docker exec -it leaf1 vtysh -c 'show ip bgp summary'
+docker exec -it leaf1 vtysh -c 'show ip bgp neighbors 10.0.0.101 advertised-routes'
+docker exec -it leaf1 vtysh -c 'show ip bgp neighbors 10.0.0.102 advertised-routes'
+```
+
+Expected successful output should show each FRR container with loopback routes, both peer sessions in Established, and explicit prefix visibility from BGP exports:
+
+```text
+leaf1# show ip bgp summary
+BGP router identifier 10.0.0.11, local AS number 65010
+Neighbor        V    AS    MsgRcvd MsgSent   State/PfxRcd
+10.0.0.101     4  65000       17      17             2
+10.0.0.102     4  65000       17      17             2
+
+leaf1# show ip bgp neighbors 10.0.0.101 advertised-routes
+      Network          Next Hop       Metric LocPrf Weight Path
+*>  10.10.10.0/24     10.0.0.11         0             0 65010 i
+*>  10.255.10.1/32    10.0.0.11         0             0 65010 i
 ```
 
 ### Task 2: Oversubscription and uplink planning
 
-Compute oversubscription for three models and choose the one with acceptable burst posture for AI/storage mixed traffic while preserving one maintenance-safe path under one-to-three spine failure assumptions.
+Run the calculation script to compare all three models and record a decision with an auditable maintenance and burst-tolerance basis:
 
-- Model A: 48x25GbE host-facing, 2x100GbE uplinks.
-- Model B: 48x25GbE host-facing, 2x100GbE + 1x400GbE uplinks.
-- Model C: 64x40GbE host-facing, 4x100GbE uplinks.
+```bash
+cat > /tmp/oversubscription-check.sh <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
 
-Document chosen ratio, expected worst case burst profile, and the first alert you would add for regression detection.
+cat <<'DATA' | while IFS=',' read -r model down up reason; do
+  ratio=$(awk "BEGIN {printf \"%.2f\", ${down}/${up}}")
+  risk="acceptable"
+  if awk "BEGIN {exit !(${down}/${up} >= 6)}"; then
+    risk="high-risk"
+  elif awk "BEGIN {exit !(${down}/${up} >= 3)}"; then
+    risk="caution"
+  fi
+  printf "%s,%s,%s\n" "$model" "$ratio" "$risk"
+done
+DATA
+A,1200,200,48x25GbE hosts / 2x100GbE uplinks
+B,1200,500,48x25GbE hosts / 2x100GbE + 1x400GbE uplinks
+C,2560,400,64x40GbE hosts / 4x100GbE uplinks
+SH
+
+bash /tmp/oversubscription-check.sh
+```
+
+```text
+Model,ratio,risk
+A,6.00,high-risk
+B,2.40,acceptable
+C,6.40,high-risk
+```
+
+```bash
+cat > /tmp/oversubscription-decision.txt <<'TXT'
+Chosen model: B
+Reason: 2.40:1 with one 400GbE uplink gives the best burst profile and single-failure path safety.
+Alert: trigger when >72% utilization on any spine uplink for 5m and ECMP imbalance >1.8:1 for 1m.
+TXT
+cat /tmp/oversubscription-decision.txt
+```
 
 ### Task 3: MTU and QoS validation from a node perspective
 
-Use controlled probes on 1500 and 9000 underlay policies, then test whether DSCP class and PFC mapping remains stable across maintenance and BGP transitions.
+Run these probes on a workload node and capture baseline transport, mtu-fragility, and mangle table evidence for a single change window:
+
+```bash
+ip link show eth0
+ip link set eth0 mtu 1500
+ping -M do -s 1472 10.0.0.1
+ping -M do -s 8972 10.0.0.1 || true
+
+ip link set eth0 mtu 9000
+ping -M do -s 8972 10.0.0.1
+ping -M do -s 9500 10.0.0.1 || true
+ip -s -s link show eth0 | sed -n '1,5p'
+
+iptables -t mangle -L -v -n
+```
+
+Expected successful output should show MTU mismatch errors at the fragmenting step, then stable 9000 behavior and changing queue counters:
+
+```text
+3: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ...
+PING 10.0.0.1 ... 1472 data bytes
+ping: local error: Message too long (MTU exceeded)
+
+3: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 ...
+64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=...
+ping: fragmentation needed and DF set
+RX: bytes packets errs drop fifo frame compressed multicast
+...
+Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
+pkts bytes target     prot opt in  out     source    destination
+...
+```
 
 ### Success Criteria
 
@@ -484,11 +677,11 @@ Continue to [Module 3.2: BGP & Routing for Kubernetes](../module-3.2-bgp-routing
 
 ## Sources
 
-- [Juniper EVPN-VXLAN overview](https://www.juniper.net/documentation/us/en/software/junos/evpn-vxlan/topics/concept/evpn-vxlan-data-center-overview.html)
+- [Juniper EVPN-VXLAN overview](https://www.juniper.net/documentation/us/en/software/junos/evpn/topics/concept/vxlan-evpn-integration-overview.html)
 - [RFC 7348 — VXLAN](https://datatracker.ietf.org/doc/html/rfc7348)
 - [RFC 7432 — EVPN](https://datatracker.ietf.org/doc/html/rfc7432)
 - [RFC 7938 — BGP data center scaling](https://datatracker.ietf.org/doc/html/rfc7938)
-- [Cisco Nexus-9k spine-leaf guidance](https://www.cisco.com/c/en/us/products/collateral/switches/nexus-9000-series-switches/white-paper-c11-738358.html)
+- [Cisco Nexus-9000 spine-leaf guidance](https://www.cisco.com/c/en/us/products/collateral/switches/nexus-9000-series-switches/white-paper-c11-743731.html)
 - [FRRouting documentation](https://docs.frrouting.org/)
 - [RFC 8939 — RoCEv2](https://datatracker.ietf.org/doc/html/rfc8939)
 - [OpenFabrics](https://www.openfabrics.org/)
