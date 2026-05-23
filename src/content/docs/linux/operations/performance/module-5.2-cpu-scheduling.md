@@ -11,782 +11,589 @@ lab:
   difficulty: advanced
   environment: ubuntu
 ---
-# Module 5.2: CPU & Scheduling
-
-> **Linux Performance** | Complexity: `[MEDIUM]` | Time: 30-35 min, with practical Linux and Kubernetes CPU scheduling diagnostics throughout the lesson.
+> **Linux Performance** | Complexity: `[MEDIUM]` | Time: 40-55 min. The module is built for operations teams who must resolve CPU incidents with evidence, not guesswork.
 
 ## Prerequisites
 
-Before starting this module, make sure you can already read basic Linux process output and recognize how containers are mapped onto cgroups.
-- **Required**: [Module 5.1: USE Method](../module-5.1-use-method/)
-- **Required**: [Module 2.2: cgroups](/linux/foundations/container-primitives/module-2.2-cgroups/)
-- **Helpful**: Understanding of processes and threads
-
+Before this module, you should already read basic Linux command output for process and system status, and you should already understand cgroup basics. The links you will use repeatedly are [module 5.1: USE method](../module-5.1-use-method/), [module 2.2: cgroups](/linux/foundations/container-primitives/module-2.2-cgroups/), and [basic process lifecycle command usage](/linux/foundations/system-essentials/module-1.2-processes-systemd/).
 
 ## Learning Outcomes
 
-After completing this module, you will be able to connect Linux scheduler evidence to Kubernetes resource policy decisions during realistic production incidents.
-- **Diagnose** CPU contention and bottlenecks using standard Linux utilities like `top`, `mpstat`, and `vmstat`.
-- **Evaluate** the impact of Kubernetes CPU requests and limits on application performance and throttling.
-- **Implement** strategies to optimize CPU resource allocation for containerized workloads in Kubernetes.
-- **Compare** the roles of the Completely Fair Scheduler (CFS) and cgroups in managing CPU resources.
-- **Troubleshoot** high load averages and unexpected application latency stemming from CPU scheduling issues.
+- **LO-1**: Use process state signals `R`, `S`, `D`, `Z`, and `T` to determine whether CPU demand is runnable, blocked, or non-runnable.
+- **LO-2**: Describe how CFS and EEVDF differ in scheduling behavior and why latency-sensitive workloads are shaped by vruntime and virtual deadlines.
+- **LO-3**: Evaluate scheduler control options across `SCHED_OTHER`, `SCHED_FIFO`, `SCHED_RR`, `SCHED_DEADLINE`, `SCHED_BATCH`, and `SCHED_IDLE`, then select safe controls.
+- **LO-4**: Diagnose scheduler and cgroup behavior with `top`, `htop`, `pidstat`, `perf sched`, `sar -u`, `mpstat -P ALL`, `/proc/<pid>/sched`, `/proc/<pid>/status`, and `/proc/stat`.
+- **LO-5**: Apply and validate cgroups v2 CPU policy and Kubernetes requests/limits for predictable throughput and bounded latency.
 
+## Why This Module Matters
 
-## Why This Module Matters: The Hidden Cost of CPU Throttling
+A Kubernetes node can appear healthy on one chart while a latency-sensitive service fails user requests because scheduling and cgroup policy interact in non-obvious ways. A common incident pattern is modest host load with high tail latency, and in that pattern the root cause is often policy-level contention or throttling, not raw CPU absence.
 
-Imagine a major e-commerce platform, anonymized here as MegaMart, preparing for its largest sale of the year. Its service owners have dashboards showing average CPU utilization below 30% across most application nodes, and the autoscaler has already added capacity. When the event begins, customers still see checkout timeouts, search requests pile up, and carts disappear after retries. The incident review later estimates millions of dollars in lost revenue, even though the first dashboard everyone opened made the servers look relaxed.
-
-The root cause was not an absent CPU. The root cause was time that the application was not allowed to use. Several latency-sensitive containers had CPU limits that converted short bursts of request handling into forced pauses, so a request that needed a small amount of compute could still wait for the next cgroup enforcement period before continuing. Average utilization stayed low because averages smear out the exact moments when users were waiting, and the service team spent precious minutes chasing network, cache, and database theories before checking throttling.
-
-This module gives you the operating model needed to avoid that kind of mistake. You will diagnose CPU contention with `top`, `mpstat`, `vmstat`, load averages, context switch counters, cgroup files, and Kubernetes metrics, then connect those observations to scheduler behavior and resource configuration. For Kubernetes examples, define the standard alias `alias k=kubectl`; after that, commands such as `k top pod` are the preferred form, and the target cluster behavior in this module assumes Kubernetes 1.35 or newer.
-
-The deeper lesson is that CPU performance is about permission to make progress, not only about silicon being present. Linux decides which runnable task executes next, cgroups decide how much CPU a group of tasks may consume, and Kubernetes decides where pods land and what constraints the kubelet applies. When those layers agree with the workload's shape, applications feel smooth under load; when they conflict, dashboards can look calm while users wait.
-
-
-## CPU Fundamentals: Reading What Linux Is Really Saying
-
-Linux performance work starts by separating three ideas that people often collapse into one word: utilization, saturation, and delay. Utilization tells you how busy CPUs were during a measurement interval, saturation tells you whether runnable work was waiting for a CPU, and delay tells you what users or upstream systems actually felt. A host can have moderate utilization with painful delay if a single core is saturated, a cgroup quota is throttling bursts, or runnable work is constantly preempted by higher priority activity.
-
-The first discipline is to treat CPU state as a set of categories rather than one percentage. User time means application code is executing, system time means kernel code is executing on behalf of workloads, idle time means no runnable task needed the CPU, and iowait means the CPU could have done work but the task was blocked on I/O. Interrupt time, soft interrupt time, and steal time each tell a different story about hardware, networking, timers, and virtualized infrastructure, so a responsible diagnosis reads the category mix before naming a bottleneck.
-
-```bash
-# View CPU time categories
-top -bn1 | grep "Cpu(s)"
-# %Cpu(s):  5.2 us,  2.1 sy,  0.0 ni, 92.0 id,  0.5 wa,  0.0 hi,  0.2 si,  0.0 st
-
-# What each means:
-```
-
-| Category | Meaning | High Value Indicates |
-|----------|---------|---------------------|
-| `us` | User - Application code | Application CPU usage |
-| `sy` | System - Kernel code | System calls, drivers |
-| `ni` | Nice - Low priority user | Nice'd processes running |
-| `id` | Idle - Nothing to do | Unused CPU capacity |
-| `wa` | I/O Wait - Waiting for disk | I/O bottleneck |
-| `hi` | Hardware IRQ - Interrupts | High interrupt load |
-| `si` | Software IRQ - Soft interrupts | Network/timer handling |
-| `st` | Steal - VM overhead | Hypervisor stealing time |
-
-A high `%us` value usually means application code is consuming processor time, but it does not automatically mean the system is unhealthy. A high `%sy` value points you toward kernel paths such as packet handling, filesystem work, memory management, or very frequent system calls. A high `%wa` value is especially important because it can raise load while CPUs are not actually computing, which is why the USE method from the previous module insists on checking saturation and errors rather than reading one utilization line in isolation.
-
-Load average is the second metric that deserves careful handling. It reports the average number of tasks that were runnable or in uninterruptible sleep over one, five, and fifteen minute windows. That means load includes tasks waiting to run on a CPU and tasks stuck waiting for resources such as disk I/O, so it is closer to a queue length signal than a CPU usage signal. When you compare load to the number of logical CPUs, you get a first approximation of whether runnable demand is exceeding available execution slots.
-
-```bash
-# Show load average
-uptime
-# 10:23:45 up 5 days,  3 users,  load average: 2.15, 1.87, 1.42
-#                                              1m    5m    15m
-
-cat /proc/loadavg
-# 2.15 1.87 1.42 3/245 12345
-# load averages   running/total  last PID
-```
-
-On a four CPU system, a load near four can mean the machine is busy but not necessarily falling behind. A load near eight means that, on average, four tasks are running while several more are waiting or blocked, and the next question is whether those waiters are runnable CPU work or I/O sleepers. The trend matters too: a one minute load above the five and fifteen minute values indicates a recent spike, while a fifteen minute value above the short windows suggests the pressure has been slowly clearing.
+This module gives you a direct incident workflow where each step changes one variable at a time and every step is measurable. You start by reading process state and run-queue pressure, then check scheduler class behavior, then inspect cgroup counters, then correct topology and affinity. This structure prevents the high-noise debugging loop where teams resize nodes, restart pods, and move services before proving cause.
 
 ```mermaid
 graph TD
-    subgraph "4-core system with load average of 4.0"
-        CPU0_P1[P1] --> CPU0(CPU 0)
-        CPU1_P2[P2] --> CPU1(CPU 1)
-        CPU2_P3[P3] --> CPU2(CPU 2)
-        CPU3_P4[P4] --> CPU3(CPU 3)
-        subgraph "4 processes running"
-            P1_running(P1)
-            P2_running(P2)
-            P3_running(P3)
-            P4_running(P4)
-        end
-        P1_running --"assigned to"--> CPU0_P1
-        P2_running --"assigned to"--> CPU1_P2
-        P3_running --"assigned to"--> CPU2_P3
-        P4_running --"assigned to"--> CPU3_P4
-        PerfUtil(Load = 4.0 = Perfect utilization)
-    end
-    subgraph "4-core system with load average of 8.0"
-        CPU0_P1_8[P1] --> CPU0_8(CPU 0)
-        CPU1_P2_8[P2] --> CPU1_8(CPU 1)
-        CPU2_P3_8[P3] --> CPU2_8(CPU 2)
-        CPU3_P4_8[P4] --> CPU3_8(CPU 3)
-        subgraph "4 running"
-            P1_running_8(P1)
-            P2_running_8(P2)
-            P3_running_8(P3)
-            P4_running_8(P4)
-        end
-        P1_running_8 --"assigned to"--> CPU0_P1_8
-        P2_running_8 --"assigned to"--> CPU1_P2_8
-        P3_running_8 --"assigned to"--> CPU2_P3_8
-        P4_running_8 --"assigned to"--> CPU3_P4_8
-        Queue_P5(P5)
-        Queue_P6(P6)
-        Queue_P7(P7)
-        Queue_P8(P8)
-        subgraph "4 waiting"
-            Waiting(Queue: [P5] [P6] [P7] [P8])
-        end
-        Overload(Load = 8.0 = 100% utilized + 4 waiting)
-    end
+    A[Incoming request] --> B{Task state}
+    B -->|R| C[Runnable scheduling candidates]
+    B -->|S| D[Sleeping waiters, no immediate demand]
+    B -->|D| E[Kernel waits and blocked I/O]
+    B -->|Z| F[Zombie, no scheduling share]
+    B -->|T| G[Stopped or debug state]
+    C --> H[CFS or EEVDF fairness path]
+    H --> I{cgroup budget check}
+    I -->|Available| J[Progress and context]
+    I -->|Exhausted| K[Throttling and delay]
+    D --> L[Use I/O/storage analysis]
+    E --> L
+    G --> M[Control/debug investigation]
+    J --> N[Observe latency and throughput]
+    K --> N
+    N --> O[Targeted remediation]
 ```
 
-Pause and predict: you have a sixteen CPU system with a load average of twenty-four, but `top` reports substantial iowait and low user time. What conclusion would you avoid, and what would you check next? The conclusion to avoid is "we simply need more CPU," because blocked I/O tasks can inflate load without consuming processor cycles. The next check is `vmstat 1`, especially the `r` and `b` columns, because they separate runnable pressure from tasks blocked in uninterruptible sleep.
+## Process State Signals and CPU Consumption (LO-1)
 
-CPU count and topology make the load comparison meaningful. `nproc` tells you how many logical CPUs Linux can schedule onto, while `lscpu` shows whether those logical CPUs are spread across sockets, cores, and hardware threads. Hyperthreads are useful scheduling targets, but they are not equivalent to independent physical cores for all workloads, so a latency-sensitive service pinned against one busy hardware thread can still struggle while a dashboard claims the machine has spare logical CPU.
+In this model, process state is your first signal about what the scheduler can do right now. `R` means runnable and queued for CPU arbitration. `S` means interruptible sleep and generally no direct CPU consumption while waiting. `D` means uninterruptible wait, typically on kernel activity such as I/O or blocked driver paths. `Z` means terminated but not reaped. `T` means stopped by control actions such as signals, tracing, or debugging.
+
+Each state has an operational meaning when paired with run-queue observations. If `R` rises while service delay rises, then runnable demand is high and scheduler or policy pressure is likely. If `D` rises with high delays, I/O path and subsystem pressure likely dominates. If `Z` is large and persistent, your immediate concern is lifecycle cleanup correctness rather than scheduler fairness.
+
+A lot of teams use `ps` and only look at one PID column. For triage, use this pattern: capture state distribution first, then inspect top-level CPU and run queue counters, then inspect the suspect process with `/proc` fields. This sequence gives you a cause order before touching priorities or limits.
 
 ```bash
-# Number of CPUs
-nproc
-# 4
-
-# Detailed CPU info
-lscpu
-# CPU(s):              4
-# Thread(s) per core:  2
-# Core(s) per socket:  2
-# Socket(s):           1
-
-# Per-CPU info
-cat /proc/cpuinfo | grep "processor\|model name" | head -8
+ps -eo state= | sort | uniq -c
+ps -eo pid,state,ni,pri,pcpu,cmd --sort=-pcpu | head -n 30
 ```
-
-There is a useful mental model for these first measurements: utilization is the speedometer, load is the line at the counter, and topology is the number of counters that can actually serve customers. If the line is long because every counter is busy, CPU is saturated. If the line is long because customers are waiting for payment authorization, more cashiers will not fix the problem. If one counter has a long line while the rest are empty, the aggregate average is hiding a distribution problem.
-
-That model also explains why the first few minutes of an incident should be deliberately boring. You want to establish CPU count, load trend, CPU state categories, and per-core shape before making a change. A premature restart or a random limit increase can erase the evidence you need, while a measured baseline lets you prove whether the next action actually reduced runnable pressure, I/O wait, or throttling delay.
-
-
-## The Linux Scheduler: Fairness, Priority, and Preemption
-
-The Linux kernel scheduler answers a question that appears simple but is operationally difficult: when many tasks can run, which task gets which CPU right now? General purpose Linux systems use the Completely Fair Scheduler for normal workloads, and CFS is designed around fairness rather than fixed time slices. Instead of giving every task identical wall clock slices, it tracks how much processor service each runnable task has effectively received, then tries to run the task that is furthest behind its fair share.
-
-Since Linux kernel 2.6.23 in 2007, CFS has used virtual runtime as its central accounting idea. A task that runs accumulates `vruntime`; a task that sleeps or waits stops accumulating it; a task with higher priority accumulates it more slowly. The scheduler keeps runnable tasks in an ordered data structure, traditionally described as a red-black tree, and chooses the task with the smallest virtual runtime. That mechanism favors tasks that have received less CPU service while still allowing priorities to affect the rate at which tasks fall behind or catch up.
-
-```mermaid
-graph TD
-    A[CFS SCHEDULER] --> B{Goal: Every process gets fair share of CPU}
-    B --> C{Process with LOWEST vruntime runs next}
-    C --> D[Red-Black Tree]
-
-    subgraph Red-Black Tree
-        P3(P3: 5000) --- Highest(Highest vruntime)
-        P1(P1: 3000) --- P5(P5: 4500)
-        P2(P2: 2000) --- P4(P4: 2800)
-        P3 --> P1
-        P3 --> P5
-        P1 --> P2
-        P1 --> P4
-    end
-
-    C --> E(Next to run: P2 (lowest vruntime = 2000))
-    E --> F(vruntime increases as process uses CPU)
-    F --> G(Higher priority = vruntime increases slower)
-```
-
-The fairness goal is not the same as a latency guarantee. CFS can make sensible decisions among runnable tasks, but it cannot make a single-threaded program use several cores at once, it cannot make an I/O blocked task proceed before storage responds, and it cannot ignore a cgroup quota that says a container has exhausted its allowed CPU time. The scheduler is one layer in a stack that includes process behavior, kernel work, interrupt handling, cgroup policy, and Kubernetes placement.
-
-Nice values are the everyday interface for adjusting priority among normal CFS tasks. A lower nice value means higher priority, so a task at `-10` receives more favorable scheduling than a task at `10` when both are runnable. This is a hint within the CFS policy, not a hard reservation, and it is most visible when tasks contend for the same CPU. If the machine is mostly idle, a low priority task can still run freely because there is no other runnable work competing for the processor.
-
-```bash
-# View process nice values
-ps -eo pid,ni,comm | head -10
-#   PID  NI COMMAND
-#     1   0 systemd
-#   123 -20 migration/0
-#   456  19 backup
-
-# Nice range: -20 (highest priority) to 19 (lowest priority)
-# Default: 0
-
-# Start process with nice value
-nice -n 10 ./my-script.sh
-
-# Change running process
-renice 10 -p 1234
-
-# Only root can set negative nice (higher priority)
-sudo nice -n -10 ./critical-process
-```
-
-The practical value of `nice` is that it lets you express intent without rewriting the application. A backup checksum job can be made nice so it yields more readily to interactive or request-serving work, while an emergency maintenance script can be given a higher priority by an operator with the required privileges. The limitation is just as important: in Kubernetes, the container's cgroup CPU weight and quota are usually the stronger controls, so process nice values inside a container cannot compensate for a pod-level CPU limit that is too low.
-
-Stop and think: you run a critical data ingestion process and a weekly reporting job on the same VM, and both are CPU bound during a backfill. Which process would you start with a higher nice value, and what would prove the change worked? The reporting job should receive the higher nice value because higher nice means lower priority, and the proof is a comparison of CPU allocation and nonvoluntary context switches while both jobs are runnable under load.
-
-Real-time scheduling policies are a separate mechanism for workloads that cannot tolerate normal fairness behavior. `SCHED_FIFO` and `SCHED_RR` can preempt ordinary CFS tasks, which makes them useful for specialized domains such as audio, industrial control, or carefully isolated low-latency services. They are also dangerous because a badly behaved real-time task can starve important system work, so they should not be used as a casual fix for application latency in general purpose clusters.
-
-```bash
-# Check scheduling policy
-chrt -p 1234
-# pid 1234's current scheduling policy: SCHED_OTHER
-# pid 1234's current scheduling priority: 0
-
-# Policies:
-# SCHED_OTHER - Normal (CFS)
-# SCHED_FIFO  - Real-time FIFO
-# SCHED_RR    - Real-time Round Robin
-# SCHED_BATCH - Batch processing
-# SCHED_IDLE  - Very low priority
-
-# Set real-time priority (careful!)
-sudo chrt -f -p 50 1234
-```
-
-A useful war story comes from a media processing team that moved an encoder helper into a real-time policy to remove audio glitches during peak ingest. The change helped in a single host test, but in production one helper process entered a tight loop and starved node agents long enough to cause health checks and restarts. The durable fix was not "make everything real-time"; it was isolating the workload, bounding concurrency, measuring scheduling delay, and reserving real-time policy for the smallest component that truly needed it.
-
-The scheduler's fairness also interacts with application design. A process that spawns hundreds of runnable worker threads on a small host can create pressure even when each thread individually seems harmless, because the scheduler must rotate among all runnable tasks and the application may spend more time contending for locks than doing useful work. When you see high context switches and poor throughput together, ask whether the program has too much runnable concurrency for the CPU it actually owns.
-
-For containerized services, this is where local process tuning meets platform policy. Reducing thread pool size can lower run queue pressure inside a pod, but it will not remove throttling caused by a tight CPU limit. Raising the pod request can improve fair share during node contention, but it will not make a single thread use multiple cores. Good CPU work keeps these layers separate until the evidence shows which one is limiting progress.
-
-
-## CPU Metrics Deep Dive: Seeing Contention Instead of Averages
-
-Aggregate CPU utilization is a convenient starting point and a frequent source of false comfort. If an eight CPU node shows 12.5% total CPU usage, one logical CPU may still be fully saturated while seven are idle. That pattern appears with single-threaded runtimes, interrupt affinity problems, thread pools with poor work distribution, and workloads constrained to a CPU set. Per-CPU metrics turn the vague question "is the machine busy?" into the useful question "where is runnable work actually landing?"
-
-```bash
-# Per-CPU utilization
-mpstat -P ALL 1
-# 10:30:01  CPU    %usr   %sy  %idle  %iowait
-# 10:30:02  all    15.2    3.1   80.5     1.2
-# 10:30:02    0    20.0    5.0   74.0     1.0
-# 10:30:02    1    10.0    2.0   87.0     1.0
-# 10:30:02    2    18.0    3.0   78.0     1.0
-# 10:30:02    3    13.0    2.0   83.0     2.0
-```
-
-When `mpstat -P ALL 1` shows one CPU doing most of the system and soft interrupt work, the next investigation is often interrupt handling rather than application code. Network drivers, storage controllers, and kernel packet processing can concentrate work on a small number of CPUs if affinity or queue configuration is poor. That explains the frustrating case where a web service cannot keep up with traffic even though the host has many idle cores: the application might be waiting behind a kernel path that is pinned to one hot CPU.
-
-Pause and predict: `CPU 0` is consistently near 100% in `%sy` and `%si`, while `CPU 1` through `CPU 7` are almost idle. What kind of configuration problem would you suspect first? The first suspect is interrupt or soft interrupt concentration, often from network receive processing or storage interrupts landing on one CPU. The fix might involve driver queue configuration, receive packet steering, IRQ affinity, or moving the workload, but the diagnosis starts with proving that the hot core is kernel work rather than balanced user code.
-
-Context switches add another lens. A context switch happens when the scheduler stops running one task and starts another, which requires saving and restoring execution state. Some context switching is normal and healthy because programs block on I/O, sleep, wait for locks, or yield cooperatively. Excessive switching, especially nonvoluntary switching for a CPU-bound process, can indicate that the process wants to run but is repeatedly preempted before making enough progress.
-
-```bash
-# System-wide context switches
-vmstat 1
-#  r  b   swpd   free  ...   in   cs
-#  2  0      0 123456  ...  500 2000
-#                            │    │
-#                            │    └── Context switches/sec
-#                            └── Interrupts/sec
-
-# Per-process context switches
-cat /proc/1234/status | grep ctxt
-# voluntary_ctxt_switches:    1000
-# nonvoluntary_ctxt_switches: 500
-
-# Voluntary = Process yielded (I/O, sleep)
-# Nonvoluntary = Preempted by scheduler
-```
-
-The difference between voluntary and nonvoluntary context switches is operationally useful. Voluntary switches suggest the task is waiting by choice, such as sleeping, waiting on a socket, or blocking on disk. Nonvoluntary switches suggest the scheduler removed the task while it was runnable, commonly because the task exhausted its slice or another runnable task had stronger scheduling priority. If a latency-sensitive process shows a rapidly increasing nonvoluntary counter during an incident, you have evidence of CPU contention even before installing a profiler.
-
-The run queue is the most direct saturation signal in the basic toolkit. In `vmstat`, the `r` column shows tasks that are runnable or currently running, while the `b` column shows tasks blocked in uninterruptible sleep. A run queue persistently above the number of logical CPUs means runnable work is waiting for CPU service. A high blocked column with moderate runnable pressure tells you that load is being driven by I/O waits, lock waits in kernel paths, or other non-CPU stalls.
-
-```bash
-# Processes in run queue
-vmstat 1
-#  r  b   swpd   free ...
-#  4  0      0 123456 ...
-#  │
-#  └── Runnable processes
-
-# Alternative
-cat /proc/loadavg
-# 4.00 3.50 3.00 2/150 12345
-#                 │
-#                 └── 2 currently running / 150 total
-```
-
-A worked example makes the sequence concrete. Suppose users report intermittent latency on a VM, while the host-level CPU chart sits around 55%. You check `vmstat 1` and see `r` fluctuating between ten and fourteen on an eight CPU host, with `b` near zero, so runnable work is queuing for CPU. Then `ps aux --sort=-%cpu` reveals a backup compression process and the application competing heavily, while `/proc/<PID>/status` shows the application accumulating nonvoluntary context switches quickly. That evidence supports lowering the backup priority, moving the job, or adding capacity, rather than tuning database timeouts.
-
-The same sequence also prevents a common misdiagnosis. If the one minute load average is high but `vmstat` shows `r` near one and `b` near eight, the bottleneck is not raw CPU service. You would pivot to storage latency, network filesystems, disk saturation, or kernel paths holding tasks in uninterruptible sleep. CPU scheduling still appears in the investigation, but it is no longer the primary suspect, and that distinction saves time during production incidents.
-
-You should also preserve the time relationship between metrics. A screenshot of high load without the matching `vmstat`, application latency, and cgroup counters is weak evidence because the workload may have already changed. During a live incident, collect several consecutive samples at a short interval and annotate what was happening at the same time. That habit turns scattered command output into a timeline that can survive review after the immediate pressure has passed.
-
-Another useful habit is to compare symptoms at different scopes. Host metrics tell you whether the node is saturated, process metrics tell you whether a particular program is being preempted, and cgroup metrics tell you whether a container group is being capped. When those scopes disagree, the disagreement is often the diagnosis. A quiet node with a throttled pod points to quota; a busy node with many runnable pods points to capacity or requests; a quiet node with one hot CPU points to imbalance.
-
-
-## Kubernetes CPU Management: Requests, Limits, and Throttling
-
-Kubernetes does not invent CPU control from scratch. It uses Linux cgroups to express scheduling weight and hard quota, then relies on the node kernel to enforce those controls. In Kubernetes 1.35, the operational model you should use is the cgroups v2 model: CPU requests influence relative weight during contention, while CPU limits translate into `cpu.max`, a quota and period that cap execution even when the node has spare CPU. That distinction is the center of modern CPU tuning.
-
-```yaml
-resources:
-  requests:
-    cpu: "100m"     # Guaranteed minimum
-  limits:
-    cpu: "500m"     # Maximum allowed
-```
-
-A CPU request is primarily a scheduling and fairness signal. The Kubernetes scheduler uses requests to decide whether a pod fits on a node, and the kubelet maps the request into a cgroup weight so the container has a proportional claim when CPU is contested. A CPU limit is a hard cap. When the container consumes its quota for the current period, the kernel throttles it until the next period, and that pause happens even if other CPUs are idle.
 
 ```mermaid
 graph LR
-    subgraph Kubernetes
-        K8s_100m["cpu: '100m' (request)"]
-        K8s_500m["cpu: '500m' (limit)"]
-        K8s_1CPU["'1 CPU'"]
-        K8s_2CPU["'2 CPU'"]
-    end
-
-    subgraph Linux cgroups v2
-        CG_shares["cpu.weight = 4 (Relative weight for scheduling)"]
-        CG_quota50k["cpu.max = '50000 100000' (50ms of every 100ms period)"]
-        CG_quota100k["cpu.max = '100000 100000' (Full period allowed)"]
-        CG_quota200k["cpu.max = '200000 100000' (Can use 2 cores simultaneously)"]
-    end
-
-    K8s_100m --> CG_shares
-    K8s_500m --> CG_quota50k
-    K8s_1CPU --> CG_quota100k
-    K8s_2CPU --> CG_quota200k
+  R[Runnable tasks] --> A{Scheduler chooses next]
+  A -->|Sufficient budget| B[CPU execution]
+  A -->|No budget| C[Throttled delay window]
+  S[Sleeping tasks] --> D[Wait on timer or I/O]
+  D --> E[No immediate execution]
+  T[Stopped tasks] --> F[Operator or debugger control]
 ```
 
-The word "millicore" can hide the physical behavior. A limit of `500m` does not mean the container gets a smooth half CPU every millisecond. It usually means the cgroup can consume a total budget of 50 milliseconds of CPU time per 100 millisecond period, and the budget may be consumed quickly by parallel threads. A multi-threaded service, a garbage collector, or a TLS-heavy request burst can burn the period budget early, then sit idle by force while user-facing latency grows.
+## CFS Scheduling Logic, vruntime, and Weight (LO-2)
 
-```bash
-# Check container throttling (cgroups v2 example)
-cat /sys/fs/cgroup/system.slice/container-id.scope/cpu.stat
-# usage_usec 123456
-# nr_periods 1000
-# nr_throttled 150
-# throttled_usec 30000000
+CFS fairness is implemented around virtual runtime tracking so each runnable task is compared against others with normalized service history. The scheduler tries to prevent one task from monopolizing all CPU time by ordering candidates by effective fairness state and scheduling the task with lower fair-delay pressure.
 
-# Interpretation:
-# 1000 periods (100ms each = 100 seconds)
-# 150 throttled (15% of periods had throttling)
-# 30,000,000 microseconds = 30 seconds throttled
-```
+`vruntime` is not a visible wall clock value by itself. It reflects weighted service, so higher-weight tasks advance through runnable history differently than lower-weight tasks. When a workload is weighted correctly, both short interactive requests and background utility tasks can coexist with predictable arbitration.
 
-`nr_periods` tells you how many enforcement periods elapsed, `nr_throttled` tells you in how many periods the cgroup hit the cap, and `throttled_usec` tells you total time spent throttled. These counters are better evidence than average CPU usage when investigating latency under limits. A service can average far below its limit over a minute while still suffering frequent short pauses during the hottest milliseconds of request handling.
+Schedulers also carry practical constraints. Load spikes can still produce large queues when runnable demand exceeds available execution slots. At that point, reducing contention inside pods, adjusting policy, or changing pod-level constraints is usually the fastest way to restore stable latency. Merely raising one process priority without checking cgroup budget often gives only temporary relief.
 
-The request versus limit distinction is easiest to remember through idle capacity. Requests shape who wins under contention, so a pod with only a request can burst above that request when nobody else needs the CPU. Limits enforce a maximum whether or not anyone else needs the CPU, so a pod with a low limit can be paused on an otherwise quiet node. This is why many platform teams avoid CPU limits for latency-sensitive services while still requiring realistic CPU requests.
+## EEVDF in Modern Linux and Latency Outcomes (LO-2)
 
-| Mechanism | Effect | When Applied |
-|-----------|--------|--------------|
-| **Requests** (`cpu.weight`) | Relative weight | Only under contention |
-| **Limits** (`cpu.max`) | Hard cap | Always enforced |
+EEVDF updates modern `SCHED_OTHER` scheduling with a stricter latency model by adding virtual deadlines into dispatch ordering. In practical terms, this reduces some forms of delay drift when many tasks continuously wake and sleep while competing for the same cores.
 
-```mermaid
-graph TD
-    subgraph CPU REQUESTS (Weight)
-        A[Pod A: 100m request]
-        B[Pod B: 200m request]
-        A --- B
-        A_contention{"When both compete for CPU"}
-        A_gets["Pod A gets: ~33% CPU"]
-        B_gets["Pod B gets: ~67% CPU"]
-        A_alone{"When only Pod A runs"}
-        A_can_use["Pod A can burst to 100% (Weight only matters during contention)"]
-        A --> A_contention
-        B --> A_contention
-        A_contention --> A_gets
-        A_contention --> B_gets
-        A --> A_alone
-        A_alone --> A_can_use
-    end
-
-    subgraph CPU LIMITS (Max)
-        C[Pod A: 500m limit = 50ms per 100ms]
-        D["Even if CPU is idle, Pod A is capped at 50%"]
-        E["This causes throttling (latency spikes)"]
-        C --> D
-        D --> E
-    end
-```
-
-There are legitimate reasons to keep CPU limits. A hard multi-tenant cluster may need limits to protect tenants from noisy neighbors, support chargeback expectations, or prevent unbounded batch jobs from harming control plane agents and system daemons. The tradeoff is that strict isolation can convert bursty compute into tail latency. A strong platform standard states which workload classes may run without CPU limits, what requests they must set, which namespaces require caps, and what alerts prove throttling is actually happening.
-
-```bash
-# Pod CPU usage
-alias k=kubectl
-k top pod
-
-# Detailed metrics (if metrics-server installed)
-k get --raw /apis/metrics.k8s.io/v1beta1/pods
-
-# Equivalent full kubectl forms kept for comparison:
-kubectl top pod
-kubectl get --raw /apis/metrics.k8s.io/v1beta1/pods
-
-# Viewing direct cgroup v2 stats for a container via the filesystem
-# Since container runtimes map paths differently, searching is reliable:
-find /sys/fs/cgroup -name cpu.stat -exec awk '/nr_throttled/ {if ($2 > 0) print FILENAME ": " $2}' {} +
-```
-
-Metrics Server gives a useful current usage view, but it does not replace cgroup throttling counters. For a Kubernetes 1.35 workload, the operational path is to correlate application latency with pod CPU usage, node CPU saturation, and cgroup `cpu.stat` growth. If latency spikes line up with `nr_throttled` and `throttled_usec` increases while node CPU is not saturated, the limit is a likely cause. If node CPU is saturated and many pods are runnable, the request and placement strategy may be the stronger lever.
-
-Which approach would you choose here and why: a payment API with strict p99 latency gets realistic CPU requests, no CPU limit, horizontal autoscaling, and node capacity alerts; a best-effort image resize queue gets a request and a conservative limit. That split is often healthier than one cluster-wide rule because the payment API is harmed by short forced pauses, while the batch queue can tolerate slower completion in exchange for stronger isolation.
-
-The request value should come from measurement rather than guesswork. A common policy is to start from recent production CPU usage, choose a percentile that reflects steady demand, add headroom for normal bursts, and revisit the number after large releases. If every service requests the minimum because teams fear lower bin packing, the scheduler's fairness signal becomes fiction, and the cluster will eventually reveal that fiction during contention.
-
-The limit value, when present, should have an even clearer reason. It might protect a shared tenant node from runaway batch work, or it might enforce a cost boundary for a namespace that accepts slower jobs. If nobody can name the failure the limit is preventing, the limit is a candidate for removal from latency-sensitive services. The review is not ideological; it is a tradeoff between isolation and the delay caused by quota enforcement.
-
-
-## Troubleshooting CPU Performance Issues
-
-A reliable CPU investigation moves from broad symptoms to narrow evidence. Start with the user-visible symptom, such as p95 latency, queue lag, request timeouts, or missed cron deadlines. Then determine whether host-level saturation, per-core imbalance, process contention, cgroup throttling, or I/O blocking explains the symptom. The order matters because jumping straight to one tool often confirms the theory you already had, while a structured path protects you from mistaking load, utilization, and quota delay for one another.
-
-```bash
-# Diagnosis steps:
-# 1. Is it CPU or I/O?
-vmstat 1
-#  r  b    ← r=CPU, b=I/O
-#  8  0    ← High r = CPU bound
-#  2  6    ← High b = I/O bound
-
-# 2. What's using CPU?
-top -bn1 | head -15
-ps aux --sort=-%cpu | head -10
-```
-
-The first branch is CPU-bound versus I/O-bound pressure. A high `r` value with low `b` means runnable tasks are waiting for CPU, so you inspect the heaviest processes, per-CPU distribution, and context switches. A high `b` value means tasks are blocked in the kernel, so disk latency, network filesystems, or storage controllers become stronger suspects. If both are high, you may have a feedback loop, such as CPU-heavy compression making storage writes slower while blocked writers accumulate.
-
-For containerized workloads, add cgroup checks early instead of treating Kubernetes as a separate world. A pod can be throttled by `cpu.max` while the node has idle CPU, and that finding changes the remedy from "add nodes" to "adjust or remove the limit for this workload class." Conversely, a pod without a limit can burst freely, but if the node is saturated and requests are too low, the pod may lose scheduling share to other workloads under contention. Requests and limits solve different problems, so the fix has to match the evidence.
-
-The throttling latency pattern is counterintuitive because the wall clock delay can be much larger than the CPU time the application needed. A container limited to `100m` can use only about ten milliseconds of CPU in a typical 100 millisecond period. If a request needs twenty milliseconds of CPU and arrives just after the quota is consumed, the request can be split across periods and wait far longer than its actual compute requirement. This is why low average CPU usage can coexist with sharp tail latency.
+The important operational result is that many workloads improve in tail metrics even when mean CPU usage stays stable. This is why kernel upgrades and scheduling policy checks should be evaluated with p50/p95/p99 traces, not just average utilization.
 
 ```mermaid
 sequenceDiagram
-    participant App as Container (100m limit)
-    App->>App: Request arrives (0ms)
-    App->>App: Processing starts (0ms)
-    App->>App: CPU quota exhausted (10ms)
-    App--xApp: WAIT until 100ms (new period)
-    App->>App: Processing continues (100ms)
-    App->>App: Response at 120ms
-    Note over App: Without throttling: 20ms latency
-    Note over App: With throttling: 120ms latency (6x slower)
-    Note over App: This is why low CPU% can still cause latency issues!
+  autonumber
+  participant Task as Runnable Task
+  participant Queue as Eligibility Queue
+  participant Core as CPU Core
+  Task->>Queue: Wake with virtual deadline
+  Queue->>Queue: Select earliest eligible entity
+  Queue->>Core: Dispatch for slice
+  Core->>Core: Update vruntime and deadline state
+  Core-->>Queue: Return task or next candidate
 ```
 
-A practical Kubernetes playbook has four checks. First, compare application latency with pod CPU usage and node CPU saturation so you know whether the symptom follows demand. Second, inspect throttling counters for the affected cgroup or container. Third, compare CPU requests to observed steady-state demand, because an unrealistically low request can make the pod a weak competitor during node contention. Fourth, examine whether the workload is bursty, multi-threaded, garbage-collector-heavy, or single-threaded, because each shape reacts differently to limits and per-core saturation.
+## Scheduler Policy Families (LO-3)
 
-Removing CPU limits is not a universal cure. It can eliminate quota throttling for a latency-sensitive pod, but it also allows that pod to consume idle CPU and potentially starve other workloads when the node becomes saturated. The safer pattern is to remove limits only for classes that need burst behavior, set requests from measured demand plus headroom, use pod and node autoscaling, and keep noisy batch or tenant workloads constrained. Platform policy should also reserve CPU for system components so node agents are not pushed out by application bursts.
+`SCHED_OTHER` remains the default policy class for general workloads and is where fairness and EEVDF behavior apply together. It is the right baseline for most services.
 
-One worked example ties the layers together. A Java API reports p99 latency spikes after a deployment, and `k top pod` shows average CPU below the configured two CPU limit. The team checks cgroup `cpu.stat` and sees `nr_throttled` growing during latency spikes, while the node has idle CPU. The application changed garbage collection behavior and now performs short parallel bursts that consume quota quickly. Raising or removing the CPU limit for that service, while keeping a realistic request and autoscaling policy, addresses the actual scheduler delay rather than hiding it behind more replicas.
+`SCHED_FIFO` is strict FIFO real-time and does not use equal-round scheduling. It runs until it blocks, yields, or is preempted by higher-priority RT logic. This can be dangerous in mixed workloads if misapplied.
 
-Another example points the other way. A single-threaded Node.js consumer falls behind on an eight CPU VM, and dashboards show overall CPU near 12.5%. `mpstat -P ALL 1` reveals one core at or near full user time while the others are mostly idle. There is no cgroup throttling problem, and adding a pod CPU limit change would not help. The fix is to shard the queue, run more worker processes, adjust runtime concurrency, or redesign the workload so it can use multiple cores.
+`SCHED_RR` is real-time round robin among equal priorities and is safer than FIFO for many RT clusters because no task can hold the CPU indefinitely within the same priority band.
 
-When the diagnosis leads to a configuration change, verify the result with the same evidence that justified the change. If you remove a CPU limit, `nr_throttled` should stop increasing during the same traffic pattern, but node saturation and neighbor workloads must remain healthy. If you raise a request, the pod should receive a better share under contention, but scheduling density may drop. If you change thread count, context switches and run queue depth should move in the expected direction.
+`SCHED_DEADLINE` uses explicit runtime and deadline parameters. It is very powerful and very strict. If misconfigured it can fail admission checks or produce severe side effects under load. In production, it is used where workloads have exact timing assumptions and where operations policy supports strict governance.
 
-Avoid treating autoscaling as a substitute for scheduler understanding. Horizontal Pod Autoscaling can add replicas when demand rises, but it reacts to metrics over time and may not fix per-request quota pauses inside each replica. Node autoscaling can add capacity, but it cannot make a low CPU limit stop throttling a single pod on an idle node. Autoscaling is powerful when resource policy is truthful; it is confusing when requests and limits hide the workload's real shape.
+`SCHED_BATCH` deprioritizes strict interactive behavior in exchange for throughput-oriented background execution. `SCHED_IDLE` yields almost everything else and is useful where a task must not disturb any user-facing work.
 
+For Kubernetes nodes, choose RT classes only with explicit ownership, observability, and rollback. A single bad RT setting can break broad scheduling fairness and reduce control-plane responsiveness.
 
-## Patterns & Anti-Patterns
+## Did You Know 1: Default Class Is the Best Starting Point
 
-Good CPU operations are less about memorizing one command and more about choosing a pattern that matches the workload. Latency-sensitive services need room for short bursts, realistic requests, and alerts that catch throttling before users report it. Batch jobs need fairness, bounded concurrency, and often lower priority. Shared clusters need tenant isolation without silently punishing the workloads that are most sensitive to short scheduler pauses.
+> **DYK:** `SCHED_OTHER` with tuned cgroup controls usually solves operationally useful latency issues before touching real-time classes.
 
-| Pattern | When to Use | Why It Works | Scaling Considerations |
-|---------|-------------|--------------|------------------------|
-| Requests based on measured steady load plus headroom | Long-running services with stable traffic patterns | Gives the scheduler and cgroup weight a truthful baseline during contention | Revisit after major releases, traffic changes, or runtime upgrades |
-| No CPU limit for latency-sensitive services | APIs, gateways, and control loops where p99 delay matters | Allows short bursts to use idle node CPU without quota pauses | Requires node saturation alerts, HPA, and protection for system daemons |
-| Conservative limits for tolerant batch work | Rendering, indexing, reports, and queue jobs with flexible deadlines | Prevents noisy jobs from consuming all shared CPU | Pair with queue depth alerts and concurrency controls |
-| Per-core inspection during imbalance | Single-threaded services, IRQ-heavy nodes, and pinned workloads | Reveals hot CPUs hidden by aggregate utilization | Combine with thread model, affinity, and runtime concurrency review |
+Most incident timelines improve first by reducing contention and cgroup pressure. Jumping to RT classes without this grounding usually increases variance and makes rollback harder.
 
-These patterns scale when teams document the reason behind each resource policy. A service manifest that says "no CPU limit because p99 latency is quota-sensitive; request set from seven day p95 CPU plus headroom" is much easier to operate than a manifest that simply omits the limit. The comment is not decoration; it tells the next engineer what evidence would justify changing the policy.
+## Priority and Policy Adjustment in Practice (LO-3, LO-4, LO-5)
 
-| Anti-Pattern | What Goes Wrong | Better Alternative |
-|--------------|-----------------|--------------------|
-| Setting tiny CPU limits on every pod by default | Bursty services are throttled even on idle nodes | Require requests everywhere, use limits only where isolation matters |
-| Treating load average as CPU utilization | I/O-blocked tasks are mistaken for CPU starvation | Compare load with `vmstat` `r` and `b` before deciding |
-| Looking only at aggregate CPU | Hot-core bottlenecks disappear into the average | Use `mpstat -P ALL 1` and runtime-specific concurrency checks |
-| Raising real-time priority to fix ordinary latency | A runaway task can starve system and application work | Use capacity, isolation, profiling, and bounded concurrency first |
+`nice` and `renice` work within normal scheduling semantics, changing relative priority by adjusting weight and placement within fairness arbitration. They are safe tools for bounded adjustments when you can prove the process mix is healthy.
 
-The common thread is that CPU policy should describe a tradeoff explicitly. A limit buys isolation at the cost of possible latency. A missing limit buys burst capacity at the cost of stronger noisy-neighbor risk. A high request buys fair share and placement confidence at the cost of lower packing density. The right answer depends on the service's failure mode, and the evidence should come from the same measurements you use during incidents.
+`chrt` changes policy and real-time priority. This is a governance decision more than a tuning preference. Safe usage pattern is small scoped change, pre-incident metrics, and rollback plan at the same time.
 
-Teams that do this well usually make CPU review part of normal service ownership rather than emergency tuning. They record the reason for each request and limit, alert on throttling where it matters, and compare resource settings after major runtime or traffic changes. The payoff is not only better latency. It is faster incident response because the team already knows which workloads are allowed to burst, which are intentionally capped, and which metrics prove the policy is working.
+Use this order on a single service: baseline signals first, adjust only one priority dimension, run a fixed measurement window, and confirm improved queue delay without collateral effects. If p99 improves while CPU throttling counters remain high, the next layer is almost always cgroup budget, not just nice value changes.
 
+```bash
+# Inspect policy for current process
+type chrt >/dev/null 2>&1 && chrt -p 1
+```
 
-## Decision Framework
+## Did You Know 2: `nice` Is Relative, Not Absolute
 
-Use this framework when a workload shows CPU-related symptoms or when you are reviewing a Kubernetes resource policy. Begin with the symptom, not the manifest. If the symptom is tail latency or queue lag, verify whether runnable work is waiting, whether one CPU is hot, whether the cgroup is throttled, and whether I/O wait is inflating load. Only then choose between changing requests, changing limits, changing concurrency, adding replicas, or moving the workload.
+> **DYK:** A lower `nice` value helps ordering, but if a pod is already budget-limited in cgroups, it will still hit throttle boundaries and cannot exceed granted runtime for sustained periods.
 
-| Observation | Strongest Next Check | Likely Action |
-|-------------|----------------------|---------------|
-| High load and high `r` in `vmstat` | `top`, `ps`, per-process context switches | Reduce CPU demand, add capacity, tune priority, or move jobs |
-| High load and high `b` in `vmstat` | Storage, filesystem, and network I/O metrics | Investigate I/O instead of buying CPU first |
-| Low average CPU but high p99 latency in a limited pod | cgroup `cpu.stat` throttling counters | Raise or remove CPU limit, then protect with requests and autoscaling |
-| One CPU saturated while others are idle | `mpstat -P ALL 1`, runtime thread model, IRQ affinity | Shard, add worker processes, tune affinity, or rebalance interrupts |
-| Node saturated with many pods contending | Requests versus actual CPU demand | Resize requests, spread workloads, add nodes, or adjust scheduling |
+This is the single most common misunderstanding in CPU incidents. The ranking can improve, but if there is no cgroup headroom, ranking cannot create runtime that is not granted.
+
+## Monitoring Stack for Scheduler Root-Cause Work (LO-4)
+
+Operationally useful evidence comes from layered tools used together. Start with broad metrics from `top`, then move into per-core diagnostics with `mpstat -P ALL`, then inspect thread behavior with `pidstat`, then schedule-level traces with `perf sched`. After these, use `/proc` file inspection to verify causal attribution.
+
+`sar -u` provides trend context for user/system distribution and can reveal periodical saturation patterns that hide in short snapshots. `schedtool` remains useful in mixed legacy environments when policy compatibility is required.
+
+Avoid running all checks at once without context windows. Use stable intervals like repeated one-minute windows because scheduling noise may fluctuate across seconds. Compare before/after states in the same measurement shape.
+
+```bash
+top -b -n 1 | head -n 20
+mpstat -P ALL 1 8
+pidstat -u -t 1 10
+sar -u 1 10
+sudo perf sched latency
+schedtool -p 0 -a 0 $$
+```
+
+## Linux Process Files for Verifiable Evidence (LO-4)
+
+`/proc/<pid>/status` is a quick field set for state and switch behavior. `voluntary_ctxt_switches` and `nonvoluntary_ctxt_switches` show whether a task is waiting or being preempted. `State` confirms the high-level scheduler category.
+
+`/proc/<pid>/sched` adds weighted and runtime accounting details. It is a practical forensic file when one service shows unexpected behavior despite acceptable aggregate host metrics. `se.vruntime` and `sum_exec_runtime` are especially useful for comparing runnable service fairness.
+
+`/proc/stat` adds host accounting context so you can see whether demand is user, kernel, or iowait heavy. This helps decide whether CPU contention is truly scheduler-limited or dominated by other subsystems.
+
+```bash
+PID=$(pgrep -o -f your-service | head -n 1)
+grep -E 'State|voluntary_ctxt_switches|nonvoluntary_ctxt_switches' /proc/$PID/status
+grep -E 'se\.vruntime|sum_exec_runtime|nr_switches|nr_involuntary_switches' /proc/$PID/sched
+cat /proc/stat | head -n 2
+```
+
+This three-file pattern is reliable because it ties runnable demand, fairness accounting, and host load decomposition together in one loop. Any remediation based only on host averages misses at least one signal path.
+
+## Cgroups v2 CPU Controls and Kubernetes Resource Mapping (LO-5)
+
+cgroups v2 exposes controls that directly bound what each workload can do. `cpu.weight` handles relative scheduling share under contention. `cpu.max` imposes hard runtime budget per period. `cpu.stat` shows period count and throttling metrics. `cpu.pressure` reveals CPU pressure experienced under demand.
+
+For Kubernetes, mapping is direct in operations practice. Requests set expected baseline and scheduler placement behavior, while limits impose hard ceilings on burst behavior and sustained progress.
+
+When a pod throttles, `nr_throttled` and `throttled_time` often explain latency spikes while host graphs are misleadingly calm. The critical command pattern is to read `cpu.max` and `cpu.stat` from inside the pod and then compare with `kubectl top` and external scheduling traces.
+
+```bash
+# Typical pod cgroup paths map from namespace file
+PID=$(pgrep -o -f your-service | head -n 1)
+CG=$(awk -F: '$2=="0" {print $3}' /proc/$PID/cgroup)
+cat /sys/fs/cgroup/$CG/cpu.max
+cat /sys/fs/cgroup/$CG/cpu.stat
+cat /sys/fs/cgroup/$CG/cpu.pressure
+```
+
+A useful operational pattern is to create a matrix with one row per pod containing state, run-queue pressure, throttling counters, and request/limit pair. If only one pod has high throttling in steady load, you can usually address it with better concurrency and limit setting.
+
+## Did You Know 3: `cpu.stat` Is Often the First Truth
+
+> **DYK:** `cpu.stat` counter growth often appears before broad SLA degradation is visible on host-level averages.
+
+That means the right first intervention is often inside the workload boundary and not a wholesale node-level capacity action, especially for short burst services that are currently constrained by strict runtime ceilings.
+
+## Cgroups in Kubernetes Practice (LO-5)
+
+In Kubernetes, limits can protect nodes from noisy-neighbor effects but can also create artificial latency for bursty workloads. The platform operator chooses between smoother throughput and strict isolation.
+
+`cfs_quota_us` and period values in cgroups v2 map to `cpu.max`. When a service gets periodic quota refills, each burst that exceeds that period can queue behind the scheduler. You will see it as high throttling counters and lower p99 completion times.
+
+Use this sequence for validation:
+
+- check pod requests and limits in manifest or describe output,
+- capture pod-level cgroup counters,
+- verify top and per-core distribution,
+- validate PSI and switch behavior.
+
+This sequence prevents accidental policy escalation and supports low-risk remediation under load.
+
+## CPU Affinity and Low-Latency Isolation (LO-5)
+
+`taskset` can isolate high-impact tasks to selected CPUs, while cgroup cpusets can reserve and constrain whole service groups. `isolcpus` can reserve kernel scheduler behavior for special hardware or latency-sensitive paths. `nohz_full` reduces periodic scheduling tick overhead on quiet dedicated cores.
+
+Isolation is strongest when combined with capacity planning and pinning discipline. Pinning only one application thread without considering sibling threads and interrupt distribution can move the bottleneck, not remove it.
+
+```bash
+taskset -c 0,1 $$
+taskset -pc $$
+```
 
 ```mermaid
-flowchart TD
-    A[Symptom: latency, queue lag, or high load] --> B{vmstat r above CPU count?}
-    B -- yes --> C[CPU runnable pressure]
-    B -- no --> D{vmstat b high or iowait high?}
-    D -- yes --> E[Investigate I/O path first]
-    D -- no --> F[Check per-core and cgroup signals]
-    C --> G{One CPU much hotter?}
-    G -- yes --> H[Investigate single-threading or IRQ affinity]
-    G -- no --> I{Kubernetes pod limited?}
-    I -- yes --> J[Check cpu.stat throttling]
-    I -- no --> K[Review demand, requests, and capacity]
-    J --> L{Throttling grows during symptom?}
-    L -- yes --> M[Raise or remove limit for this workload class]
-    L -- no --> K
+graph TD
+  A[Workload Thread Mix] --> B{Pinning strategy?}
+  B -->|Per process| C[taskset]
+  B -->|Workload group| D[cpuset]
+  C --> E[Less migration inside target cores]
+  D --> E
+  E --> F[Lower variance]
+  F --> G[Lower interference from unrelated tasks]
 ```
 
-When the framework points to a CPU limit, make the smallest policy change that matches the workload class. For an API, that may mean removing the limit, setting a request based on observed demand, and confirming HPA or node autoscaling behavior. For a tenant batch job, that may mean raising the limit enough to avoid pathological throttling while keeping a cap that protects the rest of the node. For a single-threaded application, the decision may have nothing to do with limits because one thread cannot use a larger quota across many cores.
+The best isolation design includes IRQ steering and NUMA-aware core groups. If network or storage interrupts remain concentrated on isolated cores, you can observe stable task pinning with unstable latency.
 
-The framework is also useful during design reviews. Before approving a new workload, ask what happens when it receives a burst, what happens when the node is saturated, and what evidence would show the chosen policy is wrong. Those questions connect the manifest to operations. They also keep teams from copying resource settings across services with completely different latency tolerance, concurrency models, and tenant risk.
+## Did You Know 4: Pinning Is a Surgical Tool
 
+> **DYK:** Pinning is most effective when it is narrow, reversible, and paired with IRQ and NUMA checks.
 
-## Did You Know?
+Generalized node-level pinning is rarely the answer. The highest value is in one critical path, with before/after evidence from the exact same workload and an explicit rollback condition.
 
-- **Linux has used CFS for normal tasks since 2007** - Kernel 2.6.23 replaced the older O(1) scheduler with a design based on virtual runtime and fair service.
-- **Kubernetes CPU `100m` is a control-plane abstraction** - The node kernel enforces weights and quotas through cgroups; it does not schedule a native unit called a millicore.
-- **The common cgroup quota period is 100,000 microseconds** - A `100m` limit can therefore behave like ten milliseconds of CPU budget per 100 millisecond period.
-- **Nice values run from -20 to 19** - Lower values are higher priority, and unprivileged users can usually make their own tasks nicer but not more favored than default.
+## Real-World CPU Incident Case Mapping (LO-1, LO-2, LO-5)
 
+Incident diagnostics become faster when mapped into four deterministic scenarios that recur across clusters.
+
+First, throttling under limits: an API service has brief bursts, but `cpu.max` is strict. Host CPU remains moderate, yet requests stall. Cgroup counters reveal repeated quota exhaustion.
+
+Second, context-switch storms: many runnable threads and strict priority reshuffling create wakeup churn. `pidstat`, `perf sched`, and switch counters show active preemption beyond normal baseline.
+
+Third, NUMA imbalance: workload spread across nodes ignores memory locality, causing migration overhead and tail latency despite available raw capacity.
+
+Fourth, IRQ concentration: one core carries interrupts and another carries application threads, creating asymmetric kernel time and perceived idle capacity.
+
+In each case, use a layered fix: first measure, then isolate, then tune cgroup and scheduling controls before making wide policy changes in the same window.
+
+## Extended Operational Playbook and Decision Matrix
+
+To keep high-volume teams consistent, treat CPU incidents as a deterministic sequence with explicit checkpoints instead of a single debugging brainstorm. The first checkpoint is always state and pressure extraction from live processes and host counters. This ensures your team does not mistake one-off spikes for long-running conditions. Keep one note with pre and post timestamps, commands run, and exact output size, and you will prevent evidence drift during incident handoffs.
+
+The second checkpoint is scheduler-path attribution. Build three columns in notes: expected scheduler policy, observed state pattern, and observed per-process scheduling metrics. If a process remains runnable most of the time while latency rises, then you are in a queue contention context, and priority changes become meaningful. If the process spends long stretches in uninterruptible wait, then you are not in pure scheduler contention and should inspect storage, drivers, and dependency chains first. This distinction avoids wasting capacity on incorrect remediations.
+
+The third checkpoint is cgroup budget attribution. At this stage, read the pod cgroup `cpu.max`, the full `cpu.stat`, and `cpu.weight` side by side with platform manifests. If `nr_throttled` grows in the same interval as request drops, then budget enforcement is a primary control point. If limits are generous but throttling is still present, then either a hidden nested control or node-level assignment issue is present, and the next step is namespace and runtime path inspection. This is especially true for managed environments where runtime class and runtime handler can remap container context under the hood.
+
+The fourth checkpoint is topology and affinity attribution. Before changing `taskset`, capture core-level behavior and interrupt spread. If a single core handles interrupt-heavy inbound packet paths while critical application threads live on another isolated core, your latency profile will stay unstable even with policy tuning. If the application is spread evenly but still unstable, inspect NUMA locality and memory movement because service residency can dominate latency without obvious CPU saturation.
+
+Checkpoint five is risk-scoped change planning. Pick one control category per iteration, for example limit tuning first, then pinning second, then thread shape third. Keep a one-page blast radius statement that names expected benefits and explicit rollback points. The one-control approach sounds strict, but in real incidents it reduces ambiguity and prevents simultaneous changes from making postmortems impossible.
+
+When you tune limits in Kubernetes, track both `cpu.max` evolution and queue behavior for at least two windows before declaring victory. A successful first window with lower throttling but worse tail latency often means the service had hidden oscillation, and the change merely shifted where latency accumulates. Continue to the second window only if both mean and tail improve together, then persist the change and record assumptions.
+
+For process priority tuning, treat `nice` and `renice` as temporary pressure relief tools, not architecture. If a process remains unstable after priority tuning, check cgroup policy first. If cgroup policy is correct and thread count is still too high, reduce runnable concurrency and rerun measurements. This is frequently where teams recover stability faster than with repeated RT policy experiments.
+
+Real-time policy categories must be documented with strict boundaries. If `SCHED_FIFO` or `SCHED_RR` is required, keep the scope to one narrow service and include explicit guardrails for duration, restart policy, and automatic fallback. Keep one fallback path to standard `SCHED_OTHER` and avoid running broad `SCHED_OTHER` and RT service mixes without explicit admission controls.
+
+Do not skip the rollback rehearsal. Before starting the change in production, rehearse the exact inverse command in a sandbox so the team can remove the change without additional diagnosis. Rehearsals are part of the operational control strategy because recovery time frequently defines whether an incident stays controlled. The most expensive failure is a one-way optimization that works only because the team cannot unwind it cleanly.
+
+The playbook is stronger when you define service archetypes and attach known-safe patterns. For short burst APIs, keep a low to moderate limit plus conservative context-switch guardrails. For throughput-oriented batch services, keep generous CPU share and tune worker parallelism before pinning. For mixed services that are latency-sensitive but periodic, apply conservative scheduling and explicit cgroup budgets with observability windows before any topology decisions.
+
+Your incident evidence should include a direct action table: command, observed value, threshold expectation, and decision. This single artifact becomes the most efficient way to align on-call handoffs, because new responders can continue with measurable actions without reading a long narrative. The objective is not to prove every theory; it is to prove each next action.
+
+Another strong signal for operators is to compare scheduler traces with deployment context. If a service deployed through a fast rollout overlaps with new latency, compare pre-deployment `perf sched` and `pidstat` with post-deployment values. If the service pattern changes only after rollout, include deployment order and scheduling pressure in the root-cause statement. This practice avoids false blame shifts into unrelated node-level capacity events.
+
+When the incident spans multiple namespaces, treat control changes as scoped to namespace boundaries. A pod in one namespace can create pressure that affects shared worker classes on nearby nodes, so avoid changing node-wide policy from one signal. Namespace-level and deployment-level mitigation usually produces smaller blast radius and faster reversal.
+
+For runbooks, include explicit acceptance criteria. A good acceptance statement uses three metrics: target queue delay reduction, stable per-core distribution, and reduced cgroup throttling or reduced preemption drift in the same interval. If all three metrics improve, the change is likely safe. If only one improves, keep the change as partial and continue the sequence.
+
+Final incident closure should include a short lesson anchored to the first checkpoint where misalignment began. That ensures future responders can spot patterns quickly and reuse the same sequence with less delay. This is how teams move from ad-hoc optimization to deterministic platform operations.
+
+### Expanded Incident Resolution Framework for Reusable Production Triage
+
+This expanded framework is designed to make every response reproducible under pressure and to avoid drifting into arbitrary optimization. Use this as a team playbook and keep each stage explicit.
+
+Start with a strict timeline statement, then capture state, scheduling, and fairness metrics at the same moment. This avoids comparing apples to oranges when load patterns shift every minute. Store the snapshots in a single incident artifact with explicit command output and timestamps.
+
+Next, confirm whether contention is caused by runnable queue depth or by blocked tasks. If queue depth grows while non-runnable states dominate, you likely need I/O or dependency analysis before any scheduling change. If runnable states dominate with rising run-to-wait delays, scheduler and cgroup policy are your primary focus.
+
+Then validate scheduler policy and weighting assumptions. Check which policy each critical process uses, then compare with expected baseline. If many critical services use nonstandard policy without an explicit approval path, normalize first and only then move on to targeted cgroup or affinity changes.
+
+Next, inspect cgroup CPU budgets at pod boundaries. Compare requested and limited values, and read `cpu.max`, `cpu.stat`, and `cpu.pressure` from the active pod cgroup path. High throttling with moderate host utilization usually points directly to policy cap enforcement and not lack of hardware capacity.
+
+Topology and affinity come after policy checks. A core can look unused globally and still be useless for a target workload if all runnable load is forced through unrelated IRQ paths or if interrupt handling stays concentrated in one area. Keep the isolation model explicit, but do not pin yet unless you can identify a deterministic boundary.
+
+Only after this evidence stage should you perform one change, such as reducing worker parallelism, adjusting limit boundaries, or pinning one workload family. Run the same snapshot commands after each change, and stop when the measured target improves without harming neighboring service classes.
+
+For teams with frequent incidents, a post-incident review should include which of these stages changed first and which stage confirmed the final root cause. The objective is not only to fix one issue but to increase first-time-right rate in the next outage.
+
+In this same style, add the incident checklist to internal runbooks. For each class, define expected state transition, expected cgroup behavior, expected command deltas, and expected rollback criteria so every responder can act with comparable confidence.
+
+Expected behavior from this framework: fewer surprises, fewer speculative remediations, and stronger confidence because each fix is tied to observed scheduler and cgroup evidence.
+
+## High-Fidelity CPU Audit Template for Kubernetes Operations
+
+You can run this section as a team exercise before any production change, and it prevents the two most common failures: changing controls without baseline evidence and changing too many variables at once. Keep a time-boxed log with snapshot number, command output hashes, and explicit operator names. For each snapshot, store process state distribution, scheduler metrics, cgroup counters, topology hints, and application-level latency in the same artifact so every responder can compare against the same frame.
+
+The first snapshot is a process-state map, and it should not be optional. Collect `R`, `S`, `D`, `Z`, and `T` shares for each critical pod or service process, then tag each share as runnable demand, wait state, uninterruptible path pressure, reaped-incomplete lifecycle, or controlled stop. If runnable share increases faster than expected while latency rises, escalation is usually in arbitration, not storage. If non-runnable share increases, you should treat scheduler policy as a secondary rather than primary lever and investigate dependencies or I/O saturation before adjusting CPU controls.
+
+The second snapshot is global scheduling pressure with host context. In high-trust operations, read `top` for queue depth and task mix, then read `mpstat -P ALL` for per-core execution shape. A balanced host under pressure will often show moderate user and system percentages with uneven per-core runnable distribution, while a malformed workload might show both high user utilization and high migration churn. This snapshot is where teams separate a true saturation event from a NUMA distribution artifact in one pass.
+
+The third snapshot is event-level scheduling trace quality. If you can only run one diagnostic tool during a live incident, run `perf sched` first to observe wakeup and dispatch latencies. If preemption and run-delay spikes move when you alter run policy, your incident is policy-sensitive. If trace quality remains similar while symptoms vary with input rate, then the limiting factor is more likely upstream concurrency, workload shape, or infrastructure affinity than scheduler configuration alone.
+
+The fourth snapshot is per-process accounting with `/proc` files. Read `/proc/<pid>/status` fields `State`, `voluntary_ctxt_switches`, and `nonvoluntary_ctxt_switches`; and then read `/proc/<pid>/sched` fields `nr_switches`, `se.vruntime`, and `sum_exec_runtime`. When one process accumulates many nonvoluntary switches under stable load, this indicates preemption pressure and queue conflict. When `State` is mostly `R` but runtime remains low, then arbitration is blocked by shared policy or budget boundaries. This is the fastest route to a falsifiable hypothesis for every subsequent change.
+
+The fifth snapshot is cgroup reality versus Kubernetes intent. Read pod-level `cpu.max`, `cpu.weight`, `cpu.stat`, and `cpu.pressure`, and then compare them to pod requests and limits in the manifest or `kubectl describe`. `cpu.stat` throttling counters that rise with high queue delay while host usage appears reasonable are especially important, because they often explain the “why is it lagging if host is not full” symptom. If you see no meaningful counter rise and still have lag, your likely issue is topology pressure or burst timing rather than hard quota.
+
+The sixth snapshot is topology and isolation. Before touching policy, capture `/proc/interrupts`, `cat /proc/self/status | grep Cpus_allowed_list` for observed affinity constraints, and a short `mpstat -P ALL` run. If interrupts are concentrated while your critical service is pinned elsewhere, you are probably trading one bottleneck for another. If service processes scatter across sockets while memory localities and NUMA distances stay inconsistent, latency remains unstable no matter how fair the policy appears.
+
+Use one change per iteration. Choose one control lever from one row of the table below, change it for a short fixed window, and verify with the same full snapshot sequence. This method avoids false positives and gives you direct proof of whether queue delay and throttling changed together or independently.
+
+| Control lever | Observable hypothesis | First expected movement | Failure fallback |
+|---|---|---|---|
+| `nice` / `renice` on workload processes | Runnability ordering should improve inside shared cgroup budget | Shorter wait tails before service processing | Revert if throttling counters remain dominant |
+| `chrt` policy and real-time priority | Deterministic dispatch for RT-critical threads should appear without starvation | Lower scheduling jitter in `perf sched` for target threads | Revert if control-plane responsiveness degrades |
+| `cpu.max` tightening/relaxing | Effective budget should cap or release throughput with visible throttle slope change | `nr_throttled` growth decelerates after budget increase | Re-pin to safe baseline and reopen only one additional lever |
+| `cpu.weight` increase within sibling pods | Relative share should rebalance service queues under contention | Fairness counters and p99 latency stabilize on target pod | Return to baseline and inspect competing siblings |
+| `taskset` / cpuset affinity | Less migration and clearer core ownership for critical threads | Reduced migration noise in core distribution and more stable per-core delay | Remove pinning and evaluate if topology mismatch remains |
+| Worker concurrency reduction | Runnable depth should drop before scheduler policy changes | Fewer context switches and shorter queue wait with stable throughput | Re-expand gradually and retune with explicit target load |
+
+The seventh snapshot is verification against business signals. Choose a workload command that reflects end-user latency, such as synthetic request loops or application readiness checks, and compare p50 and p99 with your scheduler snapshots. A legitimate fix has to show user-facing improvement or at least measurable queue improvement in exactly the same window. If a knob improves raw queue metrics but not business latency, the issue may live above the node plane and must be escalated differently.
+
+LO-1 and LO-2 coverage in the audit template: you explicitly separate runnable versus non-runnable behavior and then inspect fairness signals and vruntime-like accounting from `/proc/<pid>/sched`. If you do not record both, remediation decisions are guesses.
+
+LO-3 and LO-4 coverage in the audit template: every policy and tool command belongs to a defined snapshot category, and each category has expected movement before moving forward. This avoids changing from `SCHED_OTHER` to RT classes only to observe no measurable improvement because cgroup throttling was the primary limit.
+
+LO-5 coverage in the audit template: each iteration maps expected Kubernetes-level behavior to exact cgroup v2 counters, then maps those counters to workload SLOs. That closes the gap between platform governance and process-level tuning.
+
+### Incident-Ready Command Sequence with Stable Timing
+
+Run the following sequence for exactly five snapshots during an active incident, each in fixed intervals, then compare against the same runbook for every cycle:
+
+First snapshot: capture baseline and identify the dominant states and queue signatures.
+```bash
+for _ in 1 2 3; do
+  ps -eo state= | sort | uniq -c
+  top -b -n 1 | head -n 20
+  mpstat -P ALL 1 3
+  sleep 4
+done
+```
+
+Second snapshot: collect scheduling traces under current policy.
+```bash
+sudo perf sched record -a -g sleep 10
+sudo perf sched latency
+```
+
+Third snapshot: collect process-level accounting and cgroup counters for the selected service, then capture the same commands again with timestamps before interpreting any control change.
+```bash
+PID=$(pgrep -o -f your-service | head -n 1)
+grep -E 'State|voluntary_ctxt_switches|nonvoluntary_ctxt_switches' /proc/$PID/status
+sed -n '1,140p' /proc/$PID/sched
+CG=$(awk -F: '$2=="0" {print $3}' /proc/$PID/cgroup)
+cat /sys/fs/cgroup$CG/cpu.max
+cat /sys/fs/cgroup$CG/cpu.stat
+cat /sys/fs/cgroup$CG/cpu.pressure
+```
+
+Fourth snapshot: test one control change in isolation for a fixed window and capture the same signals again.
+```bash
+# Example: controlled concurrency reduction
+TASKS=$(pgrep -f your-service | head -n 1)
+renice -n 5 -p $TASKS
+sleep 12
+grep -E 'State|voluntary_ctxt_switches|nonvoluntary_ctxt_switches' /proc/$TASKS/status
+sed -n '1,140p' /proc/$TASKS/sched
+cat /sys/fs/cgroup$CG/cpu.stat
+```
+
+Fifth snapshot: rollback immediately and collect one confirming set if counter movement is not clearly beneficial.
+```bash
+renice -n 0 -p $TASKS
+sleep 12
+cat /sys/fs/cgroup$CG/cpu.stat
+top -b -n 1 | head -n 20
+```
+
+This sequence creates a reversible experiment, not a one-way optimization. Every command in each snapshot is designed to be compared side-by-side, which is what makes incidents recoverable when on-call traffic pressure rises. If one metric changes and another worsens, you should stop and attribute the change before continuing. This is the operational difference between “we changed something and hope” and “we changed one thing and prove it.”
+
+### Platform Escalation and Reproducibility Notes for SRE Teams
+
+When this audit points to policy conflict rather than pure capacity, escalate with a short decision summary: state mix, scheduler class baseline, cgroup budget direction, and business impact. Include the command list and the exact output snapshot, not just narrative. This allows a second operator to reproduce the finding without relying on memory under pressure, and it protects against false attributions during handover.
+
+When a team has recurring incidents, convert the sequence above into a scheduled health check that runs during business hours against non-critical workloads to build baselines. Recurrent baseline variance often reveals hidden interference before production impact appears. A node with stable historical baselines and clearly bounded variation can absorb more aggressive scheduling changes than a node with unstable baseline behavior.
+
+For Kubernetes operations specifically, create a pair of controls for every deployment pattern: one for request/limit fit, one for policy fit. A pod can be perfect on requests and still unstable under burst because of `cpu.max` and throttle cadence. Likewise, a pod can pass cgroup counters but still fail if scheduling class, affinity, and topology are mismatched. That is why you should treat each new service profile as two policy domains instead of one combined domain.
+
+If you suspect a node-level issue rather than a pod-level issue, run the sequence in a spare node and compare the same service class under similar load. Any control that appears to fix one node and not another usually indicates hardware locality, IRQ layout, or runtime path variance. That variance is exactly where teams should add explicit node labels, placement constraints, and policy exceptions before broad rollout.
+
+At the point of closure, record whether the root cause was queueing, quota, or topology, and include one line on what to avoid in the next incident. This closure note is not paperwork. It is preventive engineering because it converts one incident into a pattern that reduces future mean time to diagnosis.
+
+## Post-Incident Interpretation Matrix and KPI Triangulation
+
+The final stage of this module is translating all measurements into a stable decision matrix so future changes are faster and less risky. When the team builds this matrix once, it prevents interpretive drift during the heat of an incident and avoids arguing about what each counter means under pressure. Each row should carry one short symbol line and one measurable acceptance line.
+
+Begin with a symptom-to-class separation. Symptom categories include latency spikes, request retries, context-switch storms, and intermittent throttling spikes. Root classes include fairness-pressure, quota-pressure, topology-pressure, and concurrency-pressure. Use only one class per iteration and tie every change to one class hypothesis before testing. If two classes are active, pick the one with stronger evidence and document the selection logic in your log.
+
+For fairness-pressure, expect evidence in runnable share and scheduler trace shape. `R` increase with rising queue delay and stable cgroup headroom usually means a scheduling arbitration issue. In this class, safe controls are often in process shape first, then policy tuning, and finally workload concurrency. Avoid changing cgroup ceilings before this distinction is proven.
+
+For quota-pressure, expect evidence in `cpu.max`, `cpu.stat`, and `cpu.pressure` counters. If throttle counters grow while host averages stay moderate, this is usually a hard budget case. In this class, changing nice or RT class without fixing cgroup limits mostly redistributes contention rather than resolving it. A useful control is to alter request/limit boundaries only after one full window confirms sustained counter movement.
+
+For topology-pressure, expect evidence in interrupted or concentrated core behavior. If `/proc/interrupts` and per-core utilization diverge, the system can look balanced while user latency degrades. In this class, change cpuset affinity, interrupt steering, and NUMA placement only after one full snapshot of baseline core spread.
+
+For concurrency-pressure, expect evidence in `/proc/<pid>/status` and `pidstat` preemption or switch behavior. If runnable demand remains stable but context switch rates increase, reduce in-process worker density before touching kernel policy. This often fixes jitter in bursty services and protects the node from oscillation caused by too many competing runnable workers.
+
+The next discipline is KPI triangulation. Each candidate change should be declared effective only when business latency and at least two control signals move in the expected direction. For example, after increasing `cpu.max`, you should see reduced `nr_throttled` growth, reduced wakeup delay, and improved p99 distribution in the same verification window. If only one signal moves, treat it as insufficient.
+
+Use this triage table as a shared runbook artifact.
+
+| Class | Primary signal | One control action | Expected measurable outcome |
+|---|---|---|---|
+| Fairness-pressure | High runnable queue with unstable selection order | Reduce worker concurrency or tune `nice` conservatively | Lower run-queue contention and lower wait-tail variance |
+| Quota-pressure | Rising `nr_throttled`, `throttled_time`, and `pressure` | Adjust `cpu.max` and validate sibling impact | Throttle slope flattens while p99 stabilizes |
+| Topology-pressure | Asymmetric core/IRQ distribution | Move workload to explicit cpusets and align interrupts | Fewer migrations and steadier per-core execution shape |
+| Concurrency-pressure | High voluntary/nonvoluntary switch counts | Cut in-process parallelism and retest with same traffic shape | Lower switch churn and improved completion consistency |
+
+The goal is not to collect perfect telemetry but to preserve causality under stress. A runbook with this structure can be reviewed quickly in handoff, because every response includes class, action, and expected result before production change.
+
+A strong postmortem includes one line for each class, even when class is not active. That line is the institutional memory that turns repeat incidents into quicker decisions because the team can avoid repeating early assumptions. Keep these notes lightweight so they can be captured live.
+
+Example workflow after a failed first change: if latency improves but throttling remains and queue delay worsens, revert and classify as quota-pressure. Then test the same workload with a wider budget and one class of topology validation. If the second window confirms cgroup alignment, keep only the budget-oriented step and reject any unrelated policy modifications.
+
+Do not let this remain documentation-only. If two recurring incidents map to the same class, automate one command bundle that prints the exact same evidence in order: process state counts, scheduler traces, `/proc` deltas, and cgroup counters. Automation does not replace judgment; it preserves the chain of command required by on-call workflows.
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Setting CPU limits too low on latency-sensitive pods | Teams want isolation and copy a default limit without testing burst behavior | Use realistic requests, inspect throttling, and remove or raise limits where p99 latency is quota-sensitive |
-| Confusing requests and limits | Both appear under `resources`, but one is a scheduling weight and the other is a hard cap | Teach requests as fair-share baseline and limits as quota enforcement, then review each workload class |
-| Ignoring `iowait` (`wa%`) in `top` | High load feels like CPU trouble during an incident | Check `vmstat` `r` and `b`; pivot to storage or network I/O when blocked tasks dominate |
-| Trusting aggregate CPU on multi-core hosts | Dashboards average away hot-core and single-threaded bottlenecks | Use `mpstat -P ALL 1` and inspect runtime concurrency before adding CPU quota |
-| Assuming `nice` values override container policy | Process priority is visible inside the container, but cgroup controls still govern CPU share and quota | Tune Kubernetes requests and limits first, then use nice values only for local process priorities |
-| Ignoring nonvoluntary context switches | CPU contention is harder to see than a high usage graph | Inspect `/proc/<PID>/status` and compare voluntary versus nonvoluntary switch growth under load |
-| Removing every CPU limit without guardrails | Avoiding throttling can create noisy-neighbor risk on saturated nodes | Pair limit-free services with measured requests, autoscaling, node alerts, and separate treatment for batch work |
-
+| Mistake | Why it fails | Better action |
+|---|---|---|
+| Raising nice without checking cgroup quotas | Relative priority improves only within available budget | Validate `cpu.max` and `cpu.stat` before changing nice |
+| Changing RT classes on mixed workloads | Can starve control traffic and system tasks | Limit RT use to approved, isolated cases |
+| Treating low host utilization as healthy | Hidden throttling can exist with calm averages | Always read per-cgroup counters and run queue shape |
+| Ignoring `D` and `Z` patterns | Focus shifts to wrong troubleshooting path | Classify state mix before changing policy |
+| Pinning without reviewing IRQ spread | Interference remains on isolated and shared cores | Rebalance interrupts and workload groups together |
+| Overthreading a workload without need | Context switches increase despite capacity | Right-size worker count before priority changes |
+| Using one incident action for all metrics | Masks root cause and introduces risk | Apply one knob, measure one metric set, iterate |
 
 ## Quiz
 
-<details><summary>Question 1: A Kubernetes API pod has a `200m` request and a `500m` limit. Users report latency spikes while node CPU utilization sits near 40%. What do you check first, and why?</summary>
+<details>
+<summary>LO-1: Which process state means it can be selected by CPU scheduling now, and what is the immediate implication for scheduling demand in a production incident?</summary>
 
-Check the pod or container cgroup `cpu.stat` counters, especially `nr_throttled` and `throttled_usec`, during the latency window. The `500m` limit is a hard quota, so the container can be paused after consuming its period budget even when the node has idle CPU. Average node utilization cannot reveal those short forced waits. If throttling grows with latency, the limit is a stronger suspect than node capacity.
+**Correct answer:** `R`, because it is the state that remains eligible for immediate CPU dispatch when arbitration finds an available run queue slot.
 
+**Reasoning:** `R` is the runnable state and is directly in scheduling pressure. `S`, `D`, `Z`, and `T` do not represent immediate runnable demand in the same way.
 </details>
 
-<details><summary>Question 2: An eight CPU server shows load averages of 10.0, 8.0, and 6.0. What does the trend suggest, and how would `vmstat` guide your next step?</summary>
+<details>
+<summary>LO-2: In the context of CFS, which metric is used to compare relative service progression for fair scheduling decisions across runnable tasks?</summary>
 
-The system is currently above its CPU count and the short window is higher than the longer windows, so pressure increased recently. `vmstat 1` tells you whether that pressure is runnable CPU demand or blocked I/O demand. A high `r` value points toward CPU contention, while a high `b` value points toward tasks stuck in uninterruptible waits. That distinction determines whether you inspect processes and priorities or pivot to storage and I/O paths.
+**Correct answer:** `vruntime`, because it records weighted relative execution as fairness pressure and determines which runnable task should receive compensating service next during sustained contention.
 
+**Reasoning:** `vruntime` tracks weighted virtual progress and is used to bias selection toward tasks that should receive catch-up service in fairness terms.
 </details>
 
-<details><summary>Question 3: A Java service slows down whenever its CPU limit is below two CPUs, but `k top pod` shows average CPU around one and a half CPUs. What is a likely explanation?</summary>
+<details>
+<summary>LO-2: Why does EEVDF matter for latency-sensitive systems where wake-up and sleep cycles are frequent?</summary>
 
-The service may need short parallel bursts, especially during garbage collection, JIT activity, TLS work, or request fanout. Averages can stay below the limit while the process still exhausts quota during brief hot periods. Once the quota is consumed, the kernel throttles the cgroup and stretches application pauses across scheduling periods. Checking `cpu.stat` during the slow windows would confirm whether throttling aligns with the degradation.
+**Correct answer:** It improves scheduling order using eligibility and virtual deadline concepts, which keeps latency spikes smaller when mixed interactive and background workloads wake repeatedly.
 
+**Reasoning:** This refines decisions under contention and can reduce wakeup jitter for short burst and interactive workloads compared with older fairness-only behavior.
 </details>
 
-<details><summary>Question 4: A batch worker has only CPU requests, while a web server has requests and a strict CPU limit. During an off-peak web traffic spike, the node is mostly idle. How will the scheduler treat them differently?</summary>
+<details>
+<summary>LO-3: Which scheduler policy should you choose for general workloads in Kubernetes nodes when latency and fairness stability are both concerns?</summary>
 
-The batch worker can burst above its request because a request is a relative weight that matters during contention. The web server is still capped by its CPU limit because the limit maps to quota enforcement. If the web server needs more CPU than its limit during the spike, it can be throttled even though idle node CPU exists. This is why limits and requests should not be described as two versions of the same guarantee.
+**Correct answer:** `SCHED_OTHER`, because it is the default fairness-based policy for general platform workloads and should remain the baseline unless explicit real-time requirements are approved.
 
+**Reasoning:** It is the standard policy for non-real-time workloads and provides fair scheduling behavior with modern EEVDF dynamics while avoiding widespread interference patterns introduced by broad RT policy changes.
 </details>
 
-<details><summary>Question 5: A VM-hosted backend has moderate total CPU usage, but you suspect one process is being preempted by noisy neighbors. Which local evidence would support that hypothesis?</summary>
+<details>
+<summary>LO-4: What is the most reliable workflow for scheduler diagnosis when signs point to scheduling and cgroup contention at once?</summary>
 
-Inspect `/proc/<PID>/status` for `voluntary_ctxt_switches` and `nonvoluntary_ctxt_switches`, then watch how they grow during the symptom. A rapidly increasing nonvoluntary counter means the process wanted to run but the scheduler removed it. If voluntary switches are not growing at the same pace, the process is less likely to be merely sleeping or waiting on I/O. That evidence supports CPU contention before you install heavier profiling tools.
+**Correct answer:** Use `top`, `pidstat`, `perf sched`, and `/proc` evidence together before changing policy, then close a decision loop with one additional comparison window and verify that queue and latency signals improve in the same period.
 
+**Reasoning:** Isolated metrics can miss causality. Layered signals prevent changing knobs based on one symptom and give you a reproducible change sequence.
 </details>
 
-<details><summary>Question 6: A single-threaded Node.js consumer falls behind on an eight CPU host showing only 12.5% total CPU usage. What tool exposes the likely bottleneck?</summary>
+<details>
+<summary>LO-5: How can you confirm cgroup CPU throttling before changing Kubernetes limits during a live incident response?</summary>
 
-Use `mpstat -P ALL 1` or an equivalent per-CPU view. A single-threaded process can fully occupy one logical CPU while the other seven sit mostly idle, and the aggregate average will hide that shape. If one CPU is hot in user time, increasing a pod limit or buying a larger node may not solve the queue lag. The likely fixes are sharding, more worker processes, or changing the concurrency model.
+This question checks whether you can prove quota pressure before touching workload governance during an incident response sequence where latency and queue behavior stay tied to measured limits rather than assumptions.
 
+**Correct answer:** Read `cpu.max`, `cpu.stat` fields `nr_throttled` and `throttled_time`, then correlate those counters with scheduling symptoms and latency windows before changing limits.
+
+**Reasoning:** These counters directly show budget exhaustion and run-time delays at the cgroup level, and their trend should be matched with workload timing before any limit adjustment is treated as a production-safe fix.
 </details>
 
+## Hands-On Exercises
 
-## Hands-On Exercise: Exploring CPU Scheduling Dynamics
+### Exercise 1: Plain Linux state and scheduler evidence
 
-**Objective**: Gain practical experience observing CPU scheduling, priority, and throttling behavior using common Linux tools and container runtimes.
-
-**Environment**: A Linux system, VM, cloud instance, or local machine running a modern distribution with `stress` and `docker` or `podman` installed. Root access may be required for cgroup steps, and Kubernetes checks assume a Kubernetes 1.35 or newer cluster when you use `alias k=kubectl` and commands such as `k top pod`.
-
-This exercise intentionally moves from observation to controlled pressure. First you record CPU topology and current load so every later number has context. Then you create competing CPU-bound work, inspect scheduling behavior, and finally apply cgroup quotas directly before observing the same concept through a container runtime. The goal is not to memorize one output format, but to build the habit of connecting each metric to the scheduler behavior that produced it.
-
-Before you begin, decide what result would surprise you. For example, if the machine has many CPUs, a small `stress --cpu 4` run may not overload it, and the interesting observation might be per-core distribution rather than a high run queue. If your container runtime uses a slightly different cgroup path, the lesson is to follow the runtime's mapping carefully rather than assume every host arranges cgroup files the same way.
-
-### Part 1: Initial CPU System Metrics
-
-Begin by establishing a baseline understanding of your system's CPU characteristics and current load. Write down the number of logical CPUs before interpreting load average, because a load of four means something very different on a two CPU laptop than on a sixteen CPU build host.
-
+- [ ] Capture process state distribution and identify the dominant states.
 ```bash
-# 1. Check CPU info: Identify the number of logical CPUs, cores, and sockets.
-#    This helps in interpreting load averages and per-CPU statistics.
-nproc
-lscpu | grep -E "CPU|Thread|Core|Socket"
-
-# 2. View current load: Get a snapshot of the system's load average.
-#    Note the 1, 5, and 15-minute averages.
-uptime
-cat /proc/loadavg
-
-# 3. CPU time breakdown: See how CPU time is categorized (user, system, idle, iowait, etc.).
-#    This gives an initial hint if CPU is busy, waiting for I/O, or idle.
-top -bn1 | head -8
-
-# 4. Per-CPU statistics: Examine individual CPU core utilization.
-#    Look for uneven distribution or saturated individual cores.
-mpstat -P ALL 1 3
+ps -eo state= | sort | uniq -c
+ps -eo pid,state,ni,pcpu,cmd | head -n 20
 ```
 
-<details><summary>Expected Output and Analysis</summary>
-
-You should see `nproc` print the number of logical CPUs, `lscpu` describe threads, cores, and sockets, and `uptime` show the one, five, and fifteen minute load averages. Compare those load values to the CPU count instead of judging them in isolation. `top` should show CPU time categories such as user, system, idle, and iowait, while `mpstat` should show whether one CPU is doing far more work than the others. If a single CPU is much hotter than the average, keep that observation for later troubleshooting.
-
-</details>
-
-### Part 2: Observing Nice Values in Action
-
-This section demonstrates how `nice` values influence CPU allocation between competing processes. The commands use two infinite hashing jobs so there is clear contention; do not run them on a production host, and clean them up promptly.
-
+- [ ] Capture scheduler counters from `/proc` for one running PID and confirm state consistency.
 ```bash
-# 1. Start two CPU-intensive processes with different nice values.
-#    `sha256sum /dev/zero` is a CPU-bound process that reads from /dev/zero and computes SHA256 hashes indefinitely.
-nice -n 19 sha256sum /dev/zero &
-PID1=$!
-
-nice -n 0 sha256sum /dev/zero &
-PID2=$!
-
-# 2. Check their nice values and CPU usage.
-#    Observe the `%cpu` column for PID1 and PID2.
-ps -o pid,ni,%cpu,comm -p $PID1,$PID2
-sleep 3
-ps -o pid,ni,%cpu,comm -p $PID1,$PID2
-
-# 3. Notice the CPU% difference: The process with `nice 0` should get significantly more CPU time.
-#    A process with a lower nice value (higher priority) will be favored by the CFS.
-
-# 4. Clean up: Terminate the background processes.
-kill $PID1 $PID2
+PID=$(pgrep -o -x your-service | head -n 1)
+grep -E 'State|voluntary_ctxt_switches|nonvoluntary_ctxt_switches' /proc/$PID/status
+sed -n '1,90p' /proc/$PID/sched
 ```
 
-<details><summary>Expected Output and Analysis</summary>
-
-The `nice 0` process should usually receive more CPU time than the `nice 19` process while both are CPU bound. The split will not be perfectly stable because other system work also runs, but the direction should be clear. This demonstrates that nice values influence fair-share scheduling under contention rather than imposing an absolute CPU cap. If both processes run on an otherwise idle multi-core machine, you may need to start more competing workers or constrain affinity to make the difference obvious.
-
-</details>
-
-### Part 3: System-Wide Scheduling Behavior
-
-Explore how context switches and the run queue behave under increasing system load. Keep the `vmstat` output visible while you start load, because the transition is more educational than a static snapshot after the system has already settled.
-
+- [ ] Inspect per-core balance and system accounting before decisions.
 ```bash
-# 1. Monitor system-wide context switches and run queue depth.
-#    The 'cs' column (context switches) shows how many times the CPU switches between processes per second.
-#    The 'r' column (run queue) shows the number of runnable processes.
-vmstat 1 5
-# Watch the 'cs' column for spikes and 'r' column for increases.
-
-# 2. Create significant CPU load using the `stress` tool.
-#    `stress --cpu 4` will create 4 processes that spin on CPU, simulating heavy computation.
-stress --cpu 4 --timeout 30 &
-
-# 3. Watch the load average change in real-time.
-#    Open a new terminal or run this in the background: `watch -n 1 uptime`.
-#    Observe how the 1-minute load average gradually increases as the `stress` processes consume CPU.
-#    Wait 1-2 minutes to see the 1-minute average rise significantly.
-watch -n 1 uptime
+mpstat -P ALL 1 8
+cat /proc/stat | head -n 2
 ```
 
-<details><summary>Expected Output and Analysis</summary>
+Expected output: you should identify whether scheduler contention is per-core, per-task, or system-wide, and document which exact command sequence showed the earliest measurable difference across two back-to-back windows.
 
-When `stress` starts, the `r` column should increase because more processes are runnable and competing for CPU service. The `cs` column may also rise as the scheduler switches among active tasks. The one minute load average will climb gradually rather than instantly because load averages are smoothed over time. Compare the load to your `nproc` result so you can decide whether the system is merely busy or actually queuing runnable work.
+### Exercise 2: Kubernetes lab with cgroup v2 `cpu.max` and throttling visibility
 
-</details>
-
-### Part 4: Investigating cgroup CPU Quotas (Native Linux)
-
-This part uses the modern cgroups v2 unified hierarchy to demonstrate CPU quotas directly on a Linux system. This is the same family of kernel mechanism Kubernetes uses under the hood, so the lesson transfers directly to pod CPU limits.
-
+- [ ] Start or use a local cluster and run a strict pod.
 ```bash
-# 1. Create a new CPU cgroup (cgroups v2).
-#    Requires root privileges.
-sudo mkdir /sys/fs/cgroup/test
-
-# 2. Set a CPU quota for this cgroup (e.g., 10% of a CPU core).
-#    `cpu.max`: format is "quota period".
-#    "10000 100000" means 10,000us quota per 100,000us period (10% limit).
-echo "10000 100000" | sudo tee /sys/fs/cgroup/test/cpu.max
-
-# 3. Run a CPU-intensive process within this cgroup.
-#    The `$$` expands to the current shell's PID, moving it into the cgroup.
-#    Then, `sha256sum /dev/zero` will run under the imposed limit.
-echo $$ | sudo tee /sys/fs/cgroup/test/cgroup.procs
-sha256sum /dev/zero &
-PID=$! # Store the PID of the background process
-
-# 4. Check for throttling: Observe `nr_throttled` and `throttled_usec`.
-#    You should see these values incrementing, indicating active throttling.
-sleep 5
-cat /sys/fs/cgroup/test/cpu.stat
-
-# 5. Clean up: Terminate the process and remove the cgroup.
-kill $PID
-echo $$ | sudo tee /sys/fs/cgroup/cgroup.procs # Move shell back to root cgroup
-sudo rmdir /sys/fs/cgroup/test
+kind create cluster --name cpu-sched-lab
+kubectl create ns cpu-sched-lab
+kubectl run cpu-throttle --namespace cpu-sched-lab --image=busybox --requests='cpu=100m' --limits='cpu=100m' -- sh -c 'while true; do true; done'
 ```
 
-<details><summary>Expected Output and Analysis</summary>
-
-After a few seconds of `sha256sum` running, `cpu.stat` should show `nr_throttled` and `throttled_usec` greater than zero. That proves the process is runnable and wants CPU, but the cgroup quota prevents it from consuming more than the configured share during each period. If cleanup fails because the shell is still inside the test cgroup or a child process remains, move the shell back to the root cgroup and make sure the hashing process is stopped before removing the directory.
-
-</details>
-
-### Part 5: Container CPU Limits and Throttling (Docker/Podman)
-
-This section extends the cgroup understanding to container runtimes, showing how `docker` or `podman` applies CPU limits and how to observe their effect via modern cgroups v2. The important connection is that a friendly container flag becomes a kernel quota file, and the kernel is what enforces the pause.
-
+- [ ] Read pod-level controls and verify throttling counters.
 ```bash
-# 1. Run a container with a CPU limit (e.g., 0.5 CPUs).
-#    The `--cpus` flag directly translates to cgroup CPU max quotas.
-docker run -d --name cpu-test --cpus="0.5" nginx sleep 3600
-
-# 2. Inspect the cgroup settings applied to the container.
-#    These should reflect the `0.5` CPU limit (i.e., 50000 quota for a 100000 period).
-docker exec cpu-test cat /sys/fs/cgroup/cpu.max
-
-# 3. Generate CPU load inside the container.
-#    This will push the container against its defined CPU limit.
-docker exec cpu-test sh -c "sha256sum /dev/zero &"
-
-# 4. Check for throttling after a minute or so.
-#    Observe the `nr_throttled` and `throttled_usec` entries in the v2 hierarchy.
-sleep 60
-docker exec cpu-test cat /sys/fs/cgroup/cpu.stat
-
-# 5. Clean up: Stop and remove the container.
-docker rm -f cpu-test
+kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.max
+kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.stat
+kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.pressure
 ```
 
-<details><summary>Expected Output and Analysis</summary>
+- [ ] Raise limit only and compare trend counters.
+```bash
+kubectl patch pod cpu-throttle -n cpu-sched-lab --type merge -p '{"spec":{"containers":[{"name":"cpu-throttle","resources":{"limits":{"cpu":"300m"}}}]}}'
+sleep 8
+kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.max
+kubectl exec -n cpu-sched-lab cpu-throttle -- cat /sys/fs/cgroup/cpu.stat
+```
 
-The `cpu.max` output inside the container should show a quota and period consistent with half a CPU, commonly `50000 100000`. After the hashing workload runs, `cpu.stat` should show nonzero throttling counters. This is directly analogous to Kubernetes CPU limits, except Kubernetes writes the cgroup settings through the kubelet and container runtime. If you repeat the experiment without the CPU limit, the throttling counters should stop growing under the same local load.
+Expected output: `cpu.max` increases, and throttled counter growth should reduce over the second sample window while request latency variance narrows under the same stress pattern.
 
-</details>
+### Exercise 3: Node isolation and IRQ-awareness for jitter-sensitive workload
 
-### Success Criteria Checklist
+- [ ] Capture current core spread and top tasks before pinning.
+```bash
+cat /proc/interrupts | head -n 25
+mpstat -P ALL 1 5
+```
 
-- [ ] I can explain the difference between `us`, `sy`, `id`, `wa`, and `st` CPU time categories.
-- [ ] I can interpret load average values relative to the number of logical CPUs.
-- [ ] I have observed how `nice` values impact CPU allocation among competing processes.
-- [ ] I have monitored context switches and run queue depth under load.
-- [ ] I understand how cgroups v2 `cpu.max` implements CPU limits natively.
-- [ ] I have seen evidence of CPU throttling both in native cgroups and within a container.
+- [ ] Bind a quick test command to explicit CPUs and verify expected scope.
+```bash
+taskset -c 0,1 sh -c 'while true; do true; done' &
+PINNED_PID=$!
+taskset -pc $PINNED_PID
+kill $PINNED_PID
+```
 
+Expected output: the task should run only on the selected CPUs and core distribution should change in a controlled way, with no unexpected migration into unrelated queues while the binding remains active.
+
+## Sources
+
+- [CFS design documentation](https://www.kernel.org/doc/html/latest/scheduler/sched-design-CFS.html)
+- [EEVDF design and rationale](https://docs.kernel.org/scheduler/sched-eevdf.html)
+- [sched(7) manual](https://man7.org/linux/man-pages/man7/sched.7.html)
+- [sched_setscheduler(2)](https://man7.org/linux/man-pages/man2/sched_setscheduler.2.html)
+- [cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+- [taskset](https://man7.org/linux/man-pages/man1/taskset.1.html)
+- [chrt](https://man7.org/linux/man-pages/man1/chrt.1.html)
+- [nice](https://man7.org/linux/man-pages/man1/nice.1.html)
+- [perf performance analysis](https://www.brendangregg.com/perf.html)
+- [pidstat](https://man7.org/linux/man-pages/man1/pidstat.1.html)
+- [Kubernetes CPU resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [CPU management policies](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/)
+- [LWN EEVDF notes](https://lwn.net/Articles/925371/)
+- [Pressure Stall Information](https://docs.kernel.org/accounting/psi.html)
 
 ## Next Module
 
-Continue to [Module 5.3: Memory Management](./module-5.3-memory-management/) to compare CPU throttling with memory pressure, OOM behavior, RSS, cache, swap, and the very different failure mode of Kubernetes memory limits.
-
-
-## Further Reading
-
-- [Module 5.1: USE Method](../module-5.1-use-method/)
-- [Module 2.2: cgroups](/linux/foundations/container-primitives/module-2.2-cgroups/)
-- [CFS Scheduler Documentation](https://www.kernel.org/doc/Documentation/scheduler/sched-design-CFS.txt)
-- [CPU Bandwidth Control](https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt)
-- [CFS Scheduler Design](https://www.kernel.org/doc/html/latest/scheduler/sched-design-CFS.html)
-- [Cgroup v2 CPU Controller](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu)
-- [Proc Filesystem Load Average](https://docs.kernel.org/filesystems/proc.html)
-- [Kubernetes Resource Management for Pods and Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-- [Kubernetes CPU Management Policies](https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/)
-- [Kubernetes Metrics Server](https://kubernetes.io/docs/tasks/debug/debug-cluster/resource-metrics-pipeline/)
-- [Kubernetes Node Allocatable](https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/)
-- [For the Love of God, Stop Using CPU Limits](https://home.robusta.dev/blog/stop-using-cpu-limits)
+[Module 5.3: Memory Management](/linux/operations/performance/module-5.3-memory-management/)
