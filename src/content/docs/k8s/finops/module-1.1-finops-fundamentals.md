@@ -12,7 +12,7 @@ FinOps is the operating discipline that lets engineering, finance, product, proc
 
 The goal is not to turn engineers into accountants or to make finance teams review every deployment. The goal is to create a shared control system in which cost is visible early enough to matter, technical teams can act without waiting for monthly billing surprises, and business leaders can decide when higher spend is justified by higher value. Kubernetes makes this both more important and more difficult because the unit that creates business value is usually a service or product, while the unit that receives the cloud invoice is often a node, disk, network interface, managed control plane, or account-level charge.
 
-This is a fundamentals module, so it deliberately stops at orientation rather than tool mastery. You will learn the FinOps lifecycle, the Crawl/Walk/Run maturity model, why cloud economics differ from on-premises capacity planning, and why Kubernetes cost allocation is harder than tagging a virtual machine. The hands-on section gives you a local kind-based lab with OpenCost, synthetic workloads, request-versus-usage comparison, and a simple namespace report. The next module can go deeper into applied practices once this mental model is in place.
+This is a fundamentals module, so it deliberately stops at orientation rather than tool mastery. You will learn the [FinOps framework](https://www.finops.org/framework/), the Crawl/Walk/Run maturity model, why cloud economics differ from on-premises capacity planning, and why Kubernetes cost allocation is harder than tagging a virtual machine. The hands-on section gives you a local kind-based lab with OpenCost, synthetic workloads, request-versus-usage comparison, and a simple namespace report. The next module can go deeper into applied practices once this mental model is in place.
 
 ## What You'll Be Able to Do
 
@@ -40,7 +40,7 @@ The FinOps Foundation framework is useful because it prevents cost conversations
 
 ## What FinOps Is
 
-The FinOps Foundation's definition is intentionally cross-functional. FinOps is not a dashboard product, a finance-only reporting workflow, or a quarterly cleanup event. It is an operating model for making technology-spend decisions with enough data, ownership, and business context to choose wisely. The definition is also broader than public cloud alone in the current framework, because the same discipline increasingly applies to SaaS, licenses, data platforms, AI systems, private cloud, and data center spend. In this Kubernetes track, we focus on containerized infrastructure, but the collaboration pattern is the same.
+The [FinOps Foundation](https://www.finops.org/)'s definition is intentionally cross-functional. FinOps is not a dashboard product, a finance-only reporting workflow, or a quarterly cleanup event. It is an operating model for making technology-spend decisions with enough data, ownership, and business context to choose wisely. The definition is also broader than public cloud alone in the current framework, because the same discipline increasingly applies to SaaS, licenses, data platforms, AI systems, private cloud, and data center spend. In this Kubernetes track, we focus on containerized infrastructure, but the collaboration pattern is the same.
 
 The word combines finance and operations, but the practice is closer to DevOps than to traditional accounting. DevOps changed who could deploy and operate software; FinOps changes who can see and act on spend. A cloud bill managed only by finance arrives too late and lacks workload context. A cost dashboard managed only by engineering may optimize technical efficiency while missing margin, forecast, procurement, and product-pricing realities. FinOps works when teams share a vocabulary and use the same facts to make tradeoffs among cost, speed, quality, reliability, and value.
 
@@ -50,7 +50,7 @@ Kubernetes also exposes why financial accountability must be designed into the p
 
 ## FinOps Principles for Engineering Teams
 
-The FinOps Foundation lists six principles that serve as a north star for the practice: teams collaborate; business value drives technology decisions; everyone takes ownership for technology usage; FinOps data is accessible, timely, and accurate; FinOps is enabled centrally; and teams take advantage of the variable cost model of cloud. The wording has evolved with the framework, but the engineering implication is stable: cost decisions are not pushed into a remote finance queue, and engineering teams are not left alone to infer business priorities from a bill.
+The FinOps Foundation lists six principles that serve as a north star for the practice: teams collaborate; business value drives technology decisions; everyone takes ownership for technology usage; FinOps data is accessible, timely, and accurate; FinOps is enabled centrally; and teams take advantage of the variable cost model of cloud. This is codified in the [FinOps Principles](https://www.finops.org/framework/principles/). The wording has evolved with the framework, but the engineering implication is stable: cost decisions are not pushed into a remote finance queue, and engineering teams are not left alone to infer business priorities from a bill.
 
 For Kubernetes teams, collaboration means a platform engineer can explain the difference between requests and actual usage, while finance can explain why amortized commitment cost differs from on-demand list price, and product can explain whether a service is worth scaling. Ownership means the team that deploys a workload can see its namespace or label-level cost and has the authority to improve it. Central enablement means the platform or FinOps function supplies consistent allocation data, reporting conventions, rate optimization support, and guardrails, while service teams make many local decisions.
 
@@ -60,7 +60,7 @@ Taking advantage of the variable cost model also looks different in Kubernetes t
 
 ## The FinOps Lifecycle
 
-The official lifecycle has three phases: Inform, Optimize, and Operate. The phases are not a waterfall. Teams cycle through them repeatedly because workloads, traffic, pricing, commitments, and business priorities keep changing. In Kubernetes, the loop might run at different speeds for different teams. A platform team may refresh allocation reports daily, an application team may review right-sizing weekly, and finance may update forecasts monthly. The shared lifecycle keeps those rhythms connected.
+The official lifecycle has three phases: Inform, Optimize, and Operate. The phases are not a waterfall. Teams cycle through them repeatedly because workloads, traffic, pricing, commitments, and business priorities keep changing. In Kubernetes, the loop might run at different speeds for different teams. A platform team may refresh allocation reports daily, an application team may review right-sizing weekly, and finance may update forecasts monthly. The shared lifecycle keeps those rhythms connected. The flow is described in the [FinOps lifecycle](https://www.finops.org/framework/phases/).
 
 ```mermaid
 flowchart LR
@@ -86,7 +86,7 @@ The loop matters because each phase depends on the previous one but can also exp
 
 ## FinOps Maturity Model
 
-The FinOps Foundation maturity model uses Crawl, Walk, and Run to describe how sophisticated a capability is in a particular organization. The model is not a badge ladder where every team must reach Run for every capability. It is a practical way to start small, measure value, and mature where business needs justify the effort. That nuance is important for Kubernetes teams because a startup with one cluster does not need the same allocation machinery as an enterprise with hundreds of clusters across clouds.
+The FinOps Foundation maturity model uses Crawl, Walk, and Run to describe how sophisticated a capability is in a particular organization. The model is not a badge ladder where every team must reach Run for every capability. It is a practical way to start small, measure value, and mature where business needs justify the effort. That nuance is important for Kubernetes teams because a startup with one cluster does not need the same allocation machinery as an enterprise with hundreds of clusters across clouds, and it is aligned with the [maturity model](https://www.finops.org/framework/maturity-model/).
 
 At Crawl maturity, the organization has basic visibility and a small number of repeatable habits. For Kubernetes, Crawl might mean that every namespace has an owner label, the platform team can generate a rough monthly cost by namespace, and obvious waste such as abandoned development namespaces is reviewed. The data may be incomplete, and the process may be manual, but teams can finally discuss cost using workload names rather than one account-level bill.
 
@@ -132,13 +132,31 @@ flowchart TD
   action --> manifest
 ```
 
-Requests are central because they represent capacity reserved for scheduling. The Kubernetes documentation explains that the scheduler uses requests to decide where a Pod can run, while limits are enforced by the kubelet to constrain resource use. That distinction matters for cost allocation because many allocation models charge CPU and memory based on the larger of requested or used resources. If a team requests one CPU and uses fifty millicores, it may reserve capacity that prevents denser packing even if actual usage is low.
+Requests are central because they represent capacity reserved for scheduling. The Kubernetes [resource management documentation](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) explains that the scheduler uses requests to decide where a Pod can run, while limits are enforced by the kubelet to constrain resource use. That distinction matters for cost allocation because many allocation models charge CPU and memory based on the larger of requested or used resources. If a team requests one CPU and uses fifty millicores, it may reserve capacity that prevents denser packing even if actual usage is low.
 
-Namespaces are a common allocation boundary because they are visible, easy to query, and often map to teams or environments. They are not a complete business model. A single product may span many namespaces, and a single namespace may host many services. Labels add the missing dimensions, but only if they are applied consistently. Kubernetes recommended labels such as `app.kubernetes.io/name`, `app.kubernetes.io/component`, and `app.kubernetes.io/part-of` can help tools connect resources into application views, while organization-specific labels can capture team, cost center, environment, and product.
+Namespaces are a common allocation boundary because they are visible, easy to query, and often map to teams or environments. They are not a complete business model. A single product may span many namespaces, and a single namespace may host many services. Labels add the missing dimensions, but only if they are applied consistently. Kubernetes [recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/) and [resource quota guidance](https://kubernetes.io/docs/concepts/policy/resource-quotas/) can help tools connect resources into application views, while organization-specific labels can capture team, cost center, environment, and product.
 
 Shared costs are where simplistic reports become misleading. The `kube-system` namespace, ingress controllers, observability agents, service meshes, DNS, node idle capacity, and managed control-plane fees may benefit many tenants. If the report ignores shared costs, application teams understate their total cost. If the report spreads shared costs evenly, small workloads may subsidize large ones. If the report spreads shared costs proportionally, expensive workloads carry more of the overhead. FinOps requires agreement on the rule and transparency about what the rule means.
 
 Idle cost is especially important in Kubernetes because nodes are purchased or rented at node granularity while Pods consume only part of the node. A cluster can look efficient from an application perspective while still carrying idle node capacity. Some idle capacity is intentional because it absorbs bursts, protects availability, or provides scheduling headroom. The FinOps task is to distinguish intentional idle from accidental idle and to make the owner of that tradeoff explicit.
+
+### Challenge of Cloud in Kubernetes
+
+A common trap is to assume one service maps neatly to one invoice line. In multi-tenant Kubernetes clusters, a single node pool, shared ingress controller, control plane, or observability stack often serves many teams. The result is that per-service cost can be obscured without explicit shared-cost policy. This is the core challenge described by the CNCF and FinOps collaboration on Kubernetes cost management and the [CNCF FinOps for Kubernetes report](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf).
+
+In practice, namespace is usually the first allocation boundary because it is visible and easy to query. A namespace usually needs:
+- consistent `namespace` naming and ownership,
+- standardized labels,
+- and reliable `requests`/`limits` on containers.
+
+The cost model then has three layers:
+1. **Node-level costs**: instance and control-plane costs measured at node/pool granularity.
+2. **Pod-level costs**: workload allocation across namespaces and controllers.
+3. **Container-level costs**: a finer split inside pods for mixed behavior.
+
+`kubectl top` is still useful to spot current load, but it cannot answer “how much did Service X cost last week?” because it reports usage at a point in time without applying price models, shared-cost rules, or historical aggregation windows. Use allocation reports for that.
+
+The next module, [Module 1.2: FinOps in Practice](./module-1.2-finops-practice/), addresses this gap by comparing OpenCost and Kubecost approaches in deeper scenarios.
 
 ## Requests, Limits, and Waste
 
@@ -162,11 +180,13 @@ Good collaboration has a cadence. A service team might review request-to-usage d
 
 ## Tooling Landscape
 
-OpenCost is the open source starting point for Kubernetes cost allocation. The project provides a specification and an implementation for measuring and allocating infrastructure and container costs in Kubernetes environments. It can report by namespace, Pod, controller, label, annotation, container, node, and cluster. In a local lab, OpenCost can use list or custom pricing to teach the mechanics. In production, teams usually integrate provider billing data or negotiated rates so reports match finance expectations more closely.
+OpenCost is the open source starting point for Kubernetes cost allocation. The project provides a specification and an implementation for measuring and allocating infrastructure and container costs in Kubernetes environments. It can report by namespace, Pod, controller, label, annotation, container, node, and cluster. In a local lab, OpenCost can use list or custom pricing to teach the mechanics. In production, teams usually integrate provider billing data or negotiated rates so reports match finance expectations more closely. Refer to the [OpenCost docs](https://opencost.io/docs/) and [specification](https://opencost.io/docs/specification).
 
-Kubecost builds on the same cost allocation lineage and adds commercial features around reporting, recommendations, governance, alerting, federation, and enterprise workflows. For this module, you only need awareness of the distinction: OpenCost gives you a vendor-neutral open source cost signal, while Kubecost packages a broader product experience around that signal. The right tool choice depends on scale, support needs, multi-cluster reporting, billing reconciliation, and governance requirements.
+Kubecost builds on the same cost allocation lineage and adds commercial features around reporting, recommendations, governance, alerting, federation, and enterprise workflows. For this module, you only need awareness of the distinction: OpenCost gives you a vendor-neutral open source cost signal, while Kubecost packages a broader product experience around that signal. The right tool choice depends on scale, support needs, multi-cluster reporting, billing reconciliation, and governance requirements. The upstream project is tracked at [github.com/opencost/opencost](https://github.com/opencost/opencost).
 
-Cloud-provider native tools are also part of the landscape. AWS supports split cost allocation data for Amazon EKS, which can provide Pod-level visibility in Cost and Usage Reports and aggregate by Kubernetes primitives such as namespace and cluster. Google Kubernetes Engine cost allocation can expose cluster, namespace, and label dimensions into Cloud Billing. Microsoft Cost Management has Kubernetes cost views for AKS when the cost analysis add-on and supported billing context are available. These native features are valuable because they connect Kubernetes allocation to provider billing systems, but their coverage, freshness, and dimensions vary.
+Cloud-provider native tools are also part of the landscape. AWS supports split cost allocation data for Amazon EKS, which can provide Pod-level visibility in Cost and Usage Reports and aggregate by Kubernetes primitives such as namespace and cluster using [AWS Cost Explorer](https://docs.aws.amazon.com/aws-cost-management/latest/userguide/ce-what-is.html) and the [AWS CE API](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html). Google Kubernetes Engine cost allocation can expose cluster, namespace, and label dimensions into Cloud Billing via [GKE cost allocations](https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations). Microsoft Cost Management has Kubernetes cost views for AKS via [Azure Cost Management and Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/) and [Azure Kubernetes cost view](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/view-kubernetes-costs), with broader context in [Azure cost management overview](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management). These native features are valuable because they connect Kubernetes allocation to provider billing systems, but their coverage, freshness, and dimensions vary.
+
+For provider-side reporting and reconciliation, see [AWS Cost Explorer](https://docs.aws.amazon.com/aws-cost-management/latest/userguide/ce-what-is.html), the [AWS CE API](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html), [Google Cloud Billing reports](https://cloud.google.com/billing/docs/how-to/reports), and [Azure Cost Management and Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/).
 
 General cost explorers such as AWS Cost Explorer, Google Cloud Billing reports, and Azure Cost Management are still necessary because not every cost is born inside Kubernetes. Container platforms depend on registries, object storage, databases, queues, CDNs, observability systems, security tools, and support plans. A Kubernetes FinOps practice should therefore avoid tool tunnel vision. Use cluster-aware tools for workload allocation, provider tools for billing truth and commitments, and product metrics for value.
 
@@ -260,226 +280,170 @@ D) Use no tools until the platform reaches Run maturity.
 **Answer: C.** Kubernetes cost work needs both workload context and billing context. OpenCost or Kubecost can explain cluster allocation, while AWS, Google Cloud, Azure, and other billing tools provide provider costs, commitments, exports, and finance reconciliation.
 </details>
 
-## Hands-On Practice
+## Hands-On Lab
 
-- [ ] Exercise 1: Create a kind cluster, install Metrics Server, deploy Prometheus and OpenCost, and query namespace allocation from the OpenCost API.
-- [ ] Exercise 2: Deploy two Pods with different resource requests and compare requested capacity with observed usage.
-- [ ] Exercise 3: Generate a basic per-namespace CSV report from the OpenCost API and decide what the next FinOps action should be.
+This lab runs OpenCost on a local `kind` cluster and produces a namespace allocation view from the OpenCost API.
 
-These exercises are designed for a local workstation with Docker or a compatible container runtime, `kind`, `kubectl`, `helm`, `curl`, and `jq`. They use synthetic workloads and default or list pricing, so the dollar values are not a production bill. That is acceptable for this module because the learning goal is to understand allocation mechanics, not to reconcile a cloud account. If your organization already has a Kubernetes cluster with OpenCost, run the read-only API portions there and skip the local installation steps.
+- [ ] Setup `kind` and create a lab cluster.
+- [ ] Install OpenCost via `kubectl apply` (using Helm template output).
+- [ ] Port-forward OpenCost UI to `localhost:9090`.
+- [ ] Deploy a sample `nginx` workload, wait 2 minutes, and query the allocation API.
+- [ ] Complete the acceptance checklist and delete the lab cluster.
 
-### Exercise 1: Install OpenCost on a kind cluster
-
-Create a local cluster and confirm that the Kubernetes API is reachable. The kind quick start documents the basic workflow, and the OpenCost installation documentation recommends Helm for full Kubernetes cost allocation, cloud costs, and the UI. Metrics Server is included here because `kubectl top` gives you a simple baseline view of live CPU and memory usage before you look at cost allocation.
+### Step 1 — Setup the environment
 
 ```bash
 kind create cluster --name finops-lab
-kubectl cluster-info --context kind-finops-lab
-kubectl get nodes
+kubectl create namespace opencost
+kubectl create namespace finops-lab
 ```
 
-Install Metrics Server and patch it for a local kind environment where kubelet certificates are commonly not trusted by the default Metrics Server settings. Wait for the deployment, then use `kubectl top` as a baseline. If the first `top` call says metrics are unavailable, wait another minute because Metrics Server needs time to collect samples.
+If `kind` is not installed yet, follow the [kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/) and install kind first.
+
+### Step 2 — Install OpenCost via `kubectl apply`
 
 ```bash
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-kubectl -n kube-system patch deployment metrics-server --type=json \
-  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
-kubectl -n kube-system rollout status deployment/metrics-server --timeout=120s
-kubectl top nodes
-kubectl top pods --all-namespaces
-```
-
-Install Prometheus and OpenCost with Helm. The Prometheus command follows the OpenCost documentation pattern by installing the community Prometheus chart with extra scrape configuration. The OpenCost values point the exporter at the Prometheus server service created by that chart. The exact service name can change if you customize the Helm release name, so verify it with `kubectl -n prometheus-system get svc` before debugging OpenCost.
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo add opencost-charts https://opencost.github.io/opencost-helm-chart
+helm repo add opencost https://opencost.github.io/opencost-helm-chart
 helm repo update
 
-helm install prometheus prometheus-community/prometheus \
-  --namespace prometheus-system --create-namespace \
-  --set prometheus-pushgateway.enabled=false \
-  --set alertmanager.enabled=false \
-  -f https://raw.githubusercontent.com/opencost/opencost/develop/kubernetes/prometheus/extraScrapeConfigs.yaml
-
-cat > opencost-values.yaml <<'YAML'
-opencost:
-  exporter:
-    defaultClusterId: finops-kind
-  prometheus:
-    internal:
-      namespaceName: prometheus-system
-      serviceName: prometheus-server
-      port: 80
-YAML
-
-helm install opencost opencost-charts/opencost \
-  --namespace opencost --create-namespace \
-  -f opencost-values.yaml
-
-kubectl -n opencost rollout status deployment/opencost --timeout=180s
+helm template opencost opencost/opencost \
+  --namespace opencost \
+  --create-namespace \
+  --set ingress.enabled=false \
+  | kubectl apply -f -
 ```
 
-Forward the OpenCost API to your workstation and query a namespace allocation. Keep this command running in one terminal, then run the `curl` commands in another terminal. The API examples use `window`, `aggregate`, `step`, and `resolution`; this query asks for the last hour, grouped by namespace, with idle cost shown separately so you can see whether the cluster has paid capacity that is not assigned to active workloads.
+This install path is aligned with the [OpenCost installation documentation](https://opencost.io/docs/installation/install/) and the [OpenCost Helm integration](https://opencost.io/docs/installation/helm/) guidance.
+
+
+Wait for the pod to become ready:
 
 ```bash
-kubectl -n opencost port-forward service/opencost 9003:9003 9090:9090
+kubectl -n opencost wait --for=condition=ready pod -l app.kubernetes.io/name=opencost --timeout=240s
+kubectl -n opencost get pods
 ```
 
+### Step 3 — Run OpenCost and deploy sample workload
+
+Port-forward OpenCost UI and API so both are accessible from your workstation.
+
 ```bash
-curl -sG 'http://127.0.0.1:9003/allocation' \
-  --data-urlencode 'window=60m' \
-  --data-urlencode 'aggregate=namespace' \
-  --data-urlencode 'includeIdle=true' \
-  --data-urlencode 'resolution=1m' | jq '.data[0] | keys'
+kubectl -n opencost port-forward svc/opencost 9090:9090 9003:9003
 ```
 
-You should see namespaces such as `kube-system`, `opencost`, `prometheus-system`, and possibly `__idle__`. The useful observation is not the exact dollar amount, because this is a local synthetic cluster. The useful observation is the shape of the data: Kubernetes objects and metrics are being converted into allocation records that can be grouped by namespace.
-
-### Exercise 2: Compare requests, limits, and observed usage
-
-Create two simple Pods in a namespace. One Pod burns CPU with a small request and limit, while the other mostly sleeps with a much larger request. This intentionally creates a contrast between requested capacity and observed usage. In a real production system, you would use historical percentiles and application SLOs rather than one short sample, but this lab keeps the signal visible.
+Deploy `nginx` with explicit requests and labels.
 
 ```bash
-kubectl create namespace finops-lab
-kubectl label namespace finops-lab team=platform environment=lab
-
 kubectl apply -f - <<'YAML'
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: steady-worker
+  name: nginx-finops-lab
   namespace: finops-lab
   labels:
-    app.kubernetes.io/name: steady-worker
-    app.kubernetes.io/part-of: finops-lab
+    app: nginx-finops-lab
     team: platform
     environment: lab
 spec:
-  containers:
-  - name: worker
-    image: busybox:1.36
-    command: ["sh", "-c", "dd if=/dev/zero of=/dev/null"]
-    resources:
-      requests:
-        cpu: "50m"
-        memory: "32Mi"
-      limits:
-        cpu: "100m"
-        memory: "64Mi"
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: oversized-sleeper
-  namespace: finops-lab
-  labels:
-    app.kubernetes.io/name: oversized-sleeper
-    app.kubernetes.io/part-of: finops-lab
-    team: platform
-    environment: lab
-spec:
-  containers:
-  - name: sleeper
-    image: busybox:1.36
-    command: ["sh", "-c", "sleep 3600"]
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "256Mi"
-      limits:
-        cpu: "500m"
-        memory: "256Mi"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-finops-lab
+  template:
+    metadata:
+      labels:
+        app: nginx-finops-lab
+        team: platform
+        environment: lab
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27-alpine
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        ports:
+        - containerPort: 80
 YAML
 
-kubectl wait --for=condition=Ready pod/steady-worker -n finops-lab --timeout=120s
-kubectl wait --for=condition=Ready pod/oversized-sleeper -n finops-lab --timeout=120s
-kubectl top pods -n finops-lab
-kubectl get pods -n finops-lab \
-  -o custom-columns='NAME:.metadata.name,CPU_REQUEST:.spec.containers[*].resources.requests.cpu,MEM_REQUEST:.spec.containers[*].resources.requests.memory,CPU_LIMIT:.spec.containers[*].resources.limits.cpu,MEM_LIMIT:.spec.containers[*].resources.limits.memory'
+kubectl -n finops-lab rollout status deployment/nginx-finops-lab --timeout=120s
+sleep 120
 ```
 
-Calculate waste as requested capacity minus observed usage for each resource, then interpret the result carefully. If `oversized-sleeper` requests `500m` and uses close to zero CPU, the apparent CPU waste is large. That does not automatically mean every real workload should be cut to zero. It means the team needs evidence-based sizing, historical usage, and reliability review. The OpenCost allocation query should now include the `finops-lab` namespace after the tool has had time to scrape metrics.
+### Step 4 — Query OpenCost allocation
+
+Check that API and UI are reachable.
+
+```bash
+curl -sSf http://127.0.0.1:9090/ | head -n 1
+curl -sG 'http://127.0.0.1:9003/allocation' \
+  --data-urlencode 'window=24h' \
+  --data-urlencode 'aggregate=namespace' \
+  --data-urlencode 'resolution=1m' \
+  --data-urlencode 'includeIdle=true'
+```
+
+Filter for your lab namespace and compare namespace cost with Pod request limits. The same API contract is documented in the [OpenCost API examples](https://opencost.io/docs/integrations/api-examples/) and [OpenCost specification](https://opencost.io/docs/specification/).
 
 ```bash
 curl -sG 'http://127.0.0.1:9003/allocation' \
-  --data-urlencode 'window=60m' \
+  --data-urlencode 'window=24h' \
   --data-urlencode 'aggregate=namespace' \
-  --data-urlencode 'includeIdle=true' \
-  --data-urlencode 'resolution=1m' | jq '.data[0]["finops-lab"]'
+  --data-urlencode 'namespace=finops-lab' \
+  | jq '.data[0]."finops-lab"'
 ```
 
-### Exercise 3: Generate a namespace cost report
-
-Use the OpenCost API response to create a small CSV file. This is intentionally simple: it flattens the first allocation set returned by the API, extracts namespace, total cost, CPU cost, RAM cost, and efficiency when those fields are present, then writes a report that a platform team could attach to a review. The report is not a chargeback system, but it demonstrates the basic movement from API data to a FinOps conversation.
-
 ```bash
-curl -sG 'http://127.0.0.1:9003/allocation' \
-  --data-urlencode 'window=60m' \
-  --data-urlencode 'aggregate=namespace' \
-  --data-urlencode 'includeIdle=true' \
-  --data-urlencode 'resolution=1m' > namespace-allocation.json
-
-jq -r '
-  ["namespace","totalCost","cpuCost","ramCost","efficiency"],
-  (.data[0] | to_entries[] |
-    [
-      .key,
-      (.value.totalCost // 0),
-      (.value.cpuCost // 0),
-      (.value.ramCost // 0),
-      (.value.efficiency // 0)
-    ])
-  | @csv
-' namespace-allocation.json > namespace-cost-report.csv
-
-column -s, -t namespace-cost-report.csv
+kubectl -n finops-lab get deployment/nginx-finops-lab -o jsonpath='{.spec.template.spec.containers[0].resources}'
+kubectl -n finops-lab top pods
 ```
 
-Review the CSV and write down one action for each category: one missing-data fix, one potential optimization, and one policy or automation improvement. A missing-data fix might be "require `team` and `environment` labels on namespace creation." A potential optimization might be "review `oversized-sleeper` request because observed usage is far below request." A policy improvement might be "create a namespace onboarding template that includes labels, ResourceQuota, and owner documentation." This is the FinOps loop in miniature: Inform with a report, Optimize with an evidence-based change, and Operate by making the better behavior repeatable.
+### Acceptance checklist
 
-When you finish, remove the synthetic workloads and optionally delete the cluster. Deleting the namespace removes the two Pods. Deleting the kind cluster removes all local lab resources. In a real cloud cluster, cleanup should also include any load balancers, volumes, snapshots, and external services that were created by the exercise.
+- [ ] `opencost` pod is `Running`.
+- [ ] OpenCost UI is reachable at `http://127.0.0.1:9090`.
+- [ ] `nginx-finops-lab` appears in namespace/container allocation results.
+- [ ] You can explain the requests-vs-usage difference from `resources.requests` vs observed usage (`kubectl top`) and allocation output.
+
+### Cleanup
 
 ```bash
-kubectl delete namespace finops-lab
 kind delete cluster --name finops-lab
 ```
-
 ## Learner Check / Self-Assessment
 
 You are ready to move on when you can explain the difference between FinOps as a value practice and cost cutting as a short-term tactic. You should be able to describe how Inform, Optimize, and Operate form a loop, why Crawl/Walk/Run maturity is capability-specific, and why Kubernetes allocation requires both scheduler data and business metadata. If you cannot yet explain how a Pod request can affect node cost even when usage is low, repeat the second exercise and compare the request table with `kubectl top`.
 
 You should also be able to sketch a basic collaboration model for your own organization. Identify who owns namespace standards, who receives cost reports, who can approve rate commitments, who understands product value, and who can change workload manifests. If any of those owners are missing, that gap is more important than choosing a more advanced tool. FinOps starts with visibility and ownership because optimization without ownership becomes an argument over numbers.
 
+## Sources
+
+- [FinOps definition](https://www.finops.org/introduction/what-is-finops/)
+- [FinOps Framework](https://www.finops.org/framework/)
+- [FinOps lifecycle](https://www.finops.org/framework/phases/)
+- [FinOps principles](https://www.finops.org/framework/principles/)
+- [FinOps maturity model](https://www.finops.org/framework/maturity-model/)
+- [CNCF FinOps for Kubernetes whitepaper](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf)
+- [OpenCost documentation](https://opencost.io/docs/)
+- [OpenCost installation documentation](https://opencost.io/docs/installation/install/)
+- [OpenCost specification](https://opencost.io/docs/specification/)
+- [OpenCost Helm integration](https://opencost.io/docs/installation/helm/)
+- [OpenCost API examples](https://opencost.io/docs/integrations/api-examples/)
+- [OpenCost repository](https://github.com/opencost/opencost)
+- [Kubernetes resource requests and limits](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
+- [Kubernetes labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/)
+- [Kubernetes resource quotas](https://kubernetes.io/docs/concepts/policy/resource-quotas/)
+- [Kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/)
+- [AWS Cost Explorer overview](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-what-is.html)
+- [AWS Cost Explorer API](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html)
+- [Google Cloud Kubernetes cost allocations](https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations)
+- [Azure Kubernetes cost view](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/view-kubernetes-costs)
+- [Azure cost management overview](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management)
+
 ## Next Module
 
 Continue to [Module 1.2: FinOps in Practice](./module-1.2-finops-practice/) to apply these fundamentals to allocation strategy, budgets, rate optimization, workload optimization, and deeper Kubernetes cost-management workflows.
-
-## Sources
-
-- [https://www.finops.org/introduction/what-is-finops/](https://www.finops.org/introduction/what-is-finops/)
-- [https://www.finops.org/framework/](https://www.finops.org/framework/)
-- [https://www.finops.org/framework/phases/](https://www.finops.org/framework/phases/)
-- [https://www.finops.org/framework/principles/](https://www.finops.org/framework/principles/)
-- [https://www.finops.org/framework/maturity-model/](https://www.finops.org/framework/maturity-model/)
-- [https://www.finops.org/framework/personas/](https://www.finops.org/framework/personas/)
-- [https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf)
-- [https://www.cncf.io/projects/opencost/](https://www.cncf.io/projects/opencost/)
-- [https://opencost.io/docs/](https://opencost.io/docs/)
-- [https://opencost.io/docs/specification](https://opencost.io/docs/specification)
-- [https://opencost.io/docs/installation/install/](https://opencost.io/docs/installation/install/)
-- [https://opencost.io/docs/installation/prometheus/](https://opencost.io/docs/installation/prometheus/)
-- [https://opencost.io/docs/installation/helm](https://opencost.io/docs/installation/helm)
-- [https://opencost.io/docs/integrations/api/](https://opencost.io/docs/integrations/api/)
-- [https://opencost.io/docs/integrations/api-examples/](https://opencost.io/docs/integrations/api-examples/)
-- [https://github.com/opencost/opencost](https://github.com/opencost/opencost)
-- [https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-- [https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/)
-- [https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels)
-- [https://kubernetes.io/docs/concepts/policy/resource-quotas/](https://kubernetes.io/docs/concepts/policy/resource-quotas/)
-- [https://kind.sigs.k8s.io/docs/user/quick-start/](https://kind.sigs.k8s.io/docs/user/quick-start/)
-- [https://docs.aws.amazon.com/eks/latest/userguide/cost-monitoring-aws.html](https://docs.aws.amazon.com/eks/latest/userguide/cost-monitoring-aws.html)
-- [https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html](https://docs.aws.amazon.com/cost-management/latest/userguide/ce-api.html)
-- [https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations](https://cloud.google.com/kubernetes-engine/docs/how-to/cost-allocations)
-- [https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/view-kubernetes-costs](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/view-kubernetes-costs)
-- [https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management)
