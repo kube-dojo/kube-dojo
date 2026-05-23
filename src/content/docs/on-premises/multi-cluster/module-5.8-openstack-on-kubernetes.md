@@ -6,13 +6,11 @@ sidebar:
   order: 58
 ---
 
-# Module 5.8: OpenStack on Kubernetes — Containerized Private Cloud Control Plane
-
-> **Complexity**: `[COMPLEX]` | Time: 60-70 minutes
+> **On-Premises Multi-Cluster** | **Complexity**: `[COMPLEX]` | Time: 60-70 minutes
 >
-> **Prerequisites**: K8s basics, basic understanding of IaaS concepts, networking fundamentals helpful, and Module 5.1 Private Cloud Platforms recommended.
+> **Prerequisites**: K8s basics, basic understanding of IaaS concepts, networking fundamentals helpful, and [Module 5.1: Private Cloud Platforms](../module-5.1-private-cloud/) recommended.
 
-For command examples, this module uses `k` as a short alias for `kubectl`. Create it once in your shell with `alias k=kubectl` before running the hands-on work. All Kubernetes examples assume Kubernetes 1.35+ behavior unless a tool-specific command says otherwise.
+All Kubernetes examples use the full `kubectl` command name and assume Kubernetes **1.35** behavior unless a tool-specific note says otherwise. OpenStack service versions in examples align with the **2025.2** (Epoxy) release family used by current OpenStack-Helm and Kolla-Ansible documentation unless your distribution pins a different matrix.
 
 ---
 
@@ -187,16 +185,16 @@ OpenStack services rely heavily on RabbitMQ for RPC and notification paths. If R
 Day-2 operations become Kubernetes-native, but the commands still need OpenStack context behind them. A first Keystone inspection should confirm which pods exist, what the Deployment believes, and whether logs show identity, database, endpoint, or policy errors:
 
 ```bash
-k -n openstack get pods -l application=keystone
-k -n openstack logs deploy/keystone-api
-k -n openstack describe deploy keystone-api
+kubectl -n openstackubectl get pods -l application=keystone
+kubectl -n openstack logs deploy/keystone-api
+kubectl -n openstack describe deploy keystone-api
 ```
 
 After a Secret or ConfigMap change, restart the affected Deployment deliberately and wait for the rollout instead of deleting random pods. That habit keeps the action auditable and exposes failed replacements quickly:
 
 ```bash
-k -n openstack rollout restart deploy/keystone-api
-k -n openstack rollout status deploy/keystone-api
+kubectl -n openstackubectl rollout restart deploy/keystone-api
+kubectl -n openstackubectl rollout status deploy/keystone-api
 ```
 
 When the question is what Helm actually installed, inspect the release history, values, and rendered manifest before changing the cluster again. Those artifacts connect the live Kubernetes objects back to chart intent:
@@ -204,15 +202,15 @@ When the question is what Helm actually installed, inspect the release history, 
 ```bash
 helm -n openstack list
 helm -n openstack history keystone
-helm -n openstack get values keystone
-helm -n openstack get manifest keystone | less
+helm -n openstackubectl get values keystone
+helm -n openstackubectl get manifest keystone | less
 ```
 
 Those commands are ordinary Kubernetes operations. The content behind them is OpenStack-specific. This is why an OpenStack-on-Kubernetes team needs both skill sets. A pure Kubernetes operator may understand rollouts but miss Nova cell mapping.
 
 A pure OpenStack operator may understand service catalog errors but miss that a pod never mounted a Secret. The strongest teams build shared runbooks that cross both APIs. Service endpoints are published through Kubernetes Services and Ingress. Internally, Keystone, Glance, Cinder, Neutron, Nova, and Horizon communicate through cluster DNS names and Services.
 
-Externally, tenants reach public endpoints through Ingress, load balancers, or provider network addresses. The OpenStack service catalog must match those externally reachable URLs. If the service catalog points tenants to names that only resolve inside the infra cluster, the cloud appears broken from outside even when every pod is healthy. Before running a Helm upgrade, what output do you expect from `openstack endpoint list`, `k -n openstack get ingress`, and `k -n openstack get svc`?
+Externally, tenants reach public endpoints through Ingress, load balancers, or provider network addresses. The OpenStack service catalog must match those externally reachable URLs. If the service catalog points tenants to names that only resolve inside the infra cluster, the cloud appears broken from outside even when every pod is healthy. Before running a Helm upgrade, what output do you expect from `openstack endpoint list`, `kubectl -n openstackubectl get ingress`, and `kubectl -n openstackubectl get svc`?
 
 If those three views disagree, the upgrade may be technically successful but tenant-visible behavior may still fail. The upgrade story is one of the main reasons teams look at OpenStack-Helm. In a classic host-based install, upgrades often involve coordinated Ansible or Puppet runs, package repository changes, database migrations, service restarts, compute-service version pinning, and evacuation planning. In OpenStack-Helm, the operator can render chart changes, review diffs, apply `helm upgrade`, and let Kubernetes roll Deployments.
 
@@ -231,16 +229,34 @@ helm upgrade --install keystone openstack-helm/keystone \
   --namespace openstack \
   --values ./values/keystone-kind.yaml
 
-k -n openstack rollout status deploy/keystone-api
+kubectl -n openstackubectl rollout status deploy/keystone-api
 ```
 
 The command sequence is short, but the engineering judgment around it is the real work. A disciplined operator treats rendered manifests, migration behavior, rollout status, endpoint checks, and rollback limits as one upgrade decision rather than as separate rituals.
 
 ---
 
-## 3. Loci, Atmosphere, and the Packaging Layer
+## 3. Kolla-Ansible, StarlingX, Atmosphere, Operators, and the Packaging Layer
 
-OpenStack-Helm describes how to deploy services. Loci describes how to build lightweight OpenStack container images. That distinction matters. The chart is the deployment shape.
+OpenStack control planes can land on Kubernetes through several packaging families. The choice is not “containers yes or no” but **who owns lifecycle**, **how much opinion you want**, and **whether the infra Kubernetes cluster is the product or only the operator substrate**.
+
+**Kolla-Ansible** deploys OpenStack as Docker containers on Linux hosts using Ansible playbooks. It is highly opinionated out of the box—network interfaces, storage backends, and service layout follow Kolla’s reference architecture—but every `globals.yml` knob can be customized for teams that outgrow defaults. Kolla builds images via the [Kolla](https://docs.openstack.org/kolla/latest/) project; operators run `kolla-ansible deploy` against prepared bare-metal or VM controllers. The mental model is **host-first containers**: systemd (or equivalent) on controllers still matters, but each OpenStack API runs inside a named container with pinned tags. Kolla-Ansible does **not** require Kubernetes for the control plane. It competes with OpenStack-Helm when teams want containerized OpenStack without adopting etcd, CNI, and Helm as the primary day-2 API.
+
+**OpenStack-Helm** inverts that: Kubernetes schedules the control-plane pods, Helm expresses desired state, and MariaDB/RabbitMQ become StatefulSets. Trade-offs are familiar from other platform forks:
+
+| Dimension | Kolla-Ansible | OpenStack-Helm |
+|---|---|---|
+| Orchestrator | Ansible over SSH / bare-metal inventory | Helm on a dedicated infra Kubernetes cluster |
+| Unit of upgrade | Container image tag + playbook | Chart version + image tag + `helm upgrade` |
+| HA expression | Multiple physical controllers, HAProxy, Pacemaker patterns in docs | Pod replicas, PDBs, anti-affinity, plus external DB/MQ quorum |
+| Best when | Team already runs Ansible-heavy OpenStack; minimal K8s ops appetite | Team already runs production Kubernetes; wants GitOps-friendly rollouts |
+| Risk | Playbook drift across controller hosts | Infra cluster outage stalls every OpenStack API at once |
+
+**StarlingX** is a fully integrated edge-cloud stack (current documentation tracks **R12.0**) that ships Kubernetes, OpenStack, storage, and fault management as one product ISO. StarlingX can run OpenStack services with **OpenStack-Helm charts** on in-platform Kubernetes—see StarlingX system configuration for both “StarlingX Kubernetes” and “StarlingX OpenStack” planes—so it is a **distribution**, not a third unrelated installer. It fits factory floors, telecom central offices, and two-node to ~100-node edge sites that need integrated backup, update, and fault workflows rather than assembling charts by hand.
+
+**Atmosphere** (VEXXHOST) packages OpenStack-Helm, Loci-built images, Ceph, OVN, and operational automation into a production-shaped private cloud on Kubernetes. **OpenStack Operator** (OpenStack K8s operators project) goes further toward Kubernetes-native reconciliation: Custom Resources describe OpenStack services, and controllers continuously align cluster state with spec—closer to how platform engineers already run Rook or cert-manager. Atmosphere is an opinionated distribution path; OpenStack Operator is an extensible controller framework for teams building their own GitOps integration.
+
+OpenStack-Helm describes how to deploy services. **Loci** describes how to build lightweight OpenStack container images. That distinction matters. The chart is the deployment shape.
 
 The image is the runnable payload. If a team treats images as an afterthought, it may end up with inconsistent Python dependencies, mismatched OpenStack release versions, unexpected package sources, and bloated attack surface. Loci exists to make OpenStack images minimal and repeatable. It builds project-specific container images such as Keystone, Nova, Neutron, Glance, Cinder, Horizon, and supporting services from OpenStack source and base image choices.
 
@@ -425,9 +441,9 @@ Tunnel ID ranges must not overlap unexpectedly between SDN domains. Gateway node
 External network bridges must not accidentally expose infra cluster control-plane traffic to tenant networks. The runbook should include both Kubernetes and OVN views:
 
 ```bash
-k -n ovn-kubernetes get pods
-k -n openstack get pods -l application=neutron
-k -n openstack logs deploy/neutron-server
+kubectl -n ovn-kubernetes get pods
+kubectl -n openstackubectl get pods -l application=neutron
+kubectl -n openstack logs deploy/neutron-server
 ovn-nbctl show
 ovn-sbctl show
 openstack network list
@@ -537,8 +553,8 @@ Both can run production clouds. Both can fail badly when chosen for the wrong te
 |---|---|---|---|
 | Control-plane lifecycle | Helm releases, Kubernetes rollouts, ConfigMaps, Secrets, Jobs | Ansible, Puppet, packages, containers, systemd | Which lifecycle API does the team trust most? |
 | Upgrade mechanics | Render chart, review diff, run `helm upgrade`, watch rollouts and jobs | Coordinate playbooks, package repos, services, migrations | Which upgrade process has stronger local testing? |
-| Day-2 restart model | `k rollout restart`, pod replacement, probes | `systemctl`, container restart, playbook re-run | Who owns restart safety and sequencing? |
-| Debugging surface | `k logs`, events, pod status, Helm history, OpenStack logs | Journald, host files, service status, Ansible output | Which surface can the on-call team navigate at 03:00? |
+| Day-2 restart model | `kubectl rollout restart`, pod replacement, probes | `systemctl`, container restart, playbook re-run | Who owns restart safety and sequencing? |
+| Debugging surface | `kubectl logs`, events, pod status, Helm history, OpenStack logs | Journald, host files, service status, Ansible output | Which surface can the on-call team navigate at 03:00? |
 | Scaling API services | Increase replicas for stateless APIs where supported | Add controller capacity or service workers | Are bottlenecks stateless APIs, DB, MQ, or backend services? |
 | Stateful dependencies | MariaDB and RabbitMQ as StatefulSets | Databases and queues on controller hosts or external clusters | Does Kubernetes own stateful lifecycle? |
 | Hardware assumptions | Requires a reliable infra Kubernetes cluster first | Requires prepared controller, network, compute, storage hosts | Which foundation is already mature? |
@@ -558,7 +574,78 @@ The practical rule is this: Choose OpenStack-Helm when Kubernetes is already the
 
 ---
 
-## 9. Production Realities
+## 9. HA Quorum, Two-Cluster CAPO, and Disaster Recovery
+
+The [OpenStack High Availability Guide](https://docs.openstack.org/ha-guide/) documents controller HA patterns that apply whether services run on bare metal, in Kolla containers, or as Kubernetes pods. Kubernetes improves **rollout** and **placement**; it does **not** remove database or message-bus quorum rules.
+
+Stateful control-plane dependencies need odd-member quorum:
+
+| Component | Minimum production shape | Quorum note |
+|---|---|---|
+| MariaDB Galera | 3+ database members across failure domains | Galera requires a primary component; after total outage, bootstrap only from the node with the highest `seqno`—Kubernetes restarting pods does not pick the bootstrap donor |
+| RabbitMQ | 3+ cluster nodes for mirrored classic queues / quorum queues per design | A partitioned queue can report healthy containers while RPC is broken; monitor `rabbitmq-diagnostics cluster_status` |
+| Memcached | 2+ nodes or external HA cache | Loss is painful but usually not data-corrupting; Keystone token churn increases |
+| Ceph MON | 3+ monitors (5 for large clusters) | Monitor quorum is independent of Kubernetes etcd quorum |
+| Infra Kubernetes etcd | 3 or 5 control-plane members | Backup etcd before OpenStack upgrades that touch the infra cluster |
+
+OpenStack API services (Keystone, Nova API, Neutron server, Cinder API, Glance API, Horizon) are **stateless behind the data plane** in HA designs: run N replicas behind Kubernetes Services or ingress, pin anti-affinity across racks, and keep health checks that call real API paths—not only TCP sockets.
+
+### Two-cluster pattern: mgmt Kubernetes + CAPO workload clusters
+
+Production platforms often run **two Kubernetes layers**:
+
+1. **Management / infra cluster** — hosts OpenStack-Helm (or operators), Rook/Ceph controllers, ingress, GitOps, and observability. No tenant workloads.
+2. **Workload clusters** — created for tenants via **Cluster API Provider OpenStack (CAPO)** or Magnum, consuming Nova, Neutron, Cinder, and Glance from the cloud the mgmt cluster operates.
+
+```mermaid
+flowchart TB
+    subgraph Mgmt["Mgmt Kubernetes 1.35"]
+        OSH[OpenStack-Helm / Operator]
+        CephCtrl[Rook or external Ceph]
+        GitOps[Flux / Argo CD]
+    end
+    subgraph OS["OpenStack tenant plane"]
+        KS[Keystone]
+        NV[Nova + Neutron + Cinder + Glance]
+    end
+    subgraph CAPI["Cluster API mgmt"]
+        CAPO[CAPO controller]
+        MC[Cluster / Machine objects]
+    end
+    subgraph Tenant["Tenant Kubernetes 1.35"]
+        WK[Worker nodes on Nova]
+    end
+    OSH --> KS
+    OSH --> NV
+    CAPO --> NV
+    MC --> CAPO
+    CAPO --> WK
+    CephCtrl --> NV
+```
+
+CAPO maps `OpenStackCluster`, `OpenStackMachine`, and secrets for clouds.yaml into Nova instances and Neutron ports—the same objects introduced in [Module 5.3](../module-5.3-cluster-api-bare-metal/). Keep CAPO’s management cluster **separate** from the infra cluster that runs OpenStack services unless you have a documented, tested reason to collapse them; otherwise etcd backup windows and OpenStack upgrade windows become the same change ticket.
+
+### Upgrades, DR, RPO, and RTO
+
+**In-place upgrades** change chart values and roll pods on the existing infra cluster. **Side-by-side upgrades** build a parallel OpenStack control plane (new namespace or new cluster), migrate databases with documented cutover, and switch service catalog endpoints—higher cost, lower rollback risk when MariaDB migrations are not reversible.
+
+Disaster recovery should name authoritative backups:
+
+| Asset | Backup target | RPO driver |
+|---|---|---|
+| Infra cluster etcd | etcd snapshot to object storage | Time since last snapshot |
+| MariaDB Galera | Physical backup + binlog/Galera state | Replication lag + backup frequency |
+| RabbitMQ | Definitions export + mirrored queue policy | Queue durability settings |
+| Ceph | RBD export, RGW replication, or regional pool mirrors | Async replication interval |
+| Helm values + secrets | Git + sealed secrets / external KMS | Last merged PR |
+
+**RPO** (how much data you may lose) and **RTO** (how fast service returns) come from measured restore drills, not slide decks. Practice: restore etcd into a blank management cluster, restore MariaDB from backup on a cold Galera bootstrap node, replay Ceph pool recovery, then re-run OpenStack-Helm bootstrap jobs. Document whether Magnum/CAPO clusters survive an OpenStack control-plane rebuild or must be re-imported.
+
+For laptop learning without multi-node hardware, Canonical **MicroStack** (snap-based single-node OpenStack) offers a fast API sandbox; pair it mentally with this module’s Kubernetes lab—MicroStack proves tenant APIs, while the kind + OpenStack-Helm path proves **pod-shaped control planes**.
+
+---
+
+## 10. Production Realities
 
 Large operators keep OpenStack relevant because private cloud solves problems public cloud does not always solve economically or organizationally. CERN is one of the most visible examples in scientific computing. Its OpenStack and Kubernetes fleet supports research workloads at a scale where quota, automation, bare metal, storage, and identity integration matter. CERN has publicly discussed long-running OpenStack operations, Kubernetes integration, repeated upgrades, and a broad service portfolio.
 
@@ -584,7 +671,7 @@ Kubernetes can restart pods. It cannot decide by itself which Galera node has th
 
 The fifth is RabbitMQ partition handling. Message queues can fail logically while pods remain Running. OpenStack services may hang, retry, or accumulate RPC errors. Monitor RabbitMQ cluster status, queue depth, partitions, memory alarms, and connection churn.
 
-Do not stop at `k get pods`. The 2024-2026 trajectory favors Kubernetes-native operations for more parts of the private-cloud stack. The former OpenStack Foundation became the OpenInfra Foundation, reflecting a broader open infrastructure scope that includes Kubernetes-adjacent projects, CI, edge, containers, and cloud infrastructure. Atmosphere continues to present a Kubernetes-powered OpenStack distribution path.
+Do not stop at `kubectl get pods`. The 2024-2026 trajectory favors Kubernetes-native operations for more parts of the private-cloud stack. The former OpenStack Foundation became the OpenInfra Foundation, reflecting a broader open infrastructure scope that includes Kubernetes-adjacent projects, CI, edge, containers, and cloud infrastructure. Atmosphere continues to present a Kubernetes-powered OpenStack distribution path.
 
 OpenStack-Helm remains an active reference for chart-based OpenStack deployment. Operator patterns for infrastructure services continue to mature. The safe prediction is not that every OpenStack cloud will move onto Kubernetes. The safe prediction is that every serious OpenStack operator must understand the Kubernetes-based option and be able to explain when it wins.
 
@@ -647,7 +734,7 @@ The decision questions below turn that rule into an operational comparison. They
 | What is being upgraded? | OpenStack control-plane services | Tenant Kubernetes clusters | Host-based OpenStack services |
 | What is the tenant API? | OpenStack APIs, backed by K8s-managed services | OpenStack APIs plus Magnum cluster APIs | OpenStack APIs |
 | What failure domain is acceptable? | Protected infra cluster failure domain | Tenant cluster failures isolated above OpenStack | Controller and service host failure domains |
-| Which tool explains incidents fastest? | `k`, Helm, OpenStack CLI, service logs | OpenStack CLI, Heat/CAPI, tenant cluster logs | Ansible/Puppet, systemd, OpenStack CLI |
+| Which tool explains incidents fastest? | `kubectl`, Helm, OpenStack CLI, service logs | OpenStack CLI, Heat/CAPI, tenant cluster logs | Ansible/Puppet, systemd, OpenStack CLI |
 | What is the organizational pressure? | Standardize operations on Kubernetes | Offer managed K8s through existing OpenStack | Preserve stable supported OpenStack operations |
 
 The most common hybrid answer is: Run OpenStack's control plane on a dedicated infra Kubernetes cluster. Use OpenStack APIs for tenants. Use Magnum or Cluster API Provider OpenStack only when tenants need managed Kubernetes clusters. Run Ceph as the shared storage substrate.
@@ -683,6 +770,13 @@ Complexity is acceptable only when the team has clear ownership boundaries and t
 ---
 
 ## Quiz
+
+<details>
+<summary>Compare OpenStack-on-Kubernetes versus Kubernetes-on-OpenStack for a private cloud that must offer both IaaS VMs and managed tenant clusters. Which direction owns the OpenStack control plane, and which direction owns tenant Kubernetes lifecycle?</summary>
+
+OpenStack-on-Kubernetes runs Keystone, Nova, Neutron, Cinder, Glance, and Horizon as workloads on a dedicated **infra** Kubernetes cluster; Kubernetes is the operator substrate. Kubernetes-on-OpenStack (Magnum or CAPO) keeps OpenStack as the tenant-facing IaaS API and provisions **tenant** Kubernetes clusters on Nova with Neutron networks and Cinder volumes. Mature platforms use both: infra Kubernetes for OpenStack lifecycle, OpenStack APIs for tenants, Magnum/CAPO only when tenants need managed clusters—not by giving tenants the infra cluster kubeconfig.
+
+</details>
 
 <details>
 <summary>Your team runs OpenStack-Helm on a dedicated infra cluster. After a Keystone values change, tenants receive authentication errors, but the Keystone pods are Running. How do you diagnose the problem?</summary>
@@ -750,15 +844,9 @@ Install these tools before starting so the exercise can move between Kubernetes,
 ```bash
 kind version
 helm version
-k version --client
+kubectl version --client
 openstack --version
 curl --version
-```
-
-Create the `k` alias if you have not already done so, because the lab examples use it consistently and the short form keeps the diagnostic commands readable:
-
-```bash
-alias k=kubectl
 ```
 
 Clone the chart repositories used by OpenStack-Helm so you can compare packaged chart behavior with source examples, values files, and current installation guidance:
@@ -816,17 +904,17 @@ nodes:
 EOF
 
 kind create cluster --config kind-openstack-infra.yaml
-k cluster-info
-k get nodes --show-labels
-k create namespace openstack
-k create namespace osh-infra
+kubectl cluster-info
+kubectl get nodes --show-labels
+kubectl create namespace openstack
+kubectl create namespace osh-infra
 ```
 
 Install a simple ingress controller suitable for local testing so the lab can expose API endpoints through familiar Kubernetes objects instead of relying only on port-forwarding:
 
 ```bash
-k apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
-k -n ingress-nginx rollout status deploy/ingress-nginx-controller
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
+kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
 ```
 
 <details>
@@ -838,7 +926,7 @@ You should see a 3-node kind cluster with one control-plane node and two workers
 
 Use these checks to confirm that the lab has a separate infra cluster foundation before you install OpenStack services on top of it:
 
-- [ ] `k get nodes` shows all kind nodes Ready.
+- [ ] `kubectl get nodes` shows all kind nodes Ready.
 - [ ] The `openstack` namespace exists.
 - [ ] The `osh-infra` namespace exists.
 - [ ] The ingress controller pod reaches Running state.
@@ -883,19 +971,19 @@ helm upgrade --install memcached openstack-helm-infra/memcached \
   --namespace openstack \
   --values values/infra-kind.yaml
 
-k -n openstack get pods
-k -n openstack get statefulsets
-k -n openstack get pdb
-k -n openstack get svc
+kubectl -n openstackubectl get pods
+kubectl -n openstackubectl get statefulsets
+kubectl -n openstackubectl get pdb
+kubectl -n openstackubectl get svc
 ```
 
 Inspect the generated objects before moving on, and connect each Kubernetes object type to the persistence or discovery role it serves in the control plane:
 
 ```bash
-k -n openstack describe statefulset mariadb-server
-k -n openstack describe statefulset rabbitmq-rabbitmq
-k -n openstack get configmap | sort
-k -n openstack get secret | sort
+kubectl -n openstack describe statefulset mariadb-server
+kubectl -n openstack describe statefulset rabbitmq-rabbitmq
+kubectl -n openstackubectl get configmap | sort
+kubectl -n openstackubectl get secret | sort
 ```
 
 <details>
@@ -912,7 +1000,7 @@ Use these checks to verify that the infrastructure layer is present and that you
 - [ ] MariaDB has a StatefulSet or equivalent stateful workload object.
 - [ ] RabbitMQ has a StatefulSet or equivalent stateful workload object.
 - [ ] Memcached pods are Running.
-- [ ] `k -n openstack get svc` shows service discovery names for the infra components.
+- [ ] `kubectl -n openstackubectl get svc` shows service discovery names for the infra components.
 - [ ] You can explain why pod phase is not enough to prove Galera or RabbitMQ health.
 
 ### Task 3: Deploy Keystone and Obtain a Scoped Token
@@ -952,15 +1040,15 @@ helm upgrade --install keystone openstack-helm/keystone \
   --namespace openstack \
   --values values/keystone-kind.yaml
 
-k -n openstack get pods -l application=keystone
-k -n openstack get jobs | grep keystone
-k -n openstack rollout status deploy/keystone-api
+kubectl -n openstackubectl get pods -l application=keystone
+kubectl -n openstackubectl get jobs | grep keystone
+kubectl -n openstackubectl rollout status deploy/keystone-api
 ```
 
 Forward the Keystone API locally if ingress is not available, and keep that terminal open while the OpenStack client exercises the identity endpoint:
 
 ```bash
-k -n openstack port-forward svc/keystone-api 5000:5000
+kubectl -n openstack port-forward svc/keystone-api 5000:5000
 ```
 
 In a second terminal, configure OpenStack client variables. Use the passwords and endpoints generated by your chart values or chart secrets. The placeholders below are intentionally not realistic secrets.
@@ -984,9 +1072,9 @@ openstack role add --project lab-project --user lab-user member
 Inspect how configuration is delivered so you can see the practical difference between an OpenStack config file on a host and a Helm-rendered ConfigMap mounted into a pod:
 
 ```bash
-k -n openstack logs deploy/keystone-api --tail=80
-k -n openstack get configmap -l application=keystone
-k -n openstack describe configmap keystone-etc
+kubectl -n openstack logs deploy/keystone-api --tail=80
+kubectl -n openstackubectl get configmap -l application=keystone
+kubectl -n openstack describe configmap keystone-etc
 ```
 
 <details>
@@ -1047,9 +1135,9 @@ helm upgrade --install glance openstack-helm/glance \
   --namespace openstack \
   --values values/glance-kind.yaml
 
-k -n openstack rollout status deploy/glance-api
-k -n openstack get pvc
-k -n openstack get pods -l application=glance
+kubectl -n openstackubectl rollout status deploy/glance-api
+kubectl -n openstackubectl get pvc
+kubectl -n openstackubectl get pods -l application=glance
 ```
 
 Upload Cirros through the OpenStack image API so the lab demonstrates a tenant-facing workflow rather than only a successful pod rollout:
@@ -1071,9 +1159,9 @@ openstack image show cirros-0.6.3
 Observe Glance from the Kubernetes side after the upload, then relate the API logs, PVC, and endpoint object to the image record you created:
 
 ```bash
-k -n openstack logs deploy/glance-api --tail=80
-k -n openstack describe pvc
-k -n openstack get endpoints glance-api
+kubectl -n openstack logs deploy/glance-api --tail=80
+kubectl -n openstack describe pvc
+kubectl -n openstackubectl get endpoints glance-api
 ```
 
 <details>
@@ -1147,9 +1235,9 @@ helm upgrade --install cinder openstack-helm/cinder \
   --namespace openstack \
   --values values/cinder-kind.yaml
 
-k -n openstack get pods -l application=cinder
-k -n openstack rollout status deploy/cinder-api
-k -n openstack rollout status deploy/cinder-scheduler
+kubectl -n openstackubectl get pods -l application=cinder
+kubectl -n openstackubectl rollout status deploy/cinder-api
+kubectl -n openstackubectl rollout status deploy/cinder-scheduler
 ```
 
 Create a volume through the OpenStack API to exercise the scheduler and backend path instead of stopping at Kubernetes workload readiness:
@@ -1163,8 +1251,8 @@ openstack volume show lab-volume-1
 Watch the worker and scheduler logs while the request reconciles, because volume failures often appear in backend services rather than at the API edge:
 
 ```bash
-k -n openstack logs -l application=cinder,component=volume --tail=120
-k -n openstack logs -l application=cinder,component=scheduler --tail=120
+kubectl -n openstack logs -l application=cinder,component=volume --tail=120
+kubectl -n openstack logs -l application=cinder,component=scheduler --tail=120
 ```
 
 <details>
@@ -1222,14 +1310,14 @@ helm upgrade --install horizon openstack-helm/horizon \
   --namespace openstack \
   --values values/horizon-kind.yaml
 
-k -n openstack rollout status deploy/horizon
-k -n openstack get svc horizon
+kubectl -n openstackubectl rollout status deploy/horizon
+kubectl -n openstackubectl get svc horizon
 ```
 
 Forward the dashboard if needed so the browser can reach the same tenant-facing service that Kubernetes is managing behind the scenes:
 
 ```bash
-k -n openstack port-forward svc/horizon 8080:80
+kubectl -n openstack port-forward svc/horizon 8080:80
 ```
 
 Open the dashboard and use it as a tenant would, while remembering that any failed view should be traced back to Keystone, Glance, Cinder, or endpoint configuration:
@@ -1241,11 +1329,11 @@ open http://127.0.0.1:8080
 Log in as the tenant user created in Task 3. Navigate to project overview, images, and volumes. Confirm that Keystone authentication works, the Cirros image is visible, and the Cinder volume appears. Then inspect the Kubernetes objects one final time:
 
 ```bash
-k -n openstack get pods
-k -n openstack get deploy
-k -n openstack get statefulset
-k -n openstack get jobs
-k -n openstack get pvc
+kubectl -n openstackubectl get pods
+kubectl -n openstackubectl get deploy
+kubectl -n openstackubectl get statefulset
+kubectl -n openstackubectl get jobs
+kubectl -n openstackubectl get pvc
 helm -n openstack list
 openstack catalog list
 ```
@@ -1270,7 +1358,7 @@ Use these final checks to tie the tenant experience back to Helm releases, Kuber
 
 ### Exercise Debrief
 
-The lab should leave you with one concrete mental model. OpenStack APIs can be real tenant-facing services while their control-plane processes are Kubernetes workloads. You used OpenStack CLI and Horizon as a tenant would. You used `k` and Helm as a platform operator would.
+The lab should leave you with one concrete mental model. OpenStack APIs can be real tenant-facing services while their control-plane processes are Kubernetes workloads. You used OpenStack CLI and Horizon as a tenant would. You used `kubectl` and Helm as a platform operator would.
 
 That dual view is the core skill. When the tenant says "volume create is stuck," the platform operator must translate that into Cinder API, scheduler, volume worker, RabbitMQ, database, backend storage, Kubernetes pod, Secret, ConfigMap, and network checks. OpenStack-on-Kubernetes does not reduce the need for systems thinking. It gives you better objects for expressing and observing the system.
 
@@ -1278,12 +1366,25 @@ That dual view is the core skill. When the tenant says "volume create is stuck,"
 
 ## Next Module
 
-Next Module: VMware Tanzu, the final module in the Phase E.2 on-prem expansion series, compares a vendor-integrated Kubernetes platform with the OpenStack-centered private-cloud patterns you studied here.
+Continue to [Module 5.9: VMware Tanzu](./module-5.9-vmware-tanzu/) for a vendor-integrated Kubernetes platform contrasted with the OpenStack-centered private-cloud patterns you studied here.
+
+---
+
+## Learner Check
+
+> **Pause and predict**: Your OpenStack control plane runs on a dedicated infra Kubernetes cluster. After an etcd restore on that cluster, Keystone pods are Running but every `openstack token issue` fails with catalog or database errors. Name the first three objects you inspect before re-running `helm upgrade`, and state whether MariaDB Galera quorum or Keystone Deployment rollout is the more likely root cause when only one Galera pod survived the outage.
 
 ---
 
 ## Sources
 
+- OpenStack High Availability Guide: https://docs.openstack.org/ha-guide/
+- Kolla-Ansible documentation: https://docs.openstack.org/kolla-ansible/latest/
+- Kolla container image project: https://docs.openstack.org/kolla/latest/
+- StarlingX documentation: https://docs.starlingx.io/
+- OpenStack K8s operators (OpenStack Operator): https://github.com/openstack-k8s-operators/openstack-operator
+- Cluster API Provider OpenStack (CAPO): https://cluster-api.sigs.k8s.io/reference/providers.html#infrastructure-openstack
+- MicroStack documentation: https://canonical.com/microstack
 - OpenStack-Helm documentation: https://docs.openstack.org/openstack-helm/latest/
 - OpenStack-Helm source repository: https://opendev.org/openstack/openstack-helm
 - OpenStack-Helm installation guide: https://docs.openstack.org/openstack-helm/latest/install/index.html
