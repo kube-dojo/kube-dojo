@@ -97,7 +97,7 @@ The BareMetalHost state machine is the operational heartbeat of bare-metal autom
 2. **Inspecting** — Ironic boots an inspection ramdisk via PXE; CPU, RAM, disks, and NICs are inventoried.
 3. **Available** — Inspection succeeded; host powered off and idle, ready for a Machine claim.
 4. **Provisioning** — CAPI Machine selected this host; Ironic writes the OS image, injects user-data, reboots to disk.
-5. **Provisioned** — Node joined the cluster; host remains allocated to that Machine.
+5. **Provisioned** — OS image is on disk and the host has booted from it; the BareMetalHost stays allocated to the claiming Machine. Per the [Metal3 BMO state machine](https://book.metal3.io/bmo/state_machine), **Provisioned** ends at successful deploy—not at Kubernetes Node Ready. CAPI Machine phase, bootstrap (cloud-init/Ignition), and kubelet join are downstream; a host can sit **Provisioned** while the Node is still NotReady.
 6. **Deprovisioning** — Machine deleted; disks wiped per policy; host returns toward Available.
 7. **Error** — Unrecoverable failure; requires operator intervention after reviewing BMO and Ironic logs.
 
@@ -429,20 +429,20 @@ Store each cluster as a Kustomize overlay in Git with separate directories per e
 
 **Objective**: Build mental models for CAPI reconciliation, BareMetalHost states, and bootstrap differences without requiring a production BMC network.
 
-**Environment**: Linux workstation with Docker, kind, and clusterctl. Exercise 2 uses public Metal3 documentation. Exercise 3 simulates inventory with kubectl apply on any management cluster.
+**Environment**: Linux workstation with Docker, kind, and clusterctl. All three exercises run locally on kind without production BMC hardware or a live Metal3+Ironic stack.
 
 ### Exercise 1: CAPD Management Cluster and Machine Lifecycle
 
 Use the Docker infrastructure provider to observe CAPI Machine phases, controller events, and scale-up behavior before you introduce BMC networks, Ironic containers, and PXE dependencies that complicate every failure signature in production.
 
 ```bash
-curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/clusterctl-linux-amd64 -o clusterctl
+curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.5/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
 kind create cluster --name capi-mgmt
 export CLUSTER_TOPOLOGY=true
 clusterctl init --infrastructure docker
 clusterctl generate cluster lab --infrastructure docker \
-  --kubernetes-version v1.30.0 \
+  --kubernetes-version v1.35.0 \
   --control-plane-machine-count 1 \
   --worker-machine-count 2 > lab.yaml
 kubectl apply -f lab.yaml
@@ -464,46 +464,136 @@ CAPD containers mimic Machines without BMC steps, yet MachineDeployment reconcil
 
 </details>
 
-### Exercise 2: Trace BareMetalHost State Transitions
+### Exercise 2: Trace BareMetalHost State Transitions (kind + BMO)
 
-On a lab with Metal3 deployed, or by reading live CRs in a training environment, watch inspection and provisioning complete while capturing events that you will later compare against Ironic logs during real incidents.
+Install the Bare Metal Operator on your Exercise 1 management cluster (or a fresh `kind create cluster --name capm3-lab`), apply a **simulated** host, and watch `status.provisioning.state` reconcile. No physical server is required; without Ironic and a reachable BMC the host typically reaches **Error** after **Registering**, which is enough to practice reading BMO events before you touch production racks.
 
 ```bash
-kubectl get baremetalhosts -A
-kubectl get baremetalhost rack2-u14 -n metal3-system -o jsonpath='{.status.provisioning.state}{"\n"}'
-kubectl describe baremetalhost rack2-u14 -n metal3-system | tail -20
-kubectl get events -n metal3-system --field-selector involvedObject.name=rack2-u14
+# Reuse capi-mgmt from Exercise 1, or: kind create cluster --name capm3-lab
+kubectl apply -k "https://github.com/metal3-io/baremetal-operator/config/default?ref=v0.9.0"
+kubectl wait deployment/baremetal-operator-controller-manager -n baremetal-operator-system \
+  --for=condition=Available --timeout=180s
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: metal3-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lab-u01-bmc-secret
+  namespace: metal3-system
+type: Opaque
+stringData:
+  username: admin
+  password: password
+---
+apiVersion: metal3.io/v1alpha1
+kind: BareMetalHost
+metadata:
+  name: lab-u01
+  namespace: metal3-system
+  labels:
+    lab: cluster-api-bare-metal
+spec:
+  online: true
+  bootMACAddress: "52:54:00:aa:bb:01"
+  bmc:
+    address: redfish+https://192.0.2.1
+    credentialsName: lab-u01-bmc-secret
+    disableCertificateVerification: true
+EOF
+kubectl get baremetalhosts -n metal3-system -w
+# In another terminal:
+kubectl get baremetalhost lab-u01 -n metal3-system -o jsonpath='{.status.provisioning.state}{"\n"}'
+kubectl describe baremetalhost lab-u01 -n metal3-system | tail -25
+kubectl get events -n metal3-system --field-selector involvedObject.name=lab-u01 --sort-by='.lastTimestamp'
 ```
 
-- [ ] I recorded the state sequence from Registering through Available or Error.
-- [ ] I identified whether failure happened at BMC auth, PXE, or image download from events.
+- [ ] I recorded the state sequence (expect **registering** then **error** without a mock BMC/Ironic; with production Metal3 you would continue through **inspecting** → **available** → **provisioning** → **provisioned**).
+- [ ] I identified whether failure happened at BMC auth, PXE, or image download from events (lab hosts usually fail at BMC with connection or 401 errors).
 - [ ] I documented which MAC address and BMC URL the host spec uses.
 
 <details><summary>Expected analysis</summary>
 
-Authentication failures appear early with Redfish 401 messages. PXE failures show DHCP timeouts in Ironic logs. Image failures reference HTTP checksum mismatch. Mapping symptoms to layer prevents misdiagnosing CNI bugs on nodes that never joined.
+`192.0.2.1` is TEST-NET documentation space—BMO cannot reach a BMC, so the controller surfaces Redfish connection errors while `provisioning.state` moves to **error**. That is expected in this portable lab. On a full Metal3 site, the same commands against a real host show **inspecting** and **available** before a CAPI Machine claims the host. Authentication failures appear early with Redfish 401 messages; PXE failures show DHCP timeouts in Ironic logs; image failures reference HTTP checksum mismatch. Mapping symptoms to layer prevents misdiagnosing CNI bugs on nodes that never joined.
 
 </details>
 
-### Exercise 3: Compare Bootstrap and API VIP Manifests
+### Exercise 3: Compare Bootstrap and API VIP Manifests (local YAML)
 
-Render diffs between kubeadm and Talos template fragments, then configure a Metal3Cluster control-plane endpoint that matches your kube-vip design document before applying anything to production management namespaces.
+Save the two fragments below, diff them with your editor or `diff`, and align `controlPlaneEndpoint` with your kube-vip design document. No Metal3 CRDs or `kubectl apply` are required—this exercise is intentionally paper-only so you can practice before touching a production management namespace.
+
+**`lab-metal3cluster-kubeadm.yaml`** (CABPK + KubeadmControlPlane path):
+
+```yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3Cluster
+metadata:
+  name: edge-lab
+  namespace: clusters-lab
+spec:
+  controlPlaneEndpoint:
+    host: 10.10.50.100
+    port: 6443
+  noCloudProvider: true
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
+metadata:
+  name: edge-lab-cp
+  namespace: clusters-lab
+spec:
+  replicas: 3
+  version: v1.35.0
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      controlPlaneEndpoint: 10.10.50.100:6443
+```
+
+**`lab-metal3cluster-talos.yaml`** (Talos bootstrap/control-plane path):
+
+```yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: Metal3Cluster
+metadata:
+  name: edge-lab
+  namespace: clusters-lab
+spec:
+  controlPlaneEndpoint:
+    host: 10.10.50.100
+    port: 6443
+  noCloudProvider: true
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: TalosControlPlane
+metadata:
+  name: edge-lab-cp
+  namespace: clusters-lab
+spec:
+  replicas: 3
+  version: v1.35.0
+  controlPlaneConfig:
+    controlplane:
+      endpoint: https://10.10.50.100:6443
+```
 
 ```bash
-grep -n controlPlaneEndpoint -A2 lab-metal3cluster.yaml || true
-kubectl explain metal3cluster.spec.controlPlaneEndpoint
-kubectl explain kubeadmcontrolplane.spec.version
-# Validate VIP placeholder matches your L2/L3 design document
+# After copying both YAML blocks into the files above:
+grep -n controlPlaneEndpoint -A2 lab-metal3cluster-kubeadm.yaml lab-metal3cluster-talos.yaml
+diff -u lab-metal3cluster-kubeadm.yaml lab-metal3cluster-talos.yaml
+# VIP reachability is a design-time check; kube-vip is not deployed in this paper lab:
 ping -c 1 10.10.50.100 || echo "VIP not yet advertised - expected before kube-vip deploy"
 ```
 
-- [ ] I set `controlPlaneEndpoint.host` to a documented VIP outside the DHCP pool.
-- [ ] I compared kubeadm join fields in CABPK templates against Talos machine config references.
-- [ ] I listed bootstrap secrets required and marked which must never commit to Git.
+- [ ] I set `controlPlaneEndpoint.host` to a documented VIP outside the DHCP pool in both fragments.
+- [ ] I compared kubeadm `clusterConfiguration.controlPlaneEndpoint` against Talos `controlplane.endpoint`.
+- [ ] I listed bootstrap secrets required (join tokens, bootstrap kubeconfig copies) and marked which must never commit to Git.
 
 <details><summary>Expected analysis</summary>
 
-kube-vip requires the VIP to live on the same L2 domain as control-plane NICs for ARP mode. Bootstrap secrets belong in sealed secrets; only references appear in Git. Talos configs are opaque YAML bundles rather than cloud-init scripts—plan tooling accordingly.
+Both stacks share the same `Metal3Cluster` API VIP (`10.10.50.100:6443`); bootstrap differs in CRD kind (`KubeadmControlPlane` vs `TalosControlPlane`) and join mechanism (kubeadm cloud-init vs Talos machine config). kube-vip requires the VIP to live on the same L2 domain as control-plane NICs for ARP mode. Bootstrap secrets belong in sealed secrets; only references appear in Git. Talos configs are opaque YAML bundles rather than cloud-init scripts—plan tooling accordingly.
 
 </details>
 
@@ -529,5 +619,5 @@ Continue to [Module 6.1: Physical Security & Air-Gapped Environments](../../secu
 - https://cert-manager.io/docs/
 - https://github.com/siderolabs/talos
 - https://docs.rke2.io/
-- https://github.com/k3s-io/k0s
+- https://github.com/k0sproject/k0s
 - https://fluxcd.io/flux/components/kustomize/kustomizations/
