@@ -99,7 +99,7 @@ Prerequisites are strict on bare metal. All clusters must use the same datapath 
 
 Each cluster needs a unique `cluster.name` and numeric `cluster.id` (1–255 by default, up to 511 with `maxConnectedClusters`). Security identities embed cluster bits; changing IDs on live clusters requires workload restarts. **KVStoreMesh** is enabled by default in modern Cilium releases to reduce etcd load when synchronizing remote endpoints. All clusters must agree on `maxConnectedClusters`; changing it after installation is unsupported and can break policy enforcement.
 
-Cilium implements MCS and also supports **global services** via annotations such as `io.cilium/global-service: "true"` for deployments that predate full MCS controllers. For service IP planning, Cluster Mesh distinguishes configurations where **cluster-local service IPs may overlap** versus designs that require globally unique service CIDR planning. Overlapping service IPs are workable inside Cilium’s logical service mapping because resolution combines cluster ID with service identity in the eBPF datapath, but overlapping **pod** CIDRs remain invalid. This asymmetry trips teams migrating from Submariner Globalnet: pod overlap still requires redesign or NAT.
+Cilium implements MCS and also supports **global services** for cross-cluster load balancing when exports must work outside strict MCS import paths. For service IP planning, Cluster Mesh distinguishes configurations where **cluster-local service IPs may overlap** versus designs that require globally unique service CIDR planning. Overlapping service IPs are workable inside Cilium’s logical service mapping because resolution combines cluster ID with service identity in the eBPF datapath, but overlapping **pod** CIDRs remain invalid. This asymmetry trips teams migrating from Submariner Globalnet: pod overlap still requires redesign or NAT.
 
 Identity propagation is the hidden advantage. Network policies reference numeric identities that Cilium maps to labels. When Cluster Mesh is enabled, remote endpoints receive cluster-scoped identities so policies written in cluster A can reference labels on pods in cluster B without flattening Kubernetes RBAC boundaries. The cost is operational: you must protect clustermesh API servers, rotate Cluster Mesh certificates, and monitor clustermesh connectivity with `cilium clustermesh status` during upgrades.
 
@@ -125,7 +125,7 @@ Linkerd extends automatic mTLS across clusters. Gateways reject connections that
 
 Kubernetes pod DNS configuration is documented in [DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/). Each pod receives a resolver configuration with `ndots:5` and search domains such as `default.svc.cluster.local`, `svc.cluster.local`, and `cluster.local`. When an application requests `api`, the resolver tries `api.default.svc.cluster.local` before treating the name as fully qualified. That behavior prevents accidental leakage of short names but increases query volume.
 
-Cross-cluster names such as `payment.svc.clusterset.local` are fully qualified and bypass excessive search expansion when written with a trailing dot or enough dots to exceed the `ndots` threshold. Operational mistakes happen when developers use partial names like `payment.clusterset.local` without understanding search order, or when operators add a `forward . /etc/resolv.conf` stub that captures `clusterset.local` and forwards it upstream to corporate DNS that knows nothing about Kubernetes exports.
+Cross-cluster names such as `payment.default.svc.clusterset.local` are fully qualified and bypass excessive search expansion when written with a trailing dot or enough dots to exceed the `ndots` threshold. Operational mistakes happen when developers use partial names like `payment.clusterset.local` without understanding search order, or when operators add a `forward . /etc/resolv.conf` stub that captures `clusterset.local` and forwards it upstream to corporate DNS that knows nothing about Kubernetes exports.
 
 Lighthouse and MCS controllers typically install CoreDNS **stub domains** or plugins that route only `clusterset.local` to the multicluster resolver. The anti-pattern is reciprocal forwarding between two clusters’ CoreDNS deployments, which creates resolution loops and CPU spikes. Scope forwarding narrowly, log `SERVFAIL` and `NXDOMAIN` rates per zone, and teach application teams to log the exact name they requested when opening incidents.
 
@@ -493,7 +493,7 @@ kubectl --context kind-cm-cluster2 annotate service nginx service.cilium.io/glob
 # Cluster Mesh global services require the same Service name/namespace in every
 # cluster. A stub Service in cluster 1 (no matching pods) still enables DNS and
 # cross-cluster load-balancing to backends in cluster 2.
-kubectl --context kind-cm-cluster1 create service clusterip nginx --tcp-port=80:80
+kubectl --context kind-cm-cluster1 create service clusterip nginx --tcp=80:80
 kubectl --context kind-cm-cluster1 annotate service nginx service.cilium.io/global="true"
 
 kubectl --context kind-cm-cluster1 run netshoot --image=nicolaka/netshoot --restart=Never -- sleep infinity
