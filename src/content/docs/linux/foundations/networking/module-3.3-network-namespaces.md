@@ -91,6 +91,8 @@ Loopback deserves special attention because it is easy to forget. A new namespac
 
 Namespace lifetime can also surprise people. A named namespace remains available while the bind mount under `/var/run/netns` exists, even if no user shell is currently inside it. A namespace tied only to a process disappears when the final process using it exits. Devices follow their own lifetime rules: physical devices move back to the initial namespace when the namespace is freed, while veth devices inside a freed namespace are destroyed with it. That difference is important when cleanup leaves some interfaces visible and others gone.
 
+> **Pause and predict**: if a process in namespace A binds port 80, does namespace B see anything on port 80?
+
 ```bash
 sudo ip netns add red
 sudo ip netns exec red ip link show
@@ -126,6 +128,8 @@ sudo ip netns exec red ip link set lo up
 sudo ip netns exec red ip link set eth0 up
 sudo ip netns exec red ping -c 3 10.200.1.1
 ```
+
+> **Stop and think**: why must veth pairs be created in PAIRS, not as singletons?
 
 This direct-link pattern is the smallest useful namespace network. The namespace can reach the host-side veth address because both ends are on the same subnet and both links are up. The host can reach the namespace address for the same reason. Nothing in that setup says the namespace can reach the internet or another namespace. A default route and a forwarding path would still be required for off-subnet destinations.
 
@@ -351,7 +355,7 @@ ping -c 3 10.210.1.2
 sudo ip netns del kd-red
 ```
 
-After the final delete, check that `kd-red-host` is gone. The namespace owned one end of the pair, so deleting the namespace destroyed the pair. If you used a physical device instead of a veth device, the cleanup rule would be different. This is one reason veth pairs are convenient for containers and labs: their lifecycle is disposable.
+After the final delete, run `ip link show kd-red-host`. It is gone because `kd-red-host` is the host-side peer of `eth0` inside the namespace. When the kernel destroys the namespace-side peer on namespace deletion, the linked host-side peer is destroyed with it.
 
 - [ ] **Exercise 2: Connect two namespaces through a Linux bridge.** Build a miniature container bridge, attach two host-side veth ends, and prove namespace-to-namespace communication. Read the bridge membership and forwarding database before and after the first ping so you can see the bridge learn where MAC addresses live.
 
@@ -405,7 +409,11 @@ sudo ip netns del kd-egress 2>/dev/null || true
 sudo ip link del kd-egbr0 2>/dev/null || true
 
 ORIGINAL_FORWARD=$(sysctl -n net.ipv4.ip_forward)
-OUT_IF=$(ip route show default | awk '{print $5; exit}')
+OUT_IF=$(ip route show default | awk '/default/ {print $5; exit}')
+if [ -z "$OUT_IF" ]; then
+  echo "no default route; cannot NAT" >&2
+  exit 1
+fi
 
 sudo ip link add kd-egbr0 type bridge
 sudo ip addr add 10.210.3.1/24 dev kd-egbr0
@@ -446,7 +454,7 @@ For incident practice, take a timeout symptom and split it into three questions.
 
 ## Next Module
 
-Continue to [Module 3.4: iptables & netfilter](module-3.4-iptables-netfilter/), where you will inspect the host packet-filtering and NAT decisions that often sit immediately after the namespace, veth, and bridge path.
+Continue to [Module 3.4: iptables & netfilter](../module-3.4-iptables-netfilter/), where you will inspect the host packet-filtering and NAT decisions that often sit immediately after the namespace, veth, and bridge path.
 
 ## Sources
 
