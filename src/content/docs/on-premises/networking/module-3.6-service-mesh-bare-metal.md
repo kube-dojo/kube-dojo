@@ -34,7 +34,7 @@ Cloud-managed Kubernetes hides those integration points behind provider load bal
 
 ## Did You Know
 
-- Istio **1.30.x** lists supported Kubernetes versions **1.32–1.35** (with **1.36** tested but not listed as supported) per the official supported-releases matrix.
+- Istio **1.30.x** supports Kubernetes **1.32–1.36** per the official supported-releases matrix.
 - Linkerd **2.19** ships a Rust micro-proxy (not Envoy) and documents automatic mTLS between meshed pods once the control plane and identity anchors are installed.
 - Cilium can deliver mesh features—including L7 policy and mutual TLS—by attaching eBPF programs at the CNI layer instead of injecting a proxy per pod.
 - A Kubernetes `LoadBalancer` Service on bare metal remains `<pending>` until a controller such as MetalLB assigns and advertises a routable VIP.
@@ -558,7 +558,7 @@ metadata:
   namespace: demo
 spec:
   selector:
-    istio: ingressgateway
+    istio: ingress
   servers:
     - port:
         number: 80
@@ -596,11 +596,13 @@ Expected: httpbin pods show `2/2` containers (app + sidecar). The curl command r
 
 ### Exercise 2: Linkerd 2.19 Identity on a Dedicated kind Cluster
 
+Linkerd **2.19** maps to the **edge** channel (`edge-25.10.7`); OSS stable install artifacts are deprecated—use `LINKERD2_VERSION` when bootstrapping the CLI.
+
 ```bash
 kind create cluster --name mesh-linkerd --image kindest/node:v1.35.0
 kubectl wait --for=condition=Ready nodes --all --timeout=180s
 
-curl -sL https://run.linkerd.io/install | LINKERD_VERSION=stable-2.19.0 sh
+curl -sL https://run.linkerd.io/install | LINKERD2_VERSION=edge-25.10.7 sh
 export PATH=$PATH:$HOME/.linkerd2/bin
 linkerd check --pre
 linkerd install --crds | kubectl apply -f -
@@ -610,18 +612,18 @@ linkerd check
 kubectl create namespace echo
 kubectl annotate namespace echo linkerd.io/inject=enabled
 kubectl -n echo create deployment a --image=curlimages/curl -- sleep 3600
-kubectl -n echo create deployment b --image=curlimages/curl -- sleep 3600
-kubectl -n echo expose deployment b --port=80 --target-port=8080
+kubectl -n echo create deployment b --image=nginxdemos/nginx-hello --port=8080
+kubectl -n echo expose deployment b --port=8080
 kubectl -n echo wait --for=condition=Available deployment/a --timeout=120s
 kubectl -n echo wait --for=condition=Available deployment/b --timeout=120s
 
 linkerd viz install | kubectl apply -f -
 linkerd check
 POD=$(kubectl -n echo get pod -l app=a -o jsonpath='{.items[0].metadata.name}')
-kubectl -n echo exec "$POD" -c curl -- curl -s -o /dev/null -w "%{http_code}\n" http://b.echo.svc.cluster.local:80/
+kubectl -n echo exec "$POD" -c curl -- curl -sS -o /dev/null -w "%{http_code}\n" http://b.echo.svc.cluster.local:8080/
 ```
 
-Expected: meshed pods show proxy containers; `linkerd check` passes; service curl succeeds with mTLS established (use `linkerd viz tap deploy/b -n echo` to observe TLS metadata).
+Expected: meshed pods show proxy containers; `linkerd check` passes; curl from `a` to `b` returns HTTP `200` (nginx-hello demo page) with mTLS established—use `linkerd viz tap deploy/b -n echo` to observe TLS metadata.
 
 ### Exercise 3: Sysctl and Conntrack Headroom for Mesh Nodes
 
@@ -654,7 +656,7 @@ kubectl uncordon "$NODE"
 
 ### Exercise 1 troubleshooting notes
 
-If `curl` to the ingress VIP hangs from your laptop but works inside the cluster, your workstation may lack routes to the kind Docker subnet—add a host route or run curl from a pod on the cluster network. If Envoy returns `404`, verify the `Gateway` selector `istio: ingressgateway` matches labels on the gateway deployment installed by the `istio/gateway` Helm chart (release **1.30.0**). If MetalLB never assigns an IP, confirm the `IPAddressPool` range sits inside the docker `kind` network CIDR discovered earlier.
+If `curl` to the ingress VIP hangs from your laptop but works inside the cluster, your workstation may lack routes to the kind Docker subnet—add a host route or run curl from a pod on the cluster network. If Envoy returns `404`, verify the `Gateway` selector `istio: ingress` matches labels on the gateway deployment installed by the `istio/gateway` Helm release `istio-ingress` (chart **1.30.0** trims the release prefix and labels pods `istio: ingress`). If MetalLB never assigns an IP, confirm the `IPAddressPool` range sits inside the docker `kind` network CIDR discovered earlier.
 
 ### Exercise 2 troubleshooting notes
 
