@@ -32,7 +32,7 @@ This module teaches the full stack: MCS as the Kubernetes-native discovery contr
 ## Did You Know
 
 - The MCS API defines `ServiceExport` and `ServiceImport` objects but does not implement packet forwarding; you still need Submariner, Cilium ClusterMesh, or another datapath.
-- Submariner Lighthouse publishes exported services under `svc.clusterset.local`, while pod-level headless exports use `pod.namespace.svc.clusterset.local` naming rules from the MCS specification.
+- MCS DNS (KEP-1645) uses `<service>.<namespace>.svc.clusterset.local` for endpoint sets; named headless endpoints use `<hostname>.<clusterid>.<service>.<namespace>.svc.clusterset.local`.
 - Cilium Cluster Mesh defaults to KVStoreMesh in recent releases to scale endpoint synchronization, but every cluster in the mesh must agree on `maxConnectedClusters` at install time.
 - Istio primary-primary installs require reciprocal remote secrets so each control plane can discover endpoints in peer clusters on the same `network`.
 
@@ -68,7 +68,7 @@ flowchart LR
 
 Encryption is handled by Submariner’s cable drivers. **IPsec** (Libreswan) and **WireGuard** are the common choices on bare metal. IPsec introduces IKE negotiation phases; misaligned lifetimes can cause brief outages during rekey that look like application instability. WireGuard is stateless at the session layer relative to IKE and is often preferred when operators want predictable failover behavior, at the cost of distributing keys through Submariner’s own control plane.
 
-**Lighthouse** implements MCS-oriented [service discovery](https://submariner.io/getting-started/architecture/service-discovery/). When you create a `ServiceExport`, Lighthouse advertises the service to the cluster set. Imported services are reachable at `service.namespace.svc.clusterset.local`. For headless services, individual pods can be addressed with `pod.service.namespace.svc.clusterset.local` when names satisfy DNS label rules. Lighthouse integrates with CoreDNS through a multicluster plugin so queries for `clusterset.local` forward to Lighthouse rather than looping inside a single cluster’s stub domains.
+**Lighthouse** implements MCS-oriented [service discovery](https://submariner.io/getting-started/architecture/service-discovery/). When you create a `ServiceExport`, Lighthouse advertises the service to the cluster set. Imported services are reachable at `service.namespace.svc.clusterset.local` (KEP-1645 endpoint-set form). For headless services, individual pods use the named endpoint form `hostname.clusterid.service.namespace.svc.clusterset.local` when names satisfy DNS label rules. Lighthouse integrates with CoreDNS through a multicluster plugin so queries for `clusterset.local` forward to Lighthouse rather than looping inside a single cluster’s stub domains.
 
 Submariner’s optional **Globalnet** controller matters on bare metal because many clusters were built with identical default pod CIDRs. Cilium Cluster Mesh refuses overlapping pod ranges; Submariner can NAT overlapping spaces when Globalnet is enabled. The tradeoff is gateway concentration: all cross-cluster traffic hairpins through gateway nodes, which can become throughput bottlenecks and SNAT port exhaustion points under heavy microservice chatter. Plan sysctl tuning for `net.ipv4.ip_local_port_range` and conntrack limits on gateways when you expect high connection churn.
 
@@ -456,7 +456,7 @@ kind create cluster --name cm-cluster2 --image kindest/node:v1.35.1 --config /tm
 ```
 
 ```bash
-cilium install --version 1.16.5 --context kind-cm-cluster1 \
+cilium install --version 1.19.4 --context kind-cm-cluster1 \
   --set cluster.name=cm-cluster1 \
   --set cluster.id=1 \
   --set ipam.operator.clusterPoolIPv4PodCIDRList=10.10.0.0/16 \
@@ -464,7 +464,7 @@ cilium install --version 1.16.5 --context kind-cm-cluster1 \
   --set encryption.type=wireguard \
   --set clustermesh.useAPIServer=true
 
-cilium install --version 1.16.5 --context kind-cm-cluster2 \
+cilium install --version 1.19.4 --context kind-cm-cluster2 \
   --set cluster.name=cm-cluster2 \
   --set cluster.id=2 \
   --set ipam.operator.clusterPoolIPv4PodCIDRList=10.20.0.0/16 \
@@ -488,7 +488,13 @@ cilium clustermesh status --context kind-cm-cluster1 --wait
 ```bash
 kubectl --context kind-cm-cluster2 create deployment nginx --image=nginx:1.27-alpine
 kubectl --context kind-cm-cluster2 expose deployment nginx --port=80
-kubectl --context kind-cm-cluster2 annotate service nginx io.cilium/global-service=true
+kubectl --context kind-cm-cluster2 annotate service nginx service.cilium.io/global="true"
+
+# Cluster Mesh global services require the same Service name/namespace in every
+# cluster. A stub Service in cluster 1 (no matching pods) still enables DNS and
+# cross-cluster load-balancing to backends in cluster 2.
+kubectl --context kind-cm-cluster1 create service clusterip nginx --tcp-port=80:80
+kubectl --context kind-cm-cluster1 annotate service nginx service.cilium.io/global="true"
 
 kubectl --context kind-cm-cluster1 run netshoot --image=nicolaka/netshoot --restart=Never -- sleep infinity
 kubectl --context kind-cm-cluster1 wait --for=condition=Ready pod/netshoot --timeout=120s
@@ -497,7 +503,7 @@ kubectl --context kind-cm-cluster2 wait --for=condition=Ready pod -l app=nginx -
 kubectl --context kind-cm-cluster1 exec netshoot -- curl -sS --max-time 10 http://nginx.default.svc.cluster.local
 ```
 
-Expected output: the curl command returns nginx HTML from cluster two while the client pod runs in cluster one. If it times out, run `cilium clustermesh status --context kind-cm-cluster1` and confirm remote nodes show connected before debugging DNS.
+Expected output: the curl command returns nginx HTML from cluster two while the client pod runs in cluster one. Cilium ClusterMesh global services need an identically named `Service` in each connected cluster (selector mismatches on a stub cluster are fine). Without the cluster-1 stub, CoreDNS returns NXDOMAIN for `nginx.default.svc.cluster.local` before Cilium can load-balance. If curl times out, run `cilium clustermesh status --context kind-cm-cluster1` and confirm remote nodes show connected before debugging DNS.
 
 ### Exercise 2: CoreDNS ndots and search paths
 
@@ -519,7 +525,7 @@ Expected output: `resolv.conf` lists `ndots:5` and search domains ending in `svc
 ### Exercise 3: MTU sizing across Cluster Mesh
 
 ```bash
-NGINX_POD=$(kubectl --context kind-cm-cluster2 get pod -l app=nginx -o jsonpath='{.items[0].metadata.status.podIP}')
+NGINX_POD=$(kubectl --context kind-cm-cluster2 get pod -l app=nginx -o jsonpath='{.items[0].status.podIP}')
 kubectl --context kind-cm-cluster1 exec netshoot -- ping -c 2 -M do -s 1472 "${NGINX_POD}"
 kubectl --context kind-cm-cluster1 exec netshoot -- ping -c 2 -M do -s 1400 "${NGINX_POD}"
 kubectl --context kind-cm-cluster1 exec netshoot -- ping -c 2 -M do -s 1200 "${NGINX_POD}"
