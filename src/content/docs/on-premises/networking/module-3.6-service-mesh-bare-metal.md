@@ -1,518 +1,709 @@
 ---
 title: "Service Mesh on Bare Metal"
-description: "Design, deploy, and operate a service mesh on bare-metal Kubernetes without cloud-managed load balancers, focusing on performance, data plane architectures, and kernel-level tuning."
+description: "Design, deploy, and operate Istio, Linkerd, Cilium, and Consul service meshes on bare-metal Kubernetes without cloud load balancers—covering sidecar and ambient datapaths, ingress, mTLS, and kernel tuning."
 slug: on-premises/networking/module-3.6-service-mesh-bare-metal
 sidebar:
   order: 36
 ---
 
-# Service Mesh on Bare Metal
+> **Complexity**: `[ADVANCED]` | Time: 90–120 minutes
+>
+> **Prerequisites**: [Module 3.3: Load Balancing Without Cloud](../module-3.3-load-balancing/), [Module 3.5: Cross-Cluster Networking](../module-3.5-cross-cluster-networking/)
 
-## Why This Module Matters
-
-In early 2023, a major telecommunications provider attempted a massive "lift and shift" of their cloud-native microservices architecture onto their on-premises, bare-metal data centers. They deployed a standard service mesh configuration without realizing the underlying network load balancer abstractions they relied on in the public cloud simply did not exist in their physical racks. Because they lacked a bare-metal load balancer implementation, their service mesh Ingress Gateways remained stuck in a `<pending>` state indefinitely, severing all external customer traffic from the cluster.
-
-The financial impact was immediate and devastating. Millions of API requests from partner networks dropped into a black hole, violating stringent multi-million dollar Service Level Agreements (SLAs) and incurring over $2.5 million in hard penalties within a single four-hour window. The engineering team scrambled to debug why their standard Kubernetes manifests, which worked flawlessly in managed cloud environments, completely failed to route traffic on the physical hardware. They eventually discovered multiple cascading failures: beyond the missing ingress abstractions, the Linux kernel connection tracking tables on their physical nodes had exhausted their capacity due to the sidecar proxy overhead, silently dropping any internal traffic that managed to bypass the ingress issues.
-
-Operating a service mesh on bare metal strips away the safety nets of managed cloud abstractions. You become directly responsible for the entire ingress path, hardware clock synchronization, and the intricate tuning of the Linux kernel to handle the immense connection doubling that sidecar proxies introduce. This module equips you with the deeply technical skills required to design, deploy, and tune a service mesh on raw iron, ensuring carrier-grade reliability when there is no cloud provider to rescue you.
+---
 
 ## Learning Outcomes
 
-*   **Evaluate** data plane architectures (sidecar vs. eBPF) for bare-metal constraints, comparing latency profiles, CPU overhead, and failure domains.
-*   **Configure** service mesh Ingress and Egress gateways to function correctly on bare metal using BGP/ARP-based IP address management (e.g., MetalLB, Cilium BGP).
-*   **Diagnose** cross-node traffic failures caused by clock drift, connection tracking exhaustion, and certificate rotation mismatches in strict mTLS environments.
-*   **Design** resilient bare-metal networking paths that properly integrate Top-of-Rack switches with virtualized mesh Gateways.
-*   **Implement** kernel-level tuning strategies using `sysctl` to prevent port starvation and TCP backlog drops under heavy mesh workloads.
+After completing this module, you will be able to:
 
-## Did You Know?
+1. **Evaluate** sidecar, ambient (ztunnel + waypoint), and CNI-integrated service mesh datapaths for bare-metal latency, memory, and failure-domain tradeoffs.
+2. **Configure** mesh ingress and egress on bare metal using MetalLB or NodePort, including `externalTrafficPolicy: Local` and ToR-aware VIP placement.
+3. **Diagnose** mesh outages caused by clock drift, `nf_conntrack` exhaustion, certificate rotation skew, and observability cardinality on physical nodes.
+4. **Design** multi-mesh footprints that combine Istio, Linkerd, Cilium Service Mesh, or Consul Connect without fighting kube-proxy IPVS versus eBPF datapaths.
+5. **Implement** node-level `sysctl` tuning and safe maintenance workflows (`kubectl cordon`, `drain`, `uncordon`) under heavy sidecar connection churn.
 
-*   Istio was accepted as an incubating project by the CNCF on 2022-09-30 and officially moved to Graduated status on 2023-07-12.
-*   Linkerd achieved CNCF Graduated status much earlier, on 2021-07-28, after initially moving through Incubating on 2018-04-06.
-*   Linkerd 2.19, announced on 2025-10-31, remains a highly optimized choice that officially supports Kubernetes versions 1.29 through 1.34.
-*   Kubernetes NodePort services allocate from a strict default port range of 30000 to 32767 to map external physical traffic into the cluster.
+---
 
-## The Bare Metal Service Mesh Reality
+## Why This Module Matters
 
-Operating a service mesh on a managed cloud provider abstracts the most complex integration points: ingress traffic routing, hardware time synchronization, and node-level network capacity constraints. On bare metal, the platform engineer owns the entire vertical stack.
+Hypothetical scenario: a platform team completes a successful cloud migration playbook and replays it on a three-site bare-metal fleet running Kubernetes **1.35**. Application pods are healthy, Prometheus shows green, and GitOps syncs complete—but customer-facing APIs return intermittent `503` responses while internal `kubectl port-forward` tests still succeed. The post-incident timeline reveals three independent gaps: `LoadBalancer` Services for the Istio ingress gateway stayed `<pending>` because no bare-metal LB controller was installed; worker nodes silently dropped packets once `nf_conntrack` tables filled after Envoy sidecars doubled connection counts; and two racks lost NTP sync, causing strict mTLS handshakes to fail with `certificate is not yet valid` even though Istiod continued issuing certificates on schedule.
 
-When you install a mesh like Istio or Linkerd on bare metal, you lose the safety net of the cloud provider's Load Balancer. A `Service` of `type: LoadBalancer` for your mesh Ingress Gateway will remain in a `<pending>` state forever unless you provide an implementation (like MetalLB, Kube-VIP, or Cilium's L2/BGP announcements). Without MetalLB, Istio's Ingress Gateway will remain pending forever. 
+Cloud-managed Kubernetes hides those integration points behind provider load balancers, hypervisor clock sync, and pre-tuned connection-tracking defaults. On bare metal you own the full vertical stack: ToR routing to VIPs, kernel sysctl headroom, mesh certificate lifecycles, and the choice between iptables/IPVS kube-proxy and eBPF kube-proxy replacement. This module teaches you to deploy and operate service meshes where there is no cloud abstraction to absorb misconfiguration—and to choose between classic sidecar injection and newer ambient or CNI-native meshes when density and latency dominate.
 
-MetalLB is designed explicitly as a load-balancer implementation for bare-metal Kubernetes clusters. MetalLB states Kubernetes does not ship native network LoadBalancer implementations for bare-metal, so unsupported IaaS setups can leave LoadBalancers indefinitely pending. For compatibility, MetalLB requires Kubernetes 1.13.0+ and a cluster without existing network load-balancing functionality.
+---
 
-Furthermore, cloud VMs typically maintain highly accurate clocks via hypervisor synchronization; bare-metal nodes require rigorous NTP or `chrony` configuration. If node clocks drift beyond a few seconds, mTLS certificate validation fails, and the mesh drops traffic silently.
+## Did You Know
 
-Finally, the bare-metal network fabric directly dictates mesh performance. Cloud providers often enforce hard limits on network packets-per-second per VM instance. On bare metal, the bottleneck shifts entirely to the Linux kernel's network stack, specifically `iptables` rules and `nf_conntrack` (connection tracking) tables, which are severely strained by the connection doubling inherent to sidecar proxies.
+- Istio **1.30.x** supports Kubernetes **1.32–1.36** per the official supported-releases matrix.
+- Linkerd **2.19** ships a Rust micro-proxy (not Envoy) and documents automatic mTLS between meshed pods once the control plane and identity anchors are installed.
+- Cilium can deliver mesh features—including L7 policy and mutual TLS—by attaching eBPF programs at the CNI layer instead of injecting a proxy per pod.
+- A Kubernetes `LoadBalancer` Service on bare metal remains `<pending>` until a controller such as MetalLB assigns and advertises a routable VIP.
 
-> **Pause and predict**: If a bare-metal node's hardware clock drifts by 5 minutes relative to the control plane, what specific layer of the OSI model will fail first when a sidecar proxy attempts to communicate with another service?
+---
 
-## Service Mesh Standards and Versioning
+## Section 1: Service Mesh Primer—Control Plane, Data Plane, and Trust
 
-Before diving into architectural models, it is critical to understand the current release landscape of the major service meshes, as bare-metal deployments are highly sensitive to version compatibility.
+A **service mesh** splits responsibilities between a **control plane** (configuration, identities, certificates, discovery) and a **data plane** (proxies or kernel programs that encrypt, route, and observe traffic). On bare metal the control plane is usually etcd-backed Kubernetes APIs plus mesh-specific controllers such as Istiod, Linkerd’s destination/identity components, Cilium’s operator, or Consul servers with Connect enabled. Unlike managed cloud offerings that host control planes for you, every etcd backup, API server upgrade, and admission webhook failure on physical clusters directly pauses mesh configuration pushes—plan HA for control-plane nodes and separate worker pools for data-plane DaemonSets so rolling OS patches on application workers do not starve istiod or identity services running on the same machines.
 
-Istio is documented as platform-independent and initially focused on Kubernetes. In the current landscape, Istio 1.29 is a supported release in Istio’s Supported Releases page. Its data plane relies on a customized proxy architecture, and the Istio 1.29.x data plane is based on Envoy release/v1.37. When deploying to production, note that Istio 1.29.x security-patched releases are 1.29.0+, and you must avoid development branches because Istio’s master track is not a supported production release.
+Mesh features cluster into **security** (mTLS, authorization), **traffic management** (retries, timeouts, traffic splitting), and **telemetry** (metrics, logs, traces). Bare-metal operators feel security and telemetry first: mTLS breaks when clocks drift; telemetry breaks when Prometheus disks fill. Traffic management features are powerful but increase config cardinality—introduce retries and outlier detection only after baseline golden signals exist, otherwise on-call chases Envoy config dumps while the underlying issue is still a pending LoadBalancer or exhausted conntrack table.
 
-When performing lifecycle upgrades on bare metal, operational ordering is vital. The Istio control plane may be one release ahead of the data plane, but the data plane cannot be ahead of the control plane. 
+Understanding **HBONE** (HTTP-Based Overlay Network Environment) matters for Istio ambient: it is the secure tunnel format between ztunnel instances, not a replacement for corporate TLS on north-south ingress. Waypoints terminate HBONE when L7 processing is required. Training materials should diagram HBONE separately from classic sidecar mTLS so engineers do not misconfigure gateways assuming ambient removes the need for ingress certificates entirely.
 
-For underlying infrastructure, Istio 1.29 supports Kubernetes 1.31 through 1.35, with 1.26 through 1.30 listed as tested. It is important to acknowledge that versioning documentation can sometimes diverge. The current upper supported Kubernetes version for Istio can be stated as 1.31. However, this is conflicting across official docs: Istio FAQ text references 1.24 support through 1.31, while the Supported Releases matrix for Istio 1.29 lists support through 1.35, so the upper-bound depends on the release being discussed.
+The data plane is where architectural choices matter for physical networks. **Sidecar meshes** inject a proxy container beside each application pod and redirect traffic with iptables or CNI rules. **Ambient meshes** move L4 encryption and routing to per-node proxies (Istio’s **ztunnel**) and add optional **waypoint** proxies for L7 policy where needed. **CNI-integrated meshes** push interception into eBPF maps on the host, reducing per-pod overhead but coupling mesh upgrades to CNI rollouts.
 
-Linkerd offers an alternative philosophy. Linkerd installation requirements require a functioning Kubernetes cluster and supports cloud-hosted or local environments such as Minikube or Docker for Desktop. Linkerd 2.19 was announced on 2025-10-31 and is the latest stable Linkerd version referenced in Linkerd k8s support docs, supporting Kubernetes 1.29 through 1.34.
-
-## Data Plane Architectures: Sidecar vs. eBPF
-
-The service mesh data plane intercepts and routes traffic between application containers. The mechanism of interception fundamentally alters bare-metal performance.
-
-### The Sidecar Model (Envoy, Linkerd-proxy)
-
-In the traditional model, a proxy container is injected into every Pod. Traffic interception relies on `iptables` rules injected into the Pod's network namespace by an init container (e.g., `istio-init`).
+Trust is established through workload identities and short-lived certificates. Istio uses SPIFFE-compatible identities issued by Istiod; Linkerd’s identity controller mints TLS credentials anchored in a trust root you bootstrap at install time; Cilium integrates with SPIRE or its own certificate machinery depending on configuration; Consul Connect uses the **Connect CA** (built-in or external) to sign Envoy proxy certificates. On bare metal, all of these chains assume **accurate time**—use `chronyd` on every node and alert on clock offset before debugging proxy configs.
 
 ```mermaid
-graph TD
-    subgraph Pod A
-        AppA[Application] --> |1. TCP| IP[iptables PREROUTING]
-        IP --> |2. Redirect| ProxyA[Sidecar Proxy]
-    end
-    subgraph Pod B
-        ProxyB[Sidecar Proxy] --> |5. Redirect| IP2[iptables]
-        IP2 --> |6. TCP| AppB[Application]
-    end
-    ProxyA --> |3. mTLS| eth0_A[Node A NIC]
-    eth0_A --> |4. Physical Network| eth0_B[Node B NIC]
-    eth0_B --> ProxyB
+flowchart LR
+  subgraph CP["Control plane"]
+    I[Istiod / Linkerd / Cilium / Consul]
+  end
+  subgraph DP["Data plane options"]
+    S[Sidecar per pod]
+    A[Ambient ztunnel per node]
+    E[eBPF on CNI]
+  end
+  CP --> S
+  CP --> A
+  CP --> E
+  S --> N[Physical NIC / ToR]
+  A --> N
+  E --> N
 ```
 
-**Bare Metal Implications:**
-*   **Connection Doubling:** A single logical connection between App A and App B becomes three TCP connections (App A -> Proxy A, Proxy A -> Proxy B, Proxy B -> App B). This tripling of sockets exhausts ephemeral ports and `nf_conntrack` entries far faster than unmeshed traffic.
-*   **Memory Overhead:** Envoy memory usage scales with the number of endpoints in the cluster. In a 1000-node bare-metal cluster with 50,000 Pods, every sidecar receives the routing table for every other Pod, leading to massive memory bloat. You must aggressively use Istio `Sidecar` resources to scope endpoint visibility.
+Pause and predict: if the control plane is available but every pod-to-pod TLS handshake fails simultaneously, would you inspect proxy route tables first, or verify node time synchronization and certificate `notBefore`/`notAfter` windows across the fleet?
 
-### The Sidecarless Model (eBPF, Istio Ambient, Cilium)
+Enterprise platforms usually standardize one primary mesh per cluster and isolate exceptions by namespace or cluster boundary rather than mixing two datapaths on the same node without documentation. When compliance requires Consul Connect on legacy VMs while Kubernetes runs Linkerd, treat the Kubernetes cluster as a single trust domain with explicit gateway federation rather than double-injecting proxies into the same pod network namespace.
 
-Modern architectures bypass `iptables` entirely. They use eBPF (Extended Berkeley Packet Filter) to attach programs directly to kernel sockets (`sockmap` and `sk_msg`).
+---
+
+## Section 2: Bare-Metal Ingress and Egress—MetalLB, NodePort, and Source IP
+
+Kubernetes does not implement `type: LoadBalancer` by itself. The API creates a Service object; something else must allocate an external IP and program the network. On bare metal that “something” is commonly **MetalLB** (L2 ARP/NDP or BGP), **kube-vip**, or static NodePort publishing combined with external load balancers outside the cluster.
+
+For mesh **ingress gateways** (Istio ingressgateway, Linkerd’s ingress mode, Envoy Gateway, or Cilium Gateway), the pattern is:
+
+1. Deploy gateway pods (often on edge-tainted nodes).
+2. Expose them with `type: LoadBalancer` and `externalTrafficPolicy: Local`.
+3. Let MetalLB assign a VIP from an `IPAddressPool` your ToR switches route toward the announcing nodes.
+4. Configure HTTP/TCP routes via Gateway API or mesh-specific CRDs (`Gateway`, `VirtualService`, etc.).
+
+`externalTrafficPolicy: Local` matters on bare metal because the default `Cluster` policy can SNAT client traffic through arbitrary nodes, hiding the true client IP from Envoy access logs and breaking IP-based rate limits. With `Local`, only nodes running a gateway endpoint receive traffic, preserving source IP at the cost of uneven load distribution if gateway pods are imbalanced.
+
+When MetalLB is not available, **NodePort** remains valid: publish the gateway Service as NodePort and point an external HAProxy or hardware ADC at node IPs. Document which ports are exposed (default NodePort range **30000–32767**) and firewall rules on ToR switches. Egress to corporate networks often needs an **egress gateway** with a dedicated VIP and SNAT so upstream firewalls see a stable allowlisted address rather than arbitrary pod CIDRs.
+
+BGP mode MetalLB (see MetalLB configuration documentation) advertises `/32` or `/128` Service IPs from nodes that host endpoints. On spine-leaf fabrics this integrates cleanly with Module 3.2 BGP lessons: ToR switches learn the VIP as a host route, and `externalTrafficPolicy: Local` ensures only nodes with gateway pods attract traffic for that Service. L2 mode is simpler for lab clusters but concentrates ARP ownership on one node per VIP—acceptable in kind, risky at high throughput without planning fail-over seconds.
+
+Document a **north-south matrix** in your platform runbook: VIP owner, gateway namespace, TLS termination point (gateway vs application), and whether corporate clients hit MetalLB directly or an external ADC that re-encrypts to the mesh. Ambiguous termination points are a frequent source of double-TLS bugs where clients see one certificate while Envoy presents another on the backend hop.
 
 ```mermaid
-graph TD
-    subgraph Node A
-        AppA[Application Pod]
-        ZtunnelA[Node Proxy / ztunnel]
-        AppA -.-> |1. eBPF sockmap bypass| ZtunnelA
-    end
-    subgraph Node B
-        ZtunnelB[Node Proxy / ztunnel]
-        AppB[Application Pod]
-        ZtunnelA --> |2. mTLS / HBONE tunnel| ZtunnelB
-        ZtunnelB -.-> |3. eBPF sockmap bypass| AppB
-    end
+flowchart TB
+  Client[External client] --> ToR[ToR / ADC]
+  ToR --> VIP[MetalLB VIP]
+  VIP --> GW[Istio / Linkerd ingress gateway]
+  GW --> SVC[In-cluster Service]
+  SVC --> Pod[Application pod]
+  subgraph Egress path
+    Pod2[Meshed pod] --> EGW[Egress gateway VIP]
+    EGW --> FW[Corporate firewall]
+  end
 ```
 
-**Bare Metal Implications:**
-*   **Kernel Requirements:** eBPF meshes require modern kernels (typically 5.10+). Bare-metal environments running older enterprise Linux distributions (e.g., RHEL 7 with kernel 3.10) cannot run these architectures.
-*   **Shared Node Resources:** Instead of a proxy per Pod, a single proxy (e.g., Istio's `ztunnel` or a Cilium Envoy DaemonSet) runs per node. This drastically reduces memory overhead but concentrates the failure domain; if the node proxy crashes, all mesh traffic on that bare-metal node halts.
-*   **Hardware Offload:** High-performance bare metal using SmartNICs or DPDK can offload eBPF programs directly to the network card, achieving near line-rate encryption.
+For **egress**, Istio `ServiceEntry` plus egress gateway deployments mirror ingress patterns: allocate a dedicated LoadBalancer IP, route only approved external hosts through the gateway, and SNAT to the VIP. Linkerd and Cilium provide different egress primitives, but the bare-metal constraint is identical—without SNAT, upstream teams see unpredictable pod IPs from node CIDRs and reject flows.
 
-## Evaluating the Options
+---
 
-Choose your mesh based on your bare-metal CNI, your operational maturity, and your kernel versions.
+## Section 3: Istio on Bare Metal—Sidecar Mode and Ambient Mode
 
-| Feature | Istio (Sidecar) | Istio (Ambient) | Cilium Service Mesh | Linkerd | Consul |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Data Plane** | Envoy (per-Pod) | ztunnel (per-Node) + Waypoint | Envoy (per-Node) + eBPF | Linkerd-proxy (Rust) | Envoy (per-Pod) |
-| **Interception** | iptables / CNI | eBPF / iptables | eBPF (`sockmap`) | iptables / CNI | iptables |
-| **L7 Routing** | Feature-rich | Requires Waypoint proxy | Feature-rich | Feature-rich | Feature-rich |
-| **mTLS** | Default (Permissive) | HBONE | Default | Default (Strict) | Default |
-| **Best fit for** | Complex routing, multi-cluster | High density, lower memory | Existing Cilium CNI users | Simplicity, low resource | Heavy HashiCorp stack |
+### Sidecar Istio (Envoy per pod)
 
-If you are already running Cilium as your CNI in routing/BGP mode, running an `iptables`-based Istio sidecar mesh on top introduces severe complexity. The eBPF programs and iptables rules often fight over packet processing order. If using Cilium CNI, strongly consider Cilium Service Mesh or ensure Cilium's strict kube-proxy replacement is configured to ignore Istio's marks.
+Classic Istio installs **istiod** plus injected **Envoy** sidecars. Init containers or CNI plugins program redirection so application traffic flows App → Envoy → remote Envoy → App. On bare metal this triples TCP flows and stresses `nf_conntrack` and ephemeral ports. Mitigations include Istio `Sidecar` resources that limit egress hosts (avoid pushing every service in the cluster to every proxy), right-sized proxy CPU/memory requests, and node sysctl tuning (covered later).
 
-## Ingress and Egress at the Edge
+Example `Sidecar` scoping for a namespace that should talk only to same-namespace services unless declared:
 
-On bare metal, traffic enters and leaves the mesh through dedicated Gateway Pods. 
-To expose the mesh Ingress Gateway, you must bind it to a routable physical IP. 
-
-Istio supports the Kubernetes Gateway API and states it intends to make it the default traffic-management API, avoiding manual gateway Deployment management when using Gateway API. However, if using standard APIs or environments without automated provisioners, you must handle this manually.
-
-If Istio ingress `EXTERNAL-IP` is `<none>` or `<pending>`, the environment has no external load balancer and NodePort access should be used. A Kubernetes `LoadBalancer` Service on cloud-provider environments provisions external LB infrastructure and typically uses NodePort allocation underneath. In bare-metal environments, Linkerd/Envoy/other cluster meshes still depend on cluster service type behavior, so NodePort remains a practical fallback path for ingress if no LB exists. *(Note: This claim is unverified by a single canonical Linkerd source in current ledgers, but conceptually aligns with standard Kubernetes networking mechanics as observed in MetalLB and Istio documentation).*
-
-### Ingress Architecture
-
-To establish proper inbound routing:
-1.  **Deploy MetalLB or Kube-VIP:** Configure a pool of IP addresses routed by your Top-of-Rack (ToR) switches via BGP.
-2.  **Service Configuration:** Define the Ingress Gateway `Service` as `type: LoadBalancer`. MetalLB will assign an IP (e.g., `10.0.50.100`) and announce it to the ToR switch.
-3.  **ExternalTrafficPolicy:** Always set `externalTrafficPolicy: Local` on the Ingress Gateway Service. This forces the ToR switch to route traffic *only* to bare-metal nodes currently running an Ingress Gateway Pod, preserving the original client source IP and avoiding unnecessary extra network hops.
-4.  **Node Affinity:** Pin Ingress Gateway Pods to dedicated edge nodes using `nodeSelector` and `tolerations`. This isolates highly volatile public traffic from internal application workloads.
-
-### Egress Architecture and SNAT
-
-Corporate environments often require all outbound traffic to originate from known, static IP addresses for firewall whitelisting. A bare-metal node's IP is not sufficient, as Pods can move.
-
-1. Deploy an Egress Gateway.
-2. Assign a static LoadBalancer IP to the Egress Gateway using MetalLB.
-3. Use an egress SNAT configuration (or Cilium Egress Gateway feature) to force all traffic leaving the Egress Gateway Pod to be masqueraded using that specific LoadBalancer IP, rather than the underlying bare-metal node's IP.
-
-## Bare Metal Kernel Tuning for Mesh Workloads
-
-The default Linux network stack will collapse under heavy sidecar proxy traffic. When running Envoy on bare metal, you must apply specific `sysctl` configurations at the node level (usually via DaemonSet or configuration management like Ansible/Terraform during node provisioning).
-
-### Connection Tracking Exhaustion
-
-Because sidecars triple the number of TCP connections, the node's `nf_conntrack` table fills rapidly. When it is full, the kernel drops packets silently, resulting in sudden, intermittent connection timeouts across the node.
-
-**The Fix:** Increase the `net.netfilter.nf_conntrack_max` limit and decrease the timeout for connection tracking.
-
-```ini
-# /etc/sysctl.d/99-mesh-tuning.conf
-net.netfilter.nf_conntrack_max = 1048576
-net.netfilter.nf_conntrack_tcp_timeout_established = 86400
-net.netfilter.nf_conntrack_tcp_timeout_time_wait = 10
+```yaml
+apiVersion: networking.istio.io/v1
+kind: Sidecar
+metadata:
+  name: default
+  namespace: payments
+spec:
+  egress:
+    - hosts:
+        - "./*"
+        - "istio-system/*"
 ```
 
-### Port Starvation (TIME_WAIT)
+Pair scoping with **PeerAuthentication** policies staged from `PERMISSIVE` to `STRICT` during migrations. Jumping directly to `STRICT` on bare metal without verifying every client pod is injected causes opaque TLS failures that look like application bugs. Use progressive namespaces: mesh `staging` completely, observe metrics, then promote policies to `production` racks.
 
-High-throughput, short-lived connections (typical in microservices) leave sockets in the `TIME_WAIT` state on the proxy. On bare metal handling tens of thousands of requests per second, you will exhaust the local port range (default ~28,000 ports).
+Istio’s **1.30** line rides Envoy **v1.38** per the supported Envoy table—when kernel tuning and Envoy filter complexity interact (Wasm plugins, large route configs), profile p99 latency on representative hardware identical to production NICs, not only on kind clusters with bridged Docker networks.
 
-**The Fix:** Expand the port range and allow the kernel to reuse sockets in `TIME_WAIT`.
+For Kubernetes **1.35** labs and production, align on a supported Istio line—**1.30.x** explicitly lists **1.35** as supported. Pin Helm charts and sample manifests to that minor release (for example `release-1.30` sample URLs), not floating `master` branches.
 
-```ini
-# /etc/sysctl.d/99-mesh-tuning.conf
-net.ipv4.ip_local_port_range = 1024 65535
-net.ipv4.tcp_tw_reuse = 1
-```
+### Ambient Istio (ztunnel + waypoint)
 
-### Listen Backlog
+Production ambient rollouts on bare metal should stage **ztunnel** DaemonSets across all workers, verify HBONE connectivity between nodes in the same L2 domain, then enable namespace labels that enroll workloads. Skipping staged ztunnel readiness produces partial redirection where some pods still bypass encryption. Waypoint deployment can follow per team: platform services with complex HTTP fault injection receive waypoints first; stateful TCP services may remain on ztunnel-only paths longer.
 
-Envoy proxies need a large backlog to handle sudden spikes in new connection requests without dropping SYN packets.
+**Ambient mode** separates L4 and L7:
 
-```ini
-# /etc/sysctl.d/99-mesh-tuning.conf
-net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 65535
-```
+- **ztunnel** runs as a DaemonSet on each node, provides HBONE-encapsulated mTLS between workloads, and uses redirection documented in Istio’s ambient architecture guides.
+- **Waypoint** proxies are optional per-namespace or per-service Envoy instances that apply L7 policies when you need HTTP routing comparable to sidecars—without injecting a proxy beside every app container by default.
 
-> **Stop and think**: Do not set `net.ipv4.tcp_tw_recycle = 1`. This parameter has been broken for years when used behind NAT (which Kubernetes uses extensively) and was completely removed in Linux kernel 4.12. Using it on older kernels will cause random connection drops from clients.
+Ambient fits high-density bare-metal fleets where sidecar memory dominates node budgets, provided kernels and CNI plugins support the redirection model. You still need ingress gateways (or Gateway API resources) for north-south traffic and MetalLB (or equivalent) to publish VIPs.
 
-## Common Mistakes
-
-| Mistake | Why | Fix |
+| Concern | Sidecar Istio | Ambient Istio |
 | :--- | :--- | :--- |
-| Ignoring NTP synchronization | Clock drift breaks mTLS cert validity and causes silent TLS handshake failures. | Run `chronyd` or `ntpd` on all bare-metal nodes and set up strict alerting. |
-| Missing `externalTrafficPolicy: Local` | Causes extra network hops and hides the original client IP from the ingress proxy. | Set to `Local` on the Ingress Service. |
-| Using `tcp_tw_recycle` | Broken behind NAT, causes the kernel to aggressively drop valid SYN packets from reused IPs. | Use `tcp_tw_reuse = 1` instead. |
-| Default sidecar egress config | Envoy loads all cluster endpoints into memory, leading to massive OOM kills on bare metal. | Scope with the Istio `Sidecar` resource strictly. |
-| Ignoring eBPF map limits | High churn overflows `sockmap`, breaking kernel-level routing. | Monitor `bpftool`, use kernel 5.15+ for improved garbage collection. |
-| Forgetting SNAT on Egress | Physical hardware firewalls drop traffic originating from internal, unrecognized pod IPs. | Use an Egress Gateway with a dedicated LB IP and SNAT. |
+| Memory per pod | Higher (Envoy per pod) | Lower at L4 (shared ztunnel) |
+| L7 features | Full Envoy per pod | Requires waypoint proxy |
+| iptables churn | Per-pod rules | Node-level redirection |
+| Upgrade blast radius | Rolling sidecars | ztunnel + waypoints |
+
+**Upgrade ordering** on bare metal should follow Istio’s supported control-plane/data-plane skew rules: the control plane may be one minor version ahead of data planes, but data planes must not outrun istiod. Use revisions or canary namespaces to roll ztunnel DaemonSets before enabling ambient redirection on production namespaces. Capture pre-upgrade snapshots of `istioctl proxy-status` and gateway endpoint counts so rollback is measurable rather than anecdotal.
+
+Gateway API adoption (Istio’s getting-started guides for ambient and sidecar modes) reduces bespoke Ingress YAML over time, but bare-metal teams still manage the underlying `Service` type and MetalLB pools manually. When mixing Gateway API with classic `Gateway`/`VirtualService`, keep one source of truth for hostnames and TLS credentials to avoid drift between API versions during migration windows.
+
+---
+
+## Section 4: Linkerd on Bare Metal—Identity, TLS Bootstrap, and Multi-Cluster Mirror
+
+Linkerd’s data plane is the **linkerd-proxy** (Rust), not Envoy. Installation splits into **control plane** namespaces (`linkerd`, `linkerd-viz`, etc.) and **data plane injection** via namespace annotations (`linkerd.io/inject=enabled`) or admission webhooks.
+
+**TLS bootstrap** begins with a trust anchor (cluster-scoped root) and an issuer certificate. Production bare-metal runbooks store roots in HSM-backed or offline CAs, rotate issuers deliberately, and verify `linkerd identity` components before rolling workers. Automatic mTLS applies to meshed pods without application code changes—unmeshed pods remain plaintext unless policy blocks them.
+
+**Multi-cluster** Linkerd uses **service mirroring**: the `linkerd-multicluster` extension links clusters and mirrors exported services so DNS names like `service.namespace.svc.cluster.remote` resolve to mirrored Services locally. Gateway pods (also exposed via MetalLB or NodePort on bare metal) carry cross-cluster traffic. Mirror semantics are **pull-oriented**—the importing cluster watches exported services; plan firewall rules for API server reachability and gateway paths between sites.
+
+Linkerd **2.19** documentation is the current stable doc set for features such as automatic mTLS and multicluster tasks. Before upgrading production clusters to Kubernetes **1.35**, validate the Linkerd release notes for your chosen version—upstream support matrices move independently from Istio’s.
+
+Resource planning for Linkerd on physical nodes is simpler than large Envoy fleets but not zero: budget proxy CPU for TLS on high-QPS services and ensure `linkerd-destination` and `linkerd-identity` components are HA across control-plane nodes. For observability, `linkerd viz` adds another control-plane consumer—size Prometheus retention on bare-metal disks explicitly; tracing every request without sampling can fill NVMe arrays during load tests.
+
+Multicluster gateways on bare metal mirror Istio’s VIP problem: expose gateway Services via MetalLB pools reachable from peer sites, restrict firewall rules to gateway node labels, and test failover by cordoning one gateway node while mirroring controllers reconcile endpoints on survivors.
+
+**Identity rotation drill:** quarterly, rotate Linkerd trust anchors or issuers in a staging cluster mirroring production chrony and MetalLB settings. Document wall-clock time to complete rotation and the longest TLS error window observed. Bare-metal teams that skip drills discover anchor expiry only when monitoring lacks cert-expiry alerts on mesh CAs themselves—only on public ingress certs.
+
+---
+
+## Section 5: Cilium Service Mesh—mTLS on the CNI Data Path
+
+If Cilium is already your CNI—especially in **kube-proxy-free** mode with eBPF replacing iptables/IPVS—adding an iptables-heavy sidecar mesh can create **double redirection** and difficult-to-debug packet paths. **Cilium Service Mesh** (see Cilium’s servicemesh documentation) integrates ingress gateways, L7 policy, and mutual TLS using Envoy where required, while leveraging eBPF for efficient capture and identity-aware policy at the node.
+
+Encryption options include WireGuard for transport and mesh-style certificates for L7 services. On bare metal BGP fabrics, Cilium’s native routing avoids extra overlays when PodCIDRs are announced to ToR switches; mesh features must respect the same MTU headroom you engineered in Modules 3.1–3.3.
+
+Choosing Cilium mesh versus Istio/Linkerd is often an operational decision: one upgrade pipeline, one observability map (`hubble`), and consistent policy CRDs—versus best-of-breed L7 routing from Istio. Hybrid stacks are possible but expensive; prefer one primary mesh per cluster unless compliance mandates isolation per namespace.
+
+When WireGuard encryption is already enabled for Cluster Mesh (Module 3.5), decide whether mesh mTLS duplicates transport security or adds application-layer identity. Many teams disable redundant encryption after threat modeling; others keep both for compliance zones. Document the decision per cluster class (edge factory vs core datacenter) so auditors see intentional layering rather than accidental double crypto.
+
+Hubble flows help debug bare-metal drops that look like mesh faults but are actually MTU blackholes or BGP flaps—always compare Hubble drop reasons with ToR interface counters before restarting proxies.
+
+---
+
+## Section 6: Consul Connect—Connect CA and Envoy Sidecars
+
+**HashiCorp Consul Connect** attaches Envoy sidecars (or transparent proxies) to workloads based on Consul service catalog entries. The **Connect CA** signs proxy certificates; you can use Consul’s built-in CA or integrate external PKI. On Kubernetes, Consul Helm charts inject connect-inject annotations and coordinate with Consul servers running on VMs or in-cluster.
+
+Connect shines when the organization already standardizes on Consul for service discovery and intentions across VMs and Kubernetes. Bare-metal Kubernetes still needs published gateway addresses—Consul ingress gateways follow the same MetalLB/NodePort constraints as Istio. Intentions (service-to-service ACLs) replace some Istio `AuthorizationPolicy` patterns but require Consul API fluency.
+
+The **Connect CA** can remain Consul’s built-in provider or integrate with HashiCorp Vault and other PKI endpoints documented under Connect CA configuration. Rotation events must be coordinated with Envoy hot restart behavior on gateway nodes; schedule CA rollovers during maintenance windows with extra gateway replicas so north-south paths survive proxy restarts. For Kubernetes, connect-inject annotations should be standardized in Pod templates just like Istio injection labels—ad-hoc injection leads to “partially meshed” namespaces that pass health checks but bypass mTLS on new Deployments.
+
+---
+
+## Section 7: Operational Realities—Capacity, Latency, Rotation, and Observability Cost
+
+**Sidecar capacity sizing**: budget **50–150 MiB** baseline memory per Envoy sidecar plus spikes during config pushes; high-cardinality clusters without `Sidecar` scoping can exceed **500 MiB** per proxy. CPU scales with TLS crypto and L7 filters—measure p95 proxy latency, not only application latency.
+
+**Latency overhead**: expect **1–3 ms** per hop for mTLS sidecars on modern hardware; ambient L4 paths often reduce per-request overhead when L7 waypoints are absent. Measure with `istio-proxy` admin ports or Linkerd’s tap/viz metrics before accepting vendor benchmarks.
+
+**mTLS rotation**: Istio typically issues short-lived workload certificates (on the order of hours). Rotation storms after control-plane upgrades can spike CPU; stagger revisions and use canary control planes. Linkerd and Consul have their own rotation intervals—document `notAfter` alerting in Prometheus regardless of mesh flavor.
+
+**Observability cost**: distributed traces and per-request metrics explode cardinality on bare-metal fleets without tail sampling. Gate Prometheus labels (`source_workload`, `destination_service`) and prefer RED metrics dashboards over full span capture unless storage is provisioned.
+
+**Safe node maintenance**: never simulate maintenance by scaling Deployments to `replicas: 0` unless you intend to stop workloads. The safe sequence is `kubectl cordon NODE`, `kubectl drain NODE --ignore-daemonsets --delete-emptydir-data`, perform maintenance, then `kubectl uncordon NODE`. Mesh DaemonSets (ztunnel, Cilium agents) usually remain—plan PDBs and surge capacity so draining edge gateway nodes does not drop all north-south traffic.
+
+Build an **observability budget** per cluster class: sidecar meshes export thousands of metric series per pod; bare-metal Prometheus instances without remote write/sharding fail during the first mesh upgrade. Prefer native histograms or aggregated dashboards (request rate, errors, duration) at the Service level, and sample traces at 1–5% unless regulatory mandates require more. Log volumes from Envoy access logs can exceed application logs—centralize retention policies before enabling verbose access logs on ingress gateways facing the public Internet.
+
+Certificate rotation deserves runbooks independent of vendor: record issuers, TTL, grace periods, and alert thresholds at 50% TTL remaining. During istiod upgrades, watch for spikes in `citadel` or workload secret write rates; on Linkerd, monitor identity service latency; on Consul, monitor CA sign failures. Physical nodes with TPM or secure boot policies may delay kubelet restarts after reboot—factor that into maintenance SLAs so mesh proxies resync before traffic returns.
+
+---
+
+## Section 8: Datapath Choice on Bare Metal—kube-proxy IPVS versus eBPF
+
+**kube-proxy in iptables mode** scales poorly on dense bare-metal nodes—rule churn slows updates. **IPVS mode** improves load-balancing performance for Services but still centralizes state in kube-proxy. **Cilium kube-proxy replacement** programs service backends in eBPF maps, reducing latency and preserving client IP in more paths—pairs naturally with Cilium mesh.
+
+When Istio sidecars run atop IPVS kube-proxy, verify `istio-cni` or init-container redirection compatibility with your CNI vendor matrix. Ambient Istio expects compatible CNIs and kernels that support redirection features documented for ztunnel.
+
+| Datapath | Strength on bare metal | Mesh pairing caution |
+| :--- | :--- | :--- |
+| iptables kube-proxy | Ubiquitous, well understood | Sidecar iptables stacks deeply |
+| IPVS kube-proxy | Better Service LB at scale | Mind conntrack + sidecar doubles |
+| eBPF kube-proxy replacement | Lowest per-packet overhead | Align with Cilium/ambient meshes |
+
+**IPVS tuning** on bare-metal workers includes raising `net.ipv4.vs.conntrack` modules where applicable and ensuring connection sync daemons run when using IPVS in active-active gateway designs—otherwise flows blackhole after failover. **eBPF** paths shift debugging to `bpftool`, Hubble, and kernel tracepoints; train on-call engineers on those tools before disabling kube-proxy in production.
+
+```mermaid
+sequenceDiagram
+  participant App as App container
+  participant Side as Sidecar Envoy
+  participant Z as ztunnel (ambient)
+  participant NIC as Node NIC
+  App->>Side: plaintext (pod network)
+  Side->>NIC: mTLS to remote node
+  Note over App,Z: Ambient L4 path may skip per-pod sidecar
+  App->>Z: redirected socket
+  Z->>NIC: HBONE tunnel
+```
+
+---
+
+## Section 9: When Sidecar Wins versus Ambient or Sidecarless
+
+**Choose sidecars** when you need per-pod L7 policy everywhere, mature WASM/extensibility, or team expertise with Envoy filters and Istio APIs across hundreds of microservices—with budget for memory and sysctl tuning.
+
+**Choose ambient (ztunnel + waypoint)** when pod density and RAM costs dominate, most traffic is east-west L4 mTLS, and L7 policy can be scoped to namespaces via waypoints rather than every pod.
+
+**Choose CNI-integrated mesh** when Cilium (or another eBPF CNI) is non-negotiable, BGP underlay is already live, and you want one datapath team owning packets end to end.
+
+**Choose Linkerd** when you want opinionated simplicity, Rust proxy efficiency, and fast install paths on smaller clusters without Envoy’s full complexity tax.
+
+**Choose Consul Connect** when hybrid VM/Kubernetes service catalog and intentions already live in Consul.
+
+**Factory edge versus core datacenter:** edge clusters on constrained hardware often favor Linkerd or ambient Istio to preserve RAM for application pods, while core datacenters with larger nodes may run full sidecar Istio for rich L7 policy. Edge sites still need MetalLB L2 pools or BGP advertisements understood by local ToR switches—do not assume corporate ADCs understand pod CIDRs without SNAT.
+
+**Regulated environments:** dual-control observability (mesh metrics plus network taps) may be mandatory. Bare-metal taps on mirror ports can validate mesh mTLS independent of proxy-reported metrics—budget switch mirror capacity when auditors require packet evidence.
+
+Run a **decision workshop** before procurement: capture peak pod density per rack, average east-west RPS, regulatory needs for L7 inspection, existing CNI (Cilium BGP vs Calico vs kube-router), and staff skills. Sidecar meshes win when L7 policy authors outnumber platform engineers; ambient wins when node RAM is the bottleneck; Cilium wins when the organization already committed to eBPF dataplanes and Hubble-centric operations.
+
+---
 
 ## Practitioner Gotchas
 
-### 1. The Clock Drift Outage
-**Context:** Bare-metal nodes do not share a hypervisor clock. If the local system clock on a worker node drifts by more than a few seconds, the Istiod CA will issue certificates that appear to be from the future or already expired.
-**Fix:** Ensure `chronyd` or `ntpd` is running, monitored, and alerting on all bare-metal nodes. If a node loses NTP sync, traffic to its Pods will silently drop with cryptic Envoy TLS handshake errors (`503 UC upstream_reset_before_response_started{connection_termination}`).
+### 1. Pending ingress during otherwise healthy rollouts
 
-### 2. Egress SNAT Collision with Physical Firewalls
-**Context:** When mesh pods attempt to reach an external API (e.g., an on-prem Oracle DB), traffic leaves the node using the node's physical IP. If you use an Istio Egress Gateway without properly configuring IP masquerading, the physical firewall sees traffic coming from the bare-metal node's IP but with a port that the firewall state table does not recognize, resulting in dropped packets.
-**Fix:** Bind the Egress Gateway to a dedicated LoadBalancer IP via MetalLB. Configure iptables/SNAT on the node hosting the Egress Gateway to masquerade all traffic originating from the Egress Gateway Pod namespace to that specific LoadBalancer IP.
+**Context:** GitOps reports synced, pods ready, but customers timeout. `kubectl get svc -n istio-ingress` shows `<pending>` external IPs.
 
-### 3. Out-of-Memory Kills from Global Endpoint Visibility
-**Context:** By default, Istio pushes the route configuration for *every* service in the cluster to *every* sidecar proxy. In a bare-metal cluster with 5,000 services, a sidecar might consume 200MB-500MB of RAM just storing routes it will never use.
-**Fix:** Implement `Sidecar` custom resources globally. Restrict `egress.hosts` to `~/*` (same namespace only) by default, forcing developers to explicitly declare dependencies on services in other namespaces.
+**Fix:** Install or repair MetalLB pools and advertisements; confirm ToR routes include the pool CIDR. Until resolved, document temporary NodePort access only for break-glass—not as the production architecture.
 
-### 4. Unbounded Kernel Memory via sockmap (eBPF)
-**Context:** When using eBPF-based acceleration (Cilium Service Mesh or Calico eBPF data plane), connections bypass iptables via `sockmap`. Under extreme connection churn (e.g., load testing), the garbage collection of closed sockets in the eBPF maps can lag behind creation.
-**Fix:** Monitor eBPF map memory usage (`bpftool map show`). Ensure kernel versions are at least 5.15, where eBPF socket map garbage collection was significantly improved.
+### 2. Ambient enabled without waypoints for HTTP policy
 
-## Hands-on Lab: Deploying Istio on Bare Metal (Simulated)
+**Context:** Security mandates path-based routing; teams disable sidecars but never deploy waypoints.
 
-In this lab, we will simulate a bare-metal environment using `kind`, deploy MetalLB for local BGP/ARP load balancing, and install an Istio service mesh strictly configured for our synthetic edge.
+**Fix:** Label namespaces requiring L7 and deploy waypoint proxies per Istio ambient guidance; verify ztunnel metrics show HBONE while HTTP routes attach to waypoints.
 
-### Prerequisites
+### 3. Linkerd trust anchor expiry surprise
 
-* `kind` CLI installed.
-* `kubectl` installed.
-* `helm` (v3.10+) installed.
-* `istioctl` (v1.24+) installed.
+**Context:** One year after install, all meshed traffic fails though Kubernetes is healthy.
 
-### Step 1: Bootstrap the Bare Metal Simulation
+**Fix:** Calendar anchor and issuer rotation before expiry; practice rotation in staging with the same bare-metal chrony configuration as production.
 
-Istio’s no-gateway-API getting-started guide requires a supported Kubernetes version of 1.31–1.35 and can be run on supported platforms such as Minikube, or `kind` as we use here.
+### 4. Observability cluster competes with etcd
+
+**Context:** Prometheus and tracing stores run on control-plane nodes already hosting Istiod and Linkerd control planes.
+
+**Fix:** Move observability to dedicated workers or remote storage; cap cardinality and retention; never treat “more labels” as free on bare-metal NVMe.
+
+---
+
+## Platform Comparison—Istio, Linkerd, Cilium, and Consul on Bare Metal
+
+| Dimension | Istio (sidecar / ambient) | Linkerd 2.19 | Cilium Service Mesh | Consul Connect |
+| :--- | :--- | :--- | :--- | :--- |
+| Proxy technology | Envoy (per pod or waypoint) | linkerd2-proxy (Rust) | Envoy where needed + eBPF | Envoy sidecars |
+| K8s 1.35 alignment | Supported on Istio 1.30.x matrix | Validate release notes for 2.19 | Follow Cilium LTS matrix | Follow Consul K8s chart matrix |
+| Ingress on bare metal | Gateway / Gateway API + MetalLB | Multicluster/gateway Services + MetalLB | Cilium Gateway + BGP/LB | Consul ingress gateway + MetalLB |
+| Multi-cluster | Multi-primary / remote secrets patterns | Service mirroring extension | Cluster Mesh (Module 3.5) | WAN federation + intentions |
+| Ops complexity | Highest flexibility | Lowest baseline | Tied to CNI lifecycle | Tied to Consul estate |
+
+Use this table in architecture reviews—not as a vendor scorecard but to force explicit answers about who owns the CNI, who owns certificates, and where VIPs live on the physical network. A row without an owner column in your internal docs is a production incident waiting for a change window.
+
+**Integration with Module 3.3 load balancing:** any mesh ingress Service still depends on MetalLB pools, kube-vip, or external ADCs documented earlier. **Integration with Module 3.5 cross-cluster:** mesh multi-cluster features assume underlying connectivity (Submariner, Cilium Cluster Mesh, or routed PodCIDRs) already works; meshes do not fix blackholed underlays.
+
+**Integration with Module 3.4 DNS and certificates:** mesh workloads still need resolvable Kubernetes DNS names; corporate PKI for north-south ingress often flows through cert-manager while east-west stays on mesh CAs—document trust stores separately so operators do not import the wrong CA bundle into istiod when fixing public TLS only.
+
+---
+
+## Troubleshooting Playbook—Ordered Checks for Mesh Incidents
+
+When a bare-metal mesh incident starts, resist jumping to random proxy restarts. The following sequence mirrors field order-of-operations and maps to the learning outcomes for diagnosis and implementation.
+
+**Step 1 — North-south path:** Confirm ingress `Service` has an assigned external IP or NodePort, MetalLB speaker pods are ready, and ToR routes include the VIP. From outside the cluster, traceroute to the VIP and tcpdump on a gateway node’s external interface to see SYN arrival. If SYNs never arrive, the problem is still load balancing or routing—not Istio routes.
+
+**Step 2 — Time and certificates:** On failing nodes, run chrony sources and compare `date` across control plane and workers. Inspect workload certificate secrets in the namespace (`istio.io` or Linkerd labels) and verify `notBefore`/`notAfter` against current UTC. Control plane health without valid leaf certs still yields TLS failures.
+
+**Step 3 — Conntrack and ports:** Compare `nf_conntrack_count` to `nf_conntrack_max` on gateway-heavy nodes during peak. Check `ss -s` for `TIME_WAIT` saturation on proxies. If counts track mesh rollout timelines, sysctl and scoping fixes precede application profiling.
+
+**Step 4 — Datapath consistency:** Enumerate whether kube-proxy mode matches on all nodes, whether Cilium kube-proxy replacement is enabled everywhere, and whether ambient ztunnel DaemonSets cover all workers scheduled for meshed namespaces. Mixed modes show up as “works on rack A, fails on rack B” patterns.
+
+**Step 5 — Configuration push:** For Istio, `istioctl proxy-status` and `istioctl analyze`; for Linkerd, `linkerd check` and tap; for Cilium, `cilium status` and Hubble flows. Correlate config push delays with etcd or API server latency spikes on bare-metal control planes.
+
+**Step 6 — Observability sanity:** Validate Prometheus scrape targets for proxies are up but cardinality has not exploded. If only legacy dashboards fail while kube-state-metrics is fine, the incident may be storage—not mesh data plane.
+
+Document findings in the incident ticket with layer numbers so post-incident reviews improve runbooks instead of repeating heroics.
+
+---
+
+## Capacity Planning Worksheet—Sidecars, ztunnel, and Observability
+
+Use this worksheet during design reviews; numbers are starting points—replace with your measured profiles on identical hardware.
+
+**Per-node sidecar memory (Istio/Consul Envoy):** estimate `N_pods × 80 MiB` baseline plus 20% headroom for config pushes. A node with 50 meshed pods may need 4–5 GiB just for proxies before application memory.
+
+**Per-node ambient memory:** budget `ztunnel` DaemonSet limits × 1 (one per node) plus waypoints scheduled on that node. Waypoints behave like concentrated Envoy instances—size them like small ingress gateways if many L7 policies attach to the same node.
+
+**CPU for TLS:** 1–2 millicores per idle connection is misleading under burst; measure during peak RPS with hardware crypto acceleration enabled on NICs if available. Bare-metal clusters without AES-NI pay higher CPU tax on mTLS-heavy microservices.
+
+**Ingress gateway replicas:** at minimum two gateway pods on distinct failure domains (racks or power feeds) with MetalLB sharing the same VIP via `externalTrafficPolicy: Local`. Scale gateways horizontally before enlarging single proxy CPU—large single proxies restart slowly during config dumps.
+
+**Prometheus cardinality:** model `active_time_series ≈ pods × ports × labels`. Mesh labels multiply quickly. Remote-write to Thanos or Mimir with downsampling matches Module 5.7 observability guidance for multi-cluster fleets.
+
+**Disk:** Envoy access logs at info level on busy ingress gateways can write hundreds of megabytes per minute to emptyDir volumes—stream logs off-node or disable verbose access logging except during investigations.
+
+Capture worksheet results in your internal architecture decision record so capacity additions (RAM per worker, conntrack sysctl, MetalLB pool size) are funded before mesh enablement—not after the first outage.
+
+**Rolling upgrades across bare-metal racks** should interleave mesh control-plane upgrades with worker drains: never upgrade istiod, identity, and every gateway in the same maintenance window without at least N-1 gateway capacity on surviving racks. For ambient meshes, treat ztunnel upgrades like CNI DaemonSet rollouts—watch new pods become Ready on each node before deleting old ztunnel pods if your platform requires manual validation on strict change boards.
+
+**Change-board language** that helps executives approve sysctl and MetalLB work: “We are not adding a new application; we are making the existing Kubernetes Service type `LoadBalancer` actually receive traffic on physical networks, and we are reserving kernel connection table capacity for the proxies that security policy already mandates.” That framing prevents mesh projects from being deferred as “optional observability” when they are prerequisites for mTLS compliance.
+
+**Lab versus production parity:** kind clusters validate YAML and controller interactions but understate NIC driver performance and conntrack limits. Promote configurations only after a staging rack with the same kernel, CNI, and MetalLB mode as production signs off on the worksheet numbers above.
+
+**Security review checkpoints** before production mesh cutover should include: all meshed namespaces listed, CA rotation owners assigned, break-glass unmeshed namespaces documented, MetalLB pool CIDRs approved by network architects, and firewall rules opened only to gateway node labels—not entire worker subnets. Bare-metal security teams often approve pod CIDRs but forget that VIPs attract north-south traffic to specific nodes that must be hardened like traditional DMZ hosts.
+
+**Performance acceptance tests** should record baseline latency without mesh, with mesh at `PERMISSIVE`, and with `STRICT` mTLS on identical hardware. Publish acceptable overhead thresholds (for example, sub-5% p99 regression on critical payment APIs) so later policy changes do not erode SLOs silently. Include a conntrack utilization graph in the test report—leadership understands “kernel table fullness” better after seeing a correlated spike with mesh enablement.
+
+---
+
+## Common Mistakes
+
+| Mistake | Why it hurts on bare metal | Fix |
+| :--- | :--- | :--- |
+| Leaving ingress `LoadBalancer` Services pending | No cloud controller assigns VIPs; north-south traffic never arrives | Install MetalLB or kube-vip; verify pool CIDRs match ToR routes |
+| Omitting `externalTrafficPolicy: Local` | Extra hops and SNAT hide client IPs from mesh gateways | Set `Local` on ingress Services; balance gateway pods across edge nodes |
+| Ignoring NTP/chrony on workers | mTLS certs appear expired or not yet valid | Monitor clock offset; fix stratum reachability before rotating mesh CAs |
+| Default global sidecar routing | Every proxy learns all services; RAM spikes | Apply Istio `Sidecar` egress scoping; limit export sets in Linkerd |
+| Stacking iptables meshes on eBPF CNIs | Double redirection and dropped packets | Pick Cilium mesh or isolate CNI features per vendor matrix |
+| `nf_conntrack` defaults | Sidecars multiply flows; silent packet drops | Raise `nf_conntrack_max`; shorten `tcp_timeout_time_wait` thoughtfully |
+| Using `replicas: 0` as “cordon” | Stops apps abruptly; not the same as node drain | Use `kubectl cordon` → `drain` → maintenance → `uncordon` |
+| Floating `latest` mesh manifests | Breaks upgrades and voids support matrices | Pin Istio/Linkerd/Cilium/Consul versions to tested combos with K8s **1.35** |
+
+---
+
+## Further Reading (Curriculum Links)
+
+- [Module 3.3: Load Balancing Without Cloud](../module-3.3-load-balancing/) — MetalLB, kube-vip, and kube-proxy modes that precede mesh ingress.
+- [Module 3.5: Cross-Cluster Networking](../module-3.5-cross-cluster-networking/) — Cluster Mesh and tunnels that mesh multi-cluster builds upon.
+- [Module 3.4: DNS & Certificate Infrastructure](../module-3.4-dns-certs/) — Corporate PKI and cert-manager patterns for north-south TLS.
+
+---
+
+## Quiz
+
+### Question 1
+
+You deploy Istio ingress gateways on bare-metal Kubernetes **1.35** with `type: LoadBalancer`, but `EXTERNAL-IP` stays `<pending>` while pods run normally. What is the most direct fix?
 
 <details>
-<summary>Task 1: Bootstrap the Cluster</summary>
+<summary>Answer</summary>
 
-Create a kind cluster. We disable the default CNI to simulate a custom bare-metal network setup.
+Install a bare-metal load balancer implementation such as MetalLB or kube-vip so the Service receives a routable VIP and your ToR switches can forward traffic to gateway nodes. Kubernetes does not provision external load balancers without a controller. Changing mTLS modes or sidecar injection will not assign an IP.
 
-```yaml
-# kind-config.yaml
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-nodes:
-- role: control-plane
-- role: worker
-- role: worker
-```
-
-```bash
-kind create cluster --config kind-config.yaml --name mesh-bm
-kubectl wait --for=condition=ready node --all --timeout=120s
-```
 </details>
 
+### Question 2
+
+After mesh rollout, nodes log `nf_conntrack: table full, dropping packet` during peak traffic. Envoy sidecars are enabled. Which remediation best addresses the root cause?
+
 <details>
-<summary>Task 2: Install MetalLB (The Bare Metal Load Balancer)</summary>
+<summary>Answer</summary>
+
+Sidecars increase connection counts per logical flow, exhausting conntrack buckets. Increase `net.netfilter.nf_conntrack_max` and review timeout sysctl values on workers, combined with Istio `Sidecar` scoping to reduce unnecessary east-west traffic. Scaling application replicas alone does not shrink conntrack entries created by proxies.
+
+</details>
+
+### Question 3
+
+Platform metrics show TLS errors `certificate is not yet valid` on one rack only, while Istiod logs are clean. What bare-metal-specific cause should you investigate first?
+
+<details>
+<summary>Answer</summary>
+
+Clock skew on affected workers. Bare-metal nodes without reliable chrony synchronization drift relative to the certificate issuance clock, causing strict mTLS validation to fail even when the control plane operates correctly. Fix NTP before reissuing certificates.
+
+</details>
+
+### Question 4
+
+You want L7 HTTP routing in Istio ambient mode without injecting Envoy beside every application container. Which component provides L7 policy in the ambient architecture?
+
+<details>
+<summary>Answer</summary>
+
+Waypoint proxies. ztunnel handles L4 mTLS and HBONE encapsulation per node; waypoints apply L7 rules where needed. Skipping waypoints while expecting full HTTP routing yields incomplete policy enforcement.
+
+</details>
+
+### Question 5
+
+A team already runs Cilium in kube-proxy-free eBPF mode with BGP to ToR switches. They plan to add iptables-based Istio sidecars to every pod. What is the primary architectural risk?
+
+<details>
+<summary>Answer</summary>
+
+Conflicting redirection layers (eBPF CNI plus iptables sidecar captures) that increase latency and drop packets. Prefer Cilium Service Mesh or ambient/Istio-CNI combinations validated in the vendor matrix instead of stacking uncoordinated datapaths.
+
+</details>
+
+### Question 6
+
+Linkerd service mirroring is configured between two bare-metal clusters, but imported DNS names never appear. Firewalls allow gateway traffic. What conceptual mistake is most common?
+
+<details>
+<summary>Answer</summary>
+
+Expecting push-based export without completing multicluster link credentials and mirrored service creation on the importing cluster. Mirroring is pull-oriented: ensure the link is established, services are exported, and the importing cluster’s mirror controller is healthy before debugging application pods.
+
+</details>
+
+### Question 7
+
+Ingress logs show all clients as node internal IPs despite MetalLB VIPs working. Which Service field likely needs correction?
+
+<details>
+<summary>Answer</summary>
+
+`externalTrafficPolicy` is probably `Cluster`, causing SNAT through non-gateway nodes. Set `externalTrafficPolicy: Local` on the ingress Service and ensure gateway pods run on nodes receiving ToR traffic for that VIP.
+
+</details>
+
+### Question 8
+
+You must patch worker kernel packages during business hours with minimal mesh disruption. Which sequence is operationally safe?
+
+<details>
+<summary>Answer</summary>
+
+`kubectl cordon NODE`, then `kubectl drain NODE --ignore-daemonsets --delete-emptydir-data`, perform maintenance, verify gateway capacity on remaining nodes, then `kubectl uncordon NODE`. Scaling Deployments to zero is not equivalent to cordon/drain and causes uncontrolled application outages.
+
+</details>
+
+---
+
+## Hands-On Exercise: Mesh Ingress, Linkerd Identity, and Kernel Headroom
+
+Complete all three exercises. Use Kubernetes **1.35** client tooling against clusters pinned to the same minor version. Commands assume `kind`, `kubectl`, `helm`, and `istioctl`/`linkerd` CLIs are installed on your workstation.
+
+- [ ] Exercise 1: Deploy Istio **1.30** ingress on kind with MetalLB and verify north-south routing through the gateway VIP.
+- [ ] Exercise 2: Install Linkerd **2.19** on a separate kind cluster and confirm identity/mTLS between two meshed pods.
+- [ ] Exercise 3: Apply mesh-oriented `sysctl` settings and observe `nf_conntrack` utilization under controlled connection load.
+
+### Exercise 1: Istio Sidecar Ingress with MetalLB on kind
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml
-kubectl wait --namespace metallb-system \
-                --for=condition=ready pod \
-                --selector=app=metallb \
-                --timeout=90s
-```
+cat <<'EOF' > kind-mesh.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: mesh-istio
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+EOF
 
-Determine your Docker bridge IP subnet to configure MetalLB.
+kind create cluster --config kind-mesh.yaml --image kindest/node:v1.35.0
+kubectl wait --for=condition=Ready nodes --all --timeout=180s
+
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.9/config/manifests/metallb-native.yaml
+kubectl wait --namespace metallb-system --for=condition=Available deployment/controller --timeout=180s
+kubectl -n metallb-system rollout status daemonset/speaker --timeout=180s
+```
 
 ```bash
-docker network inspect -f '{{.IPAM.Config}}' kind
-# Output will look like: [{172.18.0.0/16  172.18.0.1 map[]}]
-```
-
-Create the MetalLB IP pool. Replace the IP range with a subset of your Docker network.
-
-```yaml
-# metallb-config-pool.yaml
+KIND_SUBNET_CIDR=$(docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}')
+KIND_PREFIX=$(echo "${KIND_SUBNET_CIDR%/*}" | awk -F. '{print $1 "." $2 "." $3}')
+cat <<EOF | kubectl apply -f -
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
-  name: edge-pool
+  name: mesh-pool
   namespace: metallb-system
 spec:
   addresses:
-  - 172.18.255.200-172.18.255.250 # Adjust to match your kind docker network
-```
-
-```yaml
-# metallb-config-adv.yaml
+    - ${KIND_PREFIX}.200-${KIND_PREFIX}.230
+---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: edge-adv
+  name: mesh-l2
   namespace: metallb-system
+EOF
 ```
-
-```bash
-kubectl apply -f metallb-config-pool.yaml
-kubectl apply -f metallb-config-adv.yaml
-```
-</details>
-
-### Step 3: Install Istio Base and Ingress Gateway
-
-<details>
-<summary>Task 3: Install the Mesh</summary>
-
-We use Helm for production-grade deployments.
 
 ```bash
 helm repo add istio https://istio-release.storage.googleapis.com/charts
 helm repo update
-
-# Install Base (CRDs and ClusterRoles)
-helm install istio-base istio/base -n istio-system --create-namespace --wait
-
-# Install istiod (Control Plane)
-helm install istiod istio/istiod -n istio-system --wait
-
-# Install Ingress Gateway
-helm install istio-ingressgateway istio/gateway -n istio-ingress \
-  --create-namespace \
+helm install istio-base istio/base -n istio-system --create-namespace --version 1.30.0 --wait
+helm install istiod istio/istiod -n istio-system --version 1.30.0 --wait
+helm install istio-ingress istio/gateway -n istio-ingress --create-namespace \
+  --version 1.30.0 \
   --set service.externalTrafficPolicy=Local \
   --wait
-```
 
-Verify the Ingress Gateway received an IP from MetalLB.
+kubectl create namespace demo
+kubectl label namespace demo istio-injection=enabled
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.30/samples/httpbin/httpbin.yaml -n demo
+kubectl wait -n demo --for=condition=Ready pod -l app=httpbin --timeout=180s
+kubectl get pods -n demo
 
-```bash
-kubectl get svc -n istio-ingress
-# EXPECTED: EXTERNAL-IP should be 172.18.255.200
-```
-</details>
-
-<details>
-<summary>Task 4: Enforce Strict mTLS and Deploy an Application</summary>
-
-By default, Istio uses "Permissive" mTLS. On bare metal, enforce Strict mTLS globally to secure the physical wire.
-
-```yaml
-# strict-mtls.yaml
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: default
-  namespace: istio-system
-spec:
-  mtls:
-    mode: STRICT
-```
-
-```bash
-kubectl apply -f strict-mtls.yaml
-```
-
-Create a namespace, label it for sidecar injection, and deploy a test app.
-
-```bash
-kubectl create namespace test-app
-kubectl label namespace test-app istio-injection=enabled
-
-# Deploy httpbin
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/master/samples/httpbin/httpbin.yaml -n test-app
-kubectl wait --namespace test-app --for=condition=ready pod -l app=httpbin --timeout=120s
-```
-
-Verify the sidecar was injected (`2/2` containers).
-
-```bash
-kubectl get pods -n test-app
-# EXPECTED: httpbin-...  2/2  Running
-```
-</details>
-
-### Step 5: Route External Traffic via Gateway
-
-<details>
-<summary>Task 5: Configure the Gateway</summary>
-
-Expose `httpbin` through the bare-metal Ingress Gateway.
-
-```yaml
-# gateway-def.yaml
-apiVersion: networking.istio.io/v1alpha3
+cat <<'EOF' | kubectl apply -f -
+apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: httpbin-gateway
-  namespace: test-app
+  namespace: demo
 spec:
   selector:
-    istio: ingressgateway # Maps to the ingress deployment label
+    istio: ingress
   servers:
-  - port:
-      number: 80
-      name: http
-      protocol: HTTP
-    hosts:
-    - "*"
-```
-
-```yaml
-# virtual-service.yaml
-apiVersion: networking.istio.io/v1alpha3
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*"
+---
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: httpbin
-  namespace: test-app
+  namespace: demo
 spec:
   hosts:
-  - "*"
+    - "*"
   gateways:
-  - httpbin-gateway
+    - httpbin-gateway
   http:
-  - match:
-    - uri:
-        prefix: /status
-    - uri:
-        prefix: /delay
-    route:
-    - destination:
-        port:
-          number: 8000
-        host: httpbin
+    - match:
+        - uri:
+            prefix: /status
+      route:
+        - destination:
+            host: httpbin
+            port:
+              number: 8000
+EOF
+
+INGRESS_IP=$(kubectl -n istio-ingress get svc istio-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl -sS -o /dev/null -w "HTTP %{http_code}\n" "http://${INGRESS_IP}/status/200"
 ```
+
+Expected: httpbin pods show `2/2` containers (app + sidecar). The curl command returns HTTP `200` via the MetalLB-assigned ingress VIP.
+
+### Exercise 2: Linkerd 2.19 Identity on a Dedicated kind Cluster
+
+Linkerd **2.19** maps to the **edge** channel (`edge-25.10.7`); OSS stable install artifacts are deprecated—use `LINKERD2_VERSION` when bootstrapping the CLI.
 
 ```bash
-kubectl apply -f gateway-def.yaml
-kubectl apply -f virtual-service.yaml
+kind create cluster --name mesh-linkerd --image kindest/node:v1.35.0
+kubectl wait --for=condition=Ready nodes --all --timeout=180s
+
+curl -sL https://run.linkerd.io/install | LINKERD2_VERSION=edge-25.10.7 sh
+export PATH=$PATH:$HOME/.linkerd2/bin
+linkerd check --pre
+linkerd install --crds | kubectl apply -f -
+linkerd install | kubectl apply -f -
+linkerd check
+
+kubectl create namespace echo
+kubectl annotate namespace echo linkerd.io/inject=enabled
+kubectl -n echo create deployment a --image=curlimages/curl -- sleep 3600
+kubectl -n echo create deployment b --image=nginxdemos/nginx-hello --port=8080
+kubectl -n echo expose deployment b --port=8080
+kubectl -n echo wait --for=condition=Available deployment/a --timeout=120s
+kubectl -n echo wait --for=condition=Available deployment/b --timeout=120s
+
+linkerd viz install | kubectl apply -f -
+linkerd check
+POD=$(kubectl -n echo get pod -l app=a -o jsonpath='{.items[0].metadata.name}')
+kubectl -n echo exec "$POD" -c curl -- curl -sS -o /dev/null -w "%{http_code}\n" http://b.echo.svc.cluster.local:8080/
 ```
-</details>
 
-<details>
-<summary>Task 6: Verification</summary>
+Expected: meshed pods show proxy containers; `linkerd check` passes; curl from `a` to `b` returns HTTP `200` (nginx-hello demo page) with mTLS established—use `linkerd viz tap deploy/b -n echo` to observe TLS metadata.
 
-Extract the MetalLB IP assigned to the Ingress Gateway and test the routing.
+### Exercise 3: Sysctl and Conntrack Headroom for Mesh Nodes
 
 ```bash
-export INGRESS_IP=$(kubectl get svc istio-ingressgateway -n istio-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+cat <<'EOF' | sudo tee /etc/sysctl.d/99-mesh-bare-metal.conf
+net.netfilter.nf_conntrack_max = 1048576
+net.netfilter.nf_conntrack_tcp_timeout_time_wait = 10
+net.ipv4.ip_local_port_range = 1024 65535
+net.ipv4.tcp_tw_reuse = 1
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+EOF
+sudo sysctl --system
 
-curl -s -I http://$INGRESS_IP/status/200
+sysctl net.netfilter.nf_conntrack_max
+cat /proc/sys/net/netfilter/nf_conntrack_count
 ```
 
-**Expected Output:**
-```http
-HTTP/1.1 200 OK
-server: istio-envoy
-...
+On a worker hosting mesh proxies, compare `nf_conntrack_count` before and after a load test against an in-cluster Service. Document utilization percentage and schedule raises before counts approach `nf_conntrack_max`. Do **not** enable `net.ipv4.tcp_tw_recycle` (removed in modern kernels and unsafe behind NAT).
+
+For maintenance drills on a real node (not kind), practice:
+
+```bash
+NODE=worker-01.example.internal
+kubectl cordon "$NODE"
+kubectl drain "$NODE" --ignore-daemonsets --delete-emptydir-data --timeout=300s
+# perform kernel or NIC maintenance
+kubectl uncordon "$NODE"
 ```
 
-*Troubleshooting:* If `curl` hangs, ensure your host machine has a route to the Docker bridge network. If you receive a `404 Not Found` from `istio-envoy`, verify the `Gateway` selector matches the labels on the `istio-ingressgateway` Pods.
-</details>
+### Exercise 1 troubleshooting notes
 
-## Quiz
+If `curl` to the ingress VIP hangs from your laptop but works inside the cluster, your workstation may lack routes to the kind Docker subnet—add a host route or run curl from a pod on the cluster network. If Envoy returns `404`, verify the `Gateway` selector `istio: ingress` matches labels on the gateway deployment installed by the `istio/gateway` Helm release `istio-ingress` (chart **1.30.0** trims the release prefix and labels pods `istio: ingress`). If MetalLB never assigns an IP, confirm the `IPAddressPool` range sits inside the docker `kind` network CIDR discovered earlier.
 
-<details>
-<summary>1. You operate a bare-metal Kubernetes cluster with 500 nodes and thousands of microservices. You notice that nodes are randomly dropping incoming packets, and kernel logs show `nf_conntrack: table full, dropping packet`. You recently deployed an Envoy-based service mesh. What is the most direct cause and resolution?</summary>
-A) Envoy proxies require eBPF; you must upgrade the kernel and switch to Cilium.
-B) Envoy memory limits are too low; increase the container resources for the sidecar proxy.
-C) The mesh Ingress Gateway is missing an `ExternalTrafficPolicy: Local` configuration, causing infinite routing loops.
-D) Sidecars double the number of TCP connections on the node; increase `net.netfilter.nf_conntrack_max` via sysctl.
+### Exercise 2 troubleshooting notes
 
-**Answer:** D
-**Why:** Sidecars double the number of TCP connections on the node because they intercept and relay all traffic. This rapid increase exhausts the default connection tracking limits. You must increase `net.netfilter.nf_conntrack_max` via sysctl to accommodate the higher connection density.
-</details>
+`linkerd check` failures often trace to missing `kube-api-access` or CoreDNS not ready on fresh kind clusters—wait for node Ready before install. If curl between deployments fails, confirm both deployments live in a namespace with `linkerd.io/inject=enabled` and that proxies appear beside application containers. Multicluster mirroring is out of scope for this exercise but uses the same bare-metal VIP constraints when you extend the lab.
 
-<details>
-<summary>2. You are tasked with exposing a newly deployed Istio Ingress Gateway on a bare-metal cluster. After applying the `type: LoadBalancer` Service, you notice it remains in a `<pending>` state and external clients cannot reach the mesh. Which action will resolve this issue?</summary>
-A) Deploy MetalLB or Kube-VIP to provision a routable IP and announce it via BGP.
-B) Change the Service type to `ClusterIP` and rely on `kube-proxy` for external routing.
-C) Enforce `mtls.mode: STRICT` in the `PeerAuthentication` policy.
-D) Inject an Envoy sidecar into the Top-of-Rack switch.
+### Exercise 3 interpretation guide
 
-**Answer:** A
-**Why:** A standard Kubernetes `Service` of `type: LoadBalancer` will indefinitely pend on bare metal without a controller. Deploying an IP address management solution like MetalLB or Kube-VIP provisions the IP and handles the network announcements necessary to attract physical traffic into the cluster.
-</details>
+Sustained `nf_conntrack_count` above 70% of `nf_conntrack_max` under normal load—not during a synthetic stress test—signals you should raise limits or reduce mesh connection fan-out before production promotion. Combine sysctl changes with application keep-alive tuning; long-lived gRPC streams through double sidecars multiply entries differently than short HTTP/1.1 calls.
 
-<details>
-<summary>3. Your team is migrating from an iptables-based sidecar mesh to an eBPF-based sidecarless architecture to reduce latency on a bare-metal cluster. You notice that running `iptables-save` on the worker nodes no longer shows the `ISTIO_REDIRECT` chains. How can you verify that pod traffic is still being intercepted and routed to the node proxy?</summary>
-A) Check for init containers in the application Pods that inject network namespace rules.
-B) Inspect the physical Top-of-Rack switch to ensure traffic is being hairpinned back to the node.
-C) Use `bpftool` to verify that kernel sockets are attached to an eBPF `sockmap` program.
-D) Verify that the application was recompiled using a specialized mesh SDK.
+---
 
-**Answer:** C
-**Why:** Modern sidecarless architectures utilize eBPF to attach programs directly to kernel sockets. By using `sockmap` and `sk_msg`, traffic bypasses the heavy `iptables` rule processing entirely. Therefore, checking eBPF maps with `bpftool` is the correct way to verify interception.
-</details>
+## Learner Check
 
-<details>
-<summary>4. A developer reports that their newly deployed Pod cannot communicate with any other services in the cluster. You check the Pod and see `istio-proxy` running. Using `kubectl logs`, you observe repeated `tls: certificate has expired or is not yet valid` errors. What is the most likely bare-metal specific root cause?</summary>
-A) The Istio control plane (istiod) Pod has crashed and cannot distribute new certificates.
-B) The bare-metal node hosting the Pod has lost NTP synchronization, and its local clock has drifted significantly.
-C) The developer forgot to create an Istio `VirtualService` for their application.
-D) The cluster's MetalLB address pool is exhausted and cannot assign an IP to the Pod.
+Before closing the module, confirm you can explain—in your own words—how traffic crosses the physical boundary from a ToR switch into a meshed pod without cloud load balancers, how ambient ztunnel differs from a classic sidecar hop, and which three kernel or time-sync signals you would check first when mTLS fails only on one rack. If any answer hand-waves “the mesh is broken,” revisit Sections 2, 7, and the troubleshooting playbook until the layers are separable.
 
-**Answer:** B
-**Why:** Bare-metal nodes do not benefit from hypervisor-level time synchronization. If a node loses NTP synchronization, its local clock drifts, causing the strictly validated mTLS certificates issued by the control plane to be seen as invalid or expired by the receiving sidecars.
-</details>
+> **Pause and predict**: Your bare-metal fleet runs Kubernetes **1.35** with MetalLB BGP mode and Istio ambient ztunnel. North-south latency is acceptable, but east-west HTTP retries spike after Cilium kube-proxy replacement was enabled on half the workers only. Which three configuration layers would you compare before blaming application code—and why? Start with whether kube-proxy replacement is consistent on every node, because mixed IPVS/iptables and eBPF paths split conntrack behavior. Next compare Istio ambient redirection with Cilium eBPF programs for mark and cgroup conflicts. Finally verify chrony offsets and certificate lifetimes, because partial upgrades often coincide with maintenance windows that disturb NTP on unmaintained racks.
 
-<details>
-<summary>5. After deploying an Ingress Gateway on your bare-metal cluster, backend services report that all incoming requests appear to originate from internal node IPs rather than the actual external client IPs. This is breaking your rate-limiting logic. How do you ensure the original client IP is preserved?</summary>
-A) Force the Ingress Gateway to use eBPF instead of iptables.
-B) Encrypt traffic between the Top-of-Rack switch and the bare-metal node.
-C) Set `externalTrafficPolicy: Local` on the Ingress Service so the ToR switch only routes to nodes hosting the Gateway Pod.
-D) Remove the MetalLB configuration and use `HostNetwork: true` on the Gateway deployment.
+---
 
-**Answer:** C
-**Why:** It ensures traffic is only routed to nodes hosting the Gateway Pod, preserving the client source IP and avoiding extra network hops. If omitted, traffic arriving at any node will be SNAT'd and forwarded internally, adding latency and masking the true origin IP.
-</details>
+## Next Module
 
-## Further Reading
+Return to the [Networking track overview](../) to review the full bare-metal networking sequence from datacenter design through cross-cluster connectivity and mesh operations.
 
-*   [Istio Documentation: Resource Limits and Sidecar Configurations](https://istio.io/latest/docs/reference/config/networking/sidecar/)
-*   [Cilium Service Mesh: eBPF Data Plane](https://docs.cilium.io/en/stable/network/servicemesh/)
-*   [MetalLB Documentation: BGP Configuration](https://metallb.universe.tf/configuration/)
-*   [Linkerd: Strict mTLS and Identity](https://linkerd.io/2.14/features/automatic-mtls/)
-*   [Istio Ambient Mesh Architecture](https://istio.io/latest/docs/ops/ambient/architecture/)
+---
 
-[Related Module: Cross-Cluster Networking](/on-premises/networking/module-3.5-cross-cluster-networking/) -> Discover how to bridge isolated bare-metal environments and connect services across clusters.
+## Sources
+
+- https://istio.io/latest/docs/releases/supported-releases/
+- https://istio.io/latest/docs/ops/ambient/architecture/
+- https://istio.io/latest/docs/ops/ambient/getting-started/
+- https://istio.io/latest/docs/reference/config/networking/sidecar/
+- https://linkerd.io/2.19/overview/
+- https://linkerd.io/2.19/features/automatic-mtls/
+- https://linkerd.io/2.19/tasks/multicluster/
+- https://linkerd.io/2.19/tasks/install-helm/
+- https://docs.cilium.io/en/stable/network/servicemesh/
+- https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/
+- https://developer.hashicorp.com/consul/docs/connect
+- https://developer.hashicorp.com/consul/docs/connect/ca
+- https://metallb.universe.tf/configuration/
+- https://kubernetes.io/docs/concepts/services-networking/service/
+- https://kubernetes.io/docs/reference/networking/virtual-ips/
+- https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/
+- https://www.envoyproxy.io/docs/envoy/latest/intro/intro
+
+---
+
+## Closing Notes
+
+Service mesh on bare metal is primarily a platform integration discipline: VIPs, kernel tables, clocks, and CNI datapaths must be correct before Envoy or ztunnel configuration matters. Treat mesh projects as extensions of Modules 3.3 and 3.5 rather than isolated security add-ons, and pin versions against Kubernetes **1.35** support matrices for every component you deploy. When in doubt, measure conntrack and clock skew before rewriting VirtualServices—the physical layer still wins arguments on bare metal. Keep a printed sysctl snippet with your MetalLB pool diagram in the on-call runbook so midnight responders do not guess kernel limits under pressure.
