@@ -354,7 +354,7 @@ ip -br addr
 ip route
 resolvectl status 2>/dev/null || cat /etc/resolv.conf
 ping -c 2 "$(grep nameserver /etc/resolv.conf | awk 'NR==1{print $2}')"
-curl -sI <https://docs.openstack.org/> | head -3
+curl -sI https://docs.openstack.org/ | head -3
 ```
 
 - [ ] I verified default gateway and MTU on the node NIC match the network design diagram.
@@ -371,6 +371,8 @@ Failures here predict kubelet join errors and ImagePullBackOff long before CSI o
 
 Provision one control plane VM with Vagrant libvirt or an OpenStack DevStack instance, then initialize Kubernetes 1.35.
 
+**Prerequisite (Ubuntu 24.04 hosts):** On a fresh `generic/ubuntu2404` guest, disable swap, load `br_netfilter` with forwarding sysctl, and configure containerd for `SystemdCgroup = true` before `kubeadm init` ([kubeadm install checklist](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)).
+
 ```bash
 # Example Vagrantfile snippet (libvirt):
 # Vagrant.configure("2") do |config|
@@ -382,19 +384,29 @@ Provision one control plane VM with Vagrant libvirt or an OpenStack DevStack ins
 # end
 # vagrant up && vagrant ssh
 
+sudo swapoff -a && sudo sed -i '/ swap / s/^/#/' /etc/fstab
+sudo modprobe br_netfilter
+echo 'net.bridge.bridge-nf-call-iptables=1' | sudo tee -a /etc/sysctl.d/k8s.conf
+echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.d/k8s.conf
+sudo sysctl --system
+
 sudo apt-get update
 sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.35/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.35/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y containerd kubelet kubeadm kubectl
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 mkdir -p "$HOME/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
 sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 kubectl get nodes
-kubectl apply -f <https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml>
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 ```
 
 - [ ] I initialized a control plane VM on libvirt or OpenStack and joined nothing else yet.
