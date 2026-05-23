@@ -133,7 +133,7 @@ A `ManifestWork` wraps one or more Kubernetes manifests as JSON inside a hub-sid
 
 ### Placement and PlacementDecision
 
-`Placement` defines label selectors, cluster claims, and prioritizer scores to choose targets dynamically. A `PlacementBinding` connects policies or ManifestWork templates to that Placement. The scheduler writes a `PlacementDecision` listing chosen clusters. When a new bare-metal cluster registers with labels `gpu=true` and `region=eu`, the next reconciliation automatically includes it in matching placements without editing application manifests. This dynamic targeting is the core reason many on-premises teams adopt OCM instead of static Argo CD Application lists.
+`Placement` defines label selectors, cluster claims, and prioritizer scores to choose targets dynamically. The scheduler writes a `PlacementDecision` listing chosen clusters. OCM splits binding APIs by domain: in the **governance** domain, `PlacementBinding` binds a `Placement` to a `Policy` or `PolicySet` only. In the **work-distribution** domain, `ManifestWorkReplicaSet` fans out `ManifestWork` objects to clusters via `spec.placementRefs` that reference a `Placement`—not through `PlacementBinding`. When a new bare-metal cluster registers with labels `gpu=true` and `region=eu`, the next reconciliation automatically includes it in matching placements without editing application manifests. This dynamic targeting is the core reason many on-premises teams adopt OCM instead of static Argo CD Application lists.
 
 ```yaml
 apiVersion: cluster.open-cluster-management.io/v1beta1
@@ -399,7 +399,7 @@ Adopt a **pull-based** architecture using Open Cluster Management Klusterlets or
 
 <details><summary>Question 2: How do you implement dynamic targeting so GPU workloads deploy only to EU bare-metal clusters without naming each cluster in Git?</summary>
 
-Create an Open Cluster Management **Placement** on the hub with label selectors for `region=eu` and cluster claims or labels indicating GPU capacity, then bind ManifestWorks or policies through **PlacementBinding**. The scheduler writes a **PlacementDecision** listing matching ManagedClusters whenever membership changes. Hardcoding cluster names in Argo CD Application lists does not scale and misses newly registered factories that already carry the correct labels.
+Create an Open Cluster Management **Placement** on the hub with label selectors for `region=eu` and cluster claims or labels indicating GPU capacity. Bind **Policy** or **PolicySet** objects to that Placement with **PlacementBinding** (governance domain). Fan out **ManifestWork** payloads with **ManifestWorkReplicaSet** `placementRefs` pointing at the same Placement (work-distribution domain)—not PlacementBinding. The scheduler writes a **PlacementDecision** listing matching ManagedClusters whenever membership changes. Hardcoding cluster names in Argo CD Application lists does not scale and misses newly registered factories that already carry the correct labels.
 
 </details>
 
@@ -461,8 +461,11 @@ kubectl get pods -n open-cluster-management
 JOIN_CMD="$(clusteradm get token | tail -1)"
 HUB_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' fleet-hub-control-plane)"
 kubectl config use-context kind-fleet-spoke
-eval "${JOIN_CMD//<hub-api-server>/${HUB_IP}:6443}"
-eval "${JOIN_CMD//<cluster_name>/fleet-spoke}"
+# clusteradm prints placeholders like <hub-api-server>; never eval that raw string (<...> are shell redirects)
+JOIN_READY="$(printf '%s' "$JOIN_CMD" | sed \
+  -e "s|<hub-api-server>|${HUB_IP}:6443|g" \
+  -e 's|<cluster_name>|fleet-spoke|g')"
+eval "$JOIN_READY"
 kubectl config use-context kind-fleet-hub
 clusteradm accept --clusters fleet-spoke
 kubectl get managedclusters
@@ -513,7 +516,21 @@ If join fails, verify the hub API IP reachable from the spoke container network 
 
 ### Exercise 2: Configure a Fleet GitRepo Manifest for Baseline Bundles
 
-Write and validate a Fleet GitRepo custom resource and fleet.yaml bundle definition without requiring a full Rancher install.
+Read the GitRepo manifest below, then author matching files locally and validate YAML syntax without a cluster or Fleet CRDs installed.
+
+```yaml
+# GitRepo — Fleet clones repo paths and renders bundles on the management cluster
+apiVersion: fleet.cattle.io/v1alpha1
+kind: GitRepo
+metadata:
+  name: platform-baseline
+  namespace: fleet-default
+spec:
+  repo: https://github.com/rancher/fleet-examples
+  branch: master
+  paths:
+    - multi-cluster/helm
+```
 
 ```bash
 mkdir -p /tmp/fleet-lab/baseline
@@ -541,24 +558,60 @@ spec:
   paths:
     - multi-cluster/helm
 EOF
-kubectl apply --dry-run=client -f /tmp/fleet-lab/gitrepo.yaml
+python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/gitrepo.yaml'))" && echo "GitRepo YAML OK"
+python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/baseline/fleet.yaml'))" && echo "fleet.yaml OK"
 grep -E 'kind:|repo:|paths:' /tmp/fleet-lab/gitrepo.yaml
 grep -E 'targetCustomizations|clusterSelector' /tmp/fleet-lab/baseline/fleet.yaml
 ```
 
-- [ ] GitRepo manifest passes client-side dry-run validation
+- [ ] Both YAML files parse cleanly with local `python3` YAML validation (no cluster required)
 - [ ] fleet.yaml defines bundle namespace and targetCustomizations with clusterSelector
-- [ ] Documented which paths Fleet would clone from the example repository
+- [ ] You can state which paths Fleet would clone from the example repository and which clusters `env: production` selects
 
 <details><summary>Expected analysis</summary>
 
-Dry-run proves API shape even without Fleet controllers installed. Production installs add agents on spokes and create BundleDeployments after GitRepo reconciliation. Compare your fleet.yaml selectors to labels you will set on bare-metal clusters during bootstrap.
+Local YAML parsing confirms structure without Fleet CRDs or API discovery. In production, Fleet controllers reconcile GitRepo into BundleDeployments on matching clusters. Compare your fleet.yaml selectors to labels you will set on bare-metal clusters during bootstrap.
 
 </details>
 
 ### Exercise 3: Configure an Argo CD ApplicationSet Matrix Generator
 
-Render an ApplicationSet that combines Git directories with cluster labels to show fleet-wide GitOps scaling patterns.
+Study the ApplicationSet below, recreate it locally, and validate YAML syntax without Argo CD CRDs or a live cluster.
+
+```yaml
+# ApplicationSet — matrix of list × cluster generators
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: fleet-demo
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - app: prometheus
+                - app: fluent-bit
+          - clusters:
+              selector:
+                matchLabels:
+                  env: production
+  template:
+    metadata:
+      name: '{{.app}}-{{.name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/argoproj/argocd-example-apps
+        targetRevision: HEAD
+        path: guestbook
+      destination:
+        server: '{{.server}}'
+        namespace: '{{.app}}'
+```
 
 ```bash
 mkdir -p /tmp/appset-lab
@@ -595,18 +648,18 @@ spec:
         server: '{{.server}}'
         namespace: '{{.app}}'
 EOF
-kubectl apply --dry-run=client -f /tmp/appset-lab/appset.yaml
+python3 -c "import yaml; yaml.safe_load(open('/tmp/appset-lab/appset.yaml'))" && echo "ApplicationSet YAML OK"
 grep -c 'generators:' /tmp/appset-lab/appset.yaml
 grep 'matchLabels' /tmp/appset-lab/appset.yaml
 ```
 
-- [ ] ApplicationSet manifest passes client-side dry-run validation
+- [ ] ApplicationSet YAML parses locally with `python3` (no cluster or Argo CD install required)
 - [ ] Matrix generator combines list and cluster generators in one spec
-- [ ] Template uses goTemplate fields for name, server, and namespace
+- [ ] You can predict Application names for two `env: production` clusters (four Applications total)
 
 <details><summary>Expected analysis</summary>
 
-Client dry-run validates schema; full reconciliation requires Argo CD with registered cluster secrets. At fleet scale, replace the list generator with a Git directory generator scanning monorepo paths. Watch application-controller memory when cluster count grows.
+Local YAML validation avoids kubectl API discovery, which fails without Argo CD CRDs. Full reconciliation requires Argo CD with registered cluster secrets. At fleet scale, replace the list generator with a Git directory generator scanning monorepo paths. Watch application-controller memory when cluster count grows.
 
 </details>
 
@@ -630,7 +683,7 @@ Continue to [Module 5.5: Active-Active Multi-Site](../module-5.5-active-active-m
 
 ## Sources
 
-- https://open-cluster-management.io/concepts/
+- https://open-cluster-management.io/docs/concepts/
 - https://open-cluster-management.io/docs/getting-started/quick-start/
 - https://fleet.rancher.io/ref-gitrepo
 - https://fleet.rancher.io/ref-bundle
@@ -640,7 +693,7 @@ Continue to [Module 5.5: Active-Active Multi-Site](../module-5.5-active-active-m
 - https://karmada.io/docs/core-concepts/concepts/
 - https://karmada.io/docs/userguide/scheduling/propagation-policy/
 - https://kubernetes.io/docs/concepts/cluster-administration/manage-deployment/
-- https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl/
+- https://kubernetes.io/docs/setup/
 - https://github.com/open-cluster-management-io/clusteradm
 - https://github.com/rancher/fleet
 - https://github.com/argoproj-labs/argocd-agent
