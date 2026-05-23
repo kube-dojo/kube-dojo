@@ -25,7 +25,7 @@ def _hermes_binary() -> str:
     return (
         os.environ.get("KUBEDOJO_HERMES_CMD")
         or shutil.which("hermes")
-        or "/Users/krisztiankoos/.local/bin/hermes"
+        or str(Path.home() / ".local" / "bin" / "hermes")
     )
 
 
@@ -34,6 +34,8 @@ def _detect_provider(model: str) -> str:
     override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
     if override:
         return override
+    if model.startswith("openrouter/"):
+        return "openrouter"
     if model.startswith("claude-"):
         return "anthropic"
     if model.startswith("grok-"):

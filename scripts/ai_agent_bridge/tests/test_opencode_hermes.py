@@ -31,6 +31,16 @@ def test_hermes_provider_auto_detection(
     assert _hermes._detect_provider("claude-sonnet-4-6") == "local-test"
 
 
+def test_openrouter_prefix_routes_to_openrouter() -> None:
+    from scripts.ai_agent_bridge._hermes import _detect_provider
+
+    assert (
+        _detect_provider("openrouter/anthropic/claude-opus-4-6")
+        == "openrouter"
+    )
+    assert _detect_provider("openrouter/qwen/qwen3.7-max") == "openrouter"
+
+
 def test_opencode_command_construction(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
