@@ -6,785 +6,554 @@ sidebar:
   order: 5
 ---
 
-# Module 4.4: Supply Chain Threats
+> **Complexity**: `[MEDIUM]` - threat modeling, evidence design, and Kubernetes policy enforcement.
+>
+> **Time to Complete**: 70-85 minutes.
+>
+> **Prerequisites**: [Module 4.3: Container Escape](../module-4.3-container-escape/), container image basics, CI/CD vocabulary, and basic Kubernetes admission control terminology.
+>
+> **Kubernetes target**: 1.35+. All command examples use the full `kubectl` binary name.
 
-Complexity: `[MEDIUM]` - threat awareness and control design. Time to complete: 55-70 minutes. Prerequisites: [Module 4.3: Container Escape](../module-4.3-container-escape/). All cluster commands assume Kubernetes 1.35+ and use the full `kubectl` command name.
+---
 
 ## Learning Outcomes
 
 After completing this module, you will be able to:
 
-- **Diagnose** supply chain attack vectors across base images, dependencies, CI/CD, and registries.
-- **Evaluate** image provenance signing and SLSA evidence before Kubernetes admission.
-- **Assess** CI/CD pipeline trust boundaries, secret exposure, and build isolation controls.
-- **Implement** admission policies that require trusted registries, signed images, and pinned digests.
+- **Map** the Kubernetes software supply chain from source commit to running Pod and identify where tampering, tag mutation, dependency confusion, or registry compromise can occur.
+- **Evaluate** SBOMs, image signatures, SLSA provenance, and in-toto attestations as complementary evidence instead of interchangeable security labels.
+- **Design** Kubernetes admission policies that enforce trusted registries, digest pinning, signed images, and provenance requirements without blocking emergency response.
+- **Diagnose** CI/CD and GitOps weaknesses that allow compromised actions, maintainers, build runners, or deployment repositories to create trusted-looking artifacts.
+- **Implement** hands-on checks for SBOM generation, image signing, vulnerability scanning, and admission policy enforcement using Syft, Cosign, Trivy, and Kyverno.
 
 ## Why This Module Matters
 
-In March 2024, a Microsoft engineer noticed that SSH logins on his Debian workstation were 500 milliseconds slower than usual. He traced the latency to liblzma, a compression library, and found obfuscated machine code embedded in the XZ Utils release tarball — code not present in the project's git repository. The maintainer who had landed the change had spent two years patiently earning the trust required to commit it; the backdoor was designed to intercept SSH authentication at the dynamic linker level before any application code ran. The compromise did not begin with a noisy exploit against a public service; it began upstream, inside the process that produced software everyone already trusted.
+In March 2024, the XZ Utils incident showed how close a patient upstream compromise could come to ordinary Linux systems. The public CVE record for [CVE-2024-3094](https://cveawg.mitre.org/api/cve/CVE-2024-3094) describes malicious code in the upstream xz release tarballs for versions 5.6.0 and 5.6.1, and CISA told affected users to downgrade to an uncompromised version while distributions investigated the exposure. The lesson for Kubernetes operators is not that one compression library matters more than every other dependency. The lesson is that clusters run artifacts assembled from many upstream decisions, and a cluster cannot infer that history from a Pod manifest alone.
 
-Kubernetes makes that pattern more dangerous because clusters are designed to turn artifacts into running workloads quickly. A deployment controller does not ask whether an image tag moved last night, whether a package manager resolved an internal dependency from a public registry, or whether the CI runner that signed the artifact was isolated from untrusted pull requests. It sees a Pod specification, asks the registry for bytes, and schedules the workload if policy allows it. Supply chain security is the discipline of making those bytes explain where they came from before the cluster gives them CPU, network, secrets, and service account identity.
+Kubernetes makes supply chain mistakes operationally expensive because it automates trust at scale. A Deployment references an image; the kubelet pulls the image; the controller keeps the desired replica count alive; the service account, network policy, and secrets attached to the workload shape what the code can reach. If a compromised build pipeline signs a malicious image, or a GitOps repository accepts a mutated tag, the cluster may faithfully run attacker-controlled code while every runtime control sees a normal workload. Supply chain security is the discipline of forcing artifacts to carry evidence before the cluster gives them CPU, network, secrets, and identity.
 
-This module teaches supply chain threats as a sequence of trust decisions rather than as a list of tools. You will start with the path from developer workstation to cluster, then examine base image attacks, dependency confusion, pipeline tampering, registry compromise, SBOMs, signing, provenance, and admission control. The goal is not to memorize product names for the KCSA exam; the goal is to build the habit of asking which actor created an artifact, which system verified it, and which Kubernetes control stops it when the answer is weak.
+The KCSA objective is not asking you to become a cryptographer or a registry maintainer. It is asking whether you can reason about the path from source to runtime, recognize common attack vectors, and name defensive controls that fit Kubernetes. This module treats supply chain security as an evidence chain: source review, dependency resolution, build isolation, image identity, registry integrity, signing, provenance, admission policy, and runtime detection. If one link is missing, you should be able to explain what attack becomes easier and which operational control would reduce the blast radius.
 
-## What Is a Supply Chain Attack?
+## 1. Define the Kubernetes Supply Chain
 
-A supply chain attack compromises something that defenders are trained to trust. In a Kubernetes environment, that trusted thing might be a base image, an open source package, a build script, a CI runner, a registry tag, an image signature, or a deployment manifest generated by a GitOps controller. The attack is effective because it arrives before runtime detection begins. If a backdoor is added during the build, runtime controls may only see a normal container starting from an approved namespace with an expected service account.
+A Kubernetes supply chain is the full set of people, systems, packages, credentials, and automation that turn source material into a running workload. It includes the application repository, base images, language packages, Helm charts, operators, CI actions, build runners, artifact registries, GitOps controllers, deployment manifests, admission webhooks, and runtime inventory. This broad definition matters because attackers do not need to defeat Kubernetes directly if they can compromise something Kubernetes is configured to trust.
 
-The simplest way to reason about the problem is to draw the route an artifact takes. The diagram below is intentionally basic, but it captures the most important mental model: every arrow is a handoff, and every handoff is a place where trust can be confused. A team that only scans images after they land in a registry is protecting one handoff. A mature team protects the source, the dependencies, the build environment, the artifact store, and the cluster admission boundary.
+The most useful mental model is a route map with a question at every handoff. Source asks who changed the code and whether review rules were enforced. Dependencies ask which package names, versions, hashes, and registries were resolved. The build asks which workflow and runner produced the image. The registry asks whether a tag points to the same immutable digest as yesterday. Admission asks whether the digest has the expected signatures and attestations. Runtime asks whether the running Pod still matches the evidence that was accepted at deploy time.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              SUPPLY CHAIN ATTACK DEFINED                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  LEGITIMATE SUPPLY CHAIN:                                  │
-│  Developer → Code → Build → Image → Registry → Cluster     │
-│      ✓        ✓       ✓       ✓        ✓          ✓       │
-│                                                             │
-│  SUPPLY CHAIN ATTACK:                                      │
-│  Any point in the chain can be compromised                 │
-│                                                             │
-│  Developer → Code → Build → Image → Registry → Cluster     │
-│      ✓        ✓       ✓       ✓        ✓          ✓       │
-│              ↑                  ↑                           │
-│           Malicious          Tampered                      │
-│          dependency          image                         │
-│                                                             │
-│  IMPACT:                                                   │
-│  • Malicious code runs with full trust                    │
-│  • Bypasses runtime security controls                      │
-│  • Can affect many clusters/organizations                  │
-│  • Difficult to detect                                     │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    source[Source repo\ncommits and reviews] --> deps[Dependencies\npackages and base images]
+    deps --> build[Build system\nCI runner and workflow]
+    build --> registry[Registry\nOCI image and metadata]
+    registry --> gitops[GitOps or release repo\nHelm and manifests]
+    gitops --> admission[Kubernetes admission\npolicy decision]
+    admission --> runtime[Runtime\nPod, identity, network]
+
+    source -. "compromised account\nor review bypass" .-> build
+    deps -. "typosquatting\ndependency confusion" .-> build
+    build -. "secret exposure\nmalicious action" .-> registry
+    registry -. "tag mutation\nunauthorized push" .-> admission
+    gitops -. "chart or operator drift" .-> admission
+    admission -. "policy gap\nfail-open webhook" .-> runtime
 ```
 
-Notice that the attacker does not need cluster-admin if the organization has already automated the path from merge to production. A stolen package token can alter a dependency, a weak branch protection rule can merge a malicious workflow, and a registry credential can replace an image behind a familiar tag. The cluster may be perfectly patched and still run malicious code because the failure happened earlier in the lifecycle. That is why supply chain controls must connect evidence from source, build, registry, and admission instead of treating each tool as a separate checkbox.
+Notice that the artifact changes form along the route. A developer thinks in commits and pull requests. A package manager thinks in names, versions, registry URLs, and hashes. A container registry thinks in tags, manifests, layers, signatures, and attestations. Kubernetes thinks in PodSpecs and image references. A strong platform links those views with stable identifiers, especially commit SHAs and image digests, so an incident responder can move from a running Pod back to the exact source and build that produced it.
 
-Pause and predict: if a team permits only images from `registry.example.com` but does not verify who built those images, what happens after an attacker steals a registry push token? The policy still blocks random public images, which is useful, but it does not distinguish a legitimate CI-built artifact from a manually pushed backdoor. This is the difference between checking the address on a package and checking the tamper-evident seal plus the shipping record.
+Kubernetes image references are a good example of this distinction. The official Kubernetes documentation explains that tags are movable labels while digests identify immutable image content; when both a tag and digest are present, the digest is what Kubernetes uses for pulling. A manifest that says `ghcr.io/example/api:v1.2.3` depends on the registry's current answer for that tag. A manifest that says `ghcr.io/example/api@sha256:...` identifies exact content, which is why digest-based deployment is a foundation for signing, provenance, and reliable rollback.
 
-## Attack Vectors from Source to Cluster
+Supply chain controls are also scoped differently. A vulnerability scanner can tell you whether a known vulnerable package appears in an image, but it cannot prove that the image came from an approved workflow. A signature can prove that a trusted identity signed a digest, but it cannot prove that the code was reviewed or free of known vulnerabilities. A SLSA provenance statement can describe how the artifact was built, but it still needs a policy engine to decide whether that builder is allowed for that namespace. Treat each control as one piece of evidence, not as a universal answer.
 
-Base image attacks are attractive because many application teams inherit huge amounts of software from a single `FROM` line. A base image contains an operating system filesystem, libraries, package manager metadata, certificates, shells, and sometimes debugging tools that never need to exist in production. If that image is misspelled, abandoned, overwritten, or maintained by a compromised account, every downstream image can inherit the problem. Kubernetes does not know whether a layer came from a careful vendor release or a typosquatted registry namespace; it only receives an image reference and asks the runtime to pull it.
+The Kubernetes-specific attack surface extends beyond application images. Helm charts can render privileged workloads or unexpected RBAC. Operators can reconcile new objects continuously after a one-time admission decision. GitOps repositories can become the real production control plane if every merged manifest is applied automatically. Base images and sidecars can carry shells, package managers, credential helpers, and debugging tools that do not belong in production. The exam may ask for broad concepts, but real clusters require you to inventory all of these inputs.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              BASE IMAGE ATTACKS                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  TYPOSQUATTING                                             │
-│  ├── Create: ngimx/nginx (misspelled)                      │
-│  ├── User mistypes: pulls malicious image                  │
-│  └── Contains: Backdoor, cryptominer, etc.                 │
-│                                                             │
-│  COMPROMISED MAINTAINER                                    │
-│  ├── Attacker gains access to image maintainer             │
-│  ├── Pushes malicious update                               │
-│  └── All users pulling :latest get backdoor                │
-│                                                             │
-│  ABANDONED IMAGES                                          │
-│  ├── Popular image stops being maintained                  │
-│  ├── Vulnerabilities accumulate                            │
-│  └── No security patches available                         │
-│                                                             │
-│  MITIGATION:                                               │
-│  • Use official/verified images only                       │
-│  • Pin to digest, not tag                                  │
-│  • Scan all images before use                              │
-│  • Build your own base images                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+Pause and predict: if a team requires images to come from `registry.internal.example` but does not require digests, signatures, or provenance, what happens after an attacker steals a registry push token? The policy still blocks random public images, which is useful, but it may accept a malicious image pushed to the trusted registry under a familiar tag. Registry allow-lists reduce exposure; they do not prove that the artifact was built by the trusted pipeline.
+
+## 2. Real Incidents and What They Teach
+
+The supply chain incidents most relevant to Kubernetes share one property: the compromised component looked normal to downstream automation. [SolarWinds](https://www.cisa.gov/news-events/alerts/2021/01/07/supply-chain-compromise) is the foundational enterprise example because trusted software updates carried attacker-controlled code into customer environments. [3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp) showed a user-facing desktop application being trojanized and distributed through a vendor's normal channel. These cases are outside Kubernetes, but they explain why artifact provenance matters before software reaches a cluster.
+
+The XZ Utils incident is especially useful for cloud-native learners because it separates the source repository from the release artifact. The CVE record says the malicious code appeared in upstream tarballs and modified the liblzma build process through obfuscated steps. That pattern matters for containers because an image build often starts from published release archives, package repositories, or base layers rather than from a repository that your team reviews directly. If your evidence chain begins only after the image is built, you may miss compromise that occurred before the Dockerfile ran.
+
+GitHub Actions incidents make the problem more immediate for CI/CD. CISA's alert for [tj-actions/changed-files, CVE-2025-30066](https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction), describes a compromised third-party action that exposed secrets in workflow logs and was later added to the Known Exploited Vulnerabilities Catalog. The GitHub Advisory Database entry [GHSA-mrrh-fwg8-r2c3](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3) identifies affected versions through 45.0.7 and patched version 46.0.1. For Kubernetes teams, the prescriptive lesson is to pin actions to reviewed full commit SHAs, scope workflow permissions, avoid broad secrets on untrusted jobs, and rotate credentials after exposure.
+
+The 2026 actions-cool incident is the same class of failure expressed through tag mutation. StepSecurity reported on May 18, 2026, that every tag for `actions-cool/issues-helper` had been redirected to imposter commits, and that `actions-cool/maintain-one-comment` was affected by a similar pattern. The local repository rule for GitHub Actions security points to this incident as the reason Dependabot cooldowns and full-SHA `uses:` references are mandatory here. The defensive takeaway is simple: a tag is a mutable pointer, so a workflow that says `owner/action@v3` is trusting future tag state, while a workflow pinned to a known-good full SHA is trusting one reviewed commit.
+
+The npm ecosystem has provided older but still useful case studies. The npm team's archived post on the [event-stream incident](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident) says a malicious `flatmap-stream` dependency was added to `event-stream@3.3.6` after a maintainer handoff, and that npm removed the affected packages and took ownership of the package to prevent further abuse. The [ua-parser-js advisory record](https://github.com/advisories/GHSA-pjwm-rvh2-c87w) covers malicious versions published through a maintainer account compromise. These examples explain why lockfiles, package provenance, maintainer hygiene, and install-script controls belong in Kubernetes conversations even when the compromised package never mentions Kubernetes.
+
+The safe way to use these incidents in a security curriculum is to focus on defensive invariants rather than exploit mechanics. Mutated tags teach immutable references. Compromised maintainers teach least privilege and trusted publishing. Poisoned release tarballs teach independent provenance and reproducible builds. Registry compromise teaches digest pinning and admission verification. CI secret exposure teaches job-scoped permissions and runner isolation. You do not need to reproduce the attacks to understand the control each incident makes necessary.
+
+## 3. Attack Vectors from Source to Cluster
+
+Typosquatting abuses human expectation. An attacker publishes a package, image, Helm chart, or action whose name differs from a trusted component by a small spelling change, visual similarity, namespace trick, or punctuation change. In Kubernetes, the danger is magnified by automation: a copied Dockerfile, generated chart value, or quick workflow edit can pull the wrong component without anyone noticing during review. Defenses include private mirrors, approved registries, package scopes, dependency review, and policy that rejects unapproved namespaces.
+
+Dependency confusion abuses resolver behavior rather than spelling. A build system may have access to both an internal registry and a public registry, and it may choose a higher public version of a package name that the organization intended to keep private. The result is not a suspicious Pod called `malware`; it is normal application code built into a normal image. Good controls make package source explicit, reserve internal namespaces, fail closed when a private package is missing, and record resolved package URLs and hashes in the build evidence.
+
+Tag mutation abuses mutable names. Git tags, container image tags, and action version tags are convenient for humans, but they can move if the hosting system permits it or an attacker gains the right credential. The tj-actions and actions-cool incidents made this visible for GitHub Actions, while container registries have the same basic risk for `latest`, release tags, and staging tags. Digest pins and full commit SHAs do not remove the need for updates; they move updates into a deliberate review process where a person or bot can show exactly what content changed.
+
+Compromised maintainers are hard because the attacker may use legitimate permissions. A maintainer can publish a package, push a tag, approve a release, or change workflow code. If their account is compromised, downstream systems may see valid metadata from a trusted identity. Mature defenses reduce the blast radius with mandatory MFA, short-lived publishing tokens, trusted publishing through OIDC, protected release environments, multiple maintainers for critical actions, package cooldowns, and monitoring for unusual publish behavior.
+
+Build-system compromise is the most dangerous pivot for Kubernetes because the builder often has access to source, secrets, signing credentials, registry push permissions, and deployment automation. A malicious action or script can read environment variables, alter generated artifacts, publish images, or sign the result if the job is overprivileged. The defense is to treat CI as production: pin third-party actions, set job-level permissions, separate build and deploy jobs, use ephemeral runners, prevent untrusted pull requests from receiving secrets, and make signing identity depend on protected branches and environments.
+
+Registry compromise turns distribution into the attack path. If an attacker can push to a trusted registry or replace a tag, every cluster that pulls by tag can receive different bytes without a source change. Registries should enforce immutability for promoted tags, require authenticated pushes, log push events, support malware scanning where available, and store signatures and attestations next to the digest. Kubernetes admission should verify digest-level evidence instead of trusting the registry hostname alone.
+
+GitOps and Helm introduce a second source of truth. A chart can embed a mutable image tag, a values file can override a registry, and an operator can create Pods after the original custom resource was admitted. The policy engine must inspect the rendered PodSpec or the resources that will create Pods, not only the Git repository path. This is why tools such as Kyverno and Sigstore Policy Controller enforce against PodSpec-bearing resources by default and why release reviews should include generated manifests.
+
+## 4. Evidence: SBOMs, Signatures, and Provenance
+
+An SBOM is an inventory, not a verdict. It helps you answer whether a released artifact contains a component, version, package URL, license, or relationship that matters during an incident. CycloneDX and SPDX are common formats; CycloneDX is often used in application security workflows, while SPDX is widely used for license and package metadata exchange. The operational requirement is that the SBOM be generated from the exact artifact digest that may run in production and stored where responders can search it later.
+
+SBOM quality depends on timing and scope. A source-directory SBOM can be useful during development, but it may miss operating system packages, base image layers, or generated artifacts. An image SBOM sees the filesystem that ships, but it may still miss dynamically downloaded plugins, runtime package installation, or external services. For Kubernetes, the practical baseline is to generate an image SBOM in CI, attach or attest it to the digest, index it for incident response, and regenerate when the image is rebuilt rather than editing the SBOM by hand.
+
+Vulnerability scanning consumes package evidence and vulnerability databases. Tools such as Trivy and Grype compare detected packages against advisory data, then report known vulnerabilities with severities and fix information. This is valuable, but it is not the same as exploitability. A package may be present but unreachable; a vulnerability may have no fixed version; a scanner may disagree with a vendor advisory; a newly disclosed CVE can appear after the release. Good release gates combine severity, fix availability, exposure, exploit activity, and exception records rather than treating every scanner row as equally urgent.
+
+Image signing establishes a binding between an identity and an immutable artifact digest. Sigstore's Cosign can sign OCI images and verify signatures, and Sigstore's keyless model uses OIDC identities and short-lived certificates so teams do not need to manage long-lived signing keys in ordinary CI. The important policy question is not just whether an image is signed. It is whether the signature identity matches the expected builder, repository, workflow, branch, and issuer for the workload being admitted.
+
+Provenance describes how an artifact was produced. SLSA provides a framework for progressively improving build integrity, while in-toto provides a way to record signed statements about supply chain steps and materials. A provenance statement can answer which builder ran, which source was used, which dependencies or materials were declared, and which artifact digest resulted. Kubernetes does not enforce that by itself; admission policy must compare the provenance against what the organization allows for the namespace, environment, or service account.
+
+```mermaid
+flowchart TD
+    l0["L0\nNo consistent build evidence"] --> l1["L1\nProvenance exists"]
+    l1 --> l2["L2\nHosted build platform\nsource and build service identified"]
+    l2 --> l3["L3\nHardened build platform\ntamper-resistant provenance"]
+    l3 --> l4["L4\nTwo-person review\nhermetic and reproducible expectations"]
+
+    l0 -. "manual builds\nmutable tags" .-> risk0["High investigation cost"]
+    l1 -. "artifact can be traced" .-> risk1["Better incident response"]
+    l2 -. "trusted builder boundary" .-> risk2["Reduced builder spoofing"]
+    l3 -. "stronger tamper resistance" .-> risk3["Higher assurance"]
+    l4 -. "strict source and build controls" .-> risk4["Highest operating cost"]
 ```
 
-Digest pinning solves one problem and creates an operational responsibility. When an image reference includes `@sha256:...`, the build or deployment asks for one exact manifest, not whatever the tag points to today. That makes builds reproducible and prevents silent tag replacement, but it also means emergency base image patches do not arrive automatically. The team needs a rebuild process that detects new upstream fixes, evaluates them, updates the digest deliberately, and proves the resulting application image still came from the approved pipeline.
+The SLSA level diagram should not be read as a compliance trophy ladder. Higher levels require process discipline, platform support, and maintenance cost. A small internal service may get most of its risk reduction from digest deployment, SBOMs, signatures, and hosted build provenance. A critical platform component that runs with cluster-wide permissions may justify stricter source review, isolated builders, provenance verification, and admission that rejects images lacking the expected builder identity.
 
-Dependencies create a similar trust problem at the language ecosystem layer. Package managers are built for convenience, and convenience often means resolving names from multiple registries, accepting transitive dependencies, and running package lifecycle scripts during install. A malicious package may target a typo, a maintainer account, or a private package name that the public registry should never have resolved. In Kubernetes, the result is usually not visible as a special workload. The compromised dependency becomes ordinary application code inside an ordinary container.
+Did you catch the tradeoff? Evidence adds friction when it is introduced late, but it reduces friction during incidents. A team without SBOMs must ask every owner whether they use a component. A team without provenance must guess which builds used a compromised runner. A team without digest records must ask whether a tag moved. The point of supply chain security is to make normal delivery produce the records you will need on the worst day.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              DEPENDENCY ATTACKS                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  MALICIOUS PACKAGE                                         │
-│  ├── Attacker publishes package to npm/PyPI/etc.           │
-│  ├── Package name similar to popular library               │
-│  ├── Developer installs wrong package                      │
-│  └── Malicious code executes at build or runtime           │
-│                                                             │
-│  DEPENDENCY CONFUSION                                      │
-│  ├── Company has internal package "auth-utils"             │
-│  ├── Attacker publishes "auth-utils" to public registry    │
-│  ├── Build system pulls public (higher version)            │
-│  └── Public malicious package installed                    │
-│                                                             │
-│  COMPROMISED MAINTAINER                                    │
-│  ├── Attacker gains access to package maintainer           │
-│  ├── Pushes malicious version                              │
-│  └── All downstream projects affected                      │
-│                                                             │
-│  EXAMPLES:                                                 │
-│  • event-stream (npm) - Bitcoin wallet theft               │
-│  • ua-parser-js (npm) - Cryptominer injection              │
-│  • PyPI typosquatting attacks                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+## 5. Kubernetes Enforcement Patterns
 
-Dependency confusion deserves special attention because it exploits a normal resolution rule rather than a software bug. An organization might have an internal package named `auth-utils`, while a build tool also has access to the public registry. If an attacker publishes a public `auth-utils` with a higher version and the resolver is not pinned to a private namespace, the build may select the attacker's package. Strong package scopes, internal registry routing, lockfiles, and reproducible install commands are supply chain controls because they prevent the build from guessing where trusted code lives.
+Kubernetes admission is the main place where supply chain evidence becomes a deploy-time decision. The built-in ImagePolicyWebhook admission controller can call an HTTPS backend to approve or reject images, but it is disabled by default and requires API server configuration. ValidatingAdmissionPolicy uses CEL expressions inside the API server and can enforce simple structural rules such as requiring digests or forbidding `:latest`. Dynamic admission webhooks, Kyverno, Gatekeeper, and Sigstore Policy Controller add richer policy behavior for signatures, attestations, external lookups, and custom workflows.
 
-CI/CD pipeline attacks sit in the middle of the chain, where attackers can turn a small foothold into a signed artifact. A workflow that builds on every pull request may expose secrets to untrusted code, a long-lived runner may keep credentials on disk, and a deployment job may use broad cluster permissions because it was easier than designing least privilege. The pipeline is not just automation; it is a privileged production system that compiles code, obtains secrets, signs artifacts, and updates the cluster. Treating it like a helper script is how teams accidentally make it the best attack path.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              CI/CD PIPELINE ATTACKS                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ATTACK SURFACES:                                          │
-│                                                             │
-│  Source Repository                                         │
-│  ├── Stolen credentials                                    │
-│  ├── Compromised developer workstation                     │
-│  └── Direct code injection                                 │
-│                                                             │
-│  Build System                                              │
-│  ├── Malicious build scripts                               │
-│  ├── Compromised build agents                              │
-│  └── Environment variable injection                        │
-│                                                             │
-│  Artifact Storage                                          │
-│  ├── Registry credential theft                             │
-│  ├── Image replacement                                     │
-│  └── Tag overwriting                                       │
-│                                                             │
-│  Deployment                                                │
-│  ├── Manifest tampering                                    │
-│  ├── Secret injection                                      │
-│  └── Configuration modification                            │
-│                                                             │
-│  REAL-WORLD: Build pipeline compromise                     │
-│  REAL-WORLD: CI tool tampering                             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-A practical pipeline review should ask where data crosses trust boundaries. Does code from a fork run before secrets are available, or after? Can a pull request alter the workflow that decides whether the pull request is trusted? Are build agents ephemeral, or can one build leave files that influence the next build? Are signing credentials available to every job, or only to a protected release job? These questions are more useful than asking whether the organization "has CI security," because they expose the exact points where an attacker can convert untrusted input into trusted output.
-
-Registry attacks are often less glamorous, but they are common in real operations because tags are mutable by default in many workflows. A deployment that uses `myapp:v1.0` appears versioned, yet the tag may be moved unless the registry blocks it. One node can pull the tag before the move, another node can pull it after the move, and the cluster can run two different images while every manifest still looks identical. Digest references stop that drift because the manifest points to content, not to a name that can be reused.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              REGISTRY ATTACKS                               │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  TAG MUTABILITY                                            │
-│  ├── Pull image:v1.0 on Monday                             │
-│  ├── Attacker overwrites image:v1.0 on Tuesday             │
-│  ├── New node pulls image:v1.0 on Wednesday                │
-│  └── Different (malicious) image running                   │
-│                                                             │
-│  REGISTRY COMPROMISE                                       │
-│  ├── Attacker gains registry access                        │
-│  ├── Replaces images with backdoored versions              │
-│  └── All clusters pulling from registry affected           │
-│                                                             │
-│  MAN-IN-THE-MIDDLE                                         │
-│  ├── Intercept registry traffic                            │
-│  ├── Serve malicious image                                 │
-│  └── Bypassed if not using digest verification             │
-│                                                             │
-│  MITIGATION:                                               │
-│  • Immutable tags                                          │
-│  • Image signing                                           │
-│  • Pull by digest                                          │
-│  • Private registries                                      │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Before running this in a real review, what output would you expect from a deployment inventory that mixes tags and digests? You should expect uncertainty. Tag-based workloads require registry lookup and historical registry logs to know what ran at a specific time, while digest-based workloads carry the content identity in the manifest. That distinction matters during incident response, because a team responding to a compromised package needs to know which exact image manifests are affected, not merely which application names look suspicious.
-
-The practical review habit is to follow one artifact through every system that touched it. Start with the source commit, then inspect the dependency lockfile, the build job, the image digest, the registry record, the signature, the SBOM, the deployment manifest, and finally the running Pod. If any step requires a human to say "we usually do it this way" instead of pointing to evidence, that step is a weak link. Supply chain defense becomes much easier when each stage leaves a durable record that the next stage can verify.
-
-This is also why supply chain security is not owned by one team. Application developers choose dependencies and base images, platform engineers design admission policy, security engineers set signing and scanning requirements, and release engineers maintain the CI/CD path. If those groups optimize independently, they can create gaps between controls. A scanner may run after a build, but the deployment tool may ignore the scan result. A signature may exist in the registry, but the cluster may never check it. The strongest programs agree on the evidence contract first, then choose tools that produce and enforce that contract.
-
-During incident response, the difference between evidence and assumption becomes painful. Suppose a package maintainer announces that a compromised version was published for several hours. A team with digest-based deployments, SBOMs, and provenance can ask which running images contain the package, which workflow built them, and which clusters admitted them. A team with mutable tags and missing inventories must reconstruct the answer from CI logs, registry timestamps, developer memory, and live scans. Both teams may eventually patch, but the second team spends critical time discovering what it should already know.
-
-For the KCSA exam, expect supply chain questions to hide the weak trust decision inside an otherwise familiar Kubernetes story. The workload may use a private registry, but the registry credential may be stolen. The image may be signed, but the admission controller may not verify the signature. The build may produce an SBOM, but no one may attach it to the running digest. When you read a scenario, ask which claim is being made and which claim is still missing.
-
-## Security Controls: Signing, Admission, and SBOMs
-
-Image signing adds a cryptographic statement to the artifact lifecycle: a trusted identity saw this image and signed it. That statement is only useful when the verifier checks the right identity, the right artifact digest, and the right policy context. A signature from a developer laptop might be acceptable for a development namespace, but production should usually require signatures from the automated release workflow. The security value comes from binding artifact integrity to an expected build identity, then enforcing that binding before Kubernetes admits the Pod.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              IMAGE SIGNING                                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  CONCEPT:                                                  │
-│  • Sign images after build                                 │
-│  • Verify signature before deployment                      │
-│  • Reject unsigned/incorrectly signed images               │
-│                                                             │
-│  TOOLS:                                                    │
-│  ├── Cosign (Sigstore) - Keyless signing                  │
-│  ├── Notary v2 - Content trust                            │
-│  └── Docker Content Trust (DCT)                           │
-│                                                             │
-│  KEYED COSIGN WORKFLOW:                                    │
-│  1. Build image                                            │
-│  2. Sign: cosign sign --key cosign.key myimage:tag        │
-│  3. Push signature to registry                             │
-│  4. Verify: cosign verify --key cosign.pub myimage:tag    │
-│                                                             │
-│  KEYLESS SIGNING (Sigstore):                              │
-│  • Uses OIDC identity (GitHub, Google, etc.)              │
-│  • No key management                                       │
-│  • Transparent, auditable                                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Keyless signing with Sigstore reduces the burden of long-lived private keys, but it does not remove the need for policy. Fulcio can issue a short-lived certificate based on an OIDC identity, and Rekor can record the signing event in a transparency log. The cluster still needs to know which issuer, subject, repository, branch, or workflow identity is acceptable for a namespace. If the policy merely says "has any valid signature," an attacker may sign a malicious image with their own identity and pass a weak check.
-
-Admission control is the point where Kubernetes can turn supply chain evidence into a runtime decision. A validating admission webhook, Kyverno policy, Gatekeeper constraint, or purpose-built image policy controller can inspect an incoming Pod and reject images that are unsigned, untrusted, tag-based, or sourced from a disallowed registry. This is powerful because it moves enforcement from human review into the API server path. It is also risky if the policy is incomplete, because a policy that checks only registry names can create a false sense of security.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              IMAGE ADMISSION CONTROL                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ENFORCE AT CLUSTER LEVEL:                                 │
-│                                                             │
-│  1. ALLOWED REGISTRIES                                     │
-│     Only allow images from trusted registries              │
-│     Block: docker.io, allow: gcr.io/my-project             │
-│                                                             │
-│  2. SIGNATURE VERIFICATION                                 │
-│     Require valid signatures on all images                 │
-│     Tools: Kyverno, OPA/Gatekeeper, Connaisseur           │
-│                                                             │
-│  3. VULNERABILITY SCANNING                                 │
-│     Block images with critical CVEs                        │
-│     Tools: Trivy, Snyk, Anchore                           │
-│                                                             │
-│  4. IMAGE DIGEST REQUIREMENT                               │
-│     Require digest, reject tags                            │
-│     image: nginx@sha256:abc123...                         │
-│                                                             │
-│  KYVERNO POLICY EXAMPLE:                                   │
-│  Verify images are signed with specific key               │
-│  before allowing pod creation                              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-A useful admission design layers simple checks before expensive checks. First, block registries that should never appear in the cluster. Next, require digest references so the verifier and the runtime talk about immutable content. Then verify signatures or attestations for the digest, and finally evaluate vulnerability or provenance metadata when the organization has reliable data. This ordering keeps policy understandable and avoids treating vulnerability scanners as the only gate. Scanners are useful, but they cannot prove that the image came from the approved workflow.
-
-An SBOM, or Software Bill of Materials, answers a different question: what components are inside this artifact? It does not prove the artifact is trusted by itself, but it makes vulnerability response and license review much faster. Without an SBOM, a team responding to a library disclosure must rescan images or inspect repositories. With an SBOM catalog, the team can query which image digests contain the affected package version, then rebuild and redeploy the exact services that need attention.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              SOFTWARE BILL OF MATERIALS                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  WHAT IS SBOM?                                             │
-│  • Inventory of all components in software                 │
-│  • Lists packages, versions, licenses                      │
-│  • Enables vulnerability tracking                          │
-│                                                             │
-│  FORMATS:                                                  │
-│  ├── SPDX (ISO standard)                                  │
-│  ├── CycloneDX (OWASP)                                    │
-│  └── SWID tags                                            │
-│                                                             │
-│  GENERATION TOOLS:                                         │
-│  ├── Syft (Anchore)                                       │
-│  ├── Trivy (Aqua)                                         │
-│  └── Docker Scout                                         │
-│                                                             │
-│  USE CASES:                                                │
-│  • Vulnerability response (find affected images)           │
-│  • License compliance                                      │
-│  • Dependency tracking                                     │
-│  • Incident response                                       │
-│                                                             │
-│  EXAMPLE: Critical-CVE response in transitive dep         │
-│  With SBOM: Query "which images have <vulnerable lib>?"   │
-│  Without SBOM: Manual scanning of all images              │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-The best SBOM programs attach the inventory to the image digest and store it where release and incident teams can query it. A file generated on a developer laptop and forgotten in a build log is weak evidence. A signed SBOM or attestation associated with the same digest that production runs is much stronger. That lets a response team connect three facts: this workload runs digest X, digest X was built by workflow Y, and digest X contains package Z at version N.
-
-Which approach would you choose for a regulated production namespace: allow any image with a clean vulnerability scan, or require a signed image with provenance and then use scans as an additional signal? The second approach is stronger because a clean scan does not identify the builder, source repository, or workflow. It tells you about known vulnerabilities at scan time, while provenance and signatures tell you whether the artifact belongs in the environment at all.
-
-It helps to separate integrity, authenticity, and policy because the words are often blurred in meetings. Integrity asks whether the artifact changed after it was identified. Authenticity asks whether the artifact was signed or attested by an identity the organization recognizes. Policy asks whether that identity and metadata are acceptable for this namespace, environment, or risk tier. A digest supports integrity, a signature supports authenticity, and an admission rule turns both into a deployment decision. Missing one of those layers leaves room for a technically valid but operationally unsafe artifact.
-
-Vulnerability scanning belongs in the same conversation, but it answers a narrower question. A scanner can tell you that an image contains a known vulnerable package according to its database. It cannot tell you that the package came from the approved source repository, that the build ran in an isolated runner, or that the image was reviewed before release. That is why scan results should influence admission without becoming the entire trust model. A high-severity finding may block production, but a clean result should not override missing signatures, missing provenance, or mutable image references.
-
-Admission failures should also be observable. If a policy rejects unsigned images and developers only see a vague Pod creation error, they will treat the control as an obstacle rather than as guidance. Good policies return messages that name the missing evidence and point to the release path that produces it. Audit mode is useful during rollout because it shows which teams will be affected before enforcement begins. Once enforcement is enabled, exceptions should be time-limited, reviewed, and visible in the same way production firewall exceptions are visible.
-
-One common design mistake is to enforce everything at the final cluster boundary while ignoring earlier feedback. If developers learn about missing SBOMs only when a production deployment is rejected, the organization has built a slow security system. Better pipelines check the same evidence earlier: dependency policy in pull requests, build isolation during CI, signature and attestation creation during release, and admission enforcement at deployment. The cluster remains the hard gate, but most failures are caught while they are still cheap to fix.
-
-## Secure Supply Chain Practices
-
-Image security starts before the Dockerfile and continues after deployment. Teams should choose small, maintained base images, pin them to digests, build application layers with deterministic package installs, scan the result, generate SBOMs, sign the image, and deploy by digest. None of these controls is perfect alone. Together, they make the supply chain explainable, which is exactly what defenders need when a new vulnerability or compromise appears.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              IMAGE SECURITY CHECKLIST                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  BUILD PHASE                                               │
-│  ☐ Use minimal base images (distroless, scratch)           │
-│  ☐ Multi-stage builds (separate build/runtime)             │
-│  ☐ Pin base image to digest                                │
-│  ☐ Scan during build, fail on critical CVEs                │
-│  ☐ Generate SBOM                                           │
-│                                                             │
-│  SIGN AND STORE                                            │
-│  ☐ Sign images after build                                 │
-│  ☐ Use private registry                                    │
-│  ☐ Enable immutable tags                                   │
-│  ☐ Store signatures with images                            │
-│                                                             │
-│  DEPLOY                                                    │
-│  ☐ Pull by digest, not tag                                 │
-│  ☐ Verify signatures at admission                          │
-│  ☐ Allow only approved registries                          │
-│  ☐ Block images with critical vulnerabilities              │
-│                                                             │
-│  RUNTIME                                                   │
-│  ☐ Continuous scanning in registry                         │
-│  ☐ Alert on new CVEs in running images                     │
-│  ☐ Have patching/rebuild process                           │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-The operational tradeoff is speed versus certainty. Floating tags and open package ranges make teams move quickly when everything is healthy, but they also make builds difficult to reproduce when something breaks. Strict digests, lockfiles, and signature policies require more automation because humans should not manually update every digest. The right answer is not to abandon automation; it is to make automation produce auditable evidence and fail closed when evidence is missing.
-
-CI/CD security follows the same pattern. A secure pipeline limits who can change workflows, isolates untrusted code, scopes secrets to protected jobs, uses ephemeral runners, records build metadata, and separates build permission from deployment permission. The build system should not be a permanent workstation with a registry password and cluster-admin token. It should be a controlled service that receives source, produces artifacts, signs or attests them under a known identity, and hands deployment to a policy-aware release path.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              CI/CD SECURITY CONTROLS                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  SOURCE CODE                                               │
-│  ├── Require code review for all changes                   │
-│  ├── Branch protection rules                               │
-│  ├── Signed commits                                        │
-│  └── Dependency scanning in PR                             │
-│                                                             │
-│  BUILD ENVIRONMENT                                         │
-│  ├── Ephemeral build agents                                │
-│  ├── Minimal build permissions                             │
-│  ├── Isolated build environments                           │
-│  └── Audit logging of all builds                           │
-│                                                             │
-│  SECRETS MANAGEMENT                                        │
-│  ├── No secrets in code/env vars                           │
-│  ├── Use secret managers (Vault, AWS Secrets)              │
-│  ├── Rotate credentials regularly                          │
-│  └── Audit secret access                                   │
-│                                                             │
-│  DEPLOYMENT                                                │
-│  ├── GitOps (declarative, auditable)                       │
-│  ├── Require approval for production                       │
-│  ├── Verify artifacts before deploy                        │
-│  └── Rollback capability                                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-For Kubernetes teams, GitOps can reduce deployment ambiguity because the desired state is reviewed, versioned, and reconciled by a controller instead of being pushed from a developer shell. GitOps is not automatically secure, though. If the GitOps repository accepts unsigned commits from unprotected branches, or if the controller can deploy unsigned images, it simply moves the weak point. Treat the GitOps repository as production input, protect its review path, and make the cluster admission policy verify the artifacts referenced by the manifests.
-
-Here is a small inventory command that illustrates the kind of question a platform team should ask regularly. It lists images used by Pods so reviewers can spot tag-based references that need replacement with digests. In a real environment, you would combine this with registry metadata and admission audit logs, but the command is a good first check during a workshop or incident review.
-
-```bash
-kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .spec.containers[*]}{.image}{" "}{end}{"\n"}{end}'
-```
-
-If the output contains `:latest` or version tags without `@sha256:`, treat those workloads as investigation targets rather than immediate proof of compromise. Some teams intentionally use tags in lower environments, and some registries enforce immutable tags. Production policy should still prefer digests because the Pod specification then carries the immutable content identity. During an incident, that difference saves time because responders can match running workloads to SBOMs, signatures, attestations, and vulnerability records without reconstructing registry history from memory.
-
-Now imagine the command finds a production Pod running `registry.example.com/team/api:release`. A junior reviewer might stop at the approved registry prefix, but a stronger review asks whether the tag is immutable, which digest the node pulled, whether the digest has a signature, and whether the signature belongs to the release workflow. The image reference alone is not enough. You need the chain of evidence that connects the running container back to reviewed source and controlled build infrastructure.
-
-The same review should inspect who can push to the registry path. A service account used by CI should not share credentials with human administrators, and human break-glass pushes should be rare, logged, and subject to follow-up. If a developer can push directly to the production path, then registry allowlisting is only a location check. The organization may still choose to allow emergency manual pushes, but admission should require a separate override process rather than treating manual artifacts as ordinary releases.
-
-Patch management is where many well-intended digest policies struggle. Pinning base images means a new upstream patch does not automatically change application images. That is good for reproducibility but bad if no one owns rebuild automation. A sustainable practice monitors base image advisories, opens update pull requests with new digests, rebuilds dependent images, regenerates SBOMs, signs the results, and rolls them through the normal release path. Without that loop, teams may abandon digest pinning because it feels like it slowed security down.
-
-Supply chain controls also need environment-specific rollout. In development, warn mode can teach teams how to produce signatures and SBOMs without blocking every experiment. In staging, enforcement can match production so teams catch policy failures before a release window. In production, the policy should be boring: trusted registry, digest, signature, provenance, and vulnerability thresholds should be expected parts of every deployment. The smoother the lower environments are, the less pressure there is to bypass the production gate.
-
-## Frameworks for Provenance and Trust
-
-SLSA, the Supply-chain Levels for Software Artifacts framework, gives teams a vocabulary for build provenance. The point is not to chase a badge; the point is to describe how much confidence you have that an artifact was built from the expected source by the expected process. At low maturity, provenance may simply exist. At higher maturity, builds are hosted, isolated, and hardened so attackers cannot easily inject code or forge metadata. That matters for Kubernetes because admission decisions become stronger when they evaluate provenance, not only signatures.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              SLSA FRAMEWORK                                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  SLSA = Supply-chain Levels for Software Artifacts         │
-│  Pronounced "salsa"                                        │
-│                                                             │
-│  LEVELS:                                                   │
-│                                                             │
-│  Level 0: No guarantees                                    │
-│  └── No provenance, no verification                        │
-│                                                             │
-│  Level 1: Provenance exists                                │
-│  └── Build process generates provenance                    │
-│                                                             │
-│  Level 2: Hosted build platform                            │
-│  └── Build on hosted, managed platform                     │
-│                                                             │
-│  Level 3: Hardened builds                                  │
-│  └── Isolated, ephemeral build environments                │
-│                                                             │
-│  PROVENANCE:                                               │
-│  • Who built it?                                           │
-│  • What source was used?                                   │
-│  • What build process?                                     │
-│  • Cryptographically signed attestation                    │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Image signing says an identity signed a digest. Provenance says how the digest was produced. Those are related but different claims, and KCSA questions often test that distinction indirectly. If a production policy accepts an image because it is signed, but the signing key is available to every branch or every developer workstation, the policy has not proven that the image came from the approved release workflow. Strong provenance records the source repository, commit, build definition, builder identity, and relevant parameters, then signs that statement so verifiers can reject artifacts built through the wrong path.
-
-Sigstore is one common ecosystem for these controls. Cosign signs container images and attestations, Fulcio issues short-lived certificates based on identity, and Rekor provides an append-only transparency log. The practical benefit is that a release workflow can sign an image with its OIDC identity without storing a long-lived signing key in the pipeline. The practical caution is that policy must verify the identity fields that matter, such as repository, workflow, issuer, and subject, not merely the existence of a transparency log entry.
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│              SIGSTORE ECOSYSTEM                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  COMPONENTS:                                               │
-│                                                             │
-│  Cosign                                                    │
-│  ├── Container signing and verification                    │
-│  ├── Keyless signing with OIDC                            │
-│  └── Store signatures in OCI registries                    │
-│                                                             │
-│  Fulcio                                                    │
-│  ├── Certificate authority for Sigstore                    │
-│  ├── Issues short-lived certificates                       │
-│  └── Based on OIDC identity                                │
-│                                                             │
-│  Rekor                                                     │
-│  ├── Transparency log                                      │
-│  ├── Immutable record of signatures                        │
-│  └── Public, auditable                                     │
-│                                                             │
-│  KEYLESS WORKFLOW:                                         │
-│  1. Authenticate with OIDC (GitHub, Google)                │
-│  2. Fulcio issues short-lived cert                         │
-│  3. Sign artifact with cert                                │
-│  4. Record in Rekor transparency log                       │
-│  5. Verifier checks Rekor + OIDC identity                  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-Consider a team that signs every image after a build and deploys only from a private registry. That is a good start, but it still leaves several questions unanswered. Could a developer trigger the signing job from an unreviewed branch? Could a malicious workflow file request a broader OIDC token? Could a compromised registry account push an image that was signed outside the official build? SLSA-style provenance and admission policies answer those questions by checking whether the artifact's story matches the organization's release rules.
-
-Provenance is especially useful because it changes the discussion from trust in people to trust in process. Without provenance, a release manager may say that the image came from the main branch because that is how releases are supposed to work. With provenance, the artifact carries a signed statement naming the source commit, builder, and workflow. That statement can be verified by policy without calling the release manager. The human still designs and maintains the process, but the runtime decision depends on evidence rather than memory.
-
-The SLSA levels should be read as a maturity ladder, not as a shortcut around threat modeling. Level 1 provenance is better than no provenance because it records build information, but it may not stop an attacker who can tamper with the build environment. Higher levels emphasize hosted, isolated, and hardened builds because the builder itself must be trustworthy. For Kubernetes admission, the useful question is not "what level sounds impressive" but "which level gives us enough confidence to let this workload handle production data."
-
-Sigstore's transparency log also changes detection. If a suspicious artifact appears, defenders can look for signing events associated with unexpected identities or repositories. That does not replace private monitoring, but it creates an external record that can make silent tampering harder. The same principle appears in certificate transparency for web certificates: public logs make certain classes of abuse easier to discover. For image signing, the log is most useful when teams know which identities should appear and alert when others do.
-
-Key management remains a tradeoff even with keyless signing. Long-lived keys can work in offline or highly controlled environments, but they require storage, rotation, access control, and incident response plans. Keyless signing shifts trust toward the identity provider and CI workflow configuration. If the identity provider is weak or the workflow permissions are broad, the signing story is still weak. The right model depends on the environment, but the policy must always identify the signer precisely enough to reject the wrong signer.
-
-The policy below is only a teaching fragment, not a full production rule, but it shows the shape of admission enforcement. It first establishes a namespace and then applies a Kyverno ClusterPolicy that requires images from a trusted registry path. A real verifyImages policy would also check signatures or attestations against the expected keyless identity. The important lesson is that Kubernetes admission is where supply chain evidence becomes an allow or deny decision.
+The simplest enforceable rule is digest pinning. A ValidatingAdmissionPolicy can reject Pod specs whose container images do not include an `@sha256:` digest. That policy does not verify who built the image, but it prevents silent tag drift and makes later evidence checks stable. It is a good first enforcement step because it changes how release manifests are written without requiring every team to adopt signing on day one.
 
 ```yaml
-apiVersion: v1
-kind: Namespace
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
 metadata:
-  name: supply-chain-lab
+  name: require-image-digests
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  validations:
+    - expression: "object.spec.containers.all(c, c.image.contains('@sha256:'))"
+      message: "Container images must be pinned by digest."
 ---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: require-image-digests
+spec:
+  policyName: require-image-digests
+  validationActions: ["Deny"]
+```
+
+Signature enforcement is the next step when the organization has a signing flow. Sigstore Policy Controller uses `ClusterImagePolicy` resources to match images and verify signatures or attestations. Kyverno's `verifyImages` rules can also verify signatures and mutate images to digests depending on policy design. The right tool depends on your platform standards, but the policy shape is the same: match the image scope, define trusted authorities, require expected identity, and decide whether violations warn or deny.
+
+```yaml
+apiVersion: policy.sigstore.dev/v1beta1
+kind: ClusterImagePolicy
+metadata:
+  name: require-github-actions-signature
+spec:
+  images:
+    - glob: "ghcr.io/example-org/**"
+  authorities:
+    - name: github-actions-release
+      keyless:
+        url: https://fulcio.sigstore.dev
+        identities:
+          - issuer: https://token.actions.githubusercontent.com
+            subjectRegExp: "https://github.com/example-org/.+/.github/workflows/release.yaml@refs/heads/main"
+        ctlog:
+          url: https://rekor.sigstore.dev
+```
+
+Vulnerability enforcement is more nuanced because a scanner finding is not always a deployment decision. Blocking every HIGH vulnerability may sound clean, but it can deadlock teams when base image fixes are unavailable or when a scanner produces a false positive. A practical Kyverno policy can require a vulnerability scan result annotation, restrict images to a registry where scan gates already ran, or call an external admission service that understands risk exceptions. The exercise later uses a strict example because it teaches the mechanics, not because every production cluster should copy it unchanged.
+
+```yaml
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: require-trusted-registry
+  name: require-scanned-image-annotation
 spec:
   validationFailureAction: Enforce
-  background: true
+  background: false
   rules:
-    - name: images-from-trusted-registry
+    - name: require-scan-result
       match:
         any:
           - resources:
               kinds:
                 - Pod
       validate:
-        message: "Images must come from registry.example.com/team/"
+        message: "Pods must reference an image scan record before admission."
         pattern:
-          spec:
-            containers:
-              - image: "registry.example.com/team/*"
+          metadata:
+            annotations:
+              security.example.com/trivy-scan: "?*"
 ```
 
-This example intentionally begins with a registry rule because it is easy to see and easy to test, but do not stop there. A registry allowlist says where the image was stored, not who built it or whether its contents match the reviewed source. The next step is to require digests, then signatures, then provenance predicates that identify the release workflow. Each layer narrows the gap between "this image came from a place we own" and "this exact image was produced by the process we trust."
+Admission policy must also have failure semantics. A supply chain webhook that fails open during an outage may silently accept the artifact class it normally blocks. A webhook that fails closed without an emergency process can stop critical remediation. Mature teams define namespace scope, break-glass annotations, ticket requirements, time-limited exceptions, and audit logging before enforcement reaches production. The goal is not to make exceptions impossible; it is to make exceptions visible, accountable, and short-lived.
 
-## Patterns & Anti-Patterns
+Runtime detection closes the loop. Admission decides whether a new object is acceptable, but it does not continuously prove that every running Pod still matches current policy. Nodes may cache images, long-running Pods may predate a policy, and a vulnerability may be disclosed after deployment. Runtime inventory should record running image digests, owning workloads, service accounts, namespaces, signatures, SBOM links, and scan status. Continuous attestation compares that inventory to current policy and raises drift findings without waiting for the next deploy.
 
-Good supply chain programs standardize the release path without pretending every service has identical risk. A payments API, a staging demo service, and a nightly batch job may need different rollout speeds, but they should all produce evidence that can be inspected. The following patterns work because they make trust explicit: names are scoped, artifacts are immutable, builders are identifiable, and the cluster refuses workloads that lack required evidence.
+## 6. CI/CD and GitOps Hardening
 
-| Pattern | When to Use | Why It Works | Scaling Considerations |
-|---------|-------------|--------------|------------------------|
-| Digest-first deployments | Production and regulated namespaces | The manifest names immutable content, so registry tag movement cannot silently change running bytes. | Automate digest updates through release tooling so humans do not hand-edit manifests. |
-| Keyless signing with identity policy | CI systems that support OIDC | The signature binds the image digest to a short-lived workflow identity instead of a long-lived shared key. | Admission must check issuer, subject, repository, and workflow constraints, not only signature existence. |
-| SBOM catalog by image digest | Vulnerability response and audit programs | Responders can query affected components without rescanning every image during a crisis. | Store SBOMs centrally, retain history, and attach them to the same digest used in production. |
-| Ephemeral isolated builders | Shared CI platforms and high-risk repositories | Each build starts clean, reducing persistence between jobs and limiting poisoned workspace attacks. | Cache dependencies carefully so performance gains do not reintroduce cross-build trust. |
+The highest-value CI/CD rule is to remove ambient privilege. A workflow that builds an image usually needs source read access and registry push access; it does not automatically need repository write access, cloud administrator credentials, production deployment tokens, and every organization secret. GitHub Actions, GitLab CI, Tekton, Jenkins, and other systems express permissions differently, but the principle is the same: start with read-only defaults, grant write permissions at the job that needs them, and isolate deploy credentials from untrusted code paths.
 
-Anti-patterns usually appear when teams adopt one visible tool and assume the rest of the chain is covered. A scanner does not prove provenance, a private registry does not prove integrity, and a signature does not prove that the signing identity was appropriate. These mistakes are understandable because supply chain controls overlap. The safer approach is to ask which claim each control makes and which claim remains unverified.
+Third-party CI components are executable dependencies. A GitHub Action referenced by tag can change after review; a Docker-based action can pull a mutable base image; a composite action can run scripts with your job permissions. The local repository rule for GitHub Actions security requires full commit SHA pinning, version comments for Dependabot, `persist-credentials: false` for checkout unless pushing is required, job-scoped permissions, and Dependabot cooldown. Those rules are not ceremony; they are direct mitigations for the tag-mutation and secret-exposure incidents covered earlier.
 
-| Anti-Pattern | What Goes Wrong | Better Alternative |
-|--------------|-----------------|--------------------|
-| "Private registry means trusted" | Stolen push credentials can place malicious images in the approved registry path. | Require CI signatures and provenance before admission, even for private registry images. |
-| "Scanning replaces signing" | A clean scan can still describe an attacker-built image that has no business running. | Use scanning for vulnerability risk and signing/provenance for artifact origin. |
-| "The latest tag keeps us patched" | Builds and nodes may pull different content under the same tag, making incidents hard to reproduce. | Pin digests and run an automated rebuild process when base image patches arrive. |
-| "One signing key for everyone" | Any holder of the key can make a malicious artifact look official. | Prefer keyless workflow identity or tightly scoped keys with rotation and audit logging. |
+```yaml
+name: release
 
-## Decision Framework
+on:
+  push:
+    branches: ["main"]
 
-The easiest decision framework is to separate three questions that teams often mix together. First, do we know exactly which artifact Kubernetes will run? That requires digests and immutable references. Second, do we know who produced that artifact and by which workflow? That requires signatures and provenance. Third, do we know what is inside the artifact and whether known risk is acceptable? That requires SBOMs, scanners, and exception processes. A mature release path answers all three before production admission.
+permissions:
+  contents: read
 
-```text
-                Supply Chain Admission Decision
-
-        ┌─────────────────────────────────────────┐
-        │ Does the image reference include digest? │
-        └───────────────────┬─────────────────────┘
-                            │
-                 no ────────┴────── yes
-                 │                  │
-          Reject or mutate     Check registry
-          before production          │
-                                    ▼
-        ┌─────────────────────────────────────────┐
-        │ Is the registry approved for namespace?  │
-        └───────────────────┬─────────────────────┘
-                            │
-                 no ────────┴────── yes
-                 │                  │
-              Reject          Verify signature
-                                    │
-                                    ▼
-        ┌─────────────────────────────────────────┐
-        │ Was it signed by the release workflow?   │
-        └───────────────────┬─────────────────────┘
-                            │
-                 no ────────┴────── yes
-                 │                  │
-              Reject        Evaluate provenance,
-                            SBOM, and scanner data
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@1b4b2a8c7f2d7b1e0f4d9a1b6c3e8f9a0b2c4d6e # v4.3.0 example
+        with:
+          persist-credentials: false
+      - name: Build and publish image
+        run: |
+          echo "Build, push, generate SBOM, sign, and attest in this protected job."
 ```
 
-Use the decision table when designing namespace policy. It keeps the conversation concrete because every row has an enforceable outcome. Development namespaces may warn on some failures while production rejects them, but the evidence model should be consistent. Otherwise, teams learn one release habit in development and then discover late that production requires a completely different artifact shape.
+The SHA in the example is intentionally labeled as an example, not a recommended pin. In a real workflow you resolve the current upstream tag to a full commit SHA from the upstream repository, review the diff, add a version comment so automated updates remain understandable, and let Dependabot propose later SHA changes after a cooldown window. Do not copy SHAs from random articles or training modules into production workflows.
 
-| Decision Point | Lower-Risk Environment | Production Environment | Tradeoff |
-|----------------|------------------------|------------------------|----------|
-| Registry source | Warn on unapproved public registries. | Reject anything outside approved registry paths. | Strict allowlists reduce surprise but require onboarding for new vendors. |
-| Image reference | Allow tags for short-lived experiments. | Require `@sha256:` digest references. | Digests improve reproducibility but need release automation. |
-| Signature | Warn on unsigned images while teams adopt tooling. | Reject unsigned or wrongly signed images. | Enforcement depends on reliable CI identity and incident override paths. |
-| Provenance | Store provenance for important services. | Require approved source, branch, and builder identity. | Strong checks need consistent build metadata across teams. |
-| SBOM and scan | Generate SBOMs and report findings. | Require SBOM presence and block unacceptable critical risk. | Blocking scans need exception handling for urgent patches. |
+GitOps hardening starts by recognizing that the deployment repository is part of production. If Argo CD, Flux, or another controller automatically applies changes from a branch, then branch protection, review rules, signed commits, secret scanning, and repository permissions are production controls. The controller's Kubernetes permissions should be scoped to the namespaces and resources it manages. Its automation identity should not have broad cluster-admin access unless the platform explicitly accepts that risk and compensates with strict review and monitoring.
 
-When in doubt, design the policy around evidence rather than around tool names. "Must be signed by the release workflow for this repository" is a stronger requirement than "must use Cosign." "Must run by digest with an SBOM attached to the same digest" is stronger than "must have a scanner job somewhere in CI." Tooling changes over time, but the evidence questions remain stable.
+Helm and operator supply chains need extra attention because source review may not show the rendered PodSpec. A chart dependency can update templates; a values file can switch registries; an operator can create Pods after a custom resource is admitted. Policy should evaluate rendered workloads at admission, and release processes should store rendered manifests for review. When an operator needs broad permissions, treat its image, chart, CRDs, and controller permissions as a privileged supply chain, not as ordinary application code.
 
-A final design review should test the unhappy paths explicitly. What happens if an image is unsigned, signed by a developer identity, signed by the wrong repository workflow, missing an SBOM, or tagged without a digest? What happens if the scanner service is unavailable, or if a critical vulnerability is found in a base image during a release freeze? These cases decide whether the policy will survive real pressure. A control that works only when every dependency is healthy is not ready to protect production.
+Cost and operability matter because supply chain evidence can produce a lot of data. SBOMs, scan results, provenance statements, admission audit logs, and runtime inventories consume storage and indexing capacity. At moderate scale, the cost is usually less about the command that generates the evidence and more about retention, search, and duplicate storage across registries, object stores, and security platforms. Control cost by storing evidence once per digest, deduplicating identical base layers where tooling allows, retaining high-value attestations longer than verbose build logs, and sampling noisy runtime telemetry only after preserving admission decisions.
 
-Document the exception path with the same seriousness as the normal path. Emergencies happen, and a policy with no emergency procedure will be bypassed through informal channels. A good exception records who approved the bypass, which digest was allowed, which evidence was missing, why the risk was accepted, and when the exception expires. The goal is not to make exceptions impossible. The goal is to prevent exceptions from becoming a hidden second deployment process with weaker evidence than the normal one.
+## 7. Operational Maturity Model
 
-Finally, connect the decision framework to ownership. Developers own dependency choices and Dockerfile quality, release engineers own reproducible builds and signing jobs, platform engineers own admission controls, and security engineers own risk thresholds and monitoring. When ownership is explicit, a failed policy tells the right team what to repair. When ownership is vague, the same failure becomes a meeting about who should have known. Supply chain security improves fastest when every evidence requirement has an owner and an automated feedback loop.
+At the initial level, teams deploy images by tag, depend on public packages directly, and investigate incidents through repository searches and chat messages. This is common in early clusters because it is fast and understandable. The risk is that nobody can prove which bytes ran after a tag moves, whether a vulnerable dependency was present in production, or which build used a compromised runner. The first maturity step is not buying a platform; it is writing down the artifact path and eliminating the most dangerous mutable references.
 
-The review is complete only when the normal path and the failure path are both boring. A normal release should create the same evidence every time, and a failed release should explain which evidence is absent or untrusted. That predictability is what lets teams move quickly without turning the cluster into an open door. Kubernetes admission then becomes the final verifier in a chain that already taught developers what safe artifacts look like.
+At the scanning level, CI generates SBOMs and vulnerability scan results for images. Teams can answer component exposure questions faster, and release gates catch obvious known vulnerabilities before deployment. The weakness is that scanning alone does not prove builder identity or prevent a trusted registry from serving a replaced tag. This level is valuable, but it should not be marketed internally as full supply chain security.
+
+At the signing level, CI signs image digests and the cluster verifies signatures before admission. This blocks unsigned images and makes unauthorized manual pushes easier to detect. The weakness is that vague trust policies can accept the wrong signer, and a compromised signing workflow can still sign malicious output. Strong signing policies name the expected OIDC issuer, workflow identity, repository, branch, and environment.
+
+At the provenance level, releases include SLSA-style provenance and in-toto attestations that connect source, builder, materials, and artifact digest. Admission can require that production images came from protected branches and approved builders. The weakness is complexity: provenance is only useful when policy checks it, responders can find it, and teams know how to fix failures without bypassing the system.
+
+At the continuous-attestation level, the organization compares running workloads against current evidence and policy over time. A newly disclosed CVE can be matched to running digests; a revoked builder identity can trigger a fleet search; an old Pod that predates signature enforcement can be flagged. This level treats admission as one checkpoint in a continuing evidence loop. It costs more to operate, but it is the level that supports fast, fact-based response during large supply chain incidents.
+
+Use this maturity model as a planning tool, not as a badge system. A small team can gain meaningful protection from digest pins, locked package resolution, SBOM generation, action SHA pinning, and narrow CI permissions. A platform team responsible for shared clusters should add signing, provenance, admission enforcement, exception workflows, and runtime inventory. The exam expects you to name these controls; production expects you to sequence them without breaking delivery.
+
+## Learner Check
+
+Exercise scenario: you are reviewing a new namespace for a payments service before it receives production traffic. The application repository uses protected branches, but the release workflow still calls three third-party GitHub Actions by version tag. The image is pushed to an internal registry as `payments:stable`, the GitOps repository deploys that tag, and Trivy runs in CI against the tag before the manifest is merged. The team says the registry is private and the scanner is clean, so supply chain risk is already handled. Your job is to identify which trust decisions are still implicit.
+
+Start with artifact identity. The scanner result is tied to whatever `payments:stable` meant at scan time, while the cluster will ask the registry what the same tag means at pull time. If the tag moves between those events, the scan, SBOM, signature, and running Pod may describe different content. The minimal fix is to resolve `payments:stable` to a digest during promotion, store that digest in the release record, and deploy the digest through GitOps. That change does not make the image safe by itself, but it gives every later control one stable object to discuss.
+
+Now inspect the CI workflow. A third-party action pinned to `v3` is executable code fetched during the job, and the job may give it access to repository contents, package tokens, cloud credentials, or OIDC tokens. The safer pattern is to resolve each action tag to a reviewed full commit SHA, add a version comment for update tooling, apply a cooldown before adopting new action releases, and reduce job permissions to the exact scopes required. If the workflow signs images, the signing step should run only on protected branches or protected release environments so untrusted pull requests cannot mint trusted artifacts.
+
+Next, connect the evidence. A mature release should produce an SBOM from the image digest, a vulnerability scan result for that same digest, a signature from the release identity, and provenance from the approved builder. These records should be attached to the digest or stored under a digest-keyed release record, not scattered across CI logs. When a new vulnerability appears, responders should be able to ask, "Which running digests contain this component?" rather than asking every repository owner to search their source tree.
+
+Finally, decide what Kubernetes should enforce. For a first production gate, require digest-pinned images from the internal registry and reject `:latest` or unpinned tags. For a stronger gate, verify that the digest has a Sigstore signature from the expected release workflow. For a high-assurance gate, require provenance that names the approved builder and source repository. Keep the policy narrow at first, deploy it in audit or warning mode where possible, fix legitimate failures, and then switch production namespaces to deny mode with an auditable break-glass process.
+
+Pause and answer this before moving on: which single control would you add first if the team can only make one change this week? A strong answer names the control, the attack it reduces, and the evidence it creates for responders. "Add scanning" is not enough if scanning already happens against a mutable tag. "Deploy by digest" is often the first practical move because it stabilizes the object that scanning, signing, SBOMs, provenance, and admission all need to reference.
+
+Exercise scenario: a platform team discovers that a popular base image used by twenty services contains a newly disclosed vulnerability. The team has SBOMs for all built images, but those SBOMs are named by service and version rather than digest. Some services rebuild nightly, some rebuild only on release, and several pods have been running for weeks. This is a detection problem, not just a build problem, because the team must connect source evidence to runtime state.
+
+The investigation should begin by normalizing everything to image digests. Query the registry for current tags, query the clusters for running Pod image IDs, and map those digests to the SBOM records that were generated during builds. If an SBOM is missing for a running digest, treat that as an evidence gap even if the current source tree looks clean. Source state today does not prove what was inside an image built last month, and rebuilding the image today may produce a different dependency set if inputs were not pinned.
+
+After mapping digests, triage by exposure. A vulnerable package in a base image may be unreachable in one service and reachable in another, but you need evidence before making that judgment. Consider whether the affected library is loaded by the application, whether the container includes a shell or package manager that increases attacker utility, whether the Pod has sensitive service account permissions, and whether network policy limits inbound and outbound paths. SBOMs accelerate the search; runtime context decides urgency.
+
+The response should also update prevention. If the base image is centrally owned, publish a fixed digest and trigger downstream rebuilds. If teams choose base images independently, add policy that restricts production images to approved base families or requires base-image provenance labels. If the cluster admits old digests forever, add continuous inventory so stale workloads are visible. Supply chain security is strongest when an incident improves the delivery path instead of producing a one-time spreadsheet.
+
+Exercise scenario: an operator installed from a Helm chart creates Pods in multiple namespaces. The operator image is signed, but the chart also grants broad RBAC and reconciles custom resources into privileged workloads. A reviewer says the image signature proves the operator is safe. This is a category error. The signature can tell you who signed a particular image digest; it does not prove that the chart's RBAC is least privilege, that the CRDs cannot be abused, or that the reconciled Pods comply with your namespace policy.
+
+The right review splits the artifact types. Verify the operator image digest and signer identity. Review the chart templates and rendered manifests for RBAC, webhooks, Pod security settings, namespace selectors, and default values. Apply admission policy to the Pods the operator creates, not only to the chart installation request. Monitor the operator's service account because compromise of a controller with broad reconciliation rights can become a persistent supply chain foothold inside the cluster.
+
+By now you should have a repeatable diagnostic question: "What evidence would convince the cluster to trust this artifact, and what evidence would convince a responder that the trust was justified?" If the answer is a registry hostname, the design is weak. If the answer is a digest, SBOM, vulnerability result, signer identity, provenance statement, policy decision, and runtime inventory record, the design is much stronger. The KCSA exam tests the vocabulary, but real platform work tests whether you can connect those pieces without making delivery impossible.
 
 ## Did You Know?
 
-- **The 2020 SolarWinds trusted-update backdoor** [(full case study)](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> affected roughly 18,000 customers through a single signed update path, which is why build systems are now treated as high-value production assets rather than background automation.
-
-- **Dependency confusion became a board-level issue in 2021** after public research showed that package resolution rules could pull attacker-controlled packages when private names were not scoped or routed correctly.
-
-- **US Executive Order 14028 was signed in 2021** and pushed SBOMs into mainstream procurement conversations for software sold to the United States federal government.
-
-- **Sigstore's keyless model uses short-lived certificates** so a release workflow can sign an artifact through OIDC identity without storing a permanent private key in the CI environment.
+- NIST SP 800-218, the Secure Software Development Framework, was published in February 2022 and organizes secure development work into Prepare the Organization, Protect the Software, Produce Well-Secured Software, and Respond to Vulnerabilities.
+- Kubernetes has documented keyless Sigstore verification for its own release artifacts since the v1.26-era signed-artifact task, which means Kubernetes itself is a useful example of signed release evidence.
+- The GitHub Advisory Database entry for tj-actions/changed-files lists patched version 46.0.1, while CISA added CVE-2025-30066 to the Known Exploited Vulnerabilities Catalog on March 26, 2025.
+- The StepSecurity actions-cool report says `actions-cool/issues-helper` had 53 tags moved to imposter commits and `actions-cool/maintain-one-comment` had 15 tags moved, which is why full-SHA pinning beats tag trust for CI actions.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Using `:latest` or other mutable tags in production | Tags are convenient and look versioned, but the registry can move them to different content. | Pin image references to digests and automate digest updates during release. |
-| Treating a private registry as proof of trust | Teams assume ownership of the registry means every image inside it was produced safely. | Require signatures and provenance from the approved CI workflow before admission. |
-| Scanning images only once during CI | A clean scan ages quickly as new vulnerabilities are disclosed after deployment. | Scan during build, rescan stored images, and map findings back to running digests. |
-| Allowing public and private package names to resolve together | Default package manager behavior may prefer a public package with a higher version. | Use scoped package names, private registry routing, lockfiles, and deterministic install commands. |
-| Exposing production secrets to untrusted CI jobs | Pull request workflows are often copied from trusted branch workflows without checking secret boundaries. | Separate untrusted validation from protected release jobs and scope secrets to approved branches. |
-| Accepting any valid image signature | A signature proves someone signed the digest, not that the signer was the right release identity. | Verify issuer, subject, repository, branch, workflow, and attestation predicates in admission policy. |
-| Generating SBOMs but not storing them by digest | SBOM files left in build logs are hard to query during an incident. | Attach SBOMs or attestations to the image digest and index them in a searchable catalog. |
+|---|---|---|
+| Treating a registry allow-list as provenance | The hostname looks like a trust boundary, but a stolen push token can still publish to that registry | Require image digests, signatures, and builder identity checks for production namespaces |
+| Signing mutable tags instead of digests | Tags are easier for humans to read and are common in release notes | Resolve tags to digests during promotion and sign the digest that Kubernetes will pull |
+| Letting CI jobs share broad secrets | It is convenient to put all release credentials at repository or organization scope | Scope permissions per job, split build and deploy, and keep secrets away from untrusted pull request paths |
+| Enforcing scanner output without exception design | Teams want a simple HIGH-or-better gate | Include exploitability, fix availability, business exposure, expiry dates, and documented approvals in the policy |
+| Verifying that an image is signed by anyone | The first rollout often checks only for the presence of a signature | Match signer identity, OIDC issuer, repository, workflow, branch, and expected registry path |
+| Trusting Helm charts without rendered review | Reviewers inspect chart source but not the generated PodSpec | Store rendered manifests, run policy tests in CI, and enforce admission on generated workloads |
+| Keeping SBOMs in CI logs only | The build generated evidence, but responders cannot search it later | Attach or attest SBOMs to the image digest and index them in a searchable inventory |
+| Making admission fail open by default | Operators fear deployment outages caused by policy-service downtime | Define fail-closed scope for production, report-only rollout for new policies, and auditable break-glass paths |
 
 ## Quiz
 
-<details><summary>Scenario: Your team diagnoses a supply chain attack vector when a production Deployment uses `web:v1.2`, and two nodes report different image IDs for new Pods. What do you check first, and why?</summary>
+<details>
+<summary>Question 1: A team deploys `registry.internal/payments:v2.8.0` and scans that tag before release. Two days later the same tag points to a different digest. Which control would have made the deployment evidence stable?</summary>
 
-Start by checking whether `web:v1.2` is a mutable tag and whether the registry tag moved between the two pulls. The same manifest can produce different running bytes when the tag points to different digests over time. The immediate fix is to deploy by digest so Kubernetes references immutable content. After that, review registry permissions and tag immutability because a moved tag may indicate either normal release drift or a registry compromise.
-
+The stable control is digest-based deployment, preferably combined with signing and provenance for that digest. A scan result for a tag describes what the tag pointed to at scan time, not what it points to later. If the manifest used `registry.internal/payments@sha256:...`, the cluster would ask for exact content and the scan, SBOM, signature, and provenance could all refer to the same artifact. Registry tag immutability helps too, but Kubernetes policy should still prefer immutable digests for production.
 </details>
 
-<details><summary>Scenario: A release image has a valid signature, but the auditor says you still have not evaluated image provenance signing and SLSA evidence before Kubernetes admission. What is missing?</summary>
+<details>
+<summary>Question 2: Your CI workflow signs every image, but admission accepts any image that has any valid Sigstore signature. What is the weakness?</summary>
 
-The signature proves that a key or identity signed the image digest, but it does not automatically prove how the image was built. The auditor is asking for provenance evidence such as source repository, commit, workflow identity, builder environment, and build definition. SLSA-style attestations provide that context and can be checked by admission policy. Production should reject images signed outside the approved release workflow even when the cryptographic signature itself is valid.
-
+The weakness is that the policy checks signature presence but not trusted identity. An attacker could sign an image with their own unrelated identity and satisfy a vague signed-image rule. Production policy should match the expected OIDC issuer, repository, workflow path, branch or environment, and registry scope. Signatures are useful only when the verifier knows which signer is authorized for the workload.
 </details>
 
-<details><summary>Scenario: A private package named `auth-utils` is unexpectedly resolved from a public registry during CI, and the package steals credentials. Which supply chain attack vector does this show, and which controls prevent it?</summary>
+<details>
+<summary>Question 3: A new CVE is announced for a package that may exist in several base images. Your team has SBOMs attached to image digests but no runtime inventory. What can you answer, and what is still missing?</summary>
 
-This is dependency confusion, a supply chain attack vector that abuses package resolution behavior between private and public registries. The build selected an attacker-controlled public package because the namespace and registry routing were not strict enough. Use scoped internal package names, configure package managers to route private scopes only to the internal registry, commit lockfiles, and run deterministic install commands. Also review whether package lifecycle scripts can access secrets during install.
-
+The SBOM store can answer which released image digests contain the package and version, assuming the SBOMs were generated from the shipped images. What is missing is a reliable map from running Pods to those digests across clusters and namespaces. You may know which artifacts are affected but not whether they are currently running, where they run, or which service owners must respond. Runtime inventory closes that gap by recording image digests, owners, namespaces, and workload identities.
 </details>
 
-<details><summary>Scenario: A pipeline signs images correctly, but a red team deploys an unsigned image from Docker Hub into a test namespace. What admission policy gap allowed it?</summary>
+<details>
+<summary>Question 4: A GitHub Actions workflow uses `owner/action@v3`, has repository write permission, and can read cloud deployment secrets. Which supply chain incident pattern does this resemble, and what are the first fixes?</summary>
 
-The cluster probably had signing in the build pipeline but no enforcing admission control for that namespace. Signing artifacts is only half the control; Kubernetes must reject images that lack the required signature or provenance. A test namespace may intentionally use warn mode during rollout, but the exception should be explicit and visible. Otherwise, attackers and hurried developers will find the namespace that bypasses the production rule.
-
+It resembles the tag-mutation and compromised-action pattern seen in tj-actions/changed-files and actions-cool. The first fixes are full commit SHA pinning for `uses:` references, job-level least privilege, secret isolation, and Dependabot cooldown for action updates. Repository write and cloud deployment permissions should not be available to a third-party action unless the job truly needs them. If the action may have run during a compromise window, rotate exposed credentials and inspect workflow logs.
 </details>
 
-<details><summary>Scenario: You assess CI/CD pipeline trust boundaries and find that pull request jobs can edit workflow files and receive registry credentials. Why is this dangerous?</summary>
+<details>
+<summary>Question 5: A product team wants to block every image with a HIGH vulnerability at admission. Why might that be unsafe as the only production rule?</summary>
 
-The workflow file controls what the runner executes, so allowing untrusted pull requests to change it can turn CI into an attacker-controlled script with access to secrets. Registry credentials let that script push images that may later look legitimate if downstream policy checks only registry location. Separate untrusted validation from protected release jobs, require review before workflow changes take effect, and keep signing or push credentials away from forked or unreviewed code. Ephemeral runners help, but they do not fix a broken secret boundary by themselves.
-
+It can be unsafe because scanner severity does not always equal exploitable production risk, and some vulnerabilities may have no available fix when an emergency deployment is required. A hard gate with no exception path can stop security patches or incident response releases. A better policy combines severity, fix availability, exploit activity, runtime exposure, namespace criticality, and time-limited exceptions. Strict blocking can still be useful for CRITICAL known-exploited vulnerabilities when the organization has a documented break-glass process.
 </details>
 
-<details><summary>Scenario: You implement admission policies that require trusted registries, signed images, and pinned digests, but emergency patches slow down. What operational process should accompany the policy?</summary>
+<details>
+<summary>Question 6: A GitOps controller has cluster-admin and applies every merge to `main`. The application images are signed and scanned. What supply chain risk remains?</summary>
 
-Strict admission policies need an automated rebuild and exception process. Digest pinning means patched base images do not arrive silently, so release automation must detect new base image digests, rebuild application images, regenerate SBOMs, sign the outputs, and update manifests. For urgent incidents, a documented break-glass path should still produce evidence and expire quickly. Without this process, teams may try to bypass the policy during the first serious patch event.
-
+The deployment repository and GitOps controller are still a production control plane. A malicious chart value, RBAC object, operator custom resource, or namespace-wide policy change could be applied even if the application image itself is clean. Branch protection, review rules, controller RBAC minimization, rendered manifest checks, and admission policy are still required. Image evidence protects the container artifact; it does not automatically protect every Kubernetes object that deploys it.
 </details>
 
-<details><summary>Scenario: A new critical vulnerability is announced in a JSON library, and leadership asks which running services are affected within an hour. How does an SBOM catalog change the response?</summary>
+<details>
+<summary>Question 7: An image has an SBOM, a clean vulnerability scan, and a valid signature, but no provenance. What question remains hard to answer?</summary>
 
-An SBOM catalog lets responders query component inventories by image digest instead of rescanning every repository and registry image from scratch. If SBOMs are attached to the same digests running in Kubernetes, the team can map the vulnerable library to specific workloads quickly. Scanning is still useful for validation, but the SBOM gives a fast starting point. The response becomes a targeted rebuild and redeploy effort rather than a broad search through uncertain artifacts.
-
+It remains hard to answer how the artifact was built and whether the approved builder and source revision produced it. The SBOM describes contents, the scan compares those contents to vulnerability data, and the signature binds an identity to the digest. Provenance connects source, build workflow, builder identity, materials, and output digest. Without it, responders have weaker evidence when a build runner, dependency source, or release process is suspected.
 </details>
 
-## Hands-On Exercise: Supply Chain Risk Assessment
+## Hands-On Practice
 
-In this exercise, you will review a deliberately weak container build and deployment flow, then rewrite the control plan as if you were preparing a production readiness review. You do not need a live cluster for every step, but if you have a Kubernetes 1.35+ lab cluster, use full `kubectl` commands when checking workloads. Focus on explaining the risk, the evidence you would require, and the admission behavior that should follow.
+The exercises are designed to run in a local learning environment with Docker or a compatible container engine, Syft, Cosign, Trivy, and a disposable Kubernetes cluster such as kind. Use a registry namespace you control for signing and verification because public examples cannot grant you push permission. If you cannot push images, read the commands and run the local SBOM and scan steps; the policy examples still teach the control design.
 
-**Scenario**: Review this CI/CD setup and identify supply chain risks:
+### Exercise 1: Generate a CycloneDX SBOM with Syft
 
-```yaml
-# Dockerfile
-FROM ubuntu:latest
-RUN apt-get update && apt-get install -y nodejs npm
-COPY package.json .
-RUN npm install
-COPY . .
-CMD ["node", "app.js"]
+Build a small image, generate a CycloneDX SBOM from the image, and inspect the component list. The goal is to see the difference between application dependencies and base-image packages before you rely on the SBOM during an incident.
 
-# CI Pipeline
-steps:
-  - checkout
-  - run: docker build -t myapp .
-  - run: docker push myregistry/myapp:latest
-  - run: kubectl set image deployment/myapp myapp=myregistry/myapp:latest
+```bash
+mkdir -p supply-chain-lab
+cd supply-chain-lab
+
+cat > app.py <<'PY'
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok\n")
+
+HTTPServer(("127.0.0.1", 8080), Handler).serve_forever()
+PY
+
+cat > Dockerfile <<'EOF'
+FROM python:3.12-slim
+WORKDIR /app
+COPY app.py .
+CMD ["python", "app.py"]
+EOF
+
+docker build -t supply-chain-lab:v1 .
+syft supply-chain-lab:v1 -o cyclonedx-json > sbom.cdx.json
+jq '.components[] | {name: .name, version: .version, type: .type}' sbom.cdx.json | head
 ```
 
-### Tasks
+Success criteria:
 
-- [ ] Diagnose supply chain attack vectors in the Dockerfile, dependency install, registry push, and deployment command.
-- [ ] Assess CI/CD pipeline trust boundaries, secret exposure, and build isolation controls for the workflow.
-- [ ] Evaluate image provenance signing and SLSA evidence that should be generated for the release artifact.
-- [ ] Implement admission policies that require trusted registries, signed images, and pinned digests in the review plan.
-- [ ] Define SBOM storage, vulnerability response, and rebuild criteria for future base image or dependency disclosures.
+- [ ] `sbom.cdx.json` exists and is valid JSON.
+- [ ] The SBOM contains both application-level and operating-system-level components.
+- [ ] You can explain why generating the SBOM from the image gives stronger runtime evidence than scanning only the source directory.
 
-<details><summary>Solution: Supply Chain Risks</summary>
+<details>
+<summary>Solution notes</summary>
 
-**Dockerfile Issues:**
-
-1. **FROM ubuntu:latest**
-   - Mutable tag, unpredictable content
-   - Large image with many packages
-   - Fix: Use pinned digest, minimal base image
-
-2. **apt-get install nodejs npm**
-   - Installing from public repos at build time
-   - No version pinning
-   - Fix: Use official Node image or pin versions
-
-3. **npm install without lockfile**
-   - Dependency versions may change between builds
-   - Vulnerable to dependency confusion
-   - Fix: Use npm ci with package-lock.json
-
-**CI Pipeline Issues:**
-
-4. **No image scanning**
-   - Vulnerabilities not detected before push
-   - Fix: Add trivy/grype scan step
-
-5. **No image signing**
-   - No way to verify image authenticity
-   - Fix: Sign with cosign after build
-
-6. **Push to :latest**
-   - Mutable tag
-   - Fix: Use commit SHA or version tag + digest
-
-7. **kubectl set image with tag**
-   - Pods may pull different images
-   - Fix: Use digest in deployment
-
-8. **No approval/gate**
-   - Direct push to production
-   - Fix: Add manual approval step
-
-**Secure version concept:**
-- Pin base image to digest
-- Use lockfiles for dependencies
-- Scan images for CVEs
-- Sign images after build
-- Push with immutable tags
-- Verify signatures at admission
-- Use GitOps with approval gates
-
+The command `syft supply-chain-lab:v1 -o cyclonedx-json` inventories the built image, including packages inherited from `python:3.12-slim`. If `jq` shows only a few records, inspect the full file and verify that Syft recognized the image source. In production, store this SBOM by image digest rather than by the local tag `supply-chain-lab:v1`, because the tag can be rebuilt with different content.
 </details>
 
-<details><summary>Solution: Example Review Notes</summary>
+### Exercise 2: Sign and Verify an Image with Cosign
 
-A strong review would reject the current flow for production because it cannot reproduce the base image, cannot prove dependency resolution, cannot prove the image was scanned or signed, and deploys a mutable tag directly to the cluster. The corrected flow should build from a pinned minimal base image, install dependencies with a lockfile, generate an SBOM, scan the image, sign the digest through the protected release workflow, and update a GitOps manifest with the digest. The cluster should then enforce trusted registry, digest, signature, and provenance requirements through admission policy.
+Push the image to a registry you control, resolve its digest, sign that digest with Cosign, and verify the signature. Keyless signing is the preferred modern workflow when your identity provider and registry support it; key-based signing is useful for an isolated lab.
 
+```bash
+export REGISTRY_IMAGE="ghcr.io/YOUR_ORG/supply-chain-lab:v1"
+
+docker tag supply-chain-lab:v1 "$REGISTRY_IMAGE"
+docker push "$REGISTRY_IMAGE"
+
+export DIGEST_REF="$(docker buildx imagetools inspect "$REGISTRY_IMAGE" \
+  --format '{{json .Manifest.Digest}}' | tr -d '"')"
+export IMAGE_REF="ghcr.io/YOUR_ORG/supply-chain-lab@$DIGEST_REF"
+
+cosign sign --yes "$IMAGE_REF"
+cosign verify "$IMAGE_REF"
+```
+
+Success criteria:
+
+- [ ] The image is pushed to a registry namespace you control.
+- [ ] The value in `IMAGE_REF` uses `@sha256:` rather than a mutable tag.
+- [ ] `cosign verify` returns signature information for the digest you signed.
+- [ ] You can state which identity should be checked in a production admission policy.
+
+<details>
+<summary>Solution notes</summary>
+
+If keyless signing prompts for authentication, complete the browser flow for your lab identity. In CI, the equivalent should use an OIDC identity from a protected release workflow rather than a long-lived private key stored as a secret. Production verification should not stop at "a signature exists"; it should check the expected issuer and signer identity for your release workflow.
 </details>
 
-### Success Criteria
+### Exercise 3: Scan an Image and Enforce a Simple Kyverno Gate
 
-- [ ] You can explain why digest pinning improves reproducibility but requires a patch rebuild process.
-- [ ] You can distinguish registry allowlisting from signature and provenance verification.
-- [ ] You can identify at least three CI/CD trust boundaries that affect supply chain risk.
-- [ ] You can describe how an SBOM attached to an image digest supports vulnerability response.
-- [ ] You can propose an admission policy sequence for trusted registry, digest, signature, and provenance checks.
+Scan the image with Trivy, save the result, then apply a Kyverno policy that requires a scan annotation before Pods are admitted. This exercise uses an annotation gate because a self-contained cluster cannot call your scanner's risk database without extra infrastructure.
+
+```bash
+trivy image --severity HIGH,CRITICAL --format json \
+  --output trivy-report.json supply-chain-lab:v1
+
+kubectl create namespace supply-chain-lab
+
+cat > require-scan-annotation.yaml <<'EOF'
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-trivy-scan-annotation
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: require-trivy-scan-annotation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - supply-chain-lab
+      validate:
+        message: "Set security.example.com/trivy-scan to the approved scan record before deploying."
+        pattern:
+          metadata:
+            annotations:
+              security.example.com/trivy-scan: "?*"
+EOF
+
+kubectl apply -f require-scan-annotation.yaml
+```
+
+Now try a rejected Pod and an accepted Pod. Replace the image with a digest reference from your own registry if you completed the signing exercise.
+
+```bash
+cat > unsigned-demo-pod.yaml <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unsigned-demo
+  namespace: supply-chain-lab
+spec:
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: supply-chain-lab:v1
+EOF
+
+kubectl apply -f unsigned-demo-pod.yaml
+```
+
+```bash
+cat > scanned-demo-pod.yaml <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scanned-demo
+  namespace: supply-chain-lab
+  annotations:
+    security.example.com/trivy-scan: "trivy-report.json reviewed for lab"
+spec:
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: supply-chain-lab:v1
+EOF
+
+kubectl apply -f scanned-demo-pod.yaml
+kubectl get pod scanned-demo -n supply-chain-lab
+```
+
+Success criteria:
+
+- [ ] Trivy produced `trivy-report.json`.
+- [ ] The Pod without `security.example.com/trivy-scan` is rejected by admission.
+- [ ] The annotated Pod is accepted in the lab namespace.
+- [ ] You can explain why a production HIGH-severity gate should use scan evidence from a trusted service rather than a free-form annotation alone.
+
+<details>
+<summary>Solution notes</summary>
+
+The strict annotation policy proves admission mechanics, not production-grade vulnerability enforcement. A real policy would verify that the scan record belongs to the same image digest, was produced by the approved scanner, is fresh enough for the environment, and has no unapproved HIGH or CRITICAL findings according to your risk policy. The key learning is that CI scan evidence and Kubernetes admission must be connected; otherwise a scan can pass in CI while a different image is deployed.
+</details>
 
 ## Sources
 
-- Kubernetes documentation: Images - https://kubernetes.io/docs/concepts/containers/images/
-- Kubernetes documentation: Security overview - https://kubernetes.io/docs/concepts/security/
-- Kubernetes documentation: Admission controllers - https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/
-- Kubernetes documentation: Dynamic admission control - https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/
-- Sigstore documentation: Cosign signing overview - https://docs.sigstore.dev/cosign/signing/overview/
-- Sigstore documentation: Fulcio overview - https://docs.sigstore.dev/certificate_authority/overview/
-- Sigstore documentation: Rekor overview - https://docs.sigstore.dev/logging/overview/
-- SLSA specification - https://slsa.dev/spec/v1.1/
-- SLSA provenance model - https://slsa.dev/spec/v1.1/provenance
-- SPDX project - https://spdx.dev/
-- CycloneDX specification overview - https://cyclonedx.org/specification/overview/
-- Kyverno documentation: Verify Images - https://kyverno.io/docs/writing-policies/verify-images/
-- Open Policy Agent Gatekeeper documentation - https://open-policy-agent.github.io/gatekeeper/website/docs/
+- [NIST SP 800-218 Secure Software Development Framework](https://csrc.nist.gov/pubs/sp/800/218/final)
+- [CNCF Software Supply Chain Security Paper](https://tag-security.cncf.io/community/working-groups/supply-chain-security/supply-chain-security-paper/CNCF_SSCP_v1.pdf)
+- [SLSA specification](https://slsa.dev/spec/latest/)
+- [Sigstore project](https://www.sigstore.dev/)
+- [Sigstore Cosign repository](https://github.com/sigstore/cosign)
+- [in-toto framework](https://in-toto.io/)
+- [CVE-2024-3094 CVE record](https://cveawg.mitre.org/api/cve/CVE-2024-3094)
+- [CISA: Reported Supply Chain Compromise Affecting XZ Utils](https://www.cisa.gov/news-events/alerts/2024/03/29/reported-supply-chain-compromise-affecting-xz-utils-data-compression-library-cve-2024-3094)
+- [GitHub Advisory: XZ Utils malicious code](https://github.com/advisories/GHSA-rxwq-x6h5-x525)
+- [GitHub Advisory: tj-actions/changed-files CVE-2025-30066](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3)
+- [CISA: tj-actions/changed-files and reviewdog/action-setup compromise](https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction)
+- [StepSecurity: actions-cool/issues-helper compromised](https://www.stepsecurity.io/blog/actions-cool-issues-helper-github-action-compromised-all-tags-point-to-imposter-commit-that-exfiltrates-ci-cd-credentials)
+- [CISA: Supply Chain Attack Against 3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp)
+- [CISA: SolarWinds supply chain compromise](https://www.cisa.gov/news-events/alerts/2021/01/07/supply-chain-compromise)
+- [npm: Details about the event-stream incident](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident)
+- [GitHub Advisory: malicious ua-parser-js versions](https://github.com/advisories/GHSA-pjwm-rvh2-c87w)
+- [Kubernetes documentation: Images](https://kubernetes.io/docs/concepts/containers/images/)
+- [Kubernetes documentation: Admission controllers and ImagePolicyWebhook](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/)
+- [Kubernetes documentation: ValidatingAdmissionPolicy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/)
+- [Kubernetes documentation: Verify Signed Kubernetes Artifacts](https://kubernetes.io/docs/tasks/administer-cluster/verify-signed-artifacts/)
+- [Sigstore Policy Controller overview](https://docs.sigstore.dev/policy-controller/overview/)
+- [Kyverno verifyImages documentation](https://kyverno.io/docs/policy-types/cluster-policy/verify-images/overview/)
+- [Syft SBOM tool repository](https://github.com/anchore/syft)
+- [Grype vulnerability scanner repository](https://github.com/anchore/grype)
+- [Trivy vulnerability scanner documentation](https://trivy.dev/docs/latest/scanner/vulnerability/)
+- [CycloneDX specification overview](https://cyclonedx.org/specification/overview/)
+- [SPDX specification](https://spdx.github.io/spdx-spec/v3.0/)
 
 ## Next Module
 
-[Module 5.1: Image Security](/k8s/kcsa/part5-platform-security/module-5.1-image-security/) - Next, you will turn supply chain threat awareness into concrete image hardening and lifecycle controls.
+Continue to [Module 4.5: Observability for Security](../module-4.5-observability-security/) to connect supply chain evidence with runtime signals, audit trails, and incident response.
