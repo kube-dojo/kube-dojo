@@ -639,7 +639,7 @@ kubectl apply -f tkg-style.yaml
 kubectl get clusters,machinedeployments,machines
 
 clusterctl get kubeconfig tkg-style > tkg-style.kubeconfig
-kubectl --kubeconfig=tkg-style.kubeconfig apply -f https://docs.projectcalico.org/manifests/calico.yaml
+kubectl --kubeconfig=tkg-style.kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
 kubectl --kubeconfig=tkg-style.kubeconfig wait --for=condition=Ready node --all --timeout=300s
 kubectl --kubeconfig=tkg-style.kubeconfig get nodes
 ```
