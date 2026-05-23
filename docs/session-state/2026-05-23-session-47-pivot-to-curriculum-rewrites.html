@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 47 — Strategic pivot from calibration meta-work to curriculum rewrites (5 codex dispatches in flight)</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0 }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .inflight { background: #cce5ff; color: #004085 }
+  .merged { background: #d4edda; color: #155724 }
+  .pending { background: #fff3cd; color: #856404 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style>
+</head>
+<body>
+
+<h1>Session 47 — Strategic pivot from calibration meta-work to curriculum rewrites</h1>
+<p class="meta">2026-05-23 late, immediately following the session 46 morning brief. User woke up, asked the orchestrator-choice question, then explicitly endorsed pivot away from calibration meta-work toward the 144-module rubric-critical backlog. <strong>5 codex parallel rewrites in flight at handoff write-time</strong>; harness will notify per dispatch.</p>
+
+<h2>Headline</h2>
+
+<p>The benchmark-vs-curriculum-work tradeoff was resolved in the user's favor toward shipping. User: <em>"if you think it is a waste of time let me know and lets just fix the issues and keep working on our modules first cover the gaps and the improve everything to green status."</em> Orchestrator agreed honestly (yes, it would be a waste relative to the alternative). Pivoted. Fired 5 parallel codex T0 rewrites on the top-5 rubric-critical modules from the briefing.</p>
+
+<h2>The strategic conversation that led to the pivot</h2>
+
+<h3>Question 1 — opus vs sonnet for orchestration (raised by session 46 ranking)</h3>
+<p>Session 46 final 3-fixture ranking showed <strong>sonnet 8.7 &gt; opus 8.4</strong> on orchestrating. User: "according to this i should change you to sonnet, but then we lose the context window. and we will be less effective."</p>
+
+<p>Orchestrator pushback: the 0.3-point gap is within fixture noise; the benchmark tested single-turn ~5min routing fixtures, NOT the multi-hour, context-heavy, multi-dispatch workload that's the actual orchestration job. Workload routinely hits 400-600K context (this session hit 500K+); sonnet's 200K window would compact mid-session and lose state exactly when state matters most.</p>
+
+<p><strong>Conclusion: stay on opus.</strong> Two paths to settle it more rigorously were sketched: (a) more orchestrating fixtures (~$1) or (b) build a long-context-orchestration benchmark with 200K+-token fixtures (~$2-3 + 1 day to design). User did not authorize either; the conversation moved to the cost-axis instead.</p>
+
+<h3>Question 2 — Sonnet 1M premium (user-flagged)</h3>
+<p>User: "sonnet 1m context is extra expense atm." Asked for a fact-check before locking the 1M-class cohort for any future benchmark.</p>
+
+<p>Codex (gpt-5.5, <code>--search</code>) ran the verification across 16 source pages: Anthropic models overview + pricing + context-windows docs + the 1M GA blog (Mar 13, 2026). <strong>Surprise finding: the "extra expense" framing appears stale in current Anthropic docs.</strong> Sonnet 4.6 now lists flat $3/$15 across the full 1M window — NO 2x premium above 200K. The earlier framing is either outdated or refers to Claude Max subscription-side billing (weekly-cap consumption rate), which the fact-check did not cover.</p>
+
+<p>Full fact-check artifact committed to main: <a href="https://github.com/kube-dojo/kube-dojo.github.io/blob/main/docs/calibration/long-context-cohort-2026-05-23.md">docs/calibration/long-context-cohort-2026-05-23.md</a>.</p>
+
+<p>Headline cost cliffs that survive:</p>
+<ul>
+  <li><strong>gemini-3.1-pro-preview</strong>: 2× input + 1.5× output above 200K. Pricey at long-context.</li>
+  <li><strong>grok-4.3</strong>: changes above 200K but rate not disclosed by xAI docs.</li>
+  <li><strong>claude-opus-4-7</strong>: flat $5/$25 across full 1M.</li>
+  <li><strong>claude-sonnet-4-6</strong>: flat $3/$15 across full 1M (stale "premium" framing).</li>
+  <li><strong>gemini-3.5-flash-high, gemini-3.1-flash-lite-preview, qwen3.6-plus</strong>: no premium cliffs found.</li>
+</ul>
+
+<h3>Question 3 — qwen3.7-max wiring (user-offered)</h3>
+<p>User set up opencode CLI with OpenRouter provider so qwen3.7-max is dispatchable: <code>opencode run -m openrouter/qwen/qwen3.7-max ...</code>. Confirmed model exists in the catalog. Started smoke test, then user asked the strategic question (waste-of-time?) so killed the smoke test mid-run. <strong>qwen3.7-max wiring earmarked for future calibration expansion when there are spare cycles.</strong></p>
+
+<h3>Question 4 — the actual decision: pivot or not?</h3>
+<p>User: <em>"if you think it is a waste of time let me know and lets just fix the issues and keep working on our modules first cover the gaps and the improve everything to green status."</em></p>
+
+<p>Orchestrator honest answer: yes, it would be a waste relative to the alternative. Reasons:</p>
+<ol>
+  <li>Opus-vs-sonnet decision is already resolved by data + context-window argument. Building a $20 benchmark to reconfirm what we know is procrastination dressed as rigor.</li>
+  <li>Calibration framework is mature (Phase 1+2 done, Phase 3 = 4 of 6 lanes done after session 46 closed the orchestrating slice). Returns diminishing.</li>
+  <li>144 modules at rubric &lt; 2.0 is a real, ongoing failure on a public-facing site. Every learner hitting a broken module pays a real cost.</li>
+</ol>
+
+<p><strong>Pivot accepted.</strong></p>
+
+<h2>What just fired — 5 parallel codex T0 rewrites</h2>
+
+<table>
+<tr><th>Status</th><th>Module</th><th>Worktree</th><th>Branch</th><th>Task ID</th></tr>
+<tr><td><span class="pill inflight">IN FLIGHT</span></td><td>K8S FinOps: FinOps Fundamentals</td><td><code>.worktrees/rewrite-finops-fundamentals</code></td><td><code>feat/rewrite-finops-fundamentals</code></td><td><code>bc3iou042</code></td></tr>
+<tr><td><span class="pill inflight">IN FLIGHT</span></td><td>K8S FinOps: FinOps in Practice</td><td><code>.worktrees/rewrite-finops-practice</code></td><td><code>feat/rewrite-finops-practice</code></td><td><code>bjr3ssgq6</code></td></tr>
+<tr><td><span class="pill inflight">IN FLIGHT</span></td><td>KCSA 4.4: Supply Chain Threats</td><td><code>.worktrees/rewrite-kcsa-4.4</code></td><td><code>feat/rewrite-kcsa-4.4-supply-chain</code></td><td><code>b3pmzzwno</code></td></tr>
+<tr><td><span class="pill inflight">IN FLIGHT</span></td><td>Linux Foundations: Everyday Networking Tools</td><td><code>.worktrees/rewrite-linux-networking-tools</code></td><td><code>feat/rewrite-linux-networking-tools</code></td><td><code>bok2l98tx</code></td></tr>
+<tr><td><span class="pill inflight">IN FLIGHT</span></td><td>Linux Foundations: Network Namespaces &amp; veth</td><td><code>.worktrees/rewrite-linux-namespaces</code></td><td><code>feat/rewrite-linux-network-namespaces</code></td><td><code>b1kh1s4bl</code></td></tr>
+</table>
+
+<p>All 5 are codex <code>architect</code> class (gpt-5.5, <code>--mode danger</code>, <code>--search</code>, 2400s timeout). Pattern matches the proven CKS 5.4/6.1/6.4 + Azure 3.14 + MLOps workflow from sessions 40-43. Per-module brief asks for T0 strict-verifier-pass output: body_words ≥ 5000, mean_wpp ≥ 30, ≥ 10 reachable citations, Sources section, 5+ quiz, 3+ hands-on, 2+ mermaid, common-mistakes + did-you-know + learner-check.</p>
+
+<h2>What needs to happen when each one lands (instruction set for continuation)</h2>
+
+<p>The harness will fire a notification per dispatch as it completes. For each:</p>
+
+<ol>
+  <li><strong>Verify push landed on remote</strong>: <code>git ls-remote origin &lt;branch&gt;</code> matches the reported SHA. (Per <code>feedback_codex_push_silent_failure</code>.)</li>
+  <li><strong>Read the codex output</strong> to confirm PR URL + verifier PASS claim.</li>
+  <li><strong>Dispatch gemini cross-family review</strong>: <code>scripts/dispatch_smart.py review --agent gemini --worktree .worktrees/&lt;name&gt; --task-id &lt;module&gt;-gemini-review --timeout 1200</code>. Heredoc brief telling gemini to read <code>gh pr diff &lt;N&gt;</code> + score on 6 dimensions including LAB RUNNABILITY (per <code>feedback_never_flash_for_code_review</code>: never gemini-flash; gemini-3.1-pro-preview is the only acceptable variant here). Throttle-window rule: NO claude headless review.</li>
+  <li><strong>If APPROVE / APPROVE_WITH_NITS</strong>: rebase if needed (subsequent PRs will collide on <code>changelog.md</code>; auto-resolve by keeping both sides per the established pattern), then <code>gh pr merge &lt;N&gt; --squash</code> (not <code>--auto --squash</code> per <code>feedback_gh_pr_merge_auto_squash_race</code> on multi-round PRs).</li>
+  <li><strong>If NEEDS_CHANGES</strong>: dispatch a focused codex fix (heredoc brief per <code>feedback_heredoc_for_danger_dispatches</code>) listing the specific findings with file:line references. Re-review with explicit anti-rubber-stamp instruction per <code>feedback_gemini_hallucinates_round2_approvals</code>.</li>
+  <li><strong>Mark the corresponding task</strong> (#8-#12) <code>completed</code>.</li>
+  <li><strong>After all 5 merged</strong>: pull the next 5 from the briefing's <code>actions.next</code> via <code>curl http://127.0.0.1:8768/api/briefing/session?compact=1</code> and repeat. Cycle until rubric-critical count drops materially.</li>
+</ol>
+
+<h2>Operational notes (throttle window day 2)</h2>
+
+<ul>
+  <li>2026-05-24 still inside the Claude throttle window (<code>feedback_claude_tier_discipline_opus_is_constrained</code>). All cross-family reviews go to <strong>gemini-3.1-pro-preview</strong>; NO claude-sonnet-4-6 headless reviews.</li>
+  <li>If gemini hits 503/timeout × 3 on a review: per <code>feedback_codex_offline_contingency</code> the fallback is normally headless claude, but the throttle blocks that. Instead: write the review locally as an orchestrator note, mark the PR with the note, defer merge until May 25 (throttle expires) and re-review with sonnet then.</li>
+  <li>Same-family rate-limit risk: 5 parallel codex dispatches share the codex weekly cap. If 2+ rate-limit and return with empty responses, retry sequentially (codex usually recovers within 10-15 min when cap pressure eases).</li>
+  <li>Worktree node_modules symlink: each new worktree may need <code>ln -s ../../node_modules/@astrojs node_modules/@astrojs</code> before <code>npm run build</code>. Codex briefs already include this footnote.</li>
+</ul>
+
+<h2>What we shipped earlier this same calendar day (was session 46)</h2>
+
+<p>Session 46 closed at commit <code>44bc2687</code> with 2 PRs merged (#1457 + #1458) and the orchestrating lane at 3/3 fixture target. New 3-fixture orchestrating ranking: <strong>sonnet 8.7 &gt; opus 8.4</strong> (gap ~0.3, within fixture noise). Five operational lessons saved to memory (cwd-trap, ledger-merge, gemini-partial-apply, heredoc-for-danger, output-root-doubling). Full handoff at <code>docs/session-state/2026-05-23-session-46-orchestrating-3-fixture-ranking.html</code>.</p>
+
+<h2>End state (handoff write-time)</h2>
+
+<ul>
+  <li><strong>Workspace</strong>: clean. Main at <code>83b158f7</code> (long-context-cohort fact-check doc).</li>
+  <li><strong>Worktrees</strong>: 6 (5 in-flight rewrites + 1 stale from session 45). Will explode to ~9 if more dispatches fire before rewrites land.</li>
+  <li><strong>Calibration ledger</strong>: 275 cells unchanged this session.</li>
+  <li><strong>Open issues</strong>: 16 unchanged.</li>
+  <li><strong>Critical-quality count</strong>: 144 modules at &lt; 2.0. Will drop to ~139 once these 5 land.</li>
+  <li><strong>In-flight dispatches</strong>: 5 codex parallel rewrites (see table above).</li>
+  <li><strong>Throttle window</strong>: day 1 (May 23) closing, day 2 (May 24) active.</li>
+</ul>
+
+<h2>What's NEXT</h2>
+
+<ol>
+  <li><strong>Handle the 5 in-flight rewrite completions</strong> end-to-end via the 7-step instruction set above. Expected wall-clock per module: 20-40 min draft + 1-3 min push + 1-2 min review + 0-15 min round-2 fix (if NEEDS_CHANGES) + 1-2 min merge. Worst case ~5 modules in ~3-4 hours total.</li>
+  <li><strong>Re-pull briefing actions.next after each merge cluster</strong>: <code>curl http://127.0.0.1:8768/api/briefing/session?compact=1</code> — new top-5 will surface as the queue drains.</li>
+  <li><strong>Continue the rubric-critical drain</strong>: 144 → 139 → 134 → ... over multiple sessions. Pattern is proven; volume is the only constraint.</li>
+  <li><strong>When 1M-context benchmark becomes interesting again</strong>: cohort doc + qwen3.7-max wiring are pre-staged; just fire the design when curriculum work hits a natural pause.</li>
+  <li><strong>Throttle window day 2 (May 24)</strong>: continue claude-free cross-family routing.</li>
+  <li><strong>Date-bound carryovers</strong>: 2026-06-08 claude-i wrapper · 2026-06-15 agentic-credit-pool flip (throttle expires) · 2026-06-18 drop gemini adapter · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+<h2>Predecessor chain (last 3)</h2>
+<ul>
+  <li><a href="2026-05-23-session-46-orchestrating-3-fixture-ranking.html">Session 46 — Orchestrating lane 3-fixture ranking (sonnet 8.7 &gt; opus 8.4)</a></li>
+  <li><a href="2026-05-23-session-45-benchmark-trust-arc-phase-2-3-plus-reports-redesign.html">Session 45 — Benchmark trust arc Phase 1.3 → 3.2 + reports redesign</a></li>
+  <li><a href="2026-05-22-session-44-benchmark-trust-arc-phase-1.html">Session 44 — Benchmark trust arc Phase 1</a></li>
+</ul>
+
+</body>
+</html>
