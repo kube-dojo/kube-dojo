@@ -27,14 +27,16 @@ Kubernetes is efficient at sharing infrastructure, which is exactly why it is ha
 
 The practical failure mode is usually not a lack of good intentions. Teams may tag resources, install Prometheus, and publish a monthly dashboard, yet still miss the spend that matters. Idle node capacity can hide under a platform cost center. A namespace can look cheap because shared ingress or storage is not allocated. A team can rightsized a workload and still pay for an unused commitment. A chargeback program can create resentment if the allocation rule is opaque. A healthy implementation makes those tradeoffs explicit, documented, and reviewable.
 
-The FinOps Foundation describes allocation as the capability that assigns and shares cost through accounts, tags, labels, and other metadata. It also describes anomaly management as the ability to detect, clarify, alert on, and manage unexpected cost events. OpenCost and Kubecost turn those ideas into Kubernetes workflows by combining cluster metrics, pricing inputs, allocation logic, APIs, dashboards, alerts, and savings recommendations. Your job is to connect the framework to the operating surface where platform teams actually work.
+The FinOps Foundation describes allocation as the capability that assigns and shares cost through accounts, tags, labels, and other metadata, and anomaly management as detection, investigation, and action workflows. See the [allocation capability](https://www.finops.org/framework/capabilities/allocation/) and [anomaly management capability](https://www.finops.org/framework/capabilities/anomaly-management/) for details. The OpenCost/Kubecost model uses the same source, but runs at Kubernetes operating speed with metadata and APIs. This module maps the FinOps ideas to the tools your teams already use on day-to-day clusters.
+
+Use the [FinOps maturity model](https://www.finops.org/framework/maturity-model/) to keep improvements realistic: start with a crawl of one namespace, walk toward broader labels and cross-team reconciliation, then run at a sustainable steady state.
 
 ## Did You Know?
 
-- The CNCF FinOps for Kubernetes report found that many organizations either did not monitor Kubernetes spend or relied on monthly estimates, which is a weak feedback loop for a system that can change capacity in minutes.
-- OpenCost requires a Kubernetes cluster and Prometheus for scraping metrics and storing the time series used by its cost allocation model.
-- Kubecost documents alert types for allocation budgets, allocation efficiency, recurring allocation updates, spend changes, asset budgets, cloud cost budgets, and cluster or Kubecost health checks.
-- Kubernetes schedules Pods from declared resource requests, not from what the container might use later, so inflated requests can create expensive idle capacity even when observed CPU and memory look low.
+- The [CNCF FinOps for Kubernetes report](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf) found that many organizations either did not monitor Kubernetes spend or relied on monthly estimates, which is a weak feedback loop for infrastructure that can change quickly.
+- [OpenCost](https://opencost.io/docs/) depends on a Kubernetes cluster and Prometheus for time-series input into workload allocation.
+- [Kubecost documentation](https://docs.kubecost.com/) shows alert families for allocation budgets, efficiency, spend change, updates, asset budgets, cloud cost budgets, and platform health.
+- Kubernetes schedules Pods from declared resource requests, not observed runtime usage, so over-requesting can create expensive idle capacity. See [resource management for Pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/).
 
 ## Implementation Map
 
@@ -84,7 +86,7 @@ Discounts, commitments, and credits also need a rule. A savings plan, reserved i
 
 ## Cost Data Sources
 
-Billing exports and metrics-based estimation answer different questions. Billing exports are the system of record for what the provider will invoice. AWS Cost Explorer exposes cost and usage metrics with dimensions, tags, cost categories, and time ranges. Google Cloud Billing export writes detailed billing data into BigQuery datasets. Azure Cost Management Query returns usage data for scopes such as subscriptions, resource groups, billing accounts, and management groups. These exports are essential for finance close, amortization, tax, credits, support, and vendor negotiation, but they usually do not explain a Kubernetes namespace by themselves.
+Billing exports and metrics-based estimation answer different questions. Billing exports are the system of record for what the provider will invoice. [AWS Cost Explorer](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html) exposes cost and usage metrics with dimensions, tags, time ranges, and cost categories. [Google Cloud Billing export to BigQuery](https://cloud.google.com/billing/docs/how-to/export-data-bigquery) writes detailed billing data into BigQuery tables for attribution and audit workflows. [Azure Cost Management + Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/) provides scoped usage and invoice data for reconciliation. These exports are essential for finance close, amortization, tax, credits, support, and vendor negotiation, but they usually do not explain a Kubernetes namespace by themselves.
 
 Metrics-based estimation starts inside the cluster. Prometheus collects container CPU, memory, persistent volume, network, and Kubernetes object metadata. kube-state-metrics exposes desired state such as resource requests, labels, namespaces, owner references, and pod phases. A cost engine joins those metrics with node, disk, load balancer, and network prices. The result is an estimate of how much each namespace, label, controller, or Pod consumed during a time window. It is not the legal invoice, but it is much closer to the engineering event that caused the cost.
 
@@ -96,9 +98,9 @@ Metadata quality is part of the data source, not an afterthought. A billing expo
 
 ## OpenCost Deep Dive
 
-OpenCost is the open source cost allocation engine and specification for Kubernetes cost monitoring. In a typical deployment, it runs in the cluster, reads Kubernetes and Prometheus data, applies pricing configuration, and exposes allocation results through an API. The OpenCost documentation describes the Allocation API as a way to query cost and resource allocation for Kubernetes workloads with parameters such as `window`, `aggregate`, `includeIdle`, and `shareIdle`. That makes OpenCost useful for automation as well as for a human dashboard.
+OpenCost is the [open source](https://opencost.io/docs/) cost allocation engine and specification for Kubernetes cost monitoring. In a typical deployment, it runs in the cluster, reads Kubernetes and Prometheus data, applies pricing configuration, and exposes allocation results through an API. The OpenCost documentation describes the [Allocation API](https://opencost.io/docs/integrations/api/) as a way to query cost and resource allocation for Kubernetes workloads with parameters such as `window`, `aggregate`, `includeIdle`, and `shareIdle`. That makes OpenCost useful for automation as well as for a human dashboard.
 
-The OpenCost architecture has three practical inputs. The first input is Kubernetes metadata: namespaces, Pods, controllers, labels, annotations, nodes, PersistentVolumes, and Services. The second input is utilization and allocation metrics stored in Prometheus. The third input is pricing data from cloud provider integrations, custom pricing configuration, or public on-demand price tables. The allocation engine combines those inputs into cost records by cluster, node, namespace, controller, Pod, label, and service. The API then lets you choose the time window and aggregation that match the question.
+The OpenCost architecture has three practical inputs. The first input is Kubernetes metadata: namespaces, Pods, controllers, labels, annotations, nodes, PersistentVolumes, and Services. The second input is utilization and allocation metrics stored in Prometheus. The third input is pricing data from cloud provider integrations, custom pricing configuration, or public on-demand price tables. You can install the core workflow from the [OpenCost docs](https://opencost.io/docs/installation/install/) and validate implementation quality from the [OpenCost specification](https://opencost.io/docs/specification/). The allocation engine combines those inputs into cost records by cluster, node, namespace, controller, Pod, label, and service. The API then lets you choose the time window and aggregation that match the question.
 
 OpenCost is especially valuable when the platform team wants vendor-neutral cost data. The OpenCost specification defines a methodology for measuring and allocating infrastructure and container costs in Kubernetes environments. That specification matters because it lets teams reason about the calculation instead of treating the dashboard as a black box. If a namespace cost changes, you should be able to trace the change to resource requests, actual usage, node price, idle allocation, persistent volume cost, or a shared-cost policy. Black-box cost numbers are hard to govern; explainable allocation can be reviewed.
 
@@ -137,7 +139,7 @@ The Kubecost Savings page is the optimization queue. The documentation describes
 
 Kubecost alerting turns cost visibility into response. Budget alerts tell an owner when a scope crosses a threshold. Efficiency alerts identify tenants operating below a target efficiency. Spend-change alerts compare current spend against a baseline and report unexpected movement. Recurring updates provide regular summaries. Diagnostic alerts monitor Kubecost and cluster health. The implementation question is who receives each class of alert. A namespace spend-change alert should go to the owning team. A cluster idle alert should go to platform engineering. A billing reconciliation gap should go to FinOps and finance.
 
-The distinction between OpenCost, Kubecost community functionality, and enterprise Kubecost features should be explained early to avoid tool confusion. OpenCost is the open source cost model and API. Kubecost packages dashboards, workflows, alerts, and productized integrations around cost visibility and optimization. The Kubecost installation documentation notes that deploying the open source OpenCost project directly provides the underlying cost allocation model without the same Kubecost UI, cloud provider billing integration, RBAC/SAML support, and scale improvements available in Kubecost product tiers. The right choice depends on scale, governance, access control, and reporting needs.
+The distinction between OpenCost, Kubecost community functionality, and enterprise Kubecost features should be explained early to avoid tool confusion. OpenCost is the open source cost model and API. Kubecost packages dashboards, workflows, alerts, and productized integrations around cost visibility and optimization. The [Kubecost documentation](https://docs.kubecost.com/) notes that deploying the open source OpenCost project directly provides the underlying cost allocation model without the same Kubecost UI, provider billing integration depth, RBAC/SAML support, and scale improvements available in Kubecost product tiers. The right choice depends on scale, governance, access control, and reporting needs.
 
 A minimal adoption path is to start with OpenCost or Kubecost in one non-critical cluster, validate the calculations against a known node price, and build a namespace allocation report. The next step is to add required ownership labels and tune idle handling. After that, introduce savings review and alert routing. Only then should the organization attempt chargeback. If teams do not trust the data during showback, chargeback will turn every monthly report into a dispute.
 
@@ -288,21 +290,22 @@ D. A request for finance to explain Kubernetes scheduling.
 Answer: B is correct because anomaly response depends on ownership, scope, baseline, and evidence. A is too vague, C creates noise, and D sends an engineering investigation to the wrong function.
 </details>
 
-## Hands-On Practice
+## Hands-On Lab
 
-- [ ] Exercise 1: Install OpenCost on kind, query the Allocation API, and produce a namespace cost report.
-- [ ] Exercise 2: Deploy Kubecost, tour allocation and savings views, and identify a rightsizing opportunity in a synthetic workload.
-- [ ] Exercise 3: Investigate a synthetic cost anomaly with `kubectl describe nodes` and Kubecost allocation data.
+### Setup
 
-These exercises are designed for a local learning cluster, not for production. They assume `kind`, `kubectl`, `helm`, `curl`, and `jq` are installed. A kind cluster will not reproduce real cloud billing, but it is enough to practice the workflow: install a cost engine, create workloads with ownership labels and resource requests, query allocation data, inspect dashboards, and reason from symptoms to root cause. In a managed cloud cluster, the same workflow should be connected to cloud billing integration and real node pricing.
+These commands are intended for a local lab. Assume `kind`, `kubectl`, `helm`, `curl`, and `jq` are installed.
 
-### Exercise 1: OpenCost On kind
-
-Create a small cluster, install Prometheus, install OpenCost, and query namespace allocation. The important learning objective is the API workflow, not the exact local price. You are proving that allocation can be queried by time window and namespace, then turned into a report that a team could read. Keep idle cost visible for the first query so you can see the difference between workload allocation and unused cluster capacity.
+1. Install `kind` and create a lab cluster.
 
 ```bash
+kind version
 kind create cluster --name finops-practice
+```
 
+2. Install Prometheus and render OpenCost into Kubernetes manifests via Helm, then apply with `kubectl`.
+
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo add opencost https://opencost.github.io/opencost-helm-chart
 helm repo update
@@ -311,37 +314,37 @@ helm upgrade --install prometheus prometheus-community/prometheus \
   --namespace prometheus-system \
   --create-namespace
 
-helm upgrade --install opencost opencost/opencost \
+kubectl create namespace opencost
+
+helm template opencost opencost/opencost \
   --namespace opencost \
-  --create-namespace \
-  --set opencost.exporter.defaultClusterId=kind-finops \
   --set opencost.prometheus.internal.namespaceName=prometheus-system \
-  --set opencost.prometheus.internal.serviceName=prometheus-server
+  --set opencost.prometheus.internal.serviceName=prometheus-server \
+  --set opencost.prometheus.internal.scheme=http \
+  --set opencost.prometheus.internal.port=9090 \
+  | kubectl apply -n opencost -f -
 
 kubectl wait --for=condition=Available deployment/opencost \
   --namespace opencost \
   --timeout=180s
 ```
 
-Create two labeled namespaces and a small workload so the allocation report has something to group. The requests are deliberately higher than an idle NGINX Pod needs. That makes the cost signal visible and gives you a rightsizing discussion later. Labels are included at namespace and workload level because a real implementation should not depend on namespace names alone.
+3. Create one workload with ownership labels.
 
 ```bash
 kubectl create namespace team-a
-kubectl label namespace team-a team=payments product=checkout environment=dev
+kubectl label namespace team-a team=payments environment=dev product=checkout
 
-kubectl create namespace team-b
-kubectl label namespace team-b team=search product=catalog environment=dev
-
-kubectl apply -f - <<'EOF'
+kubectl apply -n team-a -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: checkout-web
-  namespace: team-a
   labels:
+    app: checkout-web
     team: payments
     product: checkout
-    app: checkout-web
+    environment: dev
 spec:
   replicas: 2
   selector:
@@ -350,9 +353,10 @@ spec:
   template:
     metadata:
       labels:
+        app: checkout-web
         team: payments
         product: checkout
-        app: checkout-web
+        environment: dev
     spec:
       containers:
         - name: nginx
@@ -362,136 +366,58 @@ spec:
               cpu: "500m"
               memory: "512Mi"
             limits:
-              cpu: "1"
-              memory: "768Mi"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: catalog-web
-  namespace: team-b
-  labels:
-    team: search
-    product: catalog
-    app: catalog-web
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: catalog-web
-  template:
-    metadata:
-      labels:
-        team: search
-        product: catalog
-        app: catalog-web
-    spec:
-      containers:
-        - name: nginx
-          image: nginx:1.27
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "256Mi"
-            limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "750m"
+              memory: "1Gi"
 EOF
 ```
 
-Query OpenCost. If the first response is empty, wait a few minutes for Prometheus and OpenCost to collect data, then run the query again. The report should show namespaces, cost, CPU, memory, and idle handling for the selected window. In a real cluster, repeat the query with `aggregate=label:team` after validating that the label exists consistently across workloads.
+### Exercise: Querying OpenCost
+
+Use the API workflow (not a full billing integration) to generate namespace cost data.
 
 ```bash
-kubectl port-forward --namespace opencost service/opencost 9003:9003
+kubectl port-forward --namespace opencost service/opencost 9003:9003 &
+PF_PID=$!
+
+sleep 3
+curl -s "http://127.0.0.1:9003/allocation/compute?window=1h&aggregate=namespace&includeIdle=true&shareIdle=false" | jq '.data[0]'
+
+kill "$PF_PID"
 ```
+
+Expected output is a JSON object with namespace allocation rows, including `team-a` and `__unallocated__`.
+
+### Acceptance checks
+
+- [ ] `kind get clusters` includes `finops-practice`.
+- [ ] `kubectl wait --for=condition=Available deployment/opencost -n opencost --timeout=180s` exits with zero.
+- [ ] `kubectl get pods -n opencost --field-selector=status.phase=Running` returns at least one OpenCost pod.
+- [ ] `kubectl port-forward --namespace opencost service/opencost 9003:9003` followed by the allocation curl command returns valid JSON with a `data` field.
+
+### Cleanup
 
 ```bash
-curl -s "http://127.0.0.1:9003/allocation/compute?window=1h&aggregate=namespace&includeIdle=true&shareIdle=false" \
-  | jq '.data[0]'
+kind delete cluster --name finops-practice
 ```
-
-Produce a short namespace report. Include the time window, whether idle was included or shared, the top namespace by cost, the top namespace by requested CPU, and any unallocated or system namespace cost. The report does not need to be fancy. It needs to be repeatable and clear enough that an owner can understand what changed and what action is expected.
-
-### Exercise 2: Kubecost Dashboard Tour
-
-Install Kubecost and open the UI. The exact product screen may vary by version, but the tour should cover allocation, assets, savings, alerts, and settings. Your objective is to connect a recommendation to a workload owner and a safe action. Do not treat the UI as an oracle. Treat it as a fast way to ask better questions about requests, idle capacity, and workload lifecycle.
-
-```bash
-helm repo add kubecost https://kubecost.github.io/cost-analyzer/
-helm repo update
-
-helm upgrade --install kubecost kubecost/cost-analyzer \
-  --namespace kubecost \
-  --create-namespace \
-  --set kubecostProductConfigs.clusterName=kind-finops
-
-kubectl wait --for=condition=Available deployment/kubecost-cost-analyzer \
-  --namespace kubecost \
-  --timeout=300s
-
-kubectl port-forward --namespace kubecost deployment/kubecost-cost-analyzer 9090:9090
-```
-
-Open `http://127.0.0.1:9090` in a browser. In Allocations, select a recent window and aggregate by namespace. Compare `team-a` and `team-b`, then switch to a label or workload view if available. In Savings, look for container request right-sizing, abandoned workloads, unclaimed volumes, and underutilized nodes. In Alerts, inspect budget, efficiency, spend-change, recurring update, and diagnostic alert options. Record which alert would go to a service owner and which alert would go to platform engineering.
-
-For the synthetic rightsizing opportunity, inspect `team-a/checkout-web`. It requests more CPU and memory than an idle NGINX demo normally needs, so a recommendation may appear after enough metrics are collected. If your local window is too short for a recommendation, write the recommendation manually from the data you can observe: current request, observed usage, proposed request, owner, risk, validation plan, and rollback plan. The goal is the FinOps decision record, not a perfect local savings number.
-
-### Exercise 3: Cost Anomaly Investigation
-
-Exercise scenario: yesterday's daily showback report showed namespace `team-a` rising from baseline to a much larger share of cluster cost. The synthetic dashboard says compute cost increased, idle cost also increased, and the largest workload movement is `checkout-web`. A developer says the release only changed a feature flag. Finance asks whether this is planned growth, a misconfiguration, or a platform issue. Your job is to investigate the likely cause and decide who owns the next action.
-
-| Signal | Previous day | Current day | Notes |
-| --- | --- | --- | --- |
-| `team-a` replicas | 2 | 8 | HPA or manual scale changed replica count |
-| CPU request per Pod | 500m | 1000m | Request doubled during release |
-| Memory request per Pod | 512Mi | 1024Mi | Request doubled during release |
-| Node count | 1 | 3 | Cluster autoscaler added nodes |
-| Idle cost | Low | High | New nodes have unused allocatable capacity |
-| Error rate | Normal | Normal | No immediate reliability incident |
-
-Start with Kubernetes scheduling evidence. The `kubectl describe nodes` output shows requested resources and allocatable capacity for each node. If requests are high but actual usage is low, the cluster may have scaled because the scheduler had to satisfy declared requests. Then inspect Pods and owner references so you know whether the replica increase came from a Deployment, HPA, rollout, or manual scaling event.
-
-```bash
-kubectl describe nodes
-kubectl get pods --all-namespaces -o wide
-kubectl get deployment checkout-web --namespace team-a -o yaml
-kubectl get hpa --all-namespaces
-kubectl top pods --namespace team-a
-```
-
-Use Kubecost or OpenCost to compare allocation by namespace and workload. In Kubecost, aggregate by namespace, filter to `team-a`, then drill into controllers or Pods. In OpenCost, query namespace allocation for the recent window and compare `includeIdle=true` with `shareIdle=false` against a query with `shareIdle=true`. The difference tells you whether the spike is mostly direct workload cost, shared idle capacity, or a mix of both.
-
-```bash
-curl -s "http://127.0.0.1:9003/allocation/compute?window=24h&aggregate=namespace&includeIdle=true&shareIdle=false" \
-  | jq '.data[0]'
-
-curl -s "http://127.0.0.1:9003/allocation/compute?window=24h&aggregate=namespace&includeIdle=true&shareIdle=true" \
-  | jq '.data[0]'
-```
-
-The likely root cause is a release that increased both replica count and per-Pod requests, forcing new nodes while leaving idle capacity behind. The owner is the service team for the workload request and replica change, with platform engineering owning any node-pool or autoscaler tuning discovered during the review. The next action is not "cut cost" in the abstract. It is a safe rightsizing change, an HPA review, and an update to the anomaly record that explains the baseline change or the misconfiguration.
 
 ## Sources
 
 - [FinOps Framework overview](https://www.finops.org/framework/)
-- [FinOps capabilities matrix](https://www.finops.org/framework/capabilities/)
+- [FinOps Maturity Model](https://www.finops.org/framework/maturity-model/)
 - [FinOps Allocation capability](https://www.finops.org/framework/capabilities/allocation/)
-- [FinOps Usage Optimization capability](https://www.finops.org/framework/capabilities/workload-optimization/)
 - [FinOps Anomaly Management capability](https://www.finops.org/framework/capabilities/anomaly-management/)
-- [OpenCost installation documentation](https://opencost.io/docs/installation/install/)
-- [OpenCost Allocation API documentation](https://opencost.io/docs/integrations/api/)
+- [OpenCost overview](https://opencost.io/docs/)
+- [OpenCost installation](https://opencost.io/docs/installation/install/)
+- [OpenCost API](https://opencost.io/docs/integrations/api/)
 - [OpenCost specification](https://opencost.io/docs/specification/)
+- [OpenCost API examples](https://opencost.io/docs/integrations/api-examples)
 - [OpenCost GitHub repository](https://github.com/opencost/opencost)
-- [Kubecost installation documentation](https://docs.kubecost.com/install-and-configure/install)
-- [Kubecost Savings documentation](https://www.ibm.com/docs/en/kubecost/self-hosted/3.x?topic=ui-savings)
-- [Kubecost Alerts documentation](https://docs.kubecost.com/using-kubecost/navigating-the-kubecost-ui/alerts)
-- [AWS Cost Explorer GetCostAndUsage API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html)
-- [Google Cloud Billing export to BigQuery setup](https://cloud.google.com/billing/docs/how-to/export-data-bigquery-setup)
-- [Azure Cost Management Query Usage API](https://learn.microsoft.com/en-us/rest/api/cost-management/query/usage?view=rest-cost-management-2025-03-01)
+- [Kubecost documentation](https://docs.kubecost.com/)
+- [Kubecost API documentation](https://www.ibm.com/docs/en/kubecost/self-hosted/3.x?topic=apis-allocation-api)
+- [AWS Cost Explorer API](https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_GetCostAndUsage.html)
+- [Google Cloud Billing export to BigQuery](https://cloud.google.com/billing/docs/how-to/export-data-bigquery)
+- [Azure Cost Management + Billing](https://learn.microsoft.com/en-us/azure/cost-management-billing/)
 - [Kubernetes resource management for Pods and containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
-- [Kubernetes Pod Quality of Service classes](https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/)
-- [Kubernetes Horizontal Pod Autoscaling](https://kubernetes.io/docs/concepts/workloads/autoscaling/horizontal-pod-autoscale/)
-- [Kubernetes Vertical Pod Autoscaler repository](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler)
 - [CNCF FinOps for Kubernetes report](https://www.cncf.io/wp-content/uploads/2021/06/FINOPS_Kubernetes_Report.pdf)
 
 ## Next Module
