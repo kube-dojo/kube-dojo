@@ -120,9 +120,20 @@ flowchart LR
 
 Manual zone edits do not scale when developers create Ingress objects hourly. ExternalDNS watches Services and Ingresses, then creates or updates DNS records through provider plugins. For on-premises, common integrations include RFC2136 dynamic updates against BIND, PowerDNS API, Infoblox WAPI, and webhook providers for proprietary IPAM/DNS appliances. The upstream project documents each provider’s required credentials and record ownership labels; always set `txtOwnerId` or equivalent so two clusters do not fight over the same names. ExternalDNS current release line is v0.21.0; pin manifests to a tagged release rather than floating `latest` images in production.
 
-A minimal RFC2136 deployment needs TSIG keys shared between BIND and ExternalDNS, plus RBAC allowing the controller to read Ingress and Service resources cluster-wide or per namespace depending on your tenancy model:
+A minimal RFC2136 deployment needs TSIG keys shared between BIND and ExternalDNS, plus RBAC allowing the controller to read Ingress and Service resources cluster-wide or per namespace depending on your tenancy model. **Do not** put TSIG material in PodSpec `args` or `command`—those values land in etcd and audit logs. Store the key in a Kubernetes Secret and inject it with `env` / `valueFrom.secretKeyRef` (ExternalDNS maps `EXTERNAL_DNS_RFC2136_TSIG_SECRET` to `--rfc2136-tsig-secret`).
+
+When using `--policy=sync`, you must also pass `--rfc2136-tsig-axfr` so ExternalDNS can zone-transfer (AXFR) the zone and detect records to delete; without AXFR, sync silently behaves like upsert-only and stale A/AAAA names persist after Ingress removal. On BIND, grant the TSIG identity `allow-transfer` (and an `axfr-source` ACL if you use views) so AXFR from the cluster egress IPs succeeds.
 
 ```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-dns-rfc2136-tsig
+  namespace: external-dns
+type: Opaque
+stringData:
+  rfc2136-tsig-secret: "<provision from Vault or sealed-secrets; never commit real material>"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -135,6 +146,12 @@ spec:
       containers:
         - name: external-dns
           image: registry.k8s.io/external-dns/external-dns:v0.21.0
+          env:
+            - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: external-dns-rfc2136-tsig
+                  key: rfc2136-tsig-secret
           args:
             - --source=ingress
             - --source=service
@@ -143,7 +160,7 @@ spec:
             - --rfc2136-zone=internal.example.com
             - --rfc2136-tsig-secret-alg=hmac-sha256
             - --rfc2136-tsig-keyname=externaldns-key
-            - --rfc2136-tsig-secret=REPLACE_WITH_VAULT_SECRET
+            - --rfc2136-tsig-axfr
             - --txt-owner-id=k8s-prod-west
             - --policy=sync
 ```
@@ -170,7 +187,7 @@ Let’s Encrypt validates only names it can reach publicly. Internal-only zones 
 
 ## Section 7: Private CA options — step-ca, Vault, cfssl, openssl
 
-**step-ca** provides a modern ACME and SCEP endpoint with short-lived certificate policies, useful when you want public-ACME ergonomics without public-ACME trust. Bootstrap a CA, configure ACME provisioners, then point cert-manager’s ACME issuer at `https://step-ca.internal.example.com/acme/acme/directory` with your internal CA bundle in `spec.acme.privateKeySecretRef` and solver configuration for DNS-01 on your internal zone.
+**step-ca** provides a modern ACME and SCEP endpoint with short-lived certificate policies, useful when you want public-ACME ergonomics without public-ACME trust. Bootstrap a CA, configure ACME provisioners, then point cert-manager’s ACME issuer at `https://step-ca.internal.example.com/acme/acme/directory` with your internal CA trust chain in `spec.acme.caBundle` (PEM) and solver configuration for DNS-01 on your internal zone. `spec.acme.privateKeySecretRef` names the Secret that stores the ACME *account* private key—a different purpose than trusting a private ACME server.
 
 **HashiCorp Vault PKI** keeps signing keys off etcd. Enable the PKI secrets engine, generate root and intermediate CAs, define a role with `allowed_domains` and `max_ttl`, then configure Kubernetes auth so cert-manager’s service account can call `pki_int/sign/<role>`. Vault audit devices record every signature, which compliance teams expect, and CRL/OCSP endpoints can be published on corporate HTTP servers for clients that validate revocation.
 
@@ -460,7 +477,7 @@ ExternalDNS runs with `policy=sync` against BIND, but records for deleted Ingres
 <details>
 <summary>Answer</summary>
 
-Common causes include TSIG key mismatch on dynamic updates, wrong zone name in `--rfc2136-zone`, or ExternalDNS lacking permission to remove records it did not create because `txtOwnerId` changed between deployments. Review controller logs for `RFC2136` errors and confirm the BIND view allows DELETE for the TSIG identity. Domain filters excluding the hostname also leave stale records while appearing healthy in Kubernetes events.
+The most common gap is `policy=sync` without `--rfc2136-tsig-axfr`: ExternalDNS cannot AXFR the zone, so it never lists existing records and deletion silently does not happen (upstream documents this as upsert-only behavior with no warning). Also check TSIG key mismatch on dynamic updates, wrong zone in `--rfc2136-zone`, BIND `allow-transfer` / `axfr-source` denying AXFR from cluster egress, or `txtOwnerId` changes that make ExternalDNS treat records as owned by another cluster. Review controller logs for `RFC2136` and AXFR errors; confirm the BIND view allows DELETE for the TSIG identity. Domain filters excluding the hostname also leave stale records while Kubernetes events look healthy.
 </details>
 
 ### Question 4
