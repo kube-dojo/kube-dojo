@@ -77,15 +77,16 @@ Scripts intended for production should validate their execution context early. C
 
 ## Shell Expansion Order
 
-Before Bash executes any command, it performs a sequence of expansions on the command line. Understanding this order is not an academic exercise — it determines whether your variable value reaches the command intact or is silently split into multiple arguments, subjected to pattern matching, or treated as a command to execute. The [Bash manual section on Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) defines the following sequence, applied left to right on each token:
+Before Bash executes any command, it performs a sequence of expansions on the command line. Understanding this order is not an academic exercise — it determines whether your variable value reaches the command intact or is silently split into multiple arguments, subjected to pattern matching, or treated as a command to execute. The [Bash manual section on Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) defines this order, with process substitution in the substitution phase on systems that support it:
 
 1. **Brace expansion** — `{a,b,c}` expands to `a b c` before any other processing occurs. This is purely textual; no variable or filename interpretation happens at this stage.
 2. **Tilde expansion** — `~` expands to the home directory and `~user` expands to that user's home directory. This occurs only at the start of a word or after `=` in an assignment.
 3. **Parameter expansion** — `${variable}` and its many forms replace the expression with the variable's value. This is the stage where `${var:-default}`, `${var#pattern}`, `${var%pattern}`, `${#var}`, and substring slicing operate.
 4. **Command substitution** — `$(command)` or backtick syntax runs the command and replaces the substitution with its standard output, with trailing newlines removed.
 5. **Arithmetic expansion** — `$((expression))` evaluates the integer arithmetic expression and replaces it with the result.
-6. **Word splitting** — the result of unquoted parameter expansions, command substitutions, and arithmetic expansions is split into words on characters in the `IFS` variable (space, tab, newline by default). Quoted expansions are exempt from word splitting, which is the single most important reason to quote your variables.
-7. **Pathname expansion** — unquoted `*`, `?`, and `[` characters are treated as glob patterns and expanded to matching filenames. This stage is also disabled by quoting.
+6. **Process substitution** — `<(command)` and `>(command)` are expanded when the shell evaluates substitutions in systems that support process redirections.
+7. **Word splitting** — the result of unquoted parameter expansions, command substitutions, process substitutions, and arithmetic expansions is split into words on characters in the `IFS` variable (space, tab, newline by default). Quoted expansions are exempt from word splitting, which is the single most important reason to quote your variables.
+8. **Pathname expansion** — unquoted `*`, `?`, and `[` characters are treated as glob patterns and expanded to matching filenames. This stage is also disabled by quoting.
 
 The expansion order is not just a checklist — it shapes every line of Bash you write. Because word splitting happens after parameter expansion, an unquoted variable containing spaces will be split into multiple arguments after its value is substituted. Because pathname expansion happens last, an unquoted variable containing `*` will be expanded to the list of files in the current directory. These behaviours are deterministic once you know the order, and knowing the order is what separates operators who debug by guessing from operators who predict what their script will produce before it runs.
 
@@ -96,7 +97,8 @@ flowchart LR
     C --> D[Parameter Expansion]
     D --> E[Command Substitution]
     E --> F[Arithmetic Expansion]
-    F --> G{Quoted?}
+    F --> P[Process Substitution]
+    P --> G{Quoted?}
     G -->|Yes| H[Skip Splitting]
     G -->|No| I[Word Splitting on IFS]
     H --> J[Pathname Expansion]
@@ -107,7 +109,7 @@ flowchart LR
 
 Brace expansion is the first stage, and it operates on literal commas and ranges before any variable is expanded. `mkdir -p project/{src,tests,docs}` creates three directories in one command. Tilde expansion follows immediately, translating `~` and `~user` only at word boundaries. These two stages are safe because they operate on literal text rather than on substituted values.
 
-The real danger zone begins at stage three with parameter expansion, then compounds through command substitution and arithmetic expansion. Each of these stages substitutes runtime values into the command line. After substitution, the shell proceeds to word splitting on unquoted results, which is why `$file` with a value of "my documents" becomes two words. The shell then performs pathname expansion, turning `*` and `?` characters into matching filenames. Both of these destructive stages are disabled by double quotes. Understanding this sequence means you can look at any Bash command and predict its word boundaries without running it.
+The real danger zone begins at stage three with parameter expansion, then compounds through command substitution, arithmetic expansion, and process substitution. Each of these stages substitutes runtime values into the command line. After substitution, the shell proceeds to word splitting on unquoted results, which is why `$file` with a value of "my documents" becomes two words. The shell then performs pathname expansion, turning `*` and `?` characters into matching filenames. Both of these destructive stages are disabled by double quotes. Understanding this sequence means you can look at any Bash command and predict its word boundaries without running it.
 
 Parameter expansion deserves special attention because it provides the mechanisms for default values, alternate values, and string manipulation that make Bash scripts resilient in the face of missing inputs. `${var:-default}` substitutes `default` only when `var` is unset or empty, leaving the original variable unchanged. `${var:=default}` assigns the default value back to the variable as a side effect, which can be useful for enforcing configuration at the point of first use. `${var:?message}` prints the message to standard error and exits the script if the variable is unset or empty — a compact way to assert that required inputs are present. `${var:+alternate}` substitutes `alternate` only when `var` is set and non-empty, which is less commonly used but invaluable for optional flags. Substring extraction with `${var:offset:length}` and pattern-based trimming with `${var#pattern}` and `${var%pattern}` complete the toolkit. The [Bash manual section on Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html) documents every variant in detail, and you should consult it when building validation logic rather than guessing at the syntax.
 
@@ -427,11 +429,11 @@ fi
 
 The `IFS` variable deserves explicit discussion because it controls word splitting, the mechanism that silently reshapes your data. The default `IFS` is space, tab, and newline. When you set `IFS=$'\n\t'` as part of strict mode, you restrict word splitting to newlines and tabs, which prevents spaces inside values from splitting a single string into multiple arguments. This is particularly important when processing filenames or resource names that legally contain spaces. Note that setting `IFS` globally affects every unquoted expansion in the script, so it should be set once at the top and left alone.
 
-Strict mode is not without trade-offs, and there are legitimate situations where you should temporarily relax a specific option. When a command's non-zero exit is expected and handled, use `command || true` to absorb it without disabling `set -e` globally. When you need to check whether a variable is set without triggering `set -u`, use `${var:-}` to provide an empty default that satisfies nounset. When a pipeline's intermediate failure is acceptable — such as a filter that may produce no output — handle the exit explicitly after the pipeline rather than disabling `pipefail` for the entire script. The [ShellCheck wiki rule SC2155](https://www.shellcheck.net/wiki/SC2155) documents the correct patterns for each of these situations, and the rule is worth consulting whenever you are tempted to comment out `set -euo pipefail` as a quick fix.
+Strict mode is not without trade-offs, and there are legitimate situations where you should temporarily relax a specific option. When a command's non-zero exit is expected and handled, use `command || true` to absorb it without disabling `set -e` globally. When you need to check whether a variable is set without triggering `set -u`, use `${var:-}` to provide an empty default that satisfies nounset. When a pipeline's intermediate failure is acceptable — such as a filter that may produce no output — handle the exit explicitly after the pipeline rather than disabling `pipefail` for the entire script.
 
 Finally, strict mode should be paired with `set -f` (noglob) in scripts that handle untrusted filenames or user input. Noglob disables pathname expansion entirely, which means `*`, `?`, and `[` are treated as literal characters. This is the safest setting when a script processes input where glob characters might appear unintentionally, but it also means you lose the convenience of `*.txt` patterns in loops and `ls *.log` invocations. The decision to use noglob should be documented in the script's header because future maintainers may not expect glob patterns to be non-functional.
 
-Defensive scripting extends beyond shell options to explicit precondition checking. Before a script reaches any operation that modifies files, makes network calls, or changes cluster state, it should verify that required tools are available with `command -v`, required files are readable with `[[ -r "$file" ]]`, and required arguments are present. The [ShellCheck wiki page SC2236](https://www.shellcheck.net/wiki/SC2236) recommends using `command -v` over `which` for portability. The [SC2143](https://www.shellcheck.net/wiki/SC2143) rule flags the common antipattern of using `grep -q` inside `[ ]` instead of piping directly to `if grep`.
+Defensive scripting extends beyond shell options to explicit precondition checking. Before a script reaches any operation that modifies files, makes network calls, or changes cluster state, it should verify that required tools are available with `command -v`, required files are readable with `[[ -r "$file" ]]`, and required arguments are present. The [ShellCheck wiki page SC2230](https://www.shellcheck.net/wiki/SC2230) recommends using `command -v` over `which` for portability. The [SC2143](https://www.shellcheck.net/wiki/SC2143) rule flags the common antipattern of using `grep -q` inside `[ ]` instead of piping directly to `if grep`.
 
 ## ShellCheck: Integration into CI
 
@@ -554,7 +556,7 @@ The script should check both existence and readability before any operation depe
 
 <details><summary>Question 3: A CI pipeline runs `curl -s https://api.example.com/data | jq '.items' > output.json`. The `curl` command fails with a timeout, but the pipeline step reports success. Why does `set -e` not catch this, and what additional option prevents it?</summary>
 
-Without `set -o pipefail`, a pipeline's exit status is the status of the last command only. If `jq` receives empty input from the failed `curl`, it may exit successfully (producing `null` or an empty output), masking the `curl` failure. Adding `set -o pipefail` changes the pipeline exit status to the rightmost non-zero exit status, so a `curl` failure propagates. The [ShellCheck rule SC2155](https://www.shellcheck.net/wiki/SC2155) and the broader discussion in the Bash manual section on Pipelines both document that `pipefail` is essential for any pipeline where an intermediate command failure should not be silently ignored.
+Without `set -o pipefail`, a pipeline's exit status is the status of the last command only. If `jq` receives empty input from the failed `curl`, it may exit successfully (producing `null` or an empty output), masking the `curl` failure. Adding `set -o pipefail` changes the pipeline exit status to the rightmost non-zero exit status, so a `curl` failure propagates. The broader discussion in the Bash manual section on Pipelines documents that `pipefail` is essential for any pipeline where an intermediate command failure should not be silently ignored.
 
 </details>
 
@@ -566,7 +568,7 @@ Use `for file in "$@"; do ...; done`. The quoted `"$@"` expands each positional 
 
 <details><summary>Question 5: A helper function sets `status=failed` without `local`, and later the main script reads an unexpected value from `$status`. What Bash behaviour causes this, and how should the function be corrected?</summary>
 
-Variables in Bash functions are global by default unless declared with `local`. The assignment `status=failed` inside the function overwrites the caller's `status` variable at global scope. The fix is to declare `local status=failed` so the variable is scoped to the function. The [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html#s7.2-variable-names) and the [Greg's Wiki article on Bash variable scope](https://mywiki.wooledge.org/BashGuide/CompoundCommands#Functions) both emphasise that every function variable should be declared `local`, and ShellCheck rule [SC2155](https://www.shellcheck.net/wiki/SC2155) warns about assignments that should be scoped.
+Variables in Bash functions are global by default unless declared with `local`. The assignment `status=failed` inside the function overwrites the caller's `status` variable at global scope. The fix is to declare `local status=failed` so the variable is scoped to the function. The [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html#s7.2-variable-names) and the [Greg's Wiki article on Bash variable scope](https://mywiki.wooledge.org/BashGuide/CompoundCommands#Functions) both emphasise that every function variable should be declared `local`.
 
 </details>
 
@@ -733,7 +735,9 @@ echo ""
 echo "=== Pattern Matching ==="
 echo "Version:       $VERSION"
 echo "Strip leading v: ${VERSION#v}"
-echo "Major only:     ${VERSION#v} → ${VERSION%%.*}"
+MAJOR_ONLY="${VERSION#v}"
+MAJOR_ONLY="${MAJOR_ONLY%%.*}"
+echo "Major only:     $MAJOR_ONLY"
 SCRIPT
 
 chmod +x expand-demo.sh
@@ -755,7 +759,7 @@ chmod +x expand-demo.sh
 
 1. [Bash Reference Manual — GNU Project](https://www.gnu.org/software/bash/manual/bash.html) — Official and comprehensive documentation of all Bash features, including startup files, expansions, quoting, and built-in commands. Cited throughout this module for startup behaviour, expansion order, quoting rules, conditional constructs, shell functions, process substitution, redirections, the set builtin, parameter expansion, and special parameters.
 2. [Bash Reference Manual: Bash Startup Files](https://www.gnu.org/software/bash/manual/bash.html#Bash-Startup-Files) — The authoritative description of which files Bash reads during initialisation for login, interactive non-login, and non-interactive shells.
-3. [Bash Reference Manual: Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) — Full documentation of the seven-stage expansion sequence: brace, tilde, parameter, command substitution, arithmetic, word splitting, and pathname expansion.
+3. [Bash Reference Manual: Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) — Full documentation of the expansion sequence: brace, tilde, parameter, command substitution, arithmetic, process substitution (where supported), word splitting, and pathname expansion.
 4. [Bash Reference Manual: Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html) — Every parameter expansion variant, including defaults, alternates, substring extraction, and pattern trimming.
 5. [Bash Reference Manual: Quoting](https://www.gnu.org/software/bash/manual/html_node/Quoting.html) — Escape characters, single quotes, double quotes, and ANSI-C quoting with precise rules about which expansions are suppressed in each context.
 6. [Bash Reference Manual: Conditional Constructs](https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html) — `if`, `case`, `[[ ]]`, and `(( ))` with all comparison operators and pattern-matching syntax.
@@ -766,10 +770,10 @@ chmod +x expand-demo.sh
 11. [Bash Reference Manual: Bourne Shell Builtins](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html) — Built-in commands including `command`, `type`, `readonly`, and `local`, with their POSIX and Bash-specific behaviours.
 12. [POSIX Shell Command Language — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html) — The formal specification for the POSIX shell grammar, used in this module for the `#!/bin/sh` portability discussion.
 13. [POSIX test specification — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/test.html) — The formal semantics of the `[ ]` (test) command, applicable when targeting POSIX-compatible shells instead of Bash-specific `[[ ]]`.
-14. [ShellCheck — Static analysis for shell scripts](https://www.shellcheck.net/) — The online ShellCheck tool and rule index. Specific rules cited: SC1068 (spaces around `=` in assignments), SC2143 (grep -q patterns), SC2155 (variable scope and `local`), SC2236 (`command -v` over `which`), and SC2292 (`[[ ]]` vs `[ ]`).
+14. [ShellCheck — Static analysis for shell scripts](https://www.shellcheck.net/) — The online ShellCheck tool and rule index. Specific rules cited: SC1068 (spaces around `=` in assignments), SC2143 (grep -q patterns), SC2155 (declare and assign separately where command substitutions can mask return values), SC2230 (`command -v` over `which`), and SC2292 (`[[ ]]` vs `[ ]`).
 15. [ShellCheck wiki: SC1068](https://www.shellcheck.net/wiki/SC1068) — Rule documentation for the spaces-around-equals-in-assignment error.
-16. [ShellCheck wiki: SC2143](https://www.shellcheck.net/wiki/SC2143) — Rule documentation for using `grep -q` patterns correctly under `set -e`.
-17. [ShellCheck wiki: SC2155](https://www.shellcheck.net/wiki/SC2155) — Rule documentation for variable scope and the `local` requirement in functions.
+16. [ShellCheck wiki: SC2143](https://www.shellcheck.net/wiki/SC2143) — Rule documentation for using `grep -q` patterns correctly.
+17. [ShellCheck wiki: SC2155](https://www.shellcheck.net/wiki/SC2155) — Rule documentation for declaring and assigning separately to avoid masking return values.
 18. [ShellCheck GitHub Repository](https://github.com/koalaman/shellcheck) — Source repository and installation instructions for ShellCheck.
 19. [Greg's Wiki — BashGuide](https://mywiki.wooledge.org/BashGuide) — A community-maintained guide to Bash scripting widely referenced in the shell-scripting community, cited in this module for quoting rules, argument safety with arrays, and function structure.
 20. [Greg's Wiki — BashFAQ/001](https://mywiki.wooledge.org/BashFAQ/001) — The canonical reference for safe file-reading loops, explaining why `for line in $(cat file)` is unreliable and `while IFS= read -r line` is the correct alternative.
