@@ -91,7 +91,7 @@ A minimal management-cluster install uses `clusterctl` to initialize providers:
 
 ```bash
 # Install clusterctl matching your target Kubernetes minor version
-curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/clusterctl-linux-amd64 -o clusterctl
+curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/clusterctl-linux-amd64 -o clusterctl
 chmod +x clusterctl && sudo mv clusterctl /usr/local/bin/
 
 # Initialize core providers (Docker provider useful for local labs)
@@ -125,7 +125,7 @@ Fleet controllers solve **configuration drift across many API servers**. They di
 
 ### Rancher Fleet
 
-[Rancher Fleet](https://fleet.rancher.io/) targets operators who want Git-driven bundles applied to cluster groups selected by labels. A `GitRepo` resource watches a repository; Fleet builds bundles and deploys them to matching downstream clusters registered with Rancher or direct cluster credentials. Fleet excels when platform teams already standardize on Rancher for authentication and cluster import, and when downstream clusters can be reached from the management network for push-based apply.
+[Rancher Fleet](https://fleet.rancher.io/) targets operators who want Git-driven bundles applied to cluster groups selected by labels. A `GitRepo` resource on the Fleet controller watches a repository and builds bundles; a **downstream Fleet agent** in each workload cluster **pulls** those bundles by polling the controller—the controller does not initiate connections to spoke API servers. Fleet excels when platform teams already standardize on Rancher for authentication and cluster import, and when spokes can reach the management network (or a mirrored Git/Bundle endpoint) for agent polling.
 
 Fleet bundles support diff comparisons, staged rollouts, and per-cluster customization through `fleet.yaml` overlays. On-premises teams often mirror Git repositories inside the corporate network so Fleet never depends on public GitHub webhooks during air-gapped maintenance windows.
 
@@ -135,11 +135,11 @@ Bundle design tips for on-premises: pin Helm chart versions explicitly, keep CRD
 
 ### Argo CD ApplicationSets
 
-[Argo CD ApplicationSets](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/) generate one Argo `Application` per cluster using generators—cluster list, Git directory, matrix, or pull request. The Argo CD instance on the management cluster **pushes** manifests to each spoke API server using credentials stored as cluster secrets. ApplicationSets fit teams already invested in Argo CD who need multi-cluster promotion pipelines with familiar UI and RBAC.
+[Argo CD ApplicationSets](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/) generate one Argo `Application` per target using List, Cluster, Git, Matrix, or Pull Request generators. The Argo CD instance on the management cluster **pushes** manifests to each spoke API server using credentials stored as cluster secrets. ApplicationSets fit teams already invested in Argo CD who need multi-cluster promotion pipelines with familiar UI and RBAC.
 
 The push model requires stable network paths from hub to spoke API servers on port 6443 (or via bastion tunnels). Factory edge clusters behind outbound-only firewalls may be poor candidates unless you deploy Argo CD agents or shift to pull-based alternatives.
 
-ApplicationSet generators shine when cluster inventory lives in Git: add a JSON file listing cluster name, API URL, and labels; the list generator creates Applications automatically when new clusters register. Matrix generators combine cluster lists with environment directories (`overlays/production`, `overlays/staging`) so one ApplicationSet promotes the same kustomize overlay across classes of clusters. For on-premises, embed maintenance window annotations on cluster secrets so sync windows respect local change freezes.
+ApplicationSet generators differ by data source: the **List** generator iterates a **static** list of parameter sets you define in the ApplicationSet spec; the **Cluster** generator reacts dynamically to clusters registered in Argo CD (new registrations can spawn Applications without editing the list); the **Git** generator reads files or directories from a Git repository; the **Matrix** generator takes the cross-product of two other generators (for example Cluster × Git directory). For on-premises promotion pipelines, combine a Cluster generator with Git paths (`overlays/production`, `overlays/staging`) via Matrix so one ApplicationSet tracks registered clusters and environment overlays. Embed maintenance window annotations on cluster secrets so sync windows respect local change freezes.
 
 Operational caution: Argo CD stores cluster credentials as Kubernetes secrets on the hub. Protect those secrets with encryption at rest, rotate tokens when joining clusters leave the fleet, and audit `argocd cluster list` output during quarterly access reviews. A compromised hub secret equals compromised spoke API access for every registered cluster.
 
@@ -171,7 +171,7 @@ OCM integrates deeply with policy (Kubernetes Policy Controller), governance, an
 
 | Tool | Reconciliation | Best on-premises fit | Primary CRD / object |
 | :--- | :--- | :--- | :--- |
-| Rancher Fleet | Push bundles from Git | Rancher shops, label-selected clusters | `GitRepo`, `Bundle` |
+| Rancher Fleet | Pull bundles (downstream agents poll controller) | Rancher shops, label-selected clusters, spokes reach controller | `GitRepo`, `Bundle` |
 | Argo ApplicationSets | Push Applications | Existing Argo CD, hub reachable to spokes | `ApplicationSet` |
 | Flux | Pull per cluster or mgmt dispatch | DMZ-friendly, OCI/Git inside corp net | `GitRepository`, `Kustomization` |
 | Karmada | Federated API propagation | Active-active app placement | `PropagationPolicy` |
@@ -183,10 +183,10 @@ Platform architects rarely pick exactly one tool. A pragmatic on-premises refere
 
 | If your constraint is… | Lean toward… | Why |
 | :--- | :--- | :--- |
-| Corporate network allows hub→spoke API on 6443 | Argo CD ApplicationSets or Fleet push | Controllers apply directly; fewer agents on spokes |
+| Corporate network allows hub→spoke API on 6443 | Argo CD ApplicationSets (push) | Hub applies manifests to spoke API servers directly |
 | Edge sites are outbound-only | OCM klusterlet pull | Agents initiate TLS to hub; no inbound firewall holes |
 | Application teams want standard `Deployment` YAML without fleet CRDs | Karmada propagation | Federated API preserves familiar objects |
-| Air-gapped Git mirrors and bundle diff UX | Rancher Fleet | Built for GitOps bundles with per-cluster customization |
+| Air-gapped Git mirrors and bundle diff UX | Rancher Fleet | Git-driven bundles; downstream agents pull from controller |
 | Strict OCI artifact signing and Helm drift control | Flux with cluster-specific Kustomize overlays | Composable controllers and native OCI sources |
 
 Stop and think: two teams argue—Team A wants Argo CD because they already run it for single-cluster apps; Team B insists OCM because half the factories cannot expose apiserver endpoints. The resolution is not a coin flip. Split responsibilities: OCM delivers platform policy and inventory on edge **clusters**; Argo CD on the hub continues to **implement** application **distribution** to datacenter **clusters** that permit push. Document network diagrams in the **architecture** review so auditors see why hybrid fleet models are intentional, not accidental drift.
@@ -218,10 +218,13 @@ Fleet operations span the entire cluster lifetime—not only day-one provisionin
 **Decommission**: Remove cluster entries from Fleet, Argo cluster secrets, OCM `ManagedCluster`, and Karmada membership before deleting infrastructure. Drain workloads, revoke OIDC clients, delete DNS records, and archive etcd backups per retention policy. Deleting VMs while GitOps still targets the cluster UUID causes orphaned object finalizers on the hub.
 
 ```bash
-# Example: cordon a MachineDeployment before hardware maintenance (CAPI)
-kubectl patch machinedeployment prod-workers \
-  --type merge -p '{"spec":{"replicas":0}}'
-kubectl get machines -A
+# Cordon and drain a node before hardware maintenance (Kubernetes-level safety)
+kubectl cordon worker-7.example.internal
+kubectl drain worker-7.example.internal \
+  --ignore-daemonsets --delete-emptydir-data --grace-period=300
+
+# After maintenance, uncordon before returning the node to scheduling
+kubectl uncordon worker-7.example.internal
 ```
 
 Document a **cluster class** matrix: which Kubernetes versions, CNI versions, and platform bundles are approved together. Without it, fleet controllers happily deploy charts to clusters that lack required APIs.
@@ -232,7 +235,7 @@ The handoff between CAPI and fleet tools is where many implementations stumble. 
 
 Automate registration: when CAPI sets the `Cluster` Ready condition, a small controller or CI job creates the Fleet cluster registration, Argo cluster secret, or OCM import manifest. This prevents the common gap where infrastructure exists but platform bundles never attach because nobody ran the manual import step. Store kubeconfig secrets encrypted and rotate them when control-plane certificates renew.
 
-Version skew gates belong in the same automation: if CAPI upgrades a cluster from Kubernetes 1.33 to 1.34, pause Fleet bundles that require deprecated APIs until validation jobs pass. Git tags on platform repositories (`platform-v1.34`) communicate compatible bundle versions to cluster classes. Treat that integration as part of lifecycle **design**, not day-two polish.
+Version skew gates belong in the same automation: if CAPI upgrades a cluster from Kubernetes 1.34 to 1.35, pause Fleet bundles that require deprecated APIs until validation jobs pass. Git tags on platform repositories (`platform-v1.35`) communicate compatible bundle versions to cluster classes. Treat that integration as part of lifecycle **design**, not day-two polish.
 
 Upgrade ordering for production: upgrade management cluster fleet controllers first, then CAPI providers, then workload control planes in waves, then platform bundles, then tenant applications. Reversing the order—application charts before CNI compatibility—creates outages that appear as mysterious DNS failures rather than explicit version errors.
 
@@ -300,7 +303,7 @@ Audit hub proxy sessions if using Rancher or OCM console: record who impersonate
 
 Applications spanning clusters need L3/L4 connectivity or multi-cluster service discovery—not just GitOps configuration alignment.
 
-**Submariner** ([submariner.io](https://submariner.io/)) connects pod and service CIDRs across clusters with encrypted tunnels, enabling direct pod IP communication where routing allows. It suits on-premises datacenters with controlled BGP or static routes between sites. Operators must ensure CIDR plans never overlap before joining clusters.
+**Submariner** ([submariner.io](https://submariner.io/)) connects pod and service CIDRs across clusters with encrypted tunnels, enabling direct pod IP communication where routing allows. **Submariner Lighthouse** adds cross-cluster Kubernetes Service discovery via the Multi-Cluster Services (MCS) API and DNS—exported services resolve across member clusters without requiring full pod routability. It suits on-premises datacenters with controlled BGP or static routes between sites. Operators must ensure CIDR plans never overlap before joining clusters.
 
 **Cilium ClusterMesh** ([docs](https://docs.cilium.io/en/stable/network/clustermesh/clustermesh/)) shares services between independent Cilium data planes using clustermesh APIs. Global services can load-balance backends in multiple clusters when both run Cilium with compatible versions. ClusterMesh assumes mutual TLS trust between etcd-visible identities—plan certificate rotation carefully.
 
@@ -320,15 +323,15 @@ flowchart LR
     SA -.->|exported service| SB
 ```
 
-Choose networking based on whether you need pod IP reachability (Submariner), kube-service discovery across clusters (ClusterMesh), or L7 policy with mTLS (Istio). Many teams implement only GitOps federation first, then discover application dependencies that require east-west connectivity—budget time accordingly.
+Choose networking based on whether you need pod IP reachability (Submariner gateways), cross-cluster **Service** DNS/discovery (Submariner Lighthouse or Cilium ClusterMesh), or L7 policy with mTLS (Istio). Many teams implement only GitOps federation first, then discover application dependencies that require east-west connectivity—budget time accordingly.
 
-**Submariner** deploys gateway nodes that encapsulate traffic between pod CIDRs. On-premises routing teams must install routes or BGP advertisements pointing remote pod CIDRs at Submariner gateways. NAT scenarios use Globalnet when overlapping service CIDRs cannot be renumbered. Latency-sensitive workloads should measure cross-site RTT before assuming pod-to-pod access is free.
+**Submariner** deploys gateway nodes that encapsulate traffic between pod CIDRs. On-premises routing teams must install routes or BGP advertisements pointing remote pod CIDRs at Submariner gateways. **Lighthouse** publishes `ServiceExport` objects and serves MCS DNS so clients resolve remote cluster Services by name. NAT scenarios use Globalnet when overlapping service CIDRs cannot be renumbered. Latency-sensitive workloads should measure cross-site RTT before assuming pod-to-pod access is free.
 
 **Cilium ClusterMesh** requires mutual trust between cluster etcd-visible identities and compatible Cilium versions. Enable clustermesh-apiserver with proper TLS rotation; stale certificates break service discovery silently while pods still run locally. Global services excel at spreading HTTP backends across datacenters when health checks propagate quickly.
 
 **Istio multi-cluster** patterns split into single-network and multi-network topologies. East-west gateways bridge non-routable networks; primary-remote configurations reduce control-plane count but concentrate failure domains. Mesh upgrades demand coordinated revisions across clusters—schedule Istio upgrades in lockstep with fleet GitOps pause flags.
 
-When **evaluating** these **primitives**, score each against operational headcount: Submariner adds network engineering touchpoints, ClusterMesh adds Cilium expertise, Istio adds L7 policy power with operational weight. Hybrid designs are valid—GitOps on OCM, ClusterMesh for service discovery, Istio only on clusters needing advanced traffic policy.
+When **evaluating** these **primitives**, score each against operational headcount: Submariner adds network engineering touchpoints plus Lighthouse for MCS DNS, ClusterMesh adds Cilium expertise for global services, Istio adds L7 policy power with operational weight. Hybrid designs are valid—GitOps on OCM, Lighthouse or ClusterMesh for service discovery, Istio only on clusters needing advanced traffic policy.
 
 ---
 
@@ -362,6 +365,8 @@ Twelve Prometheus instances are unusable for executive dashboards and slow for o
 
 Common metrics pattern: Prometheus agents or lightweight scrapers on spokes remote-write to Thanos Receive or Grafana Mimir on the management site or a dedicated observability cluster. Mandatory labels include `cluster`, `environment`, `site`, and `platform_version`. OCM addon `ObservabilityMetric` resources can deploy collectors consistently.
 
+**HA deduplication differs by backend:** Thanos deduplicates redundant Prometheus replicas at **query time**—the Thanos Querier merges series and drops duplicates using `replica` external labels on scrape targets. Grafana Mimir deduplicates at **ingestion time** via its HA tracker: the distributor keeps samples from only one replica of a HA-paired Prometheus pair, so duplicates never land in long-term storage. Design remote-write labels and HA pairing accordingly when spokes run redundant scrapers.
+
 Logs use Fluent Bit or OpenTelemetry collectors forwarding to Loki with the same label contract. Traces aggregate in Tempo or Jaeger with tenant headers per business unit.
 
 Alert routing should identify **which cluster** fired, not only which metric. On-call runbooks link from `ManagedCluster` name to network topology and escalation paths.
@@ -390,7 +395,7 @@ Platform teams that treat the management cluster as “just another dev cluster�
 | Mistake | Problem | Solution |
 | :--- | :--- | :--- |
 | Running tenant workloads on the management cluster | Fleet syncs starve or CAPI machine rolls evict platform controllers | Taint management workers; keep only fleet/CAPI controllers |
-| Push GitOps without network path to spokes | Applications never sync; silent drift on edge clusters | Use OCM/Flux pull models or deploy Argo CD cluster agents |
+| Hub push GitOps (e.g. Argo) without network path to spokes | Applications never sync; silent drift on edge clusters | Use OCM/Flux/Fleet pull agents or Argo CD cluster agents |
 | Skipping CIDR planning before Submariner or ClusterMesh | Overlapping pod CIDRs require painful cluster rebuild | Document IPAM matrix before provisioning cluster zero |
 | Embedding application charts inside CAPI bootstrap | Cluster upgrades break unrelated application releases | Separate CAPI templates from GitOps platform repo |
 | One kubeconfig shared by all engineers | No audit trail; excessive blast radius on credential leak | OIDC per cluster plus hub proxy with RBAC |
@@ -458,17 +463,17 @@ D) vSphere CSI stops mounting volumes globally.
 
 </details>
 
-**Question 5:** Two on-premises clusters run Cilium with non-overlapping pod CIDRs. Application teams need Kubernetes `Service` discovery across clusters without full pod routability. Which solution fits?
+**Question 5:** Application teams need cross-cluster Kubernetes `Service` DNS/discovery. One site runs Cilium with non-overlapping pod CIDRs; another runs Submariner with Lighthouse enabled. Which statement is most accurate?
 
-A) Cilium ClusterMesh global services.
-B) Submariner Globalnet only for DNS.
-C) Deleting NetworkPolicies on both clusters.
-D) Sharing one kubeconfig file.
+A) Only Cilium ClusterMesh can export Services across clusters; Submariner provides pod connectivity only.
+B) Submariner Lighthouse (MCS DNS) and Cilium ClusterMesh both provide cross-cluster Service discovery; choose based on your CNI and existing Submariner deployment.
+C) Deleting NetworkPolicies on both clusters enables cross-cluster DNS.
+D) Sharing one kubeconfig file federates Service records automatically.
 
 <details>
 <summary>View Answer</summary>
 
-**Correct Answer: A**. ClusterMesh exports services across compatible Cilium deployments when CIDR planning is correct. Submariner focuses on connectivity layers; option B oversimplifies. Options C and D do not provide service discovery.
+**Correct Answer: B**. Cilium ClusterMesh global services and Submariner Lighthouse (Multi-Cluster Services API with MCS DNS) both address cross-cluster Service discovery. Option A ignores Lighthouse. Options C and D do not provide MCS or ClusterMesh semantics.
 
 </details>
 
@@ -510,7 +515,7 @@ D) Remove OIDC to simplify kubeconfig access.
 <details>
 <summary>View Answer</summary>
 
-**Correct Answer: A**. **Observability** pipelines fail independently from workload scheduling; **fan-in** issues usually appear in agent buffers, receive ingress, or long-term storage—not in application Deployments. Option B risks unnecessary **disaster** scope. Options C and D do not address metrics **recovery** paths.
+**Correct Answer: A**. **Observability** pipelines fail independently from workload scheduling; **fan-in** issues usually appear in agent buffers, receive ingress (Thanos Receive or Mimir distributor), or long-term storage—not in application Deployments. Option B risks unnecessary **disaster** scope. Options C and D do not address metrics **recovery** paths.
 
 </details>
 
@@ -526,7 +531,7 @@ These exercises use kind clusters and public documentation commands so you can p
 kind create cluster --name capi-mgmt
 kubectl cluster-info --context kind-capi-mgmt
 
-curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.9.4/clusterctl-linux-amd64 -o /tmp/clusterctl
+curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/clusterctl-linux-amd64 -o /tmp/clusterctl
 chmod +x /tmp/clusterctl
 /tmp/clusterctl init --infrastructure docker
 
@@ -562,7 +567,7 @@ kubectl get configmap tenant-boundary-contract -n policy-lab
 Open the following documentation in a browser and note whether reconciliation is push or pull for each tool:
 
 - Rancher Fleet: https://fleet.rancher.io/
-- Open Cluster Management: https://open-cluster-management.io/getting-started/
+- Open Cluster Management: https://open-cluster-management.io/docs/getting-started/quick-start/
 
 - [ ] CAPI `Cluster` kind explained successfully.
 - [ ] Documented push versus pull behavior for Fleet and OCM.
@@ -621,7 +626,7 @@ Continue to [Module 5.3: Cluster API on Bare Metal](../module-5.3-cluster-api-ba
 - https://github.com/kubernetes-sigs/cluster-api
 - https://karmada.io/docs/
 - https://open-cluster-management.io/
-- https://open-cluster-management.io/getting-started/
+- https://open-cluster-management.io/docs/getting-started/quick-start/
 - https://fleet.rancher.io/
 - https://ranchermanager.docs.rancher.com/integrations-in-rancher/fleet
 - https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/
@@ -629,7 +634,7 @@ Continue to [Module 5.3: Cluster API on Bare Metal](../module-5.3-cluster-api-ba
 - https://submariner.io/
 - https://docs.cilium.io/en/stable/network/clustermesh/clustermesh/
 - https://istio.io/latest/docs/setup/install/multicluster/
-- https://kubernetes.io/docs/concepts/cluster-administration/federation/
+- https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
 - [Cluster API documentation](https://cluster-api.sigs.k8s.io/) — Declarative cluster lifecycle API and provider model.
 - [Karmada documentation](https://karmada.io/docs/) — Federated propagation and failover policies across member clusters.
 - [Open Cluster Management](https://open-cluster-management.io/) — Hub-and-spoke registration and pull-based `ManifestWork` delivery.
