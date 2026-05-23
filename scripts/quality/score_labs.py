@@ -117,7 +117,7 @@ ROTE_RE = re.compile(
 
 # Duration parsing: "45 min", "1 hour", "1h30m", etc.
 _DURATION_RE = re.compile(
-    r"(?:(\d+)\s*h(?:our)?s?)?\s*(?:(\d+)\s*m(?:in)?)?",
+    r"(?:(\d+(?:\.\d+)?)\s*h(?:our)?s?)?\s*(?:(\d+(?:\.\d+)?)\s*m(?:in)?)?",
     re.IGNORECASE,
 )
 
@@ -213,11 +213,15 @@ def _extract_section(body: str, *heading_variants: str) -> str:
     str
         Section content, or empty string if not found.
     """
+    normalized_variants = tuple(v.lower() for v in heading_variants)
     lines = body.splitlines()
     start = -1
     for i, line in enumerate(lines):
-        stripped = line.strip().lstrip("#").strip().lower()
-        if stripped in heading_variants:
+        stripped = line.strip()
+        if not stripped.startswith("##"):
+            continue
+        heading = stripped.lstrip("#").strip().lower()
+        if any(variant in heading for variant in normalized_variants):
             start = i
             break
     if start < 0:
@@ -367,7 +371,7 @@ def _score_teardown(body: str) -> int:
     return 3
 
 
-def _parse_duration_minutes(duration_raw: str) -> int | None:
+def _parse_duration_minutes(duration_raw: str) -> float | None:
     """Parse a duration string like ``"45 min"`` or ``"1h30m"`` into minutes.
 
     Parameters
@@ -386,13 +390,31 @@ def _parse_duration_minutes(duration_raw: str) -> int | None:
     # Try "Xh Ym" / "X hour Y min" / "Xm"
     m = _DURATION_RE.fullmatch(s)
     if m and (m.group(1) or m.group(2)):
-        hours = int(m.group(1) or 0)
-        mins = int(m.group(2) or 0)
+        hours = float(m.group(1) or 0)
+        mins = float(m.group(2) or 0)
         total = hours * 60 + mins
         return total if total > 0 else None
-    # Fallback: grab first integer as minutes
-    digits = re.search(r"\d+", s)
-    return int(digits.group()) if digits else None
+    # Fallback: parse decimal units ("1.5 hour", "2.5 min", "0.5 hr", ...).
+    normalized = (
+        s.replace("hours", "hour")
+        .replace("hrs", "hr")
+        .replace("minutes", "min")
+        .replace("minute", "min")
+    )
+    total_minutes = 0.0
+    found = False
+    for num_s, unit in re.findall(r"(\d+(?:\.\d+)?)\s*(hour|hr|min)", normalized):
+        value = float(num_s)
+        if unit in {"hour", "hr"}:
+            total_minutes += value * 60
+        else:
+            total_minutes += value
+        found = True
+    if not found:
+        return None
+    if total_minutes <= 0:
+        return None
+    return round(total_minutes)
 
 
 def _estimate_complexity_minutes(body: str) -> float:
