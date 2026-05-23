@@ -43,7 +43,16 @@
 <tr><td>#1469</td><td><span class="pill failed">CLOSED</span></td><td>5.2 (grok-4.20-reasoning exhibit; closed as trial doc evidence)</td><td>grok-4.20-0309-reasoning (session 49)</td><td>n/a</td><td>Closed as trial exhibit; pointer to <code>docs/calibration/grok-3-variant-trial-2026-05-23.html</code></td></tr>
 </table>
 
-<p><strong>Tonight's tally: 9 composer-2.5 T0 author PRs merged in a single session.</strong> First-pass codex review caught 31 substantive findings across 9 PRs (~17 HIGH-severity including operationally dangerous snippets, wrong reconciliation models, broken exercises, version-pin inconsistencies, citation/source 404s, regex-search-replace damage); composer-2.5 fix-passes resolved 100% of them in 1-3 cycles per PR. <strong>Entire OnPrem Multi-Cluster section (modules 5.1-5.9) is now T0 quality.</strong></p>
+<p><strong>Tonight's tally: 12 composer-2.5 T0 author PRs merged in a single session (after orchestrator extended to OnPrem Networking 3.4-3.6 once OnPrem MC 5.1-5.9 closed).</strong> First-pass codex review caught 31 substantive findings across 9 PRs (~17 HIGH-severity including operationally dangerous snippets, wrong reconciliation models, broken exercises, version-pin inconsistencies, citation/source 404s, regex-search-replace damage); composer-2.5 fix-passes resolved 100% of them in 1-3 cycles per PR. <strong>Entire OnPrem Multi-Cluster section (modules 5.1-5.9) is now T0 quality.</strong></p>
+
+<h3>Round 3 — OnPrem Networking 3.4-3.6 (PRs #1484-#1486)</h3>
+
+<table>
+<tr><th>#</th><th>Module</th><th>codex R1 findings</th><th>fix-pass</th><th>codex R2/R3 verdict</th><th>merged</th></tr>
+<tr><td>#1484</td><td>3.4 DNS &amp; Certificate Infrastructure</td><td>3 (2×HIGH: ExternalDNS RFC2136 missing AXFR flag; cert-manager privateKeySecretRef vs caBundle confusion; 1×MEDIUM: TSIG secret as PodSpec arg)</td><td>composer-2.5 317s</td><td>PASS (clean APPROVE)</td><td>✅</td></tr>
+<tr><td>#1485</td><td>3.5 Cross-Cluster Networking</td><td>3 (2×HIGH: Cilium ClusterMesh lab using legacy annotation + missing local Service stub; broken Pod JSONPath; 1×MEDIUM: MCS KEP-1645 DNS format)</td><td>composer-2.5 146s → R2 found 3 residuals → fix-pass 2 325s</td><td>R3 PASS</td><td>✅</td></tr>
+<tr><td>#1486</td><td>3.6 Service Mesh on Bare-Metal</td><td>4 (3×P1: Istio Gateway selector label mismatch (release name → label trim); Linkerd 2.19 version env var + nonexistent stable-2.19.0; Linkerd curl exercise hits Service with no HTTP server behind it; 1×P2: Istio K8s support matrix)</td><td>composer-2.5 258s</td><td>PASS (clean APPROVE)</td><td>✅</td></tr>
+</table>
 
 <h3>Round 2 — same pattern, accelerated (PRs #1479-#1483)</h3>
 
@@ -182,7 +191,7 @@
 
 <p><strong>Workspace:</strong> primary on <code>main</code>, fully synced with origin after pull-rebase. No worktrees remain — all 4 cycle worktrees removed after merge. 4 PRs merged tonight (#1475, #1476, #1477, #1478); 1 closed trial exhibit (#1469). Recent local_api.py + decisions route + tests modifications (~263 lines) were stashed before rebase (<code>git stash list</code> entry <code>session-50-unrelated-local-api-work</code>) — these look like Cursor IDE background work or user's separate edit; not from this session's dispatches. User should review on wake before popping the stash.</p>
 
-<p><strong>Rubric-critical drain progress:</strong> On-Premises Multi-Cluster modules 5.1, 5.2, 5.3, 5.4 are now T0-quality. Modules 5.5-5.9 remain in that section (5.5 Active-Active Multi-Site = next-smallest critical candidate at ~335 lines). Briefing dashboard may not refresh until cron tick — verifier-grade reporting will reflect the change shortly.</p>
+<p><strong>Rubric-critical drain progress:</strong> entire On-Premises Multi-Cluster section (5.1-5.9) + entire On-Premises Networking 3.4-3.6 (the still-critical-rubric trio after session 49 finished 3.1-3.3) now T0-quality. Two sectional drains in one session. ~132 critical-rubric modules remain across Platform Foundations, KCSA, K8S FinOps, AI/ML Engineering. Briefing dashboard may not refresh until cron tick — verifier-grade reporting will reflect the change shortly.</p>
 
 <p><strong>Memory + decisions:</strong></p>
 <ul>
