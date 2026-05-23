@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 48 — Multi-agent rubric-critical drain + opencode/hermes adapters (5 PRs merged, 4 dispatches in flight)</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0 }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .inflight { background: #cce5ff; color: #004085 }
+  .merged { background: #d4edda; color: #155724 }
+  .pending { background: #fff3cd; color: #856404 }
+  .failed { background: #f8d7da; color: #721c24 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style>
+</head>
+<body>
+
+<h1>Session 48 — Multi-agent rubric-critical drain + opencode/hermes adapters</h1>
+<p class="meta">2026-05-23 afternoon → evening, immediately following session 47's handoff. <strong>5 PRs merged today via 4 different author agents. 4 dispatches in flight at handoff write-time</strong> (codex fix on #1464, codex reviews on #1465 + #1466, qwen3.7-max rewriting Linux CPU & Scheduling). Multi-agent orchestration discipline + 5 new memories saved.</p>
+
+<h2>Headline</h2>
+
+<p>Session 47 left 5 parallel codex T0 rewrites "in flight" — but they had all silently died around 10:17 CEST when session 47's process tree terminated, taking the codex subprocesses with them via inherited PGID + SIGHUP. Session 48 forensic-diagnosed the failures from rollout files, re-fired 3 of the 5 with proper <code>nohup + disown</code> detachment (per the new <strong>3-cap rule</strong>), drove them all the way to merge through fix-pass + review cycles, and along the way landed the <strong>opencode + hermes dispatch adapters</strong> and ran the first <strong>multi-agent T0 content-writing trial</strong> (codex baseline + qwen3.7-max via opencode + deepseek-v4-pro in parallel on Linux modules).</p>
+
+<p>User-driven course corrections shaped the session: 3-cap on parallel codex rewrites, mix-agents for parallel reviews to avoid OAuth burst, warn-before-burst on any agent (4 gemini-cli OAuth rotation accounts is finite), Monitor pattern for dispatch tracking, gemini-3.5-flash-high is NOT the old basic flash. All five locked into TOP PRIORITY memory.</p>
+
+<h2>The forensic finding — session 47's "5 in flight" were actually 5 zombies</h2>
+
+<p>Cold-start orientation showed 5 worktrees at the same parent SHA as session 47's last commit (<code>83b158f7</code>), no local changes, no remote pushes, no PRs. Should've been writing for ~30 minutes by the time session 48 picked up. Instead, all 5 codex sessions died around 10:14-10:17 CEST.</p>
+
+<h3>Diagnosis</h3>
+<ul>
+  <li>Examined <code>~/.codex/sessions/2026/05/23/rollout-2026-05-23T10-13-*.jsonl</code>: 5 rollouts existed, started 10:13-10:14, last messages all at ~10:16 with assistant text in the <em>source-validation</em> phase ("I'm validating the official source set...").</li>
+  <li>3-4 minutes of runtime, then silence. Same termination time across all 5.</li>
+  <li>Pattern matches <strong>parent-process death propagating SIGHUP to subprocesses</strong>. Session 47 was the parent; when it closed (or compacted, or session ended), all 5 codex children inherited the SIGHUP.</li>
+  <li><code>dispatch_smart.py</code> uses <code>subprocess.run</code> which doesn't daemonize. The fire-and-forget pattern session 47 used did NOT survive the parent.</li>
+</ul>
+
+<h3>Fix adopted</h3>
+<p>Re-fired with <code>nohup python scripts/dispatch_smart.py ... &amp; PID=$!; disown</code>. The <code>nohup</code> ignores SIGHUP and <code>disown</code> detaches from the shell's job table. Confirmed survival empirically — the 3 re-fired dispatches ran past session boundaries and completed cleanly.</p>
+
+<h2>PRs merged today (5)</h2>
+
+<table>
+<tr><th>#</th><th>Status</th><th>Title</th><th>Author</th><th>Reviewer</th><th>Notes</th></tr>
+<tr><td>#1459</td><td><span class="pill merged">MERGED</span></td><td>FinOps in Practice T0 rewrite</td><td>codex gpt-5.5</td><td>gemini-3.1-pro-preview</td><td>R1 NEEDS_CHANGES → fix-pass → R2 APPROVE 5/5/5/5/5/5. Lands as T2 (body 4739 vs 5000 floor). Precedent for accepting T2 over T0.</td></tr>
+<tr><td>#1461</td><td><span class="pill merged">MERGED</span></td><td>FinOps Fundamentals T0 rewrite</td><td>codex gpt-5.5</td><td>agy → claude-sonnet-4-6-thinking</td><td>R1 NEEDS_CHANGES → fix-pass → R2 rerouted to agy after gemini OAuth burst hit (956s elapsed, exhausted capacity). APPROVE_WITH_NITS, T2.</td></tr>
+<tr><td>#1462</td><td><span class="pill merged">MERGED</span></td><td>Lab scorer for Phase F audit (#386)</td><td>agy → claude-sonnet-4-6-thinking</td><td>gemini-3.1-pro-preview (R2)</td><td>R1 by agy → APPROVE_WITH_NITS (2 bugs found); fix-pass + 13 unit tests; R2 by gemini APPROVE 5/5. First multi-agent author/reviewer cross-product PR. 269 labs scored, avg 2.33, 200 below threshold; UK labs avg 1.84 vs k8s 2.83.</td></tr>
+<tr><td>#1463</td><td><span class="pill merged">MERGED</span></td><td>opencode + hermes as supported agents</td><td>codex gpt-5.5</td><td>agy → claude-sonnet-4-6-thinking</td><td>Adds 2 new agents to <code>dispatch_smart.py</code> + bridge adapters. Smoke tests passed (OPENCODE OK 5s, HERMES OK 2s). APPROVE_WITH_NITS → fix-pass (portable home path + explicit <code>openrouter/</code> prefix routing + 1 new unit test).</td></tr>
+<tr><td>#1460</td><td><span class="pill merged">MERGED</span></td><td>KCSA 4.4 Supply Chain Threats T0 rewrite</td><td>codex gpt-5.5</td><td>gemini-3.1-pro-preview (R3)</td><td>3-round cycle: R1 NEEDS_CHANGES (4 findings) → R2 dedup-gate FAIL (SolarWinds primary instead of xref) → R3 body-H1 verifier gate → final fix. Final gemini APPROVE 5/5/5/5/5/5. <strong>T0 strict PASS</strong> (body_words 5000+, all gates green).</td></tr>
+</table>
+
+<p><strong>Daily quality movement:</strong> 5 modules off the 144-critical-rubric list. Dashboard still 3h-stale at handoff time (generated 17:05 CEST) — next cold-start should auto-refresh.</p>
+
+<h2>In flight at handoff write-time (4 dispatches)</h2>
+
+<table>
+<tr><th>Task</th><th>Agent</th><th>State</th><th>PID</th><th>ETA</th></tr>
+<tr><td>fix-1464-nits (Linux Namespaces #1464 — 1 required + 3 nits)</td><td>codex gpt-5.3-codex-spark edit</td><td><span class="pill inflight">ALIVE</span></td><td>see <code>/tmp/pid-fix-1464-nits.txt</code></td><td>~5-8 min</td></tr>
+<tr><td>review-1465-codex-r2 (deepseek output of #1465 Bash Fundamentals)</td><td>codex gpt-5.5 review</td><td><span class="pill inflight">ALIVE</span></td><td>see <code>/tmp/pid-review-1465-codex-r2.txt</code></td><td>~3-8 min</td></tr>
+<tr><td>review-1466-codex (codex output of #1466 Linux Networking Tools)</td><td>codex gpt-5.5 review</td><td><span class="pill inflight">ALIVE</span></td><td>see <code>/tmp/pid-review-1466-codex.txt</code></td><td>~3-8 min</td></tr>
+<tr><td>qwen-cpu-retry-v2 (Linux CPU &amp; Scheduling T0 rewrite)</td><td>qwen3.7-max via opencode (<code>--dir=primary</code>)</td><td><span class="pill inflight">ALIVE</span></td><td>see <code>/tmp/pid-qwen-cpu-retry-v2.txt</code></td><td>~5-10 min</td></tr>
+</table>
+
+<p>All 4 have Monitor-pattern <code>until grep -qE "OK: |RateLimited|Error|Traceback"</code> watchers armed via <code>Bash run_in_background</code>. Each will fire one notification on completion.</p>
+
+<h2>The multi-agent T0 content-writing trial (informally captured)</h2>
+
+<p>User explicitly pushed mid-session: <em>"WHAT ABOUT THE OTHER AGENTS? deepseek, qwen?"</em> Trial result so far:</p>
+
+<table>
+<tr><th>Agent</th><th>Module</th><th>Result</th><th>Notes</th></tr>
+<tr><td>codex gpt-5.5</td><td>#1464 Linux Namespaces</td><td><span class="pill merged">T0 strict PASS</span></td><td>body 5081 / 16 sources × 200 OK / 692s. APPROVE_WITH_NITS by agy (1 substantive + 3 nits).</td></tr>
+<tr><td>codex gpt-5.5</td><td>#1466 Linux Networking Tools</td><td><span class="pill inflight">awaiting review</span></td><td>13 × 200 + 5 redirect sources. 846s. Review by codex gpt-5.5 in flight.</td></tr>
+<tr><td><strong>deepseek-v4-pro</strong></td><td>#1465 Linux Bash Fundamentals</td><td><span class="pill inflight">awaiting review</span></td><td>FIRST DS T0 content rewrite. All structural gates PASS, 24 sources, 4 DYK, 7 quiz w/details, 8 common mistakes, 2 mermaid, no body H1. 779 lines / 725s. Citation accuracy under review by codex (DS has documented hallucination risk on GH schemas; content writing untested).</td></tr>
+<tr><td><strong>qwen3.7-max via opencode</strong></td><td>Linux CPU &amp; Scheduling</td><td><span class="pill inflight">retry alive</span></td><td>FIRST attempt FAILED — opencode sandbox auto-rejected reads outside the worktree (<code>scripts/quality/verify_module.py</code>). RETRY with <code>--dir=/Users/krisztiankoos/projects/kubedojo</code> (primary repo as project root, qwen writes to worktree via absolute paths). Currently reading source + verifier successfully.</td></tr>
+</table>
+
+<p>Ad-hoc trial doc to be written when qwen retry + codex review of #1465 land. Path: <code>docs/calibration/qwen-ds-content-writing-trial-2026-05-23.html</code>. Format chosen via <code>AskUserQuestion</code> over option B (promote to formal calibration fixtures) — preserves calibration v1's strict design + avoids extra wave dispatches.</p>
+
+<h2>5 new memories saved (TOP PRIORITY)</h2>
+
+<table>
+<tr><th>Memory</th><th>Rule</th></tr>
+<tr><td><code>feedback_agy_claude_route_during_throttle</code></td><td>During Anthropic throttle window, agy panel surfaces Claude Sonnet/Opus 4.6 Thinking on independent Google billing (Ultra tier). Route cross-family review of codex via <code>dispatch_smart.py review --agent agy</code> — beats gemini-3.1-pro-preview fallback.</td></tr>
+<tr><td><code>feedback_parallel_rewrite_cap_three</code></td><td>HARD CAP: max 3 parallel codex rewrites, never 5. Each rewrite cascades into reviewer + possible fix-pass + possible re-review (2-4 downstream dispatches); 5 authors → 14 total agent calls saturate multiple weekly caps. <em>User: "be smart about this."</em></td></tr>
+<tr><td><code>feedback_parallel_review_oauth_burst</code></td><td>3+ parallel reviews on the SAME agent OAuth = burst limit hit. Empirical: 3 parallel gemini-3.1-pro-preview reviews → 2 OK (85s, 680s), 1 failed at 956s with "exhausted capacity." MIX agents (gemini + agy→claude + codex review) for 3+ parallel. Reroute on rate-limit symptom, don't retry on same OAuth.</td></tr>
+<tr><td><code>feedback_warn_before_agent_quota_burn</code> (renamed from <code>feedback_warn_before_gemini_quota_burn</code>)</td><td><strong>DON'T HAMMER ANY AGENT.</strong> Each has finite quota with real cost: gemini-cli (4 OAuth accounts in MANUAL rotation), codex (weekly cap, no rotation), agy (Google AI Ultra — high tier, still finite), opencode/hermes (pay-per-call $). WARN before 3+ parallel / 5+ sequential in 10 min / heavyweight while ≥2 in flight on same agent. Both gemini-cli AND agy are on Google AI Ultra subscription (user confirmed) — same account counter for Google models.</td></tr>
+<tr><td><code>feedback_monitor_dispatches_dont_poll</code></td><td>For every long-running background dispatch, fire a companion <code>Bash run_in_background</code> with an until-loop that exits on the dispatch result line. Gives ONE notification per completion. Filter regex: <code>"^OK: |RateLimitedError|^Error:|Traceback"</code>. Don't manually <code>ps</code>/<code>tail</code>/<code>ls</code> poll. User: <em>"when you dispatch an job put monitor on them why dont you use the monitor api?"</em></td></tr>
+</table>
+
+<p>Plus 1 corrected memory: <code>feedback_never_flash_for_code_review</code> was originally about <strong>old basic <code>gemini-3-flash-preview</code></strong>, NOT the newer <code>gemini-3.5-flash-high</code>. User correction: "that rule is stupid gemini-3.5-flash high is very capable." Updated to distinguish the two variants.</p>
+
+<h2>Issue triage outcomes</h2>
+
+<table>
+<tr><th>Issue</th><th>Action</th></tr>
+<tr><td>#1384 TTT (Telegraph/Teach/Test) pedagogical framework</td><td><strong>Closed not-planned</strong> with 4-point rationale (curriculum-wide retrofit = ~390 hours of codex time; current framework already produces ≥4.0 modules; TTT shape fits only ~5% of corpus; sunk-cost discipline). User concurred.</td></tr>
+<tr><td>#1401 (Phase 2 agy calibration)</td><td>Deferred with resumption-gate: critical-rubric &lt; 30 OR 2026-06-10 (8 days before gemini-cli deadline). Phase 1 wiring stays.</td></tr>
+<tr><td>#1402 (per-language CodeWritingScorer)</td><td>Deferred — single-fixture-per-lane limitation (#1413) is bigger calibration trust gap.</td></tr>
+<tr><td>#1404 (mcp-use real-execution lane)</td><td>Deferred — legitimate calibration trust gap but learner-facing rubric drain is dominant return.</td></tr>
+<tr><td>#1350 (gemini-cli → agy migration)</td><td>Status update: agy is NOW the operational reviewer this weekend (not just future migration tool). Captured durably in <code>feedback_agy_claude_route_during_throttle</code>.</td></tr>
+<tr><td>#1299 (Independent gap analysis)</td><td>Qwen3.7-max gap audit (via opencode) posted as PR comment. 8 new gaps surfaced (KubeEdge/OpenYurt, Confidential Computing, Kueue beyond AI, multi-tenancy decision framework, Wasm production depth, AI agent fleet ops, K8s control-plane comparative guide, API deprecation workflows) + 3 disputes (policy-engine selection redundant; OpenTelemetry partial; bookkeeping debt — 8 modules already shipped but listed as "to write").</td></tr>
+</table>
+
+<h2>Multi-agent orchestration patterns adopted this session</h2>
+
+<h3>1. <code>nohup + disown</code> for survival</h3>
+<p>Every <code>dispatch_smart.py</code> invocation wraps with <code>nohup ... &amp; PID=$!; disown</code> so the python+CLI subprocess inherits PGID 1 (init) instead of the orchestrator's shell. Survives parent compaction, session ending, terminal close.</p>
+
+<h3>2. Monitor-pattern watchers</h3>
+<p>For each dispatch, fire a companion <code>Bash run_in_background</code> with <code>until grep -qE "OK: |RateLimited|Error|Traceback" log; do sleep 5; done</code>. Gives a single completion notification — no manual polling. Pattern captured in <code>feedback_monitor_dispatches_dont_poll</code>.</p>
+
+<h3>3. Mix-agents for parallel reviews</h3>
+<p>3 parallel gemini-cli calls burst-limited (per-model RPM hit). Mix instead: gemini-3.1-pro-preview + agy → claude-sonnet-4-6 + codex gpt-5.5 review + opencode → claude-sonnet-4.5 = 4 different OAuth pools (or different model counters within the same Ultra account), no shared burst. Captured in <code>feedback_parallel_review_oauth_burst</code>.</p>
+
+<h3>4. opencode sandbox: <code>--dir=primary</code> trick</h3>
+<p>opencode CLI sandboxes file reads to the project root (the <code>--dir</code> argument). Setting <code>--dir</code> to the worktree blocks access to <code>scripts/quality/verify_module.py</code> in the primary repo. Workaround: set <code>--dir</code> to the primary repo; instruct the agent to WRITE to the worktree via absolute paths. Validated empirically on qwen retry.</p>
+
+<h3>5. Heredoc-only for <code>dispatch_smart.py</code> briefs (no tempfiles)</h3>
+<p>Per <code>feedback_heredoc_for_danger_dispatches</code> (existing memory). The auto-mode classifier rejects <code>dispatch_smart.py ... &lt; /tmp/brief.md</code> because the brief content isn't visible inline. Use <code>nohup python scripts/dispatch_smart.py ... &lt;&lt;'BRIEF' \n[content] \nBRIEF</code> instead. Required for every danger-mode dispatch this session.</p>
+
+<h2>Operational notes</h2>
+
+<ul>
+  <li><strong>Anthropic throttle still active</strong> through 2026-05-24. Keep cross-family reviews routed to gemini-cli OR agy → claude-sonnet-4-6 OR codex review. No headless claude dispatches.</li>
+  <li><strong>gemini-cli rotation pool burned 1 of 4</strong> early in session via my unwarned 3-parallel burst. User rotated manually. New warn-before-burst rule should prevent recurrence.</li>
+  <li><strong>codex weekly cap state unknown</strong> — fired ~15-20 codex dispatches today. No 429s observed but worth monitoring next session.</li>
+  <li><strong>opencode + hermes wiring landed</strong> in #1463 — full <code>--agent opencode</code> / <code>--agent hermes</code> support via <code>dispatch_smart.py</code> for all 5 task classes. <code>_opencode.py</code> + <code>_hermes.py</code> bridge adapters in <code>scripts/ai_agent_bridge/</code>.</li>
+  <li><strong>Worktrees:</strong> some prunable (5 branches, 3 worktrees per the briefing alert at session start). The merged-PR worktrees got cleaned up inline. Still need to handle <code>codex-interactive</code> detached HEAD + <code>pr-review-tiebreak-policy</code> stale worktree.</li>
+  <li><strong>Uncommitted on main:</strong> <code>.gitignore</code> (M), <code>.dispatch-logs/</code>, <code>.worktrees/</code>, <code>logs/</code> — all .gitignore-style additions, none committed yet. Should add to .gitignore properly and commit before next session.</li>
+</ul>
+
+<h2>Continuation instructions for next session</h2>
+
+<h3>Immediate (when watchers fire)</h3>
+<ol>
+  <li><strong>fix-1464-nits</strong> lands → run <code>gh pr view 1464 --json statusCheckRollup,commits</code>, confirm CI green + new commit, then fire round-2 review (via agy → Sonnet OR gemini-3.1-pro-preview, mix-agent rotation).</li>
+  <li><strong>review-1465-codex-r2</strong> lands → if APPROVE, merge #1465. If NEEDS_CHANGES, focused codex fix-pass on the findings. <strong>This is the data point for the trial doc.</strong></li>
+  <li><strong>review-1466-codex</strong> lands → same flow.</li>
+  <li><strong>qwen-cpu-retry-v2</strong> lands → check PR creation, verifier output, T0 tier. <strong>This is the other key data point for the trial doc.</strong></li>
+  <li>After all 4 land: write <code>docs/calibration/qwen-ds-content-writing-trial-2026-05-23.html</code> with head-to-head table.</li>
+</ol>
+
+<h3>After current PRs drain</h3>
+<ol>
+  <li>Pull next batch of critical-rubric targets from <code>/api/briefing/session?compact=1</code>. Remaining hot spots: Linux Operations (CPU &amp; Scheduling — handled by qwen retry; Bash Fundamentals — handled by DS; <strong>Text Processing</strong>, ~825L 1.5/5, NEXT), Platform Foundations + Platform Disciplines (largest concentration at 28 + 89 critical).</li>
+  <li>Maintain steady-state 3 codex rewrites per <code>feedback_parallel_rewrite_cap_three</code>. Plus 1-2 non-codex experiments (qwen/DS/opencode) as capacity allows.</li>
+  <li>Mix reviewer agents per <code>feedback_parallel_review_oauth_burst</code>.</li>
+</ol>
+
+<h3>Strategic / longer-running</h3>
+<ol>
+  <li><strong>Trial doc analysis:</strong> if qwen and/or DS prove viable for T0 content writing, expand their usage to drain the remaining 139 critical modules faster. If they fail, formally document the constraints (qwen needs <code>--dir=primary</code>; DS citation accuracy needs cross-family review every time).</li>
+  <li><strong>Phase E.1 expansion plan (#384):</strong> Release Eng, Chaos Eng, FinOps deeper coverage. The 5 PRs landed this session overlap with FinOps + KCSA scope; #384 should be re-checked for currentness.</li>
+  <li><strong>Composite liveness probes (#373):</strong> infra epic, defer until critical-rubric drain progresses below ~30.</li>
+  <li><strong>UK re-sync (#383):</strong> the 5 EN modules merged today now have UK divergence debt. Per the lab-scorer audit, UK labs score significantly lower than EN (1.84 vs 2.83 for k8s). Bulk UK translation work is high-leverage when prioritized.</li>
+</ol>
+
+<h3>Hygiene</h3>
+<ol>
+  <li>Add <code>.dispatch-logs/</code>, <code>.worktrees/</code>, <code>logs/</code> to <code>.gitignore</code> properly + commit the .gitignore change.</li>
+  <li>Clean up <code>.worktrees/codex-interactive</code> (detached HEAD) — confirm with user before removing.</li>
+  <li>Prune merged branches via <code>git cleanup-merged</code> per the briefing alert.</li>
+</ol>
+
+<h2>End state (handoff write-time)</h2>
+
+<p><strong>Workspace:</strong> 4 uncommitted entries on main (.gitignore + 3 ignored dirs). Main at <code>2faa2cf6</code> (latest merge: #1460 KCSA at 18:30 UTC = 20:30 CEST).</p>
+
+<p><strong>Worktrees (8 total):</strong></p>
+<ul>
+  <li>Primary repo @ 9138f17d (pre-merges, will refresh on next git pull)</li>
+  <li><code>.worktrees/codex-interactive</code> — detached HEAD @ 9138f17d (stale, needs cleanup)</li>
+  <li><code>.worktrees/pr-review-tiebreak-policy</code> — feat/pr-review-tiebreak-policy (stale, pre-session)</li>
+  <li><code>.worktrees/rewrite-linux-namespaces</code> — feat/rewrite-linux-network-namespaces (active — fix-pass in flight, PR #1464)</li>
+  <li><code>.worktrees/rewrite-linux-networking-tools</code> — feat/rewrite-linux-networking-tools (active — review in flight, PR #1466)</li>
+  <li><code>.worktrees/rewrite-linux-bash-fundamentals</code> — feat/rewrite-linux-bash-fundamentals (active — review in flight, PR #1465)</li>
+  <li><code>.worktrees/rewrite-linux-cpu-scheduling</code> — feat/rewrite-linux-cpu-scheduling (active — qwen rewrite in flight)</li>
+</ul>
+
+<p><strong>Open PRs:</strong> #1464, #1465, #1466 (all 3 awaiting final review/merge) + likely one more from qwen retry (TBD).</p>
+
+<p><strong>Today's merges (5):</strong> #1459, #1460, #1461, #1462, #1463.</p>
+
+<p><strong>Memory index entries added (5+1):</strong> all in TOP PRIORITY block.</p>
+
+<p><strong>User stance at handoff:</strong> active orchestrator collaboration. Auto-mode off. Pushing for parallel multi-agent fan-out. Multiple corrective signals captured durably.</p>
+
+</body>
+</html>
