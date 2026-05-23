@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KubeDojo Codebase Architecture</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --border: #30363d;
+    --fg: #e6edf3;
+    --fg-dim: #8b949e;
+    --blue: #58a6ff;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
+  header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+  header h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--fg-dim); max-width: 760px; }
+  header .meta { margin-top: 12px; font-size: 12px; color: var(--fg-dim); }
+  h2 {
+    font-size: 19px;
+    margin: 36px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 15px; margin: 20px 0 10px; }
+  p { color: var(--fg-dim); margin: 0 0 12px; }
+  .diagram {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0 24px;
+    overflow-x: auto;
+  }
+  .diagram .mermaid { display: flex; justify-content: center; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 24px;
+    font-size: 14px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--panel); color: var(--fg); }
+  td { color: var(--fg-dim); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    background: var(--panel);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--fg);
+  }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--fg-dim);
+    margin: 12px 0 24px;
+  }
+  .summary {
+    background: linear-gradient(135deg, #1a1f29 0%, #161b22 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--blue);
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-top: 28px;
+  }
+  .summary p { margin: 0; color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>KubeDojo Codebase Architecture</h1>
+  <p>Structural map of the repository: published curriculum site, agent pipeline, and local dev services.</p>
+  <p class="meta">Generated 2026-05-23 · open in browser for rendered Mermaid diagrams</p>
+</header>
+
+<h2>High-level architecture</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    subgraph Published["Published site (GitHub Pages)"]
+        GH["kube-dojo.github.io"]
+    end
+
+    subgraph Build["Site build"]
+        Astro["Astro + Starlight"]
+        Config["astro.config.mjs"]
+        Content["src/content/docs/"]
+        Components["src/components/ + layouts/"]
+        BuildCmd["npm run build → dist/"]
+    end
+
+    subgraph CI["CI/CD"]
+        DeployWF[".github/workflows/deploy.yml"]
+        UKWF["uk-quality-checks.yml"]
+    end
+
+    subgraph LocalDev["Local dev services"]
+        ServicesUp["scripts/services-up"]
+        LocalAPI["local_api.py :8768"]
+        PipelineV2["pipeline_v2 workers"]
+    end
+
+    subgraph AgentLayer["Agent orchestration"]
+        Bridge["ai_agent_bridge/ + scripts/ab"]
+        Dispatch["dispatch.py / dispatch_smart.py"]
+        Runtime["agent_runtime/"]
+        ClaudeRules[".claude/rules/ + AGENTS.md"]
+    end
+
+    subgraph Quality["Quality pipeline"]
+        State[".pipeline/state.yaml"]
+        Reviews[".pipeline/reviews/"]
+        Checks["check_links, check_citations, check_site_health"]
+        Rubric["docs/quality-rubric.md"]
+    end
+
+    subgraph InternalDocs["Internal docs & ops"]
+        Status["STATUS.md"]
+        Sessions["docs/session-state/"]
+        Research["docs/research/ai-history/"]
+        Decisions["docs/decisions/"]
+    end
+
+    Content --> Astro
+    Config --> Astro
+    Components --> Astro
+    Astro --> BuildCmd
+    BuildCmd --> DeployWF
+    DeployWF --> GH
+
+    ServicesUp --> LocalAPI
+    ServicesUp --> PipelineV2
+
+    LocalAPI --> State
+    LocalAPI --> Status
+    LocalAPI --> Content
+
+    Dispatch --> Runtime
+    Bridge --> Runtime
+    Runtime --> PipelineV2
+
+    PipelineV2 --> State
+    PipelineV2 --> Reviews
+    PipelineV2 --> Content
+    Checks --> Content
+    Rubric --> PipelineV2
+
+    ClaudeRules --> Dispatch
+    Sessions --> LocalAPI
+    Research --> Content
+</pre>
+</div>
+
+<h2>Curriculum content tree</h2>
+<p>Published curriculum lives under <code>src/content/docs/</code> and maps to Starlight sidebar tabs.</p>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    Root["src/content/docs/"]
+
+    Root --> Fund["Fundamentals"]
+    Root --> Cloud["Cloud"]
+    Root --> Certs["Certifications"]
+    Root --> Plat["Platform Eng"]
+    Root --> ML["AI/ML Engineering"]
+    Root --> Hist["AI History book"]
+    Root --> OnPrem["On-Premises"]
+    Root --> UK["uk/ translations"]
+
+    Fund --> Preq["prerequisites/"]
+    Fund --> Linux["linux/"]
+
+    Cloud --> CloudMod["cloud/"]
+
+    Certs --> K8s["k8s/"]
+    K8s --> CKA["CKA"]
+    K8s --> CKAD["CKAD"]
+    K8s --> CKS["CKS"]
+    K8s --> KCNA["KCNA/KCSA"]
+
+    Plat --> PlatFound["platform/"]
+
+    ML --> AIML["ai-ml-engineering/"]
+    ML --> AI["ai/"]
+
+    Hist --> AIHist["ai-history/ (~73 chapters)"]
+
+    UK --> UKK8s["uk/k8s/"]
+    UK --> UKPre["uk/prerequisites/"]
+</pre>
+</div>
+
+<table>
+  <thead>
+    <tr><th>Track</th><th>Path</th><th>Role</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Fundamentals</td><td><code>prerequisites/</code>, <code>linux/</code></td><td>Zero-to-terminal, everyday Linux</td></tr>
+    <tr><td>Cloud</td><td><code>cloud/</code></td><td>AWS/GCP/Azure, patterns, deep dives</td></tr>
+    <tr><td>Certifications</td><td><code>k8s/</code></td><td>CKA, CKAD, CKS, KCNA, tool certs</td></tr>
+    <tr><td>Platform Engineering</td><td><code>platform/</code></td><td>Foundations, disciplines, toolkits</td></tr>
+    <tr><td>AI/ML</td><td><code>ai-ml-engineering/</code>, <code>ai/</code></td><td>ML engineering curriculum</td></tr>
+    <tr><td>AI History</td><td><code>ai-history/</code></td><td>Narrative book (also in <code>docs/research/</code>)</td></tr>
+    <tr><td>Ukrainian</td><td><code>uk/</code></td><td>~40% translated mirror tree</td></tr>
+  </tbody>
+</table>
+
+<h2>Agent &amp; pipeline flow</h2>
+<div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant Human as Human / Orchestrator
+    participant API as Local API :8768
+    participant Dispatch as dispatch_smart.py
+    participant Agents as Claude / Codex / Gemini
+    participant Pipe as pipeline_v2
+    participant Content as src/content/docs/
+    participant Gates as Quality checks
+    participant Site as Astro build
+
+    Human->>API: GET /api/briefing/session
+    Human->>Dispatch: assign module task
+    Dispatch->>Agents: write / review module
+    Agents->>Content: edit markdown modules
+    Pipe->>Agents: queue write/review/patch workers
+    Pipe->>API: update module state + leases
+    Gates->>Content: links, citations, health
+    Content->>Site: npm run build
+    Site->>Human: dist/ → GitHub Pages
+</pre>
+</div>
+
+<h2>Key directories</h2>
+<pre>kubedojo/
+├── src/                    # Astro site source
+│   ├── content/docs/       # Curriculum (source of truth)
+│   ├── components/         # UI (Footer, etc.)
+│   └── pages/              # Custom routes
+├── scripts/                # Python tooling (~100 scripts)
+│   ├── local_api.py        # Session briefing, module state, pipeline API
+│   ├── pipeline_v2/        # Queue + workers (write/review/patch)
+│   ├── ai_agent_bridge/    # Multi-agent CLI bridge
+│   ├── agent_runtime/      # Model adapters
+│   └── checks/             # Site health, links, citations
+├── docs/                   # Internal project docs (not published)
+├── .pipeline/              # Runtime pipeline state (generated)
+├── .bridge/                # Agent message DB (generated)
+├── tests/                  # Python test suite
+└── .github/workflows/      # Deploy + quality CI</pre>
+
+<h2>Runtime vs. generated</h2>
+<div class="diagram">
+<pre class="mermaid">
+flowchart LR
+    subgraph Committed["Committed source"]
+        MD["Markdown modules"]
+        PY["Python scripts"]
+        CFG["astro.config.mjs"]
+    end
+
+    subgraph Generated["Generated at runtime — not in PRs"]
+        SY[".pipeline/state.yaml"]
+        RV[".pipeline/reviews/"]
+        BR[".bridge/messages.db"]
+        DS["dist/"]
+    end
+
+    PY --> SY
+    PY --> RV
+    PY --> BR
+    MD --> DS
+    CFG --> DS
+</pre>
+</div>
+
+<div class="summary">
+  <p><strong>Summary:</strong> KubeDojo is two systems in one repo — an <strong>Astro/Starlight static curriculum site</strong> (<code>src/content/docs/</code>) and a <strong>Python agent pipeline</strong> (<code>scripts/</code>, <code>.pipeline/</code>, local API on <code>:8768</code>) that writes, reviews, and quality-gates ~1,800+ pages before CI deploys to GitHub Pages.</p>
+</div>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    flowchart: { htmlLabels: true, curve: 'basis' },
+    sequence: { actorMargin: 50 },
+  });
+</script>
+</body>
+</html>
