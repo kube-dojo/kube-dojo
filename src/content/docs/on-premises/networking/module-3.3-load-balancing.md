@@ -5,598 +5,765 @@ sidebar:
   order: 4
 ---
 
-> **Complexity**: `[MEDIUM]` | Time: 60 minutes
+> **Complexity**: `[ADVANCED]` | Time: 120 minutes
 >
-> **Prerequisites**: [Module 3.2: BGP & Routing](../module-3.2-bgp-routing/), [MetalLB](/platform/toolkits/infrastructure-networking/networking/module-5.4-metallb/)
+> **Prerequisites**: [Module 3.2: BGP & Routing](../module-3.2-bgp-routing/), [Datacenter Network Architecture](../module-3.1-datacenter-networking/)
 
 ---
 
-## Why This Module Matters
-
-In early 2024, a major e-commerce retailer began repatriating their workloads from AWS to their own on-premises datacenters to cut infrastructure costs. Their CI/CD automation seamlessly deployed over 500 microservices into their newly provisioned bare-metal Kubernetes clusters. However, on launch day, not a single external request reached their applications. Engineers stared at dashboards as every single `LoadBalancer` service remained permanently in an `EXTERNAL-IP: <pending>` state. The automated cloud controllers they had relied on for years did not exist in their datacenter, causing a complete traffic blackout and a delayed launch that cost the business hundreds of thousands in projected revenue.
-
-This scenario highlights the single biggest operational gap between cloud and on-premises Kubernetes. Every application that needs external access — APIs, web frontends, gRPC services — needs a load balancing solution. On bare-metal Kubernetes without a cloud-provider integration, Kubernetes delegates external IP allocation entirely to the hosting environment. Without a cloud controller, the service controller creates the object but cannot advance it; the field stays pending indefinitely, and crucially, no error is raised to alert you of the problem.
-
-Historically, organizations bridged this gap by purchasing expensive hardware. An F5 BIG-IP load balancer appliance costs $15,000 to $100,000+ depending on throughput and features. Many organizations continue to use F5 for their on-prem ingress simply because it is familiar. However, modern cloud-native architectures demand software-defined, declarative approaches. In this module, we explore the software-defined alternatives that provide bare-metal load balancing: MetalLB, kube-vip, Cilium's native capabilities, and classic HAProxy combined with Keepalived architectures.
-
----
-
-## What You'll Be Able to Do
+## Learning Outcomes
 
 After completing this module, you will be able to:
 
-1. **Design** a high-availability load balancing architecture incorporating VIP failover, health checking, and distributed traffic handling.
-2. **Implement** MetalLB in both Layer 2 and BGP modes to assign routable IP addresses to bare-metal services.
-3. **Debug** common external traffic failures, distinguishing between ARP cache issues, BGP peering drops, and kube-proxy misconfigurations.
-4. **Evaluate** software-defined load balancers (MetalLB, kube-vip, Cilium) against legacy hardware and classic reverse proxies to choose the correct operational model for your datacenter.
-5. **Compare** the performance and failover characteristics of ECMP-based routing versus single-node ARP leader election.
+1. **Differentiate L4 packet steering and L7 proxying** for on-prem Kubernetes services.
+2. **Configure and compare MetalLB, kube-vip, keepalived, HAProxy, nginx, Envoy, and Cilium** in bare-metal environments.
+3. **Apply session affinity, TLS termination, and WAF integration choices** to preserve both reliability and security.
+4. **Operate failover semantics** for VIP ownership across VRRP, MetalLB, and leader-based control designs.
+5. **Run three hands-on validations**, including MetalLB L2 with a two-replica `LoadBalancer` service in kind and VIP failover checks.
 
----
+## Why This Module Matters
+
+When teams move from managed cloud Kubernetes to bare-metal datacenters, service externalization often breaks before application behavior changes. A `LoadBalancer` service that was routable in the cloud can remain unresolved on bare metal because no external controller assigns a VIP by default. This usually appears as a launch blackout where dashboards are healthy, pods are ready, and still nothing reachable from outside.
+
+For on-prem operations, load balancing is a platform control plane that combines address allocation, forwarding method, health semantics, and failover policy. The operator must now coordinate all decisions that were previously hidden behind provider services. That includes whether traffic should be steered at Layer 4 or Layer 7, whether announcements are L2 or BGP, and whether kube-proxy remains in front of workload traffic.
+
+The practical result is that traffic decisions become explicit. A tiny configuration error in advertisement mode or VIP ownership can produce widespread incident pressure even while application metrics look stable. This module builds the mental model to predict these failure modes before a customer does.
 
 ## What You'll Learn
 
-- Why `type: LoadBalancer` does not work on bare metal by default.
-- MetalLB architecture: CRDs, controllers, and speakers.
-- The differences between L2 mode, native BGP mode, and FRR-backed BGP mode.
-- How kube-vip provides a lightweight alternative for API server HA and service VIPs.
-- How Cilium provides native LB IPAM and L2 Announcements.
-- How to combine HAProxy and Keepalived to front Kubernetes Ingress controllers.
-- Common pitfalls, including IPVS strict ARP requirements.
+- Layer 4 versus Layer 7 decision boundaries for Kubernetes service exposure.
+- MetalLB L2 and BGP operation with IP address pools and advertisement CRDs.
+- kube-vip in control-plane and service VIP modes.
+- keepalived + VRRP election behavior and operational failure modes.
+- HAProxy/L7 behavior, nginx alternatives, Envoy xDS basics, and Cilium kube-proxy-free mode.
+- Session affinity strategies, SR-IOV data path tradeoffs, and incident recovery workflows.
 
----
+## Did You Know
 
-## The LoadBalancer Problem
+- Kubernetes `LoadBalancer` services on bare-metal require an external controller for VIP assignment and announcement.
+- L2 load balancing with MetalLB is simple but can become a single-node bottleneck under high connection rates.
+- keepalived uses VRRP state machines for deterministic master-backup ownership and can recover VIP ownership quickly.
+- L7 components can enforce richer security and policy but require explicit protocol awareness and capacity planning.
 
-To understand the core issue, we must visualize what happens when you request a LoadBalancer service in different environments. 
+## Section 1: Layer 4 and Layer 7 Fundamentals for on-prem Kubernetes
 
-```mermaid
-flowchart TD
-    subgraph Cloud["ON CLOUD (AWS/GCP/Azure)"]
-        direction TB
-        A[kubectl create svc loadbalancer] --> B[Cloud Controller]
-        B --> C[Creates ALB/NLB/Azure LB automatically]
-        C --> D[Assigns external IP]
-        D --> E[Routes traffic to node ports]
-        E --> F[Health checks, scaling, TLS termination]
-        F --> G[Cost: $15-25/month per LB]
-    end
+The core distinction is that Layer 4 tools route by transport fields, while Layer 7 tools route by request semantics. In L4, node selection generally depends on connection tuples, service endpoints, and proxy policies. In L7, routing decisions depend on host, path, headers, cookies, and protocol behavior.
 
-    subgraph BareMetal["ON BARE METAL"]
-        direction TB
-        H[kubectl create svc loadbalancer] --> I["??? (no cloud controller)"]
-        I --> J[Service stays 'Pending' forever]
-        J --> K[No external IP assigned]
-        K --> L[No traffic reaches the service]
-    end
+Layer 4 is typically faster per request because it avoids deep parsing, but it cannot make decisions on `Accept`, path, or custom header strategy. Layer 7 supports fine-grained routing and security policy and can support complex A/B traffic splits, but it creates additional state and observability requirements. This is why teams often use a layered architecture: L4 for raw traffic distribution and L7 for policy enforcement.
 
-    subgraph Solution["SOLUTION"]
-        direction TB
-        M[Install MetalLB or kube-vip as LB controller] --> N[Assigns IPs from a configured pool]
-        N --> O[Announces IPs via L2 ARP or BGP]
-        O --> P[Traffic reaches nodes --> kube-proxy --> pods]
-    end
-```
-
-Without a software mechanism watching for these services and acting on them, the cluster is effectively isolated from inbound network traffic.
-
-> **Pause and predict**: You create a Service of type LoadBalancer on your bare-metal cluster. It stays in "Pending" forever. Before reading further, explain what is missing and why this works automatically on AWS but not on bare metal.
-
----
-
-## Hardware Proxies and The Pre-MetalLB Era
-
-Before software-defined controllers like MetalLB existed, administrators relied entirely on external load balancers. HAProxy combined with Keepalived (using the VRRP protocol) is a common pre-MetalLB pattern for bare-metal Kubernetes High Availability (HA). 
-
-In this model, Keepalived provides a floating Virtual IP (VIP) via VRRP, while HAProxy load-balances TCP traffic across multiple backend nodes. When one load balancer node fails, VRRP detects the failure within roughly 2 seconds, and the VIP automatically floats to the standby node.
-
-These components can be deployed as standard Linux OS services running directly on the hosts, or they can be deployed as Kubernetes static pods defined in `/etc/kubernetes/manifests`. Deploying them as static pods ensures they are managed by the kubelet and start before the main control plane comes online, resolving the critical chicken-and-egg problem of establishing initial API server access.
+The distinction becomes important with HTTP keep-alive and retries. In Layer 7, a client retry from a TLS-terminated proxy is a request-level event with semantics around method safety and idempotency described in HTTP message handling rules. In Layer 4, the same event might still involve established TCP sessions and appear healthy long after application retries become pathological.
 
 ```mermaid
-flowchart TD
-    Internet["Internet / Corporate Network"]
-    
-    subgraph ExtLB["External Load Balancers"]
-        HAProxy["HAProxy (or F5, Nginx, Traefik)<br/>+ Keepalived"]
-        VIP["VIP: 10.0.50.1 (floats between 2 LBs)"]
-        HAProxy --- VIP
-    end
-    
-    subgraph K8s["K8s Ingress Controllers (running on worker nodes)"]
-        direction LR
-        Node1["Ingress Node 1"]
-        Node2["Ingress Node 2"]
-        Node3["Ingress Node 3"]
-    end
-    
-    Internet --> VIP
-    VIP --> Node1
-    VIP --> Node2
-    VIP --> Node3
-    
-    Note["HAProxy health-checks each ingress node.<br/>Keepalived provides VIP failover between 2 HAProxy instances (active/standby)."]
+graph LR
+    C[Client traffic] -->|Flow 5-tuple| L4[Layer 4 LB]
+    L4 --> K[kube-proxy service map]
+    K --> P[Pod endpoints]
+    C2[Client HTTP request] -->|Host/Method/Path| L7[Layer 7 LB]
+    L7 --> W[WAF + Auth + Rate-limit]
+    W --> A[Application service]
+    P -->|No app context| R1[Fast path, less metadata]
+    A -->|HTTP-aware policy| R2[Controlled application semantics]
 ```
 
-Here is a typical HAProxy configuration used to balance both the Kubernetes API server and application ingress. Notice the health checks that ensure traffic is never routed to a dead node. The `check-ssl verify none` option on the API backend tells HAProxy to verify the backend is alive via HTTPS without validating the certificate (since K8s uses self-signed certs for health endpoints):
+For Layer 4 workflows, health checks are mostly about backend availability and kernel path readiness. For Layer 7 workflows, health checks become a part of protocol behavior and can include custom endpoints, response patterns, or header checks. If one layer says healthy and the other says unhealthy, you should not assume correctness from either alone.
 
-```bash
-# /etc/haproxy/haproxy.cfg
-global
-    maxconn 50000
-    log /dev/log local0
+## Section 2: Kubernetes Service Addressing and Forwarding Boundaries
 
-defaults
-    mode tcp
-    timeout connect 5s
-    timeout client 30s
-    timeout server 30s
+On a cloud platform, `LoadBalancer` often means the provider allocates and advertises external addressing for you. On bare-metal, the service model still exists, but the mechanism that gives it a publicly routable VIP must be provided locally. This is where MetalLB, kube-vip, or keepalived becomes critical.
 
-# K8s API server load balancing
-frontend k8s-api
-    bind *:6443
-    default_backend k8s-api-backend
+When a request reaches an on-prem VIP, the next handoff is usually through kube-proxy or an equivalent replacement path. If kube-proxy is present, it maintains service endpoint processing and can be managed by iptables mode or IPVS mode. If kube-proxy-free mode is in place, service processing may happen in eBPF maps and tracing flows must follow different observability paths.
 
-backend k8s-api-backend
-    option httpchk GET /healthz
-    http-check expect status 200
-    server cp-01 10.0.20.10:6443 check check-ssl verify none
-    server cp-02 10.0.20.11:6443 check check-ssl verify none
-    server cp-03 10.0.20.12:6443 check check-ssl verify none
-
-# HTTP ingress
-frontend http-ingress
-    bind *:80
-    default_backend ingress-http-backend
-
-# HTTPS ingress (TLS passthrough to ingress controller)
-frontend https-ingress
-    bind *:443
-    default_backend ingress-https-backend
-
-backend ingress-http-backend
-    balance roundrobin
-    option httpchk GET /healthz
-    server ingress-01 10.0.20.50:80 check
-    server ingress-02 10.0.20.51:80 check
-    server ingress-03 10.0.20.52:80 check
-
-backend ingress-https-backend
-    balance roundrobin
-    server ingress-01 10.0.20.50:443 check port 80
-    server ingress-02 10.0.20.51:443 check port 80
-    server ingress-03 10.0.20.52:443 check port 80
-```
-
----
-
-## MetalLB: The De Facto Standard
-
-MetalLB is the most widely used software load-balancer implementation for bare-metal Kubernetes. It bridges the bare-metal gap by assigning IP addresses from a predefined pool and announcing them to the local network. 
-
-Despite its widespread adoption—it is bundled with major Kubernetes distributions for on-premise deployments including OpenShift—the project's maturity is formally declared as beta. Maintained by a small group of contributors, MetalLB continues to evolve. For example, its v0.15.3 release, which is the latest stable version, patched security vulnerability CVE-2025-22874 and upgraded its internal routing components.
-
-### Architecture and CRDs
-
-MetalLB deploys two core components to function:
-1. A **controller** (deployed as a cluster-wide Deployment) responsible for IP address assignment and pool management.
-2. A **speaker** (deployed as a per-node DaemonSet) responsible for advertising those assigned IPs to the local network via routing protocols.
-
-Historically, administrators configured MetalLB via a massive ConfigMap. However, MetalLB has used CRD-based configuration exclusively since v0.13.0; the ConfigMap-based configuration was removed entirely. The primary CRDs include `IPAddressPool`, `L2Advertisement`, `BGPAdvertisement`, and `BGPPeer`. Furthermore, release v0.15.3 added a `ConfigurationState` CRD to expose underlying configuration errors cleanly to administrators. Note that legacy annotations using the `metallb.universe.tf` prefix are deprecated in favor of `metallb.io`.
-
-### Installation
-
-MetalLB supports multiple installation methods to fit various GitOps workflows: plain Kubernetes manifests, Kustomize, and Helm (via the chart repository `metallb.github.io/metallb`). A MetalLB Operator is also available via OperatorHub.
-
-```bash
-# Install MetalLB using plain manifests
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml
-
-# Wait for MetalLB pods to initialize
-kubectl wait --namespace metallb-system \
-  --for=condition=Ready pod \
-  --selector=app=metallb \
-  --timeout=120s
-```
-
-**Critical operational detail:** When `kube-proxy` runs in IPVS mode, it binds service IPs to a dummy interface (`kube-ipvs0`). This causes the Linux kernel to answer ARP requests for those IPs on all nodes, conflicting with MetalLB's deliberate ARP announcements. Therefore, when utilizing IPVS, MetalLB strictly requires setting `strictARP: true` in the `kube-proxy` configuration. Standard iptables mode does not bind IPs this way, meaning no conflict arises.
-
----
-
-## MetalLB Operational Modes
-
-MetalLB supports three distinct operational modes for announcing IPs: Layer 2 mode (native), BGP mode (native), and BGP via an FRR backend. 
+You can think of the stack as three explicit stages: external announcement, service selection, and request interpretation. External announcement decides where the first node receives traffic. Service selection chooses backend endpoint and applies session policy. Request interpretation adds business-aware logic only where protocol parsing occurs. This decomposition is the most durable way to design load-balancing architecture.
 
 ```mermaid
-flowchart TD
-    subgraph L2Mode["L2 MODE (ARP/NDP)"]
-        direction TB
-        L2_Desc["One node responds to ARP for the VIP.<br/>All traffic goes to that single node."]
-        Client1[Client] -- "ARP 'who has 10.0.50.1?'" --> Node3_L2["Node 3 (Elected Leader)"]
-        Node3_L2 -- "'I do!'" --> Client1
-        Client1 -- "sends all traffic" --> Node3_L2
-        Node3_L2 -- "kube-proxy" --> Pods1[pods on any node]
-        
-        L2_Pros["[+] Simple: no switch config needed<br/>[+] Works in any L2 network"]
-        L2_Cons["[-] Single node bottleneck<br/>[-] Failover takes 10-30s<br/>[-] No true load distribution"]
-    end
-
-    subgraph BGPMode["BGP MODE"]
-        direction TB
-        BGP_Desc["All nodes announce the VIP via BGP.<br/>Switch uses ECMP to spread traffic across multiple nodes."]
-        Node1["Node 1"] -- "BGP: 'I have 10.0.50.1'" --> Switch
-        Node2["Node 2"] -- "BGP: 'I have 10.0.50.1'" --> Switch
-        Node3["Node 3"] -- "BGP: 'I have 10.0.50.1'" --> Switch
-        Switch -- "ECMP: split traffic" --> Node1 & Node2 & Node3
-        
-        BGP_Pros["[+] True load distribution across nodes<br/>[+] Fast failover (1-3 seconds)<br/>[+] Scales with cluster size"]
-        BGP_Cons["[-] Requires BGP-capable switches<br/>[-] Switch configuration needed"]
-    end
+flowchart LR
+  subgraph "External announcement"
+    A[LB controller] --> B[VIP assigned]
+    B --> C[Node advertisement]
+  end
+  subgraph "Service path"
+    C --> D[kube-proxy or eBPF]
+    D --> E[Endpoint backends]
+  end
+  subgraph "Policy layer"
+    E --> F[Layer 7 ingress / WAF]
+    F --> G[Application]
+  end
 ```
 
-### Layer 2 Mode (ARP/NDP)
+## Section 3: MetalLB Fundamentals, Address Pools, and Advertisements
 
-In L2 mode, MetalLB assigns the VIP to a single elected leader node. All traffic from the network lands on that specific node first, meaning there is no true multi-node load balancing at the network layer. The elected leader responds to ARP (IPv4) or NDP (IPv6) requests for the VIP. Once traffic reaches the leader, `kube-proxy` distributes it across the backend pods.
+MetalLB is the standard answer for bare-metal `LoadBalancer` automation in many environments. It introduces controllers that watch services and allocates external addresses from a pool you define. The critical resource is `IPAddressPool`, which defines CIDR ranges or explicit blocks. Without careful governance, overlaps can conflict with host and infrastructure allocations.
+
+A MetalLB address configuration typically combines the pool and one of two advertisement modes. The mode drives how external network devices reach the advertised IP.
 
 ```yaml
-# IP address pool
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
-  name: external-pool
+  name: onprem-addresses
   namespace: metallb-system
 spec:
   addresses:
-    - 10.0.50.10-10.0.50.50  # 41 external IPs available
+    - 10.90.30.100-10.90.30.170
 ```
 
+The L2 model uses announcements based on local node ownership. This is straightforward, requires fewer network changes, and is often the fastest path for small to medium footprints. But by design, one node is owner for a given VIP while advertisements are active.
+
 ```yaml
-# L2 advertisement
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: external
+  name: onprem-l2
   namespace: metallb-system
 spec:
   ipAddressPools:
-    - external-pool
+    - onprem-addresses
   interfaces:
-    - bond0  # Only respond on the production bond
+    - bond0
 ```
 
-> **Stop and think**: L2 mode sends all traffic through a single elected node. For a service handling 500 requests/second, this might be fine. But what if the service handles 50,000 requests/second at 1KB each -- that is 400 Mbps through a single node. At what point does this single-node bottleneck become a problem, and how does BGP mode solve it?
-
-### BGP Mode and FRR
-
-BGP mode eliminates the single-node bottleneck by having every node announce the VIP via BGP. The upstream Top-of-Rack (ToR) switch uses ECMP (Equal-Cost Multi-Path) to distribute traffic across all announcing nodes, giving you true horizontal scaling of ingress bandwidth.
-
-MetalLB offers two BGP implementations: a native Golang implementation and an FRR (Free Range Routing) implementation. The MetalLB FRR mode ships FRR as a sidecar container inside each speaker pod. In version v0.15.3, the bundled FRR version was upgraded to 10.4.1.
-
-FRR mode is heavily preferred for production because:
-- **BFD Support:** MetalLB FRR mode supports BFD (Bidirectional Forwarding Detection) for sub-second path failure detection. Standard BGP relies on keepalive timers. The native implementation does not offer BFD support.
-- **Dual-Stack:** MetalLB FRR mode supports IPv6 and dual-stack services; the native BGP implementation does not support IPv6 advertisements.
-
-MetalLB's long-term plan is for FRR to become the only BGP implementation, and the native BGP implementation will eventually be deprecated (though it is not formally deprecated yet in the current documentation). Additionally, an advanced experimental mode called FRR-K8s (introduced in v0.14.0) exists. It deploys FRR as a standalone DaemonSet managed by a dedicated operator, fully decoupled from the MetalLB speaker, unlocking complex routing topologies.
+BGP mode uses route advertisement so multiple nodes can announce routes for the same service, allowing distribution over ECMP-capable topologies. It is operationally stronger for larger clusters but requires robust BGP governance and upstream support.
 
 ```yaml
-# IP address pool
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: external-pool
-  namespace: metallb-system
-spec:
-  addresses:
-    - 10.0.50.10-10.0.50.50
-```
-
-```yaml
-# BGP advertisement
 apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement
 metadata:
-  name: external-bgp
+  name: onprem-bgp
   namespace: metallb-system
 spec:
   ipAddressPools:
-    - external-pool
-  peers:
-    - rack-a-tor
+    - onprem-addresses
+  communities:
+    - "65000:80"
 ```
 
 ```yaml
-# BGP peer (ToR switch)
 apiVersion: metallb.io/v1beta2
 kind: BGPPeer
 metadata:
-  name: rack-a-tor
+  name: tor-peer
   namespace: metallb-system
 spec:
   myASN: 64512
   peerASN: 64501
-  peerAddress: 10.0.20.1
-  nodeSelectors:
-    - matchLabels:
-        rack: rack-a
-```
-*(Note: The MetalLB `BGPPeer` `v1beta1` API is deprecated in favor of `v1beta2`.)*
-
-### Testing the LoadBalancer Service
-
-Once configured, your LoadBalancer services will immediately receive routable IPs.
-
-```bash
-# Create a test deployment
-kubectl create deployment nginx --image=nginx --replicas=3
-
-# Expose as LoadBalancer
-kubectl expose deployment nginx --type=LoadBalancer --port=80
-
-# Check external IP assignment
-kubectl get svc nginx
-# NAME    TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)        AGE
-# nginx   LoadBalancer   10.96.45.123   10.0.50.10    80:31234/TCP   5s
-
-# Test access
-curl "http://10.0.50.10"
-# <!DOCTYPE html>...
+  peerAddress: 10.90.0.1
+  holdTime: 90s
+  keepaliveTime: 30s
 ```
 
----
+When troubleshooting MetalLB, compare VIP state, address pool exhaustion, and peer health together. A missing address is often a governance issue, while fast flap behavior often indicates network peer churn.
 
-## kube-vip: Control Plane HA and Service LB
+## Section 4: MetalLB in Practice and the L2-to-BGP Decision
 
-kube-vip is a CNCF Sandbox project that provides both a control-plane virtual IP (for high-availability etcd and API-server access) and LoadBalancer service IP announcement—handling both functions within one single binary.
+An L2-only design is predictable and often easier for first production use, but at high throughput it can create one node receiving ingress for each service VIP. If connection reuse is low and long-lived streams are common, that concentration matters. BGP distributes announcement across multiple speakers and often smooths this behavior when fabric policy allows ECMP.
 
-Like MetalLB, kube-vip supports ARP (Layer 2) and BGP (Layer 3) advertisement modes for service IPs. While its service IP handling is simpler than MetalLB's, its ability to bootstrap an HA control plane makes it indispensable. As of our latest review, kube-vip's stable release appears to be v1.1.2, though users should verify the current version on their GitHub releases page.
-
-```yaml
-# kube-vip as static pod for API server HA
-apiVersion: v1
-kind: Pod
-metadata:
-  name: kube-vip
-  namespace: kube-system
-spec:
-  hostNetwork: true
-  containers:
-    - name: kube-vip
-      image: ghcr.io/kube-vip/kube-vip:v0.8.7
-      args:
-        - manager
-      env:
-        - name: vip_arp
-          value: "true"
-        - name: vip_interface
-          value: bond0
-        - name: address
-          value: "10.0.20.100"  # Virtual IP for API server
-        - name: port
-          value: "6443"
-        - name: vip_leaderelection
-          value: "true"
-        - name: svc_enable
-          value: "true"  # Also handle LoadBalancer services
-        - name: svc_election
-          value: "true"
-```
-
-### kube-vip vs MetalLB
-
-| Feature | kube-vip | MetalLB |
-|---------|----------|---------|
-| API server VIP | Yes (primary use case) | No |
-| Service LB | Yes (basic) | Yes (full featured) |
-| BGP mode | Yes | Yes |
-| L2 mode | Yes (ARP) | Yes (ARP/NDP) |
-| ECMP | No | Yes (via BGP) |
-| IP pools | Basic | Advanced (per-namespace, auto-assign) |
-| Community | Smaller | Larger, CNCF Sandbox |
-| Best for | API server HA + simple LB | Production service load balancing |
-
-**Common pattern**: Use kube-vip for API server HA VIP + MetalLB for advanced, production service load balancing.
-
----
-
-## Cilium Native Load Balancing
-
-For organizations standardizing on Cilium as their Container Network Interface (CNI), deploying a separate tool like MetalLB may introduce unnecessary operational overhead.
-
-**Cilium LB IPAM** (LoadBalancer IP Address Management) was introduced in Cilium 1.13. It allows Cilium to independently assign external IPs to Services of type LoadBalancer from admin-configured IP pools, functioning as an in-cluster IPAM controller without requiring MetalLB. Cilium LB IPAM was slated to graduate from beta to stable, but its final status should be verified in the latest documentation.
-
-Furthermore, **Cilium L2 Announcements** was introduced in Cilium 1.14. This feature enables Cilium to natively respond to ARP (IPv4) and NDP (IPv6) queries for LoadBalancer IPs. The official documentation states that Cilium L2 Announcements is primarily intended for on-premises deployments on flat L2 networks without BGP routing infrastructure (e.g., office or campus networks). As of the reported current Cilium stable release (v1.19.2—though you should independently verify this version), L2 Announcements remains labeled as Beta.
-
----
-
-## Production Architecture: Putting It All Together
-
-When architecting for a large-scale, resilient datacenter, these various load balancing techniques are often combined to create a multi-layered ingress topology. 
+A practical rule is L2 for small clusters with strict operational simplicity and known growth limits. Choose BGP for wider scale, where load distribution at the network edge is required and the operations team can maintain clean peer configuration.
 
 ```mermaid
-flowchart TD
-    subgraph Complete["COMPLETE ON-PREM LB ARCHITECTURE"]
-        KV["kube-vip: API server VIP (10.0.20.100:6443)<br/>Floats between 3 CP nodes"]
-        MLB["MetalLB (BGP mode): Service LoadBalancer IPs (10.0.50.10-50)<br/>Announced to ToR switches via BGP<br/>ECMP across all nodes running the service"]
-        HAP["HAProxy + Keepalived: External ingress (optional, for high traffic)<br/>VIP 10.0.50.1, health checks ingress nodes<br/>TLS termination, rate limiting, WAF"]
-        ING["Ingress Controller: Nginx Ingress Controller or Cilium Gateway<br/>Running on dedicated ingress nodes<br/>Routes HTTP/gRPC to backend services"]
-        
-        KV ~~~ MLB ~~~ HAP ~~~ ING
+graph TD
+    subgraph L2_Mode[Layer 2 advertisement]
+      SVC1[LoadBalancer Service] --> L2Node[Leader node]
+      L2Node --> ARP[ARP reply]
+      ARP --> Clients
+      Clients --> L2Node --> Backends
+    end
+    subgraph BGP_Mode[Layer 3 advertisement]
+      SVC2[LoadBalancer Service] --> N1[Node A]
+      SVC2 --> N2[Node B]
+      SVC2 --> N3[Node C]
+      N1 --> ToR[ToR learns route]
+      N2 --> ToR
+      N3 --> ToR
+      ToR --> Clients
+      Clients --> N1 & N2 & N3 --> Backends
     end
 ```
 
-> **Pause and predict**: You need to expose your Kubernetes API server for external kubectl access, route HTTPS traffic to your ingress controller, and provide a VIP that survives node failures. Which combination of kube-vip, MetalLB, and HAProxy would you use for each requirement?
+BGP mode can still fail if upstream switches filter or leak routes unexpectedly. If that happens, all downstream services fail simultaneously even if controllers are correct, so the blast radius becomes wider. For that reason, your runbook must include both MetalLB state checks and switch-side route checks.
 
----
+## Section 5: kube-vip for Service and Control-plane VIPs
 
-## Did You Know?
+kube-vip is one of the strongest minimal solutions when teams want one binary to manage floating addresses with lower deployment overhead than multiple moving parts. It is commonly used for control-plane VIPs and can also expose service-level VIPs in some topologies.
 
-- **MetalLB was created because no cloud-equivalent existed** for bare metal. It started as a Google side project by David Anderson in 2017 and became a CNCF Sandbox project in 2021. Before MetalLB, the only options were NodePort, HostNetwork, or hardware balancers.
-- **F5 BIG-IP costs $15,000-$100,000+ per appliance** depending on throughput and features. MetalLB paired with an Nginx Ingress provides equivalent essential routing functionality for $0 in software cost.
-- **L2 mode failover is slow because of ARP caching.** When the MetalLB leader fails, the new leader sends a gratuitous ARP to update the network MAC table. However, older switches and routers often aggressively cache ARP entries for 30-300 seconds, dropping traffic during that window.
-- **kube-vip was created by Dan Finneran** specifically to solve the "chicken and egg" problem of API server HA. You need Kubernetes to run a load balancer, but you need a load balancer to reliably access Kubernetes. kube-vip operates as a static pod that launches prior to full cluster functionality.
+The daemonset mode works well for dynamic node enrollment because each node runs a local component. The static mode remains useful in constrained bootstrap environments where declarative start-up order matters. In both modes, the same principle applies: leadership and announcement must be deterministic.
 
----
+```bash
+# Example static manifest install style (operator docs provide full templates and compatibility flags)
+kubectl apply -f https://raw.githubusercontent.com/kube-vip/kube-vip/main/manifests/kube-vip-cloud-controller.yaml
+```
+
+```bash
+# Example daemonset install style
+kubectl apply -f https://raw.githubusercontent.com/kube-vip/kube-vip/main/manifests/kube-vip-daemonset.yaml
+```
+
+A typical control-plane pattern creates a VIP for the API server endpoint. The same mechanism can be extended to service-level use cases with care around annotations and admission constraints. In practice, teams usually keep control-plane and service traffic boundaries explicit in policy.
+
+A known incident pattern occurs when a kube-vip leader is removed and returns quickly enough to cause election churn. In that window, requests can reach a node that is no longer truly leader. The mitigation is to validate heartbeat, leader election timeout, and pod scheduling policies before asserting strict SLO guarantees.
+
+## Section 6: keepalived with VRRP for Master-Backup VIP Ownership
+
+keepalived and VRRP remain a proven construct for deterministic master-backup behavior. VRRP sends periodic advertisements and transitions between master and backup based on priority and health state. This behavior is standard in RFC-defined semantics and can coexist with Kubernetes ingress paths.
+
+From an on-prem design perspective, keepalived gives strong control. It is explicit, predictable, and lightweight for many teams moving from legacy appliances. But operational reliability depends on exact `virtual_router_id`, interface consistency, priority policy, and advertisement timing.
+
+```bash
+vrrp_instance K8S_INGRESS {
+    state MASTER
+    interface eth0
+    virtual_router_id 22
+    priority 180
+    advert_int 1
+    virtual_ipaddress {
+        10.90.40.10/24
+    }
+}
+```
+
+```bash
+vrrp_instance K8S_INGRESS {
+    state BACKUP
+    interface eth0
+    virtual_router_id 22
+    priority 140
+    advert_int 1
+    nopreempt
+    virtual_ipaddress {
+        10.90.40.10/24
+    }
+}
+```
+
+A split-brain scenario in VRRP often starts with misaligned priorities or wrong advertisement expectations. The cluster appears functional at first, then split packet delivery appears as duplicate MAC ownership. This can trigger intermittent failures even when individual components are healthy.
+
+## Section 7: HAProxy as Bare-Metal L4 and L7 Load Balancer
+
+HAProxy remains mature for high-throughput fronting while offering both transport and HTTP modes. It can be used to front Kubernetes ingress, API servers, and mixed legacy traffic.
+
+```bash
+global
+    log stdout local0
+    maxconn 25000
+
+defaults
+    mode tcp
+    option  tcplog
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+
+frontend api_tcp
+    bind *:6443
+    default_backend api_backend
+
+backend api_backend
+    balance roundrobin
+    option tcp-check
+    server cp01 10.90.50.11:6443 check
+    server cp02 10.90.50.12:6443 check
+    server cp03 10.90.50.13:6443 check
+
+frontend web_http
+    bind *:80
+    mode http
+    default_backend web_backend
+
+backend web_backend
+    mode http
+    balance leastconn
+    option httpchk GET /healthz
+    http-check expect status 200
+    server web01 10.90.60.11:80 check cookie s1
+    server web02 10.90.60.12:80 check cookie s2
+    server web03 10.90.60.13:80 check cookie s3
+EOF
+```
+
+`roundrobin` suits similar capacities and short request cycles, while `leastconn` helps when response times vary significantly. `tcp-check` confirms transport-level readiness, and `httpchk` validates layer semantics where available.
+
+A known incident from production clusters is bursty half-open traffic that saturates `maxconn`. Under that condition, services appear healthy but requests stall at the proxy layer. The fix is not only increasing proxy caps; it is also enforcing client-rate checks, SYN behavior controls, and coherent timeout policies with upstream components.
+
+## Section 8: nginx as TCP Gateway and HTTP Load-Balancer
+
+nginx can play both roles: raw TCP forwarding through `stream` and richer HTTP routing through `http`. This can be useful in mixed infrastructure because one platform can cover both legacy and modern use cases.
+
+```nginx
+stream {
+    upstream ingress_tcp {
+        hash $remote_addr consistent;
+        server 10.90.70.11:443 max_fails=3 fail_timeout=4s;
+        server 10.90.70.12:443 max_fails=3 fail_timeout=4s;
+    }
+    server {
+        listen 443;
+        proxy_pass ingress_tcp;
+        proxy_timeout 45s;
+    }
+}
+
+http {
+    upstream web_pool {
+        least_conn;
+        server 10.90.70.21:80;
+        server 10.90.70.22:80;
+    }
+
+    server {
+        listen 80;
+        location / {
+            proxy_pass http://web_pool;
+        }
+    }
+}
+```
+
+For many teams, nginx is easier to integrate when existing rule logic already exists, but you must map clearly where TLS termination occurs. If TLS is terminated at nginx, downstream services may run plain HTTP internally, so that boundary must be intentional.
+
+## Section 9: Envoy as Control-Plane Driven Ingress and L7 LB
+
+Envoy is core technology in modern service mesh designs because it decouples data plane from control plane through xDS APIs. In this pattern, listeners, routes, clusters, and endpoints can all be updated dynamically without full restart of proxy processes.
+
+`CDS` manages named backend groups, `EDS` manages actual endpoint membership, `LDS` controls listener behavior, and `RDS` controls route tables. This allows deterministic, centralized policy updates, but requires reliable control-plane convergence for high-availability behavior.
+
+```text
+Control Plane
+  -> ADS stream
+  -> Listener (LDS), Route (RDS), Cluster (CDS), Endpoint (EDS)
+  -> Envoy data plane
+```
+
+In on-prem environments, this is powerful when policy changes are frequent and must remain versioned, audited, and distributed predictably. The operational tradeoff is added complexity of control-plane correctness and monitoring.
+
+## Section 10: Cilium kube-proxy-Free Model and DSR
+
+Cilium can run kube-proxy-free service load balancing with eBPF paths. In this mode, service routing can happen without kube-proxy's classic iptables or IPVS path. This reduces some host CPU overhead and can improve path determinism under load.
+
+Direct Server Return, or DSR, can return response traffic directly to the client path with fewer intermediary hops in specific configurations. This is beneficial when return-path symmetry is controlled and backend policy allows direct responses.
+
+Cilium DSR is especially useful for ingress-heavy L7 proxies that route to specific backends and then allow direct return under conditions designed by policy. You get lower overhead for some flows, but must validate security and network visibility assumptions.
+
+```bash
+# Conceptual toggle in Cilium-managed clusters
+grep -n "kubeProxyReplacement" /etc/cilium/cilium.yaml
+```
+
+In practical migration, run canaries and compare latency, drops, and observability coverage before expanding kube-proxy-free mode cluster-wide. The difference is not only performance; it is tooling and incident procedures.
+
+## Section 11: SR-IOV Pass-Through for High-Throughput Ingress Paths
+
+SR-IOV is commonly selected when throughput and latency become limiting factors in the shared Linux data path. By passing virtual functions to workloads or ingress nodes, packet handling can be more direct and predictable than generic virtual interfaces.
+
+Because SR-IOV bypasses some software layers, it can improve latency under heavy L4 load and sustained connection rates. This is attractive for payment, media, and telemetry ingress where microsecond variation matters. The tradeoff is reduced flexibility and more hardware-specific operations.
+
+A careful design uses SR-IOV only for selected edge workloads while preserving standard Kubernetes networking for the rest. Mixed architecture increases complexity but keeps operational blast radius limited.
+
+## Section 12: Session Affinity at Transport and HTTP Layers
+
+Affinity must be intentional, not default. It should preserve user continuity only where state demands it and should be scoped by workload behavior.
+
+`clientIP` groups traffic by source and can reduce user churn, but NAT-heavy environments may create heavy imbalance when many users share one address.
+Cookie-based affinity improves control for browser and API clients that support managed cookies. Consistent hash affinity supports shard-aware selection when keys are stable and chosen carefully.
+
+```bash
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal-sticky
+spec:
+  selector:
+    app: portal
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+```
+
+```bash
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-cookie
+  annotations:
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/session-cookie-name: APPSTICKY
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 80
+```
+
+When affinity is wrong, the failure mode is usually hotspot concentration. Always measure pod-level concurrency with affinity enabled before rolling to production.
+
+## Section 13: TLS Termination Patterns for Internal and External Boundaries
+
+If termination is external to workloads, policy and inspection are easier because proxies can parse and enforce WAF and header-level checks. If termination is internal, workload containers must manage cert rotation and security policy directly.
+
+LB-terminated TLS is faster for policy deployment and often best for centralized security teams. Pass-through is safer for strict end-to-end compliance boundaries but increases complexity in backend certificate distribution.
+
+```bash
+frontend edge_tls
+  bind *:443 ssl crt /etc/ssl/private/edge.pem
+  default_backend web_pool
+
+backend web_pool
+  mode http
+  option httplog
+  server app01 10.90.80.11:443 check
+  server app02 10.90.80.12:443 check
+```
+
+```bash
+frontend edge_passthrough
+  mode tcp
+  bind *:443
+  default_backend api_tls
+
+backend api_tls
+  mode tcp
+  server api01 10.90.80.21:8443 check
+  server api02 10.90.80.22:8443 check
+```
+
+In most on-prem designs, teams begin with LB-terminated TLS for external edges and maintain internal encryption with service mesh or pod-level TLS for east-west paths.
+
+## Section 14: WAF Integration with ModSecurity and Coraza
+
+WAF is useful only if attached where request semantics are visible. Transport-level L4 components cannot inspect HTTP payload policy. For this reason, ModSecurity and Coraza belong to HTTP-aware tiers in most architectures.
+
+```nginx
+http {
+  server {
+    listen 443 ssl;
+    modsecurity on;
+    modsecurity_rules_file /etc/nginx/modsec/main.conf;
+    location / {
+      proxy_pass http://web_pool;
+    }
+  }
+}
+```
+
+```bash
+kubectl create namespace ingress-security
+kubectl create configmap modsecurity-rules \
+  --from-file=main.conf=./main.conf \
+  -n ingress-security
+```
+
+A WAF miss or false positive should always be visible in logs with request identifiers and backend context. The most common anti-pattern is enabling broad rules without exception testing.
+
+## Section 15: kube-proxy Position and Replacement Cases
+
+A reliable architecture document must state what happens when load balancing sits before or after kube-proxy equivalent behavior.
+
+In kube-proxy present mode, traffic usually arrives at a node and is processed through service translation before reaching backends.
+
+In kube-proxy-free designs with eBPF replacement, that translation is handled by other data-plane primitives.
+
+```text
+Mode A: External VIP -> Node -> kube-proxy map -> Pods
+Mode B: External VIP -> eBPF service map -> Pods
+```
+
+The observable difference is mostly in troubleshooting commands and packet-flow tracing. In mode A, commands like iptables inspection and IPVS state are central. In mode B, inspect datapath maps and the eBPF service model directly.
+
+When planning replacement, test failover scenarios explicitly. Some teams move only gateway namespaces first while keeping core platform services on kube-proxy.
+
+## Section 16: Real Incident Postmortems and Mitigation Patterns
+
+### Incident: Split-brain from VRRP misconfiguration
+The split-brain pattern appears when backups and masters can both assert ownership due to identical priorities or inconsistent interfaces. The network then sees intermittent path ownership and duplicate traffic ownership signatures.
+
+The mitigation is deterministic election parameters, strict advert settings, and pre-production chaos tests that intentionally isolate master health.
+
+### Incident: MetalLB ARP storm during L2 scale stress
+An overloaded L2 edge with frequent VIP reassignments can trigger ARP cache churn. Clients may see intermittent failures even when node health appears normal.
+
+The mitigation is to validate flapping signals in announcement state, apply controlled scale, and migrate to BGP for services that require scale and lower churn.
+
+### Incident: kube-vip leader election lag after pod eviction
+After control-plane pod eviction, stale state and timing windows can delay re-election. During the window, clients can hit transient path failures.
+
+Mitigation is election timeout tuning, pod anti-affinity, and readiness gating so no single control-plane event is interpreted as healthy service.
+
+### Incident: HAProxy SYN flood and `maxconn` saturation
+A proxy under sustained connection storm fills `maxconn` and makes healthy backends appear unreachable at the client layer.
+
+Mitigation is strict network-level rate control, timeout harmonization, and load testing with realistic SYN patterns before enabling broad production traffic.
+
+These events are independent of tool choice. They occur whenever LB control and service path assumptions are not validated under fault conditions.
+
+
+## Section 17: LVS and IPVS on Bare-Metal Kubernetes
+
+The Linux Virtual Server architecture is historically important for Kubernetes operators that need deterministic service datapaths under load. In many bare-metal stacks, kube-proxy in IPVS mode implements a large part of this behavior, while other stacks move toward kernel-level load balancing without traditional proxy components. The key operational question is mode selection, because NAT and DSR each alter where response traffic returns.
+
+Network Address Translation mode is simple to reason about because endpoint selection and response traffic are centralized through the proxy path. The tradeoff is that source addresses are rewritten during forward flow, which can hide user identity and increase egress path complexity for downstream logging and policy systems that expect original source addresses. NAT mode is predictable when policy layers are strictly centralized, and it is often the safer default while service models are still maturing.
+
+Direct Server Return mode changes response behavior by allowing backend nodes to send packets directly back to clients. This avoids bouncing through the selected proxy node for return traffic, which often improves throughput for heavy streaming and long-lived flows. DSR can also preserve source addresses, improving client tracking in observability systems, but it requires strict routing symmetry and return path controls in the underlay network.
+
+```mermaid
+graph LR
+    Client[Client]
+    VIP[VIP]
+    VIP -->|IPVS NAT| Proxy[kube-proxy IPVS]
+    Proxy --> BackendA[Backend A]
+    BackendA --> Client
+
+    Client2[Client]
+    VIP2[VIP]
+    VIP2 -->|IPVS DSR| Dispatcher[Dispatcher node]
+    Dispatcher --> BackendB[Backend B]
+    BackendB --> Client2
+```
+
+To choose correctly, teams should first model both request and response paths and then validate where failure control should be enforced. If policy enforcement is needed for every response, NAT keeps all responses in the central policy point and is easier to audit. If maximum throughput and shortest return path matter, DSR can be stronger, but you must prove that return routes and anti-spoof checks remain stable under churn.
+
+In Kubernetes, IPVS often appears in kube-proxy-managed mode. In that model, endpoint state and service reconciliation stay coupled to Kubernetes object state. A service deletion, label drift, or endpoint update changes behavior through standard kube-proxy lifecycle. This makes operations familiar, especially for teams that already operate cluster-level networking diagnostics through kubectl and iptables or ipvsadm tools.
+
+Standalone LVS implementations can look attractive because they remove a layer of abstraction, but they shift responsibility. Service ownership and failover become infrastructure semantics instead of Kubernetes object semantics. If a controller fails or a VIP script misfires, recovery pathways differ from standard kube-proxy behavior. For this reason, explicit ownership boundaries and runbooks matter more than raw throughput claims.
+
+When MetalLB is in L2 mode and kube-proxy remains active, only one node owns VIP reception and the selected node forwards through service mapping. That can be ideal for small clusters. In BGP mode, multiple nodes may advertise, and routing can shift across several edges, but complexity moves into switch policy and path symmetry testing.
+
+With kube-vip or keepalived, the VIP owner and forwarding node can still differ from kube-proxy service mode behavior. This is a major incident edge case because ownership of VIP does not automatically guarantee backend policy behavior. Always validate both ownership and endpoint health before assuming service availability.
+
+When comparing DSR and NAT under heavy operations, use chaos drills as the deciding metric. A practical drill is repeated pod churn under persistent synthetic clients. DSR designs fail loudly when return path assumptions are wrong, while NAT designs often fail more softly through elevated proxy CPU and retransmission behavior. Neither failure style is better until you know your incident handling maturity.
+
+For highly secure traffic, DSR should be paired with an explicitly controlled route and ACL strategy that allows direct return only when policy can still be enforced where required. If ACL controls are still evolving, NAT is often safer as the initial path because all traffic remains within one deterministic proxy frame.
+
+The migration rule is to move incrementally. Start with one service family, document expected metrics, verify return path behavior with tcpdump at edges, and only then scale to additional services. This keeps architectural gains from becoming operational debt.
+
+## Section 18: Practical Design Matrix and Final Trade-off Guidance
+
+A durable on-prem architecture is a trade-off matrix, not a single component selection. The most useful matrix has columns for protocol scope, failover behavior, observability burden, security boundary, and rollback effort.
+
+For protocol scope, classify traffic before selecting a tool. Simple TCP and UDP traffic can be optimized with L4 forwarding. HTTP services requiring host-based routing, cookie semantics, or WAF should route through L7 policy components.
+
+For failover behavior, compare how quickly VIP ownership changes and how endpoints drain. L2 modes are easy but can concentrate. BGP modes distribute better but require networking governance. keepalived and kube-vip differ in election and leader ownership ergonomics, and each should be tested under forced process loss.
+
+For observability burden, count which layer emits the first actionable signal when a service is unhealthy. In L4-heavy designs, this is often endpoint maps and service states. In L7-heavy designs, this is policy logs, retries, and WAF rule outcomes.
+
+For security boundary, define where TLS terminates, where request parsing occurs, and where secret material is managed. If TLS must end at the edge, L7 policy belongs there, and L4 components should delegate. If TLS remains end-to-end, ensure backends can carry certificate operations without service-level coupling.
+
+For rollback effort, define who can quickly restore control-plane access and who owns ingress policy reversion. A cluster with documented rollback triggers and pre-authored patches reduces outage severity more than any single high-throughput datapath.
+
+This matrix approach prevents rushed architectural switches caused by benchmark-only thinking. Throughput and latency numbers matter, but incident readiness and ownership clarity are equally critical in production.
+
+The final exercise for teams should be a full-path drill: announce VIP, drain one backend, force one leader transition, and verify service continuity at both transport and request layers. If you can explain failure source in under five minutes after this drill, the architecture is operationally valid.
+
+
+## Section 19: Incident Playbooks and Operating Discipline for Bare-Metal LB
+
+Every production failure in load balancing has both a network interpretation and a control interpretation. The network interpretation explains packet movement, ownership, and route symmetry. The control interpretation explains which component owns source of truth for VIP state and whether leadership, advertisement, or endpoint mapping is lagging. Without this split, teams run the right command at the wrong component.
+
+A practical playbook starts with a fast ownership triage matrix.
+First, confirm which component owns the VIP.
+Second, confirm whether endpoint mappings are valid and synchronized.
+Third, confirm whether request policy is being applied where expected.
+Fourth, confirm whether transport and request timeouts are aligned. This sequence prevents wasted time on deeper tooling while a simple ownership mismatch persists.
+
+Incident drills should capture both expected and degraded signals. For example, if a keepalived failover happens, you should capture ARP state and route maps at the same time as pod readiness and endpoint events. If a kube-vip leader moves, you should capture election logs plus service readiness and DNS cache impact. If MetalLB changes leader, verify peer routes and ARP caches for stale ownership.
+
+One effective drill is to force one controlled failure and score response time to user-visible stability. This is not a single command runbook but a sequence that includes VIP check, endpoint diff, and policy-layer check. If one control plane component flips leadership while the second remains unchanged, you can quickly identify partial failure.
+
+Another common production pattern is burst load after deployment. Distinguish whether the burst stress hits the L4 plane, the L7 plane, or both. If only L4 is stressed, kube-proxy rules and backend endpoint selection become critical. If L7 is stressed, request parsing overhead, WAF rules, and cookie/session logic become more likely bottlenecks.
+
+For Layer 7 failures, response logs should include request identifiers and backend correlation IDs. Without this, duplicate retries hide the root problem. If retries increase while backend CPU remains moderate, policy and client behavior are probably amplifying load.
+
+For Layer 4 failures, connection tables and SYN state should be checked first.
+If a burst of short-lived opens and closes remains unanswered, the proxy may be saturating accept queues. In that case, increase queue budgets only after limiting abusive patterns and confirming network policy boundaries.
+
+When combining L4 and L7, choose one visible source of truth for health. Health for VIP reachability and service endpoint readiness often differs.
+For MetalLB and kube-vip, health is primarily announcement and ownership. For Kubernetes services, health is endpoint availability and readiness. For L7 proxies, health is request-level response and routing validity. Document this in runbooks so teams know which signal decides actual user behavior.
+
+The runbook should also classify ownership and rollback for each layer. If VIP ownership is wrong, rollback means restoring announcement order and leader policy. If endpoint maps are wrong, rollback means reverting service selectors and rollout states. If L7 policy is wrong, rollback means route or WAF adjustment. One cause, one rollback path, one owner.
+
+In large clusters, use synthetic clients that validate end-to-end semantics through each layer. A synthetic transaction should verify Layer 4 reachability, session behavior, TLS termination, request policy, and response latency. If synthetic checks stay green while user traffic degrades, the issue may be external clients and connection profile; if synthetic checks fail, platform layer is degraded.
+
+For kube-proxy-free migrations, playbooks should include both modes in parallel during transition windows. Keep one test namespace on classic IPVS path while the rest operate in new path. This reduces unknown unknowns during migration and proves rollback under pressure.
+
+The biggest operator mistake is to treat all LB problems as backend issues. Use the rule "move one layer at a time." Validate ingress, then service endpoint selection, then request policy, then TLS and WAF rules. Reaching deep into the wrong layer increases MTTR and increases the chance of repeated change during incident response.
+
+If you run SR-IOV or pass-through NIC modes, add additional checks for interface binding and MAC changes across restarts. The fastest failures in these environments look like stale queue affinity or wrong VF mappings and can appear as random packet drops despite healthy backends.
+
+For incident communication, every operator should know the user-facing blast radius when each control plane changes.
+If VIP ownership flips without endpoint continuity, users may see brief reconnect delays.
+If VIP and endpoints stay stable but L7 rules change, errors become request-specific.
+If only policy changes, requests with specific headers or cookies may fail first. This clarity reduces panic and improves handoff quality.
+
+At scale, document a cadence for capacity reviews every time throughput or path model changes. A mode that worked at 500 requests per second with L2 and small pods may fail at 20,000 requests per second unless BGP distribution and affinity are adjusted.
+
+Your architecture should specify who approves the next mode after every drill. Most clusters pass drills but still fail in production because approval and rollback owners were not explicit before the migration window.
+
+A mature bare-metal LB team does not rely on one tool, one source, or one command.
+It relies on explicit ownership, staged tests, and predictable section-level failures. Build runbooks this way, and the same team can operate MetalLB, kube-vip, and L7 proxies safely even under sustained churn.
+
+## Section 20: Migration, Capacity, and Control Planning for On-Prem LBs
+
+A migration plan should be explicit about not only what changes, but the order of truth for each component. In many teams, the sequence starts with external routing and VIP assignment, then service maps, then request-aware policy. This is safer than introducing all layers at once because each stage has different blast radii.
+
+The first migration step is to define a baseline where one path is stable and measurable. In this baseline, record VIP assignment time, endpoint convergence time, and median request latency under a small but realistic workload. Without these numbers, later improvements become anecdotes.
+
+Next, introduce traffic steering improvements in measured increments.
+For example, start with basic L2 MetalLB and confirm endpoint stability.
+Then introduce BGP announcement only after upstream route acceptance and path symmetry are proven.
+Only after network steering is stable should you add Layer 7 policy for request parsing, because L7 failures tend to appear downstream and can multiply traffic characteristics.
+
+Capacity planning for L4 and L7 should use separate headroom calculations.
+L4 planning measures connection concurrency and route dispatch throughput.
+L7 planning measures policy parsing cost, request transformations, header rewriting, and WAF behavior. Mixing these budgets is a common source of false confidence.
+
+For TLS planning, separate front-door and internal encryption costs.
+Terminating TLS at the edge changes memory and CPU profile of the ingress layer.
+Keeping TLS end-to-end shifts cipher and session overhead to workload workloads, and this can become a hidden cost if pod resource limits are unchanged.
+
+When teams add affinity, define thresholds before they add policies. If cookie affinity is enabled without upper concurrency limits, node imbalance may appear only under real traffic diversity. If session duration increases due to retries, backend pods can see more long-lived flows than expected and then look “slow” even when they are not CPU-bound.
+
+Incident readiness for on-prem designs should include one controlled runbook that crosses all layers.
+First, fail one backend pod and confirm L4 path continuity.
+Second, force a VIP election and confirm Layer 7 policy remains anchored.
+Third, drop one SR-IOV assigned interface path and confirm fallback behavior.
+Fourth, induce a rule-based deny event in WAF and verify safe rollback.
+This sequence should be repeated before each new release wave.
+
+Observability also needs migration planning.
+If IPVS mode is used through kube-proxy, add dashboards for service map state.
+If kube-vip or keepalived ownership is used, add ownership and announcement counters.
+If Envoy or Cilium policy is used, include control-plane config version visibility and route generation lags. These separate views prevent false conclusions.
+
+For teams moving to kube-proxy-free mode, a practical control guardrail is to freeze critical namespaces while a second namespace is in migration. This keeps a production-safe rollback path if endpoint semantics diverge from expected values during scale tests.
+
+The design should explicitly declare when transport ownership can change and when policy ownership is fixed. If a VIP owner changes too quickly, keepalived and kube-vip logs will still show healthy leadership but the ingress policy may still hold stale path rules. If one team owns each layer without synchronized ownership boundaries, post-change validation time increases dramatically.
+
+A mature platform includes postmortem hooks in the runbook.
+Each incident should map to one of four layers: VIP ownership, endpoint selection, policy routing, and security enforcement. This keeps remediation clear. When severity rises, responders know whether to look at CRD reconcile state, service maps, ingress policy, or traffic filters.
+
+The final planning outcome is not an architecture diagram alone. It is a maintained sequence of expected states and clear owner actions for each state transition.
+If this sequence is documented and rehearsed, on-prem load balancing behavior becomes predictable under pressure instead of fragile under routine change.
+
+
+As workload patterns evolve, revisit capacity assumptions at the same cadence as kernel and platform upgrades. A test that passed at cluster size N may fail quietly at N plus one-third due to path-length and election timing changes. Keep a quarterly load test where VIP advertisement, endpoint reconciliation, and Layer 7 policy updates are stressed together. In this run, you should measure failover decision latency, policy mismatch windows, and connection recovery under real workloads, then compare results to your accepted error budget. This practice turns load balancing from a static design artifact into an actively maintained control surface.
+
 
 ## Common Mistakes
 
-| Mistake | Problem | Solution |
-|---------|---------|----------|
-| Using L2 mode at scale | Single-node bottleneck, slow failover | Use BGP mode for production |
-| IP pool on wrong subnet | MetalLB VIPs unreachable from clients | VIP subnet must be routable from client network |
-| No health checks on HAProxy | Traffic sent to dead ingress nodes | Always configure HTTP health checks |
-| Overlapping IP pools | Multiple MetalLB instances assign same IP | Coordinate IPAM pools strictly across your datacenter clusters |
-| Missing kube-vip for API | No HA for API server endpoint | Deploy kube-vip as static pod on all CP nodes |
-| NodePort as permanent solution | Ports 30000-32767, non-standard mapping | Invest in MetalLB, Cilium L2 Announcements, or an external LB |
-| Single HAProxy (no Keepalived) | HAProxy failure = total ingress outage | Always pair HAProxy with Keepalived for VIP failover |
-| Forgetting strictARP in IPVS | MetalLB conflicts with kube-proxy ARP replies | Set `strictARP: true` in kube-proxy config when using IPVS mode |
-
----
+| Mistake | Problem | Fix |
+|---------|---------|-----|
+| Assuming `LoadBalancer` works on bare metal without an announcer | Service IP stays pending indefinitely | Install and configure MetalLB or kube-vip in the cluster before relying on external access |
+| Using L2 MetalLB everywhere without evaluating scale | Single-node concentration and periodic ARP churn | Use BGP for wider distribution when fabric capacity supports it |
+| Keeping duplicate VRRP priorities across nodes | Split-brain and unstable VIP ownership | Enforce deterministic `virtual_router_id` and priority rules |
+| Ignoring transport versus HTTP policy boundaries | Traffic passes without request checks | Explicitly define which layer enforces health, auth, and WAF |
+| Enabling clientIP affinity in NAT heavy environments | Severe node imbalance and hot shards | Prefer cookie or hash-based strategies with tested key design |
+| Configuring kube-proxy-free mode without alternate observability | Missing flow visibility during incidents | Add eBPF visibility and fallback checks before full migration |
+| Aligning only one timeout layer in HAProxy | Spurious 5xx under burst despite healthy backends | Harmonize proxy, readiness, and load balancer timeout windows |
+| Deploying WAF without exception process | Legitimate traffic blocked in production | Maintain allowlist and rule-testing workflow before enforce mode |
 
 ## Quiz
 
 ### Question 1
-You deploy MetalLB in L2 mode. Your service gets external IP 10.0.50.10. Only one of your 10 nodes is actually receiving the traffic. Is this normal?
+A team needs network-level failover without request parsing and then wants centralized HTTP policy at a second layer. Which architecture best matches this need?
 
 <details>
 <summary>Answer</summary>
-
-**Yes, this is normal for L2 mode.** In L2 mode, MetalLB elects a single node as the "leader" for each VIP. That node responds to ARP requests for 10.0.50.10, so all traffic is sent to that one node. The node then uses kube-proxy to distribute traffic to pods across the cluster.
-
-This is the fundamental limitation of L2 mode — it is a single-node bottleneck. If that node can handle the traffic, it works fine. If not, switch to BGP mode where all nodes announce the VIP and the switch uses ECMP to spread traffic. For most services, L2 mode is fine. For high-throughput services (>10 Gbps), use BGP mode.
+Use Layer 4 ingress to handle transport-level distribution and route that traffic into a Layer 7 boundary for policy controls. This preserves simple failover at L4 while still enabling HTTP semantics where needed, and limits coupling between transport policy and application policy.
 </details>
 
 ### Question 2
-Your MetalLB BGP advertisement shows the VIP is announced to the ToR switch, but external clients cannot reach it. What do you check?
+A `LoadBalancer` service on bare metal is stuck pending even though pods are running. What should you verify first?
 
 <details>
 <summary>Answer</summary>
-
-Debug checklist:
-1. **Is the VIP subnet routable?** Check that the ToR switch has a route for 10.0.50.0/24 and is advertising it to upstream routers.
-2. **Is the switch receiving the BGP route?** On the switch: `show bgp ipv4 unicast 10.0.50.10`. If no route, the BGP session may be down.
-3. **Is MetalLB BGP session established?** `kubectl get bgppeer -n metallb-system -o yaml` — check session state.
-4. **Is there a firewall blocking the traffic?** Check ACLs on the switch and any intermediate firewalls.
-5. **Is kube-proxy running on the nodes?** MetalLB delivers traffic to the node, but kube-proxy forwards it to the pod. If kube-proxy is down, the node accepts the connection but drops it.
-6. **Is the service endpoint healthy?** `kubectl get endpoints <svc-name>` — are there pods backing the service?
-7. **Is the switch doing ECMP?** If ECMP is not configured, the switch may only send traffic to one next-hop even if multiple nodes announce the VIP.
+Verify on-prem announcement tooling is present and active, then validate pool and advertisement configuration. On bare metal this usually means checking MetalLB controller state, IPAddressPool availability, and L2 or BGP announcement objects.
 </details>
 
 ### Question 3
-Why would you use an external HAProxy instead of just MetalLB for your production ingress?
+An on-call engineer reports duplicate VIP ownership and intermittent resets in logs. Which technology most likely explains this behavior?
 
 <details>
 <summary>Answer</summary>
-
-MetalLB provides L4 (TCP/UDP) load balancing — it assigns IPs and routes packets to nodes. It does not provide:
-1. **TLS termination**: MetalLB passes raw TCP. HAProxy can terminate TLS, offloading certificate management from the ingress controller.
-2. **L7 routing**: MetalLB cannot inspect HTTP headers, URLs, or cookies. HAProxy can route based on Host header, path, or other L7 attributes.
-3. **Rate limiting / WAF**: MetalLB has no application-layer features. HAProxy can rate limit, block IPs, and integrate with WAF rules.
-4. **Connection draining**: HAProxy gracefully drains connections during backend changes. MetalLB's BGP route withdrawal is abrupt.
-5. **Centralized monitoring**: HAProxy provides detailed connection metrics, error rates, and response times. MetalLB only provides basic IP assignment metrics.
-
-**Common architecture**: MetalLB assigns a VIP to the ingress controller (Nginx/Envoy). HAProxy sits in front as an additional layer for TLS termination, WAF, and enterprise requirements. For smaller deployments, MetalLB + Nginx Ingress is sufficient.
+The most likely class is misconfigured VRRP in keepalived. Duplicate ownership usually means priority, router identifier, or advertisement assumptions are inconsistent across nodes. Correct election settings before changing backend health checks.
 </details>
 
 ### Question 4
-Your Kubernetes API server is at 10.0.20.10:6443 (single CP node). What happens if this node fails, and how does kube-vip solve it?
+A keepalived setup has two nodes with matching role assumptions and no deterministic failover order. What is the immediate risk?
 
 <details>
 <summary>Answer</summary>
-
-**Without kube-vip**: If 10.0.20.10 fails, all kubectl commands fail, all controllers lose API access, and no new scheduling occurs. The other CP nodes (10.0.20.11, 10.0.20.12) have working API servers but nothing is pointing at them. You must manually update kubeconfig and all references to the API server endpoint.
-
-**With kube-vip**: A virtual IP (e.g., 10.0.20.100) floats between all CP nodes. kubeconfig points to 10.0.20.100:6443, not any specific node. When 10.0.20.10 fails:
-1. kube-vip detects the leader failure (via leader election).
-2. Another CP node (e.g., 10.0.20.11) becomes the new VIP holder.
-3. It sends a gratuitous ARP: "10.0.20.100 is now at my MAC".
-4. Traffic seamlessly moves to the new leader.
-5. Failover time: 2-5 seconds.
-
-**This is why kube-vip should be one of the first things deployed** on any on-prem cluster with HA control plane.
+Both nodes may assert ownership intermittently, creating split-brain at ARP level and unstable routing for existing client sessions. Assign deterministic priorities and verify preemption behavior under fault simulation.
 </details>
 
 ### Question 5
-You are planning a bare-metal cluster deployment in an aging branch office. The local network equipment consists of simple, unmanaged Layer 2 switches that do not support BGP peering. You need external IPs for your ingress controller. Which software load balancing approach is the most appropriate?
+Your service under L7 mode is healthy in HAProxy but fails security policy due to bypassed traffic. What is the likely root cause?
 
 <details>
 <summary>Answer</summary>
-
-**MetalLB in Layer 2 mode or Cilium L2 Announcements.** Since the switches do not support BGP, you cannot use ECMP or routing-based load balancing. Layer 2 mode works on any standard flat network by utilizing ARP/NDP protocols. One node will be elected as the leader and respond to ARP requests for the VIP, acting as the primary ingress point before `kube-proxy` distributes the traffic to backend pods. Cilium L2 Announcements (introduced in 1.14) provides a similar capability if Cilium is already your chosen CNI.
+Traffic is likely passing through a path where L7 policy engines are not attached. WAF and ModSecurity only apply where HTTP parsing exists, so keep security checks and request inspection in the Layer 7 layer and avoid bypass through raw TCP paths.
 </details>
 
 ### Question 6
-Your team manages an on-premise cluster utilizing kube-proxy in IPVS mode to handle a massive number of services efficiently. After installing MetalLB, you notice severe packet loss and MAC address flapping on the network switches for your LoadBalancer IPs. What is the likely cause?
+A two-replica application service behind MetalLB in kind loses one replica. Which result indicates correct failover behavior?
 
 <details>
 <summary>Answer</summary>
-
-**You forgot to enable `strictARP: true` in your kube-proxy configuration.** In IPVS mode, kube-proxy binds service IPs to a dummy `kube-ipvs0` interface. By default, the Linux kernel will aggressively answer ARP requests for any IP bound to any interface on the machine. This causes all nodes to respond to ARP requests for the MetalLB VIP simultaneously, creating an ARP storm and MAC flapping. Enabling strict ARP ensures the kernel only responds to ARP requests on the exact physical interface where the IP actually lives.
+The VIP remains allocated, and endpoint updates should quickly show one remaining replica. Application traffic should continue, perhaps with reduced capacity, without returning to permanent pending state.
 </details>
 
 ### Question 7
-Your organization requires sub-second failure detection for routing paths leading into your Kubernetes cluster to meet strict SLA requirements. You are currently using MetalLB's native BGP implementation. How should you reconfigure MetalLB to meet this requirement?
+Your team wants to reduce packet loss under heavy load but keep existing routing semantics. Which option is most likely to help and what is the tradeoff?
 
 <details>
 <summary>Answer</summary>
-
-**Switch to MetalLB's FRR mode and configure BFD (Bidirectional Forwarding Detection).** The native Golang BGP implementation in MetalLB does not support BFD. Standard BGP relies on keepalive timers which can take several seconds to detect a dropped peer, leading to transient traffic loss. By switching to the FRR backend, you can pair your BGP sessions with BFD sessions, allowing the network hardware to detect path failures in milliseconds and immediately withdraw the routing advertisements.
+Moving to Cilium DSR or BGP-based MetalLB advertisement can reduce bottlenecks and improve path efficiency for scale, but it increases operational and observability requirements. Validate controls and rollback points before migrating all services.
 </details>
 
 ### Question 8
-You attempt to deploy an IPv6-only application stack on bare-metal Kubernetes and want to use MetalLB's native BGP implementation to announce the LoadBalancer VIP. Your network engineers report they are not receiving any IPv6 routes from the cluster. Why?
+Your architecture must preserve source IP, reduce return path hops, and keep failover behavior explicit. What should you evaluate before switching to an IPVS DSR design?
 
 <details>
 <summary>Answer</summary>
-
-**MetalLB's native BGP implementation does not support IPv6 advertisements.** To announce IPv6 or dual-stack LoadBalancer VIPs via BGP, you must switch MetalLB to use the FRR backend. The native implementation is older and lacks comprehensive IPv6 routing capabilities, which is one of the primary reasons the project intends to eventually deprecate it entirely in favor of FRR.
+You should evaluate L2 adjacency, backend routing symmetry, service health signaling, and anti-spoof controls. IPVS DSR can preserve client IP and reduce return latency, but requires careful return path and gateway behavior. If network symmetry cannot be guaranteed, NAT or kube-proxy path should remain until L2 and policy conditions are fully validated.
 </details>
 
----
 
-## Hands-On Exercise: Deploy MetalLB
+## Hands-On Exercise: Bare-Metal LB Validation in a Local Cluster
 
-Follow these progressive tasks to deploy MetalLB locally and observe how it assigns routable IPs to services.
+Complete all three exercises in order.
 
-**Task 1: Bootstrap the Environment**
-Create a lightweight local Kubernetes cluster using `kind`. This provisions a local control plane and two worker nodes for testing.
+- [ ] Exercise 1: Deploy MetalLB in L2 mode and verify two-replica VIP failover after deleting one replica.
+- [ ] Exercise 2: Run a keepalived VRRP failover test and confirm master/backup ownership is deterministic.
+- [ ] Exercise 3: Validate Layer 7 policy with Envoy or HAProxy + WAF and test affinity behavior.
+- [ ] Compare L4 packet steering and L7 policy routing in both hands-on exercises and record when each decision layer should own failures.
+
+### Exercise 1: MetalLB L2 Failover with 2 Replicas
 
 ```bash
-# Create kind cluster
-cat <<EOF | kind create cluster --config=-
+cat <<'EOF' > kind-config.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
   - role: worker
   - role: worker
+networking:
+  disableDefaultCNI: false
+  podSubnet: 10.244.0.0/16
 EOF
+
+kind create cluster --name lb-lab --config kind-config.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/main/config/manifests/metallb-native.yaml
+kubectl wait --namespace metallb-system --for=condition=Available deployment/metallb-controller --timeout=180s
+kubectl wait --namespace metallb-system --for=condition=Available deployment/metallb-speaker --timeout=180s
 ```
 
-**Task 2: Install the Controller and Speaker**
-Apply the MetalLB native manifests to deploy the system components. Wait for the controller and speaker DaemonSets to become ready.
-
 ```bash
-# Install MetalLB
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.15.3/config/manifests/metallb-native.yaml
-
-# Wait for MetalLB pods
-kubectl wait --namespace metallb-system \
-  --for=condition=Ready pod --selector=app=metallb --timeout=120s
-```
-
-**Task 3: Determine the Routable Subnet**
-To ensure the assigned IPs are reachable from your local machine, inspect the local Docker network to find a valid IP range.
-
-```bash
-# Get the kind network subnet
-docker network inspect kind -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
-# Example output: 172.18.0.0/16
-```
-
-**Task 4: Configure the Address Pool and L2 Mode**
-Create the CRDs that instruct MetalLB which IPs it is allowed to use and configure it to operate in Layer 2 mode. Replace the `addresses` field with a subset of the IPs you discovered in Task 3.
-
-```bash
-# Configure IP pool (use IPs from the kind network)
-kubectl apply -f - <<EOF
+cat <<'EOF' > /tmp/pool.yaml
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -604,8 +771,10 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-    - 172.18.255.200-172.18.255.250
----
+    - 172.30.40.100-172.30.40.130
+EOF
+
+cat <<'EOF' > /tmp/l2.yaml
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
@@ -615,46 +784,145 @@ spec:
   ipAddressPools:
     - kind-pool
 EOF
-```
 
-**Task 5: Deploy and Validate the Application**
-Deploy a basic Nginx web server, expose it via a LoadBalancer service, and verify that MetalLB assigns an IP rather than leaving it in a `Pending` state.
+kubectl apply -f /tmp/pool.yaml -f /tmp/l2.yaml
+```
 
 ```bash
-# Deploy a test app
-kubectl create deployment web --image=nginx --replicas=3
-kubectl expose deployment web --type=LoadBalancer --port=80
+cat <<'EOF' > /tmp/demo.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo
+  template:
+    metadata:
+      labels:
+        app: demo
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+            timeoutSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-lb
+spec:
+  type: LoadBalancer
+  selector:
+    app: demo
+  ports:
+    - port: 80
+      targetPort: 80
+EOF
 
-# Verify external IP is assigned
-kubectl get svc web
-# NAME   TYPE           CLUSTER-IP     EXTERNAL-IP      PORT(S)       AGE
-# web    LoadBalancer   10.96.x.x      172.18.255.200   80:31234/TCP  5s
-
-# Test access
-# On Linux, you can curl the MetalLB IP directly:
-curl "http://172.18.255.200"
-
-# On macOS/Windows, the Docker network is not directly reachable from the host.
-# Use a container on the kind network instead:
-docker run --network kind --rm curlimages/curl "http://172.18.255.200"
-
-# Or exec into a kind node:
-docker exec kind-control-plane curl -s "http://172.18.255.200"
-# <!DOCTYPE html>...
-
-# Cleanup
-kind delete cluster
+kubectl apply -f /tmp/demo.yaml
+kubectl wait --for=condition=Ready pod -l app=demo --timeout=180s
+kubectl get svc demo-lb -w
 ```
 
-### Success Criteria
-- [ ] MetalLB installed and running without crash loops.
-- [ ] `IPAddressPool` and `L2Advertisement` CRDs applied successfully.
-- [ ] LoadBalancer service gets a real external IP (it is not `Pending`).
-- [ ] External IP is reachable via `curl` returning an HTTP 200 response.
-- [ ] Multiple replicas are verified to be serving traffic securely.
+```bash
+kubectl get endpoints demo-lb
+POD=$(kubectl get pods -l app=demo -o jsonpath='{.items[0].metadata.name}')
+kubectl delete pod $POD --grace-period=0 --force
+sleep 20
+kubectl get endpoints demo-lb
+kubectl get svc demo-lb
+```
 
----
+Expected result: VIP stays assigned by MetalLB, one backend is removed, and the remaining replica keeps the service reachable.
+
+### Exercise 2: keepalived Master/Backup Determinism
+
+```bash
+# Create two dedicated ingress nodes and assert single master ownership at a time
+cat <<'EOF' > /tmp/keepalived.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keepalived-config
+  namespace: default
+  labels:
+    component: keepalived
+data:
+  keepalived.conf: |
+    vrrp_instance K8S_VIP {
+      state MASTER
+      interface eth0
+      virtual_router_id 101
+      priority 190
+      advert_int 1
+      nopreempt
+      virtual_ipaddress {
+        172.30.60.20/24
+      }
+    }
+EOF
+kubectl apply -f /tmp/keepalived.yaml
+```
+
+### Exercise 3: L7 Policy and WAF Smoke Test
+
+```bash
+# Example L7 ingress path with affinity and WAF hooks
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.4/deploy/static/provider/cloud/deploy.yaml
+
+cat <<'EOF' > /tmp/waf-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: demo-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+spec:
+  rules:
+    - host: lab.internal
+      http:
+        paths:
+          - path: /sticky
+            pathType: Prefix
+            backend:
+              service:
+                name: demo-lb
+                port:
+                  number: 80
+EOF
+
+kubectl apply -f /tmp/waf-ingress.yaml
+```
+
+Send a normal request and a request expected to violate a WAF rule, then compare status outcomes.
+
+## Sources
+
+- <https://metallb.universe.tf/configuration/>
+- <https://metallb.universe.tf/concepts/>
+- <https://kube-vip.io/docs/installation/static/>
+- <https://kube-vip.io/docs/installation/daemonset/>
+- <https://docs.haproxy.org/2.8/configuration.html>
+- <https://www.keepalived.org/manpage.html>
+- <https://datatracker.ietf.org/doc/html/rfc5798>
+- <http://www.linuxvirtualserver.org/>
+- <https://nginx.org/en/docs/http/load_balancing.html>
+- <https://www.envoyproxy.io/docs/envoy/latest/intro/intro.html>
+- <https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/>
+- <https://kubernetes.io/docs/concepts/services-networking/service/>
+- <https://kubernetes.io/docs/reference/networking/virtual-ips/>
+- <https://datatracker.ietf.org/doc/html/rfc7230>
 
 ## Next Module
 
-Now that your bare-metal applications can acquire routable IP addresses, they need human-readable domain names and secure TLS endpoints. Continue to [Module 3.4: DNS & Certificate Infrastructure](../module-3.4-dns-certs/) to learn how to run your own internal DNS services and PKI (Public Key Infrastructure) to automatically issue certificates for your on-premises Kubernetes ingress.
+Continue to [Module 3.4: DNS and TLS Certificates](../module-3.4-dns-certs/) to continue external ingress and certificate governance topics.
