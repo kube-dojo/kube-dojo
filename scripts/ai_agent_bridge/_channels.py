@@ -65,7 +65,17 @@ from ._db import get_db
 
 # ── Constants ──────────────────────────────────────────────────────────
 
-VALID_AGENTS = ("claude", "gemini", "codex", "user")
+VALID_AGENTS = (
+    "agy",
+    "claude",
+    "codex",
+    "deepseek",
+    "gemini",
+    "hermes",
+    "opencode",
+    "qwen",
+    "user",
+)
 VALID_KINDS = ("post", "reply", "system", "fanout_start", "fanout_end")
 VALID_DELIVERY_STATUSES = (
     "pending",

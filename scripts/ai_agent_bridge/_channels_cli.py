@@ -62,6 +62,8 @@ _DISCUSSION_CLARIFICATION_MODES = {
     "codex": "danger",
     "deepseek": "yolo",
     "qwen": "yolo",
+    "hermes": "yolo",
+    "opencode": "yolo",
 }
 
 _DISCUSSION_RUNTIME_MODES = {
@@ -71,6 +73,8 @@ _DISCUSSION_RUNTIME_MODES = {
     "codex": "danger",
     "deepseek": "workspace-write",
     "qwen": "workspace-write",
+    "hermes": "workspace-write",
+    "opencode": "workspace-write",
 }
 
 _DISCUSSION_MCP_EXCLUDE_TOKENS: tuple[str, ...] = (
@@ -178,6 +182,13 @@ def _agent_runtime_mode(agent_name: str, sandbox_mode: str | None) -> str:
     if agent_name == "deepseek":
         # DeepSeek via hermes accepts workspace-write; sandbox is enforced by
         # toolset selection (see _agent_tool_config), not a mode flag.
+        if sandbox_mode == "read-only":
+            return "read-only"
+        return "workspace-write"
+    if agent_name in {"hermes", "opencode"}:
+        # These router CLIs do not expose project sandbox modes. Preserve the
+        # label for audit/session logic; the CLI invocation itself treats it
+        # as advisory.
         if sandbox_mode == "read-only":
             return "read-only"
         return "workspace-write"
@@ -1230,7 +1241,8 @@ def _handle_discuss(args) -> int:
         print(f"   root message: {root_id[:12]} / thread {correlation_id[:12]}")
         print()
 
-    # Session-less agents (agy / qwen / deepseek) map to all-None tuples;
+    # Session-less agents (agy / qwen / deepseek / hermes / opencode) map
+    # to all-None tuples;
     # the per-agent branch at "if agent_name in {claude, gemini}" later
     # in this function correctly skips session persistence for them, and
     # `stored_session.get(None)` returns None which feeds the resume-skip
@@ -1243,6 +1255,8 @@ def _handle_discuss(args) -> int:
         "agy": (None, None, None),
         "qwen": (None, None, None),
         "deepseek": (None, None, None),
+        "hermes": (None, None, None),
+        "opencode": (None, None, None),
     }
     resume_thread_session: dict[str, str | None] = {}
     if args.resume_thread:
@@ -1367,12 +1381,62 @@ def _handle_discuss(args) -> int:
             """
             nonlocal gemini_use_subscription_auth
             skip_headroom_check = False
-            runtime_tool_config = dict(tool_config)
+            runtime_tool_config = dict(tool_config or {})
             if is_new_session and agent_name in {"claude", "gemini"}:
                 runtime_tool_config["is_new_session"] = True
             if agent_name == "gemini" and use_subscription_auth:
                 runtime_tool_config["use_subscription_auth"] = True
                 skip_headroom_check = True
+            if agent_name == "opencode":
+                from . import _opencode
+
+                started = time.monotonic()
+                model = _opencode._DEFAULT_MODEL
+                ok, response, stderr_excerpt = _opencode._invoke_opencode(
+                    prompt_text,
+                    model,
+                    timeout_s=900,
+                    cwd=cwd,
+                )
+                return Result(
+                    ok=ok,
+                    agent=agent_name,
+                    model=model,
+                    mode=mode,
+                    response=response,
+                    stderr_excerpt=stderr_excerpt or None,
+                    duration_s=time.monotonic() - started,
+                    session_id=None,
+                    rate_limited=False,
+                    stalled=False,
+                    returncode=0 if ok else 1,
+                ), None
+            if agent_name == "hermes":
+                from . import _hermes
+
+                started = time.monotonic()
+                model = _hermes._DEFAULT_MODEL
+                provider = _hermes._detect_provider(model)
+                ok, response, stderr_excerpt = _hermes._invoke_hermes(
+                    prompt_text,
+                    model,
+                    provider=provider,
+                    timeout_s=900,
+                    cwd=cwd,
+                )
+                return Result(
+                    ok=ok,
+                    agent=agent_name,
+                    model=model,
+                    mode=mode,
+                    response=response,
+                    stderr_excerpt=stderr_excerpt or None,
+                    duration_s=time.monotonic() - started,
+                    session_id=None,
+                    rate_limited=False,
+                    stalled=False,
+                    returncode=0 if ok else 1,
+                ), None
             try:
                 result = runtime_invoke(
                     agent_name,
@@ -1526,7 +1590,7 @@ def _handle_discuss(args) -> int:
                 False,
             )
 
-        if result is not None:
+        if result is not None and session_field is not None:
             persist_session_id = result.session_id
             if agent_name == "codex" and not persist_session_id:
                 header_payload = getattr(result, "stdout", None) or getattr(
