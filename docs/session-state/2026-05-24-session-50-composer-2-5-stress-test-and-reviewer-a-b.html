@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Session 50 — composer-2.5 promotion-window stress test + reviewer A/B + 4 OnPrem MC T0 rewrites</title>
+<style>
+  body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { margin-bottom: 0.2rem }
+  .meta { color: #555; margin-bottom: 1.5rem }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+  h3 { margin-top: 1.4rem }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+  table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+  td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+  th { background: #f8f8f8 }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+  .merged { background: #d4edda; color: #155724 }
+  .inflight { background: #cce5ff; color: #004085 }
+  .failed { background: #f8d7da; color: #721c24 }
+  .partial { background: #fff3cd; color: #856404 }
+  blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style>
+</head>
+<body>
+
+<h1>Session 50 — composer-2.5 promotion-window stress test + reviewer A/B</h1>
+<p class="meta">2026-05-23 evening / 2026-05-24 overnight, immediately following session 49. <strong>4 composer-2.5 T0 author PRs (#1475/#1476/#1477/#1478) covering OnPrem Multi-Cluster modules 5.1-5.4. Reviewer A/B trial on #1475 surfaced sharp composer-2.5 advantage over deepseek-v4-pro as cross-family reviewer. Deepseek had 2 distinct failure modes today (rubber-stamp + raw tool-call XML leak). Codex (gpt-5.5) R1 caught substantial composer-2.5 author-side slips on every PR.</strong> Multiple alternative-reviewer routes blocked (agy, hermes, gemini all unavailable for various reasons during throttle window).</p>
+
+<h2>Headline</h2>
+
+<p>User signal at session start: "we found a worthy teammate with cursor composer 2.5 — promotion running, use it as much as possible to get to know and run all tests on it." Executed a comprehensive composer-2.5 stress test across multiple roles (author, reviewer, deliberator) on the OnPrem Multi-Cluster (5.1-5.4) section of the rubric-critical drain.</p>
+
+<p>Goal: build empirical evidence on where composer-2.5 fits in the agent matrix while the promotion is live.</p>
+
+<h2>PRs in the cycle</h2>
+
+<table>
+<tr><th>#</th><th>Status</th><th>Module</th><th>Author</th><th>Review cycle</th><th>Fix-passes</th></tr>
+<tr><td>#1475</td><td><span class="pill merged">MERGED</span></td><td>5.1 Private Cloud Platforms</td><td>composer-2.5 (started session 49)</td><td>R1 deepseek APPROVE_WITH_NITS → fix → blind A/B R2 [deepseek APPROVE (wrong, hallucinated evidence) vs composer-2.5 NEEDS_CHANGES (3 real findings)] → composer-2.5 fix-pass <code>d995ef47</code> → codex R3 NEEDS_CHANGES (2 new findings) → composer-2.5 fix-pass <code>8b29e487</code> (timed out before commit; orchestrator completed inline) → codex R4 <strong>APPROVE</strong></td><td>3</td></tr>
+<tr><td>#1476</td><td><span class="pill merged">MERGED</span></td><td>5.3 Cluster API on Bare Metal</td><td>composer-2.5</td><td>codex R1 NEEDS_CHANGES (5 findings: 2×S1 runnability, 1×S2 BMH lifecycle, 1×S2 version, 1×S3 URL 404) → composer-2.5 fix-pass <code>6678ab0d</code> → codex R2 <strong>APPROVE</strong></td><td>1</td></tr>
+<tr><td>#1477</td><td><span class="pill merged">MERGED</span></td><td>5.2 Multi-Cluster Control Planes</td><td>composer-2.5</td><td>codex R1 NEEDS_CHANGES (7 findings: 3 HIGH including wrong Fleet reconciliation model, wrong ApplicationSet generator behavior, missing Submariner Lighthouse, operationally-dangerous cordon snippet) → composer-2.5 fix-pass <code>41b624c5</code> → codex R2 <strong>APPROVE_WITH_NITS</strong> (one typo)</td><td>1</td></tr>
+<tr><td>#1478</td><td><span class="pill merged">MERGED</span></td><td>5.4 Fleet Management</td><td>composer-2.5</td><td>codex R1 NEEDS_CHANGES (4 findings: 3 HIGH including wrong OCM PlacementBinding semantics, Exercise 1 broken eval'd join, Exercises 2/3 invalid dry-run validation) → composer-2.5 fix-pass <code>64b7c3b4</code> → codex R2 <strong>APPROVE_WITH_NITS</strong> (one python-dep nit)</td><td>1</td></tr>
+<tr><td>#1469</td><td><span class="pill failed">CLOSED</span></td><td>5.2 (grok-4.20-reasoning exhibit; closed as trial doc evidence)</td><td>grok-4.20-0309-reasoning (session 49)</td><td>n/a</td><td>Closed as trial exhibit; pointer to <code>docs/calibration/grok-3-variant-trial-2026-05-23.html</code></td></tr>
+</table>
+
+<p><strong>Tonight's tally: 4 composer-2.5 T0 author PRs merged in a single session.</strong> First-pass codex review caught 17 substantive findings across 4 PRs (including 9 HIGH-severity); composer-2.5 fix-passes resolved 100% of them in 1-2 cycles per PR.</p>
+
+<h2>Reviewer A/B trial (PR #1475 R2)</h2>
+
+<p>The headline empirical finding tonight. Blind parallel R2 review on PR #1475 (composer-2.5's first T0 author work, on Private Cloud Platforms 5.1):</p>
+
+<table>
+<tr><th>Reviewer</th><th>Verdict</th><th>Findings</th><th>Evidence quality</th></tr>
+<tr><td>deepseek-v4-pro</td><td><span class="pill failed">APPROVE (wrong)</span></td><td>None; rubber-stamp</td><td><strong>Partially fabricated</strong>: spot-checked a nonexistent <code>karpenter.sh/migrating-from-cas</code> URL not in the file's Sources list; referenced wrong file path <code>platform/private-cloud/</code> vs actual <code>on-premises/multi-cluster/</code></td></tr>
+<tr><td>composer-2.5</td><td><span class="pill merged">NEEDS_CHANGES (correct)</span></td><td>1 HIGH + 2 MEDIUM + 1 NIT, all real</td><td>Composer-2.5 explicitly ran <code>bash</code> locally to verify Exercise 2 + 3 failed with syntax errors due to <code>&lt;https://...&gt;</code> inside <code>bash</code> fences (shell input-redirection)</td></tr>
+</table>
+
+<p>Findings composer-2.5 caught and deepseek missed:</p>
+<ol>
+<li><strong>HIGH</strong> — angle-bracket URLs inside <code>bash</code> code fences break Exercises 2 &amp; 3 when copy-pasted. Introduced by the R1 fix-pass over-applying MD034.</li>
+<li><strong>MEDIUM</strong> — prose says K8s 1.35, apt repo line installs v1.30 (introduced by R1 fix).</li>
+<li><strong>MEDIUM</strong> — Exercise 3 kubeadm bootstrap missing Ubuntu 24.04 prereqs (swapoff, br_netfilter, containerd SystemdCgroup).</li>
+</ol>
+
+<p>Orchestrator verified findings 1 and 3 by spot-check on the actual file. Karpenter URL is genuinely not in the file (deepseek hallucinated it).</p>
+
+<p>Memorialized:</p>
+<ul>
+<li><code>feedback_composer_2_5_sharper_reviewer.md</code> (new, TOP PRIORITY)</li>
+<li><code>feedback_composer_2_5_viable_for_t0_content.md</code> (new, TOP PRIORITY)</li>
+<li>Decision card pending user: <code>docs/decisions/pending/2026-05-24-reviewer-routing-composer-2-5.md</code></li>
+</ul>
+
+<h2>Reviewer reliability snapshot (tonight)</h2>
+
+<table>
+<tr><th>Agent</th><th>Status tonight</th><th>Failure mode(s)</th><th>Verdict</th></tr>
+<tr><td>codex (gpt-5.5)</td><td><span class="pill merged">RELIABLE</span></td><td>n/a — clean R1 on #1476/#1477/#1478, R3 on #1475. All caught real findings.</td><td><strong>Primary reviewer tonight.</strong> Rigorous, no false positives in 4-for-4. Required <code>--mode danger --worktree</code> (per memory <code>feedback_codex_review_danger_mode</code> — orchestrator forgot this initially and 4 dispatches died instantly; re-fired correctly).</td></tr>
+<tr><td>composer-2.5 (Cursor)</td><td><span class="pill merged">SHARP AS REVIEWER</span></td><td>n/a in review role; A/B win on #1475 R2.</td><td>Sharper than deepseek as reviewer; slips as author (see below).</td></tr>
+<tr><td>deepseek-v4-pro</td><td><span class="pill failed">UNRELIABLE</span></td><td>(1) Rubber-stamp APPROVE on #1475 R2 with hallucinated karpenter URL + wrong file path. (2) On #1476 R1 emitted raw <code>&lt;｜｜DSML｜｜invoke&gt;</code> tool-call XML escape; <code>OK: True</code> per dispatcher but <code>resp_chars: 1908</code> of useless plan-narrative.</td><td>Demote from primary reviewer slot per Decision Card; revisit reliability post-throttle.</td></tr>
+<tr><td>agy → Claude</td><td><span class="pill failed">UNUSABLE TONIGHT</span></td><td><code>--agent agy</code> hardcoded to <code>--mode danger</code>; <code>danger</code> requires <code>--worktree</code> per dispatch_smart; assigning a worktree to a read-only review is a misfit (agent could mutate the PR worktree). Re-fire with <code>--mode read-only</code> rejected by the agy adapter explicitly.</td><td>4 agy failures in 24h (2 yesterday, 2 today). Memory <code>feedback_agy_claude_route_during_throttle</code> still applies in theory but adapter ergonomics block its use today.</td></tr>
+<tr><td>hermes</td><td><span class="pill failed">BLOCKED</span></td><td>Default model claude-sonnet-4-6 hits Anthropic throttle (silent exit 0 with no stdout in 4s).</td><td>Could route hermes to non-Anthropic openrouter model via <code>--model</code> override but didn't pursue tonight.</td></tr>
+<tr><td>gemini-cli</td><td><span class="pill failed">QUOTA OUT</span></td><td>Per session 49 — TerminalQuotaError after multiple uses; OAuth pool exhausted yesterday.</td><td>Quota recovers manually via user OAuth rotation. Out of rotation tonight.</td></tr>
+<tr><td>cursor in ab discuss</td><td><span class="pill partial">ADAPTER BUG</span></td><td>monitor_state_snapshot JSON injected into cursor-agent CLI args; parsed <code>---</code> as unknown flag and bailed before composer-2.5 could deliberate. <code>scripts/ai_agent_bridge/_channels_cli.py</code> or <code>_cursor.py</code> needs to strip/sanitize the snapshot.</td><td>Cursor-as-deliberator role blocked tonight; bug needs fix.</td></tr>
+</table>
+
+<h2>Composer-2.5 author-quality pattern</h2>
+
+<p>Across 4 T0 author dispatches tonight, every codex R1 caught multiple real issues. Pattern is consistent enough to memorialize (<code>feedback_composer_2_5_viable_for_t0_content</code>):</p>
+
+<table>
+<tr><th>PR</th><th>Findings on first codex review</th><th>Severities</th></tr>
+<tr><td>#1475</td><td>(via composer-2.5 R2) 3 findings + (via codex R3 later) 2 more</td><td>1 HIGH, 2 MEDIUM, 1 NIT, 1 MEDIUM, 1 LOW</td></tr>
+<tr><td>#1476</td><td>5 findings (codex R1)</td><td>2 S1, 2 S2, 1 S3</td></tr>
+<tr><td>#1477</td><td>7 findings (codex R1)</td><td><strong>3 HIGH</strong>, 4 MEDIUM</td></tr>
+<tr><td>#1478</td><td>4 findings (codex R1)</td><td><strong>3 HIGH</strong>, 1 LOW</td></tr>
+</table>
+
+<p>Failure classes consistent across composer-2.5 author output:</p>
+<ol>
+<li><strong>Bash runnability inside fenced blocks</strong> — angle-bracket URLs (`<https://...>`) break copy-paste; CLI flag/column-name typos.</li>
+<li><strong>Version-pin inconsistency</strong> — prose claims K8s 1.35 but exercise pins v1.30 or installs incompatible clusterctl.</li>
+<li><strong>Factual subject-matter slips</strong> — Rancher Fleet called "push" (it's pull); Argo CD ApplicationSet generator behavior conflated; BareMetalHost lifecycle wording wrong vs Metal3 docs; OCM PlacementBinding semantics wrong.</li>
+<li><strong>Operationally dangerous snippets</strong> — #1477 had "cordon a MachineDeployment" via <code>spec.replicas: 0</code>, which scales-down/deletes Machines rather than cordoning nodes.</li>
+<li><strong>Citation reachability</strong> — broken URLs in Sources or Exercise 2 (404s).</li>
+</ol>
+
+<p>Verifier passes on all 4 modules (<code>passed=true, tier=T0, body_words=5000</code> on every original commit). <strong>Verifier ≠ T0 quality.</strong> The verifier catches mechanical gates (body_words, sources_min_10, sections, MD034) — not subject-matter accuracy, not bash runnability inside fenced blocks, not version-pin consistency.</p>
+
+<p>This is the same profile as deepseek-v4-pro authoring (<code>feedback_deepseek_v4_pro_viable_for_t0_content</code>): viable T0 author, needs vigilant code-domain reviewer. The "viable T0 author with code-domain runnability gap" appears to be the modal capability across our author agents, not unique to one.</p>
+
+<h2>Operational lessons (new)</h2>
+
+<ol>
+<li><strong>Always anchor <code>cd</code> before any dispatch chain.</strong> Orchestrator forgot once tonight and ended up creating nested worktrees inside the cursor-private-cloud worktree because Bash cwd had persisted from a prior <code>cd</code>. Cost ~10 min of damage-control. Pattern: always start dispatch sequences with <code>cd /Users/krisztiankoos/projects/kubedojo &amp;&amp; pwd</code> in the same Bash call as the dispatch.</li>
+<li><strong>codex review = <code>--mode danger --worktree</code> mandatory.</strong> Re-confirmed <code>feedback_codex_review_danger_mode</code> after forgetting and seeing 3 dispatches die instantly with "no override" arg-validation errors. dispatch_smart.py refuses if you try to skip either.</li>
+<li><strong>Cursor adapter in ab discuss breaks on monitor_state_snapshot.</strong> Bug for follow-up: strip or quote monitor state before passing to cursor-agent CLI.</li>
+<li><strong>Anti-rubber-stamp briefs work.</strong> Codex with explicit "list 4 concrete things you verified" requirement produced consistently rigorous reviews. Deepseek did not follow the requirement even with similar brief — that's an agent quality difference, not a prompt-writing difference.</li>
+<li><strong>Detached HEAD trap on primary.</strong> A reviewer dispatch did a <code>git fetch</code> which left primary at FETCH_HEAD; recovered with <code>git checkout main</code>. Look for this pattern at session start every time.</li>
+</ol>
+
+<h2>Memory updates</h2>
+
+<table>
+<tr><th>File</th><th>Type</th><th>Why</th></tr>
+<tr><td><code>feedback_composer_2_5_viable_for_t0_content.md</code></td><td>feedback (TOP PRIORITY)</td><td>4 author PRs tonight show composer-2.5 viable as T0 author but consistently needs codex code-domain review backstop. Verifier gates ≠ T0 quality.</td></tr>
+<tr><td><code>feedback_composer_2_5_sharper_reviewer.md</code></td><td>feedback (TOP PRIORITY)</td><td>n=1 reviewer A/B on PR #1475: composer-2.5 R2 caught 3 real bash bugs deepseek APPROVE'd past with hallucinated evidence. composer-2.5 runs bash locally to verify; deepseek doesn't.</td></tr>
+</table>
+
+<p>MEMORY.md index updated; both entries promoted to top of TOP PRIORITY block.</p>
+
+<h2>Decision card (pending user)</h2>
+
+<p><code>docs/decisions/pending/2026-05-24-reviewer-routing-composer-2-5.md</code></p>
+
+<p>Should composer-2.5 displace deepseek as primary cross-family reviewer for T0 content PRs? Orchestrator recommendation: <strong>Option C — task-class split</strong>. composer-2.5 for content/lab-runnability reviews while promotion lasts; codex for code/dispatcher/CI; deepseek demoted to tertiary fallback.</p>
+
+<h2>Final state — all dispatches landed</h2>
+
+<table>
+<tr><th>Dispatch class</th><th>Agent</th><th>Count tonight</th><th>Success rate</th></tr>
+<tr><td>T0 content author</td><td>composer-2.5 (Cursor)</td><td>4</td><td>4/4 verifier passed=true T0 on first commit (~17-18 min each)</td></tr>
+<tr><td>Code-domain reviewer (R1/R2/R3/R4)</td><td>codex (gpt-5.5)</td><td>7</td><td>6/6 produced clean substantive reviews (one died on missing <code>--mode danger --worktree</code>, re-fired correctly). 17 substantive findings caught; final 4 verdicts: 2× APPROVE, 2× APPROVE_WITH_NITS</td></tr>
+<tr><td>Fix-pass edits</td><td>composer-2.5</td><td>5</td><td>4/5 completed cleanly; #1475 R3 fix-pass timed out at 900s with the edits in place but uncommitted (orchestrator finished workflow inline)</td></tr>
+<tr><td>Reviewer A/B trial (#1475 R2)</td><td>deepseek-v4-pro vs composer-2.5</td><td>1 each</td><td>composer-2.5 caught real bugs deepseek APPROVE'd past with partially hallucinated evidence</td></tr>
+<tr><td>Multi-agent deliberation</td><td>codex + cursor + deepseek</td><td>1 attempt</td><td>cursor adapter bug blocked deliberation; deepseek partial response; codex did not get to respond</td></tr>
+<tr><td>Alternative reviewer routes attempted</td><td>agy, hermes, deepseek</td><td>4 attempts</td><td>All blocked tonight — agy (sandbox config), hermes (claude-sonnet-4-6 hits throttle), deepseek (2 distinct failure modes)</td></tr>
+</table>
+
+<h2>Continuation instructions for next session</h2>
+
+<h3>Immediate (when fix-pass cycles land)</h3>
+<ol>
+<li>Per PR (1475 → 1476 → 1477 → 1478): wait for fix-pass commit, then re-fire codex R2 (or R4 for #1475) with anti-rubber-stamp brief; on APPROVE merge; on NEEDS_CHANGES additional fix-pass.</li>
+<li>Each merge: cleanup worktree, delete branch (local + remote if needed).</li>
+<li>Continue rubric-critical drain — pre-staged next candidates: 5.5 Active-Active Multi-Site (335L) + a non-multicluster track (OnPrem Networking DNS &amp; Cert Infra at 660L) to spread track exposure.</li>
+</ol>
+
+<h3>Strategic</h3>
+<ol>
+<li>User decision on reviewer routing card (<code>docs/decisions/pending/2026-05-24-reviewer-routing-composer-2-5.md</code>).</li>
+<li>Fix the cursor-in-ab-discuss adapter bug (monitor_state_snapshot leak into CLI args).</li>
+<li>Investigate deepseek's tool-call XML escape failure on #1476 R1 — was it a one-off or systemic? Re-test deepseek as reviewer post-throttle window.</li>
+<li>Anthropic throttle window closes 2026-05-24 — claude headless returns then. Re-enable claude headless review/edit dispatches after that.</li>
+<li>2026-06-15 agentic-credit-pool flip — terminal Opus-4.7 inline work becomes the preferred path over claude headless dispatches.</li>
+</ol>
+
+<h2>End state</h2>
+
+<p><strong>Workspace:</strong> primary on <code>main</code>, fully synced with origin after pull-rebase. No worktrees remain — all 4 cycle worktrees removed after merge. 4 PRs merged tonight (#1475, #1476, #1477, #1478); 1 closed trial exhibit (#1469). Recent local_api.py + decisions route + tests modifications (~263 lines) were stashed before rebase (<code>git stash list</code> entry <code>session-50-unrelated-local-api-work</code>) — these look like Cursor IDE background work or user's separate edit; not from this session's dispatches. User should review on wake before popping the stash.</p>
+
+<p><strong>Rubric-critical drain progress:</strong> On-Premises Multi-Cluster modules 5.1, 5.2, 5.3, 5.4 are now T0-quality. Modules 5.5-5.9 remain in that section (5.5 Active-Active Multi-Site = next-smallest critical candidate at ~335 lines). Briefing dashboard may not refresh until cron tick — verifier-grade reporting will reflect the change shortly.</p>
+
+<p><strong>Memory + decisions:</strong></p>
+<ul>
+<li><code>feedback_composer_2_5_viable_for_t0_content.md</code> — TOP PRIORITY, indexed.</li>
+<li><code>feedback_composer_2_5_sharper_reviewer.md</code> — TOP PRIORITY, indexed.</li>
+<li><code>docs/decisions/pending/2026-05-23-reviewer-routing-composer-2-5.md</code> — awaiting user decision (orchestrator recommendation: Option C task-class split).</li>
+</ul>
+
+<p><strong>Composer-2.5 capability matrix learned tonight:</strong></p>
+
+<table>
+<tr><th>Role</th><th>Result</th></tr>
+<tr><td>T0 author</td><td>✅ Fast (~17-18 min) + verifier-passing, BUT consistent code-domain slips (bash runnability, version pins, factual subject matter, operationally dangerous snippets, citation reachability). Always pair with codex R1.</td></tr>
+<tr><td>R2 reviewer on own family (cross-family relative to deepseek)</td><td>✅ Sharper than deepseek — caught real bash bugs deepseek APPROVE'd past with hallucinated evidence. Actually ran <code>bash</code> locally.</td></tr>
+<tr><td>Fix-pass</td><td>✅ Resolved 17 substantive findings across 4 PRs in 1-2 cycles each. One timed out at 900s with edits applied but uncommitted (orchestrator workaround inline).</td></tr>
+<tr><td>ab discuss deliberator</td><td>⚠️ Adapter bug — monitor_state_snapshot leaks into CLI args; cursor-agent parses <code>---</code> as flag and bails. Bug needs fix in <code>scripts/ai_agent_bridge/_channels_cli.py</code> or <code>_cursor.py</code>.</td></tr>
+<tr><td>Code editing</td><td>✅ Targeted edits (fix-passes) clean. Self-aware about state — explicitly noted "Primary restored to main" on one dispatch after detecting it had detached HEAD.</td></tr>
+<tr><td>Search</td><td>Not tested tonight.</td></tr>
+</table>
+
+<p><strong>User's stance from session start:</strong> "we found a worthy teammate with cursor composer 2.5 — promotion running, use it as much as possible to get to know and run all tests on it." Validated. 4 modules merged + 2 new TOP PRIORITY memories + 1 decision card pending.</p>
+
+</body>
+</html>
