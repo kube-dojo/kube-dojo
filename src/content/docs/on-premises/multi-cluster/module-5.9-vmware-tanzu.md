@@ -2,17 +2,16 @@
 title: "Module 5.9: VMware Tanzu — Enterprise Kubernetes Portfolio (TKG, vSphere with Tanzu, TMC, TAP)"
 description: "Map the VMware Tanzu portfolio, evaluate vSphere-integrated Kubernetes, TKG, TMC, and TAP, and decide when Tanzu is worth the licensing and operational tradeoffs in 2026."
 slug: on-premises/multi-cluster/module-5.9-vmware-tanzu
+revision_pending: false
 sidebar:
   order: 59
 ---
-
-# Module 5.9: VMware Tanzu — Enterprise Kubernetes Portfolio (TKG, vSphere with Tanzu, TMC, TAP)
 
 > **Complexity**: `[COMPLEX]` | Time: 55-65 minutes
 >
 > **Prerequisites**: K8s basics. Basic understanding of VMware vSphere is helpful but not required.
 
-For command examples, this module uses `k` as a short alias for `kubectl`. Create it once in your shell with `alias k=kubectl` before running the hands-on work. All Kubernetes examples assume Kubernetes 1.35+ behavior unless a tool-specific command says otherwise.
+All shell examples use the full `kubectl` command name. Tanzu Kubernetes Grid (TKG) 2.5 standalone is in an end-of-life lifecycle: **2.5.4 is the final enterprise release**, and Broadcom directs new vSphere-integrated Kubernetes work toward **vSphere Kubernetes Service (VKS)** on vSphere Supervisor (formerly TKG Service). vSphere Supervisor and VKS clusters follow the vSphere 8.x and 9.x matrices in TechDocs. Kubernetes examples assume 1.35+ behavior unless a Tanzu release note pins an older supported minor for management clusters.
 
 ---
 
@@ -22,7 +21,7 @@ After completing this module, you will be able to explain Tanzu as a portfolio d
 
 1. **Compare** TKG, vSphere with Tanzu, Tanzu Mission Control, and Tanzu Application Platform without treating Tanzu as one product.
 2. **Design** a vSphere-integrated Kubernetes platform that separates Supervisor, vSphere Namespaces, VM Service, and workload clusters.
-3. **Implement** a TKG-style lab using kind, Cluster API, Calico, Contour, and Argo CD to inspect the lifecycle machinery behind Tanzu Kubernetes Grid.
+3. **Implement** a TKG management-cluster workflow on vSphere with the Tanzu CLI, and rehearse the same Cluster API lifecycle pattern locally with kind when licensing blocks a full VMware lab.
 4. **Diagnose** common Tanzu fleet issues by following Cluster API objects, MachineDeployments, CNI rollout, ingress, backup, and version status.
 5. **Evaluate** Tanzu against Rancher, Gardener, OpenShift, vanilla Cluster API, and managed Kubernetes using technical fit, licensing exposure, and day-2 operations.
 
@@ -52,17 +51,41 @@ A security team may think about centralized policy in TMC. All four people are u
 +----------------------+--------------------------+--------------------------+
 | Tanzu name           | Primary job              | Mental model             |
 +----------------------+--------------------------+--------------------------+
-| TKG                  | Create and upgrade K8s   | Cluster API distribution |
+| TKG 2.5 standalone   | Create and upgrade K8s   | Final standalone line;     |
+| (EOL; migrate VKS)   | on vSphere (legacy path) | plan move to VKS         |
 | vSphere with Tanzu   | Integrate K8s into       | vCenter + Supervisor +   |
-|                      | vSphere                  | workload clusters        |
-| TMC                  | Manage cluster fleets    | SaaS control plane over  |
-|                      | across locations         | attached clusters        |
+|                      | vSphere + VKS clusters   | workload clusters        |
+| TMC                  | Manage cluster fleets    | SaaS or Self-Managed 1.4 |
+|                      | across locations         | over attached clusters   |
 | TAP                  | Standardize developer    | Path from source code to |
 |                      | delivery workflows       | running app              |
 +----------------------+--------------------------+--------------------------+
 ```
 
 That table is the minimum vocabulary. TKG answers: "How do we create conformant Kubernetes clusters with a supported component stack?" vSphere with Tanzu answers: "How do we make vSphere itself expose Kubernetes-style consumption?" TMC answers: "How do we govern and observe many clusters from one place?" TAP answers: "How do we give developers a standardized path from source code to production?"
+
+```mermaid
+flowchart TB
+    subgraph Portfolio["VMware Tanzu portfolio (2026)"]
+        TKG["TKG 2.5 standalone (EOL)<br/>→ migrate to VKS"]
+        VWT["vSphere Supervisor + VKS<br/>go-forward clusters"]
+        TMC["TMC SaaS or Self-Managed 1.4<br/>Fleet governance"]
+        TAP["Tanzu Application Platform<br/>Developer supply chains"]
+    end
+    subgraph Infra["Your infrastructure"]
+        VCF["VMware Cloud Foundation / vSphere"]
+        Cloud["Public cloud clusters"]
+    end
+    VCF --> VWT
+    VCF --> TKG
+    TKG --> TMC
+    VWT --> TMC
+    Cloud --> TMC
+    TKG --> TAP
+    VWT --> TAP
+```
+
+**Migration note:** If your estate still runs **TKG 2.5 standalone** management clusters, plan a deliberate move to **VKS on vSphere Supervisor** rather than treating 2.5.x as a long-term platform line—2.5.4 is the last enterprise standalone release.
 
 They are related, but they are not interchangeable. The older names matter because many enterprises still have them in documents and diagrams. TKGI, formerly Enterprise PKS, was a BOSH and Ops Manager based Kubernetes platform. It came from the Pivotal era and made sense for organizations that already used BOSH. It is not the strategic default for new Kubernetes platform builds in 2026.
 
@@ -80,7 +103,7 @@ vSphere with Tanzu mainly changes the infrastructure team's experience. TKG main
 
 TAP mainly changes the developer experience. The products overlap at the edges, but the primary buyer and operator are different. That is why a one-line "Tanzu evaluation" is usually too vague to be useful.
 
-### War Story: The Wrong Demo
+### Hypothetical scenario: The wrong demo
 
 A manufacturer asked a platform team to evaluate Tanzu after a senior leader saw a polished TAP demo. The demo showed a developer pushing code and watching a supply chain build, scan, and deploy the app. The actual internal problem was different. The organization had twelve manually built Kubernetes clusters on vSphere, inconsistent CNI choices, no shared upgrade model, and no inventory.
 
@@ -97,6 +120,31 @@ vSphere with Tanzu is different. It integrates Kubernetes concepts into vSphere 
 That design is closer to "Kubernetes as a vSphere consumption layer" than "Kubernetes as another VM workload." The Supervisor is not the same thing as a normal application cluster. It is a control plane for provisioning and governing workloads in vSphere. It can host Supervisor Services, vSphere Pods in supported configurations, VM Service resources, and workload cluster definitions.
 
 Most production application workloads should run in workload clusters rather than directly on the Supervisor. That distinction matters for support, isolation, RBAC, add-ons, and upgrade planning. Here is the architecture at a high level:
+
+```mermaid
+flowchart TB
+    subgraph vCenter["vCenter Server"]
+        WM["Workload Management UI"]
+        VNS["vSphere Namespace<br/>quotas, VM classes, storage"]
+    end
+    subgraph Supervisor["Supervisor cluster"]
+        SAPI["Kubernetes API on vSphere"]
+        VMsvc["VM Service"]
+        WKC["Workload cluster CRs<br/>Cluster API / TKG Service"]
+    end
+    subgraph Tenants["Tenant runtime"]
+        Pods["vSphere Pods<br/>(specialized cases)"]
+        VMs["VM Service VMs"]
+        Apps["Workload Kubernetes clusters"]
+    end
+    WM --> VNS
+    VNS --> SAPI
+    SAPI --> VMsvc
+    SAPI --> WKC
+    VMsvc --> VMs
+    WKC --> Apps
+    SAPI --> Pods
+```
 
 ```text
 +------------------------------- vCenter -----------------------------------+
@@ -123,13 +171,13 @@ Most production application workloads should run in workload clusters rather tha
 
 The VM Service is easy to overlook, but it is one of the reasons vSphere with Tanzu exists. Many enterprises do not move from VMs to containers in one clean step. They run legacy services, databases, agents, batch workers, and COTS products that still need VMs. VM Service lets teams request VMs through Kubernetes-style objects while the infrastructure team still controls VM classes, images, storage, placement, and permissions. That can create a single consumption plane for VMs and containers.
 
-It can also confuse teams if they assume "Kubernetes" means every workload is a pod. vSphere Pods deserve a careful note. They were introduced as a way to run pods with stronger isolation using hypervisor-level machinery, historically associated with a lightweight VM runtime based on Firecracker concepts. They are interesting architecture. They are not the recommended default path for most modern Tanzu application workloads.
+It can also confuse teams if they assume "Kubernetes" means every workload is a pod. vSphere Pods deserve a careful note. **vSphere Pods are small-footprint VMs**, each running a **Photon OS-based Linux kernel**, integrated with the Supervisor via **Spherelet**, and requiring **NSX** for networking. They are interesting architecture for specialized isolation cases. They are not the recommended default path for most modern Tanzu application workloads.
 
 In current designs, workload clusters are the normal place for application teams to run Kubernetes workloads. If a design depends heavily on direct vSphere Pods, verify the current support matrix, networking mode, backup story, RBAC model, and add-on limits before treating it as a standard cluster equivalent. Workload clusters are provisioned through Cluster API style machinery under the hood. The user declares a cluster. The platform reconciles virtual machines, control-plane nodes, worker nodes, bootstrap configuration, certificates, and Kubernetes versions.
 
 From the application team's view, the result is a kubeconfig and a Kubernetes cluster. From the vSphere administrator's view, the result is a governed set of VMs, disks, networks, and resource usage inside vCenter. That dual view is the value proposition. It is also the complexity. When a workload cluster fails to create, the problem might be Kubernetes API validation, a vSphere Namespace quota, a content library image, a storage policy, an NSX or Avi load balancer issue, a VM class, a certificate problem, or a Cluster API reconcile loop.
 
-You debug across both worlds. The operator who can only read vCenter tasks will be slow. The operator who can only read Kubernetes events will also be slow. You need both views. Before running this in a real environment, what output would you expect from `k get clusters,machines,machinedeployments -A` after a workload cluster starts provisioning?
+You debug across both worlds. The operator who can only read vCenter tasks will be slow. The operator who can only read Kubernetes events will also be slow. You need both views. Before running this in a real environment, what output would you expect from `kubectl get clusters,machines,machinedeployments -A` after a workload cluster starts provisioning?
 
 You should expect to see declarative cluster objects before the virtual machines are fully healthy. That is a useful clue. Cluster API exposes intent, intermediate state, and errors while vCenter exposes VM-level tasks. The two timelines should eventually converge.
 
@@ -138,14 +186,14 @@ You should expect to see declarative cluster objects before the virtual machines
 Imagine a developer requests a workload cluster in a vSphere Namespace named `analytics-dev`. The cluster object appears, but no worker nodes become Ready. The vSphere team sees VM creation retries. The Kubernetes platform team sees Machine objects stuck in provisioning. A good debug flow crosses both planes:
 
 ```bash
-k config get-contexts
-k config use-context supervisor-context
-k get namespaces
-k get clusters -A
-k get machines -A
-k get machinedeployments -A
-k describe machine -n analytics-dev analytics-dev-md-0-abc12
-k get events -n analytics-dev --sort-by=.lastTimestamp
+kubectl config get-contexts
+kubectl config use-context supervisor-context
+kubectl get namespaces
+kubectl get clusters -A
+kubectl get machines -A
+kubectl get machinedeployments -A
+kubectl describe machine -n analytics-dev analytics-dev-md-0-abc12
+kubectl get events -n analytics-dev --sort-by=.lastTimestamp
 ```
 
 Then you check the vSphere side. You look at the vSphere Namespace quota, VM class, image availability, storage policy, load balancer address pool, and recent vCenter tasks. The failure should not be assigned to "Kubernetes" or "VMware" too early. vSphere with Tanzu intentionally spans both.
@@ -202,12 +250,12 @@ The difference is not that one has lifecycle primitives and the other does not. 
 Suppose a TKG workload cluster upgrade stalls after the first worker replacement. The application team sees fewer nodes. The platform team sees the CLI hanging. The useful path is to inspect the declarative lifecycle objects:
 
 ```bash
-k get clusters -A
-k get machinedeployments -A
-k get machinesets -A
-k get machines -A
-k describe machinedeployment -n tkg-workloads prod-md-0
-k get events -n tkg-workloads --sort-by=.lastTimestamp
+kubectl get clusters -A
+kubectl get machinedeployments -A
+kubectl get machinesets -A
+kubectl get machines -A
+kubectl describe machinedeployment -n tkg-workloads prod-md-0
+kubectl get events -n tkg-workloads --sort-by=.lastTimestamp
 ```
 
 If the new Machine exists but no Node joins, look at bootstrap data, VM creation, cloud-init, kubelet logs, network reachability, and image compatibility. If no new Machine appears, look at MachineDeployment conditions, template references, version fields, and admission failures. If Machines are created and deleted repeatedly, suspect provider-level reconciliation failures such as invalid VM classes, IP allocation, storage policy mismatch, or image lookup failure. The point is to debug the controller graph, not the CLI spinner.
@@ -222,7 +270,14 @@ The Docker infrastructure provider plays the role of vSphere or cloud infrastruc
 
 ## 4. TMC: Fleet Management Overlay
 
-Tanzu Mission Control is not a Kubernetes distribution. It is a multi-cluster management layer. Think of it as a SaaS control plane that attaches to clusters, applies policy, integrates identity, exposes fleet inventory, and coordinates lifecycle and data protection features where supported. It can work with Tanzu-managed clusters and attached conformant clusters. The exact supported feature set depends on cluster type, product version, and licensing.
+Tanzu Mission Control is not a Kubernetes distribution. It is a multi-cluster management layer available in two forms: **TMC SaaS** (cloud-managed control plane hosted by Broadcom) and **TMC Self-Managed 1.4** (installs into a customer-owned Kubernetes cluster in your data center; current supported line is 1.4.x). You register attached or Tanzu-provisioned clusters, then govern them through policy, identity, inventory, backup coordination, and lifecycle features where the cluster type and subscription tier allow.
+
+| Delivery | Control plane location | Typical tradeoff |
+|---|---|---|
+| TMC SaaS | Broadcom-hosted | No install burden; requires connectivity and acceptable data-residency posture for a hosted control plane |
+| TMC Self-Managed 1.4 | Your K8s cluster | Customer operates the management plane; fits air-gapped and regulated environments that cannot depend on SaaS |
+
+Some organizations also run complementary self-hosted fleet layers (Rancher, Open Cluster Management, or GitOps hubs) alongside TMC for VMware-aligned inventory and policy reporting. Choose SaaS versus Self-Managed based on connectivity, data residency, and who will operate the TMC management cluster—not on the assumption that TMC is SaaS-only.
 
 TMC is most useful when your problem is fleet governance. You have too many clusters to manage with ad hoc kubeconfigs. You need centralized inventory. You need consistent policy. You need IAM federation rather than local user drift.
 
@@ -245,7 +300,7 @@ Argo CD or Flux CD can define desired state across many clusters. Open Policy Ag
 
 Backstage can provide a portal. That assembly can be excellent, but the integration burden is yours. TMC is justified when the organization values a supported fleet control plane more than it values full composition freedom. It is redundant when the team already has a mature platform stack that covers inventory, identity, policy, backup, observability, and GitOps with strong internal ownership.
 
-### War Story: The Second Fleet Manager
+### Hypothetical scenario: The second fleet manager
 
 A financial services team bought a fleet manager after already building an internal Argo CD, OPA, Prometheus, and Backstage platform. The new tool was technically capable. The problem was overlap. Two systems tried to own access groups. Two systems displayed policy status.
 
@@ -305,7 +360,7 @@ Knative or Kubernetes Service exposes app
 
 That is a developer platform workflow. It is valuable when dozens or hundreds of teams need consistent delivery without copy-pasted pipelines. It is overkill when three platform engineers simply need to create five Kubernetes clusters.
 
-### War Story: Paved Path Without Ownership
+### Hypothetical scenario: Paved path without ownership
 
 A retailer built a polished internal developer platform with a portal, templates, pipelines, image scanning, and GitOps. The launch went well. Six months later, teams began bypassing the paved path because no one owned template updates, buildpack changes, scan exceptions, or deployment policy changes. The platform looked complete on day one and stale by month six.
 
@@ -368,6 +423,21 @@ A useful Tanzu evaluation memo should fit on two pages before attachments. It sh
 It should compare at least two non-Tanzu alternatives. It should name the operating team and escalation path. It should state what happens if Broadcom pricing changes again at renewal.
 
 It should include an exit plan even if the recommendation is to stay. That does not make the recommendation negative. It makes the recommendation testable.
+
+### Tanzu vs OpenShift vs Rancher for On-Prem Buyers
+
+Enterprise teams rarely choose Tanzu in isolation. The three platforms below appear together in most on-premises bake-offs because each bundles Kubernetes lifecycle, identity, policy, and developer experience differently.
+
+| Axis | VMware Tanzu (TKG / vSphere with Tanzu) | Red Hat OpenShift | SUSE Rancher |
+|---|---|---|---|
+| Primary substrate | vSphere and VCF estates | RHEL CoreOS nodes, strong bare-metal and cloud | Any CNCF-conformant cluster you can import or provision |
+| Cluster lifecycle | TKG standalone management clusters, Supervisor TKG Service, CAPV | OpenShift installer / IPI / Agent installer | RKE2/K3s provisioning plus Cluster API integrations |
+| Fleet governance | TMC SaaS or TMC Self-Managed 1.4 plus optional GitOps | Advanced Cluster Management (ACM) hub-spoke | Rancher Fleet GitRepo bundles (self-hosted) |
+| Developer platform | Tanzu Application Platform (optional) | OpenShift Pipelines, Builds, Developer perspective | Backstage / Fleet apps (assemble your own) |
+| Licensing model (2026) | VCF / vSphere Foundation subscription bundles | Red Hat OpenShift subscription | Rancher subscription with open-source core |
+| Best fit signal | Deep existing VMware operations | Red Hat platform standard, regulated multi-cluster | Open-source-first fleet UI on mixed infrastructure |
+
+None of these rows replaces a proof-of-concept on your network. They tell you which vendor's operating model you are adopting before you debate minor version skew or ingress controller logos.
 
 ---
 
@@ -526,289 +596,199 @@ The open-source path can use the same lifecycle foundation and avoid Tanzu licen
 
 ---
 
-## Hands-On Exercise
+## Hands-On Practical Exercises
 
-This lab demonstrates a TKG-style architecture using open-source components. Real Tanzu requires real VMware/Broadcom licensing and access to supported downloads, entitlement, documentation, and support channels. The lab does not install commercial Tanzu. It shows the architectural pattern underneath TKG: a management cluster, Cluster API controllers, a workload cluster, CNI, ingress, GitOps, scaling, upgrade intent, and lifecycle objects.
+**Objective**: Practice TKG lifecycle mechanics locally with Cluster API, then walk through the supported Tanzu CLI path for a standalone vSphere management cluster when entitlement and lab capacity exist.
 
-You can run the lab on a workstation with Docker, kind, `clusterctl`, and `kubectl`. If you have a licensed vSphere homelab and Tanzu entitlement, you can map each task to the Tanzu CLI and vSphere provider. The open-source path is the community-accessible route.
+**Environment**: Exercise 1 and 2 require Docker, kind, clusterctl, and kubectl on a Linux or macOS workstation. Exercise 3 requires a licensed TKG 2.5.x download, vSphere 7 or 8 with adequate resources, vCenter credentials, OVAs in a content library, and outbound access to Broadcom support portals for the exact build you are entitled to run.
 
-### Setup
+### Exercise 1: Stand up a Cluster API management plane with kind
 
-Install the local tools first, then keep the versions visible in your notes so later failures can be separated from Tanzu concepts. This lab uses commodity binaries to expose the lifecycle pattern, not to simulate VMware entitlement, vCenter integration, NSX behavior, or Broadcom support.
-
-```bash
-brew install kind kubectl clusterctl argocd
-alias k=kubectl
-```
-
-Create a local management cluster with kind. In this lab, the kind cluster stands in for the management plane that would normally run lifecycle controllers, store Cluster API objects, and reconcile workload cluster intent into infrastructure actions.
+This exercise mirrors what TKG does internally before CAPV creates VMs: a management cluster hosts Cluster API controllers that reconcile workload cluster intent. The steps follow the [Cluster API quick start](https://cluster-api.sigs.k8s.io/user/quick-start) Docker-provider pattern: the management kind cluster must mount the host Docker socket, and the workload cluster needs a CNI before nodes reach Ready.
 
 ```bash
-kind create cluster --name capi-mgmt --image kindest/node:v1.35.0
-k cluster-info --context kind-capi-mgmt
-```
+cat > capi-mgmt-kind.yaml <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: capi-mgmt
+nodes:
+- role: control-plane
+  image: kindest/node:v1.35.0
+  extraMounts:
+  - hostPath: /var/run/docker.sock
+    containerPath: /var/run/docker.sock
+EOF
 
-Initialize Cluster API with the Docker provider after the management cluster is reachable. The provider is deliberately lightweight, but it gives you the same controller vocabulary you need when reading TKG failures on vSphere, AWS, Azure, or another supported infrastructure target.
+kind create cluster --config capi-mgmt-kind.yaml
+kubectl cluster-info --context kind-capi-mgmt
 
-```bash
 clusterctl init --infrastructure docker
-k get pods -A
-k get providers -A
-```
+kubectl wait --for=condition=Ready pod -l cluster.x-k8s.io/provider=cluster-api -n capi-system --timeout=180s
+kubectl get pods -n capi-system
+kubectl get pods -n capd-system
 
-The management cluster now plays the role that a TKG management cluster would play. It hosts controllers that reconcile workload cluster objects.
-
-### Task 1: Generate a Workload Cluster
-
-Generate a small workload cluster manifest from the management context. This is the moment where the operator moves from imperative VM creation to declarative cluster intent, and that shift is the central idea behind TKG-style lifecycle management.
-
-```bash
 clusterctl generate cluster tkg-style \
   --flavor development \
   --kubernetes-version v1.35.0 \
   --control-plane-machine-count=1 \
   --worker-machine-count=1 \
   > tkg-style.yaml
-```
 
-Inspect the generated manifest before applying it, because real platform teams should understand the lifecycle objects their tooling emits. A CLI can simplify authoring, but the YAML still defines the controller graph you will debug during upgrades and failed provisioning.
-
-```bash
 grep -E 'kind: Cluster|kind: MachineDeployment|version:' tkg-style.yaml
-```
+kubectl apply -f tkg-style.yaml
+kubectl get clusters,machinedeployments,machines
 
-Apply the manifest only after you can identify the Cluster and MachineDeployment resources it will create. The workload cluster will not appear instantly; first the management cluster records desired state, then controllers begin reconciling machines, bootstrap data, and Kubernetes control-plane readiness.
-
-```bash
-k apply -f tkg-style.yaml
-k get clusters
-k get machinedeployments
-k get machines
-```
-
-<details>
-<summary>Solution notes</summary>
-
-You should see Cluster API objects appear before the workload cluster is fully usable. This is the same lifecycle principle used by TKG: declare desired cluster state, then let controllers reconcile machines and Kubernetes bootstrap. If the cluster does not progress, inspect `k get events --sort-by=.lastTimestamp` and controller pod logs in the Cluster API namespaces.
-
-</details>
-
-### Task 2: Retrieve the Workload Cluster Kubeconfig
-
-Wait for the control plane from the management cluster and watch the Machine objects instead of guessing whether the process is stuck. In a real TKG environment, this same habit helps you distinguish slow infrastructure provisioning from failed bootstrap or node-registration problems.
-
-```bash
-k get kubeadmcontrolplanes
-k get machines
-```
-
-Retrieve the workload cluster kubeconfig once the control plane is far enough along to answer API requests. This separate kubeconfig is an important boundary: management objects live in one cluster, while application workloads and add-ons run in another.
-
-```bash
 clusterctl get kubeconfig tkg-style > tkg-style.kubeconfig
-KUBECONFIG=tkg-style.kubeconfig k get nodes
+kubectl --kubeconfig=tkg-style.kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.0/manifests/calico.yaml
+kubectl --kubeconfig=tkg-style.kubeconfig wait --for=condition=Ready node --all --timeout=300s
+kubectl --kubeconfig=tkg-style.kubeconfig get nodes
 ```
 
-If nodes are not Ready yet, continue observing instead of rebuilding the lab immediately. Cluster creation has several asynchronous steps, and the most useful learning comes from correlating management-cluster Machines with workload-cluster Nodes as they converge.
-
-```bash
-watch -n 5 'KUBECONFIG=tkg-style.kubeconfig kubectl get nodes'
-```
+- [ ] kind management cluster is reachable, mounts `/var/run/docker.sock`, and Cluster API provider pods are Ready.
+- [ ] Generated manifest contains `Cluster` and `MachineDeployment` objects before Machines finish provisioning.
+- [ ] Calico (or another CNI) is applied on the workload cluster and nodes reach Ready (control plane stays NotReady without a CNI).
+- [ ] You can explain why management-cluster objects live in a different API server than application workloads.
 
 <details>
-<summary>Solution notes</summary>
+<summary>Expected analysis</summary>
 
-The workload cluster is a separate Kubernetes API server. The management cluster stores lifecycle objects. The workload cluster runs application workloads. That separation is the management cluster plus workload cluster pattern behind TKG.
+Cluster objects should appear while Machines are still provisioning. If reconciliation stalls, inspect `kubectl get events --sort-by=.lastTimestamp` in the management cluster and controller logs under `capi-system` and `capd-system`. If Machines exist but workload nodes stay NotReady, verify the Docker socket mount on the management kind cluster and that a CNI manifest was applied to the workload kubeconfig. This is the same declarative graph TKG surfaces through the Tanzu CLI on vSphere, except CAPV replaces the Docker provider.
 
 </details>
 
-### Task 3: Install Calico and Contour
+### Exercise 2: Retrieve workload credentials and scale through MachineDeployment
 
-Install Calico into the workload cluster to make the networking dependency explicit. Commercial distributions usually package and test a supported CNI path, but operators still need to understand that nodes cannot become useful application capacity until pod networking is healthy.
-
-```bash
-KUBECONFIG=tkg-style.kubeconfig k apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.0/manifests/calico.yaml
-KUBECONFIG=tkg-style.kubeconfig k -n kube-system rollout status daemonset/calico-node
-```
-
-Install Contour after the CNI is progressing, because ingress depends on a working cluster network and service routing. This step separates cluster lifecycle from platform add-ons: Cluster API created the cluster, while the platform team still curates the runtime stack.
+Reuse `tkg-style.kubeconfig` from Exercise 1 (including the Calico install). If you started fresh, fetch kubeconfig and re-apply the CNI before expecting Ready nodes.
 
 ```bash
-KUBECONFIG=tkg-style.kubeconfig k apply -f https://projectcontour.io/quickstart/contour.yaml
-KUBECONFIG=tkg-style.kubeconfig k -n projectcontour get pods
+kubectl get kubeadmcontrolplanes
+kubectl get machines
+
+clusterctl get kubeconfig tkg-style > tkg-style.kubeconfig
+KUBECONFIG=tkg-style.kubeconfig kubectl get nodes
+
+kubectl config use-context kind-capi-mgmt
+kubectl scale machinedeployment tkg-style-md-0 --replicas=2
+kubectl get machinedeployments,machines
+
+KUBECONFIG=tkg-style.kubeconfig kubectl get nodes
 ```
 
-Deploy a simple app only after the core add-ons are visible. The app is intentionally plain, because the goal is to prove the workload cluster behaves like normal Kubernetes after the management plane has finished creating it.
-
-```bash
-KUBECONFIG=tkg-style.kubeconfig k create deployment web --image=nginx:1.29
-KUBECONFIG=tkg-style.kubeconfig k expose deployment web --port=80
-KUBECONFIG=tkg-style.kubeconfig k get deploy,svc
-```
+- [ ] Workload cluster kubeconfig returns nodes (Ready may take several minutes).
+- [ ] Scaling the MachineDeployment from the management context increases Machine count.
+- [ ] You can correlate Machines on the management cluster with Nodes on the workload cluster.
 
 <details>
-<summary>Solution notes</summary>
+<summary>Expected analysis</summary>
 
-TKG distributions commonly package supported networking and ingress choices. Here you are installing open-source components directly so you can see the boundary. The cluster lifecycle tool created the cluster, while the platform layer adds CNI, ingress, and application services.
+Scaling belongs to the lifecycle plane. Patching node counts inside the workload cluster bypasses the controller graph TKG operators must debug during upgrades. If nodes never register, verify bootstrap secrets and provider logs before deleting the cluster.
 
 </details>
 
-### Task 4: Add Argo CD as a GitOps Layer
+### Exercise 3: Deploy a TKG management cluster on vSphere with the Tanzu CLI
 
-Install Argo CD into the workload cluster as a representative GitOps layer. TKG-style architectures often pair lifecycle management with GitOps, but those responsibilities should remain distinct so cluster replacement, add-on drift, and application deployment can be reasoned about independently.
+Broadcom documents TKG 2.5.x standalone management clusters for vSphere when Supervisor is unavailable or unsuitable. VMware recommends Supervisor when your estate already runs vSphere with Tanzu; treat this exercise as the standalone path. Install the Tanzu CLI from your entitled TKG bundle, not from archived Community Edition artifacts.
 
-```bash
-KUBECONFIG=tkg-style.kubeconfig k create namespace argocd
-KUBECONFIG=tkg-style.kubeconfig k apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-KUBECONFIG=tkg-style.kubeconfig k -n argocd rollout status deploy/argocd-server
-```
-
-Create a sample namespace that GitOps could manage later, then use it as a boundary marker in your notes. Namespaces are small objects, but they help demonstrate which cluster owns application desired state after the lifecycle system has delivered the cluster.
+On the bootstrap machine with vCenter access, verify CLI plugins and prepare a vSphere configuration stub. Replace placeholder values before any non-dry-run create.
 
 ```bash
-KUBECONFIG=tkg-style.kubeconfig k create namespace apps
-KUBECONFIG=tkg-style.kubeconfig k get ns apps argocd
+tanzu version
+tanzu plugin list
+
+mkdir -p ~/.config/tanzu/tkg
+cat > /tmp/vsphere-mgmt-stub.yaml <<'EOF'
+INFRASTRUCTURE_PROVIDER: vsphere
+VSPHERE_SERVER: vcenter.example.com
+VSPHERE_USERNAME: admin@example.com
+VSPHERE_PASSWORD: replace-me
+VSPHERE_DATACENTER: /dc0
+VSPHERE_DATASTORE: /dc0/datastore/shared
+VSPHERE_FOLDER: /dc0/vm/tkg
+VSPHERE_NETWORK: /dc0/network/vm-network
+VSPHERE_RESOURCE_POOL: /dc0/host/cluster/Resources/rp-tkg
+VSPHERE_TLS_THUMBPRINT: ""
+CONTROL_PLANE_MACHINE_COUNT: 1
+WORKER_MACHINE_COUNT: 1
+DEPLOY_TKG_ON_VSPHERE7: true
+EOF
+
+tanzu management-cluster create --file /tmp/vsphere-mgmt-stub.yaml --dry-run | head -40
 ```
+
+When placeholders are replaced with lab values and OVAs are imported, create the management cluster with the installer UI (recommended for first deploy) or the same file without `--dry-run`:
+
+```bash
+tanzu management-cluster create --ui
+# or, after validating the YAML:
+# tanzu management-cluster create --file /tmp/vsphere-mgmt-stub.yaml
+```
+
+After a successful deploy, inspect and retrieve credentials:
+
+```bash
+tanzu management-cluster get
+tanzu management-cluster kubeconfig get --admin
+kubectl get nodes
+kubectl get clusters -A
+```
+
+- [ ] `tanzu management-cluster create --dry-run` validates vSphere fields without applying changes (or explains missing entitlement).
+- [ ] You documented which TKG release and OS image (Ubuntu 22.04 or Photon 5 for TKG 2.5) your lab uses.
+- [ ] Post-deploy, management-cluster nodes and Cluster API objects are visible through Tanzu CLI and kubectl.
 
 <details>
-<summary>Solution notes</summary>
+<summary>Expected analysis</summary>
 
-GitOps is optional in TKG-style architectures, but it is common in real platform designs. The useful boundary is this: Cluster API owns cluster lifecycle, while GitOps owns workload and add-on desired state. Do not make the same controller family responsible for every layer unless you have a clear ownership model.
+TKG creates a temporary kind bootstrap cluster on the workstation, provisions the real management cluster on vSphere, then deletes the bootstrap cluster. Failures often trace to thumbprint mismatches, datastore paths, resource-pool placement, or missing OVAs—not Kubernetes itself. TKG 2.5 management clusters run supported Kubernetes versions documented in the release notes (for example v1.29.x on TKG 2.5.4); do not assume every 1.35 feature from this curriculum module exists on management clusters until you verify the Tanzu Kubernetes release matrix.
 
 </details>
 
-### Task 5: Scale the Workload Cluster
-
-Return to the management cluster context before scaling, because node pool changes belong to the lifecycle layer rather than to ad hoc commands inside the workload cluster. This boundary is easy to blur when both kubeconfigs are open in the same terminal.
+### Cleanup (Exercises 1 and 2)
 
 ```bash
-k config use-context kind-capi-mgmt
-k get machinedeployments
-```
-
-Scale the worker MachineDeployment from the management plane and watch the declared replica count change before the new node appears. In production, this same pattern underlies autoscaling reviews, capacity changes, and replacement after a failed VM or host event.
-
-```bash
-k scale machinedeployment tkg-style-md-0 --replicas=2
-k get machinedeployments
-k get machines
-```
-
-Watch the workload cluster after the management-side change so you can connect Machine reconciliation to Node registration. The two views should eventually agree, and disagreement between them is a useful diagnostic signal rather than just noise.
-
-```bash
-KUBECONFIG=tkg-style.kubeconfig k get nodes -w
-```
-
-<details>
-<summary>Solution notes</summary>
-
-Scaling happens through the management cluster, not by manually joining a node from inside the workload cluster. The MachineDeployment creates or updates MachineSets. Machines eventually map to workload cluster Nodes. That chain is the lifecycle graph you need to debug in real TKG environments.
-
-</details>
-
-### Task 6: Trigger a Kubernetes Version Upgrade Intent
-
-Inspect the current MachineDeployment version before changing it, because upgrades are controlled mutations of lifecycle intent. Real TKG releases also depend on available node images, supported Kubernetes versions, provider compatibility, and policy gates that this local lab cannot fully reproduce.
-
-```bash
-k get machinedeployment tkg-style-md-0 -o yaml | grep 'version:'
-```
-
-Patch the MachineDeployment version to a newer patch release if your local image and provider support it. If the exact image is not available, use this as a dry-run inspection exercise rather than forcing a broken upgrade.
-
-```bash
-k patch machinedeployment tkg-style-md-0 \
-  --type merge \
-  -p '{"spec":{"template":{"spec":{"version":"v1.35.1"}}}}'
-```
-
-Observe the lifecycle objects after expressing upgrade intent and avoid treating the patch command as the whole upgrade. MachineDeployments, MachineSets, and Machines reveal whether the controllers are creating replacements, blocked by templates, or waiting for infrastructure capacity.
-
-```bash
-k get machinedeployments
-k get machinesets
-k get machines
-k describe machinedeployment tkg-style-md-0
-```
-
-<details>
-<summary>Solution notes</summary>
-
-A Kubernetes version change on a MachineDeployment expresses upgrade intent. Controllers create replacement Machines according to rollout rules. In real TKG on vSphere, the upgrade also depends on supported Kubernetes releases, VM images, Tanzu Kubernetes releases, provider compatibility, and policy. The important learning goal is to watch `MachineDeployment`, `MachineSet`, and `Machine` state change instead of treating an upgrade as a black box.
-
-</details>
-
-Final success criteria should be evaluated from both the management and workload cluster viewpoints. You are done when you can explain the lifecycle boundary, not merely when the commands have completed without errors:
-
-- [ ] You created a kind management cluster.
-- [ ] You initialized Cluster API with the Docker infrastructure provider.
-- [ ] You generated and applied a workload cluster manifest.
-- [ ] You retrieved a separate kubeconfig for the workload cluster.
-- [ ] You installed Calico, Contour, and Argo CD into the workload cluster.
-- [ ] You scaled the workload cluster through a MachineDeployment.
-- [ ] You attempted or inspected a Kubernetes version upgrade through Cluster API objects.
-- [ ] You can explain how this lab maps to TKG without claiming it is licensed Tanzu.
-- [ ] You can list at least three places where real vSphere with Tanzu would add extra failure modes.
-
-### Cleanup
-
-Delete the workload cluster from the management cluster first. This mirrors the lifecycle ownership model: the management plane created the workload cluster resources, so it should also coordinate their removal and clean up related Machines.
-
-```bash
-k config use-context kind-capi-mgmt
-k delete cluster tkg-style
-k get machines
-```
-
-Delete the management cluster only after the workload cluster has been removed or you have intentionally abandoned the lab environment. Removing the management plane first leaves you without the controllers that understand the declared lifecycle objects.
-
-```bash
+kubectl config use-context kind-capi-mgmt
+kubectl delete cluster tkg-style --wait=false
+kubectl get machines
 kind delete cluster --name capi-mgmt
 ```
-
-### Exercise Debrief
-
-The lab should leave you with a concrete mental model. TKG is easier to reason about when you see it as a supported Cluster API distribution with packaged infrastructure integration and add-ons. vSphere with Tanzu adds a deeper vSphere integration layer around the same broad idea of declarative workload cluster lifecycle, while TMC adds fleet governance for clusters that need shared inventory, policy, access, and backup visibility across teams or locations.
-
-TAP adds developer supply chains above that cluster layer, so it belongs in a different part of the architecture conversation. The open-source lab is not a substitute for commercial Tanzu validation, because it does not exercise vCenter, Supervisor behavior, VM classes, NSX, Avi, storage policies, entitlement, or support boundaries. It is a way to learn the moving parts before you evaluate the licensed platform with a realistic operating model.
-
----
-
-## Sources
-
-- Broadcom acquisition completion announcement: https://www.broadcom.com/company/news/financial-releases/61541
-- VMware by Broadcom licensing and offer simplification announcement: https://news.broadcom.com/cloud/vmware-by-broadcom-business-transformation
-- VMware end of availability for perpetual licensing and SaaS services: https://blogs.vmware.com/cloud-foundation/2024/01/22/vmware-end-of-availability-of-perpetual-licensing-and-saas-services/
-- Ars Technica report on VMware customers evaluating exits after Broadcom changes: https://arstechnica.com/information-technology/2024/10/a-year-after-broadcoms-vmware-buy-customers-eye-exit-strategies/
-- Ars Technica report on expected VMware price increases: https://arstechnica.com/information-technology/2024/06/price-hikes-of-over-2x-widely-expected-under-broadcoms-vmware-survey-finds/
-- Ars Technica report on Broadcom CEO comments and customer unease: https://arstechnica.com/information-technology/2024/03/broadcom-ceo-admits-vmware-changes-have-brought-unease-to-customers-partners/
-- Tanzu Community Edition archived repository: https://github.com/vmware-tanzu/community-edition
-- Cluster API repository: https://github.com/kubernetes-sigs/cluster-api
-- Cluster API Provider vSphere repository: https://github.com/kubernetes-sigs/cluster-api-provider-vsphere
-- Cluster API Provider AWS repository: https://github.com/kubernetes-sigs/cluster-api-provider-aws
-- Cluster API Provider Azure repository: https://github.com/kubernetes-sigs/cluster-api-provider-azure
-- Tanzu Framework repository: https://github.com/vmware-tanzu/tanzu-framework
-- vSphere Supervisor installation and configuration docs: https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-0/vsphere-supervisor-installation-and-configuration.html
-- vSphere Supervisor workload cluster provisioning workflow: https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/8-0/using-tkg-service-with-vsphere-supervisor/provisioning-tkg-service-clusters/workflow-for-provisioning-tkg-clusters-using-kubectl.html
-- vSphere Pods workload documentation: https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/8-0/vsphere-supervisor-services-and-workloads-8-0/deploying-workloads-to-vsphere-pods.html
-- vSphere Supervisor versioned ClusterClass example: https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vsphere-supervisor-services-and-standalone-components/latest/managing-vsphere-kuberenetes-service-clusters-and-workloads/provisioning-tkg-service-clusters/using-the-cluster-v1beta1-api/using-the-versioned-clusterclass/v1beta1-example-cluster-with-ubuntu-tkr.html
-- Tanzu Mission Control introduction: https://blogs.vmware.com/tanzu/introducing-vmware-tanzu-mission-control-to-bring-order-to-cluster-chaos/
-- Tanzu Mission Control data protection: https://blogs.vmware.com/tanzu/vmware-tanzu-mission-control-expands-kubernetes-data-protection/
-- Tanzu Application Platform supply chain overview: https://blogs.vmware.com/tanzu/blog-demystifying-vmware-tanzu-application-platform-s-out-of-the-box-supply-chain/
-- Tanzu supply chain choreography overview: https://blogs.vmware.com/tanzu/what-is-supply-chain-choreography-and-why-should-you-care/
-- Antrea repository: https://github.com/antrea-io/antrea
-- Contour repository: https://github.com/projectcontour/contour
-- Harbor repository: https://github.com/goharbor/harbor
-- Velero repository: https://github.com/velero-io/velero
-- Sonobuoy repository: https://github.com/vmware-tanzu/sonobuoy
-- Flux CD documentation: https://fluxcd.io/flux/
-- Cartographer repository: https://github.com/vmware-tanzu/cartographer
-- Knative documentation: https://knative.dev/docs/
-- Cloud Native Buildpacks documentation: https://buildpacks.io/docs/
 
 ---
 
 ## Next Module
 
 End of Section 5 — Multi-Cluster & On-Prem. Continue to [Platform Engineering](../../platform/) to explore the next layer of the cloud-native stack.
+
+## Learner Check
+
+> **Pause and predict**: a platform lead says "we already bought Tanzu" but cannot name whether the estate runs Supervisor workload clusters, a standalone TKG management cluster, or imported clusters in Tanzu Mission Control. Which three questions do you ask first, and why does the answer change your day-two runbook? Ask (1) where cluster lifecycle APIs live—Supervisor namespace, standalone management cluster, or external—(2) which component owns fleet policy versus application GitOps, and (3) which Broadcom bundle entitles upgrades and support. Without those boundaries, incident response mixes vCenter tasks, Cluster API objects, and SaaS inventory that do not share the same source of truth.
+
+You are ready to continue when you can sketch TKG management versus workload clusters, Supervisor versus standalone lifecycle, and where TAP sits relative to cluster creation. You should be able to explain why Tanzu Community Edition is historical context only, and summarize how Broadcom subscription packaging affects a net-new Kubernetes buyer differently from an existing VCF customer.
+
+---
+
+## Sources
+
+- <https://www.broadcom.com/company/news/financial-releases/61541>
+- <https://news.broadcom.com/cloud/vmware-by-broadcom-business-transformation>
+- <https://blogs.vmware.com/cloud-foundation/2024/01/22/vmware-end-of-availability-of-perpetual-licensing-and-saas-services/>
+- <https://techdocs.broadcom.com/us/en/vmware-tanzu/standalone-components/tanzu-kubernetes-grid/2-5/tkg/mgmt-release-notes.html>
+- <https://techdocs.broadcom.com/us/en/vmware-tanzu/standalone-components/tanzu-mission-control-self-managed/1-4/tmc-self-managed-documentation/install-and-run-tmc-self-managed.html>
+- <https://techdocs.broadcom.com/us/en/vmware-tanzu/standalone-components/tanzu-kubernetes-grid/2-5/tkg/mgmt-deploy-config-vsphere.html>
+- <https://cluster-api.sigs.k8s.io/user/quick-start>
+- <https://techdocs.broadcom.com/us/en/vmware-tanzu/standalone-components/tanzu-kubernetes-grid/2-5/tkg/mgmt-deploy-ui.html>
+- <https://techdocs.broadcom.com/us/en/vmware-tanzu/standalone-components/tanzu-cli/1-2/cli/tanzu-management-cluster.html>
+- <https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-0/vsphere-supervisor-installation-and-configuration.html>
+- <https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/8-0/using-tkg-service-with-vsphere-supervisor/provisioning-tkg-service-clusters/workflow-for-provisioning-tkg-clusters-using-the-tanzu-cli.html>
+- <https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/8-0/using-tkg-service-with-vsphere-supervisor/provisioning-tkg-service-clusters/workflow-for-provisioning-tkg-clusters-using-kubectl.html>
+- <https://techdocs.broadcom.com/us/en/vmware-cis/vsphere/vsphere-supervisor/8-0/vsphere-supervisor-services-and-workloads-8-0/deploying-workloads-to-vsphere-pods.html>
+- <https://github.com/vmware-tanzu/community-edition>
+- <https://github.com/kubernetes-sigs/cluster-api>
+- <https://github.com/kubernetes-sigs/cluster-api-provider-vsphere>
+- <https://github.com/antrea-io/antrea>
+- <https://github.com/projectcontour/contour>
+- <https://github.com/velero-io/velero>
+- <https://github.com/vmware-tanzu/cartographer>
+- <https://buildpacks.io/docs/>
+- <https://arstechnica.com/information-technology/2024/10/a-year-after-broadcoms-vmware-buy-customers-eye-exit-strategies/>
+- <https://open-cluster-management.io/docs/getting-started/quick-start/>
+- <https://fleet.rancher.io/>
