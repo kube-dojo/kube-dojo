@@ -110,6 +110,7 @@ __all__ = [
     # Claude
     "ask_claude",
     "ask_codex",
+    "ask_cursor",
     # Gemini
     "ask_gemini",
     "bridge_status",
