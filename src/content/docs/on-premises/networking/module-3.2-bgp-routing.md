@@ -37,7 +37,7 @@ The objective in this module is not only to “make BGP work.” The objective i
 
 Border Gateway Protocol is the control plane language that switches and routers use to agree on reachability and path selection. In this context, each BGP speaker has a role, each path carries attributes, and each update is a contract about what is being offered into the IGP-to-BGP boundary. You are not simply “turning on BGP”; you are publishing an external representation of Kubernetes reachability.
 
-The BGP session model has three building blocks: local process readiness, authentication/neighbor policy, and finite state progression. A session starts in `Idle`, then moves through `Connect`, `OpenSent`, `OpenConfirm`, `Established`, and can transition back to any lower state on failure. The control loop runs on keepalives and open messages. In stable environments, a session is not just a TCP link; it is a relationship with timer assumptions and trust boundaries.
+The BGP session model has three building blocks: local process readiness, authentication/neighbor policy, and finite state progression. A session starts in `Idle`, then moves through `Connect`, `Active` (connection attempt failed; retry timer pending), `OpenSent`, `OpenConfirm`, `Established`, and can transition back to any lower state on failure. The control loop runs on keepalives and open messages. In stable environments, a session is not just a TCP link; it is a relationship with timer assumptions and trust boundaries.
 
 AS numbers are the first identity surface. Operators use private ASNs in on-prem designs to create an administration boundary. In a common approach, the cluster owns one ASN for all nodes that participate in internal BGP advertisements, while external ToR or border devices use distinct ASNs. This distinction lets you keep policy and leakage controls clear: the border advertises cluster routes in predictable directions, and external peers can apply route import logic for expected AS boundaries.
 
@@ -370,25 +370,33 @@ metadata:
   name: frr
 EOF
 
-# 4. Define a minimal MetalLB L2-to-BGP style peer model for lab topology.
+# 4. Define a valid MetalLB BGP peer model for lab topology.
 kubectl apply -f - <<'EOF'
+apiVersion: metallb.io/v1beta1
+kind: BGPPeer
+metadata:
+  name: lab-peer
+  namespace: metallb-system
+spec:
+  myASN: 64512
+  peerASN: 65099
+  peerAddress: 172.18.0.254
+  holdTime: 30s
+  keepaliveTime: 10s
+  ebgpMultihop: true
+---
 apiVersion: metallb.io/v1beta1
 kind: BGPAdvertisement
 metadata:
-  name: lab-vip
-  namespace: lab
+  name: lab-bgp-adv
+  namespace: metallb-system
 spec:
   ipAddressPools:
     - lab-pool
   communities:
     - 64512:100
   peers:
-    - peerASN: 65099
-      myASN: 64512
-      peerAddress: 172.18.0.254
-      holdTime: 30s
-      keepaliveTime: 10s
-      ebgpMultihop: 5
+    - lab-peer
 EOF
 
 # 5. Define an IPAddressPool for test VIPs and one workload Service.
@@ -397,7 +405,7 @@ apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
   name: lab-pool
-  namespace: lab
+  namespace: metallb-system
 spec:
   addresses:
     - 172.18.0.200-172.18.0.230
@@ -405,7 +413,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: demo-svc
+  name: lab-bgp
   namespace: lab
 spec:
   selector:
@@ -426,17 +434,20 @@ kubectl -n lab create deployment echo-server \
 kubectl -n lab expose deployment echo-server --port=80 --target-port=8080
 
 # 7. Start an FRR container for route validation.
-docker run -d --name frr-bgp \
+docker run -d --name lab-frr \
   --network kind \
   --privileged \
   -v /tmp/frr:/etc/frr \
   frrouting/frr:v10.0.1
+METALLB_SPEAKER_IP=$(kubectl -n metallb-system get pods -l component=speaker -o jsonpath='{.items[0].status.podIP}')
+docker exec lab-frr vtysh -c "conf t" -c "router bgp 65099" -c "neighbor $METALLB_SPEAKER_IP remote-as 64512" -c "exit" -c "exit" -c "write memory"
 
 # 8. Verify BGP state and service reachability.
-kubectl -n lab get svc demo-svc
-docker exec -i frr-bgp vtysh -c "show bgp summary"
+kubectl -n lab get svc lab-bgp
+docker exec -i lab-frr vtysh -c "show bgp summary"
+VIP=$(kubectl -n lab get svc lab-bgp -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 kubectl -n lab run verifier --rm -i --restart=Never --image=curlimages/curl:8.7.1 -- \
-  curl -sS http://172.18.0.200
+  curl -sS "http://$VIP"
 ```
 
 ## Next Module
