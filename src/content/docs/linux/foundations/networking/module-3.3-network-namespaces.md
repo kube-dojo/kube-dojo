@@ -12,680 +12,465 @@ lab:
   environment: "ubuntu"
 ---
 
-# Module 3.3: Network Namespaces & veth
-
-> **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 30-35 min. This lesson sits between namespace isolation and packet filtering, so treat it as the bridge between container theory and practical node troubleshooting.
+> **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 40-50 min. This module turns container networking from a black box into a set of Linux objects you can inspect, repair, and explain during Kubernetes node incidents.
 
 ## Prerequisites
 
-Before starting this module, make sure you can already read basic interface, address, and route output without needing every field explained from scratch:
+Before starting this module, complete [Module 2.1: Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/), [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/), and [Module 3.2: DNS in Linux](../module-3.2-dns-linux/). You should already be comfortable reading `ip addr`, `ip route`, and `ss` output on a normal Linux host, because this lesson applies the same tools inside isolated network stacks instead of introducing a different troubleshooting language.
 
-- **Required**: [Module 2.1: Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/)
-- **Required**: [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/)
-- **Helpful**: Basic understanding of bridges and switches
+The hands-on sections assume an Ubuntu Linux VM with `iproute2`, `ping`, `bridge`, `iptables` or `nft` compatibility packages, and `sudo` access. The commands use documentation-backed primitives from `network_namespaces(7)`, `ip-netns(8)`, `veth(4)`, and `ip-link(8)`, so they map directly to what container runtimes automate rather than to a vendor-specific wrapper. If your VM is remote, keep a separate management session open before changing forwarding or firewall state.
 
 ## Learning Outcomes
 
-After this module, you will be able to perform measurable troubleshooting and design tasks that map directly to the labs and scenario questions below:
-
-- **Design** a namespace, veth, and bridge topology that gives isolated workloads predictable Layer 2 connectivity.
-- **Diagnose** container and pod connectivity by inspecting network namespaces, routes, bridge membership, and NAT behavior.
-- **Trace** a packet from one isolated namespace through a veth pair, bridge, routing table, and optional masquerade rule.
-- **Evaluate** how Docker and Kubernetes CNI plugins automate the same Linux primitives you can build by hand.
+- **Model** a Linux network namespace as a complete network stack with its own interfaces, routes, neighbor cache, port space, and firewall view.
+- **Build** a working veth topology that connects isolated namespaces through direct links and a Linux bridge.
+- **Trace** packets from a namespace through link state, ARP or neighbor discovery, routing, bridge forwarding, host forwarding, and optional source NAT.
+- **Relate** manual namespace and veth operations to Kubernetes pod networking, CNI plugin calls, and practical node troubleshooting.
 
 ## Why This Module Matters
 
-In 2021, a large online marketplace lost a full regional checkout path after a node image rollout changed container networking behavior in a way that passed application health checks but broke return traffic for pods on a subset of hosts. The application team saw timeouts, the platform team saw healthy kubelets, and the cloud team saw no load balancer errors. Revenue-impacting transactions stalled for nearly an hour because the first responders were looking at service manifests and DNS records while the actual failure lived one layer lower, in the namespace, veth, bridge, route, and NAT wiring on each affected Linux node.
+Kubernetes networking problems often look like application problems at first contact. A request times out, a readiness probe flips, or a pod can reach its sidecar but cannot reach a database. The YAML may look fine, DNS may resolve, and the Service may have endpoints, yet the packet still has to cross ordinary Linux machinery on the node. It must leave the pod network namespace, traverse a virtual Ethernet peer, enter a bridge or routing path, pass forwarding policy, and return through a path that the kernel can match to the original flow.
 
-That kind of outage feels confusing because container networking is often presented as a Kubernetes abstraction. A pod has an IP, a Service selects it, and traffic either works or it does not. Underneath that clean model, Linux still has to create an isolated network stack, give it an interface, connect that interface to something outside the namespace, install routes, and sometimes rewrite addresses so replies can find their way back. When any one of those steps is missing, the failure looks like a mysterious application problem until someone can trace the packet through the node.
+That path is easy to ignore because Kubernetes presents a clean network model. Each pod gets an IP address, containers in the same pod share `localhost`, and pod-to-pod communication is supposed to work without manual port coordination. The model is real, but Linux still implements it with namespaces, devices, routes, and plugin actions. When a container runtime asks a CNI plugin to attach a pod to the network, the plugin has to manipulate the same primitives you can create with `ip netns`, `ip link`, `ip addr`, and bridge commands.
 
-This module makes the hidden machinery visible. You will create network namespaces, connect them with veth pairs, scale that pattern with a Linux bridge, and map the manual commands to Docker and Kubernetes CNI behavior. Kubernetes 1.35+ still relies on these same kernel building blocks, even when the plugin is Calico, Flannel, Cilium, or another implementation. For Kubernetes examples in this module, assume the standard shortcut `alias k=kubectl`; after that, commands use `k` so your muscle memory matches the rest of the course.
+The operational payoff is speed under pressure. If you can describe where a packet is supposed to be at each step, you can decide which namespace to enter, which interface to inspect, which route table matters, and which counters should move. Without that model, node networking becomes a pile of names such as `eth0`, `cni0`, `docker0`, `veth1234`, and `flannel.1`. With the model, those names become evidence that either confirms or rejects a specific packet path.
 
-## Network Namespace Recap
+This module also prepares you for the next lesson on iptables and netfilter. Namespace and veth debugging tells you whether the packet reached the host forwarding path. Netfilter debugging tells you what the host did with the packet after it arrived there. Keeping those questions separate prevents random fixes, such as changing a Service when the pod's interface is down, or flushing firewall rules when the namespace has no default route.
 
-A network namespace is an isolated copy of the Linux network stack. That sentence sounds small, but it includes interfaces, IP addresses, loopback behavior, routing tables, neighbor tables, firewall rules, sockets, and port bindings. A process inside one namespace can bind to port 80 while a process in another namespace also binds to port 80, because those sockets are not competing inside the same network stack. The host namespace is just the default namespace where ordinary processes start.
+## Did You Know
 
-The easiest way to reason about a namespace is to compare it with an apartment inside a larger building. The apartment has its own rooms, locks, and internal wiring, but it still needs a door, hallway, and building entrance to reach the outside world. The namespace gives a process its private network apartment; veth pairs and bridges provide the doors and hallways. Without those external connectors, the namespace is isolated but not useful for most container workloads.
+- A named network namespace created by `ip netns add` is kept alive through a bind mount under `/var/run/netns`, which is why it can outlive the shell that created it.
+- A physical network device can belong to only one network namespace at a time, while a veth pair provides two virtual ends that can be split across namespaces.
+- A newly created network namespace has its own loopback device, but loopback is administratively down until you bring it up.
+- Kubernetes pods share one network namespace across the containers in the pod, which is why containers in the same pod share an IP address and port space.
+
+## Namespace Mental Model: A Complete Network Stack
+
+A Linux network namespace is not just a label on an interface. It is an isolated instance of the networking resources that a process sees: network devices, IPv4 and IPv6 protocol stacks, route tables, neighbor tables, socket port numbers, selected `/proc` and `/sys` networking views, and firewall state. The `network_namespaces(7)` manual describes that isolation as a partition of networking resources, and the practical result is that two processes in different network namespaces can both bind TCP port 8080 without colliding.
+
+The default host namespace is simply the namespace where normal system services start. When you run `ip addr` in an ordinary shell, you are looking at the devices and addresses in that default namespace. When you run `ip netns exec red ip addr`, you are asking the same `ip` tool to inspect a different network stack. The command did not change the meaning of addresses, routes, or links; it changed the network universe that those objects belong to.
+
+That distinction matters most when a failure report says "the node has a route" or "the interface is up." Which namespace owns the route, and which namespace owns the interface? A pod process does not use the host's route table unless it is running in the host network namespace. A host shell does not see the pod's renamed `eth0` directly after the pod end of the veth pair is moved. Correct troubleshooting starts by locating the relevant process, then inspecting the network namespace that process actually uses.
+
+Named namespaces are convenient for learning because `ip netns` gives them stable names. Production containers often use anonymous namespaces tied to process lifetime, and tooling reaches them through paths such as `/proc/<pid>/ns/net`. The same rules apply in both cases. A namespace can be entered, inspected, connected, and removed, but no packet can cross the isolation boundary unless a device, route, socket, or kernel facility creates a path.
 
 ```mermaid
-flowchart TD
-    subgraph Host ["Host Network Namespace"]
-        direction TB
-        H1[eth0: 192.168.1.100]
-        H2[lo: 127.0.0.1]
-        H3[docker0: 172.17.0.1]
-        H4[Own routing table]
-        H5[Own iptables rules]
-        H6[Own ports]
+flowchart TB
+    subgraph HostNS["host network namespace"]
+        HLO["lo"]
+        HETH["eth0 or ens*"]
+        HROUTE["host route table"]
+        HFW["host forwarding and firewall view"]
+        HVETH["veth-red-host"]
     end
 
-    subgraph Container ["Container Network Namespace"]
-        direction TB
-        C1[eth0: 10.0.0.5]
-        C2[lo: 127.0.0.1]
-        C3[Own routing table]
-        C4[Own iptables rules]
-        C5["Own ports (80, 443)"]
+    subgraph RedNS["red network namespace"]
+        RLO["lo"]
+        RETH["eth0 renamed from veth-red"]
+        RROUTE["red route table"]
+        RPORTS["red socket port space"]
     end
+
+    RETH <--> HVETH
+    HVETH --> HFW
+    HFW --> HROUTE
+    HROUTE --> HETH
 ```
-*Note: The host and container have completely separate network stacks, which means the same port can be used in each namespace without either process seeing the other's socket binding.*
 
-The diagram separates the host and container stacks because the kernel treats them as different networking universes. The host can have `eth0`, a Docker bridge, and its own firewall rules, while the container can have a different `eth0`, a separate loopback device, and a route table that does not match the host. When you run a command with `ip netns exec`, you are not asking for a different command syntax; you are asking the same kernel networking tools to inspect a different network universe.
+The diagram shows the key separation. The host owns its ordinary external interface and host-side virtual interface. The namespace owns its loopback, container-facing interface, route table, and port space. A packet from the namespace must first leave through `eth0`, appear on the host-side veth, and then be handled by the host bridge or routing path. If any one of those objects is absent, down, or incorrectly addressed, the next object in the chain never sees the packet.
 
-That distinction is what makes namespace debugging feel different from ordinary host networking. On a traditional server, `ip route` usually describes the path for the process you care about because the process and your shell share the same network namespace. With containers, your shell on the node may be looking at the host route table while the failing process uses a separate route table behind a veth. If you forget that split, you can stare at a perfectly valid host default route and still miss that the pod namespace has no default route at all.
+The namespace is also a security boundary, but it is not a complete security policy by itself. It prevents ordinary processes in one namespace from seeing and binding network resources in another namespace. It does not decide which traffic should be allowed between namespaces once you connect them. That job belongs to link configuration, routing, bridge behavior, firewall rules, network policy implementations, and capability boundaries such as whether a process can create or move network devices.
 
-Network namespaces also explain why container networking problems often produce mixed signals. A liveness probe that uses `localhost` may pass because it stays inside the pod namespace, while an outbound request fails because it must cross the veth and host forwarding path. A pod-to-pod request may work on the same node through a bridge, while cross-node traffic fails because the overlay or underlay route is missing. The namespace boundary does not tell you everything, but it tells you which view of the network you must inspect first.
+## Inspecting and Managing Namespaces
+
+The `ip-netns(8)` interface gives administrators a readable workflow for named network namespaces. `ip netns add red` creates a namespace and a named handle. `ip netns list` shows handles known to the `iproute2` namespace directory. `ip netns exec red COMMAND` runs a command with the network namespace changed for that process. These commands are wrappers around kernel namespace concepts, but the wrapper is useful because it keeps lab work repeatable.
+
+Start every namespace inspection with link state, address state, and routes in that order. Link state answers whether the kernel would attempt to transmit on the interface. Address state answers whether the namespace has a usable source address on that link. Route state answers where the namespace will send a destination. If you skip directly to `ping`, you receive one failure message that could represent many causes, and you still have to walk backward through those layers.
+
+Loopback deserves special attention because it is easy to forget. A new namespace has a loopback device, but it is down. That means a local service test against `127.0.0.1` can fail even before you have made any external network design mistakes. Container runtimes bring loopback up during setup because applications expect it. In a manual lab, you must do that yourself, and seeing that step makes the runtime's work less mysterious.
+
+Namespace lifetime can also surprise people. A named namespace remains available while the bind mount under `/var/run/netns` exists, even if no user shell is currently inside it. A namespace tied only to a process disappears when the final process using it exits. Devices follow their own lifetime rules: physical devices move back to the initial namespace when the namespace is freed, while veth devices inside a freed namespace are destroyed with it. That difference is important when cleanup leaves some interfaces visible and others gone.
+
+> **Pause and predict**: if a process in namespace A binds port 80, does namespace B see anything on port 80?
 
 ```bash
-# Create namespace
 sudo ip netns add red
-
-# List namespaces
-ip netns list
-
-# Execute command in namespace
-sudo ip netns exec red ip link
-
-# Delete namespace
-sudo ip netns delete red
-```
-
-The first surprising detail in a new namespace is that even loopback starts down. That matters because many local tests assume `localhost` is always usable, but a namespace is born with its interfaces administratively down until something brings them up. Container runtimes hide that step, so beginners often forget it during manual labs and then misdiagnose a loopback failure as an IP addressing problem. Good troubleshooting starts by checking link state before chasing routes or firewall rules.
-
-Stop and think: if a network namespace is completely isolated with its own loopback interface, how can a process inside it ever send a packet to a process on the host machine? The answer cannot be "because the host can see everything"; the kernel isolation boundary is real. Some interface must exist on both sides of the boundary, or the packet has no legal path out of the namespace.
-
-In production incidents, namespace awareness gives you a clean first split in the investigation. If traffic fails inside the namespace before it reaches its gateway, inspect the namespace interface, address, neighbor table, and route. If traffic leaves the namespace but fails on the host, inspect the host-side veth, bridge membership, forwarding policy, and NAT. This split keeps you from randomly changing Service objects when the failure is a missing link or a down interface on the node.
-
-## Virtual Ethernet Pairs as the Boundary Connector
-
-A veth pair is two virtual Ethernet interfaces created as a matched pair. Packets transmitted into one end appear on the other end, which makes the pair behave like a short cable whose ends can live in different network namespaces. The pair does not route packets, assign addresses, or perform policy decisions by itself. It simply gives two isolated stacks a shared Layer 2 connection point that higher-level routing and bridging can use.
-
-```mermaid
-flowchart LR
-    VethHost["veth-host (in host ns)"] <==>|pipe| VethContainer["veth-container (in container ns)"]
-```
-*Note: Packets transmitted into one veth end come out of the other end, so the pair behaves like a virtual Ethernet cable crossing the namespace boundary.*
-
-Because a veth pair is created as two ends at once, it is a common place for naming confusion. The end you create on the host might later be renamed to `eth0` after it enters the container namespace, while the host-side end might receive a generated name from a runtime. During debugging, the name is less important than the relationship. You are looking for one interface inside the namespace and its peer outside the namespace, then verifying both ends are up and attached to the intended next hop.
-
-```bash
-# Create veth pair
-sudo ip link add veth-host type veth peer name veth-ns
-
-# They're created together as a pair
-ip link show type veth
-```
-
-The veth model is intentionally simple, which is why it appears beneath so many container networking designs. Simplicity also creates sharp edges. If you delete either end, the pair disappears. If you move one end into a namespace, commands in the host namespace no longer show that moved interface by its old name. If you attach the host end to the wrong bridge, packets can leave the container and still never reach the intended network.
-
-Pause and predict: after creating `veth-host` and `veth-ns`, what output would you expect from `ip link show type veth` before either end is moved into a namespace? Now predict what changes after `veth-ns` is moved into `red`. The important mental model is that the interface did not vanish from the kernel; it moved into a different namespace, so you must inspect that namespace to see it.
-
-One practical debugging habit is to avoid treating interface names as proof of topology. A host interface named `veth0` might not be connected to the pod you are investigating, especially on busy nodes. Use `ip -d link`, `bridge link show`, runtime metadata, or namespace entry with `nsenter` to correlate the peer relationship. The goal is to prove the path, not to infer it from a friendly-looking name.
-
-The peer relationship is more trustworthy than the name because runtimes optimize for uniqueness and lifecycle management, not human readability. Docker, containerd, and CNI plugins may create names that are truncated, regenerated, or tied to implementation-specific conventions. In a calm lab, `veth-host` and `veth-ns` make the topology obvious. On a real node, you may need to pair runtime metadata with link indexes and bridge output to avoid debugging the wrong cable.
-
-Another useful habit is to think about direction without assuming directionality. A veth pair is full duplex, so either end can transmit and receive. The reason diagrams often label one side "host" and one side "container" is administrative placement, not because the interface itself has a privileged direction. That matters when you inspect captures: a packet may be visible on both ends of the pair, but policy and routing decisions around those ends still belong to their respective namespaces.
-
-Veth pairs also influence failure blast radius. A single broken peer affects only the namespace attached to that peer, while a broken bridge or host route can affect every namespace using that shared path. This is why node triage often starts by comparing one failing pod with one healthy pod on the same node. If both fail at the same gateway or bridge, the shared component is suspicious. If only one fails, inspect that pod's namespace interface and host-side peer first.
-
-## Connecting Namespaces Directly
-
-The smallest useful lab is two namespaces connected by one veth pair. This topology does not need a bridge, a router, or NAT because both endpoints sit on the same subnet across the pair. It is the container-networking equivalent of connecting two laptops with one Ethernet cable and assigning static addresses on both ends. The design is deliberately limited, but it teaches the sequence every larger topology still contains: create isolation, create a connector, move interfaces, assign addresses, bring links up, and test.
-
-```mermaid
-flowchart LR
-    subgraph Red ["Namespace: red"]
-        R_veth["veth-red (10.0.0.1/24)"]
-    end
-    
-    subgraph Blue ["Namespace: blue"]
-        B_veth["veth-blue (10.0.0.2/24)"]
-    end
-    
-    R_veth <==>|veth pair| B_veth
-```
-*Note: With both veth ends up and addressed in the same prefix, `ping 10.0.0.2` from red works, and `ping 10.0.0.1` from blue works.*
-
-This direct topology is a useful worked example because every command has an obvious purpose. The namespace commands create two isolated stacks. The veth command creates the virtual cable. The `ip link set ... netns` commands put one cable end into each stack. The `ip addr add` commands give the endpoints addresses on the same subnet, and the `ip link set ... up` commands make the kernel willing to transmit frames through them.
-
-```bash
-# 1. Create namespaces
-sudo ip netns add red
-sudo ip netns add blue
-
-# 2. Create veth pair
-sudo ip link add veth-red type veth peer name veth-blue
-
-# 3. Move each end to a namespace
-sudo ip link set veth-red netns red
-sudo ip link set veth-blue netns blue
-
-# 4. Assign IP addresses
-sudo ip netns exec red ip addr add 10.0.0.1/24 dev veth-red
-sudo ip netns exec blue ip addr add 10.0.0.2/24 dev veth-blue
-
-# 5. Bring interfaces up
-sudo ip netns exec red ip link set veth-red up
-sudo ip netns exec blue ip link set veth-blue up
+sudo ip netns exec red ip link show
 sudo ip netns exec red ip link set lo up
-sudo ip netns exec blue ip link set lo up
-
-# 6. Test connectivity
-sudo ip netns exec red ping -c 2 10.0.0.2
-
-# 7. Cleanup
+sudo ip netns exec red ip addr show
+sudo ip netns exec red ip route show
 sudo ip netns delete red
-sudo ip netns delete blue
 ```
 
-When the ping works, the kernel has done several things for you. The `red` namespace sees that `10.0.0.2` is on-link because its interface has `10.0.0.1/24`. It resolves the neighbor, emits an Ethernet frame through `veth-red`, and the frame appears at `veth-blue` inside the `blue` namespace. No host routing table is needed because neither endpoint is using the host as a router in this simple design.
+Read the output as a state report rather than as proof of connectivity. A namespace with only loopback up can reach itself but nothing outside itself. A namespace with an Ethernet interface up but no IP address can exchange Ethernet frames but cannot originate ordinary IPv4 traffic. A namespace with an address but no matching route may answer traffic on the same subnet while failing every off-subnet destination. Each observation narrows the search.
 
-Before running this in a lab, predict what happens if you omit only the two loopback commands. The ping between `10.0.0.1` and `10.0.0.2` can still work because it uses the veth interfaces, but commands that depend on `localhost` inside either namespace will fail or behave strangely. That distinction is valuable during pod debugging because pod-to-pod traffic and localhost sidecar traffic exercise different interfaces in the same namespace.
+For production pods, the named namespace may not exist. You can still identify the network namespace through the workload process. Container runtimes and CRI tools expose the sandbox process in different ways, but the kernel path is always visible once you have the process ID: `/proc/<pid>/ns/net`. Tools such as `nsenter` can enter that namespace, and CNI runtimes pass namespace paths to plugins so the plugin knows where to place the container-side interface.
 
-The weakness of direct veth wiring appears as soon as you add more namespaces. Two endpoints require one pair, but a fully meshed set of many endpoints requires a rapidly growing number of pairs and manual routes. Physical networks solved this problem long ago with switches. Linux gives you the same idea in software through bridges, which let many veth host ends share one Layer 2 segment instead of requiring a dedicated pair for every relationship.
+## Veth Pairs: The Namespace Boundary Cable
 
-Direct wiring is still worth learning because it removes every optional component. If a direct pair cannot pass traffic after both interfaces are up and addressed correctly, a bridge would not magically solve the underlying issue. You either have the wrong namespace view, a down interface, a bad address or prefix, or a local filtering problem. Once the direct case is clear, a bridge becomes an intentional scaling tool rather than another mysterious object in the path.
+A veth pair is a pair of virtual Ethernet interfaces created together. The `veth(4)` manual describes the pair as a mechanism where packets transmitted on one device are immediately received on the other. That behavior makes a veth pair feel like a short cable with two plugs. Put one plug in the namespace and keep the other on the host, and the isolated stack now has a Layer 2 path to something outside itself.
 
-This is also where the difference between Layer 2 and Layer 3 becomes operational rather than academic. The veth pair moves Ethernet frames between two endpoints, and the IP addresses plus routes determine which frames should be emitted for a destination. When both addresses share a prefix, the kernel treats the peer as directly reachable. When the destination is outside the prefix, the namespace needs a route to a next hop, which is why bridge-gateway designs add a default route.
+The pair itself does not assign IP addresses, create default routes, provide DNS, or choose firewall policy. It only transports frames between its two ends. This simplicity is useful because it lets you test the boundary in small pieces. If a namespace cannot ping the host-side veth address on the same subnet, the problem is likely link state, addressing, neighbor discovery, or the veth relationship. You do not need to investigate DNS, Services, or external routers yet.
 
-The direct namespace lab is a good place to practice negative testing. Bring one interface down, remove one address, or assign mismatched prefixes, then predict the symptom before running `ping`. Each break teaches a different diagnostic signature. A down interface usually fails immediately, a missing address removes the source identity, and a mismatched prefix can make the kernel look for a gateway or reject the route choice. Those signatures later help you read real pod failures quickly.
+Names can be misleading during veth debugging. You might create `veth-red` and `veth-host`, then move `veth-red` into the namespace and rename it `eth0`. The host no longer shows `veth-red` by that name because that end is now owned by a different namespace. Container runtimes often generate host-side names that look random. During troubleshooting, use peer relationships, interface indexes, MAC addresses, bridge membership, and packet counters rather than trusting that names will be friendly.
 
-## Scaling the Pattern with Linux Bridges
-
-A Linux bridge is a software Layer 2 switch. It learns which MAC addresses live behind which attached interfaces and forwards frames accordingly. For container networking, the bridge usually lives in the host namespace, while each container namespace gets one veth end. The host-side veth ends attach to the bridge, so containers can discover each other with ARP and communicate as peers on one subnet without a direct pair between every container.
-
-```mermaid
-flowchart TD
-    subgraph C1 ["Container 1"]
-        eth0_1["eth0 (10.0.0.2)"]
-    end
-    subgraph C2 ["Container 2"]
-        eth0_2["eth0 (10.0.0.3)"]
-    end
-    subgraph C3 ["Container 3"]
-        eth0_3["eth0 (10.0.0.4)"]
-    end
-
-    br0["br0 bridge (10.0.0.1/24)"]
-    
-    eth0_1 <-->|veth| br0
-    eth0_2 <-->|veth| br0
-    eth0_3 <-->|veth| br0
-    
-    br0 -->|NAT / Routing| HostNIC["eth0 Host NIC (192.168.1.100)"]
-```
-
-The bridge often receives an IP address because it acts as the gateway for attached namespaces. That address is not required for pure Layer 2 forwarding between peers on the same bridge, but it becomes important when the namespace needs to route traffic beyond the local subnet. In the diagram, `br0` at `10.0.0.1/24` gives containers a next hop. The host can then forward traffic to another interface and optionally apply NAT for external networks that do not know the container subnet.
+Deleting either end of a veth pair deletes the pair. Moving one end does not delete it; it only changes namespace ownership. Bringing one end up does not automatically bring the other end up. A complete direct-link setup needs both ends up, compatible addresses on the same subnet, and routes that match the intended traffic. For a two-node lab, that may be all you need. For multiple namespaces or internet egress, you need a bridge or routing path beyond the host-side end.
 
 ```bash
-# Create bridge
-sudo ip link add br0 type bridge
-
-# Bring it up
-sudo ip link set br0 up
-
-# Assign IP (becomes gateway for containers)
-sudo ip addr add 10.0.0.1/24 dev br0
-
-# Connect veth to bridge
-sudo ip link set veth-host master br0
+sudo ip netns add red
+sudo ip link add veth-red-host type veth peer name veth-red
+sudo ip link set veth-red netns red
+sudo ip netns exec red ip link set veth-red name eth0
+sudo ip addr add 10.200.1.1/24 dev veth-red-host
+sudo ip link set veth-red-host up
+sudo ip netns exec red ip addr add 10.200.1.2/24 dev eth0
+sudo ip netns exec red ip link set lo up
+sudo ip netns exec red ip link set eth0 up
+sudo ip netns exec red ping -c 3 10.200.1.1
 ```
 
-The bridge command sequence is shorter than the concept it represents. Creating the bridge gives the host a virtual switch. Bringing it up allows forwarding. Assigning an IP makes the host reachable as a gateway on that segment. Setting a veth host end as a bridge master plugs that cable into the switch. If any step is omitted, the symptom changes, which is why structured diagnosis beats guesswork.
+> **Stop and think**: why must veth pairs be created in PAIRS, not as singletons?
 
-Stop and think: we have seen namespaces, veth pairs, and bridges. When you run `docker run nginx`, Docker automates all of this in milliseconds. Based on what you have learned, what exact sequence of networking commands do you think the Docker daemon executes behind the scenes to give that Nginx container internet access? The useful answer names both the topology work and the policy work: namespace, veth, bridge attachment, IP assignment, route, forwarding, and NAT.
+This direct-link pattern is the smallest useful namespace network. The namespace can reach the host-side veth address because both ends are on the same subnet and both links are up. The host can reach the namespace address for the same reason. Nothing in that setup says the namespace can reach the internet or another namespace. A default route and a forwarding path would still be required for off-subnet destinations.
 
-A bridge also changes how you interpret packet captures. Capturing inside the namespace shows what the workload emits or receives. Capturing on the host-side veth shows frames crossing the namespace boundary. Capturing on the bridge shows switching behavior and ARP. Capturing on the physical NIC shows routed or NATed traffic leaving the node. In a real incident, those capture points tell you where the packet disappeared.
+Troubleshooting a direct veth link should be mechanical. In the namespace, check `ip -br link`, `ip -br addr`, `ip route`, and `ip neigh`. On the host, check the host-side veth link, address, and packet counters with `ip -s link show dev veth-red-host`. If transmitted packets increase on the namespace side but received packets do not increase on the host side, you likely have the wrong interface or a down peer. If counters move but ARP remains incomplete, inspect addresses and subnet masks.
 
-Bridge designs also force you to separate local switching from host routing. Traffic between two namespaces on the same bridge may never need the host to route anything at Layer 3, because the bridge forwards frames within one broadcast domain. Traffic from a namespace to an outside subnet does need the namespace route table to choose the bridge as a gateway and the host to forward the packet onward. If you do not distinguish those cases, you may enable forwarding while the real failure is simply a missing bridge membership.
+## Bridges: Scaling One Link into a Segment
 
-The bridge has its own observability surface. `bridge link show` tells you which interfaces are enslaved to which bridge, while `ip addr show br0` tells you whether the bridge itself has a gateway address. Neighbor tables show whether ARP resolution is succeeding. Firewall tooling may also affect bridged packets depending on system configuration. A strong diagnosis names which of those surfaces has been proven and which is still an assumption.
+A direct veth pair is useful for one namespace, but container hosts usually need many isolated workloads on the same node. A Linux bridge provides that shared Layer 2 segment. The kernel bridge documentation describes a bridge as a device that connects network segments and forwards frames based on destination MAC addresses. In a container topology, the bridge is the local switch, and each host-side veth end is a switch port.
 
-Bridge-based designs are common because they create a useful compromise between isolation and shared connectivity. Each namespace keeps its own route table and port space, but all attached namespaces can participate in a common Layer 2 segment. That lets a runtime give every container a private network stack while still allowing ordinary IP communication through a predictable gateway. The tradeoff is that the bridge becomes shared infrastructure, so misconfiguration can affect many workloads at once.
+The bridge pattern changes the host-side veth role. Instead of assigning an IP address to every host-side veth, you attach each host-side veth to the bridge. The bridge receives the gateway address for the namespace subnet, and each namespace points its default route at that bridge address. This is the pattern behind names such as `docker0` and `cni0`, although production plugins add IP address management, firewall rules, overlay or routing integration, and cleanup logic.
 
-## Docker, CNI, and Kubernetes Use the Same Primitives
-
-Container runtimes do not replace Linux networking; they orchestrate it. Docker's default bridge network is a packaged version of the bridge pattern, with `docker0` as the host-side bridge, veth pairs for each container, container IP assignment from a bridge subnet, and NAT rules for outbound connectivity. The important skill is recognizing the manual pattern when a runtime hides the command sequence behind a friendly CLI.
+Layer 2 forwarding and Layer 3 routing are different jobs. A bridge can forward a frame from one namespace port to another namespace port when both namespaces are on the same bridge subnet. The host must route and forward if the destination is outside that subnet. If the destination is beyond the host, source NAT may also be required so return traffic knows how to get back. A working bridge ping does not prove that egress routing and NAT are correct.
 
 ```mermaid
-flowchart TD
-    A["1. docker run nginx"] --> B["2. Create network namespace for container"]
-    B --> C["3. Create veth pair"]
-    C --> D["4. Move one end (eth0) into container namespace"]
-    D --> E["5. Connect other end to docker0 bridge"]
-    E --> F["6. Assign IP from bridge subnet (172.17.0.x)"]
-    F --> G["7. Set up iptables rules for NAT"]
-```
-*Note: The result is a container with network access through the `docker0` bridge, plus host policy that decides whether external traffic can leave and return.*
-
-The Docker flow is not magic, and the host exposes enough evidence to reconstruct it. You can inspect `docker0`, list host-side veth interfaces, check bridge membership, and enter or execute inside the container to inspect its private address and route table. Those observations map directly to the manual lab steps. The runtime may use generated interface names and additional firewall chains, but the primitives remain the same.
-
-```bash
-# See docker bridge
-ip link show docker0
-
-# See veth interfaces (host side)
-ip link show type veth
-
-# See bridge members
-bridge link show
-
-# Inside container
-docker exec container-id ip addr
-docker exec container-id ip route
-```
-
-Kubernetes adds a stricter network contract on top of the same primitives. Every pod gets an IP, pods should be able to communicate without NAT across nodes according to the cluster networking model, and containers inside a pod share one network namespace. The kubelet asks a CNI plugin to make that contract true on the node. The plugin may use a bridge, an overlay, direct routing, eBPF programs, or cloud-provider interfaces, but it still has to attach the pod namespace to the node network somehow.
-
-```mermaid
-flowchart TD
-    Kubelet["kubelet: 'Create network for pod xyz'"] --> Plugin["CNI Plugin (Calico/Flannel/Cilium)"]
-    
-    subgraph PluginSteps ["Plugin Execution"]
-        direction TB
-        S1["1. Create network namespace"]
-        S2["2. Create veth pair"]
-        S3["3. Attach to pod namespace"]
-        S4["4. Assign IP from IPAM"]
-        S5["5. Set up routes"]
-        
-        S1 --> S2 --> S3 --> S4 --> S5
+flowchart LR
+    subgraph Blue["blue namespace"]
+        BETH["eth0 10.200.2.2/24"]
     end
-    
-    Plugin --> PluginSteps
-    PluginSteps --> Result["kubelet: 'Pod IP is 10.244.1.5'"]
-```
 
-The CNI plugin receives a namespace path and configuration, then performs the node-local networking work. IPAM assigns a pod address from the configured range. The plugin creates or reuses links, sets routes, and reports the result back to kubelet. If that chain fails, the pod can stay in `ContainerCreating` even though the image pulled successfully and the container process has not yet started. The failure is not an application crash; it is a networking setup failure before the workload begins.
-
-```mermaid
-flowchart TD
-    subgraph Pod ["Shared Network Namespace (Pod)"]
-        direction LR
-        subgraph C_A ["Container A (nginx)"]
-            P_A["port 80"]
-        end
-        subgraph C_B ["Container B (sidecar)"]
-            P_B["port 9090"]
-        end
-        eth0["eth0: 10.244.1.5\n(localhost works between containers)"]
+    subgraph Green["green namespace"]
+        GETH["eth0 10.200.2.3/24"]
     end
-    
-    Bridge["cni0 bridge"]
-    
-    eth0 <-->|veth| Bridge
+
+    subgraph Host["host namespace"]
+        BVETH["veth-blue-host"]
+        GVETH["veth-green-host"]
+        BR["br-lab 10.200.2.1/24"]
+        ROUTE["host routing and optional NAT"]
+    end
+
+    BETH <--> BVETH
+    GETH <--> GVETH
+    BVETH --> BR
+    GVETH --> BR
+    BR --> ROUTE
 ```
 
-The pod diagram explains why sidecars can use localhost. Containers in the same pod are separate processes with separate filesystems and process trees, but they join the same network namespace. They share the same loopback interface, IP address, port space, and routing table. That is why two containers in one pod cannot both bind the same port on the same address, and why a sidecar can often reach the main container through `127.0.0.1` without a Service.
+The bridge also creates new debugging evidence. `bridge link` shows which interfaces are enslaved to the bridge. `bridge fdb show br br-lab` shows forwarding database entries learned from frames. `ip addr show br-lab` confirms the gateway address. If two namespaces on the same bridge cannot ping each other, inspect bridge membership and FDB learning before investigating the upstream route. Their traffic should not need to leave the bridge subnet.
 
-For Kubernetes 1.35+ troubleshooting, start with `k get pod -o wide`, then inspect from inside the pod with `k exec pod-name -- ip addr`, `k exec pod-name -- ip route`, and `k exec pod-name -- cat /etc/resolv.conf`. When you need the node view, use the container runtime to find the process ID and enter the pod network namespace. The point is to compare the workload's view with the host's view, then locate the first place they disagree.
+Bridge timing can cause brief confusion. A Linux bridge may learn MAC addresses only after traffic flows, and spanning tree settings can influence forwarding state if enabled. In most container bridge topologies, spanning tree is disabled and ports forward quickly. Even then, the first ping may trigger ARP or neighbor discovery, so watch both `ip neigh` and counters. The useful question is whether each object learns the next object's address at the moment traffic tries to cross it.
 
-```bash
-# Find pod's network namespace
-# Get container ID
-CONTAINER_ID=$(crictl ps --name nginx -q)
+## Routes, Neighbor Tables, and Forwarding
 
-# Get PID
-PID=$(crictl inspect $CONTAINER_ID | jq .info.pid)
+IP routing inside a namespace follows the same rules as IP routing on a host. The kernel chooses an output interface and next hop based on the route table visible inside that namespace. A route such as `default via 10.200.2.1 dev eth0` says that off-subnet traffic should leave through the namespace interface and use the bridge address as the next hop. If that route is missing, traffic to external destinations fails before it ever reaches host forwarding.
 
-# Access namespace
-sudo nsenter -t $PID -n ip addr
+Neighbor discovery is the Layer 2 lookup that makes the route usable. For IPv4, the namespace must resolve the next-hop IP address to a MAC address with ARP. For IPv6, it uses Neighbor Discovery. If `ip route` looks correct but `ip neigh` shows `FAILED` or `INCOMPLETE`, the packet is stuck before Layer 3 forwarding. In a bridge topology, that usually points to a down link, wrong subnet, missing bridge membership, or filtering that blocks ARP or neighbor discovery frames.
 
-# Or via Kubernetes
-kubectl exec pod-name -- ip addr
-kubectl exec pod-name -- ip route
-kubectl exec pod-name -- cat /etc/resolv.conf
-```
+Host forwarding is separate from namespace routing. A namespace can have a default route to the bridge, and the host can receive the packet, but the host still needs forwarding enabled to route between interfaces. On Linux, IPv4 forwarding is controlled by `net.ipv4.ip_forward`, and the kernel networking sysctl documentation treats forwarding as the switch that permits packets to move between interfaces. Kubernetes node setup normally handles this through distribution, kubelet, or plugin configuration, but manual labs make the dependency visible.
 
-A war story from a platform team illustrates the value of this comparison. A pod could resolve DNS and reach its node-local gateway, but external requests timed out only on new nodes. Inside the pod, `ip route` looked normal. On the host, the bridge had the right address, and the veth was attached. The missing piece was an outbound masquerade rule that the node bootstrap script normally installed. Once the team traced the packet from namespace to bridge to host egress, the fix was a one-line NAT rule rather than a long application rollback.
+NAT is another separate question. If a namespace uses a private lab subnet and sends traffic to a network that has no route back to that subnet, replies will not return unless the host rewrites the source address or the upstream network learns the route. Container bridge setups commonly use masquerade for egress from private container ranges. Kubernetes pod networking usually aims for direct pod-to-pod routing inside the cluster model, but plugins may still use NAT for egress, Services, or special traffic paths.
 
-The CNI boundary is important because it defines responsibility during startup. Kubelet is responsible for asking the configured plugin to set up the pod network, but the plugin is responsible for making the namespace reachable according to its configuration. If kubelet reports a CNI error, the pod may not have a stable application process to inspect yet. The useful evidence is in kubelet logs, CNI plugin logs, IPAM state, and node networking state, not in application-level retries.
+Troubleshooting improves when you avoid mixing these layers. Ask first whether the namespace can reach its gateway. If not, inspect links, addresses, bridge membership, and neighbor state. Ask next whether the host forwards the packet. If not, inspect forwarding sysctls and firewall policy. Ask last whether replies can return. If not, inspect routes on the far side or the NAT policy on the host. This sequence keeps a single timeout from turning into a broad search across every networking component.
 
-Kubernetes networking also changes the cost of sloppy assumptions. A single-node lab can hide a missing route because NAT through the host makes outbound access appear to work. A multi-node cluster cannot rely on that shortcut for normal pod-to-pod communication because the Kubernetes network model expects pods to communicate without per-pod NAT across nodes. When a plugin meets that model through overlays or direct routing, the Linux primitive is still present, but the next hop may be a tunnel, eBPF datapath, cloud route, or host bridge depending on implementation.
+The same sequence works for IPv6, but the details change. IPv6 forwarding, router advertisements, neighbor discovery, and source address selection have their own sysctls and operational expectations. Do not assume an IPv4 bridge lab proves IPv6 behavior. In Kubernetes clusters that run dual-stack networking, each pod can have addresses for more than one family, and the plugin must satisfy the routing and policy model for each configured family.
 
-When you evaluate a CNI plugin, ask what it automates and what it deliberately avoids. A bridge-oriented plugin may be easy to inspect with familiar Linux tools, but it may require overlays or host routes for cross-node traffic. An eBPF-oriented plugin may reduce iptables complexity and improve performance, but it changes where policy and forwarding decisions are visible. The right operational question is not whether one approach is universally better; it is whether your team can diagnose the datapath it has chosen.
+Route lookup commands are especially useful because they force the kernel to tell you the decision it would make for a specific destination. Inside a namespace, `ip route get 10.200.2.1` answers the gateway case, while `ip route get 1.1.1.1` answers the off-subnet case. The output includes the chosen device, selected source address, and sometimes the cached path. If that output contradicts your diagram, fix the route model before collecting packet captures.
 
-## Building a Mini Container Network
+Neighbor table output gives you the next lower layer of evidence. A correct route to a directly connected next hop still needs a resolved link-layer destination. In an IPv4 lab, an incomplete neighbor entry for the bridge gateway means the namespace tried to resolve the gateway MAC but did not receive an ARP answer. That points to bridge membership, link state, subnet mismatch, or filtering of ARP frames. It does not point to DNS or a Kubernetes Service, because the packet has not reached those layers.
 
-The complete mini-network below turns the concepts into a container-like topology: a host bridge named `cni0`, one namespace named `container1`, one veth pair, an address inside the namespace, a default route through the bridge, host forwarding, and a masquerade rule. It is not a full CNI implementation, but it mirrors the minimum useful data path closely enough that later Kubernetes debugging will feel familiar rather than mysterious.
+## CNI and Kubernetes: Automation of the Same Primitives
 
-```bash
-#!/bin/bash
-# Create a container-like network setup
+Kubernetes defines the network model, but it delegates much of the node-level implementation to the container runtime and network plugin. The official Kubernetes networking documents describe pods as having their own private network namespace shared by containers in the pod, and the CNI specification defines an execution contract between runtimes and plugins. In practical terms, the runtime creates or identifies the pod sandbox namespace, then calls a plugin with enough information for the plugin to attach that namespace to the node network.
 
-# 1. Create bridge
-sudo ip link add cni0 type bridge
-sudo ip link set cni0 up
-sudo ip addr add 10.244.0.1/24 dev cni0
+CNI is intentionally about interfaces and connectivity rather than about every possible cluster behavior. The spec defines operations such as `ADD`, `DEL`, and `CHECK`, along with environment variables and JSON configuration. A plugin can create a veth pair, move one end into the pod namespace, configure addresses and routes, attach the host side to a bridge or routing datapath, and return the resulting interface information. More advanced plugins may program routes, eBPF maps, encapsulation devices, or policy objects, but the namespace boundary still has to be connected.
 
-# 2. Create "container" namespace
-sudo ip netns add container1
-
-# 3. Create veth pair
-sudo ip link add veth0 type veth peer name eth0
-
-# 4. Move eth0 to container namespace
-sudo ip link set eth0 netns container1
-
-# 5. Connect veth0 to bridge
-sudo ip link set veth0 master cni0
-sudo ip link set veth0 up
-
-# 6. Configure container interface
-sudo ip netns exec container1 ip addr add 10.244.0.2/24 dev eth0
-sudo ip netns exec container1 ip link set eth0 up
-sudo ip netns exec container1 ip link set lo up
-
-# 7. Add default route in container
-sudo ip netns exec container1 ip route add default via 10.244.0.1
-
-# 8. Enable forwarding on host
-sudo sysctl -w net.ipv4.ip_forward=1
-
-# 9. Add NAT for external access
-sudo iptables -t nat -A POSTROUTING -s 10.244.0.0/24 ! -o cni0 -j MASQUERADE
-
-# Test
-echo "Testing connectivity..."
-sudo ip netns exec container1 ping -c 2 10.244.0.1  # Gateway
-sudo ip netns exec container1 ping -c 2 8.8.8.8     # Internet (if NAT works)
-
-# Cleanup (run after testing)
-# sudo ip netns delete container1
-# sudo ip link delete cni0
-# sudo iptables -t nat -D POSTROUTING -s 10.244.0.0/24 ! -o cni0 -j MASQUERADE
-```
-
-Read the example as a packet story rather than a script. A packet from `container1` to `8.8.8.8` starts in the namespace, exits through `eth0`, appears on `veth0`, enters `cni0`, uses the namespace default route to choose the bridge as gateway, and then depends on the host to forward it out another interface. The masquerade rule rewrites the source address so the external reply returns to the host, where connection tracking can translate it back to the namespace address.
-
-Which approach would you choose here and why: direct routing for the container subnet, or NAT through the host address? Direct routing preserves pod or container source IPs and can simplify observability, but it requires the rest of the network to know how to reach that subnet. NAT is easier on a single developer machine and many simple node-local designs, but it hides the original source from external systems unless extra tracking or metadata is added.
-
-The same tradeoff appears in Kubernetes plugin design. Some plugins build overlays because the underlay network cannot route pod CIDRs directly. Some rely on cloud routing tables because the environment can advertise pod ranges. Some use eBPF to replace or accelerate parts of the bridge, iptables, or routing path. You do not need to memorize every plugin implementation to debug the first layer; you need to ask which namespace, which interface, which route, and which policy decision handled this packet.
-
-When you run the mini-network, resist the urge to jump straight to the internet ping as the only success signal. A better sequence is namespace interface state, gateway reachability, host forwarding state, and then external reachability. This progression tells you which layer failed. If the gateway ping fails, NAT cannot help. If the gateway ping works but external traffic fails, the namespace wiring is probably adequate and the investigation moves to forwarding, firewall, NAT, or upstream routes.
-
-The cleanup comments in the script matter because manual networking experiments leave real kernel objects behind. A stale namespace can keep an interface name occupied. A stale bridge can retain an address that conflicts with the next run. A stale NAT rule can make a later experiment appear to work for the wrong reason. Production automation has to be just as careful: CNI plugins must clean up links and allocations when pods are deleted, or nodes accumulate confusing leftovers that pollute future diagnostics.
-
-The mini-network also gives you a safe place to learn command ordering. You can create a bridge before the namespace, but the namespace cannot use a route through that bridge until its interface exists, has an address, and is up. You can add a NAT rule before testing the gateway, but that rule will not repair a broken veth. Thinking in dependencies makes the lab easier to debug and mirrors how kubelet waits for CNI setup before reporting a pod IP.
-
-## Patterns & Anti-Patterns
-
-Good namespace networking is less about memorizing commands and more about preserving a few stable design patterns. The same pattern can be implemented manually, by Docker, by containerd plus a CNI plugin, or by a Kubernetes distribution. When the pattern is clear, runtime-specific names become details. When the pattern is unclear, every generated interface looks suspicious and every timeout invites random changes.
-
-| Pattern | When to Use It | Why It Works | Scaling Consideration |
-|---------|----------------|--------------|-----------------------|
-| Namespace plus one veth pair | Two isolated endpoints need a simple lab connection or a point-to-point test | It proves the boundary connector without bridge or NAT complexity | Does not scale for many endpoints because pair count and routing complexity grow quickly |
-| Host bridge with veth members | Many local namespaces need one shared Layer 2 segment | The bridge behaves like a virtual switch and reduces many-to-many wiring | Broadcast, ARP, and bridge policy matter as density grows |
-| Bridge as gateway plus NAT | A local namespace subnet needs outbound access through the host | The bridge provides a next hop, and masquerade makes return traffic routable | NAT can hide source identity and complicate policy or logging |
-| CNI-managed pod namespace | Kubernetes should own pod lifecycle networking | Kubelet delegates consistent setup and cleanup to the configured plugin | Plugin-specific datapaths differ, so diagnosis must confirm the actual implementation |
-
-The most durable pattern is to separate topology from policy. Topology asks whether the namespace has an interface, whether the peer exists, whether the bridge membership is correct, and whether a route points to a reachable gateway. Policy asks whether forwarding, firewall, NetworkPolicy, or NAT rules allow the packet. Mixing those questions makes investigations noisy. Prove the wire first, then prove the permission.
-
-| Anti-Pattern | What Goes Wrong | Better Alternative |
-|--------------|-----------------|--------------------|
-| Assuming the host namespace can see the pod view | Commands on the host show different interfaces and routes than commands inside the pod | Enter the target namespace with `ip netns exec` or `nsenter` before drawing conclusions |
-| Treating veth names as stable identifiers | Runtime-generated names change and can point to the wrong workload on a busy node | Correlate peer indexes, bridge membership, runtime metadata, and pod PIDs |
-| Adding NAT before proving local connectivity | A missing link or route gets hidden behind firewall experiments | Test namespace-to-gateway first, then host forwarding, then external return traffic |
-| Debugging Kubernetes Services before pod networking | Service symptoms can be caused by a broken pod namespace path | Confirm pod IP, interface state, route, and node-side veth before changing Service objects |
-
-A practical review technique is to ask someone to narrate the path in one paragraph. If they cannot say where the packet starts, which interface it leaves through, what receives it next, which routing decision happens, and where source translation occurs, the team is not ready to change production policy. That narration does not need vendor-specific detail at first. It needs the Linux primitives in order.
-
-Patterns become especially valuable during handoffs. The application engineer may describe a timeout, the Kubernetes operator may describe a pod IP, and the network engineer may describe a route or firewall rule. The namespace-veth-bridge vocabulary gives all three people a shared map. Without it, each person can be correct inside their own layer while the incident still stalls because nobody has connected the layers into one packet path.
-
-## Decision Framework
-
-Use this framework when you are designing a lab topology or diagnosing a production container-networking failure. The first decision is always scope: is the symptom inside one namespace, between namespaces on one node, across nodes, or beyond the cluster? Each wider scope adds another layer of routing and policy, so solving the smaller scope first prevents you from skipping the actual broken hop.
+This is why pod troubleshooting often begins below Kubernetes objects. A pod can exist in the API while its sandbox network is not configured correctly on the node. The kubelet may report plugin errors when CNI setup fails, but sometimes the symptom appears later as a data-plane issue. If you know the manual pattern, you can inspect whether the pod namespace has an interface, whether the host side exists, whether the route is correct, and whether the plugin-created bridge or datapath knows about the endpoint.
 
 ```mermaid
-flowchart TD
-    A["Connectivity problem observed"] --> B{"Can the workload reach localhost?"}
-    B -->|No| C["Check loopback and process binding inside namespace"]
-    B -->|Yes| D{"Can it reach its own gateway?"}
-    D -->|No| E["Check veth state, address, bridge membership, and route"]
-    D -->|Yes| F{"Can the host forward the packet?"}
-    F -->|No| G["Check forwarding, firewall, bridge policy, and host routes"]
-    F -->|Yes| H{"Does return traffic know the source subnet?"}
-    H -->|No| I["Add routing or NAT, then verify replies"]
-    H -->|Yes| J["Inspect upstream policy, DNS, or application behavior"]
+sequenceDiagram
+    participant K as kubelet
+    participant R as container runtime
+    participant N as pod network namespace
+    participant C as CNI plugin
+    participant H as host datapath
+
+    K->>R: create pod sandbox
+    R->>N: create or open network namespace
+    R->>C: CNI ADD with namespace path and config
+    C->>H: create host-side device, bridge, route, or datapath entry
+    C->>N: move peer into namespace, set address, route, and link up
+    C-->>R: return interface and IP result
+    R-->>K: sandbox network ready
 ```
 
-The framework starts with localhost because pod sidecar communication depends on the shared namespace, not on the bridge. It then moves to the gateway because that proves the veth and bridge path. Only after the namespace can reach the gateway does host forwarding make sense. Finally, external reachability requires either routable source addresses or NAT. This order mirrors the packet path, which keeps the troubleshooting process aligned with how the kernel actually handles traffic.
+The sequence diagram is not a promise that every plugin uses a Linux bridge. Some plugins route directly, some use overlays, some use eBPF forwarding, and some integrate with cloud provider networking. The stable lesson is the boundary. A pod process needs a network namespace, an interface inside that namespace, an address, and a route. The host or datapath needs a corresponding endpoint and forwarding behavior. If those facts are not true, higher-level Kubernetes objects cannot make packets move.
 
-| Situation | First Tooling Choice | Evidence You Want | Likely Fix Area |
-|-----------|----------------------|-------------------|-----------------|
-| Sidecar cannot reach main container on localhost | `k exec` or `nsenter` inside the pod namespace | Loopback is up, process listens on expected address, no port conflict | Process binding or shared port-space conflict |
-| Pod cannot reach node-local gateway | `ip addr`, `ip route`, `bridge link show` | Pod interface is up, host-side veth is attached to intended bridge, route points to gateway | veth, bridge, or route setup |
-| Namespace reaches gateway but not internet | Host forwarding and NAT inspection | Forwarding is enabled, egress route exists, source rewrite or upstream route exists | sysctl, firewall, NAT, or upstream routing |
-| Pod stuck during creation | kubelet logs and CNI plugin logs | Error names IPAM, link creation, route setup, or policy setup | CNI configuration, IP pool, node permissions, or plugin health |
+Kubernetes also changes how you think about port conflicts. Containers within the same pod share one network namespace, so they share one port space. Two containers in the same pod cannot both bind the same IP and TCP port unless they use different addresses or socket options that allow it. Containers in different pods can bind the same port because they live in different pod namespaces. This behavior is a direct consequence of network namespace isolation, not a special Service feature.
 
-For design work, prefer the simplest topology that satisfies the visibility and routing requirements. A direct veth pair is excellent for teaching and narrow tests. A bridge is better for many local endpoints. Direct routing is better when upstream systems need to see original pod or container addresses. NAT is better when you control only the host and need a quick outbound path. Kubernetes CNI choices encode these same tradeoffs at cluster scale.
+## A Practical Packet Trace
 
-Use the framework as a loop, not a one-time checklist. After each fix, retest the smallest failing hop before moving outward. If you bring an interface up, test gateway reachability again. If you add NAT, test external return traffic again. If you change a CNI IP pool, create a new pod and confirm both allocation and route setup. This discipline keeps the investigation anchored to evidence instead of hope.
+When a pod or lab namespace cannot reach a destination, trace the packet as a set of ownership transitions. First, the process sends through the namespace socket table. Second, the namespace route table chooses an output device and next hop. Third, the namespace resolves the neighbor and transmits through its veth end. Fourth, the host-side peer receives the frame. Fifth, the bridge or host route path forwards it. Sixth, firewall and NAT policy may accept, drop, or rewrite it. Finally, the return packet must find a valid reverse path.
 
-The framework also helps you decide when a problem is no longer about namespaces. Once you have proven the pod namespace, host-side veth, bridge or datapath, host forwarding, and return route, the remaining failure may genuinely live in DNS, TLS, application binding, or upstream policy. That conclusion is stronger when it follows a packet-path proof. You are not ignoring Kubernetes abstractions; you are earning the right to move up the stack.
+Each transition has a command that answers one narrow question. `ss -lntup` inside the namespace answers whether a service is listening in the namespace's port space. `ip route get DEST` inside the namespace answers which interface and source address the kernel would choose. `ip neigh` answers whether the next hop resolved. `ip -s link` on both veth ends answers whether packets and errors are moving. `bridge link` and `bridge fdb` answer whether a bridge sees the host-side port and learned MAC addresses.
 
-## Did You Know?
+For routed or egress traffic, move to host-level evidence only after the namespace evidence says the packet left. `sysctl net.ipv4.ip_forward` answers whether IPv4 forwarding is enabled. Firewall counters answer whether policy sees and handles the packet. NAT counters answer whether source rewriting is occurring. A packet capture on the bridge, veth, or external interface can prove which step is last visible, but captures are most useful after you have predicted what each interface should see.
 
-- **Network namespaces were added to Linux in 2006** (kernel 2.6.24), but did not become widely used in everyday operations until Docker popularized containers in 2013.
-- **Each pod in Kubernetes has exactly one network namespace** shared by all containers in that pod, which is why containers in a pod can communicate via localhost.
-- **veth pairs are like virtual Ethernet cables**: one end goes in the container, the other end connects to a bridge or the host, and a single node can host thousands of them when resources allow.
-- **The CNI spec is short compared with what it enables**: a compact plugin contract defines how Kubernetes asks networking providers to wire pod namespaces.
+This prediction-first habit is the difference between debugging and browsing output. Before running a command, say what result would confirm your model and what result would reject it. If the namespace route says traffic should leave `eth0`, counters on `eth0` should increase. If the host-side veth is attached to `br-lab`, bridge FDB entries should appear after traffic. If the bridge is the namespace default gateway, ARP for the gateway should resolve to the bridge MAC. If the far network has no route back, NAT or route propagation must explain return traffic.
+
+Production plugins add names and abstractions, but they do not remove the trace. The pod's `eth0` may be a veth peer, an IPVLAN or MACVLAN interface, or another plugin-specific endpoint. The host datapath may be a bridge, routes, tunnels, or eBPF programs. The debugging method still asks who owns the namespace, which interface carries the packet, how the next hop is resolved, what datapath receives it, and where policy or routing changes the outcome.
+
+## Reading Node Evidence Without Guessing
+
+Good namespace troubleshooting is evidence-driven, but the evidence is useful only when you know which question each command answers. `ip -br link` is not a connectivity test; it is a link inventory. `ip -br addr` is not a routing test; it is an address inventory. `ip route get` is not proof that a destination replied; it is the kernel's planned forwarding decision. `ping` is only a later confirmation that several lower-level facts are already true.
+
+Counters help when output looks correct but traffic still fails. The `ip -s link` command can show whether packets are leaving one end of a veth pair and arriving on the other. If namespace transmit counters increase but host receive counters do not, the peer relationship or interface selection is wrong. If both counters increase but higher-layer connectivity fails, move upward to neighbor state, routing, bridge forwarding, firewall policy, or the return path.
+
+Packet captures are powerful, but they are easy to misuse. Capturing on every interface at once creates noise and can hide the missing step. A better approach is to predict the next interface that should see the packet, then capture there. For a bridge lab, start inside the namespace or on the namespace veth, then move to the host-side peer, then to the bridge, then to the external interface if routing is involved. The first quiet capture after a noisy one marks the broken transition.
+
+Be careful with names copied from examples. Real nodes may use `cni0`, `docker0`, `br0`, a cloud-provider interface name, or no bridge at all. The name is less important than ownership and function. Ask whether the device is inside the workload namespace or the host namespace, whether it is a peer, bridge port, bridge device, tunnel, or external interface, and whether its counters match the traffic you are generating. That classification survives across distributions and plugins.
+
+Finally, separate persistent desired state from observed Linux state. Kubernetes objects describe what the control plane wants. The `ip` and `bridge` commands show what the node kernel currently has. During an incident, those states can diverge because a plugin failed, cleanup was incomplete, or a node reboot restored only part of the configuration. You need both views, but do not let a valid Deployment, Pod, or Service manifest convince you that the node datapath is correct.
+
+## Failure Patterns You Should Recognize
+
+The most common beginner failure is an interface that exists but is down. The namespace has `eth0`, the address looks correct, and the route looks plausible, but the link state prevents transmission. Bring both ends of the veth pair up and confirm state from both namespaces. Do not assume that assigning an IP address brought the link up, because address configuration and administrative link state are separate operations.
+
+The second common failure is a missing default route. Same-subnet pings work, which creates confidence, but off-subnet traffic fails. That is expected if the namespace has no route to destinations beyond its local prefix. Add a default route through the bridge or host-side gateway, then confirm with `ip route get`. If `ip route get` still chooses no path or the wrong path, route priority or prefix selection is still wrong.
+
+The third common failure is bridge membership. The host-side veth exists and is up, but it is not enslaved to the expected bridge. The namespace can transmit into its veth peer, yet no other namespace on the bridge sees frames from it. `bridge link` and `ip link show master br-lab` are direct checks for this condition. If the interface is attached to the wrong bridge, packet captures on the intended bridge will be quiet because the frames never arrived there.
+
+The fourth common failure is forwarding or filtering on the host. The namespace reaches its gateway, and maybe same-node peers work, but traffic beyond the host fails. At that point, inspect IP forwarding and firewall rules in the host namespace. The next module covers netfilter in depth, but this module's boundary is simple: a bridge can connect local namespace ports, while a routed path through the host needs forwarding policy that permits the flow.
+
+The fifth common failure is return-path asymmetry. A packet leaves the namespace and reaches a destination, but replies never come back because the destination or upstream router does not know the namespace subnet. NAT can solve that for egress, and routed pod networks can solve it by advertising pod CIDRs or programming cloud routes. The correct fix depends on the cluster design. The troubleshooting observation is the same: outbound visibility without return traffic points to reverse routing, NAT, or stateful filtering.
+
+## Security and Isolation Boundaries
+
+Network namespaces reduce accidental and intentional interference between workloads. One namespace cannot directly see another namespace's ordinary interfaces, sockets, routes, or port bindings. That is why two pods can both run a web server on TCP port 8080 and why a sidecar can share `localhost` only with containers in its own pod. Isolation gives each workload a smaller network view and gives runtimes a place to apply per-workload configuration.
+
+Isolation does not automatically create least privilege. A process with enough capabilities in the owning user namespace may create network devices, change addresses, or alter routes inside its network namespace. A connected veth pair also creates a real communication path, so policy still matters. Kubernetes NetworkPolicy, CNI plugin policy engines, host firewalls, and cloud security controls exist because namespace separation by itself says where objects live, not which flows are acceptable.
+
+Operational cleanup is part of security. A stale namespace, leftover veth, or orphaned bridge can preserve unexpected connectivity or confuse future debugging. Manual labs should include cleanup commands, and production runtimes must handle `DEL` or garbage collection paths carefully. The CNI specification includes cleanup-oriented operations because adding connectivity is only half of the lifecycle. Removing stale resources is what keeps the node's real state aligned with the orchestrator's desired state.
 
 ## Common Mistakes
 
-| Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Interface not up | New namespace and veth interfaces start down, and runtimes usually hide the activation step | Run `ip link set <if> up` in the correct namespace and verify state before testing routes |
-| Missing IP address | The veth exists, so the topology looks present, but Layer 3 has no source address to use | Add the intended address with `ip addr add` in the namespace and confirm the prefix length |
-| No route to gateway | The namespace can reach local peers but has no default next hop for external destinations | Add a default route through the bridge or configured gateway, then test the gateway first |
-| Bridge not up | Host-side veth interfaces are attached, but the virtual switch is administratively down | Bring the bridge up and confirm membership with `bridge link show` |
-| Missing NAT | Private namespace addresses leave the host, but upstream networks do not know how to reply | Add a MASQUERADE rule or install real routes for the namespace subnet |
-| Forgot loopback | Sidecar or local health checks fail even though pod-to-gateway traffic works | Bring `lo` up inside the namespace and verify the process binds to the expected local address |
-| Inspecting the wrong namespace | Host commands do not show the workload's private route table or loopback state | Use `ip netns exec`, `nsenter`, or `k exec` to inspect from the workload's actual view |
-| Changing Kubernetes objects too early | A node-local wiring fault looks like a Service or DNS issue from the application side | Trace namespace, veth, bridge, route, and NAT before editing higher-level manifests |
+| Mistake | Symptom | Better Practice |
+|---|---|---|
+| Inspecting only the host namespace | Host routes look correct while the pod or lab namespace still cannot connect | Enter the workload namespace and inspect links, addresses, routes, and neighbors there first |
+| Forgetting to bring loopback up | Local tests against `127.0.0.1` fail inside a new namespace | Run `ip link set lo up` during manual namespace setup |
+| Bringing up only one veth end | The interface exists, but pings do not leave or counters stay flat | Confirm both peers are administratively up and have the intended names |
+| Assigning an address to the host-side veth when using a bridge | Traffic bypasses the intended bridge gateway model or behaves inconsistently | Put the gateway address on the bridge and enslave host-side veth ends to it |
+| Missing a default route inside the namespace | Same-subnet traffic works, but off-subnet traffic fails | Add and verify a namespace route through the bridge or gateway address |
+| Debugging NAT before proving local reachability | Time is spent on firewall rules while the namespace cannot reach its gateway | Prove namespace-to-gateway connectivity before inspecting host forwarding and NAT |
+| Leaving lab resources behind | Later exercises show unexpected bridges, routes, or veth names | Use deterministic names and run cleanup commands at the end of each lab |
 
-## Quiz
+## Knowledge Check
 
-<details><summary>Question 1: A pod can resolve DNS and can ping its bridge gateway, but it cannot reach an external API. The node itself can reach the same API. Which part of the path do you inspect next, and why?</summary>
+<details>
+<summary>1. Why can two pods on the same node both bind TCP port 8080 without conflicting?</summary>
 
-The namespace-to-gateway path is already proven, so the next inspection point is host forwarding, egress routing, and NAT or upstream return routing. The packet leaves the pod namespace and reaches the node, but external replies still need a valid path back to the original source. If the pod CIDR is not routed upstream, a MASQUERADE rule or equivalent source translation is required. Changing DNS or the Kubernetes Service would not address this failure because the packet has already moved beyond name resolution and pod-local connectivity.
-
-</details>
-
-<details><summary>Question 2: You manually created two namespaces and a veth pair. Both interfaces have addresses in the same subnet, but ping fails. What checks should you run before adding routes?</summary>
-
-First check that both veth interfaces are up in their respective namespaces, because a down link will prevent frames from moving even when addresses are correct. Then verify that each namespace sees the intended interface and that the prefix length places the peer address on-link. A default route is not required for two directly connected addresses in the same subnet, so adding one too early can distract from the actual Layer 2 or interface-state problem. If those checks pass, inspect neighbor resolution and confirm the veth peer relationship.
+They can bind the same port when they are in different network namespaces because each namespace has its own socket port space. Containers inside the same pod are different: they share one pod network namespace, so they also share the same IP address and port space.
 
 </details>
 
-<details><summary>Question 3: Your team needs three local test namespaces to communicate with each other. A teammate suggests creating direct veth pairs between every namespace pair. What design would you choose instead?</summary>
+<details>
+<summary>2. A namespace can ping its bridge gateway but cannot reach an external IP. Which layer should you inspect next?</summary>
 
-Use a Linux bridge in the host namespace and attach one host-side veth endpoint for each namespace to that bridge. The bridge gives the namespaces a shared Layer 2 segment, which is the software equivalent of plugging several machines into one switch. Direct pairs work for a tiny point-to-point test, but they scale poorly and make troubleshooting harder as endpoints grow. With a bridge, each namespace needs one connector, and the forwarding model matches common container runtime behavior.
-
-</details>
-
-<details><summary>Question 4: A sidecar container cannot reach `http://localhost:80` in the same pod, but another pod can reach the main container through a Service. What does that tell you about the likely failure?</summary>
-
-Because containers in one pod share a network namespace, localhost traffic does not cross the pod veth, bridge, Service, or kube-proxy path. If another pod can reach the main container through a Service, the main container is probably reachable on the pod IP, but it may not be listening on the loopback address or expected port inside the shared namespace. You should inspect process binding, port conflicts, and loopback state from inside the pod. Changing CNI routes would be unlikely to fix localhost communication within the pod namespace.
+The successful gateway ping proves the namespace interface, local address, neighbor resolution, veth pair, and bridge gateway are probably working. Next inspect host forwarding, host firewall policy, host routes, and any required NAT or upstream return route.
 
 </details>
 
-<details><summary>Question 5: A pod is stuck in `ContainerCreating`, and kubelet reports that the CNI plugin failed to allocate an address from the node's pod range. Which setup stage failed, and what evidence would confirm it?</summary>
+<details>
+<summary>3. What does a veth pair provide, and what does it not provide?</summary>
 
-The failure is in the IPAM stage of CNI setup, before the pod can receive a usable network identity. The plugin may have created some resources, but it cannot complete the pod network contract without assigning a unique IP address and returning that result to kubelet. Evidence would include CNI or kubelet logs naming an exhausted range, missing allocation record, or conflicting address. Inspecting application logs will not help because the workload has not reached normal startup yet.
-
-</details>
-
-<details><summary>Question 6: During a node incident, host `ip link` output shows several veth interfaces, but you do not know which one belongs to the failing pod. How do you avoid guessing?</summary>
-
-Enter the pod network namespace or use runtime metadata to correlate the pod process with its interface, then compare peer information and bridge membership from the host. Generated veth names are not stable enough to use as proof on a busy node. The reliable path is to identify the container or pod PID, inspect the namespace interface, and match that interface to the host-side peer. Once the relationship is proven, packet captures and link checks can focus on the correct device.
+A veth pair provides a Layer 2 path where frames transmitted on one end appear on the other end. It does not automatically provide IP addresses, routes, DNS, forwarding, firewall policy, NAT, or bridge membership.
 
 </details>
 
-<details><summary>Question 7: You are designing a developer lab for namespace networking. When would you choose NAT through the host instead of direct routing for the namespace subnet?</summary>
+<details>
+<summary>4. Why is `ip netns exec red ip route` more useful than host `ip route` for a process running in `red`?</summary>
 
-Choose NAT when the lab host must provide quick outbound access and the upstream network does not know how to route back to the namespace subnet. Masquerade rewrites the source address to the host's egress address, which makes replies return to the host without changing external routers. Direct routing is cleaner when you control the network and want original source visibility, but it requires explicit routes outside the host. For a portable single-machine lab, NAT is usually the practical choice.
+The process in `red` uses the route table in the `red` network namespace, not the host namespace route table. The host route table may be correct for host processes while the namespace route table is empty or points at the wrong gateway.
 
 </details>
 
-## Hands-On Exercise
+<details>
+<summary>5. In a bridge topology, where should the gateway IP usually live?</summary>
 
-### Building Container Networks
+The gateway IP usually lives on the bridge device, such as `br-lab`, because the bridge represents the shared Layer 2 segment for the attached namespace ports. Host-side veth ends are normally bridge ports rather than separate gateways.
 
-**Objective**: Create and connect network namespaces like containers, then diagnose the path using the same sequence you would use on a Kubernetes node.
+</details>
 
-**Environment**: Use a Linux system with root access, preferably a disposable VM or lab host where creating and deleting namespaces, bridges, and iptables rules is acceptable.
+<details>
+<summary>6. What information does a CNI plugin need in order to attach a pod sandbox to the network?</summary>
 
-This exercise keeps the original lab commands and adds explicit checkpoints. Run it on a disposable lab machine or VM because it creates namespaces, links, a bridge, and an optional Docker container. If a command fails because an object already exists, clean up the previous attempt before continuing. The goal is not to copy commands blindly; the goal is to narrate what each command changes in the packet path.
+At minimum, the plugin needs the target network namespace path, network configuration, container identity, and operation type such as `ADD` or `DEL`. With that information it can create or configure interfaces, move a peer into the namespace, assign addresses and routes, and update the host datapath.
 
-#### Task 1: Create Two Connected Namespaces
+</details>
+
+<details>
+<summary>7. Why can a packet leave a namespace successfully but still never receive a reply?</summary>
+
+The outbound path and return path are separate. Replies can fail if the far network lacks a route back to the namespace subnet, if NAT is missing for private egress, if stateful firewall policy drops the return packet, or if asymmetric routing sends the reply somewhere else.
+
+</details>
+
+## Hands-On Practice
+
+Run these exercises in a disposable Linux VM. The names use a `kd-` prefix so cleanup is predictable. If a command fails because an object already exists, run the cleanup block for that exercise and repeat the setup. The goal is not to memorize the commands; the goal is to predict which namespace owns each object and then prove your prediction with `ip` and `bridge` output.
+
+- [ ] **Exercise 1: Create a direct veth link between the host and one namespace.** Build the smallest possible namespace network, prove host-to-namespace connectivity, and identify which route table is used for each ping. Notice that the namespace can reach only its directly connected subnet until you add a default route and host forwarding path.
 
 ```bash
-# 1. Create namespaces
-sudo ip netns add ns1
-sudo ip netns add ns2
+sudo ip netns del kd-red 2>/dev/null || true
+sudo ip link del kd-red-host 2>/dev/null || true
 
-# 2. Create veth pair
-sudo ip link add veth-ns1 type veth peer name veth-ns2
+sudo ip netns add kd-red
+sudo ip link add kd-red-host type veth peer name kd-red-eth
+sudo ip link set kd-red-eth netns kd-red
+sudo ip netns exec kd-red ip link set kd-red-eth name eth0
 
-# 3. Move to namespaces
-sudo ip link set veth-ns1 netns ns1
-sudo ip link set veth-ns2 netns ns2
+sudo ip addr add 10.210.1.1/24 dev kd-red-host
+sudo ip link set kd-red-host up
+sudo ip netns exec kd-red ip addr add 10.210.1.2/24 dev eth0
+sudo ip netns exec kd-red ip link set lo up
+sudo ip netns exec kd-red ip link set eth0 up
 
-# 4. Configure IPs
-sudo ip netns exec ns1 ip addr add 10.0.0.1/24 dev veth-ns1
-sudo ip netns exec ns2 ip addr add 10.0.0.2/24 dev veth-ns2
+ip -br addr show kd-red-host
+sudo ip netns exec kd-red ip -br addr
+sudo ip netns exec kd-red ip route get 10.210.1.1
+sudo ip netns exec kd-red ping -c 3 10.210.1.1
+ping -c 3 10.210.1.2
 
-# 5. Bring up interfaces
-sudo ip netns exec ns1 ip link set veth-ns1 up
-sudo ip netns exec ns2 ip link set veth-ns2 up
-sudo ip netns exec ns1 ip link set lo up
-sudo ip netns exec ns2 ip link set lo up
-
-# 6. Test
-sudo ip netns exec ns1 ping -c 2 10.0.0.2
+sudo ip netns del kd-red
 ```
 
-<details><summary>Solution notes for Task 1</summary>
+After the final delete, run `ip link show kd-red-host`. It is gone because `kd-red-host` is the host-side peer of `eth0` inside the namespace. When the kernel destroys the namespace-side peer on namespace deletion, the linked host-side peer is destroyed with it.
 
-The successful ping proves that the two isolated namespaces have a working point-to-point Layer 2 connection through the veth pair and compatible Layer 3 addresses. If the ping fails, inspect `sudo ip netns exec ns1 ip addr`, `sudo ip netns exec ns2 ip addr`, and link state before adding routes. No default route is needed for this specific test because both addresses are in the same `/24` subnet.
-
-</details>
-
-#### Task 2: Add a Bridge
+- [ ] **Exercise 2: Connect two namespaces through a Linux bridge.** Build a miniature container bridge, attach two host-side veth ends, and prove namespace-to-namespace communication. Read the bridge membership and forwarding database before and after the first ping so you can see the bridge learn where MAC addresses live.
 
 ```bash
-# 1. Create bridge
-sudo ip link add br0 type bridge
-sudo ip link set br0 up
-sudo ip addr add 10.0.0.254/24 dev br0
+sudo ip netns del kd-blue 2>/dev/null || true
+sudo ip netns del kd-green 2>/dev/null || true
+sudo ip link del kd-br0 2>/dev/null || true
 
-# 2. Create namespace connected to bridge
-sudo ip netns add ns3
-sudo ip link add veth-ns3 type veth peer name veth-br
-sudo ip link set veth-ns3 netns ns3
-sudo ip link set veth-br master br0
-sudo ip link set veth-br up
+sudo ip link add kd-br0 type bridge
+sudo ip addr add 10.210.2.1/24 dev kd-br0
+sudo ip link set kd-br0 up
 
-# 3. Configure ns3
-sudo ip netns exec ns3 ip addr add 10.0.0.3/24 dev veth-ns3
-sudo ip netns exec ns3 ip link set veth-ns3 up
-sudo ip netns exec ns3 ip link set lo up
-sudo ip netns exec ns3 ip route add default via 10.0.0.254
+sudo ip netns add kd-blue
+sudo ip link add kd-blue-host type veth peer name kd-blue-eth
+sudo ip link set kd-blue-eth netns kd-blue
+sudo ip link set kd-blue-host master kd-br0
+sudo ip link set kd-blue-host up
+sudo ip netns exec kd-blue ip link set kd-blue-eth name eth0
+sudo ip netns exec kd-blue ip addr add 10.210.2.2/24 dev eth0
+sudo ip netns exec kd-blue ip link set lo up
+sudo ip netns exec kd-blue ip link set eth0 up
+sudo ip netns exec kd-blue ip route add default via 10.210.2.1
 
-# 4. Test connectivity
-sudo ip netns exec ns3 ping -c 2 10.0.0.254  # Bridge
-ping -c 2 10.0.0.3  # From host
+sudo ip netns add kd-green
+sudo ip link add kd-green-host type veth peer name kd-green-eth
+sudo ip link set kd-green-eth netns kd-green
+sudo ip link set kd-green-host master kd-br0
+sudo ip link set kd-green-host up
+sudo ip netns exec kd-green ip link set kd-green-eth name eth0
+sudo ip netns exec kd-green ip addr add 10.210.2.3/24 dev eth0
+sudo ip netns exec kd-green ip link set lo up
+sudo ip netns exec kd-green ip link set eth0 up
+sudo ip netns exec kd-green ip route add default via 10.210.2.1
+
+bridge link show master kd-br0
+bridge fdb show br kd-br0
+sudo ip netns exec kd-blue ping -c 3 10.210.2.3
+bridge fdb show br kd-br0
+
+sudo ip netns del kd-blue
+sudo ip netns del kd-green
+sudo ip link del kd-br0
 ```
 
-<details><summary>Solution notes for Task 2</summary>
+If the ping fails, do not change routes first. Both namespaces are on the same subnet, so the direct bridge path should be enough. Inspect whether each host-side veth is attached to `kd-br0`, whether both namespace interfaces are up, and whether ARP entries appear with `ip neigh` inside the namespaces. The first broken object in that list is usually the cause.
 
-The first ping proves the namespace can reach its bridge gateway, which validates the namespace interface, host-side veth, bridge membership, and bridge address. The host-to-namespace ping proves traffic can travel in the reverse direction on the same local segment. If the gateway ping fails, check `bridge link show` and confirm `veth-br` is attached to `br0` and up.
-
-</details>
-
-#### Task 3: Inspect Real Container Networks
+- [ ] **Exercise 3: Add controlled egress and then remove it.** Extend the bridge lab so a namespace has a default route through the bridge, enable host forwarding temporarily, and add a source NAT rule if your VM uses iptables compatibility. Record the original forwarding value first, and restore it during cleanup so the VM returns to its previous state.
 
 ```bash
-# If Docker is installed:
-# 1. Check docker0 bridge
-ip addr show docker0
+sudo ip netns del kd-egress 2>/dev/null || true
+sudo ip link del kd-egbr0 2>/dev/null || true
 
-# 2. Run a container
-docker run -d --name test nginx
+ORIGINAL_FORWARD=$(sysctl -n net.ipv4.ip_forward)
+OUT_IF=$(ip route show default | awk '/default/ {print $5; exit}')
+if [ -z "$OUT_IF" ]; then
+  echo "no default route; cannot NAT" >&2
+  exit 1
+fi
 
-# 3. Find veth pair
-ip link show type veth
+sudo ip link add kd-egbr0 type bridge
+sudo ip addr add 10.210.3.1/24 dev kd-egbr0
+sudo ip link set kd-egbr0 up
 
-# 4. Check bridge members
-bridge link show
+sudo ip netns add kd-egress
+sudo ip link add kd-eg-host type veth peer name kd-eg-eth
+sudo ip link set kd-eg-eth netns kd-egress
+sudo ip link set kd-eg-host master kd-egbr0
+sudo ip link set kd-eg-host up
+sudo ip netns exec kd-egress ip link set kd-eg-eth name eth0
+sudo ip netns exec kd-egress ip addr add 10.210.3.2/24 dev eth0
+sudo ip netns exec kd-egress ip link set lo up
+sudo ip netns exec kd-egress ip link set eth0 up
+sudo ip netns exec kd-egress ip route add default via 10.210.3.1
 
-# 5. See inside container
-docker exec test ip addr
-docker exec test ip route
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo iptables -t nat -A POSTROUTING -s 10.210.3.0/24 -o "$OUT_IF" -j MASQUERADE
 
-# 6. Cleanup
-docker rm -f test
+sudo ip netns exec kd-egress ip route get 1.1.1.1
+sudo ip netns exec kd-egress ping -c 3 1.1.1.1
+
+sudo iptables -t nat -D POSTROUTING -s 10.210.3.0/24 -o "$OUT_IF" -j MASQUERADE
+sudo sysctl -w net.ipv4.ip_forward="$ORIGINAL_FORWARD"
+sudo ip netns del kd-egress
+sudo ip link del kd-egbr0
 ```
 
-<details><summary>Solution notes for Task 3</summary>
+If external ping is blocked by your environment, the exercise is still useful. Confirm that `ip route get 1.1.1.1` inside the namespace selects `eth0` and the bridge gateway, then inspect host counters or run a packet capture if your environment permits it. The key lesson is that namespace routing, host forwarding, and return-path handling are independent checks.
 
-The Docker inspection should reveal the same pattern as the manual bridge lab, although names may be generated and firewall rules may be more elaborate. Look for `docker0`, host-side veth interfaces, bridge membership, and the container's internal `eth0` plus default route. The value of this task is correlation: Docker automates the commands, but the topology remains recognizable.
+## Learner Check
 
-</details>
+You are ready to move on when you can draw a pod-like namespace topology from memory and label the owner of every object. The namespace owns `lo`, its `eth0`, its addresses, and its route table. The host owns the peer interface, bridge or routing datapath, forwarding settings, and host-level firewall or NAT rules. If you cannot decide which namespace owns an object, pause and prove ownership with `ip netns exec`, `/proc/<pid>/ns/net`, `ip link`, and `bridge link`.
 
-#### Task 4: Diagnose a Broken Path
+Use this self-assessment after the labs: explain why loopback must be brought up, explain why a veth pair disappears when the namespace end is destroyed, explain why the bridge usually receives the gateway IP, explain why same-subnet namespace pings do not prove internet egress, and explain how a CNI `ADD` operation maps to the manual setup commands. Each explanation should include a command you would run to verify the claim on a Linux VM.
 
-Break one thing deliberately by bringing `veth-ns3` down inside `ns3`, then predict which tests should fail. After confirming the failure, bring the interface back up and repeat the gateway test. This task trains you to connect a symptom to a specific missing state instead of changing unrelated routes or firewall rules.
-
-<details><summary>Solution notes for Task 4</summary>
-
-When `veth-ns3` is down, `ns3` should not be able to reach `10.0.0.254` because the namespace cannot transmit frames through its interface. The bridge can still exist and the host-side veth can still be attached, so host-only inspection may look partially correct. Restoring the interface with `sudo ip netns exec ns3 ip link set veth-ns3 up` should make the gateway test work again if the rest of the topology is intact.
-
-</details>
-
-#### Task 5: Cleanup
-
-```bash
-sudo ip netns delete ns1
-sudo ip netns delete ns2
-sudo ip netns delete ns3
-sudo ip link delete br0
-```
-
-<details><summary>Solution notes for Task 5</summary>
-
-Deleting the namespaces removes the interfaces that live inside them, and deleting the bridge removes the host-side switching object. If cleanup reports that an object does not exist, it was probably already removed by a previous attempt. Confirm with `ip netns list`, `ip link show type bridge`, and `ip link show type veth` before starting another run.
-
-</details>
-
-### Success Criteria
-
-- [ ] Design namespace veth bridge topology for two direct namespaces and one bridge-connected namespace.
-- [ ] Diagnose namespace route bridge NAT behavior by proving each hop in order.
-- [ ] Trace packet path from namespace interface through veth peer to bridge gateway.
-- [ ] Evaluate Docker CNI Kubernetes automation by matching runtime objects to manual primitives.
-- [ ] Created and connected two namespaces.
-- [ ] Verified ping works between namespaces.
-- [ ] Set up a bridge connecting namespaces.
-- [ ] Understand the veth + bridge pattern.
-- [ ] (Docker) Inspected real container networking.
+For incident practice, take a timeout symptom and split it into three questions. Did the packet leave the workload namespace? Did the host datapath forward or transform it? Did the reply have a valid path back? If your notes answer those questions with evidence instead of guesses, you have the mental model needed for the iptables and netfilter module.
 
 ## Next Module
 
-[Module 3.4: iptables & netfilter](../module-3.4-iptables-netfilter/) shows how Linux filters, forwards, and rewrites packets, which is the foundation for Kubernetes Services, Network Policies, and many node-level troubleshooting workflows.
+Continue to [Module 3.4: iptables & netfilter](../module-3.4-iptables-netfilter/), where you will inspect the host packet-filtering and NAT decisions that often sit immediately after the namespace, veth, and bridge path.
 
-## Further Reading
+## Sources
 
-- [Linux Network Namespaces](https://man7.org/linux/man-pages/man7/network_namespaces.7.html)
-- [CNI Specification](https://github.com/containernetworking/cni/blob/master/SPEC.md)
-- [Kubernetes Networking Model](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
-- [Container Networking Deep Dive](https://iximiuz.com/en/posts/container-networking-is-simple/)
-- [veth Linux manual page](https://man7.org/linux/man-pages/man4/veth.4.html)
-- [ip-netns Linux manual page](https://man7.org/linux/man-pages/man8/ip-netns.8.html)
-- [ip-link Linux manual page](https://man7.org/linux/man-pages/man8/ip-link.8.html)
-- [bridge Linux manual page](https://man7.org/linux/man-pages/man8/bridge.8.html)
-- [Kubernetes DNS for Services and Pods](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
-- [Kubernetes Network Policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
-- [Kubernetes Container Runtime Interface](https://kubernetes.io/docs/concepts/architecture/cri/)
-- [containerd CNI documentation](https://github.com/containerd/containerd/blob/main/script/setup/install-cni)
+- network_namespaces(7), Linux man-pages: https://man7.org/linux/man-pages/man7/network_namespaces.7.html
+- ip-netns(8), Linux man-pages: https://man7.org/linux/man-pages/man8/ip-netns.8.html
+- veth(4), Linux man-pages: https://man7.org/linux/man-pages/man4/veth.4.html
+- ip-link(8), Linux man-pages: https://man7.org/linux/man-pages/man8/ip-link.8.html
+- ip-address(8), Linux man-pages: https://man7.org/linux/man-pages/man8/ip-address.8.html
+- namespaces(7), Linux man-pages: https://man7.org/linux/man-pages/man7/namespaces.7.html
+- Namespaces, Linux kernel documentation: https://docs.kernel.org/admin-guide/namespaces/index.html
+- Ethernet Bridging, Linux kernel documentation: https://docs.kernel.org/networking/bridge.html
+- IP sysctl, Linux kernel documentation: https://docs.kernel.org/networking/ip-sysctl.html
+- Namespaces in operation, part 7: Network namespaces, LWN: https://lwn.net/Articles/580893/
+- Namespaces in operation, part 1: namespaces overview, LWN: https://lwn.net/Articles/531114/
+- Kubernetes Services, Load Balancing, and Networking: https://kubernetes.io/docs/concepts/services-networking/
+- Kubernetes Cluster Networking: https://kubernetes.io/docs/concepts/cluster-administration/networking/
+- CNI specification on GitHub: https://github.com/containernetworking/cni/blob/main/SPEC.md
+- iproute2 `ip netns` source on kernel.org: https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/tree/ip/ipnetns.c
+- iproute2 veth link source on kernel.org: https://git.kernel.org/pub/scm/network/iproute2/iproute2.git/tree/ip/link_veth.c
