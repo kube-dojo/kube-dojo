@@ -654,20 +654,20 @@ Continue to [Module 7.1: Bash Fundamentals](/linux/shell-scripting/module-7.1-ba
 
 ## Sources
 
-- https://man7.org/linux/man-pages/man1/ping.1.html
-- https://man7.org/linux/man-pages/man8/traceroute.8.html
-- https://man7.org/linux/man-pages/man8/mtr.8.html
-- https://man7.org/linux/man-pages/man8/ss.8.html
-- https://www.tcpdump.org/manpages/tcpdump.1.html
-- https://www.tcpdump.org/
-- https://www.wireshark.org/docs/wsug_html_chunked/
-- https://www.linux.org
-- https://man7.org/linux/man-pages/man8/ip-route.8.html
-- https://man7.org/linux/man-pages/man8/ip-neighbour.8.html
-- https://www.netfilter.org/projects/conntrack-tools/manpage.html
-- https://man7.org/linux/man-pages/man8/ethtool.8.html
-- https://kubernetes.io/docs/concepts/services-networking/service/
-- https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
-- https://coredns.io/manual/toc/
-- https://docs.cilium.io/en/stable/operations/troubleshooting/
-- https://kubernetes.io/docs/reference/networking/virtual-ips/
+- <https://man7.org/linux/man-pages/man8/ping.8.html>
+- <https://man7.org/linux/man-pages/man8/traceroute.8.html>
+- <https://manpages.debian.org/bookworm/mtr-tiny/mtr.8.en.html>
+- <https://man7.org/linux/man-pages/man8/ss.8.html>
+- <https://www.tcpdump.org/manpages/tcpdump.1.html>
+- <https://www.tcpdump.org/>
+- <https://www.wireshark.org/docs/wsug_html_chunked/>
+- <https://www.linux.org>
+- <https://man7.org/linux/man-pages/man8/ip-route.8.html>
+- <https://man7.org/linux/man-pages/man8/ip-neighbour.8.html>
+- <https://conntrack-tools.netfilter.org/manual.html>
+- <https://man7.org/linux/man-pages/man8/ethtool.8.html>
+- <https://kubernetes.io/docs/concepts/services-networking/service/>
+- <https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/>
+- <https://coredns.io/manual/toc/>
+- <https://docs.cilium.io/en/stable/operations/troubleshooting/>
+- <https://kubernetes.io/docs/reference/networking/virtual-ips/>
