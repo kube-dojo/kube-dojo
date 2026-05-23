@@ -69,7 +69,7 @@ Pause and predict: if a team requires images to come from `registry.internal.exa
 
 ## 2. Real Incidents and What They Teach
 
-The supply chain incidents most relevant to Kubernetes share one property: the compromised component looked normal to downstream automation. [SolarWinds](https://www.cisa.gov/news-events/alerts/2021/01/07/supply-chain-compromise) is the foundational enterprise example because trusted software updates carried attacker-controlled code into customer environments. [3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp) showed a user-facing desktop application being trojanized and distributed through a vendor's normal channel. These cases are outside Kubernetes, but they explain why artifact provenance matters before software reaches a cluster.
+The supply chain incidents most relevant to Kubernetes share one property: the compromised component looked normal to downstream automation. The [2020 SolarWinds trusted-update backdoor](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> is the foundational enterprise example — trusted software updates carried attacker-controlled code into ~18,000 customer environments. [3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp) showed a user-facing desktop application being trojanized and distributed through a vendor's normal channel. These cases are outside Kubernetes, but they explain why artifact provenance matters before software reaches a cluster.
 
 The XZ Utils incident is especially useful for cloud-native learners because it separates the source repository from the release artifact. The CVE record says the malicious code appeared in upstream tarballs and modified the liblzma build process through obfuscated steps. That pattern matters for containers because an image build often starts from published release archives, package repositories, or base layers rather than from a repository that your team reviews directly. If your evidence chain begins only after the image is built, you may miss compromise that occurred before the Dockerfile ran.
 
@@ -539,7 +539,6 @@ The strict annotation policy proves admission mechanics, not production-grade vu
 - [CISA: tj-actions/changed-files and reviewdog/action-setup compromise](https://www.cisa.gov/news-events/alerts/2025/03/18/supply-chain-compromise-third-party-tj-actionschanged-files-cve-2025-30066-and-reviewdogaction)
 - [StepSecurity: actions-cool/issues-helper compromised](https://www.stepsecurity.io/blog/actions-cool-issues-helper-github-action-compromised-all-tags-point-to-imposter-commit-that-exfiltrates-ci-cd-credentials)
 - [CISA: Supply Chain Attack Against 3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp)
-- [CISA: SolarWinds supply chain compromise](https://www.cisa.gov/news-events/alerts/2021/01/07/supply-chain-compromise)
 - [npm: Details about the event-stream incident](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident)
 - [GitHub Advisory: malicious ua-parser-js versions](https://github.com/advisories/GHSA-pjwm-rvh2-c87w)
 - [Kubernetes documentation: Images](https://kubernetes.io/docs/concepts/containers/images/)
