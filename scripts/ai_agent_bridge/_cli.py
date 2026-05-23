@@ -21,6 +21,7 @@ from ._config import GEMINI_DEFAULT_MODEL, GEMINI_REVIEW_MODEL
 from ._db import get_db
 from ._deepseek import ask_deepseek
 from ._gemini import ask_gemini, converse_gemini, process_and_respond
+from ._hermes import ask_hermes
 from ._messaging import (
     acknowledge,
     acknowledge_all,
@@ -30,6 +31,7 @@ from ._messaging import (
     send_message,
 )
 from ._model import check_model
+from ._opencode import ask_opencode
 from ._prompts import build_review_message
 from ._qwen import ask_qwen
 
@@ -37,6 +39,17 @@ try:
     from dispatch import GEMINI_WRITER_MODEL
 except ImportError:  # pragma: no cover - package import path variant
     GEMINI_WRITER_MODEL = "gemini-3.1-pro-preview"
+
+AGENT_CHOICES = (
+    "agy",
+    "claude",
+    "codex",
+    "deepseek",
+    "gemini",
+    "hermes",
+    "opencode",
+    "qwen",
+)
 
 
 def interactive_mode():
@@ -340,7 +353,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # inbox
     inbox_parser = subparsers.add_parser("inbox", help="Check inbox for messages")
-    inbox_parser.add_argument("--for", dest="for_llm", default="gemini", choices=['gemini', 'claude', 'codex', 'qwen', 'agy', 'deepseek'],
+    inbox_parser.add_argument("--for", dest="for_llm", default="gemini", choices=AGENT_CHOICES,
                              help="Check inbox for which agent (default: gemini)")
 
     # read
@@ -350,7 +363,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # send
     send_parser = subparsers.add_parser("send", help="Send message to another agent")
     send_parser.add_argument("content", help="Message content")
-    send_parser.add_argument("--to", dest="to_llm", default="claude", choices=['claude', 'gemini', 'codex', 'qwen', 'agy', 'deepseek'],
+    send_parser.add_argument("--to", dest="to_llm", default="claude", choices=AGENT_CHOICES,
                             help="Target agent (default: claude)")
     send_parser.add_argument("--from", dest="from_llm", default="gemini",
                             help="Sender agent name (default: gemini)")
@@ -366,7 +379,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # ack-all
     ack_all_parser = subparsers.add_parser("ack-all", help="Acknowledge ALL unread messages for an agent")
-    ack_all_parser.add_argument("agent", choices=['claude', 'gemini', 'codex', 'qwen', 'agy', 'deepseek'], help="Agent whose inbox to clear")
+    ack_all_parser.add_argument("agent", choices=AGENT_CHOICES, help="Agent whose inbox to clear")
 
     # conversation
     conv_parser = subparsers.add_parser("conversation", help="Get conversation history")
@@ -525,6 +538,44 @@ def _build_parser() -> argparse.ArgumentParser:
     ask_deepseek_parser.add_argument("--review", action="store_true",
                                      help="Prepend docs/review-protocol.md")
 
+    # ask-hermes
+    ask_hermes_parser = subparsers.add_parser("ask-hermes", help="Send message AND invoke Hermes (one-step)")
+    ask_hermes_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_hermes_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_hermes_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_hermes_parser.add_argument("--data", help="Path to data file to attach")
+    ask_hermes_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                   help="Force new session even if one exists")
+    ask_hermes_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                   help="Sender agent family. Default: gemini")
+    ask_hermes_parser.add_argument("--from-model", dest="from_model",
+                                   help="Exact sender model ID")
+    ask_hermes_parser.add_argument("--to-model", dest="to_model",
+                                   help="Target model ID")
+    ask_hermes_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                   help="Run sync without timeout")
+    ask_hermes_parser.add_argument("--review", action="store_true",
+                                   help="Prepend docs/review-protocol.md")
+
+    # ask-opencode
+    ask_opencode_parser = subparsers.add_parser("ask-opencode", help="Send message AND invoke OpenCode (one-step)")
+    ask_opencode_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_opencode_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_opencode_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_opencode_parser.add_argument("--data", help="Path to data file to attach")
+    ask_opencode_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                     help="Force new session even if one exists")
+    ask_opencode_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                     help="Sender agent family. Default: gemini")
+    ask_opencode_parser.add_argument("--from-model", dest="from_model",
+                                     help="Exact sender model ID")
+    ask_opencode_parser.add_argument("--to-model", dest="to_model",
+                                     help="Target model ID")
+    ask_opencode_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                     help="Run sync without timeout")
+    ask_opencode_parser.add_argument("--review", action="store_true",
+                                     help="Prepend docs/review-protocol.md")
+
     # converse — multi-turn conversation with Gemini
     converse_parser = subparsers.add_parser("converse", help="Multi-turn conversation with Gemini (includes history)")
     converse_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
@@ -635,6 +686,10 @@ def _dispatch_command(args):
         _handle_ask_qwen(args)
     elif args.command == "ask-deepseek":
         _handle_ask_deepseek(args)
+    elif args.command == "ask-hermes":
+        _handle_ask_hermes(args)
+    elif args.command == "ask-opencode":
+        _handle_ask_opencode(args)
     elif args.command == "converse":
         content = sys.stdin.read() if args.content == "-" else args.content
         converse_gemini(content, args.task_id, args.model,
@@ -739,6 +794,28 @@ def _handle_ask_deepseek(args):
         data = Path(args.data).read_text()
     content = sys.stdin.read() if args.content == "-" else args.content
     ask_deepseek(content, args.task_id, args.type, data,
+                 args.new_session, args.from_llm, args.from_model,
+                 args.to_model, args.no_timeout, args.review)
+
+
+def _handle_ask_hermes(args):
+    """Handle ask-hermes subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_hermes(content, args.task_id, args.type, data,
+               args.new_session, args.from_llm, args.from_model,
+               args.to_model, args.no_timeout, args.review)
+
+
+def _handle_ask_opencode(args):
+    """Handle ask-opencode subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_opencode(content, args.task_id, args.type, data,
                  args.new_session, args.from_llm, args.from_model,
                  args.to_model, args.no_timeout, args.review)
 

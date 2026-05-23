@@ -1,4 +1,4 @@
-"""Smart-routing headless dispatcher (Claude or Codex).
+"""Smart-routing headless dispatcher.
 
 Single CLI for dispatching work to a headless agent that picks an
 appropriate model based on the task class — instead of always burning
@@ -59,8 +59,9 @@ Reuse with --dry-run to print the chosen plan without firing.
 from __future__ import annotations
 
 import argparse
-import os
 import json
+import os
+import shutil
 import subprocess
 import sys
 import time
@@ -84,7 +85,16 @@ LOG_PATH = PRIMARY_REPO / "logs" / "smart_dispatch.jsonl"
 RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
 
 
-SUPPORTED_AGENTS = ("agy", "claude", "codex", "deepseek", "gemini", "qwen")
+SUPPORTED_AGENTS = (
+    "agy",
+    "claude",
+    "codex",
+    "deepseek",
+    "gemini",
+    "hermes",
+    "opencode",
+    "qwen",
+)
 
 
 @dataclass(frozen=True)
@@ -112,6 +122,8 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.4-mini",
             "deepseek": "deepseek-v4-flash",
             "gemini": "gemini-3.1-flash-lite-preview",
+            "hermes": "qwen-3.6-flash",
+            "opencode": "openrouter/qwen/qwen3.6-flash",
             "qwen": "qwen/qwen3.6-flash",
         },
         default_mode="read-only",
@@ -126,6 +138,8 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "hermes": "grok-4.3",
+            "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
         },
         default_mode="workspace-write",
@@ -140,6 +154,8 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "hermes": "grok-4.3",
+            "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
         },
         default_mode="workspace-write",
@@ -154,6 +170,8 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "hermes": "claude-sonnet-4-6",
+            "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
         },
         default_mode="read-only",
@@ -168,6 +186,8 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "hermes": "claude-opus-4-6",
+            "opencode": "openrouter/anthropic/claude-sonnet-4.5",
             "qwen": "qwen/qwen3.6-plus",
         },
         default_mode="workspace-write",
@@ -235,16 +255,106 @@ def persist_response(task_id: str, response: str, stderr_excerpt: str) -> Path:
     return response_path
 
 
+def _opencode_binary() -> str:
+    """Resolve the opencode CLI path with an env override for local installs."""
+    return (
+        os.environ.get("KUBEDOJO_OPENCODE_CMD")
+        or shutil.which("opencode")
+        or "/opt/homebrew/bin/opencode"
+    )
+
+
+def _hermes_binary() -> str:
+    """Resolve the hermes CLI path with an env override for local installs."""
+    return (
+        os.environ.get("KUBEDOJO_HERMES_CMD")
+        or shutil.which("hermes")
+        or "/Users/krisztiankoos/.local/bin/hermes"
+    )
+
+
+def _hermes_provider_for_model(model: str) -> str:
+    """Pick a Hermes provider from the model name, unless env overrides it."""
+    override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
+    if override:
+        return override
+    if model.startswith("claude-"):
+        return "anthropic"
+    if model.startswith("grok-"):
+        return "xai"
+    return "openrouter"
+
+
+def _hermes_cli_model(model: str) -> str:
+    """Map KubeDojo's route labels to Hermes v0.14 CLI model IDs."""
+    if model.startswith("qwen-"):
+        return f"qwen/qwen{model.removeprefix('qwen-')}"
+    return model
+
+
+def _router_command(agent: str, model: str, prompt: str) -> list[str]:
+    """Build the subprocess command for direct router CLIs."""
+    if agent == "opencode":
+        return [_opencode_binary(), "run", "-m", model, "-"]
+    if agent == "hermes":
+        cli_model = _hermes_cli_model(model)
+        return [
+            _hermes_binary(),
+            "-z",
+            prompt,
+            "--provider",
+            _hermes_provider_for_model(model),
+            "-m",
+            cli_model,
+        ]
+    raise ValueError(f"unsupported direct router agent: {agent}")
+
+
+def _run_router_agent(
+    *,
+    agent: str,
+    prompt: str,
+    model: str,
+    cwd: Path,
+    timeout_s: int,
+) -> tuple[bool, str, str]:
+    """Invoke a session-less router CLI and return (ok, stdout, stderr)."""
+    cmd = _router_command(agent, model, prompt)
+    stdin_payload = prompt if agent == "opencode" else ""
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=stdin_payload,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return False, stdout, f"{agent} timed out after {timeout_s}s\n{stderr}".strip()
+    except OSError as exc:
+        return False, "", f"{type(exc).__name__}: {exc}"
+
+    response = proc.stdout or ""
+    stderr = proc.stderr or ""
+    ok = proc.returncode == 0 and bool(response.strip())
+    if not ok and not stderr.strip():
+        stderr = f"{agent} exited {proc.returncode} with no stdout"
+    return ok, response.strip(), stderr.strip()
+
+
 def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
          worktree: Path | None, task_id: str, timeout_s: int) -> int:
-    sys.path.insert(0, str(REPO / "scripts"))
-    from agent_runtime.runner import invoke
-
     print(f"[smart] agent={agent} task_class={task_class} model={model} "
           f"mode={mode} timeout={timeout_s}s")
     if worktree:
         print(f"[smart] cwd={worktree}")
     print(f"[smart] task_id={task_id}")
+    if agent in {"hermes", "opencode"}:
+        print("[smart] mode is advisory for this router CLI")
 
     started = time.time()
     previous_search: str | None = None
@@ -258,20 +368,33 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
         env = os.environ.copy()
         env["KUBEDOJO_DISPATCHED"] = "1"
         os.environ.update(env)
-        result = invoke(
-            agent,
-            prompt,
-            mode=mode,
-            cwd=worktree,
-            model=model,
-            task_id=task_id,
-            entrypoint="delegate",
-            hard_timeout=timeout_s,
-        )
-        ok = bool(result.ok)
-        response = result.response or ""
-        session_id = result.session_id
-        stderr_excerpt = result.stderr_excerpt or ""
+        if agent in {"hermes", "opencode"}:
+            ok, response, stderr_excerpt = _run_router_agent(
+                agent=agent,
+                prompt=prompt,
+                model=model,
+                cwd=worktree or Path.cwd(),
+                timeout_s=timeout_s,
+            )
+            session_id = None
+        else:
+            sys.path.insert(0, str(REPO / "scripts"))
+            from agent_runtime.runner import invoke
+
+            result = invoke(
+                agent,
+                prompt,
+                mode=mode,
+                cwd=worktree,
+                model=model,
+                task_id=task_id,
+                entrypoint="delegate",
+                hard_timeout=timeout_s,
+            )
+            ok = bool(result.ok)
+            response = result.response or ""
+            session_id = result.session_id
+            stderr_excerpt = result.stderr_excerpt or ""
     except Exception as exc:  # surface the failure but still log it
         ok = False
         response = ""
@@ -324,7 +447,7 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="Dispatch a headless agent (Claude or Codex) with a "
+        description="Dispatch a headless agent with a "
                     "task-class-based model choice. Mirrors the AGENTS.md "
                     "economical multi-agent policy across agents.",
     )
@@ -342,7 +465,9 @@ def main() -> int:
                         "branch off main.")
     p.add_argument("--mode",
                    choices=["read-only", "workspace-write", "danger"],
-                   help="Override task-class default mode.")
+                   help="Override task-class default mode. For opencode "
+                        "and hermes this is advisory; their CLIs enforce "
+                        "their own sandbox behavior.")
     p.add_argument("--model",
                    help="Override task-class default model "
                         "(rarely needed — let the class+agent pick).")
