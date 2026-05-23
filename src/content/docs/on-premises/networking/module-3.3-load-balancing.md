@@ -189,13 +189,33 @@ kube-vip is one of the strongest minimal solutions when teams want one binary to
 The daemonset mode works well for dynamic node enrollment because each node runs a local component. The static mode remains useful in constrained bootstrap environments where declarative start-up order matters. In both modes, the same principle applies: leadership and announcement must be deterministic.
 
 ```bash
-# Example static manifest install style (operator docs provide full templates and compatibility flags)
-kubectl apply -f https://raw.githubusercontent.com/kube-vip/kube-vip/main/manifests/kube-vip-cloud-controller.yaml
+# Example static pod manifest install style from kube-vip docs
+# https://kube-vip.io/docs/installation/static/
+# Replace flag values for your environment per the docs:
+VIP="172.18.255.100"
+kube-vip manifest pod \
+  --interface eth0 \
+  --address "$VIP" \
+  --controlplane \
+  --services \
+  --arp \
+  --leaderElection | kubectl apply -f -
 ```
 
 ```bash
-# Example daemonset install style
-kubectl apply -f https://raw.githubusercontent.com/kube-vip/kube-vip/main/manifests/kube-vip-daemonset.yaml
+# Example daemonset manifest install style from kube-vip docs
+# https://kube-vip.io/docs/installation/daemonset/
+# Replace flag values for your environment per the docs:
+VIP="172.18.255.100"
+kube-vip manifest daemonset \
+  --interface eth0 \
+  --address "$VIP" \
+  --inCluster \
+  --taint \
+  --controlplane \
+  --services \
+  --arp \
+  --leaderElection | kubectl apply -f -
 ```
 
 A typical control-plane pattern creates a VIP for the API server endpoint. The same mechanism can be extended to service-level use cases with care around annotations and admission constraints. In practice, teams usually keep control-plane and service traffic boundaries explicit in policy.
@@ -339,9 +359,9 @@ In on-prem environments, this is powerful when policy changes are frequent and m
 
 Cilium can run kube-proxy-free service load balancing with eBPF paths. In this mode, service routing can happen without kube-proxy's classic iptables or IPVS path. This reduces some host CPU overhead and can improve path determinism under load.
 
-Direct Server Return, or DSR, can return response traffic directly to the client path with fewer intermediary hops in specific configurations. This is beneficial when return-path symmetry is controlled and backend policy allows direct responses.
+Cilium DSR is a kube-proxy-free Service/NodePort datapath behavior, typically controlled by `loadBalancer.mode=dsr` or `loadBalancer.mode=hybrid` in Cilium-managed clusters.
 
-Cilium DSR is especially useful for ingress-heavy L7 proxies that route to specific backends and then allow direct return under conditions designed by policy. You get lower overhead for some flows, but must validate security and network visibility assumptions.
+It is not an Envoy/L7 proxy return optimization: traffic is still distributed at the service layer, while response routing in DSR mode can skip the intermediate service node when using this node-local eBPF return path.
 
 ```bash
 # Conceptual toggle in Cilium-managed clusters
@@ -500,14 +520,13 @@ Mitigation is strict network-level rate control, timeout harmonization, and load
 
 These events are independent of tool choice. They occur whenever LB control and service path assumptions are not validated under fault conditions.
 
-
 ## Section 17: LVS and IPVS on Bare-Metal Kubernetes
 
 The Linux Virtual Server architecture is historically important for Kubernetes operators that need deterministic service datapaths under load. In many bare-metal stacks, kube-proxy in IPVS mode implements a large part of this behavior, while other stacks move toward kernel-level load balancing without traditional proxy components. The key operational question is mode selection, because NAT and DSR each alter where response traffic returns.
 
-Network Address Translation mode is simple to reason about because endpoint selection and response traffic are centralized through the proxy path. The tradeoff is that source addresses are rewritten during forward flow, which can hide user identity and increase egress path complexity for downstream logging and policy systems that expect original source addresses. NAT mode is predictable when policy layers are strictly centralized, and it is often the safer default while service models are still maturing.
+Network Address Translation mode is simple to reason about because endpoint selection and response traffic are centralized through the proxy path. On ingress, LVS NAT rewrites destination from the VIP to the selected backend. On the return leg, source is rewritten so the client still sees the VIP as the responder.
 
-Direct Server Return mode changes response behavior by allowing backend nodes to send packets directly back to clients. This avoids bouncing through the selected proxy node for return traffic, which often improves throughput for heavy streaming and long-lived flows. DSR can also preserve source addresses, improving client tracking in observability systems, but it requires strict routing symmetry and return path controls in the underlay network.
+Direct Server Return (DSR) is explicitly asymmetric. Requests are forwarded to real servers without source/NAT rewrite on the backend request leg in the same flow, while responses are sent directly from real servers to the client. This often avoids one hop on return, but requires ARP + loopback tuning (for example `arp_ignore=1`, `arp_announce=2`) so only the selected node effectively owns the VIP response path.
 
 ```mermaid
 graph LR
@@ -557,7 +576,6 @@ For rollback effort, define who can quickly restore control-plane access and who
 This matrix approach prevents rushed architectural switches caused by benchmark-only thinking. Throughput and latency numbers matter, but incident readiness and ownership clarity are equally critical in production.
 
 The final exercise for teams should be a full-path drill: announce VIP, drain one backend, force one leader transition, and verify service continuity at both transport and request layers. If you can explain failure source in under five minutes after this drill, the architecture is operationally valid.
-
 
 ## Section 19: Incident Playbooks and Operating Discipline for Bare-Metal LB
 
@@ -648,9 +666,7 @@ Each incident should map to one of four layers: VIP ownership, endpoint selectio
 The final planning outcome is not an architecture diagram alone. It is a maintained sequence of expected states and clear owner actions for each state transition.
 If this sequence is documented and rehearsed, on-prem load balancing behavior becomes predictable under pressure instead of fragile under routine change.
 
-
 As workload patterns evolve, revisit capacity assumptions at the same cadence as kernel and platform upgrades. A test that passed at cluster size N may fail quietly at N plus one-third due to path-length and election timing changes. Keep a quarterly load test where VIP advertisement, endpoint reconciliation, and Layer 7 policy updates are stressed together. In this run, you should measure failover decision latency, policy mismatch windows, and connection recovery under real workloads, then compare results to your accepted error budget. This practice turns load balancing from a static design artifact into an actively maintained control surface.
-
 
 ## Common Mistakes
 
@@ -731,7 +747,6 @@ Your architecture must preserve source IP, reduce return path hops, and keep fai
 You should evaluate L2 adjacency, backend routing symmetry, service health signaling, and anti-spoof controls. IPVS DSR can preserve client IP and reduce return latency, but requires careful return path and gateway behavior. If network symmetry cannot be guaranteed, NAT or kube-proxy path should remain until L2 and policy conditions are fully validated.
 </details>
 
-
 ## Hands-On Exercise: Bare-Metal LB Validation in a Local Cluster
 
 Complete all three exercises in order.
@@ -759,11 +774,23 @@ EOF
 kind create cluster --name lb-lab --config kind-config.yaml
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/main/config/manifests/metallb-native.yaml
 kubectl wait --namespace metallb-system --for=condition=Available deployment/metallb-controller --timeout=180s
-kubectl wait --namespace metallb-system --for=condition=Available deployment/metallb-speaker --timeout=180s
+kubectl -n metallb-system rollout status daemonset/speaker --timeout=180s
 ```
 
 ```bash
-cat <<'EOF' > /tmp/pool.yaml
+KIND_SUBNET_CIDR=$(docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}')
+echo "Kind subnet: ${KIND_SUBNET_CIDR}"
+KIND_SUBNET="${KIND_SUBNET_CIDR%/*}"
+KIND_MASK="${KIND_SUBNET_CIDR#*/}"
+if [ "${KIND_MASK}" -ge 24 ]; then
+  KIND_RANGE_PREFIX="$(echo "${KIND_SUBNET}" | awk -F. '{print $1 "." $2 "." $3}')"
+else
+  KIND_RANGE_PREFIX="$(echo "${KIND_SUBNET}" | awk -F. '{print $1 "." $2 ".255"}')"
+fi
+LB_POOL_START="${KIND_RANGE_PREFIX}.200"
+LB_POOL_END="${KIND_RANGE_PREFIX}.230"
+
+cat <<EOF > /tmp/pool.yaml
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -771,7 +798,7 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-    - 172.30.40.100-172.30.40.130
+    - ${LB_POOL_START}-${LB_POOL_END}
 EOF
 
 cat <<'EOF' > /tmp/l2.yaml
@@ -831,54 +858,110 @@ EOF
 
 kubectl apply -f /tmp/demo.yaml
 kubectl wait --for=condition=Ready pod -l app=demo --timeout=180s
-kubectl get svc demo-lb -w
+kubectl wait --for=jsonpath='{.status.loadBalancer.ingress[0].ip}' svc/demo-lb --timeout=60s
+VIP=$(kubectl get svc demo-lb -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "Demo VIP: ${VIP}"
+curl -sS "http://${VIP}"
 ```
 
 ```bash
 kubectl get endpoints demo-lb
 POD=$(kubectl get pods -l app=demo -o jsonpath='{.items[0].metadata.name}')
-kubectl delete pod $POD --grace-period=0 --force
-sleep 20
+kubectl delete pod "$POD" --grace-period=0 --force
+curl -sS "http://${VIP}"
 kubectl get endpoints demo-lb
-kubectl get svc demo-lb
+sleep 15
+kubectl wait --for=condition=Ready pod -l app=demo --timeout=120s
+curl -sS "http://${VIP}"
 ```
 
-Expected result: VIP stays assigned by MetalLB, one backend is removed, and the remaining replica keeps the service reachable.
+Expected result: MetalLB keeps the VIP assigned after deleting one replica, and the remaining service endpoint continues serving traffic.
+You should capture both endpoint snapshots and the two request checks before and after pod deletion; a healthy run returns the nginx body in both `curl` calls while showing one endpoint removed during failover.
 
 ### Exercise 2: keepalived Master/Backup Determinism
 
 ```bash
-# Create two dedicated ingress nodes and assert single master ownership at a time
-cat <<'EOF' > /tmp/keepalived.yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: keepalived-config
-  namespace: default
-  labels:
-    component: keepalived
-data:
-  keepalived.conf: |
-    vrrp_instance K8S_VIP {
-      state MASTER
-      interface eth0
-      virtual_router_id 101
-      priority 190
-      advert_int 1
-      nopreempt
-      virtual_ipaddress {
-        172.30.60.20/24
-      }
-    }
+# Create a shared docker network for the VRRP pair
+docker network rm keepalived-lab >/dev/null 2>&1 || true
+docker network create --driver bridge --subnet 172.30.90.0/24 keepalived-lab
+
+cat <<'EOF' > /tmp/keepalived-master.conf
+global_defs {
+  router_id KEEPALIVED_MASTER
+}
+vrrp_instance K8S_INGRESS {
+  state MASTER
+  interface eth0
+  virtual_router_id 77
+  priority 110
+  advert_int 1
+  nopreempt
+  authentication {
+    auth_type PASS
+    auth_pass keepalive
+  }
+  virtual_ipaddress {
+    172.30.90.20/24
+  }
+}
 EOF
-kubectl apply -f /tmp/keepalived.yaml
+
+cat <<'EOF' > /tmp/keepalived-backup.conf
+global_defs {
+  router_id KEEPALIVED_BACKUP
+}
+vrrp_instance K8S_INGRESS {
+  state BACKUP
+  interface eth0
+  virtual_router_id 77
+  priority 100
+  advert_int 1
+  nopreempt
+  authentication {
+    auth_type PASS
+    auth_pass keepalive
+  }
+  virtual_ipaddress {
+    172.30.90.20/24
+  }
+}
+EOF
+
+docker run -d --name keepalived-master --network keepalived-lab --ip 172.30.90.11 --cap-add=NET_ADMIN --cap-add=NET_RAW --cap-add=NET_BROADCAST --network-alias keepalived-master \
+  -v /tmp/keepalived-master.conf:/etc/keepalived/keepalived.conf:ro \
+  alpine:3.21 sh -c "apk add --no-cache keepalived iproute2 >/dev/null && keepalived -f /etc/keepalived/keepalived.conf -n"
+
+docker run -d --name keepalived-backup --network keepalived-lab --ip 172.30.90.12 --cap-add=NET_ADMIN --cap-add=NET_RAW --cap-add=NET_BROADCAST --network-alias keepalived-backup \
+  -v /tmp/keepalived-backup.conf:/etc/keepalived/keepalived.conf:ro \
+  alpine:3.21 sh -c "apk add --no-cache keepalived iproute2 >/dev/null && keepalived -f /etc/keepalived/keepalived.conf -n"
+
+sleep 8
+echo "Initial ownership:"
+docker exec keepalived-master ip addr show | grep -n "172.30.90.20" || true
+docker exec keepalived-backup ip addr show | grep -n "172.30.90.20" || true
+
+echo "Killing MASTER..."
+docker rm -f keepalived-master
+
+sleep 5
+echo "Post-failover ownership:"
+docker exec keepalived-backup ip addr show | grep -n "172.30.90.20" || true
+
+docker logs --tail 20 keepalived-backup
+docker logs --tail 20 keepalived-master || true
+docker network rm keepalived-lab >/dev/null 2>&1 || true
 ```
+Expected output:
+During steady state, only `keepalived-master` owns `172.30.90.20` on `eth0`.
+After `docker rm -f keepalived-master`, ownership should move deterministically so `keepalived-backup` presents `172.30.90.20` on its `eth0` interface.
+Backup logs should show the transition into active MASTER role after election, and the failed node should disappear from VIP ownership after teardown.
 
 ### Exercise 3: L7 Policy and WAF Smoke Test
 
 ```bash
 # Example L7 ingress path with affinity and WAF hooks
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.4/deploy/static/provider/cloud/deploy.yaml
+kubectl wait -n ingress-nginx --for=condition=Available deployment/ingress-nginx-controller --timeout=120s
 
 cat <<'EOF' > /tmp/waf-ingress.yaml
 apiVersion: networking.k8s.io/v1
@@ -889,10 +972,10 @@ metadata:
     nginx.ingress.kubernetes.io/enable-modsecurity: "true"
 spec:
   rules:
-    - host: lab.internal
+    - host: demo.local
       http:
         paths:
-          - path: /sticky
+          - path: /
             pathType: Prefix
             backend:
               service:
@@ -902,9 +985,19 @@ spec:
 EOF
 
 kubectl apply -f /tmp/waf-ingress.yaml
+
+INGRESS_IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+if [ -z "${INGRESS_IP}" ]; then
+  INGRESS_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+fi
+curl -sS -o /dev/null -w "Normal request status: %{http_code}\n" -H 'Host: demo.local' "http://${INGRESS_IP}/"
+curl -sS -o /dev/null -w "Hostile payload status: %{http_code}\n" -G --data-urlencode 'q=<script>alert(1)</script>' -H 'Host: demo.local' "http://${INGRESS_IP}/"
 ```
 
-Send a normal request and a request expected to violate a WAF rule, then compare status outcomes.
+Expected outcomes:
+A normal request should return HTTP `200` and the demo backend body once ingress resolves `demo.local`.
+The hostile payload check should return `403` when a WAF stack is active (`modsecurity` plus policy rules). If no WAF policy is installed, `200` is expected and indicates no WAF enforcement on this ingress path.
+If ingress commands cannot reach the service, re-check the ingress IP discovery command, the service backing `demo-ingress`, and whether the path is intentionally limited to host `demo.local`.
 
 ## Sources
 
