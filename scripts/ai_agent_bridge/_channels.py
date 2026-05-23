@@ -69,6 +69,7 @@ VALID_AGENTS = (
     "agy",
     "claude",
     "codex",
+    "cursor",
     "deepseek",
     "gemini",
     "hermes",
