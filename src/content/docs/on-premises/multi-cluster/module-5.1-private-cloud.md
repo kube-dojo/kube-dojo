@@ -15,7 +15,6 @@ Before starting this module, you should understand why organizations run Kuberne
 - **Required**: [Module 2.4: Declarative Bare Metal](../../provisioning/module-2.4-declarative-bare-metal/)
 - **Helpful**: Basic familiarity with hypervisors, VLANs, and `kubectl` cluster administration
 
-
 ## Learning Outcomes
 
 After completing this module, you will be able to connect private cloud control planes to the Kubernetes lifecycle decisions your platform team makes every week.
@@ -25,7 +24,6 @@ After completing this module, you will be able to connect private cloud control 
 - **Evaluate** when an on-premises private cloud platform delivers better economics, compliance posture, or latency than a public hyperscaler for regulated workloads.
 - **Integrate** IPAM, DHCP, DNS, Octavia, and NSX-T load balancing into a cluster design so Service and Ingress objects resolve reliably on your network.
 
-
 ## Why This Module Matters: Abstraction Without Losing the Metal
 
 Hypothetical scenario: a regional healthcare provider runs three production Kubernetes clusters on bare metal because leadership wanted to avoid virtualization licensing. During a firmware campaign, engineers drain nodes manually, reschedule pods by hand, and still miss maintenance windows because storage rebuilds take days. When a storage shelf fails, recovery depends on spare parts lead times and tribal knowledge about partition layouts rather than API calls. The platform team spends most of its calendar on hardware toil instead of improving tenant onboarding, backup policies, or upgrade safety.
@@ -33,7 +31,6 @@ Hypothetical scenario: a regional healthcare provider runs three production Kube
 That pattern is common when teams treat private infrastructure as “just Linux on servers” without a cloud control plane. A private cloud platform introduces a stable API for virtual machines, networks, volumes, images, and identity. The hypervisor or equivalent layer handles live migration, snapshot rollback, and hardware fault isolation while Kubernetes continues to schedule pods against node objects that look familiar. The tradeoff is real: you inherit another distributed system with its own upgrades, quotas, and failure domains, and you must staff engineers who understand both the cloud API and the cluster API. Platform engineering maturity therefore includes fluency in two parallel control planes, not only kubectl expertise. Treat private IaaS literacy as a core hiring requirement alongside cluster administration certifications and on-call shadowing.
 
 This module teaches the architectural vocabulary you need before choosing VMware, OpenStack, CloudStack, or oVirt as the layer beneath your clusters. You will not memorize every project name in the OpenStack map; instead you will learn which service owns compute, networking, storage, and authentication so integration decisions make sense. You will also see how Kubernetes lands on private cloud through two common patterns: virtual machines plus kubeadm or Ansible, and vendor container platforms such as Tanzu or OpenShift that embed Kubernetes lifecycle into the virtualization stack. Hands-on steps assume a Kubernetes 1.35 cluster and use the full `kubectl` command name in shell examples for clarity.
-
 
 ## OpenStack Architecture and Core Services
 
@@ -88,7 +85,6 @@ Horizon dashboards help operators who prefer GUIs, but production Kubernetes tea
 
 Swift ring architecture matters when you offload etcd snapshots, Velero backups, or Helm chart mirrors to object storage instead of POSIX mounts. Erasure coding and region placement affect restore time objectives more than Kubernetes backup operators expect, especially when cross-region replication was never tested. Cinder backends range from Ceph RBD to NetApp drivers; each combination exposes different snapshot semantics that CSI must translate into Kubernetes VolumeSnapshot objects without surprising application owners during rollback drills.
 
-
 ## VMware vSphere Foundations for Kubernetes
 
 VMware vSphere remains the default enterprise hypervisor in many data centers because it couples mature lifecycle tooling with ecosystem integrations for backup, replication, and storage arrays. vCenter Server centralizes inventory, permissions, clusters, resource pools, and distributed switches, while ESXi hosts run the actual virtual machines. For Kubernetes, the important primitives are datastore-backed virtual disks, port groups or NSX segments, content libraries for templates, and vSphere zones when you stretch clusters across failure domains.
@@ -133,7 +129,6 @@ Distributed Resource Scheduler and High Availability clusters change maintenance
 
 Content libraries distribute OVF templates for worker nodes with cloud-init scripts that register instances to Ansible inventory groups. Tagging VMs with cluster name, role, and environment gives finance chargeback reports that map Kubernetes node labels back to cost centers. vSphere with Tanzu supervisor clusters add another ownership boundary: platform teams manage supervisors while application teams receive namespaces, yet underlying VI admins still control datastore capacity and distributed switch MTU settings that break pods when misconfigured.
 
-
 ## CloudStack, oVirt, and Alternative Private Cloud Stacks
 
 Apache CloudStack targets organizations that want an Apache-licensed cloud management plane with a smaller service surface than full OpenStack. It presents zones, pods, clusters, primary storage, secondary storage, and system VMs that implement routing and console proxy functions. Kubernetes integration typically means launching instances through CloudStack’s compute service and attaching volumes through its disk offerings, then installing a CSI or in-tree provider where community support exists for your release combination.
@@ -147,7 +142,6 @@ Harvester and other hyperconverged platforms blur the line between virtualizatio
 When comparing CloudStack and oVirt to OpenStack, measure operator headcount and upgrade risk alongside feature checklists. OpenStack offers finer-grained extension points and a vast ecosystem, while CloudStack and oVirt optimize for faster time to a working private IaaS at the cost of narrower third-party integrations. None of these choices remove the need for disciplined IPAM and DNS; they only change which GUI or API issues your addresses.
 
 oVirt hosted engine deployments place the management VM itself on the cluster being managed, which simplifies small footprints but concentrates risk during storage outages. Plan backup of the engine database and understand how Kubernetes node VMs depend on logical networks defined in the engine, because a mistaken network label change can isolate every kubelet simultaneously. CloudStack administrators should monitor system VM disk growth; neglected console proxy volumes have filled clusters that otherwise had ample tenant capacity.
-
 
 ## Comparing Private Cloud Platforms Across Key Axes
 
@@ -182,7 +176,6 @@ Document non-functional requirements beside the scorecard: RPO and RTO for etcd,
 
 Lifecycle comparisons should include certificate rotation cadence: Keystone Fernet keys, vCenter machine SSL, and Kubernetes apiserver certificates all expire on different clocks. Missing one rotation window surfaces as mysterious cloud provider auth failures or kubectl TLS errors during otherwise routine maintenance. Build a unified calendar with owners per layer so platform on-call is not surprised by a Sunday Keystone rotation that invalidates cloud.conf secrets mounted in kube-system.
 
-
 ## When Private Cloud Beats Hyperscaler Economics and Control
 
 Public hyperscalers excel at elastic consumption, global backbone capacity, and managed control planes that shrink day-one staffing needs. Private cloud platforms win different races. Regulated industries often require data locality, air-gapped recovery, or contractual prohibitions on specific foreign regions, and owning the stack makes audit evidence chain to internal change tickets instead of vendor attestations alone. Steady-state workloads with predictable CPU and RAM footprints can cost less on owned hardware after three to five year depreciation cycles, especially when egress charges would dominate a SaaS architecture.
@@ -196,7 +189,6 @@ Cost models should include labor: virtualization administrators, storage enginee
 Sovereignty and export-control narratives often push regulated tenants toward private cloud even when hyperscaler regions exist in-country, because contractual language still forbids foreign legal discovery paths or requires keys to remain in customer-controlled HSMs. Document which party operates hypervisor patches, disk destruction, and forensic imaging when a laptop theft occurs in a satellite office. Those answers belong in the architecture decision record beside Kubernetes RBAC diagrams.
 
 Burst capacity to public cloud remains compatible with private cloud cores when you standardize identity, container images, and GitOps repositories across both. The expensive mistakes appear when private DNS zones, private container registries, and private load balancers cannot be reached from burst environments without re-architecting CIDR plans. Plan egress NAT, firewall approvals, and secrets replication before marketing announces hybrid agility.
-
 
 ## Kubernetes on Private Cloud Virtual Machines
 
@@ -214,7 +206,6 @@ Red Hat OpenShift on RHV or oVirt inherits similar VM dependencies while adding 
 
 The Kubernetes cloud provider documentation describes how provider IDs, routes, and load balancers reconcile per platform. On OpenStack, install the external cloud-controller-manager chart with correct `cloud.conf` secrets referencing Keystone application credentials scoped to the tenant project. On vSphere, enable the CPI and CSI with paravirtual or full feature sets matching your vCenter permissions model. Skipping either component produces nodes labeled `node.kubernetes.io/exclude-from-external-load-balancers` incorrectly or Services that never receive VIPs, which wastes days of CNI debugging.
 
-
 ## IPAM, DHCP, and DNS Dependencies
 
 Private Kubernetes clusters fail in boring ways when address management is tribal knowledge. IPAM defines which CIDRs belong to nodes, pods, services, load balancers, and management appliances, and it must coordinate with corporate routers that may not accept arbitrary BGP advertisements from your CNI. DHCP pools for Nova or vSphere port groups should exclude addresses you statically assign to control plane members, etcd hosts, or registry mirrors. Duplicate assignments produce split-brain symptoms that look like Kubernetes networking bugs but are simply Layer 3 collisions.
@@ -226,7 +217,6 @@ DHCP options can inject NTP and DNS server lists for guest VMs, yet Kubernetes p
 Design reviews should include a single diagram of CIDRs, VLAN IDs, VRFs, and firewall zones with arrows showing kube-apiserver, kubelet, registry, and worker-to-control-plane paths. Reviewers from networking teams catch impossible routes early when the diagram exists; without it, platform engineers argue about CNI choices while the real blocker is a missing static route.
 
 Corporate IPAM tools such as NetBox or commercial equivalents should become the system of record for Kubernetes Service CIDRs, pod CIDRs, NodePort ranges, and LoadBalancer VIP pools. Automate allocation through CI pipelines that reject overlapping prefixes before Terraform applies Nova network creation. DHCP reservations for control plane members should reference the same IPAM object IDs so decommissioning a cluster frees addresses instead of leaking orphaned leases that block the next deployment.
-
 
 ## CSI Storage and Load Balancer Integration
 
@@ -243,7 +233,6 @@ The CNCF landscape lists CSI drivers and backup tools certified for various plat
 Octavia health monitors should probe NodePort or pod IP targets consistently with kube-proxy mode and whether you run externalTrafficPolicy Local for source IP preservation. NSX-T health checks face similar choices when ingress controllers terminate TLS on nodes while the load balancer forwards encrypted or plain traffic. Misaligned health checks mark all backends down, triggering cascading failures when operators restart ingress pods during upgrades.
 
 Multitenancy on private cloud maps Kubernetes namespaces to OpenStack projects or vSphere folders with quota objects that cap RAM, instances, and volumes. Chargeback exports from cloud billing databases should include labels applied during VM provisioning so finance can attribute November growth to a specific product line. Without chargeback, private cloud costs look opaque and leadership reopens hyperscaler evaluations based on sticker prices alone.
-
 
 ## Operational Realities: Capacity Planning and Hardware Sourcing
 
@@ -263,14 +252,12 @@ Runbooks should list which private cloud API degrades when a top-of-rack switch 
 
 Governance workshops produce better outcomes when application owners see a single slide connecting their namespace quotas to underlying cloud quotas and physical capacity. Transparency converts “Kubernetes is broken” tickets into capacity conversations early. Publish a quarterly platform newsletter with upgrade windows for OpenStack, vSphere, and Kubernetes so product teams plan releases around maintenance rather than surprise freeze requests from infra.
 
-
 ## Did You Know?
 
 - **OpenStack began as NASA Nebula and Rackspace collaboration in 2010** - The modular service design you see in Keystone and Nova reflects that federated origin rather than a single monolithic hypervisor.
 - **Octavia replaced Neutron LBaaS v1 with a dedicated load-balancer service** - Modern OpenStack Kubernetes integrations should target Octavia drivers instead of deprecated appliance models.
 - **The vSphere CSI driver superseded in-tree vSphere volume plugins** - Clusters on Kubernetes 1.35 rely on CSI for persistent disks and snapshot APIs that in-tree code no longer implements.
 - **CloudStack system VMs provide routing and console access** - Those hidden VMs consume cluster capacity and must be patched during maintenance windows just like tenant workloads.
-
 
 ## Common Mistakes
 
@@ -284,7 +271,6 @@ Governance workshops produce better outcomes when application owners see a singl
 | One giant vSphere cluster for every environment | Simplicity without blast radius control | Separate management, production, and sandbox clusters with resource pools |
 | Neglecting Octavia or NSX-T address pool sizing | Small pools work in labs | Size VIP pools for peak Services plus headroom; monitor allocation metrics |
 | Manual hardware tracking spreadsheets | Procurement outside platform team | Integrate asset tags with OpenStack host aggregates or vSphere folders |
-
 
 ## Quiz
 
@@ -329,7 +315,6 @@ DHCP duplicates cause nodes to join the wrong API endpoint or pull from rogue mi
 Advanced zones isolate guest networks with virtual routers and VLANs, while basic zones use simpler flat networking. Kubernetes clusters needing tenant isolation and corporate RFC1918 routing usually require advanced zone patterns. Basic zones suit labs but break when multiple teams need separate L3 domains and quotas.
 
 </details>
-
 
 ## Hands-On Practical Exercises
 
@@ -397,7 +382,13 @@ Provision one control plane VM with Vagrant libvirt or an OpenStack DevStack ins
 # end
 # vagrant up && vagrant ssh
 
-sudo apt-get update && sudo apt-get install -y containerd kubelet kubeadm kubectl
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y containerd kubelet kubeadm kubectl
 sudo kubeadm init --pod-network-cidr=10.244.0.0/16
 mkdir -p "$HOME/.kube"
 sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
@@ -416,11 +407,9 @@ A single-node control plane proves bootstrap automation, not production HA. DevS
 
 </details>
 
-
 ## Next Module
 
 Continue to [Module 5.2: Multi-Cluster Control Planes](./module-5.2-multi-cluster-control-planes/) to compare vCluster, Kamaji, and dedicated control plane strategies once your private cloud foundation can supply reliable VMs, networks, and disks.
-
 
 ## Sources
 
@@ -434,5 +423,5 @@ Continue to [Module 5.2: Multi-Cluster Control Planes](./module-5.2-multi-cluste
 - <https://github.com/kubernetes/cloud-provider-openstack>
 - <https://github.com/kubernetes-sigs/vsphere-csi-driver>
 - <https://docs.openstack.org/octavia/latest/>
-- <https://kubernetes.io/docs/concepts/cluster-administration/cloud-providers/>
+- <https://kubernetes.io/docs/concepts/architecture/cloud-controller/>
 - <https://www.cncf.io/projects/>
