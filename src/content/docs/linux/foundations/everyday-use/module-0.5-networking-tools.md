@@ -11,755 +11,526 @@ lab:
   difficulty: "intermediate"
   environment: "ubuntu"
 ---
-# Module 0.5: Everyday Networking Tools
-
 > **Everyday Use** | Complexity: `[QUICK]` | Time: 45 min
 
 ## Prerequisites
 
-Before starting this module, you should be comfortable with basic shell navigation, file paths, and `sudo` from [Module 0.2: Environment & Permissions](../module-0.2-environment-permissions/). It also helps if you have seen service inspection in [Module 0.4: Services & Logs Demystified](../module-0.4-services-logs/), because several examples connect network symptoms back to listening processes and service logs.
+Before starting this module, you should be comfortable moving around a shell, reading command output carefully, and using `sudo` only when a command needs elevated privileges. The examples build directly on [Module 0.2: Environment & Permissions](../module-0.2-environment-permissions/) and [Module 0.4: Services & Logs Demystified](../module-0.4-services-logs/), because network symptoms often end at a process, a service unit, a log line, or a permission boundary that lives on the local host.
 
-KubeDojo uses Kubernetes 1.35+ in cluster-facing examples. When a command needs `kubectl`, define the standard shortcut with `alias k=kubectl`; after that, a command such as `k get pods -A` means the same thing as the longer form. This module mostly stays on the Linux host, but the habit matters because real Kubernetes troubleshooting often starts by proving whether the host network, DNS, or local firewall is healthy before blaming the cluster.
+You do not need to be a network engineer to use these tools well. You do need a disciplined habit of asking one narrow question at a time, recording what the answer proves, and refusing to treat a single passing command as proof that every layer is healthy. KubeDojo examples assume modern Linux distributions and Kubernetes 1.35+ when cluster behavior appears, but this module stays grounded in host evidence first because a Kubernetes node is still a Linux machine with sockets, resolvers, routes, packet filters, and local services.
 
 ## Learning Outcomes
 
 - **Diagnose** reachability and latency failures with `ping`, `traceroute`, and `tracepath` before escalating to application debugging.
-- **Debug** HTTP and API behavior with `curl` verbose output, headers, redirects, and safe checksum verification.
-- **Inspect** listening ports and service binding choices with `ss` before blaming remote networks or firewalls.
-- **Evaluate** DNS resolver, cache, record, and TTL evidence with `dig` and `host`.
-- **Implement** a local firewall troubleshooting sequence with `ufw` and `iptables` that protects Linux and Kubernetes 1.35+ hosts.
+- **Debug** HTTP and API behavior with `curl` verbose output, headers, redirects, TLS evidence, and mTLS client-certificate basics.
+- **Inspect** listening ports and service binding choices with `ss`, while recognizing why `netstat` is now mostly a compatibility habit.
+- **Evaluate** DNS resolver, cache, record, and TTL evidence with `getent`, `dig`, `host`, and systemd-resolved tools.
+- **Implement** a local firewall troubleshooting sequence with `ufw`, `iptables`, and `nft` that inspects state and tests targeted rules without flushing production policy.
 
 ## Why This Module Matters
 
-On July 2, 2021, Kaseya disclosed a supply-chain attack that cascaded through managed service providers and disrupted hundreds of downstream organizations. The incident was not a simple "network outage," but responders still had to answer network questions under pressure: which systems could reach command-and-control infrastructure, which services were exposed, which downloads were trustworthy, and which firewall rules could contain the blast radius without breaking recovery. In incidents like that, the expensive part is not typing a command; it is knowing which fact the command proves and which conclusions it does not prove.
+Production networking failures rarely arrive with a label that says "DNS" or "firewall." They arrive as a deployment that rolled out cleanly but now times out, a webhook that works from a laptop but not from a node, a database process that is running but unreachable, or a Kubernetes Service that has endpoints but still fails from one namespace. In those moments, every theory is tempting because the network sits between the symptom and the system you can see. The practical operator advantage is not knowing every flag by memory; it is knowing which command can prove the next layer of the path.
 
-Smaller failures feel less dramatic, but they follow the same pattern. A deployment looks green, yet customers see timeouts. A database process is running, yet no remote client can connect. A DNS change was made correctly at the provider, yet one office still resolves the old address. Engineers lose hours when they jump straight from symptom to theory, because every theory sounds plausible when the network is treated as a black box. The practical skill is to turn that black box into a chain of observable questions: can packets leave, can names resolve, is the service listening, does the firewall pass the port, and does the application answer?
+The cost of guessing is high because network fixes often change shared paths. A firewall flush can disconnect SSH sessions, expose services, or erase rules managed by Kubernetes, Docker, cloud-init, or a security baseline. A DNS change made during panic can create a second incident when caches expire at different times. A restart of the wrong service can hide evidence that would have explained the root cause. The safest workflow is to start with read-only observations, compare local and remote viewpoints, then make the smallest reversible change only after the evidence points to that layer.
 
-This module gives you that chain. You will not memorize every flag in `ping`, `curl`, `ss`, `dig`, `traceroute`, `ufw`, or `iptables`; that would produce a brittle reference habit. Instead, you will learn how each tool narrows a different layer of the problem, what evidence to trust, and where false positives hide. A senior engineer's advantage is not mystical intuition. It is the disciplined habit of collecting cheap, local proof before making expensive changes.
+This module treats everyday tools as an investigation sequence rather than as a command catalog. `ping` and `tracepath` ask whether packets can travel and what the path seems to look like. `curl` asks whether an application protocol can connect, negotiate TLS, send headers, and receive a response. `ss` asks what the local kernel believes is listening. `getent`, `dig`, and `host` ask whether name resolution agrees across the local system, a chosen resolver, and authoritative DNS. `ufw`, `iptables`, and `nft` ask whether host policy permits the traffic you expect.
 
-## Build a Troubleshooting Ladder Before Running Commands
+The same sequence also makes Kubernetes troubleshooting less magical. Pods, Services, CoreDNS, kube-proxy, CNI plugins, NetworkPolicy controllers, and cloud load balancers add layers, but they do not remove the Linux facts underneath. If a node cannot resolve a name, pods on that node start from bad evidence. If a service listens only on `127.0.0.1`, another host cannot reach it by retrying harder. If a host firewall rejects a node port, the Service object can still look correct. Reliable operators prove the host layer before blaming the cluster layer.
 
-Networking tools are most useful when they are arranged as a ladder instead of scattered like a drawer of spare cables. At the bottom of the ladder is reachability: can this machine send a packet toward the target and receive any answer? Above that is name resolution: does the name point to the address you think it points to, and which resolver gave you that answer? Higher still is service behavior: is a process listening on the expected address and port, and can an HTTP or API request complete? At the top are policy and trust checks, including firewalls and checksum verification for tools you download during the fix.
+## The Tool Stack as a Layered Investigation
 
-The ladder matters because every step changes the set of likely causes. If `ping` to an IP address works but `curl https://api.example.com/health` fails, the network path probably exists and the failure may be DNS, TLS, HTTP, or application health. If `dig` returns the new address from a public resolver but not from your office resolver, the provider record is probably fine and your local cache or resolver policy deserves attention. If `ss` shows PostgreSQL listening only on `127.0.0.1:5432`, no amount of remote retry logic will make a separate host connect, because the service accepted only loopback traffic by design.
+A useful troubleshooting session starts with a ladder. At the bottom is local context: the address you are testing from, the route the kernel selected, and the resolver your system actually uses. Above that is network reachability, where ICMP and path probes give early evidence without proving application health. Above reachability is naming, because a healthy path to the wrong address is still a failure. Above naming is the transport and application protocol, where TCP, TLS, HTTP status codes, headers, and response bodies finally tell you how the service behaved.
 
-Think of the ladder as a set of receipts. Each command should let you say, "I have evidence for this layer, so I can stop guessing about it." That is why the order often starts with the cheapest tests and moves toward more specific tools. `ping` and `tracepath` test the path broadly, `dig` tests naming, `ss` tests the local socket table, `curl` tests the application protocol, and `ufw` or `iptables` tests host policy. The tools overlap, but they do not replace each other, because a passing result at one layer can hide a failure at another layer.
+The ladder prevents two common mistakes. The first mistake is skipping straight to the application and treating a timeout as proof that the app is broken. The second mistake is stopping after a low-level success and treating a working ping as proof that HTTPS, DNS, certificates, and firewall policy must also be healthy. A passing result only proves the question that command asked. A failing result only narrows the next question if you understand which layer produced the failure.
 
-Here is the mental model you should keep beside the terminal:
+```mermaid
+flowchart TD
+    Symptom["User symptom or alert"]
+    Local["Local host context<br/>ip addr, ip route, resolver state"]
+    Reach["Reachability and path<br/>ping, traceroute, tracepath"]
+    DNS["Name resolution<br/>getent, dig, host, resolvectl"]
+    Socket["Local sockets<br/>ss, service logs"]
+    App["Application protocol<br/>curl, HTTP headers, TLS"]
+    Policy["Host policy<br/>ufw, iptables, nft"]
+    K8s["Kubernetes layer<br/>Pod, Service, CoreDNS, NetworkPolicy"]
 
-```text
-+--------------------+     +--------------------+     +--------------------+
-| Client process     | --> | Local kernel       | --> | Network path       |
-| curl, app, script  |     | sockets, routing   |     | routers, NAT, ACLs |
-+--------------------+     +--------------------+     +--------------------+
-          |                          |                          |
-          v                          v                          v
-+--------------------+     +--------------------+     +--------------------+
-| DNS resolver       |     | Host firewall      |     | Remote service     |
-| dig, host, cache   |     | ufw, iptables      |     | ss, HTTP, TLS      |
-+--------------------+     +--------------------+     +--------------------+
+    Symptom --> Local
+    Local --> Reach
+    Reach --> DNS
+    DNS --> Socket
+    Socket --> App
+    App --> Policy
+    Policy --> K8s
+    DNS --> App
+    Reach --> Policy
 ```
 
-This diagram is deliberately host-centered. In a Kubernetes 1.35+ cluster, the same questions appear with more layers: pod DNS, Service routing, NetworkPolicy, node firewalls, and cloud load balancers. You still start with evidence. If a node cannot resolve a name, a pod scheduled there inherits a bad starting point. If the host firewall drops a port, a perfectly healthy application may look dead from outside. Before running this ladder on a production issue, pause and predict: which layer would you test first if an IP address works but the hostname fails, and what result would let you move on with confidence?
+The order in the diagram is a default, not a law. If the alert says "certificate verify failed," start with `curl -v` and certificate evidence, then work down only if the connection itself fails. If a pod is `CrashLoopBackOff`, start with process and log evidence before testing the network. When the symptom is a generic timeout, though, the ladder is a good discipline because it moves from cheap, low-risk observations toward more specific and potentially state-changing work.
 
-## Reachability and Path Evidence with `ping` and `traceroute`
+The strongest habit is to write down the claim next to the command. `ping -c 4 8.8.8.8` does not mean "the internet works"; it means this host sent ICMP echo requests to one public address and received replies. `curl -v https://api.example.com/health` does not mean "the API is healthy"; it means DNS, TCP, TLS, and HTTP progressed far enough to show the exact response or failure mode. `sudo ss -ltnp` does not mean "remote clients can connect"; it means the local kernel has a listening socket on a specific address and port.
 
-`ping` is the first responder because it asks a simple question with a fast answer: can the target receive an ICMP echo request and can your machine receive the reply? That question is narrower than people think. A successful ping proves that one packet type can make a round trip, but it does not prove that TCP port 443 is open or that an application is healthy. A failed ping also does not prove the host is down, because many firewalls and cloud providers block ICMP while leaving normal service ports available.
+That claim discipline is especially important during handoffs. A message such as "network is down" forces the next engineer to repeat your work. A message such as "from node-a, `dig api.example.com @10.96.0.10` returns the old address, but `dig api.example.com @8.8.8.8` returns the new address" gives a clear next move. It separates resolver behavior from route behavior and keeps the incident from drifting into vague opinions.
+
+## Reachability and Latency with `ping`, `traceroute`, and `tracepath`
+
+`ping` sends ICMP Echo Request messages and waits for Echo Reply messages. That makes it a fast reachability probe, but its scope is narrower than many operators assume. A successful ping proves that the target or an intermediate system answered ICMP for that address at that time. It does not prove that TCP port 443 is open, that TLS will verify, that the HTTP handler is healthy, or that a Kubernetes Service is routing traffic correctly. A failed ping also does not prove the target is down, because many firewalls and cloud networks intentionally block ICMP while allowing application ports.
 
 ```bash
-# Ping a host - press Ctrl+C to stop
-ping google.com
-
-# Ping with a specific number of packets
-ping -c 4 google.com
-
-# Ping an IP address directly, which bypasses DNS
+# Compare direct IP reachability with name-based reachability.
 ping -c 4 8.8.8.8
+ping -c 4 example.com
+
+# Keep DNS out of the output when reverse lookups make the result noisy.
+ping -n -c 4 8.8.8.8
 ```
 
-The most useful habit is to compare name and address behavior. If `ping -c 4 8.8.8.8` succeeds but `ping google.com` fails before it sends packets, the path to the internet may be fine while DNS is broken. If both fail, you may have a local route, VPN, wireless, cloud security group, or upstream firewall problem. If the name ping resolves and sends packets but receives no replies, move to `curl` or a TCP-based traceroute before declaring the host unavailable.
+Read ping output as a measurement rather than as decoration. Packet loss tells you whether replies disappeared, and intermittent loss often explains flaky deployments better than average latency does. Round-trip time includes outbound travel, remote handling, and the return path, so it is not a one-way measurement. TTL is useful as a clue because IP decrements it at each hop, but it is not a reliable operating-system fingerprint. RFC 791 defines the IPv4 TTL field as a lifetime limiter, and RFC 792 defines the ICMP messages that make echo tests and time-exceeded diagnostics useful.
 
-```text
-PING google.com (142.250.80.46) 56(84) bytes of data.
-64 bytes from lhr25s34-in-f14.1e100.net (142.250.80.46): icmp_seq=1 ttl=117 time=5.42 ms
-64 bytes from lhr25s34-in-f14.1e100.net (142.250.80.46): icmp_seq=2 ttl=117 time=5.38 ms
-64 bytes from lhr25s34-in-f14.1e100.net (142.250.80.46): icmp_seq=3 ttl=117 time=5.51 ms
-64 bytes from lhr25s34-in-f14.1e100.net (142.250.80.46): icmp_seq=4 ttl=117 time=5.44 ms
+The first comparison is almost always IP address versus hostname. If `ping -c 4 8.8.8.8` succeeds but `ping example.com` fails before sending packets, you should suspect name resolution rather than the basic path to the internet. If the name resolves and packets leave but no replies return, do not stop there. Test the application port with `curl`, test the path with `tracepath` or `traceroute`, and remember that the target may simply refuse ICMP while still serving HTTPS.
 
---- google.com ping statistics ---
-4 packets transmitted, 4 received, 0% packet loss, time 3005ms
-rtt min/avg/max/mdev = 5.380/5.437/5.510/0.047 ms
-```
-
-Read the output like a measurement sheet, not like decoration. `icmp_seq` tells you whether replies arrived in order or whether packets disappeared. `time` gives round-trip latency, which includes the outbound trip, remote processing, and return trip. Packet loss is often more important than average latency, because intermittent loss produces flaky deployments, slow package installs, and failed health checks that disappear during a manual retest.
-
-| Field | Meaning |
-|-------|---------|
-| `64 bytes` | Size of the response packet |
-| `icmp_seq=1` | Sequence number; skipped numbers indicate packet loss |
-| `ttl=117` | Time to Live after routers decremented the packet on the path |
-| `time=5.42 ms` | Round-trip latency for one request and reply |
-| `0% packet loss` | The critical health signal for basic reachability |
-| `rtt min/avg/max/mdev` | Latency statistics; `mdev` shows jitter or variance |
-
-TTL is a clue, not a fingerprint. Linux often starts at 64, Windows often starts at 128, and network equipment often starts at 255. When you receive a reply with `ttl=52`, a Linux origin about 12 hops away is plausible. When you receive `ttl=115`, a Windows origin about 13 hops away is plausible. The inference is useful during triage, but you should avoid turning it into certainty, because middleboxes, containers, and custom kernel settings can change starting values.
-
-| Starting TTL | Common Source |
-|--------------|---------------|
-| 64 | Linux and many Unix-like systems |
-| 128 | Windows systems |
-| 255 | Routers, switches, and network appliances |
-
-`traceroute` complements ping by asking where packets travel, not merely whether they return. It works by sending probes with increasing TTL values. The first probe expires at the first router, the second expires at the second router, and so on until the destination or a maximum hop count is reached. This trick, written by Van Jacobson in 1987, turns a protective IP field into a path discovery tool.
+`traceroute` and `tracepath` ask a different question: where do probes appear to travel before they reach the destination or stop producing useful answers? They use increasing TTL or hop-limit values so that routers along the way send back time-exceeded messages. That technique reveals a sequence of responding hops, but it does not reveal every device and it does not prove the return path is symmetric. Modern networks often rate-limit or suppress probe replies, so stars in the middle of the output are evidence to interpret, not proof that traffic died there.
 
 ```bash
-# Trace the route to a host
-traceroute google.com
+# Classic path probe. UDP is common, but firewalls may treat it differently from HTTPS.
+traceroute example.com
 
-# Use TCP instead of UDP, which can pass through some firewalls more reliably
-traceroute -T google.com
+# TCP probes are useful when you need the path to resemble HTTPS more closely.
+traceroute -T -p 443 example.com
 
-# Alternative: tracepath does not need root and uses UDP
-tracepath google.com
+# Non-root path probing with path-MTU hints.
+tracepath example.com
 ```
 
-The trap with traceroute is overconfidence. Asterisks at an intermediate hop often mean only that one router refused to answer probes; they do not automatically mean traffic stopped there. A real path problem is more convincing when latency jumps at one hop and stays high afterward, or when all later hops fail including the destination. When you are debugging customer reports, compare traces from multiple vantage points if possible, because internet routing is asymmetric and the return path may differ from the path you can see.
+`tracepath` is useful on locked-down systems because it does not require the same privileges as some traceroute modes and it reports path MTU observations. Path MTU matters when small tests pass but large responses stall, because an oversized packet that cannot be fragmented or cannot receive the needed ICMP message can create confusing hangs. Operators often see this around VPNs, tunnels, cloud overlays, and container networks where encapsulation adds headers and reduces the usable payload size.
 
-```text
-traceroute to google.com (142.250.80.46), 30 hops max, 60 byte packets
- 1  gateway (192.168.1.1)                       1.234 ms   1.112 ms   1.098 ms
- 2  isp-router.example.net (10.0.0.1)           8.432 ms   8.215 ms   8.556 ms
- 3  * * *
- 4  core-router.isp.com (203.0.113.1)          12.654 ms  11.987 ms  12.123 ms
- 5  google-peer.isp.com (198.51.100.1)         11.345 ms  11.456 ms  11.234 ms
- 6  lhr25s34-in-f14.1e100.net (142.250.80.46)  5.678 ms   5.543 ms   5.612 ms
+The most useful traceroute pattern is persistence. A single high number or a row of stars at one intermediate hop is weak evidence because that router may deprioritize replies to probes while forwarding real traffic normally. A latency jump that begins at one hop and remains high through every later hop is stronger evidence. A path that reaches the destination but `curl` still times out suggests that routing is probably not the only problem. In that case, move up to DNS, TCP, TLS, service binding, or policy instead of rerunning path probes until the output looks dramatic.
+
+```mermaid
+flowchart TD
+    Start["Timeout or slow network symptom"]
+    IPPing{"Can an IP address be reached?"}
+    NamePing{"Does the hostname resolve and respond?"}
+    Path{"Does path probing reach the destination?"}
+    Port{"Does TCP or HTTPS connect with curl?"}
+    Local{"Is the service listening on the expected address?"}
+    Policy{"Do host firewall rules allow the flow?"}
+    DNSFix["Investigate resolver, cache, and authoritative DNS"]
+    RouteFix["Investigate route, VPN, gateway, cloud ACL, or upstream path"]
+    AppFix["Inspect HTTP status, TLS, service logs, and backend health"]
+    BindFix["Fix bind address, service config, or listener"]
+    FirewallFix["Inspect and adjust only targeted firewall rules"]
+
+    Start --> IPPing
+    IPPing -- "No" --> RouteFix
+    IPPing -- "Yes" --> NamePing
+    NamePing -- "No" --> DNSFix
+    NamePing -- "Yes or ICMP blocked" --> Path
+    Path -- "Stops before destination" --> RouteFix
+    Path -- "Reaches destination" --> Port
+    Port -- "Connects and returns HTTP" --> AppFix
+    Port -- "Connection refused" --> Local
+    Port -- "Timeout" --> Policy
+    Local -- "Wrong bind address" --> BindFix
+    Policy -- "Drop or reject found" --> FirewallFix
 ```
 
-| Column | Meaning |
-|--------|---------|
-| Hop number | Each line is a router or endpoint along the path |
-| Hostname and IP | The identity returned for that hop, when available |
-| Three times | Three probe timings to that hop |
-| `* * *` | The hop did not answer probes; this is not always a fault |
+## HTTP and API Debugging with `curl`
 
-| Feature | `traceroute` | `tracepath` |
-|---------|--------------|-------------|
-| Requires root | Usually, depending on probe method | No |
-| Probe method | UDP, ICMP, or TCP | UDP |
-| MTU discovery | Not the main feature | Reports path MTU details |
-| Everyday use | Flexible path testing | Quick non-root path testing |
-
-> **War Story: The misleading hop.** A retail platform saw checkout latency jump during a regional incident. The first traceroute showed stars at an ISP router, so the team blamed that router and opened a low-quality carrier ticket. A second trace from another region showed normal intermediate stars but a consistent latency jump only after traffic crossed an ocean. The useful evidence was not the stars; it was the point where delay became persistent.
-
-Pause and predict: if `ping -c 4 8.8.8.8` succeeds with low latency, but `traceroute -T api.example.com` reaches the destination and `curl` still times out, which layer should you inspect next? The best next step is not another path test. You have enough evidence that packets can travel, so you should move to DNS, port binding, firewall policy, or application protocol behavior depending on the exact timeout.
-
-## HTTP and Download Evidence with `curl` and `wget`
-
-`curl` is the network tool you use when the question becomes protocol-specific. `ping` can tell you that a host may be reachable, but `curl` can show whether a TCP connection opens, whether TLS negotiates, whether the server redirects, which headers return, and whether the body matches your expectation. That makes it the everyday microscope for APIs, load balancers, package endpoints, health checks, and webhook integrations.
+`curl` is the everyday tool for proving what happened at the application protocol layer. It can show DNS selection, TCP connection attempts, TLS negotiation, request headers, response headers, redirects, status codes, and response bodies. That range matters because many incidents look identical from a browser or a client library. A timeout, a refused connection, a certificate failure, an HTTP 401, an HTTP 429, and an HTTP 503 can all be reported as "the API is down," but they point to very different fixes.
 
 ```bash
-# Simple GET request that shows the response body
-curl https://httpbin.org/get
+# Show the full conversation without hiding connection setup.
+curl -v https://example.com/
 
-# Follow redirects, such as HTTP to HTTPS
-curl -L http://google.com
+# Show response headers and the body together.
+curl -i https://example.com/
 
-# Save output to a file
-curl -o page.html https://example.com
-
-# Silent mode, useful for scripts that parse the response
-curl -s https://httpbin.org/get
+# Follow redirects while still surfacing failure as a nonzero exit.
+curl -L --fail-with-body https://example.com/
 ```
 
-The first choice is usually whether you want the body, the headers, or the full conversation. A monitoring script that checks a static website every minute may prefer `curl -I` because headers are enough to prove an HTTP response without transferring a large body. An engineer debugging a broken API call should usually prefer `curl -v`, because the verbose stream separates DNS, TCP, TLS, request headers, response headers, and response body. Before running this, what output do you expect if the service is reachable but overloaded: a timeout, a connection refusal, or an HTTP 503 response?
+The most important part of `curl -v` is the direction marker. Lines beginning with `*` are curl's own progress and connection notes. Lines beginning with `>` are request data sent by the client. Lines beginning with `<` are response data returned by the server. If you see `Connected` followed by a TLS handshake and then `< HTTP/2 503`, you have evidence that DNS, routing, TCP, and TLS progressed far enough for the application or load balancer to return a service-unavailable response. The next move is not another ping; it is backend health, overload, routing rules, or dependency behavior.
+
+Headers are often enough to separate network failures from application decisions. `curl -I` sends a HEAD request, which is useful for checking status, redirects, cache headers, and server identity without downloading the body. Some applications mishandle HEAD, so compare with `curl -i` when a HEAD result disagrees with a browser, a health check, or an application client. RFC 9110 (HTTP semantics) and RFC 9112 (HTTP/1.1 message syntax) are the current references, and even when HTTP/2 or HTTP/3 is negotiated, the habit of reading method, target, headers, status, and body remains the same.
 
 ```bash
-curl -v https://httpbin.org/get
+# Check redirect behavior and security headers.
+curl -I http://example.com/
+curl -I https://example.com/
+
+# Send a realistic host header when testing a virtual host or ingress.
+curl -v -H 'Host: app.example.com' https://203.0.113.10/
+
+# Bound a test so it fails quickly during an incident.
+curl --connect-timeout 3 --max-time 10 -v https://example.com/
 ```
 
-```text
-* Trying 3.230.169.85:443...
-* Connected to httpbin.org (3.230.169.85)
-* SSL connection using TLS 1.3
-> GET /get HTTP/2
-> Host: httpbin.org
-> User-Agent: curl/8.5.0
-> Accept: */*
->
-< HTTP/2 200
-< content-type: application/json
-< content-length: 256
-< server: gunicorn/19.9.0
-<
-{
-  "headers": { "...": "..." },
-  "origin": "203.0.113.42",
-  "url": "https://httpbin.org/get"
-}
-```
+TLS failures deserve their own reading discipline. A certificate-name mismatch usually means the client reached a server, but not the server name it expected. An unknown certificate authority may mean the service uses a private CA that the client does not trust. An expired certificate is not a route failure. A handshake failure can involve protocol versions, cipher suites, client certificates, or a proxy between the client and service. `curl -v` shows enough of the handshake to decide whether you need certificate material, load balancer configuration, or application logs.
 
-The direction markers are the key. Lines beginning with `>` are what your client sent, and lines beginning with `<` are what the server returned. If you see `Connected` followed by an HTTP status, you have proven more than reachability: the port accepted TCP, TLS probably completed for HTTPS, and the server generated an application-layer response. If the status is `429 Too Many Requests`, the fix is not another firewall rule; it is rate-limit handling, backoff, or quota review.
-
-> **War Story: The API rate-limit trap.** A developer wrote a script that called a third-party API with ordinary `curl` output redirected away. The script appeared to fail randomly after 100 requests, and the first investigation chased DNS and firewall theories. Switching to `curl -v` showed `HTTP/1.1 429 Too Many Requests` and a `Retry-After: 60` header, which proved the network was fine and the client needed pacing.
-
-Headers alone are powerful when you are checking redirects, cache behavior, content type, or load balancer identity. `curl -I` makes a HEAD request, while `curl -i` includes response headers before the body. Some services handle HEAD differently from GET, so if a health check built with `curl -I` disagrees with a browser or an application client, test with `curl -i` or `curl -v` before trusting the conclusion.
+mTLS adds one more identity check: the server asks the client to present a certificate, and the client must also trust the server. In a lab or controlled environment, curl can send a client certificate and key with `--cert` and `--key`, and it can pin trust to a specific CA bundle with `--cacert`. Do not paste private keys into tickets or chat, and do not use `-k` as a permanent fix. `-k` only disables certificate verification for that request, which can hide a man-in-the-middle risk or a wrong endpoint during the exact moment when you need stronger evidence.
 
 ```bash
-# Show headers only
-curl -I https://example.com
-
-# Show headers and body together
-curl -i https://example.com
+# mTLS shape only: use real paths from your controlled lab or secret store.
+curl -v \
+  --cert ./client.crt \
+  --key ./client.key \
+  --cacert ./ca.crt \
+  https://api.example.com/health
 ```
 
-For downloads, `curl` and `wget` overlap but have different personalities. `curl` is excellent for explicit protocol work and scripts that need headers, methods, uploads, and precise flags. `wget` is convenient when you want files, recursive site downloads, or simple resume behavior. In infrastructure automation, the more important decision is not which tool feels nicer; it is whether the script handles redirects, failures, checksums, and partial files predictably.
+For downloads, `curl` can also prove whether automation is handling redirects, partial failures, and checksums safely. The curl manual documents many flags, but a practical baseline is `-fL` for fail-on-error and redirects, `-o` for an explicit output path, and a checksum command from the publisher before execution. Infrastructure incidents get worse when a recovery script silently downloads an HTML error page into a binary path or runs an unverified replacement tool. The network test and the supply-chain check belong in the same workflow because both protect the operator from trusting the wrong evidence.
+
+## Local Listening Sockets with `ss`
+
+When a remote client cannot connect to a service, inspect the server before blaming the network. The Linux kernel owns the socket table, and `ss` reads that table quickly. A process can be running, healthy in logs, and still unreachable because it listened on the wrong address, the wrong port, the wrong protocol, or only the loopback interface. `systemctl status` tells you whether a service unit is active; `ss` tells you what the kernel is prepared to accept.
 
 ```bash
-# Download and save with the remote filename
-curl -O https://example.com/file.tar.gz
+# Listening TCP sockets, numeric addresses, process names when permitted.
+sudo ss -ltnp
 
-# Download with a custom name
-curl -o myfile.tar.gz https://example.com/file.tar.gz
+# Listening UDP sockets as well.
+sudo ss -lunp
 
-# Resume a broken download
-curl -C - -O https://example.com/large-file.iso
+# Filter to one expected port.
+sudo ss -ltnp 'sport = :8080'
 ```
 
-| Feature | `curl` | `wget` |
-|---------|--------|--------|
-| Protocols | 25+ | HTTP, HTTPS, FTP |
-| API interaction | Excellent | Basic |
-| Recursive downloads | No | Yes, with `wget -r` |
-| Resume downloads | `curl -C -` | `wget -c` |
-| Installed by default | Most distributions | Most distributions |
-| Best for | APIs and debugging | Downloading files or sites |
+The address column is the first thing to read. `127.0.0.1:5432` means the service is listening only on IPv4 loopback, so another host cannot connect to it through a normal network interface. `0.0.0.0:8080` means the process accepts IPv4 connections on all local interfaces, subject to routing and firewall policy. `[::]:8080` means IPv6 wildcard, and depending on system settings it may or may not also accept IPv4-mapped connections. These details explain why "the process is running" is not enough evidence.
+
+Process ownership is the second thing to read. With `sudo`, `ss -p` can show which process owns the socket, which helps you catch port conflicts and wrong daemons. A failed deployment may leave an old process listening while the new service crashes. A local development server may bind a port expected by a production daemon. A container runtime or sidecar may expose a listener that makes the host look healthy even though the application process inside the container is not the one answering.
+
+`netstat` appears in older runbooks because it was historically common through the `net-tools` package. On modern Linux systems, `ss` from iproute2 is the preferred tool because it is faster, maintained with the rest of the contemporary networking utilities, and exposes socket state directly. You may still need to read old `netstat -tulpn` examples, but new procedures should teach `ss` first and mention `netstat` only as a compatibility translation for legacy hosts.
+
+Socket state also helps with client-side failures. A client machine can show many connections stuck in `SYN-SENT` when outbound packets leave but no reply completes the TCP handshake. A server can show a growing set of `ESTAB` connections when clients connect but the application stalls later. `ss -tan state syn-sent` and `ss -tan state established` are not replacements for tracing, but they tell you whether the kernel sees connection attempts at all. That is often the difference between debugging policy and debugging application behavior.
+
+## DNS Investigation with `getent`, `dig`, `host`, and systemd-resolved
+
+DNS troubleshooting starts with a subtle question: are you testing the same resolver path your application uses? `dig` is excellent for asking DNS questions, but by default it may not exercise every Name Service Switch rule, `/etc/hosts` entry, mDNS path, or systemd-resolved routing policy that ordinary applications use. `getent hosts name.example` is often the first local check because it goes through the system's configured name service path. If `getent` and `dig` disagree, that disagreement is evidence, not noise.
 
 ```bash
-# wget basics
-wget https://example.com/file.tar.gz
-wget -c https://example.com/large.iso
-wget -q https://example.com/file.tar.gz
+# Application-like local resolution through NSS.
+getent hosts example.com
+
+# DNS-focused lookup through the configured resolver.
+dig example.com
+
+# Compact answer view.
+dig +short example.com A
+dig +short example.com AAAA
 ```
 
-Downloading a tool is not the same as safely installing it. Infrastructure scripts often fetch `kubectl`, Helm, Terraform, or a vendor agent during CI, then immediately execute the file. That pattern is attractive because it is short, but it expands a supply-chain failure into your build or cluster environment. A safe script downloads the artifact, downloads the published checksum from the same release source, verifies the exact bytes, and only then makes the binary executable.
+`dig` becomes powerful when you choose the resolver explicitly. If the local resolver returns one answer and a public resolver returns another, you have separated local caching or policy from authoritative data. If an internal resolver returns a private address and a public resolver returns no answer, that may be correct split-horizon DNS rather than an outage. If a Kubernetes pod uses CoreDNS but the node uses systemd-resolved, you must test both views before deciding where the fault lives.
 
 ```bash
-# Step 1: Download the file
-curl -LO https://example.com/tool-v1.35.0-linux-amd64.tar.gz
+# Compare the local configured resolver with a chosen recursive resolver.
+dig app.example.com
+dig @8.8.8.8 app.example.com
 
-# Step 2: Download the checksum file
-curl -LO https://example.com/tool-v1.35.0-linux-amd64.tar.gz.sha256
-
-# Step 3: Verify
-sha256sum -c tool-v1.35.0-linux-amd64.tar.gz.sha256
+# Ask for specific record types instead of relying on defaults.
+dig app.example.com A
+dig app.example.com AAAA
+dig app.example.com CNAME
+dig app.example.com MX
+dig app.example.com TXT
 ```
 
-```text
-tool-v1.35.0-linux-amd64.tar.gz: OK
-```
+TTL is the field that turns DNS from a yes-or-no question into a timeline. A resolver that returns an old address with a remaining TTL of 2800 seconds may be behaving correctly if it cached the record before a change. Another resolver that returns the new address may also be correct if it missed the earlier cache window or refreshed later. RFC 1035 defines the DNS message and resource-record model, but the operational lesson is simple: a DNS change is not globally instantaneous, and your evidence should name which resolver answered and what TTL remained.
 
-When the checksum fails, stop. A mismatch may be a corrupted transfer, a stale checksum file, a mirror problem, or active tampering. The reason does not matter during the first response; the file is not the file the publisher described. The same principle applies when installing Kubernetes 1.35+ tooling. Your script can use the `k` alias after installation, but the binary itself should be verified before it ever talks to a cluster.
+`dig +trace` is a deeper tool because it walks the delegation chain from the root toward the authoritative servers. It is slower and noisier than a normal query, but it is useful when you need to prove whether the public delegation path is intact. Use it after simpler comparisons, not as your first command during every incident. If a normal query to the authoritative server returns the expected record, but a recursive resolver returns something else, the problem is often cache, forwarding policy, or resolver configuration rather than the zone itself.
 
 ```bash
-# Generate the checksum for a downloaded file
-sha256sum tool-v1.35.0-linux-amd64.tar.gz
+# Trace delegation from the root down toward the authoritative answer.
+dig +trace app.example.com
 
-# Compare the output with the published checksum before using the file
+# Query a known authoritative server directly when you have its name.
+dig @ns1.example.net app.example.com A
+
+# Use host for a quick human-readable lookup.
+host app.example.com
+host -t MX example.com
 ```
+
+On many distributions, systemd-resolved sits between applications and upstream DNS servers. It can provide a local stub listener, route queries by domain, maintain per-link DNS settings, and expose status through `resolvectl`. That design is useful on laptops, VPN-connected hosts, and servers with multiple interfaces, but it can confuse investigations if you only read `/etc/resolv.conf` and assume it is the whole story. The systemd-resolved documentation explains the stub and routing behavior; in practice, `resolvectl status` is the everyday command that shows which DNS servers and domains each link is using.
 
 ```bash
-# Download kubectl targeting current stable v1.35.0
-curl -LO "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl"
+# Inspect systemd-resolved's current view when it is present.
+resolvectl status
 
-# Download the checksum
-curl -LO "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl.sha256"
+# Query through resolved and include detail.
+resolvectl query app.example.com
 
-# Verify
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-
-# Expected output: kubectl: OK
+# Flush caches only in a disposable lab or after recording evidence.
+sudo resolvectl flush-caches
 ```
 
-The security and reliability implications of artifact trust are further analyzed in Modern DevOps 1.6 (*DevSecOps*).
-<!-- incident-xref: codecov-2021-bash-uploader -->
-<!-- incident-xref: codecov-2021 -->
+Be careful with cache-clearing commands. Flushing a resolver cache may make your local test pass while erasing the evidence needed to explain why the application failed. In production, capture the old and new answers, TTLs, resolver addresses, and relevant timestamps before clearing anything. The better first move is comparison: local application-like lookup with `getent`, local DNS lookup with `dig`, chosen public or internal resolver with `dig @server`, and authoritative or traced evidence when the delegation path is in question.
 
-## Local Socket Evidence with `ss`
+## Local Firewall Inspection with `ufw`, `iptables`, and `nft`
 
-When a remote client cannot connect, the local server may still be the problem. A service can be installed, enabled, and logging "started" while listening on the wrong address or not listening at all. `ss` reads the kernel's socket table and answers a question that logs often blur: which processes own which local sockets right now? That makes it the tool to run before editing firewall rules or blaming the network team.
+Host firewalls are powerful because they sit close to the workload. They are also risky because they share a host with SSH, package management, monitoring, Kubernetes node agents, container runtimes, and sometimes cloud-init or security tooling. During troubleshooting, your default posture should be inspect first, change only a targeted rule, and never flush a ruleset just to "see if it helps." Flushing can disconnect you, break cluster networking, and erase the exact state another controller expects to manage.
+
+`ufw` is a friendly interface commonly used on Ubuntu systems. It expresses policy in a way humans can read quickly, but it is still backed by netfilter machinery underneath. Start with `sudo ufw status verbose` and `sudo ufw status numbered` so you can see whether it is active, what the defaults are, and which rules are present. `sudo ufw show raw` can reveal lower-level rules when the simple status output is not enough. Do not run `ufw reset` during an incident unless a runbook explicitly says the host is disposable and you have console access.
 
 ```bash
-# Show all listening TCP and UDP ports with process names
-sudo ss -tulpn
-```
-
-Each flag removes ambiguity. `-t` and `-u` include TCP and UDP sockets, `-l` keeps only listeners, `-p` asks for owning processes, and `-n` keeps numeric ports instead of translating them into service names. The command often needs `sudo` because process ownership is sensitive. Without elevated permissions, the port may still appear, but the process column can be empty, which robs you of the evidence you needed.
-
-| Flag | Meaning |
-|------|---------|
-| `-t` | Show TCP sockets |
-| `-u` | Show UDP sockets |
-| `-l` | Show listening sockets waiting for connections |
-| `-p` | Show the process using each socket |
-| `-n` | Show port numbers instead of service names |
-
-```text
-State    Recv-Q   Send-Q   Local Address:Port    Peer Address:Port   Process
-LISTEN   0        128      0.0.0.0:22            0.0.0.0:*           users:(("sshd",pid=892,fd=3))
-LISTEN   0        511      0.0.0.0:80            0.0.0.0:*           users:(("nginx",pid=1234,fd=6))
-LISTEN   0        4096     127.0.0.1:5432        0.0.0.0:*           users:(("postgres",pid=567,fd=5))
-LISTEN   0        4096     [::]:6443             [::]:*              users:(("kube-apiserver",pid=2345,fd=7))
-```
-
-The local address is the field that turns vague troubleshooting into concrete design. `0.0.0.0:80` means the process is listening on all IPv4 interfaces, so remote clients can attempt to connect if routing and firewall policy allow it. `127.0.0.1:5432` means only processes on the same host can connect, which is a safe default for many databases but a blocker for a remote microservice. `[::]:6443` is the IPv6 all-interfaces form and often appears for services that also accept IPv4 depending on system configuration.
-
-| Column | Meaning |
-|--------|---------|
-| `State` | `LISTEN` means the process is waiting for connections |
-| `Recv-Q / Send-Q` | Queue sizes; growing values can indicate pressure |
-| `Local Address:Port` | The local interface and port the service uses |
-| `Peer Address:Port` | For listeners, usually any peer |
-| `Process` | Program name, process ID, and file descriptor |
-
-| Address | Who Can Connect |
-|---------|-----------------|
-| `0.0.0.0:80` | Anyone who can route to the host and pass firewall rules |
-| `127.0.0.1:5432` | Only local processes on the same machine |
-| `[::]:6443` | IPv6 all interfaces, often relevant for Kubernetes API servers |
-| `10.0.1.5:8080` | Clients that can reach that specific private interface |
-
-Useful variations let you narrow the view without losing the underlying proof. Searching for a port is practical during deployment checks, but remember that `grep :80` can match unrelated values in some outputs. `ss -tn` shows established TCP connections rather than listeners, which is useful when you need to know whether clients are currently connected. `ss -s` summarizes socket state and can reveal a host drowning in connections even before you know which process deserves blame.
-
-```bash
-# Find what is listening on a specific port
-sudo ss -tulpn | grep :80
-
-# Show all established TCP connections
-ss -tn
-
-# Count connections per state
-ss -s
-```
-
-> **War Story: The localhost database.** A team moved a reporting worker from the database host to a separate VM and immediately saw connection refused errors. PostgreSQL was running, logs looked clean, and the firewall allowed the port. `sudo ss -tulpn` showed `127.0.0.1:5432`, which meant the service had never been exposed beyond loopback. The fix was a deliberate database bind-address and access-control change, not a retry loop.
-
-Pause and predict: on a fresh cloud server where you are connected over SSH, which service and port must already be listening for your current terminal session to exist? You should expect an SSH daemon, commonly on TCP port 22, bound to an address reachable from your client. If it is missing from `ss`, either the session is using a different transport, the service name is hidden by permissions, or you are inspecting the wrong machine.
-
-## DNS Evidence with `dig` and `host`
-
-DNS failures are frustrating because they look like network failures from the application side. A browser says a site cannot be reached, a deployment cannot pull from a registry, or a pod cannot connect to a service by name. The first discipline is to separate name resolution from packet delivery. If an IP address works but a name fails, do not keep testing the IP path; collect DNS evidence from the resolver that the system actually uses and from another resolver you trust for comparison.
-
-`host` is the quick tool. It turns a name into addresses, an address into a reverse name, or a query through a specific resolver with minimal ceremony. That makes it useful for a first pass or for scripts that need a compact answer. It is not as detailed as `dig`, but it often tells you whether the problem is "no answer at all" or "the answer is not what I expected."
-
-```bash
-# Basic lookup: name to IP
-host google.com
-
-# Reverse lookup: IP to name
-host 8.8.8.8
-
-# Query a specific DNS server
-host google.com 1.1.1.1
-```
-
-```text
-google.com has address 142.250.80.46
-google.com has IPv6 address 2a00:1450:4009:822::200e
-google.com mail is handled by 10 smtp.google.com.
-```
-
-`dig` is the tool you use when the details matter. It shows the status, answer section, record type, TTL, query time, and server that answered. Those details are how you distinguish a provider mistake from a local cache, a stale corporate resolver, split-horizon DNS, or a missing record type. When you query a specific server with `dig @8.8.8.8`, you bypass the default resolver and collect a second opinion.
-
-```bash
-# Basic A record lookup
-dig google.com
-
-# Query for specific record types
-dig google.com A
-dig google.com AAAA
-dig google.com CNAME
-dig google.com MX
-dig google.com NS
-dig google.com TXT
-
-# Short answer only, useful for scripts
-dig +short google.com
-
-# Query a specific DNS server
-dig @8.8.8.8 google.com
-
-# Trace the full DNS resolution path
-dig +trace google.com
-```
-
-```bash
-dig google.com
-```
-
-```text
-; <<>> DiG 9.18.18 <<>> google.com
-;; global options: +cmd
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 54321
-;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
-
-;; QUESTION SECTION:
-;google.com.                    IN      A
-
-;; ANSWER SECTION:
-google.com.             179     IN      A       142.250.80.46
-
-;; Query time: 5 msec
-;; SERVER: 127.0.0.53#53(127.0.0.53) (UDP)
-;; WHEN: Mon Mar 24 10:00:00 UTC 2026
-;; MSG SIZE  rcvd: 55
-```
-
-| Section | What It Tells You |
-|---------|-------------------|
-| `status: NOERROR` | DNS resolution succeeded; `NXDOMAIN` means no such domain |
-| `QUESTION SECTION` | The name and record type you requested |
-| `ANSWER SECTION` | The returned DNS records |
-| `179` | TTL in seconds, meaning how long the answer may be cached |
-| `IN A` | Internet class and IPv4 address record type |
-| `Query time: 5 msec` | How long the lookup took |
-| `SERVER: 127.0.0.53` | Which resolver answered your query |
-
-TTL explains why correct changes still appear wrong. If a record had a 3600-second TTL, a resolver that cached the old value can keep returning it until the timer expires. Your authoritative provider may already have the new value, while a nearby recursive resolver still serves the previous answer. Querying multiple resolvers and checking the TTL lets you tell the difference between a bad change and a normal propagation delay.
-
-A and CNAME records solve different design problems. An A record maps a name directly to an IPv4 address. A CNAME maps one name to another name, and the final target then resolves to one or more addresses. CNAMEs are common with CDNs and managed load balancers because the provider can change the final addresses without asking every customer to edit their DNS. The tradeoff is that CNAME chains add another place to inspect when a name points somewhere surprising.
-
-```bash
-# See the CNAME chain
-dig www.github.com
-```
-
-```text
-www.github.com.    CNAME   github.com.
-github.com.        A       140.82.121.3
-```
-
-> **War Story: The split-horizon surprise.** A company moved an internal API behind a new load balancer and updated public DNS correctly. Engineers on the VPN still reached the old IP because the internal resolver served a private zone with the same name. `dig @8.8.8.8 api.example.com` and `dig api.example.com` returned different answers, which proved the record was not globally wrong; the internal resolver policy was overriding it.
-
-Which approach would you choose here and why: flushing your laptop DNS cache, changing the public record again, or querying the authoritative nameserver first? If the public resolver and authoritative nameserver already show the expected value, changing the record again only creates churn. The better path is to identify which resolver still serves the old value, then decide whether waiting for TTL expiry, flushing a local cache, or updating an internal zone is appropriate.
-
-## Firewall and Policy Evidence with `ufw` and `iptables`
-
-Firewalls create the most confusing symptom in everyday troubleshooting: silence. A refused connection usually tells you that a host answered and no service was listening on the port. A timeout can mean packets disappeared anywhere along the path, including the local host firewall, a cloud security group, a router ACL, or a remote policy device. That is why firewall checks come after you prove the service is listening and before you blame the application.
-
-Ubuntu and Debian systems commonly use `ufw` as a friendly frontend for firewall policy. It is not a separate kernel firewall; it configures packet filtering rules underneath. The value of `ufw` is readability. During an incident, `sudo ufw status verbose` can quickly show whether a host denies inbound traffic by default, which ports are allowed, and whether a specific source has been blocked.
-
-```bash
-# Check firewall status and active rules
+# UFW read-only inspection.
 sudo ufw status verbose
-
-# Allow incoming HTTP and HTTPS
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Block a specific malicious documentation-range IP address
-sudo ufw deny from 203.0.113.50
-
-# Delete a rule if you accidentally blocked something
-sudo ufw delete deny from 203.0.113.50
+sudo ufw status numbered
+sudo ufw show raw
 ```
 
-Raw `iptables` remains an important fallback skill because many systems, appliances, container runtimes, and older runbooks still expose netfilter policy that way. Reading rules with packet counters and line numbers shows which chain is active and whether packets are matching a rule. You do not need to become a firewall engineer in this module, but you should recognize `INPUT`, `FORWARD`, and `OUTPUT`, and you should know that a default `DROP` policy requires explicit `ACCEPT` rules for expected inbound services.
+`iptables` is both a tool and a compatibility surface. Many distributions now route iptables commands through an nftables backend, while older systems may still use legacy iptables. That is why `iptables -V` matters: it tells you whether the command is using an nf_tables backend or a legacy backend. For inspection, prefer commands that list rules with counters and numeric addresses. Counters are useful because a rule that never matches may not be involved, while a rule whose packet count increases during your test is strong evidence.
 
 ```bash
-# List all active iptables rules with line numbers and packet counts
+# Inspect iptables without changing state.
+sudo iptables -V
+sudo iptables -S
 sudo iptables -L -n -v --line-numbers
+sudo iptables -t nat -L -n -v --line-numbers
 ```
 
-> **War Story: The silent drop outage.** A Redis cache listened on the expected private interface, and `ss` proved the process owned port 6379. The application still timed out because the host's `INPUT` policy dropped inbound traffic without logging. The team spent hours changing Redis settings before checking firewall counters. The durable fix was a runbook that required `ss`, then `ufw`, then raw `iptables` evidence for every timeout.
+`nft` is the native userspace tool for nftables. It represents rules as tables, chains, sets, maps, hooks, and priorities. For everyday troubleshooting, the first command is usually `sudo nft list ruleset`, optionally filtered with normal text tools after you have captured the full output. The nftables model can coexist with iptables-nft compatibility commands, so seeing a rule through `iptables` does not always mean the host is using the legacy kernel interface. The important operational question is which frontend manages the rule and whether another controller will rewrite it.
 
-In Kubernetes 1.35+ environments, be cautious before changing host firewalls. Nodes may rely on rules installed by kube-proxy, a CNI plugin, or cloud integration. A hasty flush can break pod networking, Services, or node health checks. The safe everyday pattern is read first, make the smallest source-and-port-specific change you can justify, record the reason, and verify with a client from the correct network location. If you use `k get pods -A` during the same incident, keep host evidence and cluster evidence separate so you do not confuse a node firewall issue with an application rollout issue.
-
-## Worked Example: A Timeout That Looks Like Everything
-
-The hardest beginner incidents are the ones where every layer has a partial truth. Imagine an internal API that should listen on `api.internal.example.com:8080`. A developer says DNS is broken because the hostname fails from a laptop. An operations engineer says the service is healthy because systemd reports it as active. A network engineer says the path is fine because the VM responds to ping. Each statement may be true, but none of them is enough to explain why a real client receives a timeout.
-
-```text
-+----------------------+     +----------------------+     +----------------------+
-| Laptop client        | --> | API virtual machine  | --> | API process          |
-| resolver, curl       |     | firewall, routing    |     | bind address, port   |
-+----------------------+     +----------------------+     +----------------------+
-+----------------------+     +----------------------+     +----------------------+
-| dig evidence         |     | ufw/iptables proof   |     | ss/curl evidence     |
-+----------------------+     +----------------------+     +----------------------+
-+----------------------+     +----------------------+     +----------------------+
-+----------------------+     +----------------------+     +----------------------+
+```bash
+# Inspect nftables state without flushing or editing.
+sudo nft list ruleset
+sudo nft list tables
+sudo nft list ruleset | grep -n "dport 443"
 ```
 
-Start with the client symptom and write it down in operational language: "from the laptop network, `curl -v http://api.internal.example.com:8080/health` times out." That wording is better than "the API is down" because it includes a source, a protocol, a name, a port, and a path. If you change the source to the server itself, the result may change. If you change the name to an IP address, the result may change. If you change the port, the result may change. Those differences are not noise; they are the clues.
+Kubernetes makes firewall inspection more delicate. kube-proxy, CNIs, service meshes, node-local DNS caches, and host security agents can all create rules that look unfamiliar. A node may have chains for service load balancing, masquerade behavior, pod CIDRs, or policy enforcement. If you flush those chains, the cluster can lose Service routing even though the manifests remain unchanged. When a node-level firewall is suspected, capture `ss`, `ip route`, relevant `iptables` or `nft` output, and Kubernetes Service or endpoint evidence before making a targeted change.
 
-The first useful split is name versus address. Run `dig api.internal.example.com` from the affected laptop or from a host on the same network segment. If the resolver returns no answer, an old address, or a private answer that differs from the expected environment, you have a DNS branch to investigate. Querying `dig @8.8.8.8 api.internal.example.com` can help, but only if the name is meant to be public. For internal names, the better second opinion may be the authoritative internal resolver, because public DNS may correctly know nothing about that private zone.
+The safest live test is a reversible rule with a narrow destination, protocol, and port in a lab host. Insert it at a known position, run one verification command, then delete the exact rule you inserted. Never use broad defaults as a quick experiment on a remote production machine. If you cannot guarantee console access and rollback, stop at inspection and propose the change through the normal incident process. A firewall command is not just a diagnostic; it changes the system you are trying to understand.
 
-If the name resolves to the expected private IP, move to reachability without pretending ping is a complete service test. A successful `ping -c 4` to the API VM shows that ICMP can make a round trip, which lowers suspicion about basic routing. A failed ping does not end the investigation, because the VM or network may drop ICMP while allowing TCP. When ping is blocked but the symptom is HTTP, a TCP-flavored check such as `curl -v` or `traceroute -T` is more relevant than repeating ICMP tests until someone gets a different result.
+## A Structured Troubleshooting Sequence
 
-Next, inspect the server from the inside. `sudo ss -tulpn` should show whether anything listens on port 8080, which address it binds to, and which process owns it. If the API is listening on `127.0.0.1:8080`, the service can answer local health checks while remaining unreachable from remote clients. If it listens on `10.0.1.5:8080`, clients must route to that private address and pass policy controls. If no process listens, firewall work is premature; the server has no application socket ready to accept the connection.
+A structured sequence keeps the investigation from bouncing between layers. Start by stating the symptom in observable terms: who is failing, from where, to which name or address, on which port, and since when. Then test from the failing vantage point first. A successful test from your laptop does not clear a node, a pod, a private subnet, or a VPN-connected host. The source matters because routes, resolvers, firewalls, and certificates are often different for each viewpoint.
 
-After the socket evidence looks correct, test the application locally with `curl -v http://127.0.0.1:8080/health` and, if appropriate, `curl -v http://10.0.1.5:8080/health` from the server. This catches a common configuration split where the process listens on all interfaces but the application rejects requests because the Host header, route, or upstream dependency is wrong. A local HTTP 503 points to application or dependency health. A local connection refusal points back to the listener. A local success with remote timeout points toward policy or path.
+The first host commands should be read-only and cheap. Capture address and route context, compare IP reachability with name-based reachability, inspect DNS answers and TTLs, and check whether the target service listens on the expected address. Use `curl -v` only after you know which hostname, address, and port you are testing. If the curl output returns an HTTP status, read the status and headers before calling it a network failure. A server-generated error is valuable proof that the network path reached something.
 
-Only then should you inspect host firewall policy. `sudo ufw status verbose` tells you whether a high-level rule permits the port from the client network. `sudo iptables -L -n -v --line-numbers` can show packet counters increasing on a drop rule, which is stronger evidence than simply seeing a default deny. Packet counters matter because they connect the symptom to the rule: if counters increase while the client retries, you have direct evidence that traffic reaches the host and is discarded there.
+```bash
+# A compact first-pass host checklist.
+ip -brief addr
+ip route get 8.8.8.8
+getent hosts app.example.com
+dig app.example.com
+ping -c 4 8.8.8.8
+tracepath app.example.com
+curl -v --connect-timeout 3 --max-time 10 https://app.example.com/health
+sudo ss -ltnp
+```
 
-This example also shows why changing two things at once is dangerous. If you change DNS and open the firewall together, then the next successful request does not tell you which change mattered. If the request still fails, you now have more states to reason about. The disciplined path is to preserve the before state, run one test, make one narrow change, and repeat the same test from the same source. That rhythm feels slow only when the incident starts; it becomes faster when the room fills with competing theories.
+After the first pass, branch based on the failure mode. Name lookup failures go to resolver comparison, TTLs, `/etc/hosts`, systemd-resolved, CoreDNS, or authoritative DNS. Connection refused goes to `ss`, bind addresses, service configuration, process ownership, and local logs. Connection timeout goes to routing, security groups, firewalls, NetworkPolicy, load balancers, or a remote process that is not replying. HTTP errors go to application logs, upstream health, authentication, rate limits, or dependency behavior. TLS errors go to certificates, SNI, trust stores, client certificates, and proxy configuration.
 
-The same ladder works for Kubernetes 1.35+ incidents, but the boundaries move. A pod may resolve through CoreDNS rather than the node resolver. A Service may route through kube-proxy or an eBPF data plane. NetworkPolicy may drop traffic before it reaches the destination container. Still, the host tools remain valuable because they tell you whether the node itself has working DNS, whether a node-level firewall is interfering, and whether a downloaded diagnostic binary was verified before use. Cluster tools add context; they do not remove the need for Linux evidence.
+Good troubleshooting also records negative evidence. If `ss` shows no listener on port 8080, that rules out a remote firewall as the first explanation for a local connection refusal. If `dig @8.8.8.8` and `dig @1.1.1.1` agree but `getent` returns a different result, local resolver policy deserves attention. If `curl -v` connects to the IP but fails certificate verification for the hostname, you likely reached an endpoint that is not presenting the expected identity. These negative facts keep the team from reopening discarded theories.
 
-When you write the final incident note, avoid saying only "fixed firewall." A useful note says that DNS returned the expected private IP, ICMP reached the VM, `ss` showed the API listening on `10.0.1.5:8080`, local `curl` succeeded, remote `curl` timed out, and `iptables` counters increased on a drop rule that lacked an allow entry for the client subnet. That sentence teaches the next responder how the conclusion was reached. It also protects the team from undoing the wrong change later.
+When you do change something, make the rollback as explicit as the change. A temporary iptables rule should have a matching delete command. A DNS cache flush should be recorded with the before and after answers. A service bind change should be followed by `ss` output that proves the new listener. A Kubernetes Service change should be followed by endpoints, events, and a test from the original failing vantage point. Verification is not an afterthought; it is the second half of every fix.
 
-## Patterns & Anti-Patterns
+## Kubernetes Touch-Points: Host Networking to Pod, Service, and DNS Failures
 
-Patterns are repeated choices that keep troubleshooting disciplined. They are not scripts to run blindly; they are ways to preserve evidence while narrowing the search area. The most reliable pattern is to prove the layer below the one you want to change. Before editing an application health endpoint, prove that TCP and HTTP reach the service. Before changing DNS, prove which resolver returned the bad answer. Before opening a firewall, prove the service listens on the intended address and port.
+Kubernetes networking adds abstractions, but host tools still answer important questions. A Pod IP is usually routed through a CNI-provided path. A Service virtual IP is usually implemented by kube-proxy through iptables, nftables, or IPVS depending on cluster configuration. DNS inside the cluster is usually served by CoreDNS, while the node may use systemd-resolved or another resolver for its own lookups. When a pod cannot reach an API, you need to know which layer produced the failure before editing manifests.
 
-Anti-patterns usually come from impatience, not ignorance. Under pressure, teams rerun the same command because it feels productive, change multiple layers at once because each change sounds harmless, or treat a single failure as universal proof. That behavior makes incidents longer because it destroys the ability to compare before and after evidence. The better alternative is slower for the first minute and faster for the next hour: write down the symptom, test one layer, record the result, and change only the layer that evidence implicates.
+Start outside the pod when the node itself looks suspicious. If the node cannot reach a registry, package mirror, external API, or internal DNS server, pods scheduled there may inherit the same path problem or a closely related policy problem. Host commands such as `ip route get`, `resolvectl status`, `dig`, `curl -v`, and firewall inspection can prevent a long detour through Deployment YAML. Once the host path is plausible, move into Kubernetes evidence with pod status, events, Services, EndpointSlices, and CoreDNS behavior.
 
-| Pattern | When to Use It | Why It Works | Scaling Consideration |
-|---------|----------------|--------------|-----------------------|
-| IP before name | A hostname fails or behaves differently across locations | Separates DNS from packet reachability | Test from the same network as the affected client |
-| Listener before firewall | Remote connections time out or refuse | Proves whether a process is actually accepting on the target port | On shared hosts, confirm the owning process before changing policy |
-| Verbose protocol check | HTTP, API, TLS, or redirect behavior is unclear | Shows request and response details rather than a vague success or failure | Capture only safe headers; avoid leaking credentials in tickets |
-| Checksum before execute | Automation downloads a binary or script | Verifies the bytes match the publisher's release | Pin versions and checksums in repeatable pipelines |
+```bash
+# Kubernetes evidence without shorthand aliases.
+kubectl get pods -A -o wide
+kubectl describe pod -n default app-pod
+kubectl get svc,endpointslices -n default
+kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+```
 
-| Anti-Pattern | What Goes Wrong | Better Alternative |
-|--------------|-----------------|--------------------|
-| Assuming ping failure means host down | ICMP may be blocked while TCP services work | Test the actual service port with `curl` or another protocol tool |
-| Editing DNS repeatedly during TTL delay | Creates more cache states and hides the original evidence | Query authoritative and recursive resolvers, then wait or flush intentionally |
-| Opening `0.0.0.0` without policy review | A private service may become reachable from too many networks | Bind to a specific private address and allow only required sources |
-| Flushing firewall rules on cluster nodes | Container networking and Service routing can break unexpectedly | Read counters first and make narrow, reversible changes |
+DNS failures are a classic place where host and pod views diverge. A node may resolve `example.com` through systemd-resolved, while a pod resolves through CoreDNS. CoreDNS may forward external names to the node's resolver, to a configured upstream resolver, or to cluster-specific rules. A useful sequence is to compare `getent` or `dig` on the node, a short-lived diagnostic pod query inside the cluster, and CoreDNS logs or events only after the answers differ. Do not assume the pod and node use the same resolver just because they run on the same machine.
 
-## Decision Framework
+```bash
+# A disposable DNS probe pod using a tiny image with nslookup.
+kubectl run dns-check \
+  --rm -it \
+  --image=busybox:1.36 \
+  --restart=Never \
+  -- nslookup kubernetes.default
+```
 
-The decision framework is simple: choose the tool that can falsify the next likely explanation. If you cannot name the explanation, stop and describe the symptom more precisely. "The app is down" is too broad. "The app host can reach 8.8.8.8, resolves the API name to the old address through the office resolver, and receives HTTP 503 from the load balancer through a public resolver" is actionable because it separates network path, DNS cache, and application health.
+Service failures also need layered evidence. If a Service has no endpoints, the network is not the first problem; selectors, readiness, or pod labels are. If endpoints exist but a node cannot reach the Service IP, inspect kube-proxy mode and node packet-filter state. If a pod can reach the Service but external clients cannot, move outward to Ingress, load balancers, node ports, cloud security groups, and host firewalls. The same ladder applies, but each rung has a Kubernetes object paired with a Linux fact.
 
-| Symptom | First Tool | If It Passes | If It Fails |
-|---------|------------|--------------|-------------|
-| Hostname does not resolve | `dig` or `host` | Compare resolvers and TTLs | Check local resolver, VPN, or zone configuration |
-| IP address seems unreachable | `ping` and `tracepath` | Test the actual service protocol | Check routing, VPN, gateway, or upstream filtering |
-| Web or API request fails | `curl -v` | Read status, headers, TLS, and redirects | Distinguish timeout, refusal, DNS, and TLS errors |
-| Service should be running locally | `sudo ss -tulpn` | Verify bind address and process owner | Check service status and logs |
-| Remote client times out | `ss`, then `ufw`, then `iptables` | Test from the client network | Review local and upstream firewall policy |
-| Downloaded tool will run in automation | `sha256sum` | Make executable and continue | Stop and replace the artifact or checksum source |
+The best Kubernetes troubleshooting notes name both sides. "CoreDNS is broken" is vague. "From pod `dns-check` in namespace `default`, `nslookup kubernetes.default` times out; from node `worker-2`, `resolvectl query kubernetes.default` is not relevant because that name is cluster-only; CoreDNS pods are running but their logs show upstream timeouts for external names" is actionable. It protects the team from mixing cluster DNS, node DNS, and public DNS into one confused bucket.
 
-Use `ping` when the question is broad reachability, but do not use it as the final judge of service health. Use `curl` when HTTP semantics matter, especially for health checks, API debugging, redirects, TLS negotiation, and rate limits. Use `ss` when you control or can log into the server and need local truth about listeners. Use `dig` and `host` when names, TTLs, resolvers, or record types matter. Use `traceroute` and `tracepath` when you need path evidence. Use `ufw` and `iptables` when silence points to policy.
+## Turning Evidence into an Escalation Note
+
+The final skill in everyday networking work is deciding when the local investigation has enough evidence to involve another owner. Network, DNS, security, platform, and application teams all receive vague tickets during incidents. A vague ticket forces the receiver to rediscover the problem and often creates argument about ownership before anyone tests the next useful layer. A strong escalation note is short, but it contains the source host, destination name, destination address if known, port, command output summary, timestamps, and the reason you believe the next owner controls the failing layer.
+
+For a DNS escalation, include the resolver that answered, the record type, the returned value, and the TTL. Saying "DNS still points to the old place" is weaker than saying "`dig app.example.com A @10.0.0.53` returned `192.0.2.20` with TTL 2400 at 13:10 UTC, while the authoritative server returned `192.0.2.30` with TTL 300." The second form gives the DNS owner enough data to check cache, forwarding, split-horizon policy, or zone publication without asking for the same commands again.
+
+For a firewall or routing escalation, include both the positive and negative evidence. If `ss` proves the service is listening on `0.0.0.0:8443`, and `curl -v` from the same host succeeds through loopback, but a remote client times out and firewall counters increase on a deny rule, the security owner has a concrete starting point. If counters do not move, that fact is also useful because it suggests the packet may not be reaching the host firewall. Evidence that rules out a layer is as valuable as evidence that confirms one.
+
+For an application escalation, include the protocol proof. A `curl -v` transcript that reaches `< HTTP/2 503` or `< HTTP/1.1 429` should shift the conversation away from basic reachability and toward service behavior, load balancer routing, dependency health, rate limiting, or authentication. This does not mean the network can never be involved after an HTTP response appears, but it means the next owner should start from a real application response rather than from a generic timeout report. The command output narrows the argument.
+
+Escalation quality also protects rollback. If your note says which temporary rule was inserted, which DNS cache was flushed, or which service bind address was changed, another operator can reverse the experiment or check whether it drifted. If your note only says "tried firewall change," the next shift may inherit a modified system without knowing which assumption created it. Everyday tools are simple, but the professionalism comes from preserving the chain of evidence.
 
 ## Did You Know?
 
-- Mike Muuss wrote `ping` in December 1983 and named it after sonar sounds. Its staying power comes from its narrow contract: send an ICMP echo request, measure the reply, and report loss and latency without pretending to test the whole application.
-- `curl` began in 1998 and now supports more than 25 protocols, including HTTP, HTTPS, FTP, SFTP, MQTT, and Gopher. That breadth is why it appears in everything from one-line health checks to release automation.
-- Google Public DNS at `8.8.8.8` handles more than 1 trillion queries per day. When you compare your resolver with `dig @8.8.8.8`, you are asking one of the busiest public DNS services for an independent answer.
-- `traceroute` was written by Van Jacobson in 1987 by using the IP TTL field in a clever way. Increasing TTL one hop at a time lets routers reveal a path even though the field was designed to prevent packets from looping forever.
+- **ICMP is more than ping.** RFC 792 defines ICMP messages such as Echo Reply and Time Exceeded, which is why both ping-style checks and TTL-based path discovery can produce useful network evidence.
+- **`curl -v` separates client and server speech.** The `>` lines show request data sent by curl, while `<` lines show response data from the server, making it easier to tell transport failure from application response.
+- **`ss` replaced many everyday `netstat` habits.** It comes from iproute2, reads modern socket information efficiently, and should be the first tool you teach for listening ports on current Linux systems.
+- **DNS TTL is a countdown, not a promise of instant change.** A resolver can return an old value correctly until its cached record expires, so always record which resolver answered and what TTL remained.
 
 ## Common Mistakes
 
 | Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Assuming ping failure means the host is down | Many hosts and firewalls block ICMP even while service ports are open | Test the actual protocol with `curl`, and compare name versus IP behavior |
-| Using `curl` without `-L` for redirected downloads | The request saves a redirect response instead of the intended file | Use `curl -L` when redirects are expected, and verify status codes in scripts |
-| Forgetting `sudo` with `ss -p` | The process column can be hidden from unprivileged users | Run `sudo ss -tulpn` when you need the owning process |
-| Ignoring bind addresses in `ss` output | A service can listen on loopback while remote clients need access | Distinguish `127.0.0.1`, `0.0.0.0`, specific private IPs, and IPv6 listeners |
-| Querying only the default DNS resolver | Local caches, VPN resolvers, or split-horizon zones can hide the authoritative answer | Compare `dig domain`, `dig @8.8.8.8 domain`, and provider or authoritative results |
-| Treating `* * *` in traceroute as automatic failure | Intermediate routers often refuse to answer probes while forwarding real traffic | Look for persistent latency jumps or destination failure, not isolated stars |
-| Downloading binaries without checksum verification | Automation may execute corrupted or tampered files with high privileges | Download the published checksum and verify with `sha256sum` before execution |
-| Changing firewall rules before proving a listener exists | A closed or localhost-only service can look like a policy problem | Run `ss` first, then inspect `ufw` or `iptables` if the listener is correct |
+|:---|:---|:---|
+| Treating a successful ping as proof that an API is healthy | ICMP echo replies do not test TCP, TLS, HTTP headers, authentication, or application dependencies. | Use ping only for reachability evidence, then test the actual protocol with `curl -v` and read the status or failure mode. |
+| Declaring a host down because ping fails | Firewalls, cloud networks, and appliances often block ICMP while allowing service ports. | Test the intended port with `curl`, `traceroute -T`, or another protocol-aware check before escalating the host as unreachable. |
+| Ignoring bind addresses in `ss` output | A process can be active while listening only on loopback or the wrong interface. | Read the local address column first, then compare `127.0.0.1`, `0.0.0.0`, specific interface addresses, and IPv6 wildcard listeners. |
+| Using `dig` alone and missing local resolver policy | Applications may use NSS, `/etc/hosts`, mDNS, systemd-resolved routing, or split DNS behavior that a simple dig query does not fully exercise. | Compare `getent hosts`, normal `dig`, `dig @resolver`, and `resolvectl status` when local and DNS-specific views differ. |
+| Flushing firewall rules to test a theory | Flushes erase managed state and can break SSH, Kubernetes Services, container networking, or security baselines. | Inspect with `ufw status`, `iptables -S`, and `nft list ruleset`, then use only narrow reversible rules in a lab or approved change window. |
+| Reading traceroute stars as certain packet loss | Intermediate routers may rate-limit or suppress probe replies while forwarding real traffic normally. | Look for persistent latency changes, destination behavior, and tests from multiple vantage points before blaming a middle hop. |
+| Using `curl -k` as a permanent workaround | Disabling certificate verification can hide wrong endpoints, expired certificates, and trust-store problems. | Use `-k` only for a controlled experiment, then fix CA trust, certificate names, SNI, or mTLS material properly. |
 
 ## Quiz
 
-<details><summary>Question 1: Your team reports that a partner API is slow. `ping` replies show `ttl=52`, no packet loss, and an average latency near 90 ms. A colleague says the TTL proves the partner runs Windows and the network is broken. How do you respond?</summary>
+**Test your understanding. Try to answer before revealing the solution.**
 
-The TTL more likely suggests a Linux or Unix-like system that started near 64 and crossed about 12 hops, but TTL is only a clue. The lack of packet loss means basic ICMP reachability looks stable, while the 90 ms average may be normal if geography is involved. You should not conclude that the API is broken from ping alone, because ICMP is not the application protocol. The next useful checks are `curl -v` against the API endpoint and perhaps `traceroute` or `tracepath` to see whether a persistent path latency jump exists.
+<details><summary>1. A service fails from one Linux host, but `ping -c 4 8.8.8.8` succeeds. What has that result proven, and what has it not proven?</summary>
 
+It proves that the host could send ICMP Echo Requests to one public IP address and receive Echo Replies at that moment. It does not prove DNS, TCP port reachability, TLS trust, HTTP health, proxy behavior, or Kubernetes Service routing. The next check should match the failing path more closely, such as `getent hosts`, `dig`, `tracepath`, or `curl -v` against the actual hostname and port.
 </details>
 
-<details><summary>Question 2: A deployment health check fails, but `curl -v https://api.example.com/health` shows a completed TLS connection and `< HTTP/2 503`. What layer has been proven healthy enough to move past, and what should you inspect next?</summary>
+<details><summary>2. `curl -v https://api.example.com/health` shows a completed TLS connection and then `< HTTP/2 503`. Which layer should you inspect next?</summary>
 
-The verbose output proves DNS, TCP connectivity, and TLS negotiation were healthy enough for the server to return an HTTP response. A 503 means the request reached an HTTP-speaking component, but that component could not serve the request successfully. You should inspect application health, load balancer upstreams, rate limits, or dependency status rather than opening network ports blindly. The `>` lines show what your client sent, and the `<` lines show the server response that carries the useful status.
-
+The network path, TCP connection, and TLS negotiation progressed far enough for an HTTP response to return. A 503 points toward the application, load balancer, upstream health, overload, or dependency behavior rather than basic reachability. You should inspect service logs, backend health checks, routing rules, and recent deployment changes before changing firewall or DNS policy.
 </details>
 
-<details><summary>Question 3: A reporting worker on another VM cannot reach PostgreSQL. On the database server, `sudo ss -tulpn` shows `127.0.0.1:5432` owned by `postgres`. Can the worker connect, and what change would you evaluate?</summary>
+<details><summary>3. `sudo ss -ltnp` shows `127.0.0.1:5432` for PostgreSQL, and a remote worker cannot connect. What is the likely issue?</summary>
 
-The worker cannot connect to that listener because `127.0.0.1` accepts only local connections from the database host itself. The service is running, but it is bound to loopback rather than a private network interface. The change to evaluate is a deliberate database bind-address update to a private IP or, if appropriate, `0.0.0.0`, paired with database access controls and firewall rules. After the change, rerun `ss` to verify the listener and test from the worker network.
-
+The database is listening only on IPv4 loopback, so remote hosts cannot connect to that socket through the network. You would review PostgreSQL listen address settings, host-based authentication, firewall policy, and intended exposure before changing anything. The key evidence is that the process exists but is bound to an address that only local clients can use.
 </details>
 
-<details><summary>Question 4: A DNS change should point `app.example.com` to a new address. `dig app.example.com` on your laptop returns the old address with a TTL of 2800, while `dig @8.8.8.8 app.example.com` returns the new address. What does this tell you?</summary>
+<details><summary>4. `getent hosts app.example.com` returns an internal address, while `dig @8.8.8.8 app.example.com` returns a public address. Is that automatically wrong?</summary>
 
-The provider record may already be correct, while your default resolver is serving a cached or split-horizon answer. The remaining TTL explains why the old value can persist without another provider-side mistake. The right next step is to identify which resolver your laptop uses, whether VPN or office DNS overrides the zone, and whether waiting or flushing a local cache is enough. Editing the public record again would likely create more confusing cache states.
-
+No. That can be valid split-horizon DNS or local resolver policy, especially on VPNs, corporate networks, and Kubernetes-adjacent environments. Record which resolver answered, which address each returned, and the TTLs. Then compare the expected viewpoint for the failing application instead of assuming the public resolver is the source of truth.
 </details>
 
-<details><summary>Question 5: A CI pipeline downloads `kubectl` for Kubernetes 1.35+ with `curl` and immediately executes it. The review blocks the change. What exact risk is being blocked, and what should the script add?</summary>
+<details><summary>5. A traceroute shows `* * *` at hop 3, normal replies at later hops, and the destination responds. Should you escalate hop 3 as the outage?</summary>
 
-The risk is executing unverified bytes inside automation that may have access to infrastructure credentials or clusters. A compromised endpoint, stale mirror, interrupted transfer, or tampered artifact could become a trusted binary. The script should download the official checksum file, verify the binary with `sha256sum --check`, and only then make it executable or use it. After installation, defining `alias k=kubectl` is fine for operator convenience, but it does not replace artifact verification.
-
+Not based on that evidence alone. The hop may simply refuse or rate-limit traceroute probes while forwarding traffic normally. Stronger evidence would include a persistent latency jump after that hop, failure of all later hops including the destination, matching reports from multiple vantage points, or provider evidence that traffic is being dropped there.
 </details>
 
-<details><summary>Question 6: A remote client times out connecting to an internal API on port 8080. You can SSH to the server. Design the first three checks using the tools in this module.</summary>
+<details><summary>6. During a node incident, someone proposes `iptables -F` to test whether the firewall is responsible. Why is that unsafe, and what should you do instead?</summary>
 
-First, run `sudo ss -tulpn` on the server to prove whether the API is listening on port 8080 and whether it is bound to a reachable address. Second, test the service locally with `curl -v http://127.0.0.1:8080` or the private address as appropriate, because that separates the application from the remote path. Third, inspect `sudo ufw status verbose` or `sudo iptables -L -n -v --line-numbers` to see whether local policy drops the client's traffic. This order prevents you from changing firewall rules for a service that is not listening.
-
+Flushing rules can erase SSH protection, Kubernetes service routing, container networking rules, NAT behavior, and security-managed policy. Start with read-only inspection: `iptables -V`, `iptables -S`, `iptables -L -n -v --line-numbers`, and `nft list ruleset` if nftables is involved. If a change is required, use a narrow reversible rule in a lab or approved window and document the matching rollback command.
 </details>
 
-<details><summary>Question 7: `traceroute` to a service shows `* * *` at hop 3, normal responses at hops 4 and 5, and the destination responds. A teammate wants to escalate the hop 3 router as the outage. What evidence is missing?</summary>
+<details><summary>7. A pod cannot resolve `kubernetes.default`, but the node can resolve public names with systemd-resolved. What should you compare next?</summary>
 
-The missing evidence is that traffic actually stops or degrades at hop 3. Because later hops and the destination respond, hop 3 is probably forwarding traffic while refusing to answer traceroute probes. You would need persistent packet loss, a latency jump that remains high after that point, failure at all later hops, or corroborating traces from affected clients before blaming that router. Isolated stars are common and should not drive escalation by themselves.
-
+You should compare pod DNS and cluster DNS evidence rather than treating the node's public resolver result as decisive. Check CoreDNS pods, Kubernetes Service and EndpointSlice objects for DNS, a disposable pod lookup such as `nslookup kubernetes.default`, and CoreDNS logs if the pod-side query fails. Node DNS and pod DNS can use different resolver paths.
 </details>
 
-## Hands-On Exercise
+## Hands-On Practice
 
-### Network Detective Challenge
+These exercises are written for the Killercoda Ubuntu lab or another disposable Linux environment. Do not run firewall-changing commands on a production host, a shared bastion, or a remote machine where you lack console access. The goal is not to memorize output; it is to collect evidence in an order that would be safe during a real incident and to explain what each command proves.
 
-The goal of this exercise is to build evidence in layers instead of running commands at random. Use any Linux system with internet access, including a VM, WSL2, or a native installation. If you completed Module 0.4 and still have nginx or another service running, you can use that local service for the `ss` and `curl` parts; otherwise, the public examples are enough to practice the method.
-
-#### Task 1: Investigate latency and reachability with `ping`
+**Task 1: Five-tool checklist on a misbehaving service.** Exercise scenario: a web health endpoint is reported as slow or unavailable, and you need a first-pass host investigation before escalating. Use the same target hostname for every step so the evidence stays comparable. Replace `app.example.com` with a host you are allowed to test, and keep the curl timeout bounded so a broken endpoint does not stall your whole investigation.
 
 ```bash
-# Ping Google's public DNS and observe the results
-ping -c 5 8.8.8.8
+TARGET=app.example.com
+
+getent hosts "$TARGET"
+dig "$TARGET"
+ping -c 4 "$TARGET"
+tracepath "$TARGET"
+curl -v --connect-timeout 3 --max-time 10 "https://$TARGET/health"
 ```
 
-Record the average round-trip time, packet loss, and TTL. Estimate the likely hop count by comparing the received TTL with common starting TTL values. Then write one sentence explaining what this test proves and one sentence explaining what it does not prove.
+After running the checklist, write one sentence for each tool: what did it prove, what did it not prove, and what would you test next if it failed. This is the main muscle of the module. A clean `getent` result does not prove HTTPS. A clean ping does not prove HTTP. A curl response with a status code does not prove the application is healthy, but it does prove the request reached an HTTP-speaking endpoint.
 
-<details><summary>Solution guidance</summary>
+<details><summary>Solution guidance for Task 1</summary>
 
-You should be able to identify packet loss, average latency, and a TTL value from the output. If packet loss is 0%, basic ICMP reachability looks healthy, but that does not prove HTTP, DNS, or a specific service port works. The TTL can help you estimate distance, but it should not be treated as a guaranteed operating system fingerprint.
-
+A strong answer names the layer behind each result. `getent` proves the local application-like name path returned an address. `dig` gives DNS-specific evidence from the configured resolver. `ping` tests ICMP reachability but not the service port. `tracepath` gives path and MTU hints without proving application health. `curl -v` shows TCP, TLS, HTTP, headers, status, and body evidence for the real endpoint.
 </details>
 
-#### Task 2: Inspect HTTP behavior with `curl`
+- [ ] I compared local name resolution with DNS-specific lookup for the same target.
+- [ ] I recorded whether reachability evidence came from ICMP, path probing, or the actual HTTP endpoint.
+- [ ] I can name the next layer to inspect for timeout, connection refused, TLS failure, and HTTP error responses.
+
+**Task 2: DNS deep-dive from local resolver to delegation path.** Exercise scenario: a DNS change was made recently, and different clients disagree about the address for the same name. This task compares the local system view, a chosen recursive resolver, and the public delegation chain. Use a domain you control if possible, because authoritative answers and TTLs are easiest to interpret when you know the intended record.
 
 ```bash
-# Make a verbose request to httpbin.org and examine the conversation
-curl -v https://httpbin.org/headers 2>&1
+NAME=app.example.com
 
-# Now request just the response headers
-curl -I https://httpbin.org/get
-
-# Fetch your apparent IP address as seen by the server
-curl -s https://httpbin.org/ip
+getent hosts "$NAME"
+dig "$NAME" A
+dig "$NAME" AAAA
+dig @8.8.8.8 "$NAME" A
+dig +trace "$NAME"
+host "$NAME"
+resolvectl status
 ```
 
-Identify which lines are your request and which lines are the server response. Note the HTTP version, the `Content-Type`, and the public IP reported by httpbin. If a command fails, classify the failure as DNS, connection, TLS, HTTP status, or body-content related.
+Focus on resolver identity and TTL. If your local resolver returns an old address with a high remaining TTL, that may explain why one environment is stale without proving the zone is wrong. If `dig +trace` reaches the expected authoritative answer but the local resolver disagrees, investigate cache, forwarding, split DNS, VPN domain routing, or systemd-resolved per-link settings. If the trace fails before the authoritative servers, delegation or public DNS configuration deserves attention.
 
-<details><summary>Solution guidance</summary>
+<details><summary>Solution guidance for Task 2</summary>
 
-In verbose output, `>` lines are sent by your client and `<` lines are returned by the server. A completed HTTP response means the path and protocol handshake worked far enough to reach the application layer. `curl -I` is efficient for headers, while `curl -v` is better when you need to see the entire conversation.
-
+A strong answer records the answer address, record type, resolver used, and TTL for each command. It does not simply say "DNS is wrong." It separates application-like local lookup through `getent`, DNS-specific lookup through `dig`, explicit resolver lookup through `dig @8.8.8.8`, delegation evidence through `dig +trace`, and systemd-resolved routing evidence through `resolvectl status`.
 </details>
 
-#### Task 3: Query DNS records with `dig`
+- [ ] I captured the local system answer and at least one explicit resolver answer.
+- [ ] I compared A and AAAA records instead of assuming IPv4 and IPv6 behave the same.
+- [ ] I recorded TTLs and resolver addresses before clearing any cache.
+
+**Task 3: Local firewall blocking and verification in a disposable lab.** Exercise scenario: you need to prove how a narrow host firewall rule changes one outbound connection without flushing any ruleset. The example below blocks HTTP to the current example.com address and then deletes the exact same rule. Run it only in a lab, keep another terminal open, and confirm the delete command before inserting the rule.
 
 ```bash
-# Look up google.com A records
-dig google.com
+# Inspect first.
+sudo iptables -V
+sudo iptables -L OUTPUT -n -v --line-numbers
 
-# Get just the IP in short form
-dig +short google.com
+# Resolve the current example.com A/AAAA destination (for IPv4 lab use, keep this line as-is).
+TARGET_IP=$(dig +short example.com | head -1)
 
-# Check for CNAME records on www.github.com
-dig www.github.com
+# Insert one narrow temporary rule.
+sudo iptables -I OUTPUT 1 -p tcp -d "$TARGET_IP" --dport 80 -j REJECT
+sudo iptables -L OUTPUT -n -v --line-numbers
 
-# Query using Google's DNS server specifically
-dig @8.8.8.8 google.com
+# Verify the effect with a bounded request.
+curl -v --connect-timeout 3 --max-time 6 "http://$TARGET_IP/"
+
+# Remove exactly the rule you inserted.
+sudo iptables -D OUTPUT -p tcp -d "$TARGET_IP" --dport 80 -j REJECT
+sudo iptables -L OUTPUT -n -v --line-numbers
 ```
 
-Record the returned address, TTL, resolver, and whether `www.github.com` uses a CNAME. Compare the default resolver answer with the answer from `8.8.8.8`. If they differ, explain whether TTL, cache, VPN DNS, or split-horizon policy could explain the difference.
+The point is not that example.com is special. The point is the pattern: inspect, insert one narrow rule, run one verification, and delete the exact rule. If your distribution uses iptables-nft, inspect `sudo nft list ruleset` afterward and notice how the compatibility command appears through nftables. If UFW is active, also compare `sudo ufw status numbered` before and after so you understand which layer is managing policy on your lab host.
 
-<details><summary>Solution guidance</summary>
+<details><summary>Solution guidance for Task 3</summary>
 
-The `ANSWER SECTION` tells you which record was returned, while the `SERVER` line tells you which resolver answered. A different answer from a public resolver does not automatically mean one is wrong; it may reflect cache state, internal zones, or geography-aware DNS. TTL gives you the time window during which cached answers may remain valid.
-
+A strong answer confirms that the OUTPUT chain changed by exactly one rule, the curl test changed while the rule was present, and the rule disappeared after the delete command. It also notes whether `iptables -V` reported an nf_tables backend, because that affects how iptables and nftables inspection relate on the host.
 </details>
 
-#### Task 4: Check local listening services with `ss`
-
-```bash
-# Show all listening TCP and UDP ports with process names
-sudo ss -tulpn
-
-# If you have nginx running from Module 0.4, verify it is listening
-sudo ss -tulpn | grep :80
-```
-
-Count the listeners, identify at least one process owner, and classify one local address as loopback, all interfaces, IPv6 all interfaces, or a specific private address. If nginx or another web server is running, explain who can connect based on its bind address.
-
-<details><summary>Solution guidance</summary>
-
-The important fields are `Local Address:Port` and `Process`. A listener on `127.0.0.1` is local-only, while `0.0.0.0` accepts traffic on all IPv4 interfaces if firewall and routing policy allow it. If process names are missing, rerun with `sudo` before drawing conclusions.
-
-</details>
-
-#### Task 5: Trace the network path
-
-```bash
-# Trace the route to Google's public DNS
-traceroute 8.8.8.8
-
-# If traceroute is not installed or hangs, try:
-tracepath 8.8.8.8
-```
-
-Record the hop count, any `* * *` entries, and whether latency jumps at a point and stays high afterward. Compare the hop count with your TTL estimate from Task 1. Explain why the two numbers may not match exactly.
-
-<details><summary>Solution guidance</summary>
-
-Traceroute shows the outbound path visible to probes, while TTL in ping reflects the return packet's remaining value from the destination. Routes can be asymmetric, and routers may refuse to answer probes while still forwarding traffic. Treat persistent patterns as evidence, not isolated stars.
-
-</details>
-
-#### Task 6: Practice download verification
-
-```bash
-# Download the kubectl checksum file and verify the pattern.
-# You do not need to install kubectl; this is checksum practice.
-curl -LO "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl"
-curl -LO "https://dl.k8s.io/release/v1.35.0/bin/linux/amd64/kubectl.sha256"
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-
-# Clean up
-rm -f kubectl kubectl.sha256
-```
-
-Explain why checksum verification belongs before execution in a CI/CD pipeline. If the check fails, do not retry by running the binary manually; inspect whether the file, checksum, version, or download source is wrong.
-
-<details><summary>Solution guidance</summary>
-
-The expected success output is `kubectl: OK`. That result means the downloaded bytes match the published checksum. It does not prove the publisher is perfect, but it protects you from corrupted transfers and many tampering scenarios between the release source and your machine.
-
-</details>
-
-### Success Criteria
-
-- [ ] Diagnosed reachability and latency with `ping`, including TTL, packet loss, and what the test does not prove.
-- [ ] Debugged HTTP behavior with `curl -v`, identifying request lines, response lines, status, and headers.
-- [ ] Evaluated DNS resolver evidence with `dig`, including TTL, record type, and resolver differences.
-- [ ] Inspected listening ports with `sudo ss -tulpn` and classified at least one bind address correctly.
-- [ ] Compared path evidence from `traceroute` or `tracepath` with the ping TTL estimate.
-- [ ] Implemented a safe download verification flow with `curl` and `sha256sum`.
-
-## Key Takeaways
-
-Everyday networking troubleshooting is a discipline of narrowing uncertainty. Start with the question that removes the most guesswork at the lowest cost, then move upward only when the evidence justifies it. `ping` and `tracepath` tell you about reachability and path shape, but they do not prove service health. `dig` and `host` tell you what the resolver believes, but they do not prove the application accepts traffic. `ss` tells you what the local kernel is listening on, but it does not prove remote policy allows the connection.
-
-`curl` connects those layers to application behavior because it exposes the actual HTTP conversation. Firewalls explain silence only after you have proven that a listener exists and the client is testing the right address and port. Checksums protect the tooling you bring into an environment while fixing it. The skill is not running all commands every time; it is choosing the next command because it can prove or disprove a specific explanation.
+- [ ] I inspected firewall state before changing anything.
+- [ ] I inserted only a narrow temporary rule and verified its effect with a bounded request.
+- [ ] I removed the exact rule and confirmed the chain returned to its prior shape.
 
 ## Next Module
 
-Next, move into [Module 1.1: Kernel & Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/) to connect these everyday commands to the kernel mechanisms, sockets, and system calls that make Linux networking work.
+Next up: [System Essentials](../system-essentials/) moves from everyday host operation into the Linux internals that explain processes, kernels, filesystems, and the low-level behavior behind the tools you have been using.
 
-## Further Reading
+## Sources
 
-- [curl Documentation](https://curl.se/docs/)
-- [curl Manual](https://curl.se/docs/manpage.html)
-- [dig Manual](https://linux.die.net/man/1/dig)
-- [ss(8) Man Page](https://man7.org/linux/man-pages/man8/ss.8.html)
-- [ip(8) Man Page](https://man7.org/linux/man-pages/man8/ip.8.html)
-- [An Introduction to DNS Terminology](https://www.digitalocean.com/community/tutorials/an-introduction-to-dns-terminology-components-and-concepts)
-- [How Traceroute Works](https://networklessons.com/cisco/ccna-routing-switching-icnd1-100-105/traceroute)
-- [Linux Kernel Networking Documentation](https://www.kernel.org/doc/html/latest/networking/index.html)
-- [Netfilter Documentation](https://www.netfilter.org/documentation/)
-- [firewalld Documentation](https://firewalld.org/documentation/)
-- [Install kubectl on Linux](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/)
+- [ping(8) - Linux manual page](https://man7.org/linux/man-pages/man8/ping.8.html)
+- [traceroute(8) - Linux manual page](https://man7.org/linux/man-pages/man8/traceroute.8.html)
+- [tracepath(8) - Linux manual page](https://man7.org/linux/man-pages/man8/tracepath.8.html)
+- [curl(1) - Linux manual page](https://man7.org/linux/man-pages/man1/curl.1.html)
+- [ss(8) - Linux manual page](https://man7.org/linux/man-pages/man8/ss.8.html)
+- [iptables(8) - Linux manual page](https://man7.org/linux/man-pages/man8/iptables.8.html)
+- [xtables-nft(8) - Linux manual page](https://man7.org/linux/man-pages/man8/xtables-nft.8.html)
+- [BIND 9 Manual Pages: dig and host](https://bind9.readthedocs.io/en/v9.20.23/manpages.html)
+- [ufw(8) - Ubuntu manual page](https://manpages.ubuntu.com/manpages/jammy/man8/ufw.8.html)
+- [nft(8) - Debian manual page](https://manpages.debian.org/trixie/nftables/nft.8.en.html)
+- [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
+- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
+- [RFC 1035: Domain Names - Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035)
+- [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
+- [RFC 9112: HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9112)
+- [curl Manual](https://curl.se/docs/manual.html)
+- [Kubernetes: Troubleshooting Applications](https://kubernetes.io/docs/tasks/debug/debug-application/)
+- [systemd-resolved.service manual](https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.service.html)
+- [Netfilter nftables project](https://netfilter.org/projects/nftables/)
