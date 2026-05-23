@@ -6,6 +6,8 @@ sidebar:
   order: 5
 ---
 
+# Module 4.4: Supply Chain Threats
+
 > **Complexity**: `[MEDIUM]` - threat modeling, evidence design, and Kubernetes policy enforcement.
 >
 > **Time to Complete**: 70-85 minutes.
@@ -70,6 +72,8 @@ Pause and predict: if a team requires images to come from `registry.internal.exa
 ## 2. Real Incidents and What They Teach
 
 The supply chain incidents most relevant to Kubernetes share one property: the compromised component looked normal to downstream automation. The [2020 SolarWinds trusted-update backdoor](../../../../prerequisites/modern-devops/module-1.3-cicd-pipelines/) <!-- incident-xref: solarwinds-2020 --> is the foundational enterprise example — trusted software updates carried attacker-controlled code into ~18,000 customer environments. [3CXDesktopApp](https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp) showed a user-facing desktop application being trojanized and distributed through a vendor's normal channel. These cases are outside Kubernetes, but they explain why artifact provenance matters before software reaches a cluster.
+
+NotPetya is the canonical enterprise warning for trusted-update risk. In June 2017, an update delivered through M.E.Doc, a widely used Ukrainian accounting package, carried the initial payload. Attackers used that trusted update path to spread a destructive payload that behaved like ransomware but had no realistic recovery mechanism; the malicious process overwrote critical data structures in a way that made large-scale decryption infeasible even after paying ransom demands. The operational lesson is visible in the blast radius: global logistics, manufacturing, and logistics-adjacent firms, including Maersk, Merck, and FedEx, were disrupted because the malware moved with trusted enterprise update and authentication trust rather than purely by direct compromise. For Kubernetes supply-chain defense, the point is not only “don’t trust updates,” but to pair every update trust boundary with provenance checks, signed/attested immutability, and fast rollback to a known-good artifact state. [CISA Alert TA17-181A](https://www.cisa.gov/ncas/alerts/TA17-181A) documents these details from the NotPetya episode.
 
 The XZ Utils incident is especially useful for cloud-native learners because it separates the source repository from the release artifact. The CVE record says the malicious code appeared in upstream tarballs and modified the liblzma build process through obfuscated steps. That pattern matters for containers because an image build often starts from published release archives, package repositories, or base layers rather than from a repository that your team reviews directly. If your evidence chain begins only after the image is built, you may miss compromise that occurred before the Dockerfile ran.
 
@@ -513,7 +517,7 @@ kubectl get pod scanned-demo -n supply-chain-lab
 
 Success criteria:
 
-- [ ] Trivy produced `trivy-report.json`.
+- [ ] Trivy produced trivy-report.json.
 - [ ] The Pod without `security.example.com/trivy-scan` is rejected by admission.
 - [ ] The annotated Pod is accepted in the lab namespace.
 - [ ] You can explain why a production HIGH-severity gate should use scan evidence from a trusted service rather than a free-form annotation alone.
@@ -555,4 +559,4 @@ The strict annotation policy proves admission mechanics, not production-grade vu
 
 ## Next Module
 
-Continue to [Module 4.5: Observability for Security](../module-4.5-observability-security/) to connect supply chain evidence with runtime signals, audit trails, and incident response.
+Continue to [Module 4.5: Threat Modeling & Supply Chain Theory](../module-4.5-threat-modeling-supply-chain-theory/) to connect supply chain evidence with runtime signals, audit trails, and incident response.
