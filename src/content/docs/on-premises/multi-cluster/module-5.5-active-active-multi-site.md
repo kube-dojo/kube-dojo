@@ -77,11 +77,11 @@ A **federated** approach runs independent Kubernetes clusters per site, each wit
 | 5 | 3 | 2 |
 | 7 | 4 | 3 |
 
-The etcd FAQ notes that clusters larger than seven members rarely help: fault tolerance improves slowly while write performance degrades because more replicas must persist each log entry. For on-premises multi-site control planes, three members in one site plus two witness members in a third, low-latency site is a common pattern when stretch is mandatory—never two plus two without a tie-breaker.
+The etcd FAQ notes that clusters larger than seven members rarely help: fault tolerance improves slowly while write performance degrades because more replicas must persist each log entry. For on-premises multi-site control planes when stretch is mandatory, prefer **two members in each of two primary sites plus one witness in a third site (2+2+1)**—any single-site loss leaves three of five members alive (quorum). Never place five members across only two sites: one site must host at least three members, and losing that site leaves two survivors (below the majority of three). Never use two plus two without a tie-breaker. A **3+2 across three sites** pattern (three members in one primary site, two witnesses elsewhere) does **not** survive loss of the three-member site (two of five alive = no quorum); use that layout only when primary-site availability is otherwise guaranteed (for example dedicated HA hardware) and witness sites are bandwidth-limited—not as a default stretch design.
 
 ### Latency tolerance and tuning
 
-When RTT between etcd peers rises, leader heartbeats miss deadlines and spurious elections cascade. Increase `heartbeat-interval` to roughly track cross-site RTT and set `election-timeout` to at least five times the heartbeat interval, following etcd tuning guidance for high-latency links. Disk latency still matters more than network for many incidents: an etcd member on a noisy SAN can starve the whole cluster even when WAN is healthy. Monitor `etcd_disk_backend_commit_duration_seconds` and `etcd_server_heartbeat_send_failures_total` per site.
+When RTT between etcd peers rises, leader heartbeats miss deadlines and spurious elections cascade. etcd tuning guidance for WAN links states both rules side by side: **heartbeat interval** should be approximately one round-trip time (RTT) between members; **election timeout** should be at least **10×** the heartbeat interval **and** at least **10×** RTT (when heartbeat ≈ RTT, election timeout ≥ 10× heartbeat is usually sufficient). For cross-region etcd with ~50 ms RTT, plan heartbeat **50–100 ms** and election timeout **500–1000 ms**. Disk latency still matters more than network for many incidents: an etcd member on a noisy SAN can starve the whole cluster even when WAN is healthy. Monitor `etcd_disk_backend_commit_duration_seconds` and `etcd_server_heartbeat_send_failures_total` per site.
 
 Separate **management** etcd (fleet hub) from **workload** etcd per site. Losing Frankfurt workload etcd should not freeze Rancher Fleet or OCM hub reconciliation if those components live in a neutral management site with their own quorum. Document backup and restore per etcd cluster; restoring the wrong snapshot into a multi-member cluster causes cluster ID mismatch warnings documented in etcd operations guides.
 
@@ -335,7 +335,7 @@ Ingress and Gateway API objects remain per-cluster unless you adopt multi-cluste
 | Overlapping PodCIDRs between sites | ClusterMesh/Submariner routing conflicts | Plan CIDR matrix; use Globalnet only when required |
 | `topology.kubernetes.io/zone` on hostname only | One rack loss kills quorum | Align zone labels with real halls/datacenters |
 | Active-active ingress with single-site database | 502 after failover | Match traffic steering to datastore quorum health |
-| Ignoring etcd election timeouts on WAN | Flapping leaders and API errors | Tune heartbeat/election per etcd guidance |
+| Ignoring etcd election timeouts on WAN | Flapping leaders and API errors | Tune heartbeat ≈ RTT; election timeout ≥ 10× heartbeat and ≥ 10× RTT |
 | No per-site observability labels | Incidents show global graphs hiding one site | Standardize `site`/`cluster` labels before go-live |
 
 ### Day-Two Operations Checklist
@@ -364,7 +364,7 @@ Run **active-active** on stateless ingress and pods in both sites so regional us
 
 <details><summary>Question 2: Design etcd for two equal on-premises datacenters. Why is a five-member cluster spanning only those two sites insufficient during partition?</summary>
 
-Each site likely hosts two or three members in common designs; partition splits votes evenly so **no majority** exists (for example, two versus two on four members, or two versus three with asymmetric placement). etcd halts writes to prevent split brain. Add a **witness** in a third site or run independent etcd per cluster with federated Kubernetes. Recalculate majority as ⌊n/2⌋+1 before approving stretch designs.
+Five members need a majority of **three** (⌊5/2⌋+1). Across only two sites, one site must hold **at least three** members. If that three-member site fails, only **two** members survive—below quorum—even though 3/5 is majority in the abstract. The split is **inherently unsafe** regardless of arithmetic: you need a **third site** as tiebreaker (for example **2+2+1**: two in each primary site plus one witness) so any two surviving sites can still reach three votes. Alternatively run independent etcd per cluster with federated Kubernetes. Recalculate majority as ⌊n/2⌋+1 before approving stretch designs.
 
 </details>
 
@@ -410,7 +410,7 @@ Each site needs roughly **40k RPS headroom** (full peak), not 20k, unless the bu
 
 **Objective**: Build intuition for quorum math, ClusterMesh prerequisites, and Lighthouse DNS export workflows without requiring a full production WAN.
 
-**Environment**: Linux workstation with `bash`, `python3`, optional `kind`/`kubectl`/`cilium` CLI for Exercise 2. Exercise 1 is calculator-only; Exercise 3 uses local YAML and DNS tools.
+**Environment**: Linux workstation with `bash`, optional `kind`/`kubectl`/`cilium` CLI for Exercise 2. Exercise 1 is calculator-only. Exercise 3 uses local YAML and DNS tools and requires **PyYAML** via the repo virtualenv at `.venv/bin/python` (if running outside the repo, install with `pip install pyyaml`).
 
 ### Exercise 1: Design etcd Quorum and Latency Budgets
 
@@ -423,15 +423,15 @@ for n in 1 2 3 4 5 7; do
   tolerance=$(( (n - 1) / 2 ))
   echo "members=${n} majority=${majority} tolerate_member_loss=${tolerance}"
 done
-# Example: 80ms WAN RTT — if election-timeout is 1000ms, is RTT > timeout/5?
+# Example: 80ms WAN RTT — heartbeat ≈ RTT; election-timeout ≥ 10× heartbeat and ≥ 10× RTT
 RTT_MS=80
-HEARTBEAT_MS=200
-ELECTION_MS=1000
+HEARTBEAT_MS=80
+ELECTION_MS=800
 echo "heartbeat=${HEARTBEAT_MS}ms election=${ELECTION_MS}ms RTT=${RTT_MS}ms ratio=$(( ELECTION_MS / RTT_MS ))"
 ```
 
 - [ ] I calculated majority and fault tolerance for at least three odd member counts used in **design** reviews.
-- [ ] I documented whether my WAN RTT fits within etcd **election-timeout** guidance (timeout ≥ 5× heartbeat, RTT not dominating heartbeat).
+- [ ] I documented whether my WAN RTT fits etcd tuning: heartbeat ≈ RTT; election timeout ≥ 10× heartbeat and ≥ 10× RTT (for ~50 ms RTT, heartbeat 50–100 ms and election timeout 500–1000 ms).
 - [ ] I compared stretched etcd versus federated clusters for my organization’s RTO/RPO statement.
 
 <details><summary>Expected analysis</summary>
@@ -480,7 +480,7 @@ metadata:
   name: payments
   namespace: finance
 EOF
-python3 -c "import yaml; yaml.safe_load(open('/tmp/lighthouse-lab/serviceexport.yaml'))" && echo "ServiceExport YAML OK"
+.venv/bin/python -c "import yaml; yaml.safe_load(open('/tmp/lighthouse-lab/serviceexport.yaml'))" && echo "ServiceExport YAML OK"
 grep -E '^kind:|^  name:' /tmp/lighthouse-lab/serviceexport.yaml
 # Optional when Submariner is installed:
 # kubectl apply -f /tmp/lighthouse-lab/serviceexport.yaml
