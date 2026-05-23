@@ -640,8 +640,7 @@ kubectl -n garden-local annotate shoot local gardener.cloud/operation=rotate-cre
 ```
 
 Some landscapes wrap these operations with `gardenctl` commands for day-to-day use.
-The exercise uses `gardenctl rotate-kubeconfig` because that is the desired operator workflow in this module.
-If your installed gardenctl build does not expose that exact subcommand, use the documented Shoot credential-rotation annotations and the Shoot access API as the equivalent path.
+The hands-on exercise in this module uses the documented Shoot credential-rotation annotations because they are the stable, version-independent API path.
 The underlying principle remains the same: rotate through Gardener, observe status, and verify that old credentials no longer authenticate.
 
 ### Version Updates and Worker Rollouts
@@ -650,11 +649,11 @@ Kubernetes upgrades are multi-step.
 The control plane must move first.
 Then node components roll forward within Kubernetes version-skew rules.
 Gardener encodes this sequence so tenants do not invent their own upgrade order.
-When `spec.kubernetes.version` changes to a supported version such as `1.35.3`, Gardenlet updates control-plane components, waits for health, and then rolls worker nodes.
+When `spec.kubernetes.version` changes to a supported version such as `1.35.4`, Gardenlet updates control-plane components, waits for health, and then rolls worker nodes.
 
 ```bash
 kubectl -n garden-local patch shoot local --type merge \
-  -p '{"spec":{"kubernetes":{"version":"1.35.3"}}}'
+  -p '{"spec":{"kubernetes":{"version":"1.35.4"}}}'
 
 kubectl -n garden-local get shoot local -w
 ```
@@ -833,7 +832,8 @@ The operational pattern is stable even when subcommands change.
 gardenctl target --garden local --project local
 gardenctl target --garden local --project local --shoot local
 gardenctl kubeconfig
-gardenctl ssh <shoot-node-name>
+# Replace with your node name from `kubectl get nodes` on the targeted Shoot.
+gardenctl ssh shoot--garden--local-worker-1234
 ```
 
 ### Hypothetical scenario: The Wrong Kubeconfig
@@ -914,7 +914,8 @@ The bastion flow gives operators controlled access while preserving fleet policy
 
 ```bash
 gardenctl target --garden local --project local --shoot local
-gardenctl ssh <shoot-node-name>
+# Replace with your node name from `kubectl get nodes` on the targeted Shoot.
+gardenctl ssh shoot--garden--local-worker-1234
 ```
 
 Use SSH for node-level diagnosis, not as a configuration management system.
@@ -1206,10 +1207,11 @@ cd gardener
 make kind-up gardener-up
 ```
 
-Set your kubeconfig to the local Garden cluster if the script does not do it for your shell.
+Set your kubeconfig to the virtual Garden cluster if the script does not do it for your shell.
+The local setup writes two kubeconfigs under `dev-setup/kubeconfigs/`: `runtime/kubeconfig` for the kind runtime cluster and `virtual-garden/kubeconfig` for Garden API operations such as Seeds and Shoots.
 
 ```bash
-export KUBECONFIG="$PWD/example/gardener-local/kind/local/kubeconfig"
+export KUBECONFIG="$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig"
 kubectl get ns
 kubectl get apiservices | grep gardener
 kubectl get seeds
@@ -1222,7 +1224,7 @@ The local setup commonly uses one kind cluster as both Garden and Seed for simpl
 <summary>Solution and success criteria for Task 1</summary>
 
 You should see Gardener API services registered and a Seed named `local`.
-If `kubectl get seeds` fails, confirm that `KUBECONFIG` points at `example/gardener-local/kind/local/kubeconfig`.
+If `kubectl get seeds` fails, confirm that `KUBECONFIG` points at `dev-setup/kubeconfigs/virtual-garden/kubeconfig`.
 If the API service exists but reports unavailable, wait for the Gardener API server and controller pods to become ready.
 
 - [ ] `kubectl get ns` returns namespaces from the local kind cluster.
@@ -1323,15 +1325,20 @@ kubectl apply -f /tmp/shoot-local.yaml
 kubectl -n garden-local get shoot local -w
 ```
 
-Then patch a worker pool machine image version to trigger a node rolling update.
-Use a version supported by your local CloudProfile.
-The example below is illustrative; inspect your CloudProfile first.
+Then update the `local` worker pool machine image to trigger a node rolling update.
+The provider-local Shoot uses a worker named `local` with the `local` machine image (`1.0.0` or `2.0.0` in the CloudProfile), not Garden Linux.
+Do not merge-patch the entire `workers` array — that replaces every pool.
+Inspect supported versions first, then patch only the existing worker entry with a JSON patch:
 
 ```bash
 kubectl get cloudprofile local -o yaml | grep -A20 machineImages
-kubectl -n garden-local patch shoot local --type merge \
-  -p '{"spec":{"provider":{"workers":[{"name":"worker","machine":{"image":{"name":"gardenlinux","version":"1.35.1"}}}]}}}'
+kubectl -n garden-local patch shoot local --type=json -p='[
+  {"op":"replace","path":"/spec/provider/workers/0/machine/image","value":{"name":"local","version":"2.0.0"}}
+]'
 ```
+
+If `replace` fails because `machine.image` is not set yet, use `kubectl edit shoot local -n garden-local` and add `machine.image.name: local` and `machine.image.version: "2.0.0"` under the worker named `local`.
+Alternatively, read the Shoot, edit the worker block in a copy, and reapply with `kubectl apply -f`.
 
 <details>
 <summary>Solution and success criteria for Task 4</summary>
@@ -1354,9 +1361,9 @@ Patch the Shoot Kubernetes version to a newer supported 1.35 patch version.
 Confirm the target version exists in the CloudProfile before patching.
 
 ```bash
-kubectl get cloudprofile local -o yaml | grep -A30 versions
+kubectl get cloudprofile local -o yaml | yq .spec.kubernetes.versions
 kubectl -n garden-local patch shoot local --type merge \
-  -p '{"spec":{"kubernetes":{"version":"1.35.3"}}}'
+  -p '{"spec":{"kubernetes":{"version":"1.35.4"}}}'
 kubectl -n garden-local get shoot local -w
 ```
 
@@ -1366,8 +1373,8 @@ After the Shoot returns to ready, acquire or refresh your Shoot kubeconfig using
 Then verify the upgraded cluster.
 
 ```bash
-./hack/usage/generate-admin-kubeconf.sh > /tmp/local-shoot-kubeconfig.yaml
-KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml k version
+./hack/usage/generate-kubeconfig.sh > /tmp/local-shoot-kubeconfig.yaml
+KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml kubectl version
 KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml kubectl get nodes
 ```
 
@@ -1375,8 +1382,8 @@ KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml kubectl get nodes
 <summary>Solution and success criteria for Task 5</summary>
 
 The upgrade should proceed only if the requested version is supported by the CloudProfile.
-If `1.35.3` is not available in your local checkout, select another supported 1.35+ patch version from the CloudProfile.
-After reconciliation, `k version` against the Shoot kubeconfig should report the new server version.
+If `1.35.4` is not available in your local checkout, select another supported 1.35+ patch version from the CloudProfile.
+After reconciliation, `kubectl version` against the Shoot kubeconfig should report the new server version.
 Node rollout may take longer than control-plane rollout because nodes must be recreated or updated safely.
 
 - [ ] You verified the target version in the CloudProfile.
@@ -1396,22 +1403,16 @@ eval "$(gardenctl kubectl-env bash)"
 kubectl get ns
 ```
 
-Rotate the Shoot's kubeconfig credentials with the operator workflow requested for this module, then watch the Shoot status rather than assuming the command completed every phase instantly. Credential rotation is a reconciled lifecycle operation, so status is the source of truth.
+Rotate the Shoot's kubeconfig credentials through Gardener's credential-rotation annotations, then watch the Shoot status rather than assuming the operation completed every phase instantly. Credential rotation is a reconciled lifecycle operation, so status is the source of truth.
 
 ```bash
-gardenctl rotate-kubeconfig --garden local --project local --shoot local
-```
-
-If your installed gardenctl does not provide that exact command, use the Gardener credential-rotation annotations shown below as the equivalent API-level path. This keeps the exercise aligned with Gardener's reconciliation model while avoiding dependence on one particular gardenctl release.
-
-```bash
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-start
 
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local get shoot local -o jsonpath='{.status.credentials.rotation}{"\n"}'
 
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-complete
 ```
 
@@ -1420,13 +1421,13 @@ Then verify that the old kubeconfig fails once the rotation has completed and ol
 Finally, delete the Shoot cleanly.
 
 ```bash
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local annotate shoot local confirmation.gardener.cloud/deletion=true
 
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local delete shoot local
 
-kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/dev-setup/kubeconfigs/virtual-garden/kubeconfig" \
   -n garden-local get shoot local -w
 ```
 
