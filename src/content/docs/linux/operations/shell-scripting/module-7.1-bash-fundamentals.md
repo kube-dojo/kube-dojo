@@ -12,964 +12,768 @@ lab:
   environment: ubuntu
 ---
 
-# Module 7.1: Bash Fundamentals
-
-> **Shell Scripting** | Complexity: `[MEDIUM]` | Time: 30-35 min | Focus: safe command orchestration, readable control flow, and defensive automation habits.
+> **Shell Scripting** | Complexity: `[MEDIUM]` | Time: 30-35 min | Focus: startup files, expansion order, quoting, control flow, functions, redirections, strict mode, ShellCheck CI, and kubectl automation patterns.
 
 ## Prerequisites
 
-Before starting this module, make sure you can navigate a Linux shell, run commands with arguments, and recognize when a command succeeds or fails from its visible output and exit status.
+Before starting this module, you should be comfortable navigating a Linux filesystem from the terminal, running commands with arguments, and recognising when a command succeeds or fails from its exit status and visible output. You do not need prior scripting experience, but familiarity with opening a text editor and understanding how the shell interprets one command at a time will help you move faster through the worked examples.
 
-- **Required**: [Module 1.1: Kernel Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/) for understanding commands
-- **Required**: Basic command line experience
-- **Helpful**: Any programming experience
+- **Required**: [Module 1.1: Kernel Architecture](/linux/foundations/system-essentials/module-1.1-kernel-architecture/) — understanding how the kernel launches processes and how the shell sits between the user and the operating system provides essential context for why startup files and process boundaries matter in Bash scripting.
+- **Helpful**: Any prior programming experience, particularly in languages where variable scope, control flow, and return codes are explicit concepts. The mental models transfer even when the syntax differs.
 
 ## What You'll Be Able to Do
 
-After this module, you will be able to apply Bash fundamentals to scripts that other operators can run, inspect, and debug without relying on hidden terminal state.
+After this module, you will be able to write Bash scripts that are safe for unattended execution in CI pipelines, operational runbooks, and Kubernetes automation contexts. Each outcome below maps to a concrete skill you can verify by completing the hands-on exercises at the end of the module.
 
-- **Implement** bash scripts with variables, conditionals, loops, and functions that behave correctly when inputs contain spaces or missing values.
-- **Diagnose** error handling failures by evaluating exit codes, pipelines, `set -euo pipefail`, and `trap` behavior.
-- **Design** argument processing and input validation so scripts fail clearly before they damage files, clusters, or deployment state.
-- **Debug** failing scripts with tracing, ShellCheck, and small repeatable tests instead of guessing at command output.
+- **Diagnose** the startup sequence that determines which configuration files Bash reads, distinguishing between login shells, interactive non-login shells, and non-interactive shells so that your scripts never depend on accidental environment state.
+- **Predict** the result of any Bash expansion chain — brace, tilde, parameter, command substitution, arithmetic, word splitting, and pathname — and apply quoting rules that prevent the shell from silently reshaping your data before the target command receives it.
+- **Construct** control flow with `if`, `for`, `while`, and `case` that handles empty inputs, spaces in arguments, and nonzero exit codes without producing misleading success messages.
+- **Design** functions with `local` variables, explicit return codes, and separation of diagnostic output from data output so that callers can compose and test helpers independently.
 
 ## Why This Module Matters
 
-In 2021, a payments platform running a routine maintenance window lost several hours of transaction processing because a shell script treated an empty variable as a valid target directory. The cleanup job was intended to rotate temporary export files before a database migration, but one missing environment value changed the meaning of the command line. Engineers recovered from backups and internal queues, yet the incident still consumed an overnight response bridge, delayed settlements, and cost the company more in remediation than the original migration project.
+In 2021, a payments platform running a routine maintenance window lost several hours of transaction processing because a shell script treated an empty environment variable as a valid target directory. The cleanup job was intended to rotate temporary export files before a database migration, but one missing value changed the semantics of the command line so that it operated on a directory the engineers never intended to touch. They recovered from backups and internal queues, but the incident still consumed an overnight response bridge, delayed settlement processing, and cost more in remediation effort than the original migration project had budgeted.
 
-That story is not dramatic because Bash is exotic; it is dramatic because Bash is ordinary. The shell sits between humans, operating systems, CI pipelines, package managers, Kubernetes clients, and production automation. A small script can be the safest tool in the room when it validates assumptions, preserves arguments, and reports failures honestly. The same script can become dangerous when it relies on unquoted variables, ignores exit codes, or keeps running after a pipeline has already failed.
+That story is not dramatic because Bash is exotic; it is dramatic because Bash is ordinary. The shell sits between humans and the operating system, between CI pipelines and package managers, between Kubernetes clients and production automation on every major Linux distribution. A small script that validates its assumptions, quotes its expansions, and reports failures honestly can be the safest tool in the room. The same script, when it relies on unquoted variables, ignores pipeline failures, or keeps running after a `cd` fails silently, becomes a production risk that no quantity of monitoring can fully mitigate.
 
-This module teaches Bash as operational engineering, not as trivia about syntax. You will write scripts that use variables, conditionals, loops, functions, input, output, and error handling, but the deeper goal is judgment: recognizing when Bash is enough, when it needs guardrails, and when the job deserves a richer language. When Kubernetes examples appear later in the Linux and platform tracks, assume the exam-friendly shortcut `alias k=kubectl` is available, and target Kubernetes 1.35 or newer behavior when a command interacts with cluster resources.
+This module treats Bash as operational engineering, not as syntax trivia. You will learn the startup files that determine what state your script inherits, the expansion order that controls how the shell transforms your text before any command runs, and the quoting disciplines that prevent those transformations from becoming destructive. Kubernetes examples throughout assume the exam-friendly shorthand `alias k=kubectl` is available for interactive terminal speed, and they target Kubernetes 1.35 or newer behaviour when a command interacts with cluster resources.
 
-## The Shell Script Contract
+The real cost of Bash mistakes in SRE work is not the syntax error itself. It is the diagnostic time. An unquoted variable that splits on a space fails at 03:10 during a maintenance window, and the on-call engineer must now distinguish between a genuine service outage and a script that silently operated on the wrong files. A missing `pipefail` in a twelve-command deployment pipeline succeeds even when step three failed, and the engineer discovers the partial deployment only when users report errors hours later. Each of these scenarios shares the same root cause: the script is allowed to continue past a failure without reporting it. The techniques in this module — strict mode, expansion awareness, explicit error handling, and CI-linted ShellCheck integration — directly reduce the mean time to detect and the mean time to diagnose for every script your team writes. By the end, you will know when Bash is the right tool, when it needs guardrails, and when the job deserves a richer language — not because someone told you, but because you understand the failure modes each choice brings.
 
-A Bash script is a contract between the person who writes it, the shell that interprets it, and the system state it changes. The first line chooses the interpreter, the permission bit decides whether the kernel can execute the file directly, and every command after that inherits a working directory, environment variables, file descriptors, and arguments. Treating those pieces as a contract helps you avoid the beginner mistake of thinking a script is just a saved terminal transcript.
+## Bash Startup and Execution Context
 
-The shebang line is the first visible part of that contract. `#!/bin/bash` says the script intentionally uses Bash, while `#!/bin/sh` promises a smaller POSIX feature set that may be interpreted by `dash`, `ash`, or another shell. `#!/usr/bin/env bash` finds Bash through `PATH`, which can help on systems where Bash is installed outside `/bin`, but it also means the calling environment influences which binary is selected. None of these choices is universally best; the right choice depends on whether portability or Bash-specific safety features matter more for the job.
+Every Bash process begins by reading configuration files, but which files it reads depends on how the shell was invoked. A login shell, such as the one spawned when you connect over SSH or open a terminal emulator configured as a login shell, reads `/etc/profile` and then the first of `~/.bash_profile`, `~/.bash_login`, or `~/.profile` that exists. An interactive non-login shell, such as the one you get when you open a new terminal tab in most desktop environments or run `bash` from an existing session, reads only `~/.bashrc`. A non-interactive shell, such as the one that runs a script with `bash script.sh` or executes a command over SSH without a TTY, reads none of these files unless the `BASH_ENV` environment variable points to a startup script. This three-way distinction matters because scripts that accidentally depend on aliases, functions, or environment variables defined in an interactive `~/.bashrc` will fail when executed by cron, systemd, or a CI runner — all of which invoke non-interactive shells. The [Bash Reference Manual documents the full startup sequence](https://www.gnu.org/software/bash/manual/bash.html#Bash-Startup-Files) with precise ordering for each invocation mode, and it is worth consulting whenever a script behaves differently inside and outside a terminal session.
 
 ```bash
-#!/bin/bash
-# This is a comment
-echo "Hello, World!"
+# Determine what kind of shell you are in
+shopt login_shell    # check if this is a login shell
+[[ $- == *i* ]] && echo "interactive" || echo "non-interactive"
+
+# Common pattern: source .bashrc from .bash_profile for consistency
+# In ~/.bash_profile:
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
 ```
 
-A first script looks simple because the shell does a lot of work before your code runs. It opens the file, chooses the interpreter, passes the script path as `$0`, and passes the remaining words as positional arguments. That setup means the same text can behave differently depending on whether you execute it directly, run it through `bash script.sh`, or source it into your current shell with `source script.sh`.
+The shebang line is the first visible part of the execution contract. `#!/bin/bash` declares that the script intentionally uses Bash and should be interpreted by the Bash binary at that exact path. `#!/usr/bin/env bash` searches `PATH` for Bash, which improves portability across systems where Bash is installed in different locations — common in macOS environments where the system Bash is frozen at version 3.2 and a newer version lives under `/usr/local/bin/bash` or a Homebrew prefix. The trade-off is that `env` introduces an extra level of indirection: the caller's `PATH` determines which binary is selected, which can be a security consideration in tightly controlled environments. `#!/bin/sh` promises only the POSIX shell feature set and may be interpreted by `dash`, `ash`, or another minimal shell on systems like Alpine Linux or Debian where `/bin/sh` is deliberately not Bash. The [POSIX Shell Command Language specification](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html) defines the minimum contract that `#!/bin/sh` scripts can rely on across all conforming systems.
+
+Sourcing a script with `source script.sh` or `. script.sh` runs it inside the current shell process rather than in a child process. This means any variable assignments, directory changes, or function definitions persist after the script finishes, which is exactly what you want for profile files and shared helper libraries but dangerous for general automation. An executable script launched with `./script.sh` starts a new process, inherits a copy of the environment, and cannot accidentally modify the caller's shell state. Before running any script you did not write yourself, decide whether you want its side effects to survive its execution, and choose the invocation method accordingly.
 
 ```bash
-# Create and run
-cat > hello.sh << 'EOF'
-#!/bin/bash
-echo "Hello, World!"
-EOF
-
-chmod +x hello.sh
-./hello.sh
-# Hello, World!
-```
-
-Executable scripts are usually easier to reason about in operations because they behave like commands: they receive arguments, return exit codes, and do not unexpectedly modify the caller's shell. Sourced scripts are useful for profile files and shared helper definitions, but they run in the current shell process, so changing a variable or directory inside the file changes the caller as well. Before running this, what output and side effects do you expect from `./script.sh` compared with `source script.sh`?
-
-```bash
-#!/bin/bash          # Use Bash
-#!/bin/sh            # Use system shell (more portable)
-#!/usr/bin/env bash  # Find bash in PATH (most portable)
-
-# The shebang must be the first line, no spaces before #!
-```
-
-The mechanics of running a script also affect debugging. If you type `bash script.sh`, the executable bit does not matter because you are explicitly launching Bash and giving it a file to read. If you type `./script.sh`, the executable bit and shebang both matter because the kernel is asked to execute that path. If you source the file, there is no child process boundary, which is powerful for loading functions but risky for general automation.
-
-```bash
-# Method 1: Make executable
+# Method 1: Execute as a child process (recommended for automation)
 chmod +x script.sh
 ./script.sh
 
-# Method 2: Run with interpreter
+# Method 2: Explicitly invoke the interpreter
 bash script.sh
 
-# Method 3: Source (runs in current shell)
+# Method 3: Source into current shell (use for profile/helpers only)
 source script.sh
-. script.sh  # Same as source
+. script.sh  # POSIX equivalent
 ```
 
-Operational scripts should make their expectations visible. Put the interpreter decision at the top, keep setup close to the entry point, and avoid relying on interactive shell aliases unless the script defines them itself. In an exam shell you might define `alias k=kubectl` for speed, but a script that controls a cluster should either call the binary it needs or document the dependency with a clear command check before it tries to use it.
+Scripts intended for production should validate their execution context early. Check that required commands exist with `command -v`, verify that required files are readable with `[[ -r "$file" ]]`, and exit with a clear message before reaching any destructive operation if preconditions are not met. A script that fails immediately with a specific error message at line fifteen is infinitely easier to debug than one that fails silently at line two hundred because a `cd` earlier in the script changed the working directory without the operator realising it. As documented in the [Bash manual section on Bourne Shell Builtins](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html), `command -v` is the portable way to test for command availability across all POSIX-compatible shells, and it should be preferred over `which` or `type` in operational scripts.
 
-A helpful way to review any shell script is to ask what promise each line makes. The shebang promises an interpreter, each assignment promises a value, each branch promises a decision rule, and each command promises a side effect or a piece of output. When those promises are implicit, the script may still work for the author, but it becomes hard for another engineer to determine whether a later change is safe. Making the contract explicit is what turns a short script into shared infrastructure.
+## Shell Expansion Order
 
-There is also a security angle to this contract. A script that inherits arbitrary environment values, runs in an unexpected directory, or expands untrusted input without quotes can become an accidental command builder. You do not need to turn every basic script into a hardened security appliance, but you should know which values came from the caller and which values the script created itself. The moment a value crosses that boundary, validation and quoting become part of the design rather than cleanup work.
+Before Bash executes any command, it performs a sequence of expansions on the command line. Understanding this order is not an academic exercise — it determines whether your variable value reaches the command intact or is silently split into multiple arguments, subjected to pattern matching, or treated as a command to execute. The [Bash manual section on Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) defines the following sequence, applied left to right on each token:
 
-## Variables, Arguments, and Quoting
+1. **Brace expansion** — `{a,b,c}` expands to `a b c` before any other processing occurs. This is purely textual; no variable or filename interpretation happens at this stage.
+2. **Tilde expansion** — `~` expands to the home directory and `~user` expands to that user's home directory. This occurs only at the start of a word or after `=` in an assignment.
+3. **Parameter expansion** — `${variable}` and its many forms replace the expression with the variable's value. This is the stage where `${var:-default}`, `${var#pattern}`, `${var%pattern}`, `${#var}`, and substring slicing operate.
+4. **Command substitution** — `$(command)` or backtick syntax runs the command and replaces the substitution with its standard output, with trailing newlines removed.
+5. **Arithmetic expansion** — `$((expression))` evaluates the integer arithmetic expression and replaces it with the result.
+6. **Word splitting** — the result of unquoted parameter expansions, command substitutions, and arithmetic expansions is split into words on characters in the `IFS` variable (space, tab, newline by default). Quoted expansions are exempt from word splitting, which is the single most important reason to quote your variables.
+7. **Pathname expansion** — unquoted `*`, `?`, and `[` characters are treated as glob patterns and expanded to matching filenames. This stage is also disabled by quoting.
 
-Variables in Bash are not typed containers in the way Python or Go variables are. They are mostly strings that the shell expands into command words before a command runs. That expansion step is why assignment has no spaces around `=`, why `${name}` can be clearer than `$name`, and why quoting is not cosmetic. If the expansion produces two words where you expected one path, the command receives two arguments and may do something very different from what the script author intended.
+The expansion order is not just a checklist — it shapes every line of Bash you write. Because word splitting happens after parameter expansion, an unquoted variable containing spaces will be split into multiple arguments after its value is substituted. Because pathname expansion happens last, an unquoted variable containing `*` will be expanded to the list of files in the current directory. These behaviours are deterministic once you know the order, and knowing the order is what separates operators who debug by guessing from operators who predict what their script will produce before it runs.
 
-```bash
-# Assignment (no spaces around =)
-name="John"
-count=42
-
-# Using variables
-echo "Hello, $name"
-echo "Count: ${count}"
-
-# ${} is clearer and required for some cases
-file="log"
-echo "${file}s"   # logs
-echo "$files"     # Empty (no variable named files)
-
-# Read-only
-readonly PI=3.14159
-PI=3  # Error: PI: readonly variable
+```mermaid
+flowchart LR
+    A[Raw Command Line] --> B[Brace Expansion]
+    B --> C[Tilde Expansion]
+    C --> D[Parameter Expansion]
+    D --> E[Command Substitution]
+    E --> F[Arithmetic Expansion]
+    F --> G{Quoted?}
+    G -->|Yes| H[Skip Splitting]
+    G -->|No| I[Word Splitting on IFS]
+    H --> J[Pathname Expansion]
+    I --> J
+    J --> K[Quote Removal]
+    K --> L[Command Execution]
 ```
 
-The most important habit in this section is quoting expansions that should remain a single value. `"$name"` tells Bash to preserve the value as one argument even if it contains spaces, tabs, or wildcard characters. `${file}s` tells Bash where the variable name ends, which prevents accidental lookup of a different variable. `readonly` is useful for constants because it turns accidental reassignment into an immediate error instead of a quiet change in behavior.
+Brace expansion is the first stage, and it operates on literal commas and ranges before any variable is expanded. `mkdir -p project/{src,tests,docs}` creates three directories in one command. Tilde expansion follows immediately, translating `~` and `~user` only at word boundaries. These two stages are safe because they operate on literal text rather than on substituted values.
+
+The real danger zone begins at stage three with parameter expansion, then compounds through command substitution and arithmetic expansion. Each of these stages substitutes runtime values into the command line. After substitution, the shell proceeds to word splitting on unquoted results, which is why `$file` with a value of "my documents" becomes two words. The shell then performs pathname expansion, turning `*` and `?` characters into matching filenames. Both of these destructive stages are disabled by double quotes. Understanding this sequence means you can look at any Bash command and predict its word boundaries without running it.
+
+Parameter expansion deserves special attention because it provides the mechanisms for default values, alternate values, and string manipulation that make Bash scripts resilient in the face of missing inputs. `${var:-default}` substitutes `default` only when `var` is unset or empty, leaving the original variable unchanged. `${var:=default}` assigns the default value back to the variable as a side effect, which can be useful for enforcing configuration at the point of first use. `${var:?message}` prints the message to standard error and exits the script if the variable is unset or empty — a compact way to assert that required inputs are present. `${var:+alternate}` substitutes `alternate` only when `var` is set and non-empty, which is less commonly used but invaluable for optional flags. Substring extraction with `${var:offset:length}` and pattern-based trimming with `${var#pattern}` and `${var%pattern}` complete the toolkit. The [Bash manual section on Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html) documents every variant in detail, and you should consult it when building validation logic rather than guessing at the syntax.
 
 ```bash
-$0          # Script name
-$1, $2...   # Positional arguments
-$#          # Number of arguments
-$@          # All arguments (as separate strings)
-$*          # All arguments (as single string)
-$?          # Exit code of last command
-$$          # Current process ID
-$!          # PID of last background command
-```
-
-Special variables are the script's view of its calling context. `$#` tells you how many arguments arrived, `$?` reports the last command's exit code, and `"$@"` preserves the original argument boundaries when you need to forward or loop over user input. The difference between `"$@"` and `$*` is not academic when file names contain spaces, Kubernetes resource names are generated by tools, or a CI job passes a flag value that happens to include shell metacharacters.
-
-```bash
-# Indexed array
-fruits=("apple" "banana" "cherry")
-echo ${fruits[0]}      # apple
-echo ${fruits[@]}      # All elements
-echo ${#fruits[@]}     # Length: 3
-
-# Add element
-fruits+=("date")
-
-# Associative array (Bash 4+)
-declare -A colors
-colors[red]="#FF0000"
-colors[green]="#00FF00"
-echo ${colors[red]}
-```
-
-Arrays let Bash carry a list without flattening it into one string. That matters when you build argument vectors for commands, because each array element remains one word when expanded as `"${array[@]}"`. Associative arrays add named keys, which can be helpful for small lookup tables, but remember that they require Bash 4 or newer. If portability to older macOS system Bash matters, either install a newer Bash or avoid associative arrays in shared scripts.
-
-Command substitution runs a command and replaces the substitution with its standard output. Standard error is not captured unless you redirect it, and the trailing newlines in standard output are removed. Pause and predict: what happens if you run `files=$(ls -l /nonexistent)`? The error message is printed to standard error, the variable receives only standard output, and the assignment's success behavior depends on how you use the command substitution afterward.
-
-```bash
-# Modern syntax (preferred)
-now=$(date)
-files=$(ls -1 | wc -l)
-
-# Old syntax (still works)
-now=`date`
-
-# Use in strings
-echo "Current time: $(date +%H:%M)"
-echo "You have $(ls | wc -l) files"
-```
-
-Use `$()` for command substitution because it nests cleanly and is easier to read during reviews. Backticks still work, and you will see them in legacy scripts, but nested backticks require escaping that makes failure modes harder to spot. When command substitution becomes complex, consider whether a named function or temporary variable would make the script easier to test. The goal is not to compress every operation into one line; the goal is to make the data flow obvious.
-
-Quoting deserves repetition because it is the difference between a script that works with the sample input and a script that works with real input. A path copied from a desktop can contain spaces, a generated filename can contain brackets, and an operator can pass an empty string while testing a failure case. Quoting does not make values trusted, but it does preserve their boundaries so the receiving command sees the same argument the caller intended. Once you build that habit, many shell bugs simply stop appearing.
-
-When you need a default, be precise about what "missing" means. `${value:-default}` uses the default when the variable is unset or empty, while other parameter expansion forms distinguish unset from empty. That distinction matters in scripts where an empty value can be intentional, such as clearing a label or disabling an optional field. Beginners often reach for defaults to avoid errors, but experienced operators use them only when the fallback is a genuine part of the workflow.
-
-## Decisions with Conditionals
-
-Conditionals turn shell scripts from command lists into automation that can inspect state and choose a path. The `if` statement itself is simple: it runs a command and checks that command's exit code. In Bash, tests such as `[ "$a" = "$b" ]` and `[[ "$a" = "$b" ]]` are commands or language constructs that return success or failure, so the same mental model applies whether you are checking a string, a file, or a real command.
-
-```bash
-# Basic if
-if [ condition ]; then
-    echo "true"
-fi
-
-# If-else
-if [ condition ]; then
-    echo "true"
-else
-    echo "false"
-fi
-
-# If-elif-else
-if [ condition1 ]; then
-    echo "first"
-elif [ condition2 ]; then
-    echo "second"
-else
-    echo "else"
-fi
-```
-
-The shape of an `if` block should reveal the decision being made. A script that checks whether a configuration file exists before reading it is not merely avoiding a crash; it is protecting the next command from receiving nonsense input. Good conditionals fail close to the bad assumption and report the value that caused the failure. That habit saves time when a script runs unattended in CI and the only evidence you get is a log file.
-
-```bash
-# String comparisons
-[ "$a" = "$b" ]     # Equal
-[ "$a" != "$b" ]    # Not equal
-[ -z "$a" ]         # Empty
-[ -n "$a" ]         # Not empty
-
-# Number comparisons
-[ "$a" -eq "$b" ]   # Equal
-[ "$a" -ne "$b" ]   # Not equal
-[ "$a" -lt "$b" ]   # Less than
-[ "$a" -le "$b" ]   # Less than or equal
-[ "$a" -gt "$b" ]   # Greater than
-[ "$a" -ge "$b" ]   # Greater than or equal
-
-# File tests
-[ -e "$file" ]      # Exists
-[ -f "$file" ]      # Is regular file
-[ -d "$dir" ]       # Is directory
-[ -r "$file" ]      # Is readable
-[ -w "$file" ]      # Is writable
-[ -x "$file" ]      # Is executable
-[ -s "$file" ]      # Has size > 0
-```
-
-The test operators are small, but the distinction between string, number, and file checks is large. `-eq` compares integers, while `=` compares strings, and using the wrong one produces misleading errors when a value is empty or nonnumeric. File tests are often the best defense before a destructive command because they let the script explain what is wrong before attempting the operation. A clear `[[ ! -r "$config_file" ]]` branch is better than letting the next command fail several lines later.
-
-`[[ ]]` is Bash-specific, while `[ ]` is the portable test command. In a Bash script, `[[ ]]` is usually safer because it does not perform word splitting or pathname expansion on unquoted variable expansions, and it supports pattern and regular expression matching. Stop and think: why is `[[ ]]` considered safer than `[ ]`? If `$name` is completely empty and unquoted in `[ $name = "John" ]`, Bash effectively hands `[` a malformed argument list.
-
-```bash
-# [[ ]] is Bash-specific but safer
-[[ "$name" = "John" ]]      # Works even if $name is empty
-[[ "$file" = *.txt ]]       # Pattern matching
-[[ "$a" =~ ^[0-9]+$ ]]      # Regex matching
-
-# [ ] is POSIX, more portable
-# But requires more quoting
-[ "$name" = "John" ]
-
-# Recommendation: Use [[ ]] in Bash scripts
-```
-
-Logical operators let you combine decisions, but they can also hide intent if the condition grows too wide. A useful rule is to keep the condition readable enough that a tired reviewer can name the failure case. If the check requires several business rules, split the validation into a function with a meaningful name and return an exit code. That keeps the top-level script focused on control flow while the function owns the details.
-
-```bash
-# AND
-if [[ condition1 && condition2 ]]; then
-    echo "both true"
-fi
-
-# OR
-if [[ condition1 || condition2 ]]; then
-    echo "at least one true"
-fi
-
-# NOT
-if [[ ! condition ]]; then
-    echo "not true"
-fi
-
-# With [ ] syntax
-if [ condition1 ] && [ condition2 ]; then
-    echo "both true"
-fi
-```
-
-The practical takeaway is that conditionals should document operational intent. A backup script should say whether a target directory is missing, unreadable, or empty. A deployment helper should distinguish "tool missing" from "cluster returned an error" instead of printing one vague failure line. These details feel verbose while writing, but they turn a production page from a mystery into a checklist.
-
-Conditionals also help you separate expected alternatives from exceptional failures. A missing optional report file might be a normal branch, while a missing destination directory might be a hard stop. If both cases are handled with the same generic `echo failed`, the script loses information that could have guided the next action. Write branches that reflect the operational meaning of the condition, not just the mechanical result of a test expression.
-
-For scripts that will be reviewed by teammates, prefer clear positive checks at important boundaries. `if [[ -r "$config_file" ]]; then load_config; else ...` often reads better than deeply nested negative logic, especially when several conditions interact. Negative checks are still useful for early exits, but they should fail with a specific reason. A reviewer should be able to trace the path from input validation to work execution without mentally simulating every possible value.
-
-## Repetition with Loops
-
-Loops are where shell scripts become powerful and where many shell scripts become fragile. The shell's default behavior is to split words and expand globs before the loop body runs, so you need to know whether you are iterating over a literal list, an array, a pathname pattern, or command output. The safest loop is the one that preserves the shape of the data it was given and handles the empty case explicitly.
-
-```bash
-# List iteration
-for fruit in apple banana cherry; do
-    echo "$fruit"
-done
-
-# Array iteration
-fruits=("apple" "banana" "cherry")
-for fruit in "${fruits[@]}"; do
-    echo "$fruit"
-done
-
-# Range
-for i in {1..5}; do
-    echo "$i"
-done
-
-# C-style
-for ((i=0; i<5; i++)); do
-    echo "$i"
-done
-
-# Files
-for file in *.txt; do
-    echo "Processing $file"
-done
-
-# Command output
-for pod in $(kubectl get pods -o name); do
-    echo "Pod: $pod"
-done
-```
-
-The final example shows a common trap: command substitution followed by a `for` loop splits on whitespace, so it is safe only when the output format cannot contain spaces and you accept the parsing tradeoff. Kubernetes object names returned by `kubectl get pods -o name` are typically safe enough for quick terminal work, especially if you use `k get pods -o name` after defining `alias k=kubectl`, but scripts should prefer structured output or line-oriented reads when correctness matters. Pause and predict: if you loop over `*.txt` in a directory with no text files, does the loop skip, or does it process the literal string `*.txt`?
-
-```bash
-# Basic while
-count=0
-while [ $count -lt 5 ]; do
-    echo "$count"
-    ((count++))
-done
-
-# Read file line by line
-while IFS= read -r line; do
-    echo "Line: $line"
-done < file.txt
-
-# Read command output
-kubectl get pods -o name | while read pod; do
-    echo "Pod: $pod"
-done
-
-# Infinite loop
-while true; do
-    echo "Running..."
-    sleep 5
-done
-```
-
-`while IFS= read -r line` is the standard pattern for reading text without trimming leading whitespace or treating backslashes as escapes. It is longer than a naive `for line in $(cat file)` loop, but it preserves the data instead of letting the shell reinterpret it. In operational scripts, preserving the data is almost always worth the extra characters. A log line, path, or JSON fragment can contain spaces that are meaningful to the program reading it.
-
-```bash
-# Break
-for i in {1..10}; do
-    if [ $i -eq 5 ]; then
-        break
-    fi
-    echo "$i"
-done
-
-# Continue
-for i in {1..5}; do
-    if [ $i -eq 3 ]; then
-        continue
-    fi
-    echo "$i"
-done
-```
-
-Loop control is useful when the script has a clear reason to stop early or skip one item. `break` communicates that continuing would be wasteful or unsafe, while `continue` communicates that the current item is not eligible for the remaining work. If either command appears deep inside nested logic, consider moving the loop body into a function. Named functions make it easier to test the decision separately and keep the loop's purpose visible.
-
-Be especially careful when a loop performs side effects. Printing names is harmless, but deleting files, restarting services, or updating cluster resources changes the cost of a bad iteration. A practical pattern is to first write the loop so it prints the exact commands or targets, then replace the print with the real operation only after the target list looks correct. This dry-run mindset catches glob surprises, whitespace bugs, and unexpected empty matches before they become state changes.
-
-Line-oriented loops should also make failure behavior visible. If one item fails, should the script stop, skip the item, retry, or record the failure and continue? There is no universal answer, but there should be an answer in the code. Batch scripts that silently continue after partial failure are painful because the final success message hides the list of items that were never processed correctly.
-
-## Functions and Script Shape
-
-Functions are how Bash scripts become maintainable programs instead of long scrolls of commands. A function packages a decision or operation behind a name, receives arguments through `$1`, `$2`, and friends, and reports success or failure through its return code. It can also print data for command substitution, but that technique works best when the function's standard output is reserved for data and diagnostic messages go to standard error.
-
-```bash
-# Definition
-greet() {
-    echo "Hello, $1!"
-}
-
-# Call
-greet "World"
-# Hello, World!
-
-# Alternative syntax
-function greet {
-    echo "Hello, $1!"
-}
-```
-
-The `name() { ...; }` form is widely used and portable across Bash versions. The `function name { ...; }` form is also common in Bash, but it is less portable and offers no major benefit for ordinary scripts. More important than the spelling is the boundary: a function should have a narrow job, validate its inputs, and return a status that the caller can act on. If a function both prints user-facing logs and emits machine-readable data, command substitution becomes harder to use safely.
-
-```bash
-# Function arguments
-add() {
-    local a=$1
-    local b=$2
-    echo $((a + b))
-}
-
-result=$(add 5 3)
-echo "5 + 3 = $result"
-
-# Return codes
-is_even() {
-    if (( $1 % 2 == 0 )); then
-        return 0  # Success/true
-    else
-        return 1  # Failure/false
-    fi
-}
-
-if is_even 4; then
-    echo "4 is even"
-fi
-
-# Return string via echo
-get_name() {
-    echo "John"
-}
-name=$(get_name)
-```
-
-Bash return codes are integers used for control flow, not returned values in the Python sense. A function that computes a string generally prints it, and the caller captures that output. A predicate function returns `0` for true and nonzero for false, which matches how `if command; then` works. This convention may feel inverted if you come from other languages, but it is consistent with the Unix idea that exit code `0` means success.
-
-```bash
-# Without local - global scope
-broken() {
-    x=10  # Modifies global x!
-}
-
-# With local - function scope
-correct() {
-    local x=10  # Only in this function
-}
-
-# Always use local for function variables
-```
-
-Use `local` for variables that belong inside a function. Without it, Bash variables are global by default, so a helper can accidentally overwrite a value that the main script still needs. Stop and think: what happens if you define a variable without `local` inside a function and then use a variable with the same name in your main script? That bug is hard to see in review because each assignment looks valid in isolation.
-
-A good script often has a `main` function at the bottom that wires together smaller helpers. The helpers check arguments, read configuration, perform work, and return meaningful codes. The top level enables safety settings, installs traps, and calls `main "$@"`. That shape gives you a single entry point while still allowing individual functions to be exercised in small manual tests.
-
-Function boundaries are also a good place to define what output means. A function named `find_config` can print a path to standard output and return nonzero when no usable config exists. A function named `log` can print human messages, ideally to standard error when another command might capture data. Mixing those responsibilities forces callers to parse human text, which is exactly the kind of fragile dependency shell scripts should avoid.
-
-Keep functions small enough that their names remain honest. If `deploy_app` validates arguments, builds artifacts, edits manifests, applies resources, waits for rollout, and sends a notification, it is not one operation anymore; it is an entire workflow hidden behind one label. Splitting the workflow into named helpers makes errors easier to localize and lets future maintainers change one step without rereading the whole script.
-
-## Input, Output, and Failure Signals
-
-Input and output are not just convenience features; they are how scripts communicate with users, pipelines, and other programs. Standard output should carry the data a caller may want to capture, while standard error should carry diagnostics meant for humans or logs. When you separate those streams, a script can be both friendly on a terminal and reliable inside automation.
-
-```bash
-# Simple read
-echo -n "Enter name: "
-read name
-echo "Hello, $name"
-
-# With prompt
-read -p "Enter name: " name
-
-# Silent (for passwords)
-read -sp "Password: " password
-echo
-
-# Read with default
-read -p "Port [8080]: " port
-port=${port:-8080}
-
-# Read with timeout
-read -t 5 -p "Quick! " answer || echo "Too slow"
-```
-
-Interactive input belongs in scripts meant for humans, not unattended CI jobs. If a script may run without a terminal, prefer flags, environment variables, or configuration files, and validate them before doing work. A default such as `${port:-8080}` is useful when the absence of a value is acceptable, but it can hide a mistake when the value is required. The difference between optional and required input should be explicit in code.
-
-```bash
-# stdout
-echo "Normal output"
-printf "Formatted: %s %d\n" "text" 42
-
-# stderr
-echo "Error message" >&2
-
-# Redirect to file
-echo "text" > file.txt    # Overwrite
-echo "text" >> file.txt   # Append
-
-# Redirect both
-command > output.txt 2>&1
-command &> output.txt     # Bash shorthand
-```
-
-Prefer `printf` when output formatting matters because it is more predictable than `echo` across shells and inputs. Redirection is equally important: `>` overwrites, `>>` appends, `2>&1` combines standard error with standard output, and `&>` is Bash shorthand for redirecting both. Those operators are powerful enough to destroy evidence if misused, so scripts that redirect logs should make file paths obvious and check write permissions before the critical command runs.
-
-```bash
-# Here-doc
-cat << EOF
-This is a multi-line
-string with $variables expanded
-EOF
-
-# Here-doc without expansion
-cat << 'EOF'
-This keeps $variables literal
-EOF
-
-# Here-doc to command
-mysql << EOF
-SELECT * FROM users;
-EOF
-```
-
-Here documents are a readable way to embed templates, sample configuration, or multiline input for another command. Quoting the delimiter, as in `<< 'EOF'`, prevents variable expansion inside the body, which is exactly what you want when generating scripts or configuration that contains literal `$` characters. Leaving the delimiter unquoted expands variables, which is useful for templates but risky when the input contains untrusted text. Before running a here document, decide whether the body is data to preserve or a template to render.
-
-Exit codes are the shell's primary failure signal. Every command returns a status, and an `if` statement asks whether that status represents success. Checking `$?` immediately after a command works, but wrapping the command directly in `if command; then` is usually clearer because it keeps the cause and branch together. The longer the distance between a command and its exit-code check, the easier it is for another command to overwrite `$?`.
-
-```bash
-# Exit with code
-exit 0   # Success
-exit 1   # General error
-exit 2   # Misuse of command
-
-# Check last exit code
-command
-if [ $? -eq 0 ]; then
-    echo "Success"
-fi
-
-# Or more idiomatically
-if command; then
-    echo "Success"
-else
-    echo "Failed"
-fi
-```
-
-`set -euo pipefail` is a useful safety baseline, but it is not a substitute for understanding control flow. `set -e` exits on many unhandled command failures, `set -u` treats unset variables as errors, and `pipefail` makes a pipeline fail when any command in it fails. These options expose mistakes early, yet they also require intentional handling for commands like `grep` that use nonzero status to mean "not found" rather than "the script is broken."
-
-```bash
-#!/bin/bash
-set -e          # Exit on error
-set -u          # Exit on undefined variable
-set -o pipefail # Exit on pipe failure
-set -x          # Debug: print commands
-
-# Combined (recommended for scripts)
-set -euo pipefail
-
-# Trap errors
-trap 'echo "Error on line $LINENO"' ERR
-
-# Trap exit (cleanup)
-cleanup() {
-    rm -f /tmp/tempfile
-}
-trap cleanup EXIT
-```
-
-Think carefully before putting `set -x` in a script that might handle credentials or sensitive arguments, because tracing prints expanded commands. `trap` gives the script a way to report the failing line or clean temporary files even when a command exits early. Stop and think: if your script uses `set -e` and runs `grep "error" log.txt`, what happens when the word is not found? The answer depends on whether that nonzero status is handled as an expected branch or left as an unhandled failure.
-
-```bash
-# Check command exists
-command -v kubectl &> /dev/null || {
-    echo "kubectl not found" >&2
-    exit 1
-}
-
-# Check file exists
-if [[ ! -f "$config_file" ]]; then
-    echo "Config not found: $config_file" >&2
-    exit 1
-fi
-
 # Default values
-name=${1:-"default"}
-port=${PORT:-8080}
+name="${1:-World}"                # Use "World" if $1 is unset or empty
+port="${PORT:-8080}"              # Use 8080 if $PORT is unset or empty
+
+# Assign default back to variable
+echo "${count:=0}"                # Assigns 0 to count and echoes it
+
+# Fail with message if unset
+config="${CONFIG_FILE:?CONFIG_FILE must be set}"
+
+# Alternate value (set and not empty)
+debug="${DEBUG:+-v}"              # Adds -v only when DEBUG is set and non-empty
+
+# Substring extraction
+filename="backup-2025-03-15.tar.gz"
+echo "${filename:7:10}"           # 2025-03-15
+echo "${filename%.*}"             # backup-2025-03-15.tar (remove shortest .* suffix)
+echo "${filename%%.*}"            # backup-2025-03-15 (remove longest .* suffix)
+echo "${filename#*-}"             # 2025-03-15.tar.gz (remove shortest *- prefix)
+echo "${filename##*-}"            # 03-15.tar.gz (remove longest *- prefix)
 ```
 
-Defensive programming is not pessimism; it is respect for unattended execution. Check that required tools exist, required files are readable, and required variables are present before the script reaches a destructive or expensive operation. When the failure message includes the missing command or path, the next engineer can fix the environment without reading the whole script. That is the difference between automation that scales and automation that creates new handoffs.
+## Quoting Rules
 
-The hardest part of `set -euo pipefail` is deciding which failures are expected. A missing match from `grep`, a stopped service in a health check, or an absent optional file may be valid information rather than a reason to abort. Handle those cases close to the command with an `if` statement or a carefully documented fallback. What you should avoid is turning off the safety options globally because one command needed a deliberate exception.
+Bash provides four quoting mechanisms, and each solves a specific class of expansion-control problem. **Single quotes** preserve every character literally — no expansion, no substitution, no escape sequences except that a single quote cannot appear inside a single-quoted string. **Double quotes** preserve most characters literally but allow parameter expansion (`$var`), command substitution (`$(cmd)`), and arithmetic expansion (`$((expr))`) to proceed while suppressing word splitting and pathname expansion on the result. **Dollar-single quotes** (`$'...'`), also called ANSI-C quoting, interpret backslash escape sequences like `\n`, `\t`, and `\e` but do not perform shell expansions. **Backslash** escapes the character immediately following it, removing any special meaning it would otherwise carry.
 
-Cleanup deserves the same care as setup. Temporary files should be created with tools designed for that purpose, and cleanup traps should preserve the original exit code so callers are not told that a failed script succeeded. If cleanup itself can fail, report that separately without hiding the original problem. The script's last message should help the next operator understand both the result and the state left behind.
-
-## Debugging as a Practice
-
-Debugging Bash is less about memorizing flags and more about reducing ambiguity. Start by reproducing the failure with the smallest input that still fails, then inspect what the shell is expanding and what each command returns. `set -x` can show expanded commands, ShellCheck can point out common quoting and portability mistakes, and deliberate test cases can prove that paths with spaces, empty arguments, and missing files behave correctly.
-
-A useful debugging session begins with the contract. Which interpreter ran the script? What was the working directory? Which arguments arrived? Which environment variables were required? Which command returned the first unexpected nonzero status? Answering those questions is faster than staring at the final error line, because the final error is often only a symptom of a bad expansion or unchecked assumption earlier in the script.
-
-When a script controls infrastructure, debugging should also protect the target system. Add dry-run modes before destructive commands, print the exact resource or path being changed, and test against temporary files before using real directories. For Kubernetes 1.35 exercises, use `k` interactively for speed after defining the alias, but keep production scripts explicit and testable. The point is to make the script boring under pressure.
-
-ShellCheck is valuable because it encodes years of common shell mistakes, but it should not replace reasoning. If it warns about a variable that should be quoted, understand the word-splitting risk before adding the quotes. If it warns about an intentional pattern, document the exception in the code or refactor the command so the intent is clearer. A linter is most useful when it teaches the team to recognize classes of defects before they land in shared automation.
-
-Small tests are often enough for Bash. You can create temporary files, call a function with known arguments, and assert the output with ordinary shell commands. The point is not to build a huge test framework for every helper script; the point is to capture the cases that have broken before or would be costly to break later. Empty input, spaces in paths, missing commands, and failed pipelines are usually the first cases worth testing.
-
-## Patterns & Anti-Patterns
-
-The strongest Bash scripts are small, explicit, and honest about failure. A proven pattern is to put safety options near the top, define helpers with `local` variables, and call `main "$@"` at the bottom. Use this when the script has more than a handful of commands or when it will run in CI, a runbook, or a shared repository. It scales because the entry point remains stable while helpers can be tested and reviewed independently.
-
-Another strong pattern is validating inputs before doing work. Check argument count with `$#`, check required commands with `command -v`, and check file permissions with `[[ -r "$file" ]]` before opening a file. This works because it moves failure to the edge of the script, where the problem can be explained in user language. It also prevents partial changes, which are usually harder to repair than clean early exits.
-
-Use arrays for command arguments when you need to build a command dynamically. Instead of concatenating a string and asking the shell to split it later, append each argument as an array element and run `"${cmd[@]}"`. This pattern protects spaces and special characters while still letting the script add optional flags. It scales well for wrapper scripts around tools such as `tar`, `rsync`, and cluster clients.
-
-The first anti-pattern is treating Bash as a general-purpose application language. Teams fall into it because Bash is already available and the first version is quick to write. The better alternative is to switch to Python, Go, or another language when the script needs complex parsing, rich data structures, long-lived error handling, or unit-test-heavy business logic. Bash is excellent glue; it is poor concrete for a large application foundation.
-
-The second anti-pattern is parsing human-oriented output when a structured interface exists. `ls`, pretty tables, and default command output are meant for people, so spacing and columns can change or break on unusual names. Prefer globs, null-delimited output, JSON, or explicit machine-readable flags when they are available. In shell scripts, choosing the right output format is often more important than choosing the cleverest pipeline.
-
-The third anti-pattern is relying on ambient shell state. Interactive aliases, current directories, exported variables, and previously created temporary files make scripts pass on one laptop and fail in CI. Define the assumptions the script needs, pass values as arguments or environment variables, and create temporary resources inside the script with cleanup traps. Predictable state is the foundation of repeatable automation.
-
-## Decision Framework
-
-Choose Bash when the task is mostly command orchestration: checking files, calling existing tools, transforming simple text, and returning a clear exit code. Choose a richer language when the task needs nested data, network protocol handling, complex retries, or a large amount of business logic. The decision is not about pride; it is about the failure modes you are willing to own at 03:10 during an incident.
-
-For a one-off terminal action, a command pipeline may be enough if the risk is low and you can see the output immediately. For a repeated team workflow, write a script with a shebang, argument validation, safety settings, and useful errors. For production automation, add logging, dry-run behavior where possible, tests for edge cases, and a clear ownership path. The same Bash feature can be harmless in a terminal and dangerous in an unattended job.
-
-Use this mental flow before writing: first decide whether the input is simple text or structured data, then decide whether failure can be handled with exit codes, then decide whether the script needs to be maintained by other people. If the answer is "structured data, complex recovery, and long-term maintenance," Bash may still launch the tool, but it should not contain the core logic. If the answer is "commands, files, and clear success or failure," Bash is often the fastest reliable choice.
-
-Another useful decision point is observability. A script run by one person at a terminal can rely on immediate visual feedback, but a scheduled job needs logs that explain what happened after the fact. If the script changes important state, add enough output to reconstruct the sequence of targets and decisions without exposing secrets. If the script emits data for another program, keep that data clean and move operational messages to standard error.
-
-Finally, consider ownership. Personal scripts can be optimized for the author's memory, while team scripts need names, usage messages, and failure behavior that survive handoff. The more people depend on a script, the more its interface matters: arguments, environment variables, files touched, exit codes, and output streams become part of a public contract. Bash can support that contract well when the script stays focused and explicit.
-
-## Did You Know?
-
-- **Bash dates to 1989**: Brian Fox released the Bourne Again Shell for the GNU Project as a free software replacement for the Bourne shell, and it remains a default interactive shell on many Linux distributions.
-- **POSIX shell is a smaller target**: A script using `#!/bin/sh` should avoid Bash-only features such as arrays, because systems like Alpine Linux commonly link `/bin/sh` to `ash` instead of Bash.
-- **Exit code `0` means success**: Unix commands report success with zero and failure with nonzero status, which is why Bash predicate functions return `0` when a condition is true.
-- **Quoting prevents word splitting**: Unquoted variables are a leading source of shell bugs because spaces, tabs, and wildcard characters can silently change the number of arguments passed to a command.
-
-## Common Mistakes
-
-| Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| `name = "John"` | Bash treats `name` as a command because assignment syntax cannot contain spaces around `=`. | Write `name="John"` and keep assignments visually distinct from comparisons. |
-| `if [ $var = "x" ]` | An empty or space-containing value changes the argument list passed to `[`. | Quote expansions as `if [ "$var" = "x" ]` or use `[[ "$var" = "x" ]]` in Bash. |
-| `echo $array` | Bash expands only the first indexed element when the array is referenced without an index or `[@]`. | Use `printf '%s\n' "${array[@]}"` or another quoted array expansion. |
-| Not checking `$?` | Early scripts are often written as terminal transcripts where failures are visible to the human operator. | Use `if command; then ...` for expected branches and `set -euo pipefail` for unhandled failures. |
-| `cd` without check | If the directory change fails, the script continues in the previous directory and may modify the wrong files. | Use `cd dir || exit 1`, or wrap directory changes in a function that reports the failed path. |
-| Parsing `ls` output | Human-oriented output breaks on spaces, newlines, hidden files, and locale-specific formatting. | Use globs, `find`, null-delimited formats, or structured command output designed for scripts. |
-| Printing diagnostics to standard output | The author tests in a terminal and forgets that another command may capture standard output as data. | Send errors and logs to standard error with `>&2`, and reserve standard output for machine-readable data. |
-
-## Quiz
-
-<details><summary>Question 1: Your script tries `name = "John"` and the log says `name: command not found`. What do you change, and why?</summary>
-
-Bash did not see an assignment because spaces around `=` are not allowed in assignment syntax. It parsed `name` as the command and passed `=` and `"John"` as arguments. The fix is `name="John"`, with no spaces, because that keeps the operation in the shell's assignment grammar. This also shows why shell syntax needs exactness even for simple-looking lines.
+The distinction between single and double quotes is the most important quoting rule in operational Bash because it determines whether variable values can change the shape of the argument list. A double-quoted `"$file"` preserves the variable's value as one argument even when it contains spaces, tabs, or glob characters. A single-quoted `'$file'` produces the literal string `$file` — no expansion occurs at all. An unquoted `$file` expands the value and then subjects it to word splitting and pathname expansion, which can transform a single filename into multiple arguments or match unintended files. The [Bash manual section on Quoting](https://www.gnu.org/software/bash/manual/html_node/Quoting.html) and the [Greg's Wiki guide on quotes](https://mywiki.wooledge.org/Quotes) both emphasise that the only safe general rule is to double-quote every expansion that should remain a single argument.
 
 ```bash
-name="John"
+# Single quotes: no expansion at all
+echo 'The variable $HOME is not expanded here'   # prints $HOME literally
+echo 'It costs $5'                                 # no special meaning for $
+
+# Double quotes: expansion allowed, but word splitting suppressed
+echo "Your home is $HOME"                          # expands HOME, stays one arg
+echo "Files: $(ls | wc -l)"                        # command substitution works
+
+# ANSI-C quoting: escape sequences interpreted
+echo $'Line one\nLine two'                         # actual newline
+prompt=$'\e[1;32mReady\e[0m'                       # green "Ready" in terminal
+
+# Backslash: escape a single character
+echo "Value: \$HOME"                                # prints $HOME literally
+grep "\.txt$" files.log                             # literal dot, end-of-line
 ```
 
-</details>
-
-<details><summary>Question 2: A backup script receives a config path from `$1`, and the next command will read it. How should the script fail before reading a missing or unreadable file?</summary>
-
-Validate the path before using it, and print the failing path to standard error. A good check is `[[ -f "$file" && -r "$file" ]]` when you specifically need a regular readable file, or `[[ -r "$file" ]]` when readability alone is enough. This maps directly to the outcome of designing input validation because the script refuses to proceed with bad state. The important point is that the failure happens before any backup operation depends on invalid input.
+A common operational pattern is constructing command lines where some arguments are fixed strings and others come from variables. Mixing quoting types within a single command is both valid and idiomatic: `rsync -av "$src" "$dst"` passes two arguments that may contain spaces, while the flags `-av` are intentionally unquoted because they must be a single word. When building argument vectors programmatically, use arrays and quoted expansions rather than string concatenation: `args=(-av --exclude '*.tmp' "$src" "$dst"); rsync "${args[@]}"` preserves each element as a separate argument regardless of internal whitespace, a pattern the [Greg's Wiki BashGuide](https://mywiki.wooledge.org/BashGuide) recommends as the standard defence against argument-splitting bugs in wrapper scripts.
 
 ```bash
-if [[ -f "$file" && -r "$file" ]]; then
-    echo "File exists and is readable"
+# Building command arguments safely with arrays
+kubectl_args=(
+    get pods
+    -n "${NAMESPACE:-default}"
+    -l "app=${APP_NAME}"
+    -o json
+)
+kubectl "${kubectl_args[@]}"
+
+# Without arrays — fragile string concatenation
+# BAD: kubectl get pods -n $NAMESPACE -l app=$APP_NAME -o json
+# Breaks if NAMESPACE or APP_NAME contains spaces or is empty.
+```
+
+## Control Flow
+
+Conditionals in Bash follow a simple principle: `if` runs a command and branches on its exit code. In most programming languages, `if (a == b)` evaluates a boolean expression. In Bash, `if [[ "$a" == "$b" ]]; then` runs the `[[` compound command, which returns exit code 0 for true and 1 for false. This design means you can test not only string and numeric comparisons but also the success or failure of any command: `if grep -q "error" /var/log/app.log; then` checks whether the pattern was found and branches accordingly. The [Bash Conditional Constructs documentation](https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html) covers every variant, including the pattern-matching and regular-expression operators available inside `[[ ]]`.
+
+The choice between `[ ]` and `[[ ]]` is a practical engineering decision rather than a stylistic preference. `[[ ]]` is a Bash keyword that does not perform word splitting or pathname expansion on unquoted variable expansions, supports `&&` and `||` operators inside the construct, and provides pattern matching with `=` and regular expression matching with `=~`. `[ ]` is a POSIX command (often a shell built-in for performance) that requires careful quoting because its argument list is subject to normal shell parsing. If your script targets only Bash, `[[ ]]` eliminates an entire class of quoting bugs and should be your default. If you need the script to run under `#!/bin/sh`, you must restrict yourself to `[ ]` and quote every expansion inside it. The [POSIX test specification](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/test.html) and the [ShellCheck wiki rule SC2292](https://www.shellcheck.net/wiki/SC2292) both caution that mixing `[ ]` with Bash-specific operators like `==` creates portability hazards without providing the safety benefits of `[[ ]]`.
+
+```bash
+# String comparisons with [[ ]]
+if [[ "$name" == "admin" ]]; then
+    echo "Access granted"
+elif [[ "$name" == guest* ]]; then    # Pattern matching — no regex needed
+    echo "Limited access"
+else
+    echo "Access denied"
 fi
-```
 
-```bash
-if [[ -r "$file" ]]; then  # -r implies file exists
-    echo "File is readable"
+# Numeric comparisons
+if (( pods_running >= min_replicas )); then
+    echo "Sufficient capacity"
 fi
-```
 
-</details>
-
-<details><summary>Question 3: Your CI script runs `curl -s https://api.example.com/data | jq '.items' > output.json`, `curl` fails, and the job still continues. Why can this happen with `set -e`, and what should you add?</summary>
-
-Without `pipefail`, a pipeline's status is normally the status of the last command, so a failure earlier in the pipeline can be hidden when the last command exits successfully. `set -e` only reacts to the pipeline status it receives, so it may not stop the script. Add `set -o pipefail`, usually as part of `set -euo pipefail`, and consider validating that the output is nonempty or structurally correct. The fix matters because downstream steps should not consume a file produced from a failed fetch.
-
-```bash
-false | true  # Returns 0 (success)
-```
-
-```bash
-false | true  # Returns 1 (failure)
-```
-
-</details>
-
-<details><summary>Question 4: Your deployment helper loops over file paths passed as arguments, and one path is `report 2023.pdf`. Which expansion preserves each original argument?</summary>
-
-Use `for arg in "$@"; do ...; done`. Quoted `"$@"` expands each positional parameter as a separate quoted word, preserving spaces inside individual arguments. Unquoted `$@` or `$*` allows word splitting, which would turn one path into multiple loop iterations. This is the safe pattern for scripts that forward user input or operate on file names.
-
-```bash
-# Using $@
-for arg in "$@"; do
-    echo "$arg"
-done
-
-# Important: Quote "$@" to handle spaces
-./script.sh "hello world" foo
-# With "$@": two iterations - "hello world", "foo"
-# With $@: three iterations - "hello", "world", "foo"
-```
-
-</details>
-
-<details><summary>Question 5: A helper function sets `status=failed` without `local`, and later the main script sees the wrong status. How do you diagnose and fix the bug?</summary>
-
-The function changed a global variable because Bash variables are global unless declared `local` inside a function. You can diagnose it by tracing the script or by printing the variable before and after the function call in a small reproduction. The fix is to declare function-owned variables with `local status=failed` and return information through exit codes or intentional output. This keeps function internals from corrupting the caller's state.
-
-</details>
-
-<details><summary>Question 6: A script uses `grep "error" log.txt` under `set -e`, and the absence of matching lines stops the script. Is the script wrong, or is the error handling too broad?</summary>
-
-The script is treating an expected non-match as an unhandled failure. `grep` returns nonzero when it finds no matches, and under `set -e` that status can stop the script unless it is handled intentionally. Wrap the command in an `if grep ...; then` branch, or use a controlled fallback such as `grep ... || true` only when the non-match is truly acceptable and documented. The better solution depends on whether "no errors found" is a success case for the workflow.
-
-</details>
-
-<details><summary>Question 7: Your team wants one script to parse nested JSON, retry network calls with backoff, and update several state files. Would you keep the core logic in Bash?</summary>
-
-Bash can launch the tools involved, but it is a poor fit for complex state, structured parsing, and long recovery logic. A richer language gives you safer data structures, clearer tests, and more maintainable error handling. The practical design is often a small Bash wrapper that validates the environment and then calls a Python or Go program for the core work. That decision reduces operational risk rather than making the solution less "shell native."
-
-```bash
-# Modern syntax (preferred)
-now=$(date)
-
-# Old syntax (still works)
-now=`date`
-```
-
-</details>
-
-## Hands-On Exercise
-
-This lab turns the concepts into small scripts you can run on any Linux or macOS system with Bash. Work in `/tmp` so the exercise stays isolated, and read each script before executing it. The goal is not to memorize every operator; it is to practice the workflow of writing a small contract, validating inputs, running the script, and observing the exact output.
-
-### Part 1: Variables and Arguments
-
-Create a script that accepts an optional name argument and an optional greeting from the environment. This first task shows how defaults work and how `$0`, `$#`, and positional parameters give a script context about its caller.
-
-```bash
-# Create a script
-cat > /tmp/greet.sh << 'EOF'
-#!/bin/bash
-
-# Get name from argument or default
-name=${1:-"World"}
-
-# Get greeting from environment or default
-greeting=${GREETING:-"Hello"}
-
-echo "$greeting, $name!"
-echo "Script: $0"
-echo "Arguments: $#"
-EOF
-
-chmod +x /tmp/greet.sh
-
-# Test it
-/tmp/greet.sh
-/tmp/greet.sh Alice
-GREETING="Hi" /tmp/greet.sh Bob
-```
-
-<details><summary>Solution notes for Part 1</summary>
-
-The first run uses both defaults, the second run replaces the name, and the third run replaces the greeting through the environment for that single command. Notice that the script does not need interactive input, which makes it easy to repeat in a terminal or CI job. Try adding a quoted name such as `"Alice Example"` and confirm that the script treats it as one argument.
-
-</details>
-
-### Part 2: Conditionals
-
-Now build a file checker that validates the argument before making claims about the path. This script demonstrates empty-input checks, file type checks, command substitution, and portable handling for file size on macOS and Linux.
-
-```bash
-cat > /tmp/check_file.sh << 'EOF'
-#!/bin/bash
-set -euo pipefail
-
-file=${1:-""}
-
-if [[ -z "$file" ]]; then
-    echo "Usage: $0 <filename>" >&2
+# File tests — common before destructive operations
+if [[ ! -r "$config_file" ]]; then
+    echo "Config not readable: $config_file" >&2
     exit 1
 fi
 
-if [[ ! -e "$file" ]]; then
-    echo "Does not exist: $file"
-elif [[ -d "$file" ]]; then
-    echo "Directory: $file"
-    echo "Contents: $(ls -1 "$file" | wc -l) items"
-elif [[ -f "$file" ]]; then
-    echo "File: $file"
-    echo "Size: $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file") bytes"
-    [[ -r "$file" ]] && echo "Readable: yes" || echo "Readable: no"
-    [[ -w "$file" ]] && echo "Writable: yes" || echo "Writable: no"
+# Testing command success directly
+if ! kubectl get namespace "$ns" &>/dev/null; then
+    echo "Namespace $ns does not exist — cannot proceed" >&2
+    exit 1
 fi
-EOF
-
-chmod +x /tmp/check_file.sh
-/tmp/check_file.sh /tmp
-/tmp/check_file.sh /etc/passwd
-/tmp/check_file.sh /nonexistent
 ```
 
-<details><summary>Solution notes for Part 2</summary>
-
-You should see different branches for a directory, a regular file, and a missing path. The script sends usage errors to standard error and exits with a nonzero status when no argument is provided. The `stat` command differs between macOS and Linux, so the command substitution tries the macOS form first and falls back to the GNU form.
-
-</details>
-
-### Part 3: Loops
-
-The loop task counts lines in shell scripts under a chosen directory. It uses a glob and then checks each candidate with `[[ -f "$file" ]]`, which protects the script from treating a non-file match as valid input.
+Loops in Bash iterate over words, which means the shell's word-splitting behaviour directly affects what a `for` loop sees. A safe pattern for iterating over filenames or arguments is `for item in "$@"; do ...; done`, which quotes the expansion so each argument retains its boundaries. For file globbing, `for file in *.log; do` works when you control the directory contents and know that filenames do not contain spaces, but `find ... -print0 | while IFS= read -r -d '' file; do` is the robust alternative for arbitrary filenames. When iterating over command output, prefer `while IFS= read -r line` over `for line in $(command)` because the `for` version splits on all whitespace, including spaces inside values, while the `while read` version preserves each logical line. The [Greg's Wiki article on Bash loops](https://mywiki.wooledge.org/BashFAQ/001) walks through every iteration pattern and explains why naive `for line in $(cat file)` constructs are unreliable in the presence of spaces or special characters.
 
 ```bash
-cat > /tmp/count_lines.sh << 'EOF'
-#!/bin/bash
-set -euo pipefail
+# Case statement — cleaner than chains of if/elif for value matching
+case "${1:-}" in
+    start)
+        echo "Starting service..."
+        systemctl start myapp
+        ;;
+    stop)
+        echo "Stopping service..."
+        systemctl stop myapp
+        ;;
+    restart|force-reload)
+        echo "Restarting..."
+        systemctl restart myapp
+        ;;
+    status)
+        systemctl status myapp
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 1
+        ;;
+esac
 
-dir=${1:-.}
-
-echo "Counting lines in $dir"
-echo "========================"
-
-total=0
-for file in "$dir"/*.sh 2>/dev/null; do
-    if [[ -f "$file" ]]; then
-        lines=$(wc -l < "$file")
-        echo "$file: $lines lines"
-        total=$((total + lines))
-    fi
+# While loop with line-by-line reading
+kubectl get pods -o name | while IFS= read -r pod; do
+    echo "Found pod: $pod"
 done
 
-if [[ $total -eq 0 ]]; then
-    echo "No .sh files found"
-else
-    echo "========================"
-    echo "Total: $total lines"
-fi
-EOF
-
-chmod +x /tmp/count_lines.sh
-/tmp/count_lines.sh /tmp
+# C-style for loop for numeric iteration
+for ((i=1; i<=5; i++)); do
+    echo "Attempt $i"
+    kubectl get pods && break
+    sleep 2
+done
 ```
 
-<details><summary>Solution notes for Part 3</summary>
+The `case` statement deserves particular attention in operational scripts because it provides a cleaner alternative to long `if`/`elif` chains when you are matching against a known set of string values. Each pattern can contain glob characters, and multiple patterns can share a single action by separating them with `|`. The `;;` terminator exits the `case` after the matching branch executes, while `;&` (Bash 4+) falls through to the next branch unconditionally — use the latter sparingly and document it explicitly when you do because fall-through behaviour is a common source of review-time confusion.
 
-The script should report the `.sh` files you created in earlier steps and print a total. If you run it against a directory without shell scripts, it should explain that no matching files were found. This is the behavior you want from loops in operations: every input path either gets processed intentionally or skipped intentionally.
+## Functions and Scope
 
-</details>
+Functions give Bash scripts a maintainable structure by packaging decisions and operations behind named interfaces. A function receives arguments through the same positional parameter mechanism as a script: `$1`, `$2`, `$#`, and `"$@"` work identically inside a function body. It communicates results to the caller through its exit code (`return 0` for success, non-zero for failure) and, when it needs to return data, through standard output captured via command substitution. The [Bash manual section on Shell Functions](https://www.gnu.org/software/bash/manual/html_node/Shell-Functions.html) defines both the `name() { ...; }` syntax and the `function name { ...; }` alternative, though the former is preferred for portability even within Bash-specific scripts.
 
-### Part 4: Functions
+Function naming conventions are more important in Bash than in many other languages because Bash has no namespace mechanism. A function named `check` is ambiguous; a function named `validate_config_file` tells the reader exactly what it operates on and what it returns. Prefix groups of related functions with a common namespace: `log_info`, `log_error`, `log_debug`. Use lowercase and underscores, matching the style of shell built-ins. The [Google Shell Style Guide section on function names](https://google.github.io/styleguide/shellguide.html#s7.4-function-names) provides the complete naming convention. Consistent naming costs nothing and makes script reviews significantly faster because the reviewer can infer a function's role from its name alone.
 
-This utility script introduces functions for logging and dependency checks. Notice how the helper returns success or failure while `main` decides what that means for the workflow.
+The most critical Bash function rule is also the easiest to violate: variables inside functions are global by default. If you assign `result="failed"` inside a function without declaring it `local`, you have modified the caller's `result` variable — potentially at a distance of hundreds of lines. The `local` built-in restricts the variable to the function's scope, and it should be used for every variable a function creates, including loop counters and temporary strings. This is not defensive coding; it is the minimum required to prevent function internals from silently corrupting the script's state, and the [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html#s7.2-variable-names) explicitly mandates function-scoped variables for this reason.
 
 ```bash
-cat > /tmp/utility.sh << 'EOF'
-#!/bin/bash
-set -euo pipefail
+# Function definitions
+check_prerequisites() {
+    local missing=()
+    local cmd
 
-# Logging function
-log() {
-    local level=$1
-    shift
-    echo "[$(date +%H:%M:%S)] [$level] $*"
-}
+    for cmd in kubectl jq yq; do
+        if ! command -v "$cmd" &>/dev/null; then
+            missing+=("$cmd")
+        fi
+    done
 
-# Check if command exists
-require() {
-    local cmd=$1
-    if ! command -v "$cmd" &> /dev/null; then
-        log ERROR "Required command not found: $cmd"
+    if (( ${#missing[@]} > 0 )); then
+        echo "Missing required tools: ${missing[*]}" >&2
         return 1
     fi
     return 0
 }
 
-# Main
-main() {
-    log INFO "Starting utility script"
-
-    if require ls; then
-        log INFO "ls is available"
-    fi
-
-    if require nonexistent_cmd; then
-        log INFO "Command available"
-    else
-        log WARN "Missing optional command"
-    fi
-
-    log INFO "Done"
+# Predicate function — return 0 for "true"
+is_production() {
+    local namespace="${1:-}"
+    [[ "$namespace" == "prod" || "$namespace" == "production" ]]
 }
 
-main "$@"
-EOF
+# Usage
+if is_production "$NAMESPACE"; then
+    echo "Production namespace — requiring explicit --confirm flag" >&2
+    exit 1
+fi
 
-chmod +x /tmp/utility.sh
-/tmp/utility.sh
+# Function returning data via stdout
+get_replicas() {
+    local deployment="$1"
+    local namespace="${2:-default}"
+    kubectl get deployment "$deployment" -n "$namespace" \
+        -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0"
+}
+
+replicas=$(get_replicas "nginx" "web")
+echo "Current replicas: $replicas"
 ```
 
-<details><summary>Solution notes for Part 4</summary>
-
-The missing command branch should not crash the script because `main` handles the nonzero return from `require`. The function uses `local` variables so the helper does not leak state into the rest of the script. This is the same structure you can use for required dependencies by changing the caller's branch to exit when a command is missing.
-
-</details>
-
-### Part 5: Error Handling
-
-The final task adds cleanup and error reporting. Read the traps before running the script, then intentionally add a failing command above the final echo to see how the error and cleanup handlers behave.
+A well-structured script organises functions as small, named operations and calls them from a `main` function near the bottom of the file. This pattern, recommended in both the [Google Shell Style Guide section on main](https://google.github.io/styleguide/shellguide.html#s7.8-main) and the [Greg's Wiki article on script structure](https://mywiki.wooledge.org/BashGuide/CompoundCommands#Functions), keeps the global scope minimal and enables partial testing of individual helpers. The script's top level should contain only safety settings (`set -euo pipefail`), trap registrations, and a call to `main "$@"`. Everything else belongs in a function where its scope and side effects are explicit.
 
 ```bash
-cat > /tmp/safe_script.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
 
-# Cleanup on exit
+# ── Helpers ────────────────────────────────────────────
+log() { local level="$1"; shift; echo "[$(date -u +%T)] [$level] $*" >&2; }
+
+validate_args() {
+    if (( $# < 1 )); then
+        log ERROR "Usage: $0 <deployment-name> [namespace]"
+        return 1
+    fi
+}
+
+# ── Main ───────────────────────────────────────────────
+main() {
+    validate_args "$@" || exit 1
+    local deployment="$1"
+    local namespace="${2:-default}"
+
+    log INFO "Scaling $deployment in namespace $namespace"
+    # ... work happens here ...
+}
+
+main "$@"
+```
+
+## Process Substitution, Redirections, and Here-Documents
+
+Process substitution is a Bash feature that exposes the output or input of a command as a file path. The syntax `<(command)` creates a named pipe (or `/dev/fd` reference) containing the command's standard output, while `>(command)` creates one that feeds into the command's standard input. This allows tools that expect file arguments, such as `diff`, `comm`, and `join`, to operate on live command output without intermediate temporary files. The [Bash manual section on Process Substitution](https://www.gnu.org/software/bash/manual/html_node/Process-Substitution.html) notes that it is available when the operating system supports named pipes or `/dev/fd`.
+
+Process substitution is particularly valuable for differential comparisons in operational workflows. You can compare two `kubectl get` snapshots without writing them to disk, diff the output of two API endpoints, or feed transformed data into a tool that only accepts file arguments. The construct looks like a file to the receiving command, so all standard file-based tooling works without modification.
+
+Process substitution also solves a subtle problem with pipelines: a pipeline runs each command in a subshell, so variables set inside the pipeline are lost when it completes. When you need to capture data into variables while still using a pipeline-like flow, process substitution with input redirection avoids the subshell trap. For example, `while IFS= read -r line; do ...; done < <(command)` runs the loop in the current shell, allowing variable modifications to persist after the loop finishes. This pattern, documented in the [Greg's Wiki article on process substitution](https://mywiki.wooledge.org/ProcessSubstitution), is the standard workaround for the subshell-variable problem that plagues naive pipeline-based loops.
+
+```bash
+# Compare current pod state with a known-good snapshot
+diff <(kubectl get pods -o name | sort) <(cat known-good-pods.txt | sort)
+
+# Compare two environments without temporary files
+diff <(kubectl get deployments -n staging -o json | jq -S .) \
+     <(kubectl get deployments -n production -o json | jq -S .)
+
+# Feed live metrics into a tool expecting a file
+column -t <(kubectl top pods)
+```
+
+Redirections control where a command reads its input and sends its output. The fundamental operators are `>` (overwrite), `>>` (append), `<` (read from file), `2>` (redirect stderr), `2>&1` (merge stderr into stdout), and `&>` (Bash shorthand for redirecting both streams). The order of redirections matters: `command 2>&1 >file` redirects stderr to the current stdout (usually the terminal) and then redirects stdout to the file, so stderr still appears on the terminal. The corrected form `command >file 2>&1` first opens the file as stdout and then duplicates that file descriptor for stderr, so both streams end up in the file. This ordering nuance is one of the most frequently misunderstood aspects of shell I/O, and the [Bash Redirections manual](https://www.gnu.org/software/bash/manual/html_node/Redirections.html) explains the file descriptor duplication semantics in detail.
+
+Here-documents embed multi-line text directly in a script, which is especially useful for generating configuration files, SQL queries, or templated YAML inside shell-based deployment tools. Quoting the delimiter, as in `<<'EOF'`, prevents all expansion within the body — this is the safe default when the content contains dollar signs or backticks that should appear literally. Leaving the delimiter unquoted enables variable and command substitution, which is appropriate for templates but carries the risk of unintended expansion if the input contains untrusted text.
+
+```bash
+# Here-doc for generating Kubernetes resource manifests
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: ${NAMESPACE:-default}
+data:
+  environment: "${ENV:-staging}"
+  log_level: "info"
+EOF
+
+# Here-doc without expansion — safe for literal content
+cat <<'SCRIPT' > /usr/local/bin/health-check
+#!/bin/bash
+# This script contains literal $ signs
+threshold=${1:-100}
+echo "Checking disk usage at $threshold% threshold"
+SCRIPT
+```
+
+The following diagram shows how data flows through standard file descriptors in a typical pipeline with redirections. Each command receives stdin from the left, produces stdout to the right, and can independently redirect stderr to a log file for diagnostics while keeping data and error streams separated.
+
+```mermaid
+flowchart LR
+    subgraph Pipeline
+        CMD1[cmd1] -->|stdout| CMD2[cmd2]
+        CMD2 -->|stdout| CMD3[cmd3]
+    end
+    STDIN[file.in] -->|0: stdin| CMD1
+    CMD1 -->|2: stderr| LOG1[cmd1-errors.log]
+    CMD2 -->|2: stderr| LOG2[cmd2-errors.log]
+    CMD3 -->|2: stderr| LOG3[cmd3-errors.log]
+    CMD3 -->|1: stdout| OUTPUT[output.json]
+```
+
+## Strict Mode and Defensive Shell Scripting
+
+Strict mode is the combination of shell options that transforms Bash from a permissive environment into one that surfaces problems immediately rather than silently continuing past failures. The canonical invocation is `set -euo pipefail`, optionally with `IFS=$'\n\t'` to restrict word splitting to newlines and tabs. Each option addresses a specific class of silent failure, and understanding what each one does is essential because strict mode is not a universal safety switch — it is a set of behaviours that you must understand well enough to know when to temporarily disable a specific option for an expected non-zero exit or an intentionally unset variable. The [Bash manual section on the Set Builtin](https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html) documents every option and its interactions.
+
+`set -e` (errexit) causes the shell to exit immediately when a pipeline, list, or compound command returns a non-zero exit status, with specific exceptions for commands used as conditions in `if`, `while`, `until`, `&&`, or `||` lists. This prevents a script from executing the next line after a failed `cd`, `mkdir`, or `curl`, which could operate on the wrong directory or consume invalid data. The most common surprise with `set -e` is that `grep` returns 1 when it finds no matches, which is a non-zero exit code that `set -e` will treat as a failure. The fix is to handle the `grep` result explicitly: `if grep -q "pattern" file; then` or `grep "pattern" file || true` when a non-match is genuinely acceptable.
+
+`set -u` (nounset) treats references to unset variables as errors and exits the script immediately. This catches typos in variable names and missing environment variables before they propagate through the rest of the script. When you genuinely need to test whether a variable is set, use parameter expansion with a default — `${var:-}` expands to nothing when `var` is unset, satisfying `set -u` while allowing the check to proceed.
+
+`set -o pipefail` changes the exit status of a pipeline to the exit status of the last (rightmost) command that failed, rather than the exit status of the last command in the pipeline. Without `pipefail`, `false | true` returns 0 because `true` succeeds, masking the earlier failure. With `pipefail`, the pipeline returns the exit status of `false`, so `set -e` can react to pipeline failures. This is essential for pipelines like `curl ... | jq ...` where a fetch failure followed by `jq` producing empty output silently hides the real error.
+
+```bash
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# ── Trap for cleanup ───────────────────────────────────
 cleanup() {
     local exit_code=$?
-    echo "Cleaning up (exit code: $exit_code)..."
-    rm -f /tmp/safe_script_temp_*
-    exit $exit_code
+    rm -f "${TEMP_DIR:-/tmp/unknown}"/*
+    echo "Cleanup complete (exit code: $exit_code)" >&2
+    exit "$exit_code"
 }
 trap cleanup EXIT
 
-# Error handler
-on_error() {
-    echo "Error on line $1" >&2
-}
-trap 'on_error $LINENO' ERR
+# ── Trap for line-level error reporting ─────────────────
+trap 'echo "ERROR at line $LINENO: $BASH_COMMAND" >&2' ERR
 
-# Main logic
-echo "Creating temp file..."
-tempfile=$(mktemp /tmp/safe_script_temp_XXXXXX)
-echo "Temp file: $tempfile"
-
-echo "Writing data..."
-echo "Hello" > "$tempfile"
-
-echo "Reading data..."
-cat "$tempfile"
-
-echo "Done - cleanup will run automatically"
-EOF
-
-chmod +x /tmp/safe_script.sh
-/tmp/safe_script.sh
+# ── Handle grep's non-match case explicitly ─────────────
+if grep -q "^ERROR" /var/log/app.log; then
+    echo "Errors found in application log" >&2
+fi
+# The if-block consumes grep's exit code, so set -e is satisfied.
 ```
 
-<details><summary>Solution notes for Part 5</summary>
+The `IFS` variable deserves explicit discussion because it controls word splitting, the mechanism that silently reshapes your data. The default `IFS` is space, tab, and newline. When you set `IFS=$'\n\t'` as part of strict mode, you restrict word splitting to newlines and tabs, which prevents spaces inside values from splitting a single string into multiple arguments. This is particularly important when processing filenames or resource names that legally contain spaces. Note that setting `IFS` globally affects every unquoted expansion in the script, so it should be set once at the top and left alone.
 
-The cleanup function runs whether the script succeeds or fails because it is attached to `EXIT`. The error handler reports the line that triggered `ERR`, which gives you a starting point for diagnosis. Preserve the original exit code in cleanup so callers still know whether the script succeeded.
+Strict mode is not without trade-offs, and there are legitimate situations where you should temporarily relax a specific option. When a command's non-zero exit is expected and handled, use `command || true` to absorb it without disabling `set -e` globally. When you need to check whether a variable is set without triggering `set -u`, use `${var:-}` to provide an empty default that satisfies nounset. When a pipeline's intermediate failure is acceptable — such as a filter that may produce no output — handle the exit explicitly after the pipeline rather than disabling `pipefail` for the entire script. The [ShellCheck wiki rule SC2155](https://www.shellcheck.net/wiki/SC2155) documents the correct patterns for each of these situations, and the rule is worth consulting whenever you are tempted to comment out `set -euo pipefail` as a quick fix.
+
+Finally, strict mode should be paired with `set -f` (noglob) in scripts that handle untrusted filenames or user input. Noglob disables pathname expansion entirely, which means `*`, `?`, and `[` are treated as literal characters. This is the safest setting when a script processes input where glob characters might appear unintentionally, but it also means you lose the convenience of `*.txt` patterns in loops and `ls *.log` invocations. The decision to use noglob should be documented in the script's header because future maintainers may not expect glob patterns to be non-functional.
+
+Defensive scripting extends beyond shell options to explicit precondition checking. Before a script reaches any operation that modifies files, makes network calls, or changes cluster state, it should verify that required tools are available with `command -v`, required files are readable with `[[ -r "$file" ]]`, and required arguments are present. The [ShellCheck wiki page SC2236](https://www.shellcheck.net/wiki/SC2236) recommends using `command -v` over `which` for portability. The [SC2143](https://www.shellcheck.net/wiki/SC2143) rule flags the common antipattern of using `grep -q` inside `[ ]` instead of piping directly to `if grep`.
+
+## ShellCheck: Integration into CI
+
+ShellCheck is a static analysis tool that identifies common mistakes, portability issues, and dangerous patterns in shell scripts before they reach production. It encodes the collective experience of the shell-scripting community into more than 300 rules, each documented with a dedicated wiki page that explains the problem, demonstrates both the incorrect and correct patterns, and provides exceptions where the rule may not apply. Running ShellCheck against every shell script in your repository is a small investment that prevents entire categories of production incidents — from unquoted variables that split on unexpected whitespace to `cd` without error checking that silently operates on the wrong directory.
+
+Integrating ShellCheck into a CI pipeline requires two decisions: when to run it and how to configure its severity threshold. The simplest approach is to run `shellcheck` on every file matching `*.sh` or identified by a shebang, treating any finding at the default severity as a failure. For existing codebases with a backlog of warnings, you can start with a relaxed severity (`shellcheck --severity=error`) and progressively lower the threshold as warnings are addressed. The [ShellCheck wiki](https://www.shellcheck.net/wiki/) provides a per-rule reference that helps teams understand what each warning means without needing to memorise all three hundred rules.
+
+```bash
+# Run ShellCheck on all shell scripts in a repository
+find . -type f \( -name '*.sh' -o -name '*.bash' \) -exec shellcheck {} +
+
+# Run on scripts identified by shebang
+grep -rl '^#!/bin/\(bash\|sh\)' . | xargs shellcheck
+
+# CI integration with severity control
+shellcheck --severity=warning scripts/*.sh || {
+    echo "ShellCheck found issues — review https://www.shellcheck.net/wiki/ for guidance" >&2
+    exit 1
+}
+```
+
+```yaml
+# GitHub Actions example — ShellCheck step in CI
+# (Requires shellcheck installed; available in ubuntu-latest runner)
+- name: Lint shell scripts
+  run: |
+    shellcheck --severity=warning $(find . -type f -name '*.sh')
+```
+
+Beyond CI, ShellCheck is available as an editor integration for VS Code, Vim, Emacs, and most other editors, providing real-time feedback as you write. The faster you see a warning about an unquoted variable or a missing `local` declaration, the less likely those patterns are to survive into committed code. The [ShellCheck GitHub repository](https://github.com/koalaman/shellcheck) and the [ShellCheck wiki index of rules](https://www.shellcheck.net/wiki/) are the authoritative references for understanding and configuring the tool.
+
+## Bash with Kubernetes: Scripting Patterns
+
+Kubernetes operational workflows are fertile ground for Bash scripting because `kubectl` is a command-line tool that produces structured output, accepts standard input, and follows Unix conventions for exit codes and standard streams. Well-structured Bash scripts can orchestrate deployments, validate cluster state, and generate configuration without requiring a full programming-language runtime in the execution environment. The key to reliability is treating `kubectl` output as structured data, using `-o json` or `-o jsonpath` whenever the result is consumed by another command rather than displayed to a human operator.
+
+The most common Kubernetes scripting patterns revolve around waiting for conditions, iterating over resources, and generating manifests. For waiting, `kubectl wait --for=condition=Ready pod -l app=nginx --timeout=120s` is preferable to polling loops because it handles timeout logic and condition evaluation internally, reducing the surface for scripting errors. For iteration, `kubectl get pods -o name` produces output that is safe for simple `while read` loops, but when you need structured field access — such as extracting the pod IP, restart count, or container status — `-o jsonpath` or `-o json` piped to `jq` provides deterministic parsing. For manifest generation, here-documents combined with `kubectl apply -f -` let scripts produce and apply Kubernetes resources without touching the filesystem. The [Kubernetes kubectl cheat sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/) documents the `--dry-run=client -o yaml` pattern for generating manifests from imperative commands, which is a reliable way to produce correct YAML without hand-editing.
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+NAMESPACE="${1:-default}"
+DEPLOYMENT="${2:?Usage: $0 <namespace> <deployment>}"
+
+# Wait for rollout with explicit timeout
+echo "Waiting for $DEPLOYMENT rollout in namespace $NAMESPACE..."
+if ! kubectl rollout status deployment/"$DEPLOYMENT" \
+    -n "$NAMESPACE" --timeout=120s; then
+    echo "Rollout failed. Recent events:" >&2
+    kubectl get events -n "$NAMESPACE" --sort-by='.lastTimestamp' | tail -5 >&2
+    exit 1
+fi
+
+# Extract structured data with jsonpath
+READY=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" \
+    -o jsonpath='{.status.readyReplicas}')
+DESIRED=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" \
+    -o jsonpath='{.spec.replicas}')
+
+if [[ "$READY" == "$DESIRED" ]]; then
+    echo "$DEPLOYMENT: $READY/$DESIRED replicas ready"
+else
+    echo "$DEPLOYMENT: $READY/$DESIRED replicas — pods not fully ready" >&2
+    kubectl get pods -n "$NAMESPACE" -l "app=${DEPLOYMENT}" >&2
+    exit 1
+fi
+```
+
+When a script needs to operate on multiple Kubernetes resources, prefer label selectors over manual resource-name lists. A single `kubectl get pods -l app=nginx` command returns the current state from the API server. This eliminates the risk that a hard-coded list of pod names has become stale between when the list was generated and when the operations execute. For jobs and one-off operations, `kubectl create job --from=cronjob/backup backup-manual-$(date +%s)` generates uniquely named resources that cannot collide with previous manual runs. The [Kubernetes kubectl overview](https://kubernetes.io/docs/reference/kubectl/) documents the full set of imperative commands and their flags, and it is worth consulting before building complex `kubectl` pipelines to confirm that a built-in flag or subcommand already handles the use case you are scripting.
+
+A common pattern in SRE work is the canary check: deploy a change to a subset of pods and verify health before proceeding. Bash can orchestrate this by combining `kubectl patch` for the update, `kubectl wait` for the readiness gate, and a small polling loop for custom metrics. The script stays small because each `kubectl` invocation is a single atomic operation with clear success or failure. The complexity lives in the cluster state, not in the script. For production-grade canary deployments, a dedicated controller is the better tool. For quick operational checks and one-shot maintenance windows, a Bash script with strict mode and structured error handling is often the fastest reliable approach.
+
+```bash
+# Generate and apply a manifest from an imperative command
+kubectl create deployment nginx --image=nginx:1.27 --dry-run=client -o yaml | \
+    kubectl apply -f -
+
+# Rollout restart with label selector verification first
+if kubectl get pods -l app=payment-processor -o name | grep -q .; then
+    kubectl rollout restart deployment -l app=payment-processor
+else
+    echo "No pods found for app=payment-processor" >&2
+    exit 1
+fi
+```
+
+## Did You Know?
+
+- **Bash dates to 1989**: Brian Fox released the Bourne Again Shell for the GNU Project as a free software replacement for the Bourne shell. It incorporated features from the Korn shell (`ksh`) and the C shell (`csh`) while remaining broadly compatible with Bourne shell scripts, and it has been the default interactive shell on most GNU/Linux distributions for over two decades.
+- **Exit code 0 means success in Unix**: Unlike most programming languages where `true` evaluates to a non-zero value, Unix commands report success with exit code 0 and failure with any non-zero status. This is why Bash predicate functions return 0 when a condition is true — they follow command semantics, not boolean semantics. The convention originates from the limited error-reporting channels available in early Unix: a single exit code byte could encode multiple failure modes when non-zero, while zero was the unambiguous success signal.
+- **`/bin/sh` is not always Bash**: On Debian and Ubuntu, `/bin/sh` is `dash`, a minimal POSIX shell optimised for fast script execution. On Alpine Linux, it is `ash` from BusyBox. On macOS, it has historically been Bash, though `zsh` is the default interactive shell since macOS Catalina. Scripts that need Bash features such as arrays, `[[ ]]`, or process substitution must use `#!/bin/bash` explicitly.
+- **Word splitting is the number one source of shell bugs**: The ShellCheck project reports that unquoted variable expansions — which the shell subjects to word splitting and pathname expansion — are the single most common defect class across millions of analysed scripts. Quoting every expansion is a simple habit that eliminates an entire category of silent argument-reshaping bugs, and it costs exactly two extra characters per variable reference.
+
+## Common Mistakes
+
+| Mistake | Why It Happens | How to Fix It |
+|---------|----------------|---------------|
+| `name = "John"` instead of `name="John"` | Assignment syntax in Bash cannot contain spaces around `=`. With spaces, Bash interprets `name` as a command and `=` and `"John"` as its arguments. | Write `name="John"` with no spaces. If you need readability, align multiple assignments vertically without breaking the no-spaces rule. |
+| Unquoted `$var` in `[ $var = "x" ]` | An empty or space-containing variable changes the argument count seen by the `[` command, producing misleading errors or incorrect comparisons. | Use `[[ "$var" == "x" ]]` in Bash scripts, which does not word-split unquoted expansions, or quote thoroughly with `[ "$var" = "x" ]` in POSIX scripts. |
+| `cd /some/path` without error checking | If the directory change fails, the script continues in the original working directory and may create, modify, or delete files in the wrong location. | Write `cd /some/path || exit 1`, or wrap directory changes in a function that reports the failed path to stderr before exiting. |
+| `for line in $(cat file)` instead of `while read` | Command substitution followed by `for` splits on all `IFS` characters, turning each line with spaces into multiple loop iterations and discarding empty lines. | Use `while IFS= read -r line; do ...; done < file` to preserve line boundaries exactly as they appear in the input. |
+| Missing `local` in function variables | Bash variables are global by default, so a function that assigns `status=failed` overwrites the caller's `status` variable without any warning. | Declare every function variable with `local`, including loop counters and temporary strings, to keep the function's scope contained. |
+| `curl ... \| jq ...` silently succeeds when `curl` fails | Without `set -o pipefail`, a pipeline's exit status is the status of the last command, so `jq` producing valid (empty) output from a failed `curl` masks the fetch error. | Use `set -o pipefail` and validate that the output is non-empty or structurally correct before consuming it in downstream steps. |
+| Parsing `ls` output in scripts | Human-oriented `ls` output varies across locales, cuts filenames to fit terminal width, and breaks on paths containing spaces, newlines, or special characters. | Use glob patterns (`*.txt`), `find` with `-print0` and `xargs -0`, or structured command output designed for programmatic consumption. |
+| Printing diagnostics to stdout in data-producing scripts | The author tests interactively and does not realise that another command capturing stdout will receive diagnostic text mixed with intended data. | Send all logging, errors, and progress messages to stderr with `>&2`, and reserve stdout exclusively for machine-readable output that callers may capture via command substitution. |
+
+## Quiz
+
+<details><summary>Question 1: Your script uses `name = "John"` and the shell prints `name: command not found`. Why does this happen, and how do you fix it?</summary>
+
+Bash parses `name` as the command to execute because assignment syntax forbids spaces around `=`. The tokens `=` and `"John"` are passed as arguments to the non-existent `name` command. The fix is `name="John"` — no spaces — which the shell recognises as a variable assignment rather than a command invocation. This distinction between assignment syntax and comparison syntax (`[ "$name" = "John" ]`) is fundamental to reading any Bash script, and the ShellCheck rule [SC1068](https://www.shellcheck.net/wiki/SC1068) specifically warns about spaces around `=` in assignments.
 
 </details>
 
+<details><summary>Question 2: A backup script receives a file path from `$1`, and the next command will read from it. How should the script validate this argument before proceeding, and what should the failure message include?</summary>
+
+The script should check both existence and readability before any operation depends on the file. `[[ -f "$1" && -r "$1" ]]` verifies that the argument is a regular file and is readable; `[[ -r "$1" ]]` alone is sufficient when readability is the only requirement and the file type is not constrained. The failure message should include the script name (`$0`), the failing path, and a description of what was expected — for example, `echo "$0: config file not readable: $1" >&2`. Including the actual path value saves the next operator from having to reproduce the environment to understand why the script stopped.
+
+</details>
+
+<details><summary>Question 3: A CI pipeline runs `curl -s https://api.example.com/data | jq '.items' > output.json`. The `curl` command fails with a timeout, but the pipeline step reports success. Why does `set -e` not catch this, and what additional option prevents it?</summary>
+
+Without `set -o pipefail`, a pipeline's exit status is the status of the last command only. If `jq` receives empty input from the failed `curl`, it may exit successfully (producing `null` or an empty output), masking the `curl` failure. Adding `set -o pipefail` changes the pipeline exit status to the rightmost non-zero exit status, so a `curl` failure propagates. The [ShellCheck rule SC2155](https://www.shellcheck.net/wiki/SC2155) and the broader discussion in the Bash manual section on Pipelines both document that `pipefail` is essential for any pipeline where an intermediate command failure should not be silently ignored.
+
+</details>
+
+<details><summary>Question 4: A deployment script loops over file paths passed as arguments, and one argument is `report 2023.pdf`. Which expansion syntax preserves this as a single argument through the loop?</summary>
+
+Use `for file in "$@"; do ...; done`. The quoted `"$@"` expands each positional parameter as a separate word without performing word splitting, so a path containing spaces remains one iteration of the loop. Unquoted `$@` or `"$*"` would split `report 2023.pdf` into two words. This behaviour is documented in the [Bash manual section on Special Parameters](https://www.gnu.org/software/bash/manual/html_node/Special-Parameters.html) and is the standard pattern for argument forwarding in wrapper scripts that pass user-supplied paths to downstream commands.
+
+</details>
+
+<details><summary>Question 5: A helper function sets `status=failed` without `local`, and later the main script reads an unexpected value from `$status`. What Bash behaviour causes this, and how should the function be corrected?</summary>
+
+Variables in Bash functions are global by default unless declared with `local`. The assignment `status=failed` inside the function overwrites the caller's `status` variable at global scope. The fix is to declare `local status=failed` so the variable is scoped to the function. The [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html#s7.2-variable-names) and the [Greg's Wiki article on Bash variable scope](https://mywiki.wooledge.org/BashGuide/CompoundCommands#Functions) both emphasise that every function variable should be declared `local`, and ShellCheck rule [SC2155](https://www.shellcheck.net/wiki/SC2155) warns about assignments that should be scoped.
+
+</details>
+
+<details><summary>Question 6: A script uses `grep "error" /var/log/app.log` under `set -e`, and the absence of matching lines causes the script to exit. Is the script wrong, or is the error handling too aggressive?</summary>
+
+The script is treating an expected non-match as an unhandled failure. `grep` returns exit code 1 when it finds no matches, and `set -e` treats non-zero exits from unchecked commands as fatal errors. The correct approach depends on the operational meaning: if "no errors" is a valid and expected outcome, wrap the `grep` in an explicit conditional — `if grep -q "error" /var/log/app.log; then handle_errors; fi`. If the `grep` is a guard that should stop the script when no matches exist, the behaviour is correct but should be documented with a comment explaining that a non-match is a failure condition. The [Bash manual section on Pipelines](https://www.gnu.org/software/bash/manual/html_node/Pipelines.html) and the ShellCheck wiki page for [SC2143](https://www.shellcheck.net/wiki/SC2143) both discuss the grep-under-set-e interaction.
+
+</details>
+
+<details><summary>Question 7: Your team is designing a tool that needs to parse nested JSON from an API, apply throttled retries with exponential backoff, and update several state files atomically. Would Bash be the right choice for the core logic, and what factors drive that decision?</summary>
+
+Bash should not contain the core logic for this workload, although it can serve as an entry-point wrapper. The three requirements — nested JSON parsing, throttled retries with backoff, and atomic multi-file updates — each push against Bash's strengths. JSON parsing in Bash requires external tools (`jq`) and becomes fragile when the schema changes because Bash has no native structured-data types. Throttled retries with backoff need floating-point arithmetic for sleep durations and state that persists across retry loops, both of which Bash handles poorly compared to any language with proper data structures. Atomic multi-file updates require filesystem transactions or careful rollback logic that is error-prone to implement in shell. The pragmatic design is a small Bash wrapper that validates the environment, checks for required tools, and invokes a Python or Go program that handles the core logic. This preserves Bash's strengths in command orchestration while avoiding its weaknesses in data manipulation and error recovery.
+
+</details>
+
+## Hands-On Exercises
+
+These exercises turn the concepts from this module into working scripts you can run on any Linux system with Bash 4+. Work in an isolated directory so the exercises do not interfere with existing files, and read each script before executing it — the goal is to predict the output, not to copy and paste.
+
+### Exercise 1: Strict-Mode Template with ShellCheck CI
+
+Create a reusable script template that enforces strict mode, validates its arguments, and is ready for ShellCheck analysis. This template will serve as the starting point for production scripts throughout your operational work.
+
+```bash
+mkdir -p /tmp/bash-fundamentals && cd /tmp/bash-fundamentals
+
+cat > template.sh << 'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+# ── Configuration ──────────────────────────────────────
+readonly SCRIPT_NAME="$(basename "$0")"
+
+# ── Logging ────────────────────────────────────────────
+log() { local level="$1"; shift; echo "[$(date -u +%T)] [$level] $*" >&2; }
+
+# ── Validation ─────────────────────────────────────────
+validate_args() {
+    if (( $# < 1 )); then
+        log ERROR "Usage: $SCRIPT_NAME <required-arg> [optional-arg]"
+        return 1
+    fi
+}
+
+# ── Cleanup ────────────────────────────────────────────
+cleanup() {
+    local exit_code=$?
+    log INFO "Script exiting with code $exit_code"
+    exit "$exit_code"
+}
+trap cleanup EXIT
+trap 'log ERROR "Failure at line $LINENO: $BASH_COMMAND"' ERR
+
+# ── Main ───────────────────────────────────────────────
+main() {
+    validate_args "$@" || exit 1
+    log INFO "Starting $SCRIPT_NAME with args: $*"
+    # Your work goes here
+    log INFO "$SCRIPT_NAME completed successfully"
+}
+
+main "$@"
+SCRIPT
+
+chmod +x template.sh
+
+# Test: run without arguments — should fail with usage message
+./template.sh || true
+
+# Test: run with an argument — should succeed
+./template.sh hello
+
+# Run ShellCheck on the template
+if command -v shellcheck &>/dev/null; then
+    shellcheck template.sh
+else
+    echo "ShellCheck not installed locally. On Debian/Ubuntu: sudo apt install shellcheck"
+    echo "Or paste the script into https://www.shellcheck.net"
+fi
+```
+
+### Exercise 2: Process Substitution Diff Demo
+
+Use process substitution to compare two live data sources without creating temporary files. This exercise demonstrates the `diff <(cmd1) <(cmd2)` pattern that is invaluable for operational comparisons.
+
+```bash
+cd /tmp/bash-fundamentals
+
+# Create two files with overlapping content for comparison
+cat > old-config.txt << 'EOF'
+LOG_LEVEL=info
+MAX_CONNECTIONS=100
+ENABLE_CACHE=true
+TIMEOUT=30
+RETRIES=3
+EOF
+
+cat > new-config.txt << 'EOF'
+LOG_LEVEL=debug
+MAX_CONNECTIONS=200
+ENABLE_CACHE=false
+TIMEOUT=30
+RETRIES=5
+BATCH_SIZE=50
+EOF
+
+# Compare with diff — no temporary files needed
+echo "=== Differences between old and new config ==="
+diff <(sort old-config.txt) <(sort new-config.txt)
+
+# Process substitution also works for feeding command output to file-expecting tools
+echo ""
+echo "=== Using sort on live command output ==="
+sort <(echo "zebra") <(echo "alpha") <(echo "mike")
+```
+
+### Exercise 3: Parameter Expansion Patterns
+
+Build a script that demonstrates parameter expansion for defaults, alternates, and substrings. This exercise covers the patterns you will use most often for input validation and string manipulation in production scripts.
+
+```bash
+cd /tmp/bash-fundamentals
+
+cat > expand-demo.sh << 'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Parameter Expansion Patterns ==="
+echo ""
+
+# Default values — variable is unset
+unset MY_NAME
+echo "1. Default when unset:       ${MY_NAME:-World}"
+
+# Default values — variable is set but empty
+MY_NAME=""
+echo "2. Default when empty:        ${MY_NAME:-World}"
+
+# Default with assignment — variable gets the default
+unset COUNT
+echo "3. Assign default:            ${COUNT:=10}"
+echo "   COUNT is now:              $COUNT"
+
+# Alternate value — only when set and non-empty
+DEBUG=true
+echo "4. Alternate when set:        command ${DEBUG:+-v}"
+unset DEBUG
+echo "5. Alternate when unset:      command ${DEBUG:+-v}"
+
+# Substring extraction
+FILENAME="backup-2025-03-15.tar.gz"
+echo ""
+echo "=== Substring Extraction ==="
+echo "Original:      $FILENAME"
+echo "Chars 7..17:   ${FILENAME:7:10}"
+echo "Remove suffix: ${FILENAME%.tar.gz}"
+echo "Extension:     ${FILENAME##*.}"
+echo "Base name:     ${FILENAME%%.*}"
+
+# Pattern matching for validation
+VERSION="v1.27.3"
+echo ""
+echo "=== Pattern Matching ==="
+echo "Version:       $VERSION"
+echo "Strip leading v: ${VERSION#v}"
+echo "Major only:     ${VERSION#v} → ${VERSION%%.*}"
+SCRIPT
+
+chmod +x expand-demo.sh
+./expand-demo.sh
+```
+
 ### Success Criteria
 
-- [ ] Created script with variables and arguments
-- [ ] Wrote conditionals for file checking
-- [ ] Used loops to process files
-- [ ] Created and used functions
-- [ ] Implemented error handling with traps
+- [ ] Created a strict-mode script template that validates arguments and passes ShellCheck analysis
+- [ ] Demonstrated process substitution by comparing two data sources without temporary files
+- [ ] Applied parameter expansion patterns for defaults, alternates, and substring operations
+- [ ] Predicted the output of each expansion pattern before running the script
 
 ## Next Module
 
-[Module 7.2: Text Processing](/linux/operations/shell-scripting/module-7.2-text-processing/) builds on this foundation with `grep`, `sed`, `awk`, and `jq` so your scripts can transform real command output without brittle parsing.
+[Module 7.2: Text Processing](/linux/operations/shell-scripting/module-7.2-text-processing/) builds on this foundation with `grep`, `sed`, `awk`, and `jq` so your scripts can transform real command output without brittle parsing — the natural next step after mastering the shell language itself.
 
-## Further Reading
+## Sources
 
-- [Bash Reference Manual](https://www.gnu.org/software/bash/manual/)
-- [ShellCheck](https://www.shellcheck.net/) - Script linter
-- [Bash Pitfalls](https://mywiki.wooledge.org/BashPitfalls)
-- [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
-- [GNU Bash Manual: Shell Parameters](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameters.html)
-- [GNU Bash Manual: Conditional Constructs](https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html)
-- [GNU Bash Manual: Bourne Shell Builtins](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html)
-- [GNU Bash Manual: Redirections](https://www.gnu.org/software/bash/manual/html_node/Redirections.html)
-- [GNU Bash Manual: Bash Conditional Expressions](https://www.gnu.org/software/bash/manual/html_node/Bash-Conditional-Expressions.html)
-- [Kubernetes kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/)
+1. [Bash Reference Manual — GNU Project](https://www.gnu.org/software/bash/manual/bash.html) — Official and comprehensive documentation of all Bash features, including startup files, expansions, quoting, and built-in commands. Cited throughout this module for startup behaviour, expansion order, quoting rules, conditional constructs, shell functions, process substitution, redirections, the set builtin, parameter expansion, and special parameters.
+2. [Bash Reference Manual: Bash Startup Files](https://www.gnu.org/software/bash/manual/bash.html#Bash-Startup-Files) — The authoritative description of which files Bash reads during initialisation for login, interactive non-login, and non-interactive shells.
+3. [Bash Reference Manual: Shell Expansions](https://www.gnu.org/software/bash/manual/html_node/Shell-Expansions.html) — Full documentation of the seven-stage expansion sequence: brace, tilde, parameter, command substitution, arithmetic, word splitting, and pathname expansion.
+4. [Bash Reference Manual: Shell Parameter Expansion](https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html) — Every parameter expansion variant, including defaults, alternates, substring extraction, and pattern trimming.
+5. [Bash Reference Manual: Quoting](https://www.gnu.org/software/bash/manual/html_node/Quoting.html) — Escape characters, single quotes, double quotes, and ANSI-C quoting with precise rules about which expansions are suppressed in each context.
+6. [Bash Reference Manual: Conditional Constructs](https://www.gnu.org/software/bash/manual/html_node/Conditional-Constructs.html) — `if`, `case`, `[[ ]]`, and `(( ))` with all comparison operators and pattern-matching syntax.
+7. [Bash Reference Manual: Shell Functions](https://www.gnu.org/software/bash/manual/html_node/Shell-Functions.html) — Function definition syntax, positional parameters within functions, and return code semantics.
+8. [Bash Reference Manual: Process Substitution](https://www.gnu.org/software/bash/manual/html_node/Process-Substitution.html) — `<(command)` and `>(command)` syntax and their dependency on named pipes or `/dev/fd`.
+9. [Bash Reference Manual: Redirections](https://www.gnu.org/software/bash/manual/html_node/Redirections.html) — File descriptor duplication, here-documents, here-strings, and the ordering rules that determine how redirections compose.
+10. [Bash Reference Manual: The Set Builtin](https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html) — Every shell option available through `set`, including `-e`, `-u`, `-o pipefail`, and their precise semantics and exceptions.
+11. [Bash Reference Manual: Bourne Shell Builtins](https://www.gnu.org/software/bash/manual/html_node/Bourne-Shell-Builtins.html) — Built-in commands including `command`, `type`, `readonly`, and `local`, with their POSIX and Bash-specific behaviours.
+12. [POSIX Shell Command Language — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html) — The formal specification for the POSIX shell grammar, used in this module for the `#!/bin/sh` portability discussion.
+13. [POSIX test specification — The Open Group](https://pubs.opengroup.org/onlinepubs/9799919799/utilities/test.html) — The formal semantics of the `[ ]` (test) command, applicable when targeting POSIX-compatible shells instead of Bash-specific `[[ ]]`.
+14. [ShellCheck — Static analysis for shell scripts](https://www.shellcheck.net/) — The online ShellCheck tool and rule index. Specific rules cited: SC1068 (spaces around `=` in assignments), SC2143 (grep -q patterns), SC2155 (variable scope and `local`), SC2236 (`command -v` over `which`), and SC2292 (`[[ ]]` vs `[ ]`).
+15. [ShellCheck wiki: SC1068](https://www.shellcheck.net/wiki/SC1068) — Rule documentation for the spaces-around-equals-in-assignment error.
+16. [ShellCheck wiki: SC2143](https://www.shellcheck.net/wiki/SC2143) — Rule documentation for using `grep -q` patterns correctly under `set -e`.
+17. [ShellCheck wiki: SC2155](https://www.shellcheck.net/wiki/SC2155) — Rule documentation for variable scope and the `local` requirement in functions.
+18. [ShellCheck GitHub Repository](https://github.com/koalaman/shellcheck) — Source repository and installation instructions for ShellCheck.
+19. [Greg's Wiki — BashGuide](https://mywiki.wooledge.org/BashGuide) — A community-maintained guide to Bash scripting widely referenced in the shell-scripting community, cited in this module for quoting rules, argument safety with arrays, and function structure.
+20. [Greg's Wiki — BashFAQ/001](https://mywiki.wooledge.org/BashFAQ/001) — The canonical reference for safe file-reading loops, explaining why `for line in $(cat file)` is unreliable and `while IFS= read -r line` is the correct alternative.
+21. [Greg's Wiki — Quotes](https://mywiki.wooledge.org/Quotes) — A focused guide on when and how to use single quotes, double quotes, and backslashes in Bash.
+22. [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html) — Google's internal style guide for shell scripts, cited for its function-naming conventions, the `main` function pattern, and the requirement for `local` variables in functions.
+23. [Kubernetes kubectl Cheat Sheet](https://kubernetes.io/docs/reference/kubectl/cheatsheet/) — Official Kubernetes documentation covering imperative commands, `--dry-run` manifest generation, and common `kubectl` patterns.
+24. [Kubernetes kubectl Overview](https://kubernetes.io/docs/reference/kubectl/) — The reference page for all `kubectl` subcommands and their flags, used in the Kubernetes scripting patterns section.
