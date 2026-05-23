@@ -151,7 +151,7 @@ curl -L --fail-with-body https://example.com/
 
 The most important part of `curl -v` is the direction marker. Lines beginning with `*` are curl's own progress and connection notes. Lines beginning with `>` are request data sent by the client. Lines beginning with `<` are response data returned by the server. If you see `Connected` followed by a TLS handshake and then `< HTTP/2 503`, you have evidence that DNS, routing, TCP, and TLS progressed far enough for the application or load balancer to return a service-unavailable response. The next move is not another ping; it is backend health, overload, routing rules, or dependency behavior.
 
-Headers are often enough to separate network failures from application decisions. `curl -I` sends a HEAD request, which is useful for checking status, redirects, cache headers, and server identity without downloading the body. Some applications mishandle HEAD, so compare with `curl -i` when a HEAD result disagrees with a browser, a health check, or an application client. RFC 7230 is the HTTP/1.1 message syntax reference, and even when HTTP/2 or HTTP/3 is negotiated, the habit of reading method, target, headers, status, and body remains the same.
+Headers are often enough to separate network failures from application decisions. `curl -I` sends a HEAD request, which is useful for checking status, redirects, cache headers, and server identity without downloading the body. Some applications mishandle HEAD, so compare with `curl -i` when a HEAD result disagrees with a browser, a health check, or an application client. RFC 9110 (HTTP semantics) and RFC 9112 (HTTP/1.1 message syntax) are the current references, and even when HTTP/2 or HTTP/3 is negotiated, the habit of reading method, target, headers, status, and body remains the same.
 
 ```bash
 # Check redirect behavior and security headers.
@@ -483,15 +483,18 @@ A strong answer records the answer address, record type, resolver used, and TTL 
 sudo iptables -V
 sudo iptables -L OUTPUT -n -v --line-numbers
 
+# Resolve the current example.com A/AAAA destination (for IPv4 lab use, keep this line as-is).
+TARGET_IP=$(dig +short example.com | head -1)
+
 # Insert one narrow temporary rule.
-sudo iptables -I OUTPUT 1 -p tcp -d 93.184.216.34 --dport 80 -j REJECT
+sudo iptables -I OUTPUT 1 -p tcp -d "$TARGET_IP" --dport 80 -j REJECT
 sudo iptables -L OUTPUT -n -v --line-numbers
 
 # Verify the effect with a bounded request.
-curl -v --connect-timeout 3 --max-time 6 http://93.184.216.34/
+curl -v --connect-timeout 3 --max-time 6 "http://$TARGET_IP/"
 
 # Remove exactly the rule you inserted.
-sudo iptables -D OUTPUT -p tcp -d 93.184.216.34 --dport 80 -j REJECT
+sudo iptables -D OUTPUT -p tcp -d "$TARGET_IP" --dport 80 -j REJECT
 sudo iptables -L OUTPUT -n -v --line-numbers
 ```
 
@@ -525,7 +528,8 @@ Next up: [System Essentials](../system-essentials/) moves from everyday host ope
 - [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
 - [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
 - [RFC 1035: Domain Names - Implementation and Specification](https://www.rfc-editor.org/rfc/rfc1035)
-- [RFC 7230: HTTP/1.1 Message Syntax and Routing](https://www.rfc-editor.org/rfc/rfc7230)
+- [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110)
+- [RFC 9112: HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9112)
 - [curl Manual](https://curl.se/docs/manual.html)
 - [Kubernetes: Troubleshooting Applications](https://kubernetes.io/docs/tasks/debug/debug-application/)
 - [systemd-resolved.service manual](https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.service.html)
