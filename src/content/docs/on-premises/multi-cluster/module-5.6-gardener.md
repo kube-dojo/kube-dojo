@@ -6,14 +6,9 @@ sidebar:
   order: 56
 ---
 
-# Module 5.6: Gardener — Open-Source Kubernetes-as-a-Service at Scale
-
 > **Complexity**: `[COMPLEX]` | Time: 60 minutes
 >
 > **Prerequisites**: K8s Basics (CKA-level understanding), [Module 5.3: Cluster API on Bare Metal](../module-5.3-cluster-api-bare-metal/), basic understanding of multi-cluster concepts
-
-For command examples, this module uses `k` as a short alias for `kubectl`.
-Create it once in your shell with `alias k=kubectl` before running the hands-on work.
 
 ---
 
@@ -216,6 +211,34 @@ This is the most important architectural distinction in Gardener.
 +---------------------------------------------------------------------------+
 ```
 
+```mermaid
+flowchart TB
+    subgraph Garden["Garden cluster"]
+        API[Gardener API server]
+        CM[Gardener controller manager]
+        SCH[Scheduler + admission]
+        SHOOT_CR[Shoot / Project / CloudProfile CRs]
+    end
+    subgraph Seed["Seed cluster"]
+        GL[Gardenlet]
+        NS[shoot--project--name namespace]
+        CP[Hosted control plane pods]
+        ETCD[etcd-druid]
+    end
+    subgraph Shoot["Shoot cluster"]
+        WN[Worker nodes]
+        APP[Tenant workloads]
+    end
+    API --> SHOOT_CR
+    GL -->|watches Garden| API
+    GL --> NS
+    NS --> CP
+    NS --> ETCD
+    GL -->|reconciles workers via extensions| WN
+    CP -->|kube-apiserver endpoint| APP
+    WN --> APP
+```
+
 The diagram shows why Gardener can achieve high density.
 Control planes become pods.
 Pods can be scheduled, restarted, monitored, and resourced by Kubernetes.
@@ -264,18 +287,16 @@ They also let a platform align Shoots with provider regions, data-sovereignty re
 ### Worked Example: Finding a Shoot's Control Plane
 
 Suppose a tenant says their API requests are timing out.
-The tenant can still see nodes with a stale kubeconfig, but new `k get pods` calls fail intermittently.
+The tenant can still see nodes with a stale kubeconfig, but new `kubectl get pods` calls fail intermittently.
 The platform operator should not start by SSHing into every worker node.
 The operator should locate the Shoot in the Garden, identify its Seed, and inspect the Seed namespace that hosts the control plane.
 That path matches the architecture.
 
 ```bash
-alias k=kubectl
-
-k -n garden-team-a get shoot prod-a -o wide
-k -n garden-team-a get shoot prod-a -o jsonpath='{.status.seedName}{"\n"}'
-k -n shoot--team-a--prod-a get pods
-k -n shoot--team-a--prod-a get deploy,sts,svc
+kubectl -n garden-team-a get shoot prod-a -o wide
+kubectl -n garden-team-a get shoot prod-a -o jsonpath='{.status.seedName}{"\n"}'
+kubectl -n shoot--team-a--prod-a get pods
+kubectl -n shoot--team-a--prod-a get deploy,sts,svc
 ```
 
 The first command asks the Garden about the tenant cluster.
@@ -283,7 +304,7 @@ The second command finds the Seed assignment.
 The third and fourth commands target the Seed namespace, assuming your kubeconfig now points to that Seed.
 This shift from Garden view to Seed execution view is a common operator motion in Gardener.
 
-### War Story: The Control Plane Was Healthy, the Endpoint Was Not
+### Hypothetical scenario: The Control Plane Was Healthy, the Endpoint Was Not
 
 A platform team once spent an incident looking at worker nodes because users reported that a Shoot was unreachable.
 The nodes were healthy, CoreDNS was fine, and application pods were running.
@@ -402,7 +423,7 @@ The important point is not which image is fashionable.
 The important point is that machine image choices are managed as platform policy.
 Users should not paste arbitrary image IDs into every Shoot manifest.
 
-### War Story: Provider Logic in the Wrong Place
+### Hypothetical scenario: Provider Logic in the Wrong Place
 
 A team building its own multi-cluster platform once placed AWS, OpenStack, and vSphere logic inside one controller.
 The controller grew provider flags, conditional code, custom retries, and provider-specific cleanup paths.
@@ -551,8 +572,8 @@ If credentials rotate, old clients may stop working.
 That is desirable when credentials are revoked intentionally.
 
 ```bash
-k -n garden-local get shoot local -o jsonpath='{.status.advertisedAddresses}{"\n"}'
-k -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
+kubectl -n garden-local get shoot local -o jsonpath='{.status.advertisedAddresses}{"\n"}'
+kubectl -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
 ```
 
 These commands inspect the high-level state from the Garden.
@@ -613,9 +634,9 @@ For specific credentials, Gardener offers more targeted operations.
 The point is to rotate with observable state, not with ad hoc secret replacement.
 
 ```bash
-k -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-start
-k -n garden-local get shoot local -o jsonpath='{.status.credentials.rotation}{"\n"}'
-k -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-complete
+kubectl -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-start
+kubectl -n garden-local get shoot local -o jsonpath='{.status.credentials.rotation}{"\n"}'
+kubectl -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-complete
 ```
 
 Some landscapes wrap these operations with `gardenctl` commands for day-to-day use.
@@ -632,16 +653,72 @@ Gardener encodes this sequence so tenants do not invent their own upgrade order.
 When `spec.kubernetes.version` changes to a supported version such as `1.35.3`, Gardenlet updates control-plane components, waits for health, and then rolls worker nodes.
 
 ```bash
-k -n garden-local patch shoot local --type merge \
+kubectl -n garden-local patch shoot local --type merge \
   -p '{"spec":{"kubernetes":{"version":"1.35.3"}}}'
 
-k -n garden-local get shoot local -w
+kubectl -n garden-local get shoot local -w
 ```
 
 Watching the Shoot status is more meaningful than watching only nodes.
 The Shoot status shows the lifecycle operation progress.
 If a control-plane component fails first, node status may not tell the story.
 If a worker rollout fails later, the Shoot conditions and worker machine status point to the next layer.
+
+### Hibernation and Scheduled Wake-Up
+
+Hibernation is Gardener's cost-control mechanism for idle Shoots.
+When `spec.hibernation.enabled` is `true`, Gardener scales down control-plane and worker resources so the cluster stops consuming provider capacity while desired state remains in the Garden.
+Setting it back to `false` wakes the Shoot and restarts reconciliation.
+This is not the same as cordoning nodes: you express intent on the Shoot object and Gardener drives the underlying scale-down through its controllers.
+
+Production landscapes often define cron schedules under `spec.hibernation.schedules` so development clusters hibernate overnight and wake before the business day.
+Each schedule needs at least one of `start` or `end` cron expressions plus an optional `location` for timezone evaluation.
+Manual patches can still override the schedule when an engineer needs a cluster during an off-hours incident.
+
+```bash
+kubectl -n garden-local patch shoot local --type merge \
+  -p '{"spec":{"hibernation":{"enabled":true}}}'
+
+kubectl -n garden-local get shoot local -o jsonpath='{.status.lastOperation.type}{"\n"}'
+
+kubectl -n garden-local patch shoot local --type merge \
+  -p '{"spec":{"hibernation":{"enabled":false}}}'
+```
+
+Before hibernating regulated clusters, read `.status.constraints` for `HibernationPossible`.
+Gardener may block hibernation when Shoot webhooks use `failurePolicy=Fail` on Pods or Nodes, because those webhooks would block wake-up while their backing service is offline.
+High webhook timeouts can produce the same symptom even with `Ignore`.
+Landscape operators can enable Gardenlet's webhook remediator to surface the constraint and adjust offending webhook configurations according to Gardener's documented rules.
+
+```yaml
+  hibernation:
+    enabled: false
+    schedules:
+      - start: "0 20 * * *"
+        end: "0 6 * * *"
+        location: "Europe/Berlin"
+```
+
+### Shoot API Exposure and Network Access
+
+Tenants reach the Shoot API server through addresses published in `.status.advertisedAddresses`.
+Those entries may describe public load-balancer IPs, internal DNS names, or VPN-only endpoints depending on how the landscape exposes control planes.
+Gardener reconciles DNS records, load balancers, and VPN components through extension resources such as `DNSRecord`, `Infrastructure`, and provider-specific control-plane configs rather than asking users to hand-wire endpoints after every upgrade.
+
+On-premises designs usually choose one of three patterns.
+A private DNS name resolves to an internal load balancer fronting the apiserver Service in the Seed namespace.
+A corporate VPN or private link carries traffic from developer laptops to that endpoint without exposing the API on the public internet.
+A bastion or jump host with `gardenctl` SSH helpers reaches nodes and control-plane diagnostics when direct API access is restricted.
+The wrong pattern for your compliance tier is almost always "reuse the Seed cluster's default Service IP" without documenting how tenant kubeconfigs traverse firewalls.
+
+```bash
+kubectl -n garden-local get shoot local -o jsonpath='{range .status.advertisedAddresses[*]}{.name}{": "}{.url}{"\n"}{end}'
+kubectl -n shoot--local--local get svc | grep kube-apiserver
+```
+
+When exposure changes after an ingress or load-balancer migration, Shoot conditions such as `APIServerAvailable` may fail even though etcd and scheduler pods look healthy.
+Reissue kubeconfigs through Gardener's Shoot access workflow after confirming the advertised address list matches what clients can route to.
+Treat DNS TTL, firewall rules, and split-horizon DNS as part of the Shoot lifecycle, not as optional Day-2 paperwork.
 
 ### Graceful Deletion
 
@@ -656,9 +733,9 @@ That extra step prevents a casual delete from removing a tenant cluster.
 After confirmation, deletion should be watched through Shoot status and provider resources until all external infrastructure is gone.
 
 ```bash
-k -n garden-local annotate shoot local confirmation.gardener.cloud/deletion=true
-k -n garden-local delete shoot local
-k -n garden-local get shoot local -w
+kubectl -n garden-local annotate shoot local confirmation.gardener.cloud/deletion=true
+kubectl -n garden-local delete shoot local
+kubectl -n garden-local get shoot local -w
 ```
 
 If deletion stalls, do not immediately remove finalizers.
@@ -740,11 +817,11 @@ gardenctl gives operators a safer targeting workflow.
 ```bash
 gardenctl target --garden local --project local --shoot local
 eval "$(gardenctl kubectl-env bash)"
-k get nodes
+kubectl get nodes
 ```
 
 The target command selects the Garden, Project, and Shoot.
-The `kubectl-env` command updates the shell environment so `k` points at the targeted cluster.
+The `kubectl-env` command updates the shell environment so `kubectl` points at the targeted cluster.
 This makes it clear which cluster you are operating on.
 In production, always confirm the target before changing resources.
 
@@ -759,7 +836,7 @@ gardenctl kubeconfig
 gardenctl ssh <shoot-node-name>
 ```
 
-### War Story: The Wrong Kubeconfig
+### Hypothetical scenario: The Wrong Kubeconfig
 
 A senior operator once patched a staging namespace while believing they were targeting development.
 The namespace names matched because the platform used identical app names across clusters.
@@ -859,10 +936,10 @@ Do not restart controllers randomly.
 Find the controller that owns the failing step.
 
 ```bash
-k -n garden-local describe shoot local
-k -n garden-local get shoot local -o jsonpath='{.status.lastOperation}{"\n"}'
-k -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
-k -n garden get pods -l app=gardenlet
+kubectl -n garden-local describe shoot local
+kubectl -n garden-local get shoot local -o jsonpath='{.status.lastOperation}{"\n"}'
+kubectl -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
+kubectl -n garden get pods -l app=gardenlet
 ```
 
 The exact Gardenlet namespace depends on your landscape.
@@ -942,6 +1019,33 @@ It is a strong fit when a team wants to model databases, networks, IAM, object s
 It can provision clusters, but its center of gravity is broader infrastructure composition.
 If the platform product is "all infrastructure through claims," Crossplane deserves serious evaluation.
 
+### Gardener vs Rancher, Kamaji, vCluster, and OpenShift Hosted Control Planes
+
+Rancher (with Fleet) excels at registering existing clusters and distributing GitOps bundles, but it does not natively implement Gardener's Shoot reconciliation loop, CloudProfile catalog, or hosted control-plane density on Seeds.
+Many enterprises run Rancher above clusters created by Gardener, CAPI, or hyperscaler managed Kubernetes, because the products solve different layers.
+Choose Rancher when the primary pain is application delivery and cluster inventory across a heterogeneous fleet, and choose Gardener when the product is "create and lifecycle-manage conformant Kubernetes clusters as a service."
+
+Kamaji and vCluster both virtualize control planes inside a parent cluster, which resembles Gardener's "control plane as pods" idea.
+Kamaji targets multi-tenancy operators who want many lightweight tenant control planes with a shared datastore strategy on one management cluster.
+vCluster targets developers and platform teams who need fast, inexpensive logical clusters for isolation or CI without provisioning full worker fleets each time.
+Gardener targets fleet operators who need provider extensions, etcd-druid backups, maintenance windows, hibernation, quotas, and SAP-scale lifecycle policy across AWS, Azure, GCP, OpenStack, vSphere, and bare-metal providers.
+If your requirement is five ephemeral dev namespaces per week, vCluster may be simpler.
+If your requirement is five hundred production clusters with patch compliance, Gardener is the closer match.
+
+OpenShift Hosted Control Planes (HyperShift) deliver Red Hat's opinionated hosted control-plane model on OpenShift infrastructure with strong integration to OCP networking, identity, and support contracts.
+Gardener remains vendor-neutral and extension-driven, which suits platforms that must span multiple IaaS backends and custom on-premises providers under one API.
+HyperShift fits organizations standardized on OpenShift operations and subscription economics.
+Gardener fits organizations building an internal Kubernetes-as-a-Service product that must outlive any single vendor distribution.
+
+| Tool | Primary abstraction | Hosted control plane | Best when |
+|------|---------------------|----------------------|-----------|
+| Gardener | Shoot in Garden cluster | Yes, on Seeds | Multi-IaaS internal Kubernetes-as-a-Service at hundreds to thousands of clusters |
+| Cluster API | Cluster, Machine, KubeadmControlPlane | Optional via providers | Platform engineers assembling their own lifecycle stack |
+| Rancher + Fleet | Registered cluster + GitRepo bundle | No (manages existing clusters) | GitOps across diverse clusters from one Rancher management server |
+| Kamaji | TenantControlPlane | Yes, on management cluster | Dense multi-tenant control planes with shared ops model |
+| vCluster | Virtual cluster in namespace | Yes, lightweight | Fast ephemeral logical clusters for dev/CI isolation |
+| OpenShift HCP / HyperShift | HostedCluster | Yes, on OCP worker nodes | OpenShift-standardized hosted control planes with Red Hat support |
+
 ```mermaid
 flowchart TD
     A[What are you building?] --> B{Primary product is tenant Kubernetes clusters?}
@@ -961,6 +1065,21 @@ A platform may use Cluster API or provider automation underneath a Gardener exte
 A platform may use Crossplane to create supporting infrastructure that Gardener then uses.
 The key is to avoid making tenants learn every layer.
 The tenant-facing product should stay simple even if the platform internals are sophisticated.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Creating: Shoot applied
+    Creating --> Reconciling: Gardenlet assigned
+    Reconciling --> Ready: Control plane + workers healthy
+    Ready --> Hibernated: spec.hibernation.enabled=true
+    Hibernated --> Ready: spec.hibernation.enabled=false
+    Ready --> Updating: Version or worker change
+    Updating --> Ready: Reconciliation success
+    Ready --> Deleting: Confirmed delete
+    Deleting --> [*]: Infrastructure cleaned
+    Reconciling --> Failed: Last operation error
+    Failed --> Reconciling: retry annotation or spec fix
+```
 
 ---
 
@@ -992,7 +1111,7 @@ The tenant-facing product should stay simple even if the platform internals are 
 <details>
 <summary>Your Shoot cluster has been stuck in Reconciling for 20 minutes after creation. What do you check first, and why?</summary>
 
-Start with the Shoot status in the Garden namespace: `k -n <project-namespace> describe shoot <name>` and the `.status.lastOperation` plus `.status.conditions` fields.
+Start with the Shoot status in the Garden namespace: `kubectl -n <project-namespace> describe shoot <name>` and the `.status.lastOperation` plus `.status.conditions` fields.
 Those fields identify which lifecycle stage is failing before you read logs.
 If the failure points to infrastructure, inspect extension resources and provider extension logs.
 If it points to API server availability, move to the Seed namespace that hosts the Shoot control plane.
@@ -1077,12 +1196,6 @@ You need Docker, kind, Go tooling required by Gardener, `kubectl`, and enough lo
 The official local setup guide recommends generous CPU, memory, and disk allocation because the Garden, Seed, and Shoot run on the same machine.
 Close other heavy workloads before starting.
 
-Create the `k` alias before beginning:
-
-```bash
-alias k=kubectl
-```
-
 ### Task 1: Bootstrap a Local Gardener Environment
 
 Clone Gardener and start the local kind-based landscape.
@@ -1097,9 +1210,9 @@ Set your kubeconfig to the local Garden cluster if the script does not do it for
 
 ```bash
 export KUBECONFIG="$PWD/example/gardener-local/kind/local/kubeconfig"
-k get ns
-k get apiservices | grep gardener
-k get seeds
+kubectl get ns
+kubectl get apiservices | grep gardener
+kubectl get seeds
 ```
 
 Verify that the Gardener API server is registered and the local Seed exists.
@@ -1109,12 +1222,12 @@ The local setup commonly uses one kind cluster as both Garden and Seed for simpl
 <summary>Solution and success criteria for Task 1</summary>
 
 You should see Gardener API services registered and a Seed named `local`.
-If `k get seeds` fails, confirm that `KUBECONFIG` points at `example/gardener-local/kind/local/kubeconfig`.
+If `kubectl get seeds` fails, confirm that `KUBECONFIG` points at `example/gardener-local/kind/local/kubeconfig`.
 If the API service exists but reports unavailable, wait for the Gardener API server and controller pods to become ready.
 
-- [ ] `k get ns` returns namespaces from the local kind cluster.
-- [ ] `k get apiservices | grep gardener` shows Gardener API services.
-- [ ] `k get seeds` lists the local Seed.
+- [ ] `kubectl get ns` returns namespaces from the local kind cluster.
+- [ ] `kubectl get apiservices | grep gardener` shows Gardener API services.
+- [ ] `kubectl get seeds` lists the local Seed.
 - [ ] You can explain why the same kind cluster can act as Garden and Seed in the local setup.
 
 </details>
@@ -1124,15 +1237,15 @@ If the API service exists but reports unavailable, wait for the Gardener API ser
 List all Seeds, their conditions, and current Shoots.
 
 ```bash
-k get seeds -o wide
-k get shoots -A
-k -n garden get pods | grep gardenlet
+kubectl get seeds -o wide
+kubectl get shoots -A
+kubectl -n garden get pods | grep gardenlet
 ```
 
 If your local setup places Gardenlet in a different namespace, find it with labels:
 
 ```bash
-k get pods -A | grep gardenlet
+kubectl get pods -A | grep gardenlet
 ```
 
 Observe that Gardenlet is the Seed-side agent responsible for reconciling assigned Shoots.
@@ -1145,8 +1258,8 @@ You should see the local Seed and either no Shoots yet or the sample Shoots you 
 Gardenlet should be running because it is the actor that turns Shoot desired state into Seed-hosted control planes and provider resources.
 If Gardenlet is missing, the Seed will not reconcile Shoots.
 
-- [ ] `k get seeds -o wide` shows the local Seed.
-- [ ] `k get shoots -A` works even if no Shoots exist yet.
+- [ ] `kubectl get seeds -o wide` shows the local Seed.
+- [ ] `kubectl get shoots -A` works even if no Shoots exist yet.
 - [ ] You located the Gardenlet pod.
 - [ ] You can describe why Gardenlet runs per Seed.
 
@@ -1157,8 +1270,8 @@ If Gardenlet is missing, the Seed will not reconcile Shoots.
 Apply the example Shoot manifest from the local provider.
 
 ```bash
-k apply -f example/provider-local/shoot.yaml
-k -n garden-local get shoot local -w
+kubectl apply -f example/provider-local/shoot.yaml
+kubectl -n garden-local get shoot local -w
 ```
 
 Watch the Shoot progress through lifecycle states such as `Creating`, `Reconciling`, and `Ready`.
@@ -1168,8 +1281,8 @@ Local resource pressure can make this slower than expected.
 After the Shoot becomes ready, inspect its advertised addresses and conditions.
 
 ```bash
-k -n garden-local get shoot local -o jsonpath='{.status.advertisedAddresses}{"\n"}'
-k -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
+kubectl -n garden-local get shoot local -o jsonpath='{.status.advertisedAddresses}{"\n"}'
+kubectl -n garden-local get shoot local -o jsonpath='{.status.conditions}{"\n"}'
 ```
 
 <details>
@@ -1180,7 +1293,7 @@ If it remains in `Reconciling`, describe the Shoot and inspect the last operatio
 Then inspect Gardenlet and provider-local logs.
 The most common local causes are insufficient Docker resources, image pull delays, or local networking issues.
 
-- [ ] `k -n garden-local get shoot local` shows the Shoot.
+- [ ] `kubectl -n garden-local get shoot local` shows the Shoot.
 - [ ] The Shoot reaches a healthy or ready state.
 - [ ] You captured how long local provisioning took.
 - [ ] You inspected advertised addresses and conditions.
@@ -1206,8 +1319,8 @@ maximum: 2
 Reapply the manifest and watch the Shoot.
 
 ```bash
-k apply -f /tmp/shoot-local.yaml
-k -n garden-local get shoot local -w
+kubectl apply -f /tmp/shoot-local.yaml
+kubectl -n garden-local get shoot local -w
 ```
 
 Then patch a worker pool machine image version to trigger a node rolling update.
@@ -1215,8 +1328,8 @@ Use a version supported by your local CloudProfile.
 The example below is illustrative; inspect your CloudProfile first.
 
 ```bash
-k get cloudprofile local -o yaml | grep -A20 machineImages
-k -n garden-local patch shoot local --type merge \
+kubectl get cloudprofile local -o yaml | grep -A20 machineImages
+kubectl -n garden-local patch shoot local --type merge \
   -p '{"spec":{"provider":{"workers":[{"name":"worker","machine":{"image":{"name":"gardenlinux","version":"1.35.1"}}}]}}}'
 ```
 
@@ -1241,10 +1354,10 @@ Patch the Shoot Kubernetes version to a newer supported 1.35 patch version.
 Confirm the target version exists in the CloudProfile before patching.
 
 ```bash
-k get cloudprofile local -o yaml | grep -A30 versions
-k -n garden-local patch shoot local --type merge \
+kubectl get cloudprofile local -o yaml | grep -A30 versions
+kubectl -n garden-local patch shoot local --type merge \
   -p '{"spec":{"kubernetes":{"version":"1.35.3"}}}'
-k -n garden-local get shoot local -w
+kubectl -n garden-local get shoot local -w
 ```
 
 Watch the sequence.
@@ -1255,7 +1368,7 @@ Then verify the upgraded cluster.
 ```bash
 ./hack/usage/generate-admin-kubeconf.sh > /tmp/local-shoot-kubeconfig.yaml
 KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml k version
-KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml k get nodes
+KUBECONFIG=/tmp/local-shoot-kubeconfig.yaml kubectl get nodes
 ```
 
 <details>
@@ -1280,7 +1393,7 @@ Use gardenctl to target the local Shoot before changing credentials, because thi
 ```bash
 gardenctl target --garden local --project local --shoot local
 eval "$(gardenctl kubectl-env bash)"
-k get ns
+kubectl get ns
 ```
 
 Rotate the Shoot's kubeconfig credentials with the operator workflow requested for this module, then watch the Shoot status rather than assuming the command completed every phase instantly. Credential rotation is a reconciled lifecycle operation, so status is the source of truth.
@@ -1292,13 +1405,13 @@ gardenctl rotate-kubeconfig --garden local --project local --shoot local
 If your installed gardenctl does not provide that exact command, use the Gardener credential-rotation annotations shown below as the equivalent API-level path. This keeps the exercise aligned with Gardener's reconciliation model while avoiding dependence on one particular gardenctl release.
 
 ```bash
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-start
 
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local get shoot local -o jsonpath='{.status.credentials.rotation}{"\n"}'
 
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local annotate shoot local gardener.cloud/operation=rotate-credentials-complete
 ```
 
@@ -1307,13 +1420,13 @@ Then verify that the old kubeconfig fails once the rotation has completed and ol
 Finally, delete the Shoot cleanly.
 
 ```bash
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local annotate shoot local confirmation.gardener.cloud/deletion=true
 
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local delete shoot local
 
-k --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
+kubectl --kubeconfig "$PWD/example/gardener-local/kind/local/kubeconfig" \
   -n garden-local get shoot local -w
 ```
 
@@ -1331,7 +1444,7 @@ If deletion stalls, inspect the Shoot status and extension cleanup logs before t
 - [ ] A fresh kubeconfig worked after rotation.
 - [ ] The old kubeconfig no longer authenticated after completion.
 - [ ] The Shoot was deleted with deletion confirmation.
-- [ ] No local Shoot remains in `k -n garden-local get shoots`.
+- [ ] No local Shoot remains in `kubectl -n garden-local get shoots`.
 
 </details>
 
@@ -1347,6 +1460,12 @@ That is the mental model to carry into real providers.
 In production, the same lifecycle has stronger policy around identity, quota, backup, network ranges, and Seed placement.
 The local provider removes cloud account friction, but it does not remove the architecture.
 Garden, Seed, Shoot, extension, status, and reconciliation remain the same concepts.
+
+---
+
+## Learner Check
+
+> You can explain the Garden, Seed, and Shoot responsibilities without a diagram, trace a failed reconciliation from Shoot conditions to the Seed namespace hosting the control plane, and describe why hibernation is declared on the Shoot spec rather than by scaling Deployments to zero by hand. You should be able to patch `spec.hibernation.enabled`, read `HibernationPossible` constraints, and justify when Gardener fits better than Rancher Fleet, Cluster API alone, Kamaji, vCluster, or OpenShift Hosted Control Planes for your organization's internal Kubernetes-as-a-Service roadmap.
 
 ---
 
@@ -1374,6 +1493,12 @@ Next: Karmada/Liqo + kube-vip for multi-cluster on-prem federation, where you wi
 - [Kubernetes blog by SAP authors: Gardener - The Kubernetes Botanist](https://kubernetes.io/blog/2018/05/17/gardener/)
 - [Gardener Shoot credential rotation](https://gardener.cloud/docs/gardener/shoot-operations/shoot_credentials_rotation/)
 - [Gardener Shoot access documentation](https://gardener.cloud/docs/gardener/shoot/shoot_access/)
+- [Gardener Shoot hibernation](https://gardener.cloud/docs/gardener/shoot/shoot_hibernate/)
+- [Gardener Shoot status and constraints](https://gardener.cloud/docs/gardener/shoot/shoot_status/)
+- [Cluster API documentation](https://cluster-api.sigs.k8s.io/)
+- [Kamaji documentation](https://kamaji.clastix.io/)
+- [vCluster documentation](https://www.vcluster.com/docs/)
+- [OpenShift hosted control planes](https://docs.openshift.com/container-platform/latest/hosted_control_planes/index.html)
 - [Gardener Project documentation](https://gardener.cloud/docs/getting-started/project/)
 - [Gardener observability components](https://gardener.cloud/docs/getting-started/observability/components/)
 - [Gardener monitoring stack](https://gardener.cloud/docs/gardener/monitoring-stack/)
