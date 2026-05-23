@@ -279,7 +279,7 @@ kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, addresses: .st
 
 ```bash
 kubectl get pods -A -o json | jq -r '.items[] | [ .metadata.namespace, .metadata.name, .status.phase ] | @tsv'
-kubectl get pods -A -o json | jq '[.items[] | {namespace, name: .metadata.name, image: .spec.containers[0].image}]'
+kubectl get pods -A -o json | jq '[.items[] | {namespace: .metadata.namespace, name: .metadata.name, image: .spec.containers[0].image}]'
 ```
 
 `yq` performs the same style of structured transforms for YAML when policy files, Helm values, and manifests become part of triage. Use it for explicit key access, array navigation, and scripted checks, not for freeform replacements.
@@ -302,7 +302,7 @@ kubectl get configmap config-a -o yaml | yq '.data | keys' | jq -R -s .
 
 ```bash
 find /var/log -type f -name '*.log' -size -20M -mtime -7 -print0 > /tmp/log_inputs
-find /etc -type f -name '*.yml' -o -name '*.yaml' -print
+find /etc -type f \( -name '*.yml' -o -name '*.yaml' \) -print
 find . -type f -path './.git/*' -prune -o -name '*.md' -print
 ```
 
@@ -310,11 +310,13 @@ find . -type f -path './.git/*' -prune -o -name '*.md' -print
 
 ```bash
 find /tmp/reports -name '*.txt' -print0 | xargs -0 -n 8 echo batch:
-find pod-names.txt -print0 | xargs -0 -n 1 -P 4 kubectl delete pod -n default
+xargs -a pod-names.txt -n 1 kubectl delete pod
 find pods.txt | xargs -I{} echo pod:{}
 ```
 
 `--null` (or `-0`) is the critical safety switch for whitespace. Without it, names and paths containing spaces break into multiple arguments and can run against wrong resources.
+
+> GNU/BSD portability note: `xargs --null`, `--max-args`, `-r`, `-a`, and `-d` are not consistently supported across BSD `xargs`, so validate available flags in mixed environments.
 
 ```bash
 printf '%s\0' "pod one" "pod two" | xargs -0 -I{} kubectl get pod "{}"
@@ -344,11 +346,11 @@ rg -n --glob '*.log' --context 2 "failed" /var/log
 rg --no-ignore-vcs --hidden --glob '*.yml' "serviceAccountName"
 ```
 
-For compressed streams, modern flows use explicit decompression and null-safe handling. `rg --search-zip` is convenient when supported, and `comgrep -z` can be used where available for compressed archives.
+For compressed streams, modern flows use explicit decompression and null-safe handling. `rg --search-zip` is convenient when supported, and `zgrep` can be used where available for compressed archives.
 
 ```bash
-gzip -dc /var/log/archive/2026-05-*.gz | rg --line-number "Unhandled\|Error"
-gzip -dc /var/log/audit/*.gz | rg --search-zip "permission denied"
+zgrep -n -E "Unhandled|Error" /var/log/archive/2026-05-*.gz
+rg --search-zip "permission denied" /var/log/audit/*.gz
 ```
 
 Performance comparisons should be operational, not only microbenchmarks. On clean text trees, `rg` is generally faster and more ergonomic. On constrained environments or strict POSIX constraints, classic `grep -R` plus explicit include/exclude may be safer.
@@ -555,42 +557,96 @@ D) Use `sed` without boundaries for speed.
 
 ```bash
 kubectl get pods -A -o json \
-  | jq -r '.items[] | [ .metadata.namespace, .metadata.name, .status.phase, (.status.conditions[]? | select(.type=="Ready").status // "Unknown") ] | @tsv' \
+  | jq -r '.items[] | [ .metadata.namespace, .metadata.name, .status.phase, ([.status.conditions[]? | select(.type=="Ready") | .status][0] // "Unknown") ] | @tsv' \
+  | awk -F '\t' 'NF != 4 { print "MALFORMED:", $0 > "/dev/stderr"; next } 1' \
   | sort -k1,1 -k2,2 > /tmp/platform_pod_health.tsv
 wc -l /tmp/platform_pod_health.tsv
 head -n 5 /tmp/platform_pod_health.tsv
 ```
 
 Verifiable output: file exists, line count is non-zero, and the first rows show namespace, pod, phase, readiness columns.
+For a 2-pod fixture with one missing Ready condition, expected readiness output should include:
+`default	p2	Pending	Unknown`.
 
 - [ ] Validate mixed structured and unstructured parsing by splitting log records, converting, and producing top endpoint offenders from structured access data.
 
 ```bash
-awk '{print $1,$2,$7}' /var/log/access.log | \
-  awk '$1 != "" && $7 ~ /^[0-9]+$/ { print $1 ":" $2 ":" $7 }' \
-  | sort | uniq -c | sort -nr | head -n 20 > /tmp/endpoint_outliers.tsv
-wc -l /tmp/endpoint_outliers.tsv
-sed -n '1,8p' /tmp/endpoint_outliers.tsv
+mkdir -p /tmp/log_scan
+cat > /tmp/access.log <<'EOF'
+203.0.113.10 - - [10/May/2026:10:00:01 +0000] "GET /api/v1/health HTTP/1.1" 200 512
+203.0.113.10 - - [10/May/2026:10:00:02 +0000] "GET /api/v1/health HTTP/1.1" 404 128
+198.51.100.20 - - [10/May/2026:10:00:03 +0000] "POST /api/v1/users HTTP/1.1" 403 300
+198.51.100.21 - - [10/May/2026:10:00:04 +0000] "GET /api/v1/orders HTTP/1.1" 500 64
+198.51.100.22 - - [10/May/2026:10:00:05 +0000] "GET /api/v2/auth HTTP/1.1" 200 256
+203.0.113.11 - - [10/May/2026:10:00:06 +0000] "POST /api/v1/orders HTTP/1.1" 503 88
+203.0.113.12 - - [10/May/2026:10:00:07 +0000] "GET /api/v1/orders HTTP/1.1" 500 90
+198.51.100.23 - - [10/May/2026:10:00:08 +0000] "GET /api/v2/auth HTTP/1.1" 401 110
+203.0.113.13 - - [10/May/2026:10:00:09 +0000] "GET /api/v1/health HTTP/1.1" 503 77
+198.51.100.24 - - [10/May/2026:10:00:10 +0000] "POST /api/v1/cart HTTP/1.1" 200 450
+EOF
+awk 'NF == 10 && match($0, /"([A-Z]+) ([^ ]+) [^"]+" ([0-9]{3}) /, m) {
+  if (m[3] >= 400) {
+    endpoints[m[2]]++
+  }
+}
+END {
+  for (endpoint in endpoints) {
+    printf "%6d %s\n", endpoints[endpoint], endpoint
+  }
+}' /tmp/access.log | sort -k1,1nr -k2 > /tmp/endpoint_outliers.tsv
+cat /tmp/endpoint_outliers.tsv
 ```
-
-Verifiable output: `/tmp/endpoint_outliers.tsv` contains numeric frequency counts with most active endpoint patterns near the top.
+Expected output is deterministic because this fixture is fixed; `/tmp/endpoint_outliers.tsv` should contain numeric frequency counts with the highest-volume endpoint patterns listed first:
+```text
+     2 /api/v1/health
+     2 /api/v1/orders
+     1 /api/v1/users
+     1 /api/v2/auth
+```
 
 - [ ] Process compressed historical logs with null-safe pipelines, then confirm matched incident markers exist per file.
 
 ```bash
-mkdir -p /tmp/log_scan
-for f in /var/log/archive/*.gz; do
-  gzip -dc "$f" | rg --line-number "Failed|Timeout" >> /tmp/log_scan/incident_hits.tsv
-done
-wc -l /tmp/log_scan/incident_hits.tsv
-if [ -s /tmp/log_scan/incident_hits.tsv ]; then
-  echo "hits_present"
-else
-  echo "no_hits"
-fi
-```
+mkdir -p /tmp/log_scan/input /tmp/log_scan/output
+cat <<'EOF' > /tmp/log_scan/input/node-a.log
+node-a startup complete
+Failed exception while processing request
+all good
+EOF
+gzip -c /tmp/log_scan/input/node-a.log > /tmp/log_scan/input/node-a.log.gz
 
-Verifiable output: output line `hits_present` appears when at least one incident marker is extracted.
+cat <<'EOF' > /tmp/log_scan/input/node-b.log
+Request Timeout contacting upstream
+Timeout while waiting for response
+Failed dependency
+EOF
+gzip -c /tmp/log_scan/input/node-b.log > /tmp/log_scan/input/node-b.log.gz
+
+cat <<'EOF' > /tmp/log_scan/input/node-c.log
+normal health check
+permission denied for operation
+EOF
+gzip -c /tmp/log_scan/input/node-c.log > /tmp/log_scan/input/node-c.log.gz
+
+shopt -s nullglob
+hits=0
+for f in /tmp/log_scan/input/*.gz; do
+  file_hits="$(gzip -dc "$f" | rg -c "Failed|Timeout|permission denied" || true)"
+  if [[ "$file_hits" =~ ^[0-9]+$ ]]; then
+    hits=$((hits + file_hits))
+  fi
+done
+if [ "$hits" -gt 0 ]; then
+  echo "hits=$hits" > /tmp/log_scan/output/summary.txt
+else
+  echo "no_hits" > /tmp/log_scan/output/summary.txt
+fi
+cat /tmp/log_scan/output/summary.txt
+```
+Expected output should be deterministic for this fixed fixture: `/tmp/log_scan/output/summary.txt` reports `hits=4` when incident markers are present, or `no_hits` otherwise:
+```text
+hits=4
+```
 
 ## Sources
 
