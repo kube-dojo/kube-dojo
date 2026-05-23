@@ -38,7 +38,9 @@ This synthesis module is the capstone for the On-Premises Multi-Cluster track. I
 
 Mature on-premises programs converge on a **control plane of control planes**: one or two highly available management clusters run Cluster API controllers, fleet GitOps, policy engines, and observability receivers, while workload clusters run customer applications and local platform agents. The management cluster is production infrastructure with its own backup, upgrade, and access-control lifecycle—not a lab afterthought.
 
-Sizing the management plane starts from controller count and etcd write rate, not from vCPU totals alone. A fleet of twenty workload clusters with Argo CD ApplicationSets, OCM placement controllers, and Thanos Receive ingesting remote write from every spoke generates sustained API traffic on the hub. Platform teams commonly allocate three to five control-plane nodes with fast etcd storage, plus two to four worker nodes tainted for `fleet=platform` so general workloads cannot starve reconciliation loops. Workload clusters scale by expected pod density, storage throughput, and GPU or storage-specialized node pools—not by copying management-cluster sizes.
+Sizing the management plane starts from controller count and etcd write rate, not from vCPU totals alone. A fleet of twenty workload clusters with Argo CD ApplicationSets, OCM placement controllers, and Thanos Receive ingesting remote write from every spoke generates sustained API traffic on the hub. Platform teams commonly allocate three to five control-plane nodes with fast etcd storage, plus two to four worker nodes tainted for `fleet=platform` so general workloads cannot starve reconciliation loops. For a five-member management etcd cluster, **quorum is three** (⌊5/2⌋+1)—the cluster tolerates two member failures, not four. When stretching etcd across sites, prefer **2+2+1** (two members in each of two primary sites plus one witness in a third): any single-site loss leaves three of five members and quorum holds. A **3+2** layout across three sites (three members in one primary site, two elsewhere) does **not** survive loss of the three-member site—only two members remain, below quorum—even though three of five sounds like a majority in the abstract.
+
+Workload clusters scale by expected pod density, storage throughput, and GPU or storage-specialized node pools—not by copying management-cluster sizes.
 
 Workload cluster counts follow blast-radius and compliance boundaries more than hardware convenience. A useful rule of thumb for regulated manufacturing is **one production cluster per site or per major application family**, separate staging clusters that mirror production Kubernetes minor versions, and shared lab clusters only for experiments that tolerate noisy neighbors. Edge factory clusters stay small—three control-plane nodes where HA is mandated, otherwise a single control plane with documented break-glass recovery when the business accepts the risk.
 
@@ -128,7 +130,7 @@ Hybrid fleets are normal: CAPI provisions clusters, OCM delivers baseline Manife
 
 **Evaluate** fleet and networking choices together because misaligned combinations fail in production even when each tool passes a proof-of-concept. ApplicationSets plus Submariner Lighthouse suit datacenter meshes where hub push works and MCS DNS is enough for service discovery. Fleet plus ClusterMesh suits edge spokes that pull bundles while datacenter Cilium clusters expose global services for shared APIs. OCM plus Istio suits regulated environments that need pull-based baselines and L7 mTLS for a subset of microservices—accept the operational cost of mesh upgrades across clusters. Write the decision in the architecture record so auditors see intentional pairing rather than accidental overlap.
 
-Argo CD ApplicationSet **generators** deserve explicit runbook coverage: the **Cluster** generator watches registered cluster secrets; the **Git** generator scans repository directories; the **Matrix** generator multiplies two generator outputs—useful for monorepo platform charts times production clusters. Enable `goTemplate: true` with `missingkey=error` so template typos fail CI instead of creating silently empty Application names. Fleet **GitRepo** paths should separate `baseline/`, `security/`, and `apps/` directories with independent `fleet.yaml` files so a broken application chart does not block monitoring agent rollout. Karmada **PropagationPolicy** `resourceSelectors` must be narrow enough that system namespaces are not accidentally propagated; OCM **ManifestWorkReplicaSet** status fields should feed the same compliance dashboard Kyverno policy reports use.
+Argo CD ApplicationSet **generators** deserve explicit runbook coverage: the **List** generator iterates over a static set of items (typically used for stable cluster lists or environments); the **Cluster** generator watches registered cluster secrets; the **Git** generator scans repository directories; the **Matrix** generator multiplies two generator outputs—useful for monorepo platform charts times production clusters. Enable `goTemplate: true` with `missingkey=error` so template typos fail CI instead of creating silently empty Application names. Fleet **GitRepo** paths should separate `baseline/`, `security/`, and `apps/` directories with independent `fleet.yaml` files so a broken application chart does not block monitoring agent rollout. Karmada **PropagationPolicy** `resourceSelectors` must be narrow enough that system namespaces are not accidentally propagated; OCM **ManifestWorkReplicaSet** status fields should feed the same compliance dashboard Kyverno policy reports use.
 
 ---
 
@@ -363,7 +365,7 @@ New cluster provisioning, fleet sync, centralized policy placement, and metrics 
 
 ## Hands-On Exercises
 
-These exercises practice synthesis concepts with `kind`, `kubectl`, and local YAML validation. Commands use the full `kubectl` name. Together they map **management-cluster architecture**, **fleet object contracts**, and **observability label discipline** without requiring a full private cloud lab.
+These exercises practice synthesis concepts with `kind`, `kubectl`, Docker (for the Cluster API Docker infrastructure provider), and local YAML validation. Commands use the full `kubectl` name. Exercise 2 requires **PyYAML** via the repo virtualenv at `.venv/bin/python` (if running outside the repo, `pip install pyyaml`). Together they map **management-cluster architecture**, **fleet object contracts**, and **observability label discipline** without requiring a full private cloud lab.
 
 ### Exercise 1: Stand up a local management cluster and Cluster API providers
 
@@ -371,7 +373,9 @@ These exercises practice synthesis concepts with `kind`, `kubectl`, and local YA
 kind create cluster --name mgmt-synthesis
 kubectl cluster-info --context kind-mgmt-synthesis
 
-curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.1/clusterctl-linux-amd64 -o /tmp/clusterctl
+OS=$(uname | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+curl -sL "https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.5/clusterctl-${OS}-${ARCH}" -o /tmp/clusterctl
 chmod +x /tmp/clusterctl
 /tmp/clusterctl init --infrastructure docker
 
@@ -438,18 +442,18 @@ spec:
         - prod-eu-1
         - prod-eu-2
 EOF
-python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-synthesis/appset.yaml'))" && echo "ApplicationSet OK"
-python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-synthesis/propagation.yaml'))" && echo "PropagationPolicy OK"
+.venv/bin/python -c "import yaml; yaml.safe_load(open('/tmp/fleet-synthesis/appset.yaml'))" && echo "ApplicationSet OK"
+.venv/bin/python -c "import yaml; yaml.safe_load(open('/tmp/fleet-synthesis/propagation.yaml'))" && echo "PropagationPolicy OK"
 grep -E 'generators:|clusterAffinity:' /tmp/fleet-synthesis/appset.yaml /tmp/fleet-synthesis/propagation.yaml
 ```
 
-- [ ] Both YAML files parse with local `python3` validation.
+- [ ] Both YAML files parse with `.venv/bin/python` validation.
 - [ ] ApplicationSet uses a Cluster generator with label selector `env: production`.
 - [ ] PropagationPolicy names explicit member clusters under `placement.clusterAffinity`.
 
 <details><summary>Expected analysis</summary>
 
-ApplicationSets push Applications to registered clusters—network must allow hub-to-spoke access. Karmada PropagationPolicy creates ResourceBindings on member clusters; override policies would patch image mirrors per site. OCM equivalents use Placement plus ManifestWorkReplicaSet instead of PropagationPolicy.
+ApplicationSets push Applications to registered clusters—network must allow hub-to-spoke access. Karmada PropagationPolicy creates a ResourceBinding **in the Karmada control plane** that records placement; the actual propagated resources land in the member clusters. Override policies would patch image mirrors per site. OCM equivalents use Placement plus ManifestWorkReplicaSet instead of PropagationPolicy.
 
 </details>
 
