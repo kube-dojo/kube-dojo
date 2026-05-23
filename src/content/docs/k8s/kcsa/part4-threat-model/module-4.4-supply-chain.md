@@ -6,8 +6,6 @@ sidebar:
   order: 5
 ---
 
-# Module 4.4: Supply Chain Threats
-
 > **Complexity**: `[MEDIUM]` - threat modeling, evidence design, and Kubernetes policy enforcement.
 >
 > **Time to Complete**: 70-85 minutes.
