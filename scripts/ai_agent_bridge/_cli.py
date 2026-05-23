@@ -32,6 +32,7 @@ from ._messaging import (
 )
 from ._model import check_model
 from ._opencode import ask_opencode
+from ._cursor import ask_cursor
 from ._prompts import build_review_message
 from ._qwen import ask_qwen
 
@@ -44,6 +45,7 @@ AGENT_CHOICES = (
     "agy",
     "claude",
     "codex",
+    "cursor",
     "deepseek",
     "gemini",
     "hermes",
@@ -576,6 +578,25 @@ def _build_parser() -> argparse.ArgumentParser:
     ask_opencode_parser.add_argument("--review", action="store_true",
                                      help="Prepend docs/review-protocol.md")
 
+    # ask-cursor
+    ask_cursor_parser = subparsers.add_parser("ask-cursor", help="Send message AND invoke Cursor (one-step)")
+    ask_cursor_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
+    ask_cursor_parser.add_argument("--task-id", help="Task ID for session tracking")
+    ask_cursor_parser.add_argument("--type", default="query", help="Message type (default: query)")
+    ask_cursor_parser.add_argument("--data", help="Path to data file to attach")
+    ask_cursor_parser.add_argument("--new-session", dest="new_session", action="store_true",
+                                  help="Force new session even if one exists")
+    ask_cursor_parser.add_argument("--from", dest="from_llm", default="gemini",
+                                  help="Sender agent family. Default: gemini")
+    ask_cursor_parser.add_argument("--from-model", dest="from_model",
+                                  help="Exact sender model ID")
+    ask_cursor_parser.add_argument("--to-model", dest="to_model",
+                                  help="Target model ID")
+    ask_cursor_parser.add_argument("--no-timeout", dest="no_timeout", action="store_true",
+                                  help="Run sync without timeout")
+    ask_cursor_parser.add_argument("--review", action="store_true",
+                                  help="Prepend docs/review-protocol.md")
+
     # converse — multi-turn conversation with Gemini
     converse_parser = subparsers.add_parser("converse", help="Multi-turn conversation with Gemini (includes history)")
     converse_parser.add_argument("content", help="Message content (use '-' to read from stdin)")
@@ -690,6 +711,8 @@ def _dispatch_command(args):
         _handle_ask_hermes(args)
     elif args.command == "ask-opencode":
         _handle_ask_opencode(args)
+    elif args.command == "ask-cursor":
+        _handle_ask_cursor(args)
     elif args.command == "converse":
         content = sys.stdin.read() if args.content == "-" else args.content
         converse_gemini(content, args.task_id, args.model,
@@ -818,6 +841,17 @@ def _handle_ask_opencode(args):
     ask_opencode(content, args.task_id, args.type, data,
                  args.new_session, args.from_llm, args.from_model,
                  args.to_model, args.no_timeout, args.review)
+
+
+def _handle_ask_cursor(args):
+    """Handle ask-cursor subcommand."""
+    data = None
+    if args.data:
+        data = Path(args.data).read_text()
+    content = sys.stdin.read() if args.content == "-" else args.content
+    ask_cursor(content, args.task_id, args.type, data,
+               args.new_session, args.from_llm, args.from_model,
+               args.to_model, args.no_timeout, args.review)
 
 
 def main():

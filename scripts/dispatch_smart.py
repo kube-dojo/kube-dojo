@@ -89,6 +89,7 @@ SUPPORTED_AGENTS = (
     "agy",
     "claude",
     "codex",
+    "cursor",
     "deepseek",
     "gemini",
     "hermes",
@@ -122,6 +123,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.4-mini",
             "deepseek": "deepseek-v4-flash",
             "gemini": "gemini-3.1-flash-lite-preview",
+            "cursor": "composer-2.5-fast",
             "hermes": "qwen-3.6-flash",
             "opencode": "openrouter/qwen/qwen3.6-flash",
             "qwen": "qwen/qwen3.6-flash",
@@ -138,6 +140,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "cursor": "composer-2.5",
             "hermes": "grok-4.3",
             "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
@@ -154,6 +157,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.3-codex-spark",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "cursor": "composer-2.5",
             "hermes": "grok-4.3",
             "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
@@ -170,6 +174,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "cursor": "gpt-5.5",
             "hermes": "claude-sonnet-4-6",
             "opencode": "openrouter/qwen/qwen3.7-max",
             "qwen": "qwen/qwen3.6-plus",
@@ -186,6 +191,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
             "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
+            "cursor": "composer-2.5",
             "hermes": "claude-opus-4-6",
             "opencode": "openrouter/anthropic/claude-sonnet-4.5",
             "qwen": "qwen/qwen3.6-plus",
@@ -273,6 +279,15 @@ def _hermes_binary() -> str:
     )
 
 
+def _cursor_binary() -> str:
+    """Resolve the cursor-agent CLI path with an env override for local installs."""
+    return (
+        os.environ.get("KUBEDOJO_CURSOR_CMD")
+        or shutil.which("cursor-agent")
+        or str(Path.home() / ".local" / "bin" / "cursor-agent")
+    )
+
+
 def _hermes_provider_for_model(model: str) -> str:
     """Pick a Hermes provider from the model name, unless env overrides it."""
     override = os.environ.get("KUBEDOJO_HERMES_PROVIDER")
@@ -298,6 +313,18 @@ def _router_command(agent: str, model: str, prompt: str) -> list[str]:
     """Build the subprocess command for direct router CLIs."""
     if agent == "opencode":
         return [_opencode_binary(), "run", "-m", model, "-"]
+    if agent == "cursor":
+        return [
+            _cursor_binary(),
+            "--print",
+            "--force",
+            "--trust",
+            "--model",
+            model,
+            "--output-format",
+            "text",
+            prompt,
+        ]
     if agent == "hermes":
         cli_model = _hermes_cli_model(model)
         return [
@@ -323,6 +350,8 @@ def _run_router_agent(
     """Invoke a session-less router CLI and return (ok, stdout, stderr)."""
     cmd = _router_command(agent, model, prompt)
     stdin_payload = prompt if agent == "opencode" else ""
+    if agent == "cursor":
+        stdin_payload = ""
     try:
         proc = subprocess.run(
             cmd,
@@ -355,7 +384,7 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
     if worktree:
         print(f"[smart] cwd={worktree}")
     print(f"[smart] task_id={task_id}")
-    if agent in {"hermes", "opencode"}:
+    if agent in {"cursor", "hermes", "opencode"}:
         print("[smart] mode is advisory for this router CLI")
 
     started = time.time()
@@ -370,7 +399,7 @@ def fire(*, agent: str, task_class: str, prompt: str, mode: str, model: str,
         env = os.environ.copy()
         env["KUBEDOJO_DISPATCHED"] = "1"
         os.environ.update(env)
-        if agent in {"hermes", "opencode"}:
+        if agent in {"cursor", "hermes", "opencode"}:
             ok, response, stderr_excerpt = _run_router_agent(
                 agent=agent,
                 prompt=prompt,
@@ -467,9 +496,9 @@ def main() -> int:
                         "branch off main.")
     p.add_argument("--mode",
                    choices=["read-only", "workspace-write", "danger"],
-                   help="Override task-class default mode. For opencode "
-                        "and hermes this is advisory; their CLIs enforce "
-                        "their own sandbox behavior.")
+                   help="Override task-class default mode. For opencode, "
+                        "hermes, and cursor this is advisory; their CLIs "
+                        "enforce their own sandbox behavior.")
     p.add_argument("--model",
                    help="Override task-class default model "
                         "(rarely needed — let the class+agent pick).")

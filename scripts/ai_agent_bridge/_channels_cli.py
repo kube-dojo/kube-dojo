@@ -64,6 +64,7 @@ _DISCUSSION_CLARIFICATION_MODES = {
     "qwen": "yolo",
     "hermes": "yolo",
     "opencode": "yolo",
+    "cursor": "yolo",
 }
 
 _DISCUSSION_RUNTIME_MODES = {
@@ -75,6 +76,7 @@ _DISCUSSION_RUNTIME_MODES = {
     "qwen": "workspace-write",
     "hermes": "workspace-write",
     "opencode": "workspace-write",
+    "cursor": "workspace-write",
 }
 
 _DISCUSSION_MCP_EXCLUDE_TOKENS: tuple[str, ...] = (
@@ -185,7 +187,7 @@ def _agent_runtime_mode(agent_name: str, sandbox_mode: str | None) -> str:
         if sandbox_mode == "read-only":
             return "read-only"
         return "workspace-write"
-    if agent_name in {"hermes", "opencode"}:
+    if agent_name in {"hermes", "opencode", "cursor"}:
         # These router CLIs do not expose project sandbox modes. Preserve the
         # label for audit/session logic; the CLI invocation itself treats it
         # as advisory.
@@ -1241,7 +1243,7 @@ def _handle_discuss(args) -> int:
         print(f"   root message: {root_id[:12]} / thread {correlation_id[:12]}")
         print()
 
-    # Session-less agents (agy / qwen / deepseek / hermes / opencode) map
+    # Session-less agents (agy / qwen / deepseek / hermes / opencode / cursor) map
     # to all-None tuples;
     # the per-agent branch at "if agent_name in {claude, gemini}" later
     # in this function correctly skips session persistence for them, and
@@ -1257,6 +1259,7 @@ def _handle_discuss(args) -> int:
         "deepseek": (None, None, None),
         "hermes": (None, None, None),
         "opencode": (None, None, None),
+        "cursor": (None, None, None),
     }
     resume_thread_session: dict[str, str | None] = {}
     if args.resume_thread:
@@ -1393,6 +1396,30 @@ def _handle_discuss(args) -> int:
                 started = time.monotonic()
                 model = _opencode._DEFAULT_MODEL
                 ok, response, stderr_excerpt = _opencode._invoke_opencode(
+                    prompt_text,
+                    model,
+                    timeout_s=900,
+                    cwd=cwd,
+                )
+                return Result(
+                    ok=ok,
+                    agent=agent_name,
+                    model=model,
+                    mode=mode,
+                    response=response,
+                    stderr_excerpt=stderr_excerpt or None,
+                    duration_s=time.monotonic() - started,
+                    session_id=None,
+                    rate_limited=False,
+                    stalled=False,
+                    returncode=0 if ok else 1,
+                ), None
+            if agent_name == "cursor":
+                from . import _cursor
+
+                started = time.monotonic()
+                model = _cursor._DEFAULT_MODEL
+                ok, response, stderr_excerpt = _cursor._invoke_cursor(
                     prompt_text,
                     model,
                     timeout_s=900,
