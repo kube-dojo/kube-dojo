@@ -81,10 +81,10 @@ An eBPF program always runs because something happened at a hook point. The hook
 
 | Hook family | Typical attachment | What the program sees | Platform example | Main risk |
 |---|---|---|---|---|
-| kprobe / fentry | Kernel function entry or return | Function arguments and kernel context | Debugging a kernel path or profiler sample | Kernel internals can change across versions |
+| kprobe / fentry | Kernel function entry or return; fentry needs BTF-backed attachment, typically Linux 5.5+ | Function arguments and kernel context | Debugging a kernel path or profiler sample | Kernel internals can change across versions |
 | tracepoint | Stable kernel instrumentation point | Typed event fields from a named event | bpftrace syscall tracing | Lower risk than arbitrary kprobes, but less flexible |
 | XDP | Earliest network receive path in the driver | Raw packet data before the normal stack | DDoS filtering or very fast packet drop | A bad decision can drop traffic before higher layers see it |
-| tc / tcx | Traffic-control ingress or egress path | Packet metadata after more networking context exists | Cilium datapath and policy logic | Packet mutation and policy state must be carefully tested |
+| tc / [tcx](https://docs.ebpf.io/linux/program-type/BPF_PROG_TYPE_SCHED_CLS/) (tcx: Linux 6.6+) | Traffic-control ingress or egress path | Packet metadata after more networking context exists | Cilium datapath and policy logic | Packet mutation and policy state must be carefully tested |
 | cgroup | Socket, syscall, or device boundary for a cgroup | Workload-scoped operation context | Per-workload connect or bind policy | Mis-scoping can affect every process in a workload group |
 | LSM | Linux Security Module hook | Security decision context | Tetragon or KubeArmor-style enforcement | False positives can block legitimate production work |
 
@@ -163,7 +163,7 @@ __sync_fetch_and_add(value, 1);
 return 0;
 ```
 
-[The kernel BPF design Q&A states that unprivileged BPF programs have a `BPF_MAXINSNS` limit of `4096`, while the verifier also has internal limits such as an explored-instruction analysis limit currently set to one million](https://www.kernel.org/doc/html/latest/bpf/bpf_design_QA.html). Those numbers matter because they force design discipline. The kernel is willing to run tiny programs at hot event points, but it is not a place for unbounded parsers, heavyweight policy engines, or arbitrary loops that might stall production CPUs.
+[The kernel BPF design Q&A states that unprivileged BPF programs have a `BPF_MAXINSNS` limit of `4096`, while the verifier also has internal limits such as an explored-instruction analysis limit currently set to one million](https://www.kernel.org/doc/html/latest/bpf/bpf_design_QA.html). Privileged loaders such as Cilium agents, Tetragon, or similar node-level DaemonSets can load larger programs; the `4096` value is the unprivileged `BPF_MAXINSNS`, not a universal kernel cap. Those numbers matter because they force design discipline. The kernel is willing to run small, bounded programs at hot event points, but it is not a place for unbounded parsers, heavyweight policy engines, or arbitrary loops that might stall production CPUs.
 
 Operationally, the lifecycle has two failure modes that beginners often conflate. A load-time failure means the program never attached, usually because the verifier rejected it, the kernel lacks a helper or program type, BTF data is unavailable, or the process lacks capabilities. A run-time failure means the program attached but the system behavior is wrong: a map fills, a policy key is stale, events are dropped, a hook sees a different context than expected, or user space misinterprets the data. Debugging starts by separating those two classes before touching production configuration.
 
@@ -178,6 +178,16 @@ For a platform team, the best debugging artifact is a small compatibility report
 Kernel data structures change across versions, configurations, architectures, and distributions. A BPF program that reads a field from `task_struct` cannot assume the field has the same offset everywhere. That used to make portable BPF tooling painful, because programs were coupled to the kernel headers and layout of the machine where they were built. BTF and CO-RE solve much of that problem by moving type information and relocation into the build/load path.
 
 [BTF is the kernel's compact metadata format for BPF-related type information](https://docs.kernel.org/bpf/btf.html). It describes types, functions, and line information in a way loaders can use. [The Linux libbpf overview explains that BPF CO-RE brings together BTF type information, libbpf, and the compiler so a single binary can run across multiple kernel versions and configurations](https://cdn.kernel.org/doc/html/latest/bpf/libbpf/libbpf_overview.html). At load time, libbpf matches the program's recorded type and relocation information against the running kernel's BTF, commonly exposed at `/sys/kernel/btf/vmlinux`, then adjusts offsets so the program reads the intended fields.
+
+Version floors are practical starting points, not guarantees. Managed Kubernetes providers may backport features, disable them in node images, or run older long-term kernels, so verify the node instead of trusting a marketing phrase such as "supports eBPF."
+
+| Feature or requirement | Practical floor | Verify on a node |
+|---|---|---|
+| vmlinux BTF exposed for loaders | Common on many distributions around Linux 5.5+ | `test -r /sys/kernel/btf/vmlinux` |
+| CO-RE relocation support through libbpf | Around Linux 5.4+, plus usable BTF for the target kernel | `bpftool btf dump file /sys/kernel/btf/vmlinux format c >/dev/null` |
+| `CAP_BPF` privilege split | Linux 5.8+ | `uname -r`, then inspect the pod security context or `capsh --print` |
+| fentry programs | Linux 5.5+ with vmlinux BTF | `bpftool feature probe kernel \| grep -i fentry` |
+| tcx attachment | Linux 6.6+ | `uname -r`, then confirm the tool can attach its tcx program in a canary node pool |
 
 | Tooling choice | Best fit | Trade-off |
 |---|---|---|
@@ -224,7 +234,7 @@ Do not turn that precision into overconfidence. eBPF tools can be wrong, stale, 
 
 ## Did You Know?
 
-- **The eBPF register model is tiny on purpose**: [the instruction-set documentation describes ten general-purpose 64-bit registers plus the read-only frame pointer register `R10`](https://docs.kernel.org/5.17/bpf/instruction-set.html), and the Cilium BPF reference describes the associated 512-byte BPF stack space.
+- **The eBPF register model is tiny on purpose**: [the instruction-set documentation describes ten general-purpose 64-bit registers plus the read-only frame pointer register `R10`](https://docs.kernel.org/bpf/instruction-set.html), and the Cilium BPF reference describes the associated 512-byte BPF stack space.
 - **The verifier has hard numerical guardrails**: [the kernel BPF design Q&A lists `4096` as the unprivileged `BPF_MAXINSNS` limit and describes an internal verifier analysis limit of one million explored instructions](https://www.kernel.org/doc/html/latest/bpf/bpf_design_QA.html).
 - **The modern privilege split is recent**: [Linux capabilities documentation says `CAP_BPF` was added in Linux 5.8](https://man7.org/linux/man-pages/man7/capabilities.7.html), which is why older operational habits and some manifests still lean on broader capabilities.
 - **Real outages can hide in BPF maps**: [Cilium issue #11742 documents TCP reset flows producing BPF connection-tracking entries with about `21600s` expiry, with eventual `CT: Map insertion failed` packet drops](https://github.com/cilium/cilium/issues/11742).
