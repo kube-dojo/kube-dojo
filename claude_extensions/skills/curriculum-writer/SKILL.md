@@ -1,16 +1,50 @@
 ---
 name: curriculum-writer
-description: Write KubeDojo curriculum modules. Use when creating modules, writing theory, exercises, quizzes. Triggers on "write module", "create module", "new module".
+description: Write KubeDojo curriculum modules. For ANY agent acting as the T0 author (cursor composer-2.5, codex, deepseek-v4-pro, claude headless). Use when creating modules, writing theory, exercises, quizzes. Triggers on "write module", "create module", "new module", "rewrite module".
+last_calibrated: 2026-05-24
 ---
 
 # Curriculum Writer Skill
 
-Expert skill for writing new KubeDojo curriculum modules. Ensures consistent structure, tone, and quality across all educational content.
+Author skill for new KubeDojo curriculum modules. Ensures consistent structure, tone, and quality across all educational content. **Agent-agnostic** — applies whether you are cursor composer-2.5, codex, deepseek-v4-pro, claude headless, or agy.
 
 ## When to Use
 - Creating new curriculum modules
 - Expanding existing module content
 - Writing theory sections, exercises, or quizzes
+- Rewriting modules failing the verifier (`median_wpp < 28` etc.) or the 7-dimension rubric
+
+## Author lanes (who writes what — 2026-05-24 snapshot)
+
+| Lane | Agent | When | Notes |
+|---|---|---|---|
+| T0 primary (production-grade prose) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Default for #1504 review epic, bug fixes, T0 author | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]) |
+| T0 secondary (writer dispatch) | codex gpt-5.5 (`dispatch_smart draft --agent codex --mode danger --worktree X --search`) | Codex weekly cap allowing | Requires `--search` + writable sandbox for factual content ([[feedback_codex_writer_needs_search]]) |
+| T0 tertiary (off-load author) | deepseek-v4-pro | Spread T0 load off codex weekly cap | Pair with vigilant code-domain reviewer; hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]) |
+| Drafter (needs Claude expansion) | gemini-3.1-pro-preview | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
+| Source-fidelity expansion | claude opus (post-2026-06-15 inline) OR codex (pre, danger mode) | Strict-source rewrites | [[feedback_codex_default_prose_expander]] |
+
+**Important**: every author lane is bound by the same density gates and 7-dim rubric below. The agent identity changes the dispatch wrapper, not the content contract.
+
+## Author contract (every lane)
+
+Every authored/rewritten module MUST satisfy ALL of:
+
+1. **Density gates** (deterministic, enforced by `scripts/quality/verify_module.py`):
+   - `median_wpp ≥ 28` (median words per paragraph)
+   - `mean_wpp ≥ 30` (mean words per paragraph)
+   - `short-para-rate ≤ 20%` (paragraphs under 15 words)
+2. **Frontmatter**: `title:` + `sidebar.order:` (mandatory per [[.claude/rules/new-content-checklist]]).
+3. **Slug**: if filename has dots (e.g. `module-1.1-foo.md`), explicit `slug:` to preserve them.
+4. **Parent index.md**: add module to section's index table.
+5. **Internal links**: slug format (`module-foo/`), never `.md` extension.
+6. **Build green**: `npm run build` with 0 warnings.
+7. **Health check**: `python scripts/check_site_health.py` returns 0 errors.
+8. **Citation discipline**: every external fact verified, unverified removed ([[feedback_citation_verify_or_remove]]).
+9. **No personal framing**: no interview/job/role narrative ([[feedback_no_personal_framing]]).
+10. **Pedagogy over listicles**: modules must TEACH, not dump facts ([[feedback_teaching_not_listicles]]).
+
+The 7-dimension rubric (Learning Outcomes, Scaffolding, Active Learning, Real-World Connection, Assessment Alignment, Cognitive Load, Engagement) is the reviewer's contract — see [[module-quality-reviewer]]. Author for ≥3.5 average with no dimension at 1.
 
 ## Track-Specific Guidelines
 
@@ -344,6 +378,7 @@ Books, talks, and papers for deeper understanding:
 Before considering a module complete:
 
 ### All Tracks
+- [ ] **Density gates pass** (`python scripts/quality/verify_module.py <path>`): median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%
 - [ ] All structural elements present
 - [ ] At least one memorable analogy
 - [ ] At least one war story
@@ -351,7 +386,8 @@ Before considering a module complete:
 - [ ] Common mistakes table filled
 - [ ] 4 quiz questions with detailed answers
 - [ ] Hands-on exercise with verification
-- [ ] All code tested and working
+- [ ] All code tested and working (runnability ≠ verifier-pass — actually run `bash` snippets in a sandbox)
+- [ ] All external facts cited and verified ([[feedback_citation_verify_or_remove]])
 - [ ] Links to next module
 - [ ] Proofread for clarity
 
@@ -393,3 +429,46 @@ When referencing other modules:
 - Use relative links: `../foundations/systems-thinking/module-1.1-xxx.md`
 - For prerequisites: Link to specific module, not just track
 - For further learning: "See also [Module X.Y: Topic]"
+
+---
+
+## Dispatch Recipes (orchestrator perspective)
+
+When the orchestrator delegates authoring to an agent, the recipe is:
+
+### Cursor composer-2.5 (T0 primary, 2026-05-24)
+1. File a GH issue with the module spec (use [[curriculum-writer]] template + density gates).
+2. Comment "cursor please claim" — cursor watches the queue.
+3. Cursor opens a PR from a worktree.
+4. Orchestrator picks PR up → dispatches codex R1 ([[cross-family-reviewer]]).
+5. On NEEDS_CHANGES, comment with R1 findings; cursor fix-passes.
+6. On APPROVE, orchestrator merges (cursor does NOT merge per session-51 directive).
+
+### Codex gpt-5.5 (T0 secondary, dispatch protocol)
+```bash
+python scripts/dispatch_smart.py draft --agent codex \
+  --mode danger --worktree <module-slug> --search \
+  --prompt-file /tmp/<module-slug>-brief.md
+```
+The brief MUST include: module spec, density gates, citation discipline rule, target word count, frontmatter requirements. Codex requires `--search` for factual content ([[feedback_codex_writer_needs_search]]).
+
+### Deepseek-v4-pro (T0 tertiary, off-load)
+Same shape as codex via `dispatch_smart draft --agent deepseek`. Pair with a vigilant code-domain reviewer; deepseek hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]).
+
+### Post-author orchestrator checklist
+1. Run `python scripts/quality/verify_module.py <path>` → must pass density gates.
+2. Run `npm run build` → 0 warnings.
+3. Run `python scripts/check_site_health.py` → 0 errors.
+4. Dispatch cross-family reviewer per [[cross-family-reviewer]] routing table.
+5. On R1 APPROVE, merge through PR (rebase). On NEEDS_CHANGES, fix-pass + R2.
+
+## References
+
+- [[module-quality-reviewer]] — the 7-dimension rubric your authored module is graded against.
+- [[cross-family-reviewer]] — post-author review protocol.
+- [[dispatch-router]] — agent routing decisions.
+- [[k8s-cert-expert]] — domain expertise for k8s/cert content.
+- [[platform-expert]] — domain expertise for platform-engineering content.
+- [`docs/quality-rubric.md`](../../../docs/quality-rubric.md) — full rubric definition.
+- [`docs/pedagogical-framework.md`](../../../docs/pedagogical-framework.md) — research + guidelines.
+- [`scripts/prompts/module-writer.md`](../../../scripts/prompts/module-writer.md) — standard module-writer prompt.
