@@ -53,9 +53,13 @@ IPv6 Address Anatomy
       +--> often represented as: 2001:db8:1234:10::aabb:ccdd
 ```
 
-**Predict:** If someone gives you `2001:db8:abcd:1::42` and asks where this host sits in aggregate policy, what is the first step before applying any filter: prefix length review, interface identifier decomposition, or source policy context (pod/namespace/node)?
+**Predict:** If someone gives you `2001:db8:abcd:1::42` and asks where this host sits in aggregate policy, what is the first step before applying any filter: prefix length review, interface identifier decomposition, or source policy context (application/host/interface)?
 
 The answer is always prefix length first, then policy context. With IPv6 you often see `/56` or `/64` at enterprise level and `/120` in specialized management networks, so making this sequence muscle-memory reduces incident time.
+
+Good IPv6 planning starts by separating the routeable prefix from the interface identifier. In IPv4-heavy habits, engineers often look for the host address first because the subnet is small enough to feel concrete. IPv6 reverses that instinct. The prefix tells you which organization, site, environment, or link owns the traffic path, while the lower bits may be generated automatically, randomized for privacy, or assigned by a management system. A stable troubleshooting method therefore begins with "who owns this prefix?" before asking "which exact host is this?"
+
+That shift matters during reviews because the same written address can carry different operational meaning depending on prefix length. `2001:db8:abcd:1::42/64` can be an ordinary host address inside one site, while `2001:db8:abcd::/48` may represent a larger allocation that should never appear as a single endpoint. Teams that record only the compressed address and omit the prefix force every future reader to reconstruct intent from context. Teams that write both address and prefix length make routing, firewall, and DNS decisions easier to audit.
 
 #### 1.1 Address types you must keep in your mental model
 
@@ -68,9 +72,15 @@ Four classes recur in operational conversations:
 | Link-Local | `fe80::/10` | Auto-configured per-interface addresses for immediate-neighbor discovery |
 | Multicast | `ff00::/8` | Group-based delivery replacing broadcast behavior |
 
+ULA deserves one extra detail: `fc00::/7` is the RFC 4193/IANA block, but operational deployments normally generate local prefixes under `fd00::/8`; `fc00::/8` remains reserved rather than a source of ordinary local prefixes.
+
 A strong mental distinction: **GUA** and ULA are unicast and represent endpoint identity, while multicast is destination semantics for groups. Link-local is operationally critical for neighbor discovery and control-plane protocols and is not a “weaker internet address” so much as a local transport scope.
 
 The biggest novice trap is to treat `fe80::/10` as routable internet-facing traffic. It is not routable across subnets and should stay in scope where protocol intent expects local-layer discovery and protocol control, so it can be used safely without weakening perimeter assumptions.
+
+The ULA choice is not a shortcut for avoiding design discipline. A `fd00::/8` prefix still needs ownership, collision avoidance, DNS policy, and firewall intent. Treating ULA as "private, therefore harmless" recreates an old IPv4 anti-pattern where internal networks become harder to reason about than public ones. A well-run environment can explain why a ULA exists, which systems may route it, and what happens if a host accidentally advertises it outside the intended boundary.
+
+Multicast also changes operator instincts because IPv6 has no broadcast in the IPv4 sense. Neighbor discovery and local control flows use multicast groups with scoped meaning, which makes blanket "drop multicast" security guidance risky unless it is tied to the exact group and interface. When a firewall blocks the wrong ICMPv6 or multicast path, symptoms often look like random reachability failure even though the actual break is in local discovery. That is why address type, scope, and control-plane purpose should be read together.
 
 #### 1.2 Common address decomposition workflow
 
@@ -115,7 +125,7 @@ graph TD
 
 In many estates, DHCPv6 remains essential for deterministic DNS server assignment and enterprise governance even when SLAAC handles address generation.
 
-**Try this:** In a lab with `iproute2` installed, compare route and DNS behaviors after disabling RA or disabling DHCPv6 on a Linux lab namespace. Ask whether address loss or name-resolution behavior changes first, then inspect service impact.
+**Try this:** In a lab with `iproute2` installed, compare route and DNS behaviors after disabling RA or disabling DHCPv6 in a Linux network namespace. Ask whether address loss or name-resolution behavior changes first, then inspect service impact.
 
 #### 2.1 SLAAC vs DHCPv6 quick comparison
 
@@ -126,6 +136,16 @@ In many estates, DHCPv6 remains essential for deterministic DNS server assignmen
 | DHCPv6 stateful only | Full address from server | Central lease and full control | Highly regulated or tightly managed estates |
 
 Note how `/64` remains the common SLAAC host-route length in much of the industry because it keeps EUI-64/IR-based host bits and privacy addressing behavior consistent, even though operators can and do use other masks where needed.
+
+#### 2.2 Router Advertisement ownership and DHCPv6 boundaries
+
+Router Advertisements are small messages with large consequences. They do not merely say "a router exists"; they can influence prefixes, default-route lifetime, and whether hosts should expect other configuration from DHCPv6. In a clean design, one team owns the RA policy, another may operate DHCPv6, and both agree on the address-assignment story before hosts join the network. In a weak design, RA and DHCPv6 are tuned independently and hosts receive a technically valid but operationally confusing mixture of signals.
+
+The most important mental model is that SLAAC and DHCPv6 solve overlapping but not identical problems. SLAAC gives the host enough information to build an address and route, while DHCPv6 can provide managed options, leases, and policy metadata depending on mode. A host can therefore have IPv6 reachability while still missing the resolver or domain-search behavior an application expects. This split explains many incidents where "IPv6 works" at ping level but service discovery is still broken.
+
+Privacy addressing adds another operational wrinkle. Modern clients may generate temporary interface identifiers so the host is not permanently trackable through a stable address suffix. That is good for user privacy, but it means inventory and allowlist processes must not assume that the lower 64 bits identify a machine forever. Servers, appliances, and managed hosts often need more deterministic addressing; client fleets often need privacy and churn tolerance. The policy should say which category a system belongs to.
+
+During design review, ask what should happen when RA exists but DHCPv6 does not, when DHCPv6 exists but RA is absent, and when both exist but DNS options disagree. Those three cases reveal whether the team understands the actual control points. They also produce clear lab exercises: disable one component at a time, capture the route table and resolver behavior, and record which failure is expected instead of treating every mismatch as a surprise.
 
 ### 3) NDP: IPv6’s neighbor-resolution contract
 
@@ -176,13 +196,23 @@ ip -6 addr show dev eth0 | sed -n '1,80p'
 
 The biggest misdiagnosis is to blame application DNS when RA/NDP is already failing because the host never becomes truly on-link visible.
 
+#### 3.2 ICMPv6, caches, and why "ping is optional" is the wrong lesson
+
+IPv4 culture taught many teams to block ICMP aggressively because echo requests felt like optional diagnostics. IPv6 makes that habit dangerous. ICMPv6 carries essential neighbor discovery and path-control behavior, so a firewall rule that treats all ICMP as low-value noise can break legitimate traffic before the application sees a packet. Security policy can still be strict, but it must distinguish echo behavior from protocol-required NDP and path messages rather than flattening them into one deny rule.
+
+Neighbor caches also create delayed symptoms. A path can keep working briefly because the host already has a usable neighbor entry, then fail later when the cache expires and a blocked NS/NA exchange cannot refresh it. This makes some IPv6 incidents feel intermittent even when the configuration is consistently wrong. The lesson is to compare timing: if failures appear after cache lifetimes, after link churn, or after a route update, NDP evidence deserves priority over application logs.
+
+Duplicate Address Detection is another reason the first packet is not always the first signal. Hosts must make sure an address is not already in use before assigning it, and that process depends on local discovery. If DAD is blocked, delayed, or noisy, addresses may fail to become usable even though the written prefix plan looks correct. A good incident note records whether the address is tentative, preferred, deprecated, or failed, because those states tell a more precise story than "the host has IPv6."
+
+When teaching this workflow, keep ARP analogies short. Saying "NDP is IPv6 ARP" helps only for the first five minutes; after that it hides RA, redirects, DAD, and multicast scoping. A better operational statement is: NDP is the local IPv6 control contract that lets hosts find routers, prove neighbor reachability, and maintain address safety. That wording gives the learner more hooks for debugging.
+
 ### 4) IPv6 DNS and reverse zones: AAAA, ip6.arpa, and mixed-resolution behavior
 
 DNS in IPv6 is not “new DNS,” but it adds practical surface area through AAAA records and longer reverse mapping spaces. The key concept is that forward and reverse records must align with address selection strategy, especially when both families are enabled.
 
 An A record maps IPv4 names to IPv4 addresses; AAAA maps names to IPv6. Reverse lookups move from `in-addr.arpa` to `ip6.arpa`, where nibbles are reversed at the hex level. This is a major source of operational errors because people often generate reverse zones manually and forget nibble order. A compact example is useful in runbooks: `api.platform.example` resolves to `2001:db8:55::a00:20ff:fe7c:1f5`, while reverse naming expects `5.f.1.5.f.e.c.0.2.0.2.0.0.0.0.0.0.1.0.0.0...` when expanded to nibble format. Run these commands to verify both directions explicitly:
 
-`getent ahosts api.platform.internal`, `dig +short AAAA api.platform.internal`, and `host 2001:db8:55::a00:20ff:fe7c:1f5 ip6.arpa`.
+`getent ahosts api.platform.internal`, `dig +short AAAA api.platform.internal`, and `dig -x 2001:db8:55::a00:20ff:fe7c:1f5 +short`.
 
 In dual-stack services, DNS policy can silently route failures into the wrong family during resolver behavior changes. A safe playbook for incident triage is to force family-specific resolution and compare outcomes; if one family fails while the other succeeds, you now have a scoped investigation area.
 
@@ -194,18 +224,30 @@ Some services degrade gracefully, resolving only one family and relying on OS pr
 - Ensure name resolution order is explicit in incident runbooks.
 - Validate reverse zones for at least one canonical critical service before production rollout.
 
+#### 4.2 Address selection and reverse lookup discipline
+
+Forward DNS answers do not decide the whole connection path. Client libraries, operating-system address selection rules, cached responses, proxy settings, and application retry behavior can all influence whether an A or AAAA answer is attempted first. This means a healthy AAAA record can still produce user-visible slowness if the chosen IPv6 route is broken and the client waits before falling back. The diagnostic sequence should therefore capture both what DNS returned and what the client actually attempted.
+
+Reverse DNS matters less for ordinary request routing than for operations evidence, but that does not make it optional. Logs, allowlist audits, abuse workflows, and incident timelines often need names that line up with addresses. If a critical service has a forward AAAA record but no usable reverse entry, the service may still function while the investigation becomes slower and less trustworthy. The cost appears during an incident, not during the first availability test.
+
+The `ip6.arpa` nibble format is deliberately mechanical: expand the address to 32 hexadecimal nibbles, reverse them, and append the zone. Humans are bad at doing that by hand under pressure. Tools such as `dig -x` reduce copy-paste errors because they generate the correct reverse name from the address. Teach the format so learners understand what is happening, then teach the command so runbooks do not depend on manual nibble reversal.
+
+The safest DNS test compares four views: `dig A`, `dig AAAA`, `dig -x`, and the application or shell command that opens the connection. If all four agree, the incident likely lives elsewhere. If forward and reverse disagree, naming discipline is suspect. If DNS looks good but the client chooses a failing address family, address selection or routing is the next layer. This four-view habit prevents teams from declaring DNS healthy too early.
+
 ### 5) Tools and operational workflows on Linux
 
 Linux provides strong IPv6 workflows, but the CLI surface can be misleading if you do not internalize scope and family flags.
 
-Common commands:
+Common commands should be chosen by layer so the output tells you whether the failure is local state, path state, or name-resolution behavior:
 - `ip -6` for addresses, links, neighbors, and routes.
-- `ping6` for basic reachability and path latency.
+- `ping -6` or `ping6` for basic reachability and path latency.
 - `traceroute6` for path discovery.
 - `tcpdump -i <iface> ip6` for packet-level inspection.
 - `bpftrace` for kernel-level probes when packet drops need fine-grained visibility.
 
-> **Important URL format difference:** bracket IPv6 literals in URLs: `http://[::1]:8080` and `http://[2001:db8::10]:8080`.
+Modern Linux commonly prefers `ping -6`, while many systems still provide `ping6` as a compatibility command for older scripts and runbooks.
+
+> **Important URL format difference:** bracket IPv6 literals in URLs, because unbracketed colons conflict with host and port parsing: `http://[::1]:8080` and `http://[2001:db8::10]:8080`.
 
 ```bash
 # URL test with bracketed IPv6 literal
@@ -217,13 +259,23 @@ ip -6 neigh
 ip -6 route
 ```
 
-`ping6` succeeds when one-way routing is broken less often than when DNS path is wrong; combine it with `tcpdump` to separate host, path, and app-layer failures.
+`ping -6` or `ping6` succeeds when one-way routing is broken less often than when DNS path is wrong; combine it with `tcpdump` to separate host, path, and app-layer failures.
 
 ```bash
-ping6 -c 3 fe80::1%eth0
-ping6 -c 3 2001:db8:55::10
+ping -6 -c 3 fe80::1%eth0
+ping -6 -c 3 2001:db8:55::10
 ip -6 route get 2001:db8:55::10
 ```
+
+#### 5.1 A repeatable Linux tool sequence
+
+The best IPv6 command sequence starts wide and narrows quickly. First, confirm what the host believes about its interfaces with `ip -6 addr show`; then confirm where it would send a packet with `ip -6 route get`; then confirm whether the next hop or peer is visible with `ip -6 neigh`. This order avoids a common trap where the operator tests an endpoint before proving the local host has a coherent source address and route.
+
+After local state looks plausible, test a path with a command that forces the address family. `ping -6` is useful because it removes resolver ambiguity, but it is not a complete application test. A successful echo only proves that a particular ICMPv6 path worked at that moment. You still need a TCP or UDP check that matches the real service protocol, plus a socket view such as `ss -6` when listener scope might be wrong.
+
+Packet capture is the bridge between host state and path state. `tcpdump -i <iface> ip6` can show whether RS, RA, NS, NA, and application packets appear on the expected interface. If no packets appear, the failure may be before the wire: wrong source address, wrong route, local firewall, or application bind. If packets appear but no answer returns, the path or peer is more suspicious. The evidence changes the next command.
+
+When kernel tracing is available, use it as a calibration tool before treating it as a verdict. A concrete tracepoint that emits for a known local test builds confidence that the tool is attached correctly. If the tracepoint is silent during the known test, fix the probe, permissions, or kernel compatibility before interpreting silence during the real incident. This small discipline prevents a second troubleshooting problem from masquerading as the first.
 
 ```ascii
 IPv6 Troubleshooting Triage Ladder
@@ -239,7 +291,7 @@ IPv6 Troubleshooting Triage Ladder
 
 ### 6) Practical design checklists for IPv6 in production
 
-When designing IPv6 for production service meshes or platform overlays, teams usually fail in one of four ways: wrong `/` mask assumptions, mixed link-local misuse, RA over-permissiveness, and brittle DNS cutover playbooks. Build a design habit around explicit policy documents and testable assumptions.
+When designing IPv6 for production service estates, teams usually fail in one of four ways: wrong `/` mask assumptions, mixed link-local misuse, RA over-permissiveness, and brittle DNS cutover playbooks. Build a design habit around explicit policy documents and testable assumptions.
 
 ```text
 DESIGN REVIEW SHEET FOR IPV6
@@ -256,7 +308,7 @@ DESIGN REVIEW SHEET FOR IPV6
 For platform teams, an often useful policy is to require a minimum set of checks before any production rollout:
 
 - Route table deterministic for each workload class.
-- DNS forward/reverse assertions for at least one service per namespace.
+- DNS forward/reverse assertions for at least one service per environment.
 - Link-local and default route validity on each node class.
 - A documented fallback strategy for IPv6-only control-plane traffic during partial failures.
 
@@ -282,13 +334,13 @@ Intentional prefix planning matrix
 +----------------------+-----------------------+----------------------------+-----------------------------+
 | Network scope        | Suggested prefix size  | Why it is sized this way    | Failure mode if wrong        |
 +----------------------+-----------------------+----------------------------+-----------------------------+
-| Pod/service ingress   | /56 or /64            | Balance route aggregation +  | Overlapping subnets at edge  |
+| Application ingress   | /56 or /64            | Balance route aggregation +  | Overlapping subnets at edge  |
 |                      |                        | easier ownership            |                             |
 | Node-to-node links    | /127                  | Reduce ambiguity on p2p      | Duplicate-like neighbor state |
 |                      |                        | adjacency behavior          |                             |
 | Management/control    | /64 or /120           | Policy clarity + readability | Unexpected scope/route drift  |
 |                      |                        |                              |                             |
-| Internal tooling VPC  | ULA (`fc00::/7`)      | Keep non-production tooling  | Inadvertent public exposure   |
+| Internal tooling VPC  | ULA (`fd00::/8`)      | Keep non-production tooling  | Inadvertent public exposure   |
 |                      |                        | off core perimeter           |                              |
 | Public-facing API     | GUA (`2000::/3`)      | Required for global reachability| Non-routable behavior in tests |
 +----------------------+-----------------------+----------------------------+-----------------------------+
@@ -301,11 +353,11 @@ Intentional prefix planning matrix
 # Keep a migration register for deterministic review
 cat > /tmp/ipv6-prefix-register.md <<'EOF'
 ## Prefix register
-- Name: pod-plane
+- Name: app-edge
   Subnet: 2001:db8:10::/56
   Child subnets:
-  - cluster-a: 2001:db8:10:10::/64
-  - cluster-b: 2001:db8:10:20::/64
+  - region-a: 2001:db8:10:10::/64
+  - region-b: 2001:db8:10:20::/64
 
 - Name: p2p-spine
   Subnet: 2001:db8:fe::/127
@@ -313,62 +365,37 @@ cat > /tmp/ipv6-prefix-register.md <<'EOF'
 EOF
 ```
 
-#### 6.2 Kubernetes-aligned controls: where IPv6 leaks into workload behavior
+#### 6.2 Family-policy controls that stay platform-agnostic
 
-IPv6 in Kubernetes is often treated as a networking detail, but this is incomplete. It also directly affects API defaults, service rollout behavior, and endpoint reachability assumptions.
+This foundation module stops at network and host readiness. Kubernetes API fields, Service family policies, CNI-specific rollout patterns, and cluster-observability tool integrations belong in the follow-on dual-stack Kubernetes module, where the platform-specific contracts can be taught without blurring the base protocol model.
 
-The most common operational issues begin where implicit family policy is missing, especially when template scope, DNS family preference, and endpoint policy are controlled by different owners without a shared validation sequence.
+The useful control at this layer is a short, reusable family-policy card. It should answer questions that apply to bare Linux hosts, appliances, virtual machines, cloud load balancers, and later cluster implementations alike:
 
-- dual-stack service definitions
-- pod network plugin behavior
-- ingress/egress policy defaults
-- readiness/liveness probes that exercise only one family
-
-Use a shared policy card per namespace profile to force explicit choices:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ipv6-defaults
-data:
-  clusterAddressFamily: "DualStack"
-  serviceAddressFamilies: |
-    - "IPv4"
-    - "IPv6"
-  dnsFamilySelection: "auto-both"
-  ipv6PreferLocal: "true"
+```text
+IPv6 family-policy card
+1) Which prefixes are routable outside the site, and which are ULA-only?
+2) Which interfaces are expected to have link-local addresses only?
+3) Which DNS names must publish AAAA, and which require reverse DNS?
+4) Which ICMPv6 types must be allowed for NDP and path health?
+5) Which command proves the first failing layer during rollback?
 ```
 
-This is a teaching artifact for on-call readiness. Each team should document:
-
-1. Which family should default at bootstrap.
-2. Which family should carry health-check-first logic for each critical component.
-3. Which observability path gives equivalent parity for both families.
+Do not turn this card into a product config. Its value is that it records intent before implementation details appear. If a later system uses Kubernetes, a network appliance, or a cloud control plane, the same answers should still constrain the design.
 
 ```ascii
-Flow of family behavior in dual-stack services
-┌───────────────┐
-│ Service name  │
-└──────┬────────┘
-       │
-       ▼
-DNS lookup (A and AAAA)
-       │
-       ├── A selected → IPv4 path
-       └── AAAA selected → IPv6 path
-               │
-               ▼
-LB/ingress and policy check
-               │
-               ▼
-Pod endpoint selection
-               │
-               ▼
-Observed app binding on ::, 0.0.0.0, or both
+Family behavior before product behavior
++----------------------+-------------------------+
+| Question             | Evidence                |
++----------------------+-------------------------+
+| Address scope        | ip -6 addr / prefix map |
+| Route expectation    | ip -6 route get target  |
+| Neighbor health      | ip -6 neigh / tcpdump   |
+| DNS family behavior  | dig A, dig AAAA, dig -x |
+| Service bind scope   | ss -6 and app logs      |
++----------------------+-------------------------+
 ```
 
-> **Try this:** Before rollout, write the exact family precedence rule in your deployment template and then purposely reverse it in a staging namespace. Confirm your service script behavior matches the rule.
+> **Try this:** Write one family-policy card for a simple web service before picking any orchestration technology. If the card cannot say which address family should fail open or fail closed, the design is not ready for a dual-stack rollout.
 
 #### 6.3 Operational SLAAC vs DHCPv6 decision matrix
 
@@ -406,9 +433,9 @@ Readiness comes from scenario rehearsal, not from one-time command memorization.
 
 Run three repeatable fault patterns, each with fixed expected artifacts and deterministic outcomes for the same baseline.
 
-1. Scope inversion drill: link-local-only responder published as a global target.
-2. RA filter drill: disable RA briefly and observe route-context loss.
-3. DNS precedence drill: remove AAAA response first and observe fallback behavior.
+1. Scope inversion drill: link-local-only responder recorded as a global target.
+2. RA visibility drill: observe route context before and after expected advertisements.
+3. DNS precedence drill: remove or override an AAAA answer in a lab resolver and observe fallback behavior.
 
 For every drill, capture at least three evidence classes in one shared record: neighbor transitions, route-table behavior, and DNS family resolution outcomes.
 
@@ -440,7 +467,7 @@ Set objective scoring with explicit thresholds for recovery latency, evidence co
 
 #### 6.5 BPF-enabled investigation with bpftrace
 
-This course includes a platform-adjacent observability requirement. In incident response, a minimal IPv6 BPF probe is often the quickest way to prove whether packets enter expected kernel paths.
+This course includes a platform-adjacent observability requirement. In incident response, a minimal IPv6 BPF probe is often the quickest way to prove whether packets enter expected kernel paths without assuming the application layer is guilty.
 
 ```bash
 id -u
@@ -449,10 +476,10 @@ sudo bpftrace -l 'kprobe:ndisc*' | head -n 20
 ```
 
 ```bash
-# Small and stable control probe for ICMPv6-forwarding signals
+# Small control probe for IPv6 delivery signals
 sudo bpftrace -e '
-tracepoint:ipv6:ipv6_fwd { @[comm, cpu] = count(); }
-tracepoint:ipv6:ipv6_deliver { @[comm, args->daddr] = count(); }
+tracepoint:ipv6:ipv6_deliver { @[comm] = count(); }
+interval:s:5 { exit(); }
 '
 ```
 
@@ -489,7 +516,7 @@ IPv6 Incident Runbook v1
 1) Confirm family in error path (`ip -6`)
 2) Confirm scope and route (`ip -6 route`, `ip -6 neigh`)
 3) Confirm RA/NDP behavior
-4) Confirm DNS consistency (`dig AAAA`, `ip6.arpa`)
+4) Confirm DNS consistency (`dig AAAA`, `dig -x`)
 5) Confirm endpoint binding and policy
 6) Confirm bpftrace control probe viability
 7) Apply reversible change (RA, DNS, policy, route)
@@ -500,328 +527,99 @@ IPv6 Incident Runbook v1
 
 #### 6.7 Capacity-aware IPv6 planning and performance realism
 
-At scale, the IPv6 design story is not only about routing correctness; it is also about controller limits, cache pressure, and human observability bandwidth. Teams who only plan addresses and ignore operational capacity often discover a second-order failure: the network becomes technically correct but operations-unfriendly.
+At scale, the IPv6 design story is not only about routing correctness; it is also about cache pressure, table size, and human observability bandwidth. Teams who only plan addresses and ignore operating capacity often discover a second-order failure: the network becomes technically correct but hard to diagnose.
 
-The practical model is to treat capacity as a first-class line item in each design document. For example, node-level kernel tables, endpoint density, and control-plane watchers each scale with family complexity. In practice, what looked like a simple switch from IPv4 to dual-stack becomes a change to multiple bounded resources:
-
-1. Route tables may grow in unexpected directions during transition phases.
-2. Neighbor caches can appear “noisy” during churn when RA intervals and client refresh behavior interact.
-3. Policy engines may process higher branching logic because each connection path can now negotiate family preference.
-
-These impacts do not usually trigger a major alarm immediately; they show up as degraded automation confidence and longer MTTR during the first large incident.
+The practical model is to treat capacity as a first-class line item in each design document. Route tables may grow during transition phases, neighbor caches can look noisy during churn, and policy checks may branch differently once each connection can negotiate family preference.
 
 ```text
 Capacity thinking checklist
-┌────────────────────────────────────────────────────┐
-│ Symptom                                     │ Mitigation                        │
-├────────────────────────────────────────────────────┤
-│ Increased p2p chatter with stable SLAAC      │ Tighten neighbor validation windows │
-│ Long incident scripts due to ambiguous scope  │ Add scope-specific runbook fields  │
-│ Sudden policy drift in endpoint bindings      │ Add family-aware CI checks         │
-│ BPF probe empty output despite traffic        │ Validate tracepoint mapping by family│
-└────────────────────────────────────────────────────┘
++--------------------------------------+--------------------------------+
+| Symptom                              | Mitigation                     |
++--------------------------------------+--------------------------------+
+| Noisy neighbor transitions           | Tighten expected NDP windows   |
+| Ambiguous scope in incident scripts  | Add scope-specific fields      |
+| BPF probe empty despite traffic      | Validate tracepoint selection  |
+| DNS looks healthy but path fails     | Compare AAAA, route, and bind  |
++--------------------------------------+--------------------------------+
 ```
 
-This framing aligns with incident leadership: when someone says “it works in the lab,” ask “what is the worst case during 1,000-node rollout at 2 a.m.?”
+This framing aligns with incident leadership: when someone says "it works in the lab," ask what evidence would still be clear during a high-pressure rollout at night.
 
-#### 6.8 IPv6 and policy layers: Cilium, Tetragon, KubeArmor, and Pixie touchpoints
+#### 6.8 Field journal: one compact rehearsal loop
 
-Although this module belongs to Foundations, platform teams often apply these concepts directly in CNI, workload policy, and observability stacks.
-
-- **Cilium:** handles eBPF-managed service path and needs predictable interface and pod-level visibility; address-family assumptions leak into policy compilation and route expectations.
-- **Tetragon:** offers runtime security visibility where family-level mismatches matter in tracing and event correlation.
-- **KubeArmor:** policy engines often evaluate endpoint scope; mixed protocols without explicit rules make policy audits noisy and less reliable.
-- **Pixie:** observability workflows become stronger when IPv6 command checks are integrated into trace workflows from day one.
-
-The message for this course is not to learn these tools deeply, but to avoid designing IPv6 in isolation from them.
-
-```bash
-# If you later integrate with policy tools, keep these checks in CI preconditions
-ip -6 route show > /tmp/routes.ipv6
-ip -6 neigh show | head -n 40
-ss -6tnp | head -n 40
-```
-
-Use this as a bridge statement in code reviews: “No merge unless route, neighbor, and socket-family checks are coherent in the same change set.” This single line prevents many expensive regressions.
-
-#### 6.9 Incident case study: what would have prevented a scope outage?
-
-Imagine a team has two clusters, Cluster-A for staging and Cluster-B for production. Both run dual-stack. A policy template accidentally points one deployment to bind only `::1` for testing while still advertising a GUA endpoint in the service record. A partial rollout to the shared path triggers intermittent client errors.
-
-Walk through what your triage should do with evidence:
-
-- First, validate whether failures are family-specific at packet level.
-- Next, inspect endpoint binding and ensure service listeners actually accept both families when expected.
-- Then confirm DNS records in the client path, including whether `dig AAAA` and `dig A` still return coherent targets.
-- Finally, confirm policy and observability traces can show when family mismatches happen.
-
-This is exactly the type of chain where teams lose time because they start at logs and skip infrastructure checks.
-
-**Try this (prediction drill):** before applying a fix, predict whether DNS records or app binding will fail first in this pattern. Now replay the scenario in a safe test environment and compare.
-
-The educational point is deep but simple: if the command you need is clear during design, incident response becomes a deterministic sequence instead of a guessing game.
-
-```ascii
-Prevention vs discovery
-┌───────────────────────────────────┐
-│ Pre-change                        │
-│ 1) Design checklists             │
-│ 2) Predictive review             │
-│ 3) Automation guardrails          │
-└──────────────┬────────────────────┘
-               │
-               ▼
-                Runtime incident
-               │
-               ▼
-┌───────────────────────────────────┐
-│ If guardrails were present:         │
-│ - shorter MTTR                    │
-│ - cleaner evidence                 │
-│ - less “it looked fine in staging” │
-└───────────────────────────────────┘
-```
-
-#### 6.10 Runbook literacy and documentation debt
-
-One overlooked skill in platform engineering is documenting failure mode intent, not just success behavior. Teams often have polished “happy-path” docs and a broken “break-path” narrative. This section is about that debt.
-
-Every design review should include a one-hour doc drill:
-
-- If IPv6 address creation uses SLAAC, where is the DHCPv6 exception documented?
-- Who owns link-local vs global policy for that cluster class?
-- When a probe does not emit output, who decides whether this means false negative or wrong tracepoint?
-- Which metrics and commands must be recorded before rollback?
-
-You can make this practical by adding two “must-hold” artifacts:
-
-```text
-Runbook evidence pack
-1) Command output snapshot (`ip -6 route`, `ip -6 neigh`, `dig AAAA`)
-2) Decision prediction and why it failed or passed
-3) Family-specific recovery action and rollback command
-4) Postmortem section linked to team handoff notes
-```
-
-This discipline is a form of engineering anti-fragility. You are not only checking that IPv6 works; you are proving that your team can diagnose it under pressure.
-
-```bash
-# Example command order to avoid random probing
-set -o pipefail
-echo "[1] Family + scope snapshot"
-ip -6 addr show | sed -n '1,120p'
-echo "[2] Route and reachability snapshot"
-ip -6 route show
-echo "[3] Neighbors and DNS"
-ip -6 neigh
-dig +short AAAA localhost
-```
-
-By the time this block is repeated weekly, teams stop treating IPv6 as an exam topic and treat it as routine operations discipline.
-
-#### 6.11 End-to-end IPv6 design simulation: a full planning case
-
-Consider a real migration story you can model as a teaching exercise without making up external details. Your team has an internal platform with three environments: dev, staging, and production. The cluster networking currently works with IPv4-only service assumptions, but product demand requires global customers to reach services with IPv6 by next quarter. This is a classic sequencing problem. If you rush directly from “dual-stack enabled” to “traffic cutover,” you often discover that each layer—DNS, endpoint binding, firewalling, observability—has independent preconditions, and one missing assumption collapses the entire rollout.
-
-You begin with a design charter that names ownership explicitly. For each environment, you define who approves prefix allocation, who validates DNS policy, and who authorizes route changes. This pre-work sounds managerial, but it is technically essential because IPv6 has more implicit coupling between control plane and runtime than most IPv4 migration plans reveal. A subnet may be technically valid but still wrong for service binding if nobody owns the endpoint policy check. The same can be said for DNS: if no one owns reverse zone generation, a healthy-looking AAAA set can still become an operational blind spot.
-
-Your first technical step is to separate planning data from deployment mechanics. You maintain two documents that move together: one for addressing model, one for service family behavior. The addressing model defines how `/56`, `/60`, `/64`, and `/127` patterns are allocated by purpose. The service model defines whether each workload tolerates IPv6-first behavior, whether failover goes to IPv4 first, and which errors are actionable versus cosmetic. These documents prevent “operator magic,” because every decision gets recorded before code lands.
-
-Next comes baseline evidence collection. You capture `ip -6 addr`, `ip -6 route`, `ip -6 neigh`, and `dig AAAA` on all control and data planes. This is not just ritual: those outputs become the comparison set for every later stage. If production is stable now, you can still detect early regression because any future change can be judged against those snapshots. Without this baseline, teams tend to create “it worked in staging” narratives that cannot be replicated in operations rooms.
-
-Then you define a migration wave model. Wave 1 is dual-stack DNS and service manifests, without changing external internet exposure. Wave 2 is selective workload enablement where traffic can still fail open to IPv4. Wave 3 is full policy and observability enforcement with family-aware runbooks. This staged approach is often unpopular because it slows initial speed, but it is measurable in safety: each wave has explicit acceptance criteria tied to evidence, not sentiment.
-
-At run-time, each deployment must pass a deterministic check sequence before merging. If the service manifest changed only one part and created a broken endpoint binding, the check should fail in the same way every time. If DNS records for AAAA exist but a pod is still reachable only on IPv4, that condition should be flagged immediately and the change should not proceed. If a route table suggests global routes but neighbor cache is inconsistent on peer nodes, that issue should be categorized as network-control risk and escalated without waiting for user-visible alarms.
-
-Now assume a controlled failure is injected: a node advertises RA unexpectedly, while another path has a stale filter that drops ICMPv6 neighbor messages. At first, your synthetic clients may still hit endpoints due to cached state, which creates a misleading sense of resilience. A proper runbook sequence catches this because your checks run from family-aware signals rather than a single end-to-end ping success. When NDP behavior degrades but packet capture still shows partial success, you should treat the event as a controlled partial failure, not a false positive, and record the exact point where reachability diverges.
-
-The exercise becomes most valuable when teams must predict the incident class before remediation. Ask whether the symptom belongs to:
-
-- address family mismatch (service binds `::` vs `0.0.0.0`),
-- route scope mismatch (global route assumed where scope link is required),
-- control-plane packet mismatch (RA or NDP missing in one lane),
-- DNS-policy mismatch (AAAA exists but family precedence is unstable),
-- or policy mismatch (firewall rules that do not consider ICMPv6 essentials).
-
-Predictive training here reduces MTTR because the team spends less time discovering context during incident response and more time executing known steps.
-
-During the recovery phase, you do not just repair one faulty node. You repair assumptions. If the root cause is scope confusion, you update your allocation and review process so the next rollout enforces explicit scope assertions in templates. If the root cause is DNS precedence, you update service templates and runbooks to include dual-check logic in both acceptance and rollback paths. If observability was insufficient, you add a bpftrace control command tied to the incident artifact package, plus a minimal check for output behavior in pre-merge conditions.
-
-The final requirement before moving to next wave is documentation of family transitions. Each rollout note should include the same categories:
-1) what changed,
-2) why that change changed risk,
-3) how the change was tested,
-4) what output was captured,
-5) what rollback existed and when it triggered.
-
-You can require these five fields in code review templates so IPv6 expertise compounds over time instead of repeating in one human’s notes.
-
-Now expand the same plan into an explicit bpftrace confidence step. The objective is not to expose kernel internals to everyone, but to ensure at least one team member can prove packet behavior without assumptions. In production-like labs you should test a stable control command plus a known fault trigger. If the command does not emit expected probes when traffic is forced, that itself is a learning signal; your next step should be tracepoint validation, not product panic. This avoids false root-cause conclusions and keeps remediation aligned with evidence.
-
-From a pedagogy perspective, this section closes a major gap: networking is not merely protocol mechanics, it is coordination mechanics. The best engineers do not memorize addresses; they design workflows that make protocol behavior observable and repeatable. If your module teaches only address format and command syntax, it has not solved the operational problem. The goal is an operational pattern where protocol knowledge can be applied in minutes under pressure with minimum ambiguity.
-
-You can also integrate observability tools at this stage rather than as afterthoughts. If the team uses Cilium-based networking, map each IPv6 design assumption to a Cilium policy check item. If they use Tetragon or KubeArmor for guardrail enforcement, enforce an additional policy review where endpoints and namespace policies are tested across both families. If Pixie is present, attach flow-level traces in the same way that you attach DNS and neighbor checks. The conceptual move is to make IPv6 checks first-class citizens in security and observability workflows, not late-stage tickets.
-
-This is where advanced teams diverge. Teams that keep IPv6 in a separate “networking specialty” silo eventually fail on-call because no single person owns cross-tool context during incidents. Teams that treat IPv6 as an engineering habit maintain smaller MTTR, because each tool and policy layer can communicate through shared observability signals and consistent family-aware language.
-
-As a final exercise, ask every engineer to explain the same migration in ten lines before writing any code. If they cannot explain where RA, NDP, DNS, route policy, and endpoint binding interact, pause the rollout and invest in design education. If they can explain it, the architecture may still break technically, but the team will recover faster and with less chaos.
-
-> **Predict:** In this staged migration, which layer should fail first if ICMPv6 is accidentally blocked at host firewall level, and why does that produce delayed symptoms in distributed systems?  
-> **Try:** Run this thought experiment on paper with your team: swap one event order and predict what check catches it first.
-
-To avoid rework, close each quarter with a full script-level dry run using the full sequence above. Teams that do this regularly do not “hope the IPv6 path works,” they demonstrate it with reproducible, auditable evidence and known recovery playbooks.
-
-#### 6.12 Field journal: command-first scenario training
-
-If this module is taught in a practical classroom, this subsection becomes the central exercise. It is intentionally verbose because teams learn better from repeated command cycles that include expected signals and interpretations. A command-only lab is not enough unless the learner can predict what the command will show and why each output line matters for IPv6 reliability.
-
-Start by choosing a stable baseline node with `iproute2`, `dig`, and `bpftrace` available. Open a terminal and write down the exact sequence you will run before changing anything. This removes variance introduced by ad-hoc probing and makes subsequent analysis traceable.
+Use one short field journal instead of repeating the same command loop for every scenario. Choose a stable Linux host with `iproute2`, `dig`, and optional `bpftrace`. Before changing anything, write a four-column note: command, observed state, expected state, next action.
 
 ```bash
 ip -6 addr show
 ip -6 route show
 ip -6 neigh show
 dig +short AAAA localhost
-grep -i "ndisc\|icmpv6" /etc/services 2>/dev/null
+dig -x 2001:db8:55::10 +short
 ```
 
-Now run each command again and compare diff-style. The learner should notice that baseline stability is not judged by “everything is green,” but by consistency and intention. If one command has high churn while another is stable, that churn is not automatically bad; you interpret it with scope, timing, and expected role.
-
-Next, force one controlled family boundary. For example, use a temporary local scope adjustment in lab settings and observe whether your route and neighbor tables still match expected transitions.
+Then make one prediction before each command family. The prediction is the real learning step: if `ip -6 route get ::1` succeeds but a global test prefix has no route, say whether that is expected for loopback-only validation or evidence of a broken external path.
 
 ```bash
-# Controlled experiment: narrow scope check (example only)
-sudo ip -6 link set dev lo up
 ip -6 route get ::1
 ip -6 route get 2001:db8:55::10
+ping -6 -c 1 -W 1 2001:db8:ffff::1 || true
 ```
 
-The key is not the specific addresses; it is whether the outputs tell a coherent story. If `ip -6 route get` for loopback behaves differently from your expected global path, you already found a design assumption mismatch before application logs become meaningful.
-
-Now test DNS and reverse behavior with one known host and one synthetic host pattern from lab docs. Record if `dig +short AAAA` and `host <ipv6>` produce complementary answers.
-
-```bash
-dig +short AAAA localhost
-host 2001:db8:55::10 ip6.arpa
-```
-
-If reverse behavior diverges while forward works, do not interpret that as pure DNS failure immediately. It may mean naming discipline is inconsistent across teams, especially when service templates create family-specific aliases and fallback rules that do not match deployment defaults.
-
-At this point, add neighbor visibility. In many teams, NDP signals are still assumed to be “automatic,” yet operators do not capture the intermediate states.
+Add one neighbor and socket pass so routing success does not hide service-scope mistakes:
 
 ```bash
 ip -6 neigh
-ip -6 neigh show nud stalled
-ip -6 neigh show nud failed
+ss -6lntup | head -n 20
 ```
 
-You are looking for predictable transitions. A long burst of failed neighbor states may be transient during a simulation, but if it persists across repeated checks, classify it as infrastructure risk and treat it before any application-layer rollout.
-
-Next, connect these observations to service behavior.
+If `bpftrace` is available, calibrate one concrete tracepoint before using it as evidence. A missing probe output should trigger probe validation first, not an immediate protocol conclusion.
 
 ```bash
-ss -lntup | grep -E "LISTEN|LISTENING"
+sudo bpftrace -l 'tracepoint:ipv6:*' | head -n 20
+sudo bpftrace -e 'tracepoint:ipv6:ipv6_deliver { @[comm] = count(); } interval:s:5 { exit(); }' 2>/dev/null
 ```
 
-If service sockets are bound only to loopback (`::1`) in places where external family checks were expected, you have a binding-policy problem, not only a routing problem. In dual-stack systems this distinction becomes crucial because IPv6 and IPv4 service binding patterns are often not symmetric.
+Close the journal by naming one reversible action. If you applied a temporary route, DNS override, firewall rule, or interface change in a lab, remove that exact change and rerun the baseline commands. If you did not alter state, the rollback note should explicitly say "no persistent change made." That habit prevents ambiguous cleanup during real incidents.
 
-Bring in one control probe to verify kernel traceability. This does not need to be deep eBPF mastery; it needs deterministic control behavior.
+The objective is that each engineer can describe IPv6 behavior in terms of three things: expected state, expected symptom, and expected recovery. If that sentence is easy to say, the module has moved from passive reading into operational capability.
 
-```bash
-sudo bpftrace -l 'tracepoint:ipv6:*' | head -n 30
-sudo bpftrace -e '
-tracepoint:ipv6:ipv6_deliver {
-  @[args->saddr, args->daddr] = count();
-}
-' 2>/dev/null | head -n 5
-```
+#### 6.9 Platform-neutral design review walkthrough
 
-If the probe output remains empty, your next decision is probe calibration, not emergency architecture rewrite. The common mistake is attributing all missing output to network failure when missing output can simply mean mismatched probe scope.
+Imagine a team preparing to expose one customer-facing API over IPv6 while keeping the existing IPv4 path available. The work is not a Kubernetes task yet, and it is not a firewall task alone. It is a family-transition task that touches prefix ownership, DNS records, listener behavior, routing, monitoring, and rollback language. The review should begin by naming those layers explicitly so no team can assume another team already handled the family-specific part.
 
-Now write a concise inference log. Four columns are enough:
+The first artifact is an address plan that separates public reachability from internal-only reachability. A public API should use a GUA allocation with a documented owner and route announcement path. Internal automation can use ULA, but only when the document also states who may route it and which DNS names should never resolve publicly. Link-local addresses should appear only as local control-plane evidence, not as stable service targets. This one page prevents the most common scope confusion before commands enter the conversation.
 
-1. command,
-2. observed state,
-3. expected state,
-4. next action.
+The second artifact is a name-resolution plan. It should say which hostnames publish AAAA records, whether A and AAAA lifecycles are tied together, and how reverse DNS is generated. The rollback plan should include the exact DNS action and the expected client effect. Removing an AAAA record is not the same as fixing the IPv6 path; it is a traffic-shaping decision that can reduce impact while the root cause is investigated. Writing that distinction avoids treating rollback as proof that IPv6 was the problem.
 
-This is a minimal operational habit that scales better than large notebooks.
+The third artifact is a listener and source-address plan. Services that bind to `::` may accept IPv6 on all interfaces depending on operating-system and application behavior; services that bind to `::1` are local-only; services that bind only to an IPv4 literal will not become reachable just because DNS has an AAAA answer. A review should ask the application owner to prove which address family the process listens on and which source address outbound checks will use. This is still protocol foundations, not product-specific configuration.
 
-Repeat the same loop on a second node or namespace and compare delta patterns. You should now separate node-local faults from path-wide faults. This distinction improves triage because the fix may be one node restart, one link configuration fix, or one policy update—not always a cluster-wide rollback.
+The fourth artifact is an ICMPv6 and firewall statement. A secure environment can be restrictive, but it cannot be vague. The policy should identify which NDP and path messages are allowed, where echo is allowed or denied, and how the team will distinguish an intentional deny from a broken discovery path. If the policy owner cannot explain the difference between blocking arbitrary probes and blocking essential neighbor discovery, the rollout is not ready.
 
-After the second run, run a full incident rehearsal simulation with one deliberate failure. For example, temporarily delay route expectation by stopping one link-level behavior in one place, then collect all three families of signals again. The learner should predict which signal breaks first, then validate against output.
+The fifth artifact is an observation plan that works before the incident starts. It should define what a normal `ip -6 route get` result looks like for one representative target, what a healthy neighbor table looks like during quiet periods, and which DNS command confirms reverse lookup behavior. The point is not to store endless command output. The point is to know what "normal enough" looks like so a responder can recognize meaningful deviation quickly.
 
-```bash
-ip -6 neigh flush all
-ip -6 neigh
-ip -6 route show
-```
+A strong review then turns each artifact into a failure prediction. If DNS is wrong, users should see one class of symptom. If listener scope is wrong, packet arrival and socket state should disagree. If NDP is broken, route and DNS may look fine while neighbor state degrades. If firewall policy is wrong, packet capture should show a different story than application logs. These predictions are valuable because they give responders a map before stress and alerts distort the discussion.
 
-Flushing neighbor cache in a controlled environment is not a permanent playbook step, but it helps demonstrate that neighbor resolution is stateful and expected to recover with correct RA/NDP context.
+During rollout, avoid the phrase "turn on IPv6" unless the scope is tiny and reversible. A safer phrase is "make this named path reachable over IPv6 under these constraints." That wording forces the team to name the actual service, prefix, DNS name, listener, policy boundary, and rollback condition. It also prevents accidental expansion from one tested path to a broader estate that was never reviewed. Good IPv6 work is often slower at the sentence level and faster during incidents.
 
-In environments where security policy teams need cross-tool visibility, add one short paragraph per command line to your module notes. For example, if an `ip -6 neigh` check reveals unexpected transitions after policy push, connect this to the expected behavior in Cilium or Tetragon instrumentation.
+When a failure appears, the recovery discussion should repair assumptions rather than only restoring traffic. If the root cause is a missing reverse zone, update the DNS generation process. If it is a listener bound to loopback, update service templates or deployment documentation. If it is blocked NDP, update firewall review criteria. If it is address-selection behavior in one client, add that client to the compatibility matrix. Each fix should leave behind a better review question for the next rollout.
 
-The objective is to force a bilingual operating model: networking language and security-language both agree on the same observed state.
+This walkthrough is intentionally platform-neutral because the same logic survives technology changes. A later module can map these controls onto Kubernetes Services, Pod CIDRs, CNI behavior, and cluster rollout waves. At this layer, the learner should instead master the invariant reasoning: addresses have scope, routes express intent, DNS changes client choices, NDP makes local reachability real, and observability must prove the layer that failed. Those concepts are portable, which is exactly why they belong in a foundations module.
 
-Run a final closeout checkpoint by calculating whether each command family remained within expected ranges. If any family regressed repeatedly across two consecutive runs, it becomes a required precondition before any production shift. This is where training becomes governance.
+#### 6.10 Handoff criteria for teams that share IPv6 ownership
 
-#### 6.13 Documentation and governance for long-horizon reliability
+IPv6 work often crosses organizational boundaries, so handoff quality matters as much as command knowledge. Network engineering may own prefix allocation and routing, security may own filtering, application teams may own listener behavior, and operations may own incident evidence. A poor handoff says "IPv6 enabled" and leaves every reader to guess the scope. A useful handoff says which address family changed, which prefixes were affected, which evidence proved success, and which rollback remained available.
 
-The final part of this section is often skipped, but long-lived teams only stay stable when reliability expectations are encoded in process. Create a governance rule that every dual-stack work item must include evidence of scope alignment, neighbor sanity, DNS coherence, and observability readiness.
+For design documents, require a plain-language risk sentence. Good examples sound like: "If AAAA records are published before listener scope is verified, clients that prefer IPv6 may see connection timeouts while IPv4 clients remain healthy." That sentence is not fancy, but it is actionable. It names the condition, the affected client group, and the visible symptom. Reviewers can then ask for the exact command or test that proves the condition is controlled.
 
-For every feature PR, require at least two reviewers: one for networking mechanics and one for platform operations sequence. Reviewers should not just validate syntax. They should confirm that the expected output from `ip -6` commands aligns with the incident hypothesis and that rollback has a deterministic criterion.
+For incident notes, require layer-specific evidence rather than generic screenshots. A route command explains local forwarding intent, a neighbor command explains local discovery state, a DNS command explains name choice, and a socket command explains service binding. A single dashboard may be useful, but it rarely distinguishes these layers by itself. The handoff should therefore preserve enough raw command evidence that another engineer can reconstruct the reasoning without relying on memory.
 
-Use a concise template for PR description:
+For rollback, require an owner and a criterion. "Rollback if errors increase" is too vague for a family transition because errors may increase after DNS cache delay, client retry behavior, or neighbor cache expiration. Better criteria name the signal: rollback the AAAA publication if IPv6 connection attempts fail above the agreed threshold while IPv4 remains healthy, or revert a route policy if `ip -6 route get` and packet capture disagree after the planned change. Specific criteria reduce argument during pressure.
 
-```text
-Dual-stack change template
-- Addressing decision and rationale
-- Expected service family behavior
-- DNS forward/reverse checks
-- NDP/RA checks
-- Observability command for verification
-- Rollback criterion by family
-```
+Finally, treat every IPv6 handoff as a small training artifact. The next reader should learn one thing about scope, control messages, DNS, or tooling from the way the change was documented. This does not mean turning every ticket into a textbook. It means writing decisions in a way that future responders can reuse. Over time, the team builds a shared language where IPv6 is not a specialist corner, but an ordinary part of reliable service design.
 
-This template is the same template you use during on-call incidents. If you can document it during development, you do not invent it during an outage. That single consistency reduces stress, confusion, and handoff overhead.
+### See also: where these foundations appear later
 
-When teams mature, they can remove this module from induction and use it as production muscle memory. The long-form habit is that learners become comfortable with both expected outputs and deliberate uncertainty. They can say: this family mismatch is expected under this specific deployment sequence, this mismatch is not.
-
-By building a loop that alternates plan, run, observe, and correct, the team transforms IPv6 from an isolated protocol chapter into a routine capability that withstands incident pressure without panic.
-
-#### 6.14 Final field sequence to satisfy operational muscle memory
-
-Now take the same environment and run an intentionally boring, repeated exercise for 20 minutes. The point is to make the checks feel routine so that when a real incident appears you can execute without hesitation. In each iteration, keep one worksheet with six columns: timestamp, command, observed signal, expected signal, interpretation, next action. Repetition creates a stable team language.
-
-In the first five minutes, run only passive baseline commands and write exact output signatures for the local machine. You are not trying to change configuration, only collecting evidence that can be compared later. This helps reduce ambiguity because operators can separate “policy changed” from “environment changed.” Even identical commands can become ambiguous if run only once and not written down.
-
-In the next three minutes, run a controlled positive case. Generate an IPv6 connectivity check that should succeed, then run a path-specific DNS check that should also succeed. The important decision is to compare both outputs side by side and decide whether they represent the same family assumption. A green ping result with a broken reverse zone is not a failed host; it is a documentation mismatch with operational implications.
-
-Spend the next block on one controlled negative test. Use a deliberate invalid destination that you can justify. Predict the failure point before running the command. If the output deviates from your prediction, adjust your mental model and rewrite the hypothesis. This prevents “rote command execution” and builds genuine diagnostic fluency.
-
-For this stage, keep command selection conservative and repeatable. Example order is `ip -6 addr`, `ip -6 route`, `ip -6 neigh`, one DNS command, then one tracepoint probe command. Do not add extra experiments in this rehearsal because noise introduces false patterning. The exercise teaches consistency under low variance, which is exactly what you need during production noise.
-
-After the negative test, perform scoped rollback. In this pedagogy, rollback is itself a learning step, not a cleanup chore. Ask which output changed fastest, which stayed unchanged, and which still looked noisy. The output that changes fastest usually points to ephemeral control-plane state; the output that persists points to configuration issues.
-
-Continue this sequence for a second host and keep your note style identical. If the second host produces a different signal profile, annotate the difference explicitly and classify the type. This is how teams avoid false consensus when an environment has mixed platform configurations and different kernel defaults.
-
-Use one paragraph to review firewall and ICMPv6 assumptions after each iteration. A lot of IPv6 failures are “invisible” until someone finally checks family-aware filtering. Write down what was allowed and what was dropped in one line, then repeat once on the next window. If the signal pattern is not stable yet, treat that as a separate control-plane debt item.
-
-At the midpoint, switch to one bpftrace control probe check. This is where engineering teams often become overconfident because kernel visibility is hard, but the target is simple: can we produce a bounded output signal for a known input path. If not, your goal is to recalibrate probe selection, not to rewrite the whole architecture.
-
-When this control probe works, run the same command again immediately and compare throughput of event capture. The exact difference is less important than signal determinism. If the same command yields entirely different event volume with identical inputs, you have a process issue in your runbook and your measurement is not yet reliable.
-
-One exercise that appears low value but gives high value is repeated command timing. Capture wall-clock duration for route and neighbor checks across ten consecutive runs. Sudden timing variance can indicate resource pressure or unexpected background churn. This is important because teams often treat all latency as application-level, but networking control-plane latency can delay incident interpretation.
-
-Now connect this exercise to operational handoff. At the end of each run, assign one team member to summarize what changed in language understandable by both platform and application engineers. If they can give a clean family-aware summary with no tool-specific jargon, the module is transitioning from “learned” to “adopted.”
-
-Finish by documenting one anti-pattern discovered during the lab. Do not just write the issue, write the precondition that made it possible. For example: “link-local was used as service endpoint because environment template did not enforce scope ownership.” That sentence is far more useful than “SLAAC was wrong.”
-
-Finally, run the same 20-minute loop once more, now with a teammate who did not author the module section. Their first question will usually reveal the single point where your teaching still hides a gap. Capture that and feed it directly into your next iteration of this module.
-
-For teams that want a measurable baseline target, require one minimum quality target: at least one pass where baseline, controlled failure, and rollback all complete under 30 minutes with predictable signal output and an unambiguous final recommendation.
-
-The objective is that each engineer can now describe IPv6 behavior in terms of three things: expected state, expected symptom, and expected recovery. If that sentence is easy to say, the module has moved from passive reading into operational capability.
+After this module, IPv6 terms appear inside Kubernetes networking material, but the cluster-specific mechanics are intentionally taught elsewhere. Revisit these existing inline references when you want to see the vocabulary in context: [EndpointSlices and dual-stack discovery](/k8s/cka/part3-services-networking/module-3.2-endpoints/), [CNI CIDR planning and dual-stack capacity](/k8s/cka/part3-services-networking/module-3.7-cni/), [network troubleshooting with address-family notes](/k8s/cka/part5-troubleshooting/module-5.5-networking/), and [CKS network-security checks for IPv6 listeners](/k8s/cks/part3-system-hardening/module-3.4-network-security/).
 
 ## Did You Know?
 
@@ -848,7 +646,7 @@ The objective is that each engineer can now describe IPv6 behavior in terms of t
 1. 
 <details>
 <summary>Your platform has `fe80::1` on all nodes and `2001:db8:55::/64` on the same subnet, but service calls intermittently fail from one node to another. Which IPv6-specific check should be first: (A) disable firewall temporarily, (B) confirm link-local reachability with `ip -6 neigh` and RA presence, (C) restart the application, or (D) force AAAA to IPv4 only.</summary>
-A) B. Intermittent cross-host failure in IPv6 networks with mixed scopes often starts with neighbor discovery and link-local reachability.
+Correct answer: B. Intermittent cross-host failure in IPv6 networks with mixed scopes often starts with neighbor discovery and link-local reachability.
 
 This is a layer-2/3 control-plane symptom first, not an application bug. Before any remediation, capture whether RA/NDP messages are present and whether neighbor-cache state is stable. If this fails, restarting app logic usually masks the root cause and extends MTTR.
 </details>
@@ -882,7 +680,7 @@ The practical implication: a troubleshooting script that copies IPv4 checks to I
 4. 
 <details>
 <summary>A service has correct AAAA records, but many clients fail with high latency after dual-stack rollout. What is the most evidence-driven first diagnostic sequence?</summary>
-A) Restart kubelet and network daemons.
+A) Restart network daemons first.
 B) Force all clients to IPv4 and defer IPv6 changes.
 C) Validate AAAA reachability, reverse DNS expectations (`ip6.arpa`), then NDP and route scope on affected paths.
 D) Disable all DNS caching and flush browser caches.
@@ -937,7 +735,7 @@ This exercise is designed for any Linux host with `bpftrace` installed and `ipro
 
 ### Goal
 
-Build and verify core IPv6 troubleshooting visibility with `ip -6`, `ping6`, DNS checks, and a focused `bpftrace` probe.
+Build and verify core IPv6 troubleshooting visibility with `ip -6`, `ping -6` or `ping6`, DNS checks, and a focused `bpftrace` probe.
 
 ### Task
 
@@ -945,26 +743,26 @@ Build and verify core IPv6 troubleshooting visibility with `ip -6`, `ping6`, DNS
 command -v bpftrace >/dev/null
 ip -6 addr show
 ip -6 route show
-ping6 -c 2 ::1
+ping -6 -c 2 ::1
 ```
 
-1. **Create a small namespace exercise and collect baseline evidence**
-   1. Confirm IPv6 is enabled and discover all addresses in your default namespace.
-   2. Verify loopback IPv6 (`::1`) responds to ping6.
+1. **Collect baseline evidence from your current network namespace**
+   1. Confirm IPv6 is enabled and discover all addresses in your current network namespace.
+   2. Verify loopback IPv6 (`::1`) responds to `ping -6` or `ping6`.
 2. **Inspect scope-aware addressing and routes**
    1. Identify one link-local and one global unicast address from `ip -6 addr show`.
-   3. Run a route lookup for the global address and a neighbor lookup for link-local peer reachability.
+   2. Run a route lookup for the global address and a neighbor lookup for link-local peer reachability.
 3. **Probe IPv6 neighbor discovery behavior**
    1. Run a minimal bpftrace snippet with root privileges to observe kernel entry for NDP-related probes.
    2. Capture command output and verify event count changes when you issue an ICMPv6 neighbor query.
 4. **Validate DNS family behavior**
    1. Resolve both A and AAAA for a known host.
-   2. Compare `ping6` behavior to verify actual packet path capability.
+   2. Compare `ping -6` behavior to verify actual packet path capability.
 
 ### Success Criteria
 
 - [ ] `ip -6 addr show` includes at least one `scope link` and one `scope global` example in the environment where expected.
-- [ ] `ping6` succeeds to local loopback and fails only with intentional changes.
+- [ ] `ping -6` or `ping6` succeeds to local loopback and fails only with intentional changes.
 - [ ] `ip -6 neigh` and `ip -6 route get` reflect expected neighbor and next-hop behavior.
 - [ ] At least one `bpftrace` control command executes successfully and emits an event when ICMPv6 traffic is generated.
 - [ ] DNS checks demonstrate that AAAA values and expected IPv6 reachability are not silently ignored.
@@ -982,15 +780,14 @@ ip -6 route get ::1
 sudo bpftrace -l 'kprobe:ndisc*' | head -n 20
 
 # Minimal control probe
-sudo bpftrace -e 'tracepoint:ipv6:ipv6:* { @[probefunc] = count(); }
-' 2>/dev/null || true
+sudo bpftrace -e 'tracepoint:ipv6:ipv6_deliver { @[comm] = count(); } interval:s:5 { exit(); }' 2>/dev/null || true
 ```
 
-> **Try this:** Before declaring success, run one command that intentionally fails (for example, `ping6` to an unroutable test address) and verify you can trace where validation should stop: resolver, route, or neighbor scope.
+> **Try this:** Before declaring success, run one command that intentionally fails (for example, `ping -6` to an unroutable test address) and verify you can trace where validation should stop: resolver, route, or neighbor scope.
 
 ## Next Module
 
-For a practical K8s-facing follow-up, move to [Kubernetes dual-stack networking fundamentals](https://kubernetes.io/docs/concepts/services-networking/dual-stack/) before this module’s design and operations concepts are applied in cluster APIs.
+The canonical follow-on is the planned [Dual-stack K8s Setup module in issue #1523](https://github.com/kube-dojo/kube-dojo.github.io/issues/1523), which will layer Kubernetes-specific Services, Pod CIDRs, and cluster rollout mechanics on top of these foundations. Until that lands, use the upstream [Kubernetes dual-stack networking overview](https://kubernetes.io/docs/concepts/services-networking/dual-stack/) as a reference, not as this module’s main teaching path.
 
 ## Sources
 
@@ -1007,6 +804,3 @@ For a practical K8s-facing follow-up, move to [Kubernetes dual-stack networking 
 - [bpftrace project documentation](https://github.com/bpftrace/bpftrace)
 - [Cloudflare route leak incident on January 22, 2026](https://blog.cloudflare.com/route-leak-incident-january-22-2026/)
 - [Kubernetes IPv6 and dual-stack networking overview](https://kubernetes.io/docs/concepts/services-networking/dual-stack/)
-- [Cilium IPv6 networking concepts](https://docs.cilium.io/en/stable/network/concepts/ipv6/)
-- [Pixie observability for Kubernetes networking](https://docs.px.dev/about-pixie/)
-- [Tetragon threat-aware networking for Kubernetes](https://tetragon.io/docs/)
