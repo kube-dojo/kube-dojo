@@ -1,9 +1,14 @@
 ---
 date: 2026-05-23
+decided: 2026-05-24
 title: Primary cross-family reviewer for T0 content PRs — composer-2.5 vs deepseek-v4-pro
 author: claude-opus-4-7 (orchestrator)
-status: pending-user
+status: accepted
+chosen_option: C
+decider: user (krisztian)
 ---
+
+> **DECIDED 2026-05-24 (session 51 start)**: User confirmed **Option C — task-class split**. Composer-2.5 = primary T0 content reviewer; codex = secondary; deepseek demoted to tertiary fallback. Routing change table below is now in effect. Also: claude/agy (agy routed to claude-sonnet) is OUT of cross-family review rotation during the 2026-05-23/24 throttle window — codex is the canonical fallback when composer-2.5 unavailable.
 
 ## DECISION REQUIRED — Primary cross-family reviewer for T0 content PRs
 
