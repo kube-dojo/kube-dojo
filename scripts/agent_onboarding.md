@@ -133,3 +133,23 @@ The briefing API exists so deep file crawls are normally unnecessary.
 - **Errors are JSON envelopes**: `{"error": "<code>", ...optional context}` with an HTTP status that matches the code.
 - **Cache**: cacheable endpoints return a weak ETag; `If-None-Match` yields `304`.
 - **Compact**: `/api/briefing/session?compact=1` drops navigation aids (`next_reads`, `links`, worktree list) while keeping the actionable surface.
+
+## 9. Cross-family PR review (before merge)
+
+Cross-family review is mandatory (`docs/review-protocol.md`, AGENTS.md rule 10). Implementation agents open PRs; the **orchestrator merges** after review.
+
+**Pick a reviewer from a different model family than the author** (Codex writes → Claude or Gemini reviews; Claude writes → Gemini or Codex; etc.).
+
+| When | Tool | Command |
+|------|------|---------|
+| Headless Gemini (Ultra OAuth) | `dispatch.py` | `KUBEDOJO_GEMINI_SUBSCRIPTION=1 .venv/bin/python scripts/dispatch.py gemini - --review` |
+| Bridge review with `gh pr diff` | `ab ask-gemini` | `scripts/ab ask-gemini --review --allow-write` |
+| Quote verification (always) | `verify_review.py` | `.venv/bin/python scripts/verify_review.py --pr N --branch origin/<branch>` |
+
+Workflow:
+
+1. Post the review as `gh pr comment` — not `gh pr review --approve` when the same GitHub identity owns author and reviewer.
+2. Run `verify_review.py` before treating `NEEDS CHANGES` as blocking; ignore `quote_missing` findings unless the verifier confirms them.
+3. Orchestrator merges after an independent-family review is posted; coding agents do not merge their own PRs.
+
+Smoketest: `bash scripts/ops/smoketest_review_verifier.sh` (fixture with one verified + one quote_missing finding).
