@@ -175,3 +175,14 @@ def test_home_has_artifacts_and_decisions_cards(tmp_path: Path) -> None:
     assert "View artifacts" in body
     assert 'class="decisions-summary-card" href="/decisions"' in body
     assert "View decisions" in body
+
+
+def test_schema_documents_research_artifact_deferral() -> None:
+    schema = local_api.build_api_schema()
+    endpoints = {entry["path"]: entry for entry in schema["endpoints"]}
+    api_artifacts = endpoints["/api/artifacts"]
+    html_artifacts = endpoints["/artifacts"]
+    assert "Research" in api_artifacts["desc"]
+    assert "include=research" in api_artifacts["query"]
+    assert "include_research=1" in api_artifacts["query"]
+    assert "include=research" in html_artifacts["query"]
