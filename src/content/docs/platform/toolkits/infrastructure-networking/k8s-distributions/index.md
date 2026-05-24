@@ -4,11 +4,11 @@ sidebar:
   order: 0
   label: "K8s Distributions"
 ---
-> **Toolkit Track** | 7 Modules | ~6.5 hours total
+> **Toolkit Track** | 8 Modules | ~7.5 hours total
 
 ## Overview
 
-The Kubernetes Distributions Toolkit covers lightweight Kubernetes alternatives for edge, IoT, development, and resource-constrained environments. When vanilla Kubernetes is too heavy—requiring too much RAM, too many nodes, or too complex to manage—these distributions deliver Kubernetes-compatible APIs with dramatically lower overhead.
+The Kubernetes Distributions Toolkit covers lightweight Kubernetes alternatives for edge, IoT, development, and resource-constrained environments. When vanilla Kubernetes is too heavy—requiring too much RAM, too many nodes, or too complex to manage—these distributions deliver Kubernetes-compatible APIs with dramatically lower overhead. The toolkit also teaches the edge landscape, where footprint, autonomy, immutable operating systems, and cloud-edge synchronization have to be evaluated together.
 
 This toolkit applies concepts from [Systems Thinking](../../../foundations/systems-thinking/) and [Platform Engineering](../../../disciplines/core-platform/platform-engineering/).
 
@@ -31,6 +31,7 @@ Before starting this toolkit:
 | 14.5 | [OpenShift](module-14.5-openshift/) | `[COMPLEX]` | 50-55 min |
 | 14.6 | [Managed Kubernetes](module-14.6-managed-kubernetes/) | `[COMPLEX]` | 55-60 min |
 | 14.7 | [RKE2](module-14.7-rke2/) | `[COMPLEX]` | 50-55 min |
+| 14.8 | [Edge Kubernetes Distros Landscape](module-14.8-edge-distros-landscape/) | `[COMPLEX]` | 60-75 min |
 
 ## Learning Outcomes
 
@@ -43,7 +44,8 @@ After completing this toolkit, you will be able to:
 5. **Navigate OpenShift** — Enterprise Kubernetes with batteries included
 6. **Compare managed services** — EKS vs GKE vs AKS decision making
 7. **Deploy RKE2** — Enterprise-hardened, FIPS-compliant Kubernetes for high-security environments
-8. **Choose the right distribution** — Match specific infrastructure and compliance requirements to distribution strengths
+8. **Evaluate edge architectures** — Compare lightweight distributions, immutable node operating systems, and cloud-edge frameworks
+9. **Choose the right distribution** — Match specific infrastructure, edge, and compliance requirements to distribution strengths
 
 ## Distribution Selection Guide
 
@@ -241,6 +243,12 @@ Module 14.7: RKE2
      │  CIS Benchmark compliance
      │  FIPS 140-2 validated
      ▼
+Module 14.8: Edge Kubernetes Distros Landscape
+     │
+     │  k3s, k0s, MicroK8s, Talos, Kairos
+     │  KubeEdge and OpenYurt autonomy patterns
+     │  Fleet-scale edge decision tree
+     ▼
 [Toolkit Complete] → Next: CI/CD Pipelines Toolkit
 ```
 
@@ -278,6 +286,7 @@ CPU                2 cores     2 cores     2 cores     4 cores     2 cores
 | OpenShift | S2I builds, Routes, BuildConfigs |
 | Managed K8s | Multi-provider comparison, cost analysis |
 | RKE2 | Deploy CIS hardened cluster, verify air-gap registry |
+| Edge Distros Landscape | Use bpftrace to expose mutable-host assumptions and compare edge operating models |
 
 ## Related Tracks
 
