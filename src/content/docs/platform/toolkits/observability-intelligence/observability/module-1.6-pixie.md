@@ -16,6 +16,8 @@ sidebar:
 
 **Environment Assumption**: The examples assume a Linux Kubernetes cluster where [privileged DaemonSets are allowed and eBPF is supported by the worker-node kernel](https://raw.githubusercontent.com/pixie-io/docs.px.dev/main/content/en/02-installing-pixie/01-requirements.md).
 
+**Recommended Foundation**: [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/) explains the hook, verifier, map, BTF, and privilege model that Pixie relies on.
+
 ---
 
 ## Learning Outcomes

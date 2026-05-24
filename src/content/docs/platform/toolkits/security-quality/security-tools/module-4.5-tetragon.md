@@ -8,7 +8,7 @@ sidebar:
 ## Complexity: [MEDIUM]
 
 **Time to Complete**: 90 minutes
-**Prerequisites**: Module 4.3 (Falco basics), Understanding of Linux syscalls, Basic Kubernetes security concepts
+**Prerequisites**: Module 4.3 (Falco basics), [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/), understanding of Linux syscalls, and basic Kubernetes security concepts
 **Learning Objectives**:
 - Understand eBPF-based runtime security
 - Deploy Tetragon for kernel-level threat detection

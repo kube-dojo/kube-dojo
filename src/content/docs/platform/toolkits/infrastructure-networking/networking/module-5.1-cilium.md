@@ -39,6 +39,7 @@ Cilium changes everything. By the end of this module, when something drops packe
 
 **Prerequisites**:
 - Kubernetes networking basics (Services, Pods)
+- [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/) for programs, maps, helpers, and verifier vocabulary
 - [Security Principles Foundations](/platform/foundations/security-principles/)
 - A healthy frustration with iptables (optional but helps)
 
