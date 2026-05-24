@@ -12,17 +12,15 @@ lab:
   environment: "ubuntu"
 ---
 
-> **Linux Foundations** | Complexity: `[MEDIUM]` | Time: 40-50 min. This module turns container networking from a black box into a set of Linux objects you can inspect, repair, and explain during Kubernetes node incidents.
+> **Complexity**: `[MEDIUM]` — Container networking as inspectable Linux objects for Kubernetes node incidents
+>
+> **Time to Complete**: 40-50 minutes
+>
+> **Prerequisites**: [Module 2.1: Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/), [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/), and [Module 3.2: DNS in Linux](../module-3.2-dns-linux/); comfort reading `ip addr`, `ip route`, and `ss` on a host before applying the same tools inside isolated stacks
 
-## Prerequisites
+---
 
-Before starting this module, complete [Module 2.1: Linux Namespaces](/linux/foundations/container-primitives/module-2.1-namespaces/), [Module 3.1: TCP/IP Essentials](../module-3.1-tcp-ip-essentials/), and [Module 3.2: DNS in Linux](../module-3.2-dns-linux/). You should already be comfortable reading `ip addr`, `ip route`, and `ss` output on a normal Linux host, because this lesson applies the same tools inside isolated network stacks instead of introducing a different troubleshooting language.
-
-The hands-on sections assume an Ubuntu 24.04 Linux VM with `iproute2`, `ping`, `bridge-utils`, `iptables` or nftables compatibility packages, `tcpdump`, and `sudo` access. The commands use documentation-backed primitives from `network_namespaces(7)`, `ip-netns(8)`, `veth(4)`, and `ip-link(8)`, so they map directly to what container runtimes automate rather than to a vendor-specific wrapper. If your VM is remote, keep a separate management session open before changing forwarding or firewall state.
-
-You do not need a running Kubernetes cluster to complete this module, but you should read Kubernetes 1.35+ networking documentation alongside the labs so you can translate `kd-blue` into `pod sandbox` vocabulary. When you later practice on a real node, carry the same notebook sections: namespace inventory, host veth and bridge membership, forwarding sysctl, and scoped NAT rules.
-
-## Learning Outcomes
+## What You'll Be Able to Do
 
 After completing this module, you will be able to:
 
@@ -33,6 +31,8 @@ After completing this module, you will be able to:
 - **Evaluate** cleanup and leak scenarios involving dangling veth halves, stale named namespaces, and host-versus-namespace conntrack views.
 
 ## Why This Module Matters
+
+The hands-on sections assume an Ubuntu 24.04 Linux VM with `iproute2`, `ping`, `bridge-utils`, `iptables` or nftables compatibility packages, `tcpdump`, and `sudo` access. The commands use documentation-backed primitives from `network_namespaces(7)`, `ip-netns(8)`, `veth(4)`, and `ip-link(8)`, so they map directly to what container runtimes automate rather than to a vendor-specific wrapper. If your VM is remote, keep a separate management session open before changing forwarding or firewall state. You do not need a running Kubernetes cluster to complete this module, but you should read Kubernetes 1.35+ networking documentation alongside the labs so you can translate `kd-blue` into `pod sandbox` vocabulary.
 
 Kubernetes networking problems often look like application problems at first contact. A request times out, a readiness probe flips, or a pod can reach its sidecar but cannot reach a database. The YAML may look fine, DNS may resolve, and the Service may have endpoints, yet the packet still has to cross ordinary Linux machinery on the node. It must leave the pod network namespace, traverse a virtual Ethernet peer, enter a bridge or routing path, pass forwarding policy, and return through a path that the kernel can match to the original flow.
 
@@ -315,19 +315,19 @@ The sequence diagram is not a promise that every plugin uses a Linux bridge. Som
 
 On a node running Kubernetes 1.35+, useful evidence commands include:
 
-```bash
-# Pod IP and node placement from the API
+```text
+# Pod IP and node placement from the API (requires kubectl — not Ubuntu 24.04 lab baseline)
 kubectl get pod -o wide
 
-# Sandbox process and namespace path (runtime-specific; example uses crictl)
+# Sandbox process and namespace path (requires crictl + jq on the node)
 sudo crictl pods --name my-pod -q | head -1 | xargs -I{} sudo crictl inspect {} | jq '.info.pid'
 
-# Enter the pod network namespace when you know PID
-sudo nsenter --net=/proc/PID/ns/net ip -br addr
-sudo nsenter --net=/proc/PID/ns/net ip route
+# Enter the pod network namespace when you know the sandbox PID
+sudo nsenter --net=/proc/<sandbox-pid>/ns/net ip -br addr
+sudo nsenter --net=/proc/<sandbox-pid>/ns/net ip route
 ```
 
-Replace `PID` with the sandbox process ID from your runtime. The exact CRI tooling varies, but the namespace path format is stable.
+Replace `<sandbox-pid>` with the sandbox process ID from your runtime. The exact CRI tooling varies, but the namespace path format is stable. Install `kubectl`, `crictl`, and `jq` on production nodes; they are illustrated here, not required for the Ubuntu 24.04 lab blocks in this module.
 
 ### CHECK operations and partial failure
 
@@ -353,9 +353,9 @@ For routed or egress traffic, move to host-level evidence only after the namespa
 
 CNI plugin failures sometimes leave a host-side `veth*` interface without an obvious pod owner. The host end still exists, but the peer may be inside a pod namespace or already deleted. Use peer index information:
 
-```bash
-# Show peer ifindex and interface name on the host
-ip -d link show vethdeadbeef
+```text
+# Show peer ifindex and interface name on the host (replace with the real veth name)
+ip -d link show <host-veth-name>
 
 # Example output fragment: peer_ifindex 42
 # Then locate interface with ifindex 42 in another namespace
@@ -376,6 +376,48 @@ Be careful with names copied from examples. Real nodes may use `cni0`, `docker0`
 
 Finally, separate persistent desired state from observed Linux state. Kubernetes objects describe what the control plane wants. The `ip` and `bridge` commands show what the node kernel currently has. During an incident, those states can diverge because a plugin failed, cleanup was incomplete, or a node reboot restored only part of the configuration. You need both views, but do not let a valid Deployment, Pod, or Service manifest convince you that the node datapath is correct.
 
+## Core: Reading Node Evidence Without Guessing
+
+Production nodes rarely give you a tidy `ip netns list` that matches pod names. Your job is to correlate three independent inventories: API objects, runtime sandboxes, and kernel objects. Start from the symptom IP or pod name, then walk downward until one layer contradicts the layer above.
+
+**Orphaned handles under `/var/run/netns`.** Named namespaces created with `ip netns add` appear as bind mounts:
+
+```bash
+ls -l /var/run/netns/
+sudo ip netns list
+```
+
+If `ip netns list` shows `cni-abc123` but no pod or sandbox owns that name, inspect whether any process still holds the namespace open before deleting it:
+
+```bash
+sudo ls -l /proc/*/ns/net 2>/dev/null | head
+# Compare inode numbers with the netns file:
+readlink /var/run/netns/cni-abc123
+```
+
+A stale bind mount after a crashed plugin can make later `ip netns exec` commands fail with confusing errors even though Kubernetes already recreated the pod elsewhere. Deleting the handle without confirming sandbox ownership is how you destroy a live network stack.
+
+**Bridge state when the CNI plugin mis-attached a port.** When pod-to-pod traffic on the same node fails but routes look fine, read the bridge as a switch, not as a route:
+
+```bash
+ip -br link show master cni0
+bridge link show master cni0
+bridge fdb show br cni0
+```
+
+If the host veth is `UP` but missing from `bridge link`, frames never enter the L2 domain. If FDB entries never learn the peer MAC after you generate traffic, the frame is not arriving on the bridge port you think it is—often because the veth is enslaved to `docker0` or a secondary bridge from an older plugin generation.
+
+**Correlating a host veth name to a pod without kubectl.** On the lab host you can still practice the peer-ifindex hunt with only `iproute2`:
+
+```bash
+HOST_VETH=veth0a1b2c3   # replace with the dangling name you see on the node
+ip -d link show "$HOST_VETH" | grep -E 'peer_ifindex|link/ether'
+```
+
+Take the `peer_ifindex` value and search inside each named namespace you can reach, or walk `/proc/<pid>/ns/net` for sandbox PIDs your runtime lists. The goal is not to memorize veth naming schemes; it is to prove whether a host port still has a live peer inside a sandbox namespace.
+
+**When API, runtime, and kernel disagree.** A pod can show `Running` while the sandbox namespace has only `lo` up. Treat that as a failed or partial CNI `ADD`, not as an application bug. Your notebook line should read: "API IP present, sandbox eth0 missing, host veth orphaned on cni0 port 7" rather than "network flapping." That sentence is enough for a teammate to search plugin logs and kubelet sandbox events without re-running your entire inspection chain.
+
 ## Core: Failure Patterns You Should Recognize Early
 
 The most common beginner failure is an interface that exists but is down. The namespace has `eth0`, the address looks correct, and the route looks plausible, but the link state prevents transmission. Bring both ends of the veth pair up and confirm state from both namespaces. Do not assume that assigning an IP address brought the link up, because address configuration and administrative link state are separate operations in `ip-link(8)`.
@@ -389,6 +431,44 @@ The fourth common failure is forwarding or filtering on the host. The namespace 
 The fifth common failure is return-path asymmetry. A packet leaves the namespace and reaches a destination, but replies never come back because the destination or upstream router does not know the namespace subnet. NAT can solve that for egress to the public internet, and routed pod networks solve it by advertising pod CIDRs or programming cloud routes. The correct fix depends on the cluster design. The troubleshooting observation is the same: outbound visibility without return traffic points to reverse routing, NAT, or stateful filtering.
 
 The sixth common failure is incomplete CNI cleanup after a crashed plugin. You may see a host `veth*` without a matching pod, or a pod IP that appears in `kubectl get pod -o wide` while the sandbox namespace lacks `eth0`. Treat that as desynchronization between orchestrator desired state and node datapath state. Your job is to identify whether the runtime still owns the namespace, whether the host port is orphaned, and whether deleting objects through Kubernetes will trigger a proper `DEL` or whether manual intervention is required on the node.
+
+### Walkthrough: bridge gateway on the wrong device
+
+A learner assigns `10.244.50.1/24` to each host-side veth instead of to `kd-br0`. Symptom: each namespace can ping its own host-side veth IP, but not the other namespace. Inspection sequence:
+
+```bash
+ip -br addr show master kd-br0
+ip -br addr show veth-blue-host veth-green-host
+sudo ip netns exec kd-blue ip route get 10.244.50.3
+```
+
+Pass condition: the `/24` gateway address appears only on `kd-br0`, host veth ends have no gateway IP, and `ip route get` inside each namespace selects `eth0` with next hop `10.244.50.1`. Fix by moving the subnet address to the bridge and leaving each namespace with a host route via that bridge IP.
+
+### Walkthrough: ARP succeeds to gateway but bridge FDB stays empty
+
+Symptom: namespace can ping `10.244.50.1` (the bridge) but not `10.244.50.3` on the same segment. `ip neigh show dev eth0` lists the gateway as `REACHABLE`, yet `bridge fdb show br kd-br0` never learns the peer MAC after you ping the remote pod IP.
+
+```bash
+sudo ip netns exec kd-blue ping -c 1 10.244.50.3
+bridge fdb show br kd-br0
+bridge link show master kd-br0
+```
+
+If FDB is empty while `bridge link` omits `veth-green-host`, the green port never joined the bridge domain—traffic hairpinned to the host stack or black-holed at the veth peer. Re-enslave the host-side veth with `ip link set veth-green-host master kd-br0` and repeat the ping while watching FDB populate.
+
+### Walkthrough: forwarding enabled but return traffic black-holes
+
+Symptom: from inside a namespace, `ip route get 1.1.1.1` looks correct and the first ping emits, but no reply arrives; on the host, `tcpdump -ni eth0 icmp` shows echo requests without replies. Namespace counters on `eth0` increase TX without RX growth on return.
+
+Check host forwarding and whether upstream routing knows the pod source:
+
+```bash
+sysctl net.ipv4.ip_forward
+sudo iptables -t nat -S POSTROUTING | grep 10.244.50.0/24
+ip route get 10.244.50.2 from 1.1.1.1
+```
+
+If forwarding is `0`, enable it only after you understand cluster design. If forwarding is `1` but upstream has no route to `10.244.50.0/24`, you need cluster routing or scoped MASQUERADE on the host egress interface—not a DNS change inside the pod.
 
 ### IPv6 and dual-stack notes
 
@@ -431,13 +511,6 @@ That mapping is intentionally imperfect. A Calico VXLAN setup may not use a Linu
 
 Draw a box for the host namespace and two boxes for pod namespaces. Label `lo`, `eth0`, host veth peers, `kd-br0` or `cni0`, the node default route interface, and the direction of a ping from `10.244.50.2` to `10.244.50.3`. Mark where ARP should occur and where forwarding should not be required for that east-west case. Then mark where forwarding and NAT would engage for a ping from `10.244.50.2` to `1.1.1.1`. If you cannot place those marks confidently, rerun the bridge lab and update the diagram while watching `bridge fdb` and `ip neigh` after each ping.
 
-## Did You Know
-
-- A named network namespace created by `ip netns add` is kept alive through a bind mount under `/var/run/netns`, which is why it can outlive the shell that created it.
-- A physical network device can belong to only one network namespace at a time, while a veth pair provides two virtual ends that can be split across namespaces.
-- A newly created network namespace has its own loopback device, but loopback is administratively down until you bring it up.
-- Kubernetes pods share one network namespace across the containers in the pod, which is why containers in the same pod share an IP address and port space.
-
 ## Core: End-to-End Troubleshooting Narrative
 
 Walk through this narrative once on paper, then again on a VM. A developer reports that pod `payments-7d4f9` at `10.244.12.19` cannot reach pod `ledger-5c8aa` at `10.244.12.33` on the same node. Both pods show Ready, and the cluster DNS record for the Service is irrelevant because the test uses pod IPs directly.
@@ -451,6 +524,13 @@ Only after east-west pod IP traffic works would you investigate Services, Networ
 If the same symptom occurred across nodes, you would still begin with namespace and host evidence on one failing pod pair before you chased control-plane or CNI chart version skew. Cluster-wide outages exist, but the first node you inspect should yield a concrete broken object such as a down `eth0`, a missing default route, or a veth that never joined `cni0`. That object becomes the search term for other nodes: are they missing the same bridge membership, the same sysctl, or the same plugin version?
 
 When you communicate findings to application teams, translate namespace evidence into impact language without hiding the Linux layer. Instead of "network broken," say "pod `eth0` is down in the sandbox namespace, so traffic never leaves the pod stack despite Ready status." That sentence ties Kubernetes health signals to kernel facts and sets up Module 3.4 to explain whether the host dropped packets after they left the pod.
+
+## Did You Know
+
+- A named network namespace created by `ip netns add` is kept alive through a bind mount under `/var/run/netns`, which is why it can outlive the shell that created it.
+- A physical network device can belong to only one network namespace at a time, while a veth pair provides two virtual ends that can be split across namespaces.
+- A newly created network namespace has its own loopback device, but loopback is administratively down until you bring it up.
+- Kubernetes pods share one network namespace across the containers in the pod, which is why containers in the same pod share an IP address and port space.
 
 ## Common Mistakes
 
@@ -549,7 +629,7 @@ Run this lab in a disposable Ubuntu 24.04 VM. It uses realistic pod CIDR address
 
 **Step 7 — Add controlled egress.** Record `net.ipv4.ip_forward`, enable forwarding, and append a single MASQUERADE rule scoped to `10.244.50.0/24` on the host default interface. Verify planning with `ip route get 1.1.1.1` inside `kd-blue` before you interpret ping success or failure.
 
-**Step 8 — Restore the host.** Delete the NAT rule, restore forwarding, delete namespaces and the bridge. Confirm `ip link show kd-br0` fails afterward and that `ip netns list` no longer shows lab names.
+**Step 8 — Restore the host.** The lab script registers `trap cleanup EXIT` so sysctl, NAT, namespaces, and the bridge are removed even when a ping fails under `set -euo pipefail`. After the script exits, confirm `ip link show kd-br0` fails and that `ip netns list` no longer shows lab names.
 
 ### Verification commands between steps
 
@@ -593,13 +673,24 @@ sudo ip netns exec kd-blue ip route get 1.1.1.1
 ```bash
 set -euo pipefail
 
-# --- cleanup from any previous attempt ---
+OUT_IF=$(ip route show default | awk '/default/ {print $5; exit}')
+ORIG_FWD=$(sysctl -n net.ipv4.ip_forward)
+
+cleanup() {
+  sudo iptables -t nat -D POSTROUTING -s 10.244.50.0/24 -o "$OUT_IF" -j MASQUERADE 2>/dev/null || true
+  sudo sysctl -w net.ipv4.ip_forward="$ORIG_FWD" >/dev/null 2>&1 || true
+  sudo ip netns del kd-blue 2>/dev/null || true
+  sudo ip netns del kd-green 2>/dev/null || true
+  sudo ip link del kd-br0 2>/dev/null || true
+}
+
+trap cleanup EXIT
+
+# --- reset from any previous attempt ---
 sudo ip netns del kd-blue 2>/dev/null || true
 sudo ip netns del kd-green 2>/dev/null || true
 sudo ip link del kd-br0 2>/dev/null || true
 
-ORIG_FWD=$(sysctl -n net.ipv4.ip_forward)
-OUT_IF=$(ip route show default | awk '/default/ {print $5; exit}')
 if [ -z "$OUT_IF" ]; then
   echo "No default route on host; NAT step will not work." >&2
   exit 1
@@ -650,12 +741,7 @@ sudo iptables -t nat -A POSTROUTING -s 10.244.50.0/24 -o "$OUT_IF" -j MASQUERADE
 sudo ip netns exec kd-blue ip route get 1.1.1.1
 sudo ip netns exec kd-blue ping -c 3 1.1.1.1 || echo "External ping may be blocked by your lab network; route get is still required evidence."
 
-# --- cleanup (run even if pings failed) ---
-sudo iptables -t nat -D POSTROUTING -s 10.244.50.0/24 -o "$OUT_IF" -j MASQUERADE 2>/dev/null || true
-sudo sysctl -w net.ipv4.ip_forward="$ORIG_FWD"
-sudo ip netns del kd-blue
-sudo ip netns del kd-green
-sudo ip link del kd-br0
+# cleanup runs via trap on EXIT (including ping failures under set -e)
 ```
 
 If namespace-to-namespace ping fails, inspect bridge membership with `bridge link`, neighbor tables with `sudo ip netns exec kd-blue ip neigh`, and counters with `ip -s link` on both veth ends before touching NAT or DNS.
@@ -697,4 +783,3 @@ The citations below are primary references for behavior described in this module
 When you extend this module with your own notes, link each command you use habitually to one of the man pages above. That discipline keeps your runbooks aligned with the kernel and iproute2 behavior you will see on Ubuntu 24.04 nodes running Kubernetes 1.35+.
 
 Return to this list when a colleague asks whether a behavior is "Kubernetes magic" or documented Linux semantics. The answer is almost always inspectable with the objects in this module first.
-
