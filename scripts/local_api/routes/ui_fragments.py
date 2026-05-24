@@ -18,8 +18,11 @@ def render_poll_stale_script() -> str:
     if (!el) return;
     let ts = payload?.generated_at ?? payload?.snapshot?.generated_at ?? payload?.freshness?.refresh_completed_at;
     if (ts == null || !Number.isFinite(Number(ts))) ts = Math.floor(Date.now() / 1000);
-    el.dataset.pollTs = String(Math.floor(Number(ts)));
-    el.classList.remove("poll-stale");
+    const tsSec = Math.floor(Number(ts));
+    el.dataset.pollTs = String(tsSec);
+    const tsMs = tsSec * 1000;
+    const stale = Number.isFinite(tsMs) && tsMs > 0 && Date.now() - tsMs > STALE_MS;
+    el.classList.toggle("poll-stale", stale);
   };
   function markStalePolls() {
     document.querySelectorAll("[data-poll-ts]").forEach((el) => {

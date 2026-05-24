@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def _load_module():
@@ -27,11 +30,30 @@ def _load_ui_fragments():
     return module
 
 
+def _set_poll_ts_body(script: str) -> str:
+    match = re.search(
+        r"window\.setPollTs = function setPollTs\(el, payload\) \{.*?\n  \};",
+        script,
+        re.DOTALL,
+    )
+    assert match is not None
+    return match.group(0)
+
+
 local_api = _load_module()
 ui_fragments = _load_ui_fragments()
 
 
 POLL_PAGES = ("/", "/operator", "/pipeline", "/activity", "/health", "/quality")
+
+SET_POLL_TS_CALL_SITES = (
+    ("/", "setPollTs($('#last-updated'), briefing)"),
+    ("/operator", "setPollTs($('#last-updated'), briefing)"),
+    ("/pipeline", "setPollTs($('#v2-badge'), v2Status)"),
+    ("/activity", "setPollTs($('#activity-badge'), activityData)"),
+    ("/health", "setPollTs($('#svc-badge'), services)"),
+    ("/quality", "setPollTs($('#last-updated'), board)"),
+)
 
 
 def test_poll_stale_script_marks_elements_older_than_24h() -> None:
@@ -39,6 +61,23 @@ def test_poll_stale_script_marks_elements_older_than_24h() -> None:
     assert "setPollTs" in script
     assert "poll-stale" in script
     assert "24 * 60 * 60 * 1000" in script
+
+
+def test_set_poll_ts_toggles_stale_immediately() -> None:
+    script = ui_fragments.render_poll_stale_script()
+    body = _set_poll_ts_body(script)
+    assert "STALE_MS" in body
+    assert 'classList.toggle("poll-stale", stale)' in body
+    assert "classList.remove" not in body
+
+
+def test_set_poll_ts_reapplies_stale_for_old_cached_timestamp() -> None:
+    """Stale cached refresh must not clear poll-stale until data is fresh."""
+    script = ui_fragments.render_poll_stale_script()
+    body = _set_poll_ts_body(script)
+    assert "Date.now() - tsMs > STALE_MS" in body
+    assert "el.dataset.pollTs" in body
+    assert 'classList.toggle("poll-stale", stale)' in body
 
 
 def test_auto_refresh_pages_include_poll_stale_assets(tmp_path: Path) -> None:
@@ -51,11 +90,10 @@ def test_auto_refresh_pages_include_poll_stale_assets(tmp_path: Path) -> None:
         assert "markStalePolls" in body, route
 
 
-def test_auto_refresh_pages_wire_set_poll_ts_in_refresh_handlers(tmp_path: Path) -> None:
-    status, body, _ = local_api.route_request(tmp_path, "/operator")
-    assert status == 200
-    assert "setPollTs($('#last-updated'), briefing)" in body
-
-    status, body, _ = local_api.route_request(tmp_path, "/quality")
-    assert status == 200
-    assert "setPollTs($('#last-updated'), board)" in body
+@pytest.mark.parametrize("route,needle", SET_POLL_TS_CALL_SITES)
+def test_auto_refresh_page_wires_set_poll_ts_in_refresh_handler(
+    tmp_path: Path, route: str, needle: str
+) -> None:
+    status, body, _ = local_api.route_request(tmp_path, route)
+    assert status == 200, route
+    assert needle in body, route
