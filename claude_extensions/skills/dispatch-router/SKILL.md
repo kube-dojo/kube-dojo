@@ -37,10 +37,14 @@ Pick the right agent + model + tier for a task before firing a dispatch. This sk
 2. **NEVER use Agent-tool subagents for per-file sweeps** — 5x cost ([[feedback_dispatch_smart_for_sweeps]]).
 
 ### Draft (new content / module write)
-1. T0 production content: cursor composer-2.5 (file GH issue, cursor claims).
-2. Codex weekly-cap allowing: `dispatch_smart draft --agent codex --mode danger --worktree X --search`.
-3. Off-load: `dispatch_smart draft --agent deepseek`.
-4. See [[curriculum-writer]] for the author contract.
+
+T0 author primary is **codex-or-cursor** depending on codex weekly-cap state — quality-best lane per [[feedback_quality_over_budget_in_role_allocation]]:
+
+1. **Codex cap healthy (default)** → `.venv/bin/python scripts/dispatch_smart.py draft --agent codex --mode danger --worktree X --search`. Stronger first-pass quality (factual/version/runnability). Required `--search` for factual content per [[feedback_codex_writer_needs_search]].
+2. **Codex cap thin / throttle** → cursor composer-2.5 via `dispatch_smart draft --agent cursor --model composer-2.5` (headless) or cursor IDE. Verifier-pass ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]); pair with codex R1 review. Session 52 measured 67% first-pass NEEDS_CHANGES on cursor-authored T0 — fix-pass is reliable but it's 2-3 rounds per PR.
+3. **Off-load (3+ codex authors in-flight)** → `dispatch_smart draft --agent deepseek`. Spread parallel-cap per [[feedback_parallel_rewrite_cap_three]].
+4. **Bug fixes (any cap state)** → cursor composer-2.5. Proven 3/3 first-commit on session 51 bug PRs per [[feedback_cursor_is_strong_bug_fixer]]; different lane than T0 author.
+5. See [[curriculum-writer]] for the author contract that binds every lane.
 
 ### Review (cross-family PR review)
 1. Pick reviewer per Decision Card C routing — see [[cross-family-reviewer]].
