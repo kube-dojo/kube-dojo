@@ -116,6 +116,14 @@ def _render_page_chrome(*, include_afk: bool = False) -> str:
     return _ui_fragments_module().render_global_chrome(include_search=True, include_afk=include_afk)
 
 
+def _poll_stale_css() -> str:
+    return _ui_fragments_module().POLL_STALE_CSS
+
+
+def _render_poll_stale_script() -> str:
+    return _ui_fragments_module().render_poll_stale_script()
+
+
 _CHANNEL_ROUTES = _load_channel_routes_module()
 _DECISION_ROUTES = _load_decision_routes_module()
 _SEARCH_ROUTES = _load_search_routes_module()
@@ -6098,6 +6106,7 @@ _ACTIVITY_PAGE_JS = r"""
       const parts = [['commit', 'commits'], ['pipeline_event', 'events'], ['bridge_message', 'msgs']]
         .filter(([k]) => counts[k]).map(([k, label]) => `${counts[k]} ${label}`);
       $('#activity-badge').textContent = `${shown.length === items.length ? '' : `${shown.length}/${items.length} shown / `}${parts.join(' / ') || 'Quiet'}`;
+      setPollTs($('#activity-badge'), activityData);
       if (!shown.length) { el.innerHTML = '<div class="empty-state">No activity matches these filters</div>'; return; }
       const now = activityData.generated_at || Math.floor(Date.now() / 1000);
       el.innerHTML = `<ul class="activity-feed">${shown.map(item => {
@@ -6310,6 +6319,7 @@ _HEALTH_PAGE_JS = r"""
       renderServices(services);
       renderWorktrees(worktrees);
       renderMissing(missing);
+      setPollTs($('#svc-badge'), services);
     }
     loadHealthPage().catch(err => {
       $('#services').innerHTML = '<div class="empty-state">Health data unavailable</div>';
@@ -6697,6 +6707,7 @@ _QUALITY_BOARD_PAGE_JS = r"""
       try {
         const board = await fetchJson('/api/quality/board');
         renderQualityBoard(board);
+        setPollTs($('#last-updated'), board);
         $('#last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
       } catch (err) {
         console.error('Quality board refresh failed:', err);
@@ -6805,6 +6816,7 @@ _OPERATOR_PAGE_JS = """
         const briefing = await fetchJson('/api/briefing/session?compact=1');
         if (briefing.error) throw new Error(briefing.error);
         renderOperator(briefing);
+        setPollTs($('#last-updated'), briefing);
         $('#last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
         const pill = $('#conn-status');
         pill.innerHTML = '<span class="dot"></span> Connected';
@@ -7023,6 +7035,7 @@ def render_quality_board_page_html() -> str:
   <style>
 {_TOP_NAV_CSS}
 {_QUALITY_BOARD_PAGE_CSS}
+{_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7053,6 +7066,7 @@ def render_quality_board_page_html() -> str:
 <script>
 {_QUALITY_BOARD_PAGE_JS}
 </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 
@@ -7216,6 +7230,7 @@ def render_operator_page_html() -> str:
   <style>
 {_TOP_NAV_CSS}
 {_OPERATOR_PAGE_CSS}
+{_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7271,6 +7286,7 @@ def render_operator_page_html() -> str:
   <script>
 {_OPERATOR_PAGE_JS}
   </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 
@@ -7287,6 +7303,7 @@ def render_pipeline_page_html(repo_root: Path, *, tail: int = 30) -> str:
   <style>
 {_TOP_NAV_CSS}
 {_PIPELINE_PAGE_CSS}
+{_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7381,6 +7398,7 @@ def render_pipeline_page_html(repo_root: Path, *, tail: int = 30) -> str:
       ]);
       renderPipelinePanel('#v2-body', '#v2-badge', v2Status, 'V2 Pipeline');
       renderPipelineEvents(events);
+      setPollTs($('#v2-badge'), v2Status);
     }}
 
     loadPipelinePage().catch(err => {{
@@ -7389,6 +7407,7 @@ def render_pipeline_page_html(repo_root: Path, *, tail: int = 30) -> str:
       console.error('Pipeline page load failed:', err);
     }});
   </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 
@@ -7405,6 +7424,7 @@ def render_activity_page_html() -> str:
 {_TOP_NAV_CSS}
 {_ACTIVITY_PAGE_CSS}
 {_ACTIVITY_FEED_CSS}
+{_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7456,6 +7476,7 @@ def render_activity_page_html() -> str:
   <script>
 {_ACTIVITY_PAGE_JS}
   </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 
@@ -7471,6 +7492,7 @@ def render_health_page_html() -> str:
   <style>
 {_TOP_NAV_CSS}
 {_HEALTH_PAGE_CSS}
+{_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7524,6 +7546,7 @@ def render_health_page_html() -> str:
   <script>
 {_HEALTH_PAGE_JS}
   </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 
@@ -7585,6 +7608,7 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     .op-summary-link,.quality-summary-link,.pipeline-summary-link,.activity-summary-link,.summary-link {{ color:var(--accent); font-size:13px; font-weight:800; white-space:nowrap; }}
     @media (max-width:860px) {{ .summary-grid {{ grid-template-columns:1fr; }} .op-summary-card,.pipeline-summary-card,.benchmarks-summary-card {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .op-summary-link,.pipeline-summary-link {{ justify-self:start; }} }}
     @media (max-width:640px) {{ .main {{ padding:16px; }} .header-inner {{ padding:16px; align-items:flex-start; flex-direction:column; }} .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card,.artifacts-summary-card,.decisions-summary-card {{ grid-template-columns:1fr; }} .quality-summary-counts,.summary-copy,.health-summary-copy {{ white-space:normal; }} }}
+    {_poll_stale_css()}
   </style>
 </head>
 <body>
@@ -7713,6 +7737,7 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
           fetchJson('/api/missing-modules/status'), fetchJson('/api/pipeline/v2/status'), fetchJson('/api/briefing/session?compact=1'), fetchJson('/api/quality/board'), fetchJson('/api/activity?limit=3')
         ]);
         renderOperator(briefing); renderQuality(qualityBoard); renderPipeline(pipelineStatus); renderActivity(activitySummary); renderHealth(briefing, missing);
+        setPollTs($('#last-updated'), briefing);
         $('#last-updated').textContent = `Updated ${{new Date().toLocaleTimeString()}}`;
         const pill = $('#conn-status'); pill.innerHTML = '<span class="dot"></span> Connected'; tone(pill, 'green');
       }} catch (err) {{ const pill = $('#conn-status'); pill.innerHTML = '<span class="dot"></span> Error'; tone(pill, 'red'); console.error('Dashboard refresh failed:', err); }}
@@ -7720,6 +7745,7 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     }}
     $('#refresh').addEventListener('click', refresh); refresh(); setInterval(refresh, 60000);
   </script>
+{_render_poll_stale_script()}
 </body>
 </html>"""
 

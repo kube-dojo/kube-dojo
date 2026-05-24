@@ -14,6 +14,13 @@ def render_poll_stale_script() -> str:
 <script>
 (() => {
   const STALE_MS = 24 * 60 * 60 * 1000;
+  window.setPollTs = function setPollTs(el, payload) {
+    if (!el) return;
+    let ts = payload?.generated_at ?? payload?.snapshot?.generated_at ?? payload?.freshness?.refresh_completed_at;
+    if (ts == null || !Number.isFinite(Number(ts))) ts = Math.floor(Date.now() / 1000);
+    el.dataset.pollTs = String(Math.floor(Number(ts)));
+    el.classList.remove("poll-stale");
+  };
   function markStalePolls() {
     document.querySelectorAll("[data-poll-ts]").forEach((el) => {
       const ts = Number(el.dataset.pollTs) * 1000;
