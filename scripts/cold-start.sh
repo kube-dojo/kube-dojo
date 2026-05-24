@@ -18,12 +18,24 @@ while [[ $# -gt 0 ]]; do
       INCLUDE_MANIFEST=1
       shift
       ;;
+    --issue)
+      if [[ $# -lt 2 ]]; then
+        echo "Missing argument for --issue" >&2
+        exit 2
+      fi
+      KUBEDOJO_ISSUE="$2"
+      shift 2
+      ;;
     -h|--help)
       cat <<'EOF'
-Usage: scripts/cold-start.sh [--manifest]
+Usage: scripts/cold-start.sh [--manifest] [--issue N]
 
 Deterministic cold-start for coding agents: services-up, workspace state,
 pending decisions, then API orientation (briefing + orient + session pointer).
+
+Options:
+  --issue N            Print issue-first reminder for GitHub issue #N
+                       (same as KUBEDOJO_ISSUE=N; flag takes precedence)
 
 Environment:
   KUBEDOJO_ISSUE=N     Print issue-first reminder for GitHub issue #N
@@ -125,10 +137,15 @@ head -n 40 STATUS.md
 echo ""
 
 echo "--- kubedojo:handoff-path ---"
-handoff_path=""
-if handoff_path=$(grep -m1 -oE 'docs/session-state/[^)\]]+\.(html|md)' STATUS.md 2>/dev/null); then
-  :
-else
+handoff_path=$(awk '
+  /^## Latest handoff/ { in_section=1; next }
+  in_section && /^## / { exit }
+  in_section && match($0, /docs\/session-state\/[A-Za-z0-9._\/-]+\.(html|md)/) {
+    print substr($0, RSTART, RLENGTH)
+    exit
+  }
+' STATUS.md)
+if [ -z "$handoff_path" ]; then
   handoff_path="(could not parse Latest handoff path from STATUS.md)"
 fi
 echo "$handoff_path"
