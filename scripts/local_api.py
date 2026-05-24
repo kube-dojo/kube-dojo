@@ -7020,6 +7020,7 @@ def render_quality_board_page_html() -> str:
   <meta charset=\"utf-8\">
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
   <title>Quality Board - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
 {_TOP_NAV_CSS}
 {_QUALITY_BOARD_PAGE_CSS}
@@ -7027,6 +7028,7 @@ def render_quality_board_page_html() -> str:
 </head>
 <body>
  {_render_top_nav("quality")}
+{_render_page_chrome()}
 <main class=\"main\">
   <div class=\"page-head\">
     <div>
