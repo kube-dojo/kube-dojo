@@ -7,17 +7,23 @@
 
 ## Cold start (first call on a fresh session)
 
-**Do not start with `git log` or a grep sweep.** Run:
+**Do not start with `git log` or a grep sweep.** Issue-driven sessions: read the GitHub issue verbatim first, then run:
 
 ```bash
-bash scripts/cold-start.sh          # services-up + compact briefing in one call
+KUBEDOJO_ISSUE=N bash scripts/cold-start.sh   # issue reminder + orient in one call
+# or without an issue:
+bash scripts/cold-start.sh
 ```
 
-The briefing returns `actions.{active, blocked, next}` + `top_modules[]` — answers "what should I touch" in the same call as "what is the global state". Responses carry a weak ETag; send `If-None-Match` for 304 on repeat polls.
+The script brings up services, prints `git status`, pending Decision Cards, then API blocks:
+`briefing` (compact snapshot), `orient` (primary action + alternatives), `session` (handoff pointer).
+Optional route discovery: `bash scripts/cold-start.sh --manifest`.
+
+Full copy-paste ritual: [`scripts/prompts/cold-start.md`](scripts/prompts/cold-start.md).
 
 Before claiming work: `GET /api/pipeline/leases`. Before fixing a module: `GET /api/module/{key}/state` (structured `diagnostics[]`). Before re-reviewing: `GET /api/reviews?module={key}`. Situational awareness: `GET /api/tracks/readiness` + `GET /api/activity`.
 
-If the API is down, fall back to `STATUS.md` + `CLAUDE.md`.
+If the API is down, the script **exits 0** with a `STATUS.md` excerpt and handoff path — then read `CLAUDE.md` only if that block is insufficient. More recipes: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
 ---
 
