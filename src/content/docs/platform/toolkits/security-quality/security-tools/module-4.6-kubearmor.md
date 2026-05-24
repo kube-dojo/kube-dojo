@@ -10,7 +10,7 @@ sidebar:
 
 **Time to Complete**: 90 minutes
 
-**Prerequisites**: Module 4.3 (Falco), Module 4.5 (Tetragon basics), working knowledge of Linux permissions, Kubernetes Deployments, labels, and basic runtime security concepts such as AppArmor, SELinux, and Linux capabilities.
+**Prerequisites**: Module 4.3 (Falco), Module 4.5 (Tetragon basics), [eBPF Fundamentals](/platform/foundations/ebpf/module-1.1-ebpf-fundamentals/), working knowledge of Linux permissions, Kubernetes Deployments, labels, and basic runtime security concepts such as AppArmor, SELinux, and Linux capabilities.
 
 **Track**: Platform Toolkits
 
