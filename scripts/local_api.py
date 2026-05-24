@@ -4303,6 +4303,7 @@ _BENCHMARK_REPORT_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ARTIFACT_ALLOWED_DIRS = (
     "audit",
     "calibration/v1/reports",
+    "docs/architecture",
     "docs/migrations",
     "docs/session-state",
     "docs/decisions",
@@ -4328,6 +4329,7 @@ _ARTIFACT_ASSET_TYPES = {
 _ARTIFACT_SECTION_SPECS = (
     ("Reports", "audit", ("**/*.html", "**/*.md")),
     ("Calibration reports", "calibration/v1/reports", ("**/*.html",)),
+    ("Architecture", "docs/architecture", ("**/*.html",)),
     ("Migrations", "docs/migrations", ("**/*.html", "**/*.md")),
     ("Handoffs", "docs/session-state", ("*.html", "*.md")),
     ("Decisions", "docs/decisions", ("**/*.html", "**/*.md")),

@@ -186,3 +186,21 @@ def test_schema_documents_research_artifact_deferral() -> None:
     assert "include=research" in api_artifacts["query"]
     assert "include_research=1" in api_artifacts["query"]
     assert "include=research" in html_artifacts["query"]
+
+
+def test_architecture_diagram_is_served_and_indexed(tmp_path: Path) -> None:
+    diagram = tmp_path / "docs" / "architecture" / "codebase-diagram.html"
+    _write(diagram, "<!doctype html><title>KubeDojo Codebase Architecture</title><h1>Architecture</h1>")
+
+    status, body, content_type = local_api.route_request(
+        tmp_path,
+        "/artifacts/docs/architecture/codebase-diagram.html",
+    )
+    assert status == 200
+    assert "text/html" in content_type
+    assert "Architecture" in body
+
+    status, index, _ = local_api.route_request(tmp_path, "/api/artifacts")
+    assert status == 200
+    assert "Architecture" in index
+    assert index["Architecture"][0]["path"] == "docs/architecture/codebase-diagram.html"
