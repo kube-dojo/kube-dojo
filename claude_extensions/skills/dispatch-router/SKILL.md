@@ -22,7 +22,7 @@ Pick the right agent + model + tier for a task before firing a dispatch. This sk
 | gemini-3-flash-preview | `dispatch_smart --agent gemini --model gemini-3-flash-preview` | Cheap fallback for non-code-review. | **NEVER use for code/lab review** ([[feedback_never_flash_for_code_review]]). Hallucinates `wc -l` numbers ([[feedback_deterministic_over_hallucination]]). | — |
 | claude headless (post-2026-06-15) | `dispatch_smart --agent claude` (inline pool post-cutover) | Sweep edit (sonnet), architecture (opus). | Pre-2026-06-15: burns chat credits. Post: agentic pool ($200/mo Max). | [[feedback_inline_claude_post_agentic_pool]], [[feedback_dispatch_codex_for_code_changes]] |
 | hermes / grok-4.3 | `hermes -z --provider openrouter -m grok-4.3` | x.com / twitter.com URL fetch (only) | Other adapters get login-walled. Pay-per-call $. | [[feedback_grok_for_x_dot_com_links]], [[feedback_grok_unreliable_t0_author_via_opencode]] (DO NOT use as T0 author) |
-| qwen-3.6 / openrouter | `hermes -z --provider openrouter -m <id>` | Many models reachable via openrouter. | Not in dispatch_smart `--agent` choices. Pay-per-call. | [[reference_qwen_hermes_openrouter]] |
+| qwen-3.6 / openrouter | `dispatch_smart --agent qwen` (native); `hermes -z --provider openrouter -m <id>` (additional models via openrouter) | Many models reachable. Native `qwen` agent wired into `SUPPORTED_AGENTS` with per-task-class defaults. | Pay-per-call. Verify task-class model in `TASK_CLASSES[<class>].models["qwen"]` before relying on a specific tier. | [[reference_qwen_hermes_openrouter]] |
 
 ## Task class → agent decision tree
 

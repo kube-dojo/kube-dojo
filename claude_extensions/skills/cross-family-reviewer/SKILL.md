@@ -8,6 +8,8 @@ last_calibrated: 2026-05-24
 
 Run a rigorous PR review on KubeDojo code or content. **Different model family than the author** ([`docs/review-protocol.md`](../../../docs/review-protocol.md)) — that's the load-bearing property. Author-family review is allowed for style/lint but never substitutes for cross-family.
 
+> **Routing source-of-truth precedence**: `docs/review-protocol.md` defines the cross-family *principle* but its concrete pairings (Claude → Codex etc.) predate Decision Card C (2026-05-24). The active routing table below + [`STATUS.md`](../../../STATUS.md) "Active policies" supersede the stale defaults in `review-protocol.md` until that doc is refreshed.
+
 This skill describes the **review contract**. For pedagogical content scoring against the 7-dim rubric, layer in [[module-quality-reviewer]].
 
 ## Routing table (Decision Card C, 2026-05-24)
@@ -30,7 +32,7 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 3. **For curriculum content**: also run [[module-quality-reviewer]] (7-dim rubric).
 4. **For code**: run the relevant linter + tests (`.venv/bin/ruff check`, `npx tsc --noEmit`, `npx eslint`, `.venv/bin/pytest`, `npm test`).
 5. **For workflows** (`.github/workflows/**`): `uvx zizmor --offline --strict-collection .github/` ([[.claude/rules/github-actions-security]]).
-6. **For modules**: `python scripts/quality/verify_module.py <path>` for density gates.
+6. **For modules**: `.venv/bin/python scripts/quality/verify_module.py <path>` for density gates.
 7. **For lab content**: actually run the `bash`/`kubectl`/`yaml` snippets in a sandbox.
 8. **Verify all external citations** ([[feedback_citation_verify_or_remove]]) — burden of proof is on KEEPING. If not `supports`, flag for removal.
 9. **Grep for sibling failures** — same anti-pattern likely elsewhere.
@@ -81,7 +83,7 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 
 ## Anti-patterns to flag (codebase-wide)
 
-- Tests that mock the database — must hit a real DB ([[feedback memory: integration tests]]).
+- Tests that mock the database when an integration target exists — favor a real DB / fixtures over mocks for boundary tests.
 - Hard-coded SHAs as version pins without comment (must be `# vX.Y.Z` for Dependabot) ([[.claude/rules/github-actions-security §1]]).
 - `persist-credentials: true` (default) on `actions/checkout` without a push need ([[.claude/rules/github-actions-security §3]]).
 - Workflow-level `permissions:` with privileged scopes ([[.claude/rules/github-actions-security §4]]).

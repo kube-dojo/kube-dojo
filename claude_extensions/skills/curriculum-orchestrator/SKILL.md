@@ -96,7 +96,7 @@ composer-2.5                            →  codex
 orchestrator inline edits               →  composer-2.5
 ```
 
-Everything not reviewed by composer-2.5 has to be reviewed by composer-2.5 (user policy refinement). The 388-module review epic (#1504) executes this on the back-catalog.
+Per user policy refinement: every shipped module must carry a composer-2.5 cross-family review record, even those merged before Decision Card C — the `shipped_unreviewed` backlog gets composer-2.5 backfilled. The 388-module review epic (#1504) executes this on the back-catalog.
 
 ## Curriculum-specific failure modes
 

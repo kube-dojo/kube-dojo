@@ -138,9 +138,9 @@ Cap STATUS.md at ~100 lines (the recent compression target — commit `dcd86360`
 
 ## Serving the handoff
 
-Per [[feedback_html_artifacts_via_local_api]]: HTML artifacts MUST be served via `http://127.0.0.1:8768/`, never `open <file>` or `file://`.
+Per [[feedback_html_artifacts_via_local_api]]: HTML artifacts MUST be served via the local API, never `open <file>` or `file://`. **Port map** — `8768` = local API (briefing, pipeline state, JSON endpoints); `8910` = session-state HTML renderer (`render_url` for dated handoffs).
 
-The render URL is `http://127.0.0.1:8910/docs/session-state/<file>.html` (local API renders + serves). Briefing API surfaces it as `kubedojo:session` → `render_url`.
+The render URL pattern is `http://127.0.0.1:8910/docs/session-state/<file>.html`. Briefing API (`8768`) surfaces it as `kubedojo:session` → `render_url`.
 
 ## Commit the handoff in the same PR as the work, or in a dedicated docs commit
 
@@ -169,7 +169,7 @@ The handoff cites/links to these; it does not duplicate them.
 
 ## Anti-patterns
 
-- Inlining the full handoff into STATUS.md ([[feedback memory: STATUS.md is index not log]]).
+- Inlining the full handoff into STATUS.md — STATUS.md is the index, dated handoff HTML is the log (see commit `dcd86360` STATUS.md compression).
 - Skipping the dispatch ledger — that's the audit trail, not optional.
 - Writing the handoff in Markdown when the HTML rendering matters (tables, pill labels) — use HTML.
 - Forgetting to refresh `## TODO` / `## Blockers` — the briefing API will surface stale data.
