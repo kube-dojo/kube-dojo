@@ -983,7 +983,7 @@ Success criteria:
 
 ## Next Module
 
-Next: [Module 1.2: Building a RAG Retrieval Pipeline](./module-1.2-building-a-rag-retrieval-pipeline/)
+*Next module coming soon.*
 
 ---
 

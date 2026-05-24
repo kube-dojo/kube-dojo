@@ -431,4 +431,4 @@ spec:
 
 ## Next Module
 
-[Module 5.5: Runtime Security](../module-5.5-runtime-security/) - Continue from admission-time policy into runtime detection and response for workloads that have already been admitted.
+[Module 6.1: Kubernetes Audit Logging](../part6-runtime-security/module-6.1-audit-logging/) - Continue from admission-time policy into runtime audit logging and forensics for workloads that have already been admitted.

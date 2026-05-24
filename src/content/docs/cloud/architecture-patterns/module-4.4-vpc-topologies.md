@@ -437,7 +437,7 @@ k logs -n kube-system -l k8s-app=aws-node --tail=100
 
 ## Next Module
 
-Next, continue to [Module 4.5: Serverless and Event-Driven Cloud Patterns](./module-4.5-serverless-event-driven/) to compare network topology decisions with higher-level event-driven architectures.
+*Next module coming soon.*
 
 ## Sources
 

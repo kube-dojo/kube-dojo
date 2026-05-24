@@ -2534,7 +2534,7 @@ Every shadow should have an exit condition such as a paired-request budget, dela
 
 ## Next Module
 
-Next, continue to [Module 5.11: Drift-Triggered Auto-Retraining Loop](../module-5.11-drift-retraining/), where production monitoring signals become retraining decisions.
+Next, continue to Module 5.11: Drift-Triggered Auto-Retraining Loop, where production monitoring signals become retraining decisions.
 
 Traffic patterns decide how a candidate model earns exposure.
 

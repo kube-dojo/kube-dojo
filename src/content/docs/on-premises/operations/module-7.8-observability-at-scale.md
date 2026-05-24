@@ -532,7 +532,7 @@ k delete namespace observability
 
 ## Next Module
 
-Continue to [Module 7.9: Capacity Planning and Forecasting](../module-7.9-capacity-planning/) to learn how to model the growth of the platform you have just built, set the cardinality and storage budgets that keep it healthy, and forecast when you will need to add ingester capacity before the page fires.
+*Next module coming soon.*
 
 ## Further Reading
 

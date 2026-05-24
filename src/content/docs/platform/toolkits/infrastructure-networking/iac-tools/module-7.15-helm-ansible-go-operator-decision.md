@@ -787,4 +787,4 @@ kind delete cluster --name operator-lab
 
 ## Next Module
 
-The IaC Tools Toolkit is complete. Continue to the [Platform Engineering Disciplines](../../../disciplines/) for production-grade platform architecture, or explore the [Operators Toolkit](../../operators/) to go deeper on Go Operator patterns including webhooks, multi-version CRD management, and end-to-end testing with `envtest`.
+The IaC Tools Toolkit is complete. Continue to the [Platform Engineering Disciplines](../../../disciplines/) for production-grade platform architecture, or explore the Operators Toolkit to go deeper on Go Operator patterns including webhooks, multi-version CRD management, and end-to-end testing with `envtest`.

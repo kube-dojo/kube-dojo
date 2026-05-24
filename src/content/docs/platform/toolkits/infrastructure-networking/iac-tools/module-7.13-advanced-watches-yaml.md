@@ -828,4 +828,4 @@ The `ignored-app` CR should have no status conditions because the operator never
 
 ## Next Module
 
-[Module 7.14: AWX and Event-Driven Ansible](../module-7.14-awx-eda/) — Move beyond in-cluster operator patterns to the AWX control plane and learn how Event-Driven Ansible connects external event sources to Ansible automation without writing a custom controller.
+*Next module coming soon.*
