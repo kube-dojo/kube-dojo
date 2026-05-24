@@ -71,9 +71,9 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 | Role | Primary | Fallback | Notes |
 |---|---|---|---|
-| T0 content author | composer-2.5 (cursor IDE) | codex gpt-5.5 (writer), deepseek-v4-pro | composer-2.5 verifier ≠ runnability — always pair with codex R1 ([[feedback_composer_2_5_viable_for_t0_content]]) |
-| Bug fixer | composer-2.5 (cursor IDE) | codex | Cursor proved 3/3 first-commit on session 51 bug PRs ([[feedback_cursor_is_strong_bug_fixer]]) |
-| Cross-family reviewer of CLAUDE-authored | composer-2.5 | codex (if cursor unavailable) | Decision Card C 2026-05-24 |
+| T0 content author | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 (writer), deepseek-v4-pro | composer-2.5 verifier ≠ runnability — always pair with codex R1 ([[feedback_composer_2_5_viable_for_t0_content]]) |
+| Bug fixer | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex | Cursor proved 3/3 first-commit on session 51 bug PRs ([[feedback_cursor_is_strong_bug_fixer]]) |
+| Cross-family reviewer of CLAUDE-authored | composer-2.5 (`dispatch_smart review --agent cursor --model composer-2.5`) | codex (fallback) | Decision Card C 2026-05-24 |
 | Cross-family reviewer of COMPOSER-2.5-authored | codex (gpt-5.5, danger mode, worktree) | gemini-3.1-pro-preview | [[feedback_codex_review_danger_mode]] |
 | Cross-family reviewer of CODEX-authored | composer-2.5 OR gemini-3.1-pro-preview OR agy→Claude | claude headless | Mix to avoid OAuth burst |
 | LLM judge / sweep edit | sonnet via `dispatch_smart edit` | — | Throttle window: route review/edit to codex/agy/gemini ([[feedback_claude_tier_discipline_opus_is_constrained]]) |

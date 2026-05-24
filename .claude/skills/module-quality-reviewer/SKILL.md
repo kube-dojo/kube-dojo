@@ -13,7 +13,7 @@ Review KubeDojo modules against the quality rubric at `docs/quality-rubric.md`. 
 ```
 Author                                  →  Cross-family reviewer
 codex / deepseek / gemini / claude /
-agy / anyone else                       →  composer-2.5 (cursor IDE)
+agy / anyone else                       →  composer-2.5 (cursor-agent CLI or cursor IDE)
 composer-2.5                            →  codex (gpt-5.5, danger mode, worktree)
 orchestrator inline edits               →  composer-2.5
 ```
@@ -126,7 +126,7 @@ Every PR must be reviewed by a different model family than the author per [`docs
 
 | Pair | Dispatch |
 |---|---|
-| Review claude-authored | Open PR; comment `cursor please review`; cursor picks up via IDE with composer-2.5 model selected. |
+| Review claude-authored | `python scripts/dispatch_smart.py review --agent cursor --model composer-2.5 --mode danger --worktree pr-<N>-review` (headless cursor-agent CLI). OR open in cursor IDE with composer-2.5 selected. |
 | Review composer-2.5-authored | `python scripts/dispatch_smart.py review --agent codex --mode danger --worktree <pr-slug>` ([[feedback_codex_review_danger_mode]]) |
 | Review codex-authored | Same as claude-authored (composer-2.5 cross-family) OR `dispatch_smart review --agent gemini --model gemini-3.1-pro-preview` if cursor unavailable. Fall back to `--agent claude` on Gemini 503 ([[feedback_headless_claude_gemini_fallback]]). |
 | Review agy-authored | `dispatch_smart review --agent codex` (different family). |
