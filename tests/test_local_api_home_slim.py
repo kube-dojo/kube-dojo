@@ -26,8 +26,8 @@ def _home(tmp_path: Path) -> str:
     return body
 
 
-def test_home_body_stays_under_20kb(tmp_path: Path) -> None:
-    assert len(_home(tmp_path).encode()) < 20_480
+def test_home_body_stays_under_26kb(tmp_path: Path) -> None:
+    assert len(_home(tmp_path).encode()) < 26_624
 
 
 def test_home_keeps_topnav_and_route_summary_cards(tmp_path: Path) -> None:
@@ -42,6 +42,8 @@ def test_home_keeps_topnav_and_route_summary_cards(tmp_path: Path) -> None:
     assert 'class="activity-summary-card" href="/activity"' in html
     assert 'class="op-summary-card health-summary-card" href="/health"' in html
     assert 'class="channels-summary-card" href="/channels"' in html
+    assert 'class="artifacts-summary-card" href="/artifacts"' in html
+    assert 'class="decisions-summary-card" href="/decisions"' in html
 
 
 def test_home_does_not_render_tables(tmp_path: Path) -> None:

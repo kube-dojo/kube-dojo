@@ -53,6 +53,8 @@ def test_artifacts_index_lists_seeded_html_by_category(tmp_path: Path) -> None:
     assert "/artifacts/docs/decisions/decision-card.md" in body
     assert "Markdown files" in body
     assert '<a class="navlink active" href="/artifacts"' in body
+    assert 'id="artifact-search"' in body
+    assert "Recently updated" in body
 
 
 def test_api_artifacts_returns_json_shape(tmp_path: Path) -> None:
@@ -70,7 +72,7 @@ def test_api_artifacts_returns_json_shape(tmp_path: Path) -> None:
     assert isinstance(body["Handoffs"][0]["size_bytes"], int)
 
 
-def test_artifact_html_serves_with_html_content_type(tmp_path: Path) -> None:
+def test_artifact_html_uses_shell_by_default(tmp_path: Path) -> None:
     _write(tmp_path / "docs" / "references" / "external" / "ref.html", "<title>Reference</title>")
 
     status, body, content_type = local_api.route_request(
@@ -79,8 +81,36 @@ def test_artifact_html_serves_with_html_content_type(tmp_path: Path) -> None:
     )
 
     assert status == 200
+    assert content_type == "text/html; charset=utf-8"
+    assert isinstance(body, str)
+    assert 'class="artifact-shell"' in body
+    assert 'class="artifact-frame"' in body
+    assert "?raw=1" in body
+
+
+def test_artifact_html_raw_query_serves_bytes(tmp_path: Path) -> None:
+    _write(tmp_path / "docs" / "references" / "external" / "ref.html", "<title>Reference</title>")
+
+    status, body, content_type = local_api.route_request(
+        tmp_path,
+        "/artifacts/docs/references/external/ref.html?raw=1",
+    )
+
+    assert status == 200
     assert body == b"<title>Reference</title>"
     assert content_type == "text/html; charset=utf-8"
+
+
+def test_research_excluded_from_default_index(tmp_path: Path) -> None:
+    _write(tmp_path / "docs" / "research" / "paper.html", "<title>Research Paper</title>")
+
+    status, body, _ = local_api.route_request(tmp_path, "/artifacts")
+    assert status == 200
+    assert "Research Paper" not in body
+
+    status, body, _ = local_api.route_request(tmp_path, "/artifacts?include=research")
+    assert status == 200
+    assert "Research Paper" in body
 
 
 def test_artifact_markdown_renders_with_html_content_type(tmp_path: Path) -> None:
@@ -135,9 +165,13 @@ def test_artifact_nonexistent_returns_404(tmp_path: Path) -> None:
     assert status == 404
 
 
-def test_operator_nav_links_to_artifacts(tmp_path: Path) -> None:
+def test_home_has_artifacts_and_decisions_cards(tmp_path: Path) -> None:
     status, body, content_type = local_api.route_request(tmp_path, "/")
 
     assert status == 200
     assert "text/html" in content_type
     assert '<a class="navlink" href="/artifacts">Artifacts</a>' in body
+    assert 'class="artifacts-summary-card" href="/artifacts"' in body
+    assert "View artifacts" in body
+    assert 'class="decisions-summary-card" href="/decisions"' in body
+    assert "View decisions" in body

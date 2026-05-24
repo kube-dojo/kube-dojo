@@ -1,6 +1,42 @@
 from __future__ import annotations
 
 
+DESIGN_SYSTEM_LINK = '<link rel="stylesheet" href="/static/design-system.css">'
+
+POLL_STALE_CSS = """
+    .poll-stale { opacity: 0.72; }
+    .poll-stale[data-poll-ts]::after { content: " · stale"; color: var(--amber, #f59e0b); font-size: 0.85em; font-weight: 700; }
+"""
+
+
+def render_poll_stale_script() -> str:
+    return """
+<script>
+(() => {
+  const STALE_MS = 24 * 60 * 60 * 1000;
+  function markStalePolls() {
+    document.querySelectorAll("[data-poll-ts]").forEach((el) => {
+      const ts = Number(el.dataset.pollTs) * 1000;
+      if (Number.isFinite(ts) && ts > 0 && Date.now() - ts > STALE_MS) {
+        el.classList.add("poll-stale");
+      }
+    });
+  }
+  markStalePolls();
+  setInterval(markStalePolls, 60000);
+})();
+</script>"""
+
+
+def render_global_chrome(*, include_search: bool = True, include_afk: bool = False) -> str:
+    parts: list[str] = []
+    if include_search:
+        parts.append(render_search_widget())
+    if include_afk:
+        parts.append(render_afk_notify_markup())
+    return "\n".join(parts)
+
+
 AFK_NOTIFY_CSS = """
     .afk-notify{position:fixed;right:18px;bottom:18px;z-index:30;display:flex;align-items:center;gap:10px;max-width:min(440px,calc(100vw - 36px));border:1px solid rgba(61,214,198,.5);background:#121416;color:var(--text);border-radius:6px;padding:10px 12px;box-shadow:0 18px 60px rgba(0,0,0,.4);font-size:13px}
     .afk-notify[hidden]{display:none}

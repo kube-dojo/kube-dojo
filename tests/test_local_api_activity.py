@@ -35,7 +35,7 @@ def test_activity_route_returns_real_page_with_filters(tmp_path: Path) -> None:
     assert 'id="activity-agent-filter"' in html
     for label in ["Fundamentals", "Cloud", "Certifications", "Platform", "Other"]:
         assert f">{label}</option>" in html
-    for label in ["claude", "codex", "gemini", "autopilot"]:
+    for label in ["claude", "codex", "gemini", "grok", "deepseek", "qwen", "cursor", "composer", "autopilot"]:
         assert f">{label}</option>" in html
 
 

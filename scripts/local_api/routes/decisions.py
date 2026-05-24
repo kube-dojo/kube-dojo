@@ -18,6 +18,7 @@ try:
     from ai_agent_bridge._fts import setup_decisions_fts
     from local_api.routes.ui_fragments import (
         AFK_NOTIFY_CSS,
+        DESIGN_SYSTEM_LINK,
         render_afk_notify_markup,
         render_search_widget,
     )
@@ -25,6 +26,7 @@ except ModuleNotFoundError:
     from scripts.ai_agent_bridge._fts import setup_decisions_fts
     from scripts.local_api.routes.ui_fragments import (
         AFK_NOTIFY_CSS,
+        DESIGN_SYSTEM_LINK,
         render_afk_notify_markup,
         render_search_widget,
     )
@@ -597,25 +599,72 @@ def _resolve_decision_render_path(repo_root: Path, raw: str) -> Path | None:
     return path
 
 
+def _render_decision_not_found_html(
+    *,
+    top_nav_css: str,
+    render_top_nav_fn: Callable[[str], str],
+    raw_decision: str,
+) -> str:
+    safe = _html.escape(raw_decision or "unknown", quote=True)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision not found - KubeDojo Local Monitor</title>
+  {DESIGN_SYSTEM_LINK}
+  <style>
+    :root{{--bg:#101112;--text:#f3f4f2;--muted:#9ca3a3;--topnav-h:45px}}
+    body{{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}}
+{top_nav_css}
+    main{{max-width:720px;margin:0 auto;padding:48px 24px}}
+    h1{{margin:0 0 12px;font-size:24px}}
+    p{{color:var(--muted)}}
+    a{{color:#3dd6c6}}
+  </style>
+</head>
+<body>
+{render_top_nav_fn("decisions")}
+<main>
+  <h1>Decision not found</h1>
+  <p>No decision file matched <code>{safe}</code>.</p>
+  <p><a href="/decisions">&larr; Back to decisions</a></p>
+</main>
+</body>
+</html>"""
+
+
 def render_decision_detail_html(
     repo_root: Path,
     raw_decision: str,
     *,
     top_nav_css: str,
     render_top_nav_fn: Callable[[str], str],
+    render_markdown_fn: Callable[[str], str] | None = None,
 ) -> RouteResponse:
     path = _resolve_decision_render_path(repo_root, raw_decision)
     if path is None or not path.exists():
-        return 404, {"error": "decision_not_found"}, "application/json; charset=utf-8"
+        return (
+            404,
+            _render_decision_not_found_html(
+                top_nav_css=top_nav_css,
+                render_top_nav_fn=render_top_nav_fn,
+                raw_decision=raw_decision,
+            ),
+            "text/html; charset=utf-8",
+        )
     body = path.read_text(encoding="utf-8")
     title = _decision_title(body, path.name)
     rel = path.relative_to(repo_root).as_posix()
+    rendered_body = render_markdown_fn(body) if render_markdown_fn is not None else _render_markdownish(body)
+    body_tag = "article" if render_markdown_fn is not None else "div"
     return 200, f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{_html.escape(title)} - Decisions</title>
+  {DESIGN_SYSTEM_LINK}
   <style>
     :root{{--bg:#101112;--panel:#17191b;--line:#30343a;--text:#f3f4f2;--muted:#9ca3a3;--teal:#3dd6c6;--topnav-h:45px}}
     body{{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.55}}
@@ -634,7 +683,7 @@ def render_decision_detail_html(
 <main>
   <a href="/decisions">&larr; Decisions</a>
   <div class="path">{_html.escape(rel)}</div>
-  {_render_markdownish(body)}
+  <{body_tag}>{rendered_body}</{body_tag}>
 </main>
 </body>
 </html>""", "text/html; charset=utf-8"
@@ -646,6 +695,7 @@ def route_decision_page_request(
     *,
     top_nav_css: str,
     render_top_nav_fn: Callable[[str], str],
+    render_markdown_fn: Callable[[str], str] | None = None,
 ) -> RouteResponse | None:
     if path == "/decisions":
         return 200, render_decisions_index_html(
@@ -660,6 +710,7 @@ def route_decision_page_request(
             raw,
             top_nav_css=top_nav_css,
             render_top_nav_fn=render_top_nav_fn,
+            render_markdown_fn=render_markdown_fn,
         )
     return None
 
