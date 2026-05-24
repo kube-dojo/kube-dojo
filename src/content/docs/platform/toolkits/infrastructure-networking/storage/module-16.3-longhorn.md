@@ -955,7 +955,7 @@ rm -f kind-longhorn-config.yaml longhorn-test-pvc.yaml
 
 ## Next Module
 
-Continue to [Module 16.4: Storage Performance And Capacity Planning](../module-16.4-storage-performance-capacity/) to design storage classes, capacity limits, rebuild budgets, and performance guardrails for production stateful workloads.
+*Next module coming soon.*
 
 ## Sources
 

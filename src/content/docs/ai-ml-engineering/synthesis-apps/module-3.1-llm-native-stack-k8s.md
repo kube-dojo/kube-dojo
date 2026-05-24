@@ -1367,4 +1367,4 @@ Success criteria:
 
 ## Next Module
 
-[Next: Wiring the LLM App — The Orchestration Layer](module-3.2-wiring-the-llm-app/) turns this verified substrate into an application service with retrieval calls, state handling, context-budget control, and retry behavior for the failure modes you observed here.
+*Next module coming soon.*

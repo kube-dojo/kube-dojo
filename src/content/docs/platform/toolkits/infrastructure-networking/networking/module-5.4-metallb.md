@@ -967,7 +967,7 @@ kind delete cluster --name metallb-lab
 
 ## Next Module
 
-[Module 5.5: Ingress Controllers](../module-5.5-ingress-controllers/) teaches the HTTP routing layer that commonly sits behind a MetalLB-provided external IP.
+*Next module coming soon.*
 
 ## Sources
 

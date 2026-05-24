@@ -32,9 +32,9 @@ Before starting this toolkit:
 | 9.6 | [LangChain & LlamaIndex](module-9.6-langchain-llamaindex/) | `[COMPLEX]` | 50-60 min |
 | 9.7 | [GPU Scheduling](module-9.7-gpu-scheduling/) | `[COMPLEX]` | 50 min |
 | 9.8 | [KServe](module-9.8-kserve/) | `[COMPLEX]` | 55-65 min |
-| 9.9 | [Seldon Core](module-9.9-seldon-core/) | `[COMPLEX]` | 55-65 min |
-| 9.10 | [BentoML](module-9.10-bentoml/) | `[COMPLEX]` | 50-60 min |
-| 9.11 | [Bare-Metal MLOps](module-9.11-bare-metal-mlops/) | `[COMPLEX]` | 60-70 min |
+| 9.9 | Seldon Core | `[COMPLEX]` | 55-65 min |
+| 9.10 | BentoML | `[COMPLEX]` | 50-60 min |
+| 9.11 | Bare-Metal MLOps | `[COMPLEX]` | 60-70 min |
 
 ## Learning Outcomes
 

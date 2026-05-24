@@ -452,7 +452,7 @@ kubectl -n lab run verifier --rm -i --restart=Never --image=curlimages/curl:8.7.
 
 ## Next Module
 
-- [Next: Module 3.3 — Gateway and Traffic Policies for On-Prem Kubernetes](../module-3.3-kubernetes-gateway-traffic-policies/)
+*Next module coming soon.*
 
 ## Sources
 

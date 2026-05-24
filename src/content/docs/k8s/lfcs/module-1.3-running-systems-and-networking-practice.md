@@ -548,4 +548,4 @@ Success criteria should prove both repair and cleanup, so do not mark the exerci
 
 ## Next Module
 
-Next: [LFCS Storage and Filesystems Practice](./module-1.4-storage-and-filesystems-practice/) builds on this recovery mindset by practicing disks, mounts, swap, permissions, and persistent filesystem configuration.
+*Next module coming soon.*

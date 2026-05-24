@@ -718,4 +718,4 @@ kubectl get deployment,svc,pods -n helm-lab
 
 ## Next Module
 
-Next: [Module 1.4: Kubeadm Cluster Setup](./module-1.4-kubeadm-cluster-setup/) - build on Helm release operations by learning how Kubernetes clusters are bootstrapped, configured, and validated.
+*Next module coming soon.*

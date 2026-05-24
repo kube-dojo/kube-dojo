@@ -1087,7 +1087,7 @@ The CML docs show workflows that install DVC, run `dvc pull`, run `dvc repro`, a
 
 This module only introduces the pattern.
 
-The dedicated CI/CD module appears later as [Module 5.12: Continuous Machine Learning with CML](../module-5.12-cml/).
+The dedicated CI/CD module appears later as Module 5.12: Continuous Machine Learning with CML.
 
 Do not duplicate the whole CML design here.
 
@@ -1867,7 +1867,7 @@ Add a data-quality stage before `train`.
 
 Make it fail if `churn` is missing or if the positive class ratio falls below a chosen threshold.
 
-Then compare your design with the next module, [Module 5.8: Great Expectations Data Quality](../module-5.8-great-expectations/).
+Then compare your design with the next module, Module 5.8: Great Expectations Data Quality.
 
 The transfer lesson is important:
 
@@ -1925,9 +1925,7 @@ Split the dataset into meaningful partitions or shard files so unchanged content
 
 ## Next Module
 
-Next, connect versioned data to explicit data-quality contracts in [Module 5.8: Great Expectations Data Quality](../module-5.8-great-expectations/).
-
-Later, connect DVC evidence to pull request reporting and ML CI workflows in [Module 5.12: Continuous Machine Learning with CML](../module-5.12-cml/).
+*Next module coming soon.*
 
 ## Sources
 
