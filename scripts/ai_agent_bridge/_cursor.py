@@ -40,6 +40,7 @@ def _build_command(prompt: str, model: str) -> list[str]:
         model,
         "--output-format",
         "text",
+        "--",
         prompt,
     ]
 

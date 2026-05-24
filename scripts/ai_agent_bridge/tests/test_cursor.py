@@ -48,12 +48,34 @@ def test_cursor_command_construction(
         "composer-2.5",
         "--output-format",
         "text",
+        "--",
         "hello world",
     ]
     assert captured["kwargs"]["input"] == ""
     assert captured["kwargs"]["cwd"] == tmp_path
     assert captured["kwargs"]["timeout"] == 3
     assert captured["kwargs"]["capture_output"] is True
+
+
+def test_build_command_end_of_options_before_monitor_state_prompt() -> None:
+    """Regression test for #1488 — ab discuss monitor-state prefix parsed as flags.
+
+    cursor-agent uses commander.js, which treats any argv element beginning
+    with ``--`` as an option flag even after positional args have started.
+    The discuss prompt assembled by ``_channels.py:466`` always starts with
+    ``--- monitor: project state (volatile) ---``, so every cursor invocation
+    in an ``ab discuss`` channel failed with ``error: unknown option ...``
+    until the POSIX ``--`` end-of-options marker was inserted before the
+    prompt argv. See GitHub issue #1488 for the full root-cause writeup.
+    """
+
+    from ai_agent_bridge import _cursor
+
+    prompt = '--- monitor: project state (volatile) ---\n{"x": 1}'
+    command = _cursor._build_command(prompt, "composer-2.5")
+
+    assert command[-2] == "--"
+    assert command[-1] == prompt
 
 
 def test_cursor_default_model_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
