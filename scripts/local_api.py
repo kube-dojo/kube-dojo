@@ -2405,7 +2405,7 @@ _CITATION_STATUS_CACHE_LOCK = threading.Lock()
 _QUALITY_TITLE_RE = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
 _QUALITY_SOURCES_HEADING_RE = re.compile(r"^##\s+Sources\s*$", re.MULTILINE)
 _QUALITY_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
-_QUALITY_BARE_URL_RE = re.compile(r"^\s*[-*]?\s*(https?://\S+)", re.MULTILINE)
+_QUALITY_BARE_URL_RE = re.compile(r"https?://\S+")
 _QUALITY_TRACK_LABELS = {
     "ai": "AI",
     "ai-ml-engineering": "AI/ML Engineering",
