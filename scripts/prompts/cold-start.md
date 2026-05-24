@@ -1,0 +1,65 @@
+# Cold-start ritual — issue-driven agent sessions
+
+Copy-paste sequence for a fresh KubeDojo coding session. Single shell entry point:
+`scripts/cold-start.sh` (also documented in `AGENTS.md`, `CLAUDE.md`, and
+`.claude/skills/cold-start/SKILL.md`).
+
+## Ritual
+
+```
+1. Read GitHub issue #N verbatim (parent task).
+   gh issue view N --repo kube-dojo/kube-dojo.github.io
+
+2. Orient (services-up + workspace + API):
+   KUBEDOJO_ISSUE=N bash scripts/cold-start.sh
+   # Optional route discovery:
+   bash scripts/cold-start.sh --manifest
+
+3. If claiming the issue:
+   gh issue comment N --body "Claiming — worktree .worktrees/<short-name>"
+
+4. Create worktree on main (never work on primary main):
+   git worktree add .worktrees/<short-name> -b <branch> main
+
+5. Work in the worktree only. Do not merge — cross-family review via
+   scripts/dispatch.py or scripts/ab; organizer merges.
+
+6. Read the full handoff file ONLY if briefing/orient leaves a narrative gap.
+   Path comes from --- kubedojo:session --- (API) or --- kubedojo:handoff-path --- (fallback).
+```
+
+## What the script emits
+
+| Section | Source |
+|---------|--------|
+| `kubedojo:issue` | `KUBEDOJO_ISSUE=N` reminder (optional) |
+| `kubedojo:workspace` | `git status --short` |
+| `kubedojo:pending-decisions` | `docs/decisions/pending/` (first 5) |
+| `kubedojo:briefing` | `GET /api/briefing/session?compact=1` |
+| `kubedojo:orient` | `GET /api/orient` — primary action + alternatives |
+| `kubedojo:session` | `GET /api/session/current` — handoff pointer only |
+| `kubedojo:manifest` | `GET /api/state/manifest` (with `--manifest`) |
+
+API base: `http://127.0.0.1:8768` (`KUBEDOJO_API` override). Timeout: 2s per request.
+
+## API-down fallback
+
+When the briefing API does not respond after retries, the script **exits 0** and prints:
+
+- First 40 lines of `STATUS.md`
+- Latest handoff path parsed from the `## Latest handoff` table
+
+Then read `CLAUDE.md` / `MEMORY.md` only if the fallback block is insufficient.
+
+## Before claiming / fixing / re-reviewing
+
+After cold-start, use the local API (see `scripts/agent_onboarding.md`):
+
+- Claim work: `GET /api/pipeline/leases`
+- Fix module: `GET /api/module/{key}/state`
+- Re-review: `GET /api/reviews?module={key}`
+
+## Skip cold-start
+
+Content dispatches that must not invoke skills or shell scripts should say so
+explicitly in the brief (see session-50 dispatch preamble pattern).

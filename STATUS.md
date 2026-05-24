@@ -15,9 +15,12 @@
 
 ## Cold-start protocol
 
-1. Hit `curl -s http://127.0.0.1:8768/api/briefing/session?compact=1` (the API parses the `## TODO` and `## Blockers` sections of this file).
-2. Scan [`docs/decisions/pending/`](./docs/decisions/pending/) for outstanding Decision Cards and surface any pending user decision before unrelated work.
-3. Read the row in **Latest handoff** below — that's the only file you need for current state.
+1. **Issue-driven:** read GitHub issue #N verbatim, then `KUBEDOJO_ISSUE=N bash scripts/cold-start.sh`.
+   **Standalone:** `bash scripts/cold-start.sh` (add `--manifest` for route discovery).
+   The script runs services-up, `git status`, pending decisions, compact briefing, orient, and session handoff pointer.
+   On API failure it prints a STATUS excerpt + handoff path (exit 0). Ritual: [`scripts/prompts/cold-start.md`](./scripts/prompts/cold-start.md).
+2. Scan [`docs/decisions/pending/`](./docs/decisions/pending/) for outstanding Decision Cards and surface any pending user decision before unrelated work (also listed by the script).
+3. Read the row in **Latest handoff** below only when briefing/orient leave a narrative gap — that's the file for current state.
 4. Skim **Cross-thread notes (still active)** for stuff that spans sessions.
 5. If picking up a long-running thread, click into the relevant **Predecessor chain** row.
 6. Pre-2026-04-28 sessions (29 of them, going back to session 1) live in [`docs/session-state/archive-pre-2026-04-28.md`](./docs/session-state/archive-pre-2026-04-28.md) — kept for spelunking only, not actively maintained.

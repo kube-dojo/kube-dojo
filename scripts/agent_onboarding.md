@@ -4,10 +4,34 @@ Single source of concrete `curl` recipes for any agent (Claude, Codex, Gemini) s
 
 ## 1. Cold-start orientation
 
+**Single entry point** (preferred — replaces manual curl crawl):
+
 ```bash
-# One call replaces "cat CLAUDE.md + STATUS.md + git log -20 + git status + ls".
-# Compact form is the agent path — ~0.7K tokens, 76% reduction vs. the crawl.
-curl -s http://127.0.0.1:8768/api/briefing/session?compact=1
+# Issue-driven session:
+KUBEDOJO_ISSUE=1234 bash scripts/cold-start.sh
+
+# Standalone session:
+bash scripts/cold-start.sh
+
+# Optional route discovery:
+bash scripts/cold-start.sh --manifest
+```
+
+Emits labeled sections: `workspace`, `pending-decisions`, `briefing`, `orient`, `session`.
+On API failure: `STATUS.md` excerpt + handoff path, exit 0. Copy-paste ritual:
+[`scripts/prompts/cold-start.md`](prompts/cold-start.md).
+
+Individual endpoints (when you need one call without the full ritual):
+
+```bash
+# Compact briefing — ~0.7K tokens, 76% reduction vs. the crawl.
+curl -s --max-time 2 http://127.0.0.1:8768/api/briefing/session?compact=1
+
+# Punch-line orientation — primary action + up to 3 alternatives (~1.3 KB).
+curl -s --max-time 2 http://127.0.0.1:8768/api/orient
+
+# Latest handoff pointer (path + title/tldr, not full HTML body).
+curl -s --max-time 2 http://127.0.0.1:8768/api/session/current
 
 # Full briefing (~1.5K) when you also want next_reads + the worktree list.
 curl -s http://127.0.0.1:8768/api/briefing/session
@@ -91,14 +115,16 @@ The same endpoints feed an HTML dashboard at `http://127.0.0.1:8768/`. The Opera
 
 ## 7. Fallback
 
-If the API is down, agents should:
+`bash scripts/cold-start.sh` handles API-down automatically: prints the first 40 lines of
+`STATUS.md` plus the Latest handoff path, then exits 0.
 
-1. `cat STATUS.md` for focus + blockers.
+If that block is insufficient:
+
+1. Read the handoff file from the `kubedojo:handoff-path` section.
 2. `cat CLAUDE.md` for project overview.
-3. `git log -20 --oneline` for recent commits.
-4. `git status` for worktree state.
+3. `git status` for worktree state (also emitted by the script when API is up).
 
-The briefing endpoint exists so none of the above is normally necessary.
+The briefing API exists so deep file crawls are normally unnecessary.
 
 ## 8. Conventions
 

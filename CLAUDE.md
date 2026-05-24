@@ -4,47 +4,28 @@ KubeDojo — free, open-source cloud native curriculum.
 
 ## Agent Orientation (first call on a cold start)
 
-The orientation sequence is API-first to reduce token use and get a complete cold-start picture (`actions`, blockers, leases, and top modules) before reading local handoff files.
+**Issue-driven sessions:** read the GitHub issue verbatim, then run one script:
 
-1. Pull compact briefing:
 ```bash
-curl -s --max-time 2 "http://127.0.0.1:8768/api/briefing/session?compact=1"
-```
-If 200, parse the payload and proceed. If timeout or non-200, record `API down` — still run steps 2 and 3 (local filesystem state is independent of the API), then fall back to step 6 instead of step 4.
-
-2. Run local working-tree awareness:
-```bash
-git status --short
+KUBEDOJO_ISSUE=N bash scripts/cold-start.sh
 ```
 
-3. Scan for blocking decisions:
-```bash
-ls docs/decisions/pending/
-```
-Respect `.claude/rules/decision-card.md` and only process what is declared blocking.
+Standalone session: `bash scripts/cold-start.sh` (add `--manifest` for route discovery).
 
-4. Pull the latest handoff via API (preferred) or fall back to the file:
-```bash
-curl -s --max-time 2 "http://127.0.0.1:8768/api/session/current"
-```
-Returns the most recent handoff path plus predecessor chain. Only read the underlying `docs/session-state/<date>-*.{md,html}` file when the briefing leaves a real narrative-why gap; use the path from the API response or from STATUS.md's `Latest handoff` row.
+The script is API-first: services-up, `git status`, pending Decision Cards, then compact
+briefing + orient punch-line + session handoff pointer. It exits 0 with a `STATUS.md`
+fallback when the API is down. Full ritual: [`scripts/prompts/cold-start.md`](scripts/prompts/cold-start.md).
+Individual curl recipes: [`scripts/agent_onboarding.md`](scripts/agent_onboarding.md).
 
-5. Optional situational check for recent orchestration context:
-```bash
-curl -s --max-time 2 "http://127.0.0.1:8768/api/activity?limit=30"
-```
-
-6. Fallback path if API is down:
-`STATUS.md` → latest handoff → `MEMORY.md` → `CLAUDE.md`.
+Only read the underlying `docs/session-state/<date>-*.{md,html}` file when briefing/orient
+leave a real narrative-why gap. Respect `.claude/rules/decision-card.md` for pending decisions.
 
 **Before you claim/fix/re-review work**:
 - `GET /api/pipeline/leases`
 - `GET /api/module/{key}/state`
 - `GET /api/reviews?module={key}`
 
-**Self-discovery**: `curl -s http://127.0.0.1:8768/api/state/manifest` returns the categorized route inventory (cold_start / dashboards / pipeline / etc.) — use this when uncertain which endpoint serves a given concern.
-
-**Orientation punch-line**: `curl -s --max-time 2 http://127.0.0.1:8768/api/orient` returns the single primary action + up to 3 alternatives + blockers/alerts in ~1.3 KB. Use this when the briefing is overkill.
+Optional situational check: `GET /api/activity?limit=30`.
 
 Standalone session = main orchestrator. Drive the queue; ask only on irreversible or ambiguous actions.
 
