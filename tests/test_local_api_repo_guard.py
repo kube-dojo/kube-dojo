@@ -45,7 +45,7 @@ def test_build_healthz_payload_fails_on_stale_api_pid(tmp_path: Path) -> None:
     assert any("dead process" in warning for warning in payload["warnings"])
 
 
-def test_build_healthz_payload_warns_on_unreadable_api_pid(tmp_path: Path) -> None:
+def test_malformed_pid_file_content(tmp_path: Path) -> None:
     repo_guard = _load_repo_guard()
     pid_dir = tmp_path / ".pids"
     pid_dir.mkdir()
@@ -55,6 +55,39 @@ def test_build_healthz_payload_warns_on_unreadable_api_pid(tmp_path: Path) -> No
 
     assert payload["ok"] is False
     assert any("unreadable" in warning for warning in payload["warnings"])
+
+
+def test_unreadable_pid_file_oserror(tmp_path: Path) -> None:
+    repo_guard = _load_repo_guard()
+    pid_dir = tmp_path / ".pids"
+    pid_dir.mkdir()
+    pid_file = pid_dir / "api.pid"
+    pid_file.write_text("12345", encoding="utf-8")
+    pid_file.chmod(0o000)
+
+    try:
+        payload = repo_guard.build_healthz_payload(tmp_path)
+    finally:
+        pid_file.chmod(0o644)
+
+    assert payload["ok"] is False
+    assert any("unreadable" in warning for warning in payload["warnings"])
+
+
+def test_inspect_repo_root_warns_when_not_primary(tmp_path: Path, monkeypatch) -> None:
+    repo_guard = _load_repo_guard()
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    monkeypatch.setattr(repo_guard, "resolve_primary_repo_root", lambda _start=None: primary)
+
+    inspection = repo_guard.inspect_repo_root(worktree)
+
+    assert inspection["repo_root"] == str(worktree.resolve())
+    assert inspection["primary_repo_root"] == str(primary.resolve())
+    assert any("not the primary checkout" in warning for warning in inspection["warnings"])
+    assert repo_guard.build_healthz_payload(worktree)["ok"] is False
 
 
 def test_inspect_repo_root_worktree_cwd_is_informational(tmp_path: Path, monkeypatch) -> None:
@@ -84,3 +117,17 @@ def test_schema_documents_healthz_contract() -> None:
     healthz = next(entry for entry in schema["endpoints"] if entry["path"] == "/healthz")
     assert healthz["fields"] == ["ok", "repo_root", "primary_repo_root", "warnings"]
     assert "dead/unreadable" in healthz["desc"]
+
+
+def test_schema_documents_runtime_services_repo_field() -> None:
+    local_api = _load_local_api()
+    schema = local_api.build_api_schema()
+    runtime = next(entry for entry in schema["endpoints"] if entry["path"] == "/api/runtime/services")
+    assert runtime["fields"] == ["running", "stopped", "stale", "total", "services", "repo"]
+    assert runtime["repo"]["fields"] == [
+        "repo_root",
+        "primary_repo_root",
+        "process_cwd",
+        "warnings",
+    ]
+    assert "inspect_repo_root" in runtime["repo"]["desc"]

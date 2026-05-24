@@ -8575,7 +8575,20 @@ def build_api_schema() -> dict[str, Any]:
                 "path": "/api/tracks/readiness",
                 "desc": "Per-track, per-section production-readiness grid (cleared/in_flight/dead_letter/not_yet_enqueued)",
             },
-            {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
+            {
+                "path": "/api/runtime/services",
+                "desc": "Runtime services (pids, uptime, ports) plus repo-root inspection.",
+                "fields": ["running", "stopped", "stale", "total", "services", "repo"],
+                "repo": {
+                    "fields": ["repo_root", "primary_repo_root", "process_cwd", "warnings"],
+                    "desc": (
+                        "inspect_repo_root() output: repo_root is the served checkout; "
+                        "primary_repo_root is git common-dir parent (null when git unavailable); "
+                        "process_cwd is os.getcwd(); warnings when repo_root != primary, "
+                        "cwd is under .worktrees/, or .pids/api.pid is stale/unreadable."
+                    ),
+                },
+            },
             {"path": "/api/build/run", "desc": "Spawn `npm run build` in the background", "method": "POST"},
             {"path": "/api/build/status", "desc": "Build job status + tail + warning diff", "query": ["job_id=..."]},
             {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
