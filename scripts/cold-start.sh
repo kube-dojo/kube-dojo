@@ -34,6 +34,7 @@ Deterministic cold-start for coding agents: services-up, workspace state,
 pending decisions, then API orientation (briefing + orient + session pointer).
 
 Options:
+  --manifest           Append the /api/state/manifest section (route discovery)
   --issue N            Print issue-first reminder for GitHub issue #N
                        (same as KUBEDOJO_ISSUE=N; flag takes precedence)
 
