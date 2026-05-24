@@ -1,4 +1,4 @@
-"""Regression tests for build_quality_scores citation detection."""
+"""Regression tests for build_quality_scores heuristics (citations, diagrams)."""
 
 from __future__ import annotations
 
@@ -25,6 +25,40 @@ local_api = _load_local_api()
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _clear_quality_cache() -> None:
+    with local_api._QUALITY_AUDIT_CACHE_LOCK:
+        local_api._QUALITY_AUDIT_CACHE.clear()
+
+
+def _module_with_diagram(rel_path: str, title: str, diagram_block: str) -> None:
+    body = "\n".join(
+        [
+            "---",
+            f'title: "{title}"',
+            "---",
+            "",
+            "## Overview",
+            "",
+            diagram_block,
+            "",
+            *[f"Line {i}" for i in range(120)],
+            "",
+            "## Quick Quiz",
+            "",
+            "- Question",
+            "",
+            "## Hands-On",
+            "",
+            "1. Do thing",
+            "",
+            "## Sources",
+            "",
+            "- https://example.com",
+        ]
+    )
+    _write(Path(rel_path), body + "\n")
 
 
 def _module_with_sources(rel_path: str, title: str, sources_lines: list[str]) -> None:
@@ -84,8 +118,7 @@ def test_build_quality_scores_accepts_common_citation_formats(quality_repo: Path
         ["- Label: https://example.com"],
     )
 
-    with local_api._QUALITY_AUDIT_CACHE_LOCK:
-        local_api._QUALITY_AUDIT_CACHE.clear()
+    _clear_quality_cache()
 
     quality = local_api.build_quality_scores(quality_repo)
     by_path = {entry["path"]: entry for entry in quality["modules"]}
@@ -98,3 +131,76 @@ def test_build_quality_scores_accepts_common_citation_formats(quality_repo: Path
         module = by_path[path]
         assert module["score"] > 1.5, path
         assert not module["primary_issue"].startswith("no citations"), path
+
+
+def test_build_quality_scores_detects_diagram_formats(quality_repo: Path) -> None:
+    """Issue #1503: has_diagram must recognize Mermaid, details, and ASCII box art.
+
+    ASCII diagrams need at least five lines with Unicode box-drawing characters
+    (U+2500-U+257F). Fewer lines are incidental decoration and must not count.
+    """
+    docs = quality_repo / "src" / "content" / "docs" / "ai" / "diagrams"
+    _module_with_diagram(
+        str(docs / "module-1.1-mermaid.md"),
+        "Mermaid Diagram",
+        "```mermaid\nflowchart LR\n  A --> B\n```",
+    )
+    _module_with_diagram(
+        str(docs / "module-1.2-details.md"),
+        "Details Diagram",
+        "<details>\n<summary>Architecture</summary>\n<pre>svc</pre>\n</details>",
+    )
+    ascii_five = "\n".join(
+        [
+            "┌─────────┐     ┌─────────┐",
+            "│ Source  │────▶│  Sink   │",
+            "└─────────┘     └─────────┘",
+            "       │               │",
+            "       └───────┬───────┘",
+        ]
+    )
+    _module_with_diagram(
+        str(docs / "module-1.3-ascii-five.md"),
+        "ASCII Diagram",
+        ascii_five,
+    )
+    ascii_three = "\n".join(
+        [
+            "┌─────┐",
+            "│ one │",
+            "└─────┘",
+            "plain text line",
+            "another plain line",
+        ]
+    )
+    _module_with_diagram(
+        str(docs / "module-1.4-ascii-few.md"),
+        "ASCII Decoration",
+        ascii_three,
+    )
+    _module_with_diagram(
+        str(docs / "module-1.5-none.md"),
+        "No Diagram",
+        "Just prose about pipelines with no visual.",
+    )
+
+    _clear_quality_cache()
+    quality = local_api.build_quality_scores(quality_repo)
+    by_path = {entry["path"]: entry for entry in quality["modules"]}
+
+    for path in (
+        "ai/diagrams/module-1.1-mermaid.md",
+        "ai/diagrams/module-1.2-details.md",
+        "ai/diagrams/module-1.3-ascii-five.md",
+    ):
+        module = by_path[path]
+        assert "no diagram" not in module["primary_issue"], path
+        assert module["score"] == pytest.approx(4.3), path
+
+    for path in (
+        "ai/diagrams/module-1.4-ascii-few.md",
+        "ai/diagrams/module-1.5-none.md",
+    ):
+        module = by_path[path]
+        assert "no diagram" in module["primary_issue"], path
+        assert module["score"] == pytest.approx(3.6), path
