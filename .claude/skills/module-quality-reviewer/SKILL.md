@@ -18,12 +18,12 @@ composer-2.5                            →  codex (gpt-5.5, danger mode, worktr
 orchestrator inline edits               →  composer-2.5
 ```
 
-Every PR must be reviewed by a different model family than the author per [`docs/review-protocol.md`](../../../docs/review-protocol.md). "Tests passing" is not a substitute ([[feedback_review_policy]]).
+Every PR must be reviewed by a different model family than the author per [`docs/review-protocol.md`](../../../docs/review-protocol.md). "Tests passing" is not a substitute ([[feedback_review_policy]]). **The Decision Card C table above + [`STATUS.md`](../../../STATUS.md) "Active policies" supersede the stale concrete pairings in `docs/review-protocol.md`** until that doc is refreshed.
 
 ## How to Review
 
 1. **Read the module fully** — line-by-line, not skim ([[code-editing-safety §3]]).
-2. **Run the verifier first**: `python scripts/quality/verify_module.py <path>`. Density gates failing (median_wpp < 28, mean_wpp < 30, short-para > 20%) = immediate NEEDS_CHANGES, no rubric needed yet.
+2. **Run the verifier first**: `.venv/bin/python scripts/quality/verify_module.py <path>`. Density gates failing (median_wpp < 28, mean_wpp < 30, short-para > 20%) = immediate NEEDS_CHANGES, no rubric needed yet.
 3. **Score against ALL 7 rubric dimensions** (1-5 each).
 4. **Be STRICT** — a 4 means genuinely good, a 5 is exceptional.
 5. **Flag specific issues with line numbers** — vague critique is reviewer-malpractice.
@@ -53,6 +53,8 @@ Every PR must be reviewed by a different model family than the author per [`docs
 - [ ] Quiz (6-8 scenario-based questions with `<details>` answers)
 - [ ] Hands-On Exercise (multi-step with success criteria)
 - [ ] Next Module link
+
+> **Reviewer bar ≥ author template.** [[curriculum-writer]]'s minimal template lists 2-3 Did You Know? / 4 quiz questions; this reviewer checklist is the stricter shipping bar. Author for the reviewer bar, not the template floor.
 
 ## Passing Criteria
 
@@ -126,10 +128,10 @@ Every PR must be reviewed by a different model family than the author per [`docs
 
 | Pair | Dispatch |
 |---|---|
-| Review claude-authored | `python scripts/dispatch_smart.py review --agent cursor --model composer-2.5 --mode danger --worktree pr-<N>-review` (headless cursor-agent CLI). OR open in cursor IDE with composer-2.5 selected. |
-| Review composer-2.5-authored | `python scripts/dispatch_smart.py review --agent codex --mode danger --worktree <pr-slug>` ([[feedback_codex_review_danger_mode]]) |
-| Review codex-authored | Same as claude-authored (composer-2.5 cross-family) OR `dispatch_smart review --agent gemini --model gemini-3.1-pro-preview` if cursor unavailable. Fall back to `--agent claude` on Gemini 503 ([[feedback_headless_claude_gemini_fallback]]). |
-| Review agy-authored | `dispatch_smart review --agent codex` (different family). |
+| Review claude-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent cursor --model composer-2.5` (headless cursor-agent CLI; review-class default mode is read-only). OR open in cursor IDE with composer-2.5 selected. |
+| Review composer-2.5-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent codex --mode danger --worktree <pr-slug>` ([[feedback_codex_review_danger_mode]]) |
+| Review codex-authored | Same as claude-authored (composer-2.5 cross-family) OR `dispatch_smart review --agent gemini --model gemini-3.1-pro-preview` if cursor unavailable. **During Anthropic throttle window, claude headless is OFF rotation** (Decision Card C, `docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md:11`) — prefer codex / agy (Claude tier) / gemini. Post-throttle, `dispatch_smart review --agent claude` is a documented Gemini-503 fallback ([[feedback_headless_claude_gemini_fallback]]). |
+| Review agy-authored | `.venv/bin/python scripts/dispatch_smart.py review --agent codex` (different family). |
 
 After R1, if NEEDS_CHANGES, dispatch the original author for a fix-pass, then re-run review (R2). On APPROVE/APPROVE_WITH_NITS, merge (orchestrator-driven; cursor does NOT self-merge per session-51 directive).
 

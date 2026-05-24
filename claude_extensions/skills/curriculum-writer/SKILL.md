@@ -33,13 +33,13 @@ Every authored/rewritten module MUST satisfy ALL of:
 1. **Density gates** (deterministic, enforced by `scripts/quality/verify_module.py`):
    - `median_wpp ≥ 28` (median words per paragraph)
    - `mean_wpp ≥ 30` (mean words per paragraph)
-   - `short-para-rate ≤ 20%` (paragraphs under 15 words)
+   - `short-para-rate ≤ 20%` (paragraphs under 18 words — see `verify_module.py:799`)
 2. **Frontmatter**: `title:` + `sidebar.order:` (mandatory per [[.claude/rules/new-content-checklist]]).
 3. **Slug**: if filename has dots (e.g. `module-1.1-foo.md`), explicit `slug:` to preserve them.
 4. **Parent index.md**: add module to section's index table.
 5. **Internal links**: slug format (`module-foo/`), never `.md` extension.
 6. **Build green**: `npm run build` with 0 warnings.
-7. **Health check**: `python scripts/check_site_health.py` returns 0 errors.
+7. **Health check**: `.venv/bin/python scripts/check_site_health.py` returns 0 errors.
 8. **Citation discipline**: every external fact verified, unverified removed ([[feedback_citation_verify_or_remove]]).
 9. **No personal framing**: no interview/job/role narrative ([[feedback_no_personal_framing]]).
 10. **Pedagogy over listicles**: modules must TEACH, not dump facts ([[feedback_teaching_not_listicles]]).
@@ -378,7 +378,7 @@ Books, talks, and papers for deeper understanding:
 Before considering a module complete:
 
 ### All Tracks
-- [ ] **Density gates pass** (`python scripts/quality/verify_module.py <path>`): median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%
+- [ ] **Density gates pass** (`.venv/bin/python scripts/quality/verify_module.py <path>`): median_wpp ≥ 28, mean_wpp ≥ 30, short-para-rate ≤ 20%
 - [ ] All structural elements present
 - [ ] At least one memorable analogy
 - [ ] At least one war story
@@ -456,9 +456,9 @@ The brief MUST include: module spec, density gates, citation discipline rule, ta
 Same shape as codex via `dispatch_smart draft --agent deepseek`. Pair with a vigilant code-domain reviewer; deepseek hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]).
 
 ### Post-author orchestrator checklist
-1. Run `python scripts/quality/verify_module.py <path>` → must pass density gates.
+1. Run `.venv/bin/python scripts/quality/verify_module.py <path>` → must pass density gates.
 2. Run `npm run build` → 0 warnings.
-3. Run `python scripts/check_site_health.py` → 0 errors.
+3. Run `.venv/bin/python scripts/check_site_health.py` → 0 errors.
 4. Dispatch cross-family reviewer per [[cross-family-reviewer]] routing table.
 5. On R1 APPROVE, merge through PR (rebase). On NEEDS_CHANGES, fix-pass + R2.
 
