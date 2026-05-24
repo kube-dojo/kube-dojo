@@ -1,4 +1,5 @@
 ---
+citations_verified: true
 title: "Module 6.4: Network Debugging"
 slug: linux/operations/troubleshooting/module-6.4-network-debugging
 revision_pending: false
@@ -24,650 +25,718 @@ Before starting this module, confirm you already understand the Linux protocol s
 ## Learning Outcomes
 
 After completing this module, you will be able to:
-- **Trace** ICMP, TCP, UDP, and DNS failures across Linux and Kubernetes layers using a repeatable workflow.
-- **Interpret** socket state, route, namespace, and firewall telemetry to locate the exact failure boundary.
-- **Operate** `ss`, `tcpdump`, `tshark`, and Wireshark analysis in one incident loop and move from raw packets to root cause.
-- **Debug** Kubernetes service, PodIP, and ClusterIP routing with `ip route get`, `ip neigh`, `arp`, and NAT rule inspection.
-- **Run** reproducible hands-on investigations for MTU, conntrack saturation, stale NAT, and CoreDNS resolution failures in Linux and kind.
+
+- **Trace** ICMP, TCP/UDP, DNS, and Kubernetes service-plane failures using a fixed layer-by-layer workflow instead of ad hoc command sprawl.
+- **Interpret** `ss`, `ip route get`, `ip neigh`, packet captures, and conntrack counters to locate the exact failure boundary between host, CNI, kube-proxy, and application sockets.
+- **Design** bounded `tcpdump` captures and offline `tshark` filters that prove whether bytes reached a listener, were dropped by policy, or never left a namespace.
+- **Compare** kube-proxy iptables versus IPVS datapaths and explain how DNAT, SNAT, and conntrack entries should align with EndpointSlices on Kubernetes 1.35+ clusters.
+- **Reproduce** MTU blackholes, conntrack table exhaustion, and CoreDNS search-path amplification in kind so postmortems reference evidence, not guesses.
 
 ## Why This Module Matters
 
-Network incidents in production usually begin with one symptom and hide multiple causes, so teams often argue about where the fault sits before they prove it. A single user request may traverse kernel routing, overlays, node proxying, firewall state, DNS resolution, and container namespace boundaries before reaching the pod process. If you do not isolate each layer in order, the most likely diagnosis can be wrong even when the command outputs look plausible. This module gives you a fixed sequence to avoid that trap.
+At 03:40 during a regional incident, checkout latency spikes while CPU graphs stay flat. Application logs blame “upstream timeouts,” the ingress team insists TLS is healthy, and someone proposes restarting kube-proxy on every node because “that fixed it last time.” Twenty minutes later the cluster is noisier, SSH sessions on two nodes flicker, and nobody can answer a simple question: did the client’s SYN packet reach the pod listener, or did it die in overlay MTU, a full conntrack table, or a resolver search storm?
 
-The main operational risk is not technical complexity, it is incorrect attribution. If a ticket says "requests are slow", a naive diagnosis might stop at the first visible bottleneck. But many clusters fail for reasons where each layer is correct in isolation and still incorrect as a combined system. A valid service path can carry packets while NodeLocal DNSCache drops upstream fallback quality, then the application retries and appears overloaded. A healthy kube-proxy can forward traffic while stale NAT entries keep sessions pinned to dead endpoints. The difference between a false conclusion and a practical recovery is usually one layer later in the path.
+Network outages punish confident narratives. `ping` succeeding does not prove TCP handshakes work. CoreDNS pods being Ready does not prove a pod’s `ndots:5` search list is sane. A Service object with endpoints does not prove kube-proxy programmed the mode you think you run. The expensive mistake is attributing a transport failure to application code, or a DNS failure to kube-proxy, because the first command an operator ran happened to return plausible text.
 
-You will also gain an incident workflow for SRE environments where production access windows are short. Your first objective is to prevent blind resets. A reset might restore service, but if it is not guided by evidence, the same failure returns because the root cause is still hidden in packet metadata, route policy, DNS search behavior, or kernel state. The methods here prioritize fast evidence capture, minimal side effects, and explicit ownership handoff.
+This module teaches diagnosis as falsification. Each layer—ICMP reachability, transport sockets, DNS naming, then Kubernetes virtual IPs and NAT—gets one primary tool family and a clear “if this passes, move on; if it fails, stop and own this layer.” That discipline keeps production changes small: you capture routes, neighbors, socket state, and a short pcap before anyone flushes firewall state or restarts dataplane daemons.
 
-Most importantly, this module links three planes together in one mental model: operating system behavior, container networking, and platform policy. When these align, you can say, for example, that a `Service` is healthy, endpoints are present, route selection is correct, but packets are dropped by policy before the PodNet namespace. That conclusion is defensible because each claim can be verified with a command, capture, and repeatable criterion.
+The workflow also matches how platform teams actually work under time pressure. You will compare host context and pod network namespace context, because CNI overlays routinely make host routes look perfect while pod egress fails. You will treat conntrack as a finite resource that can drop **new** flows while old SSH sessions survive—exactly the pattern that looks like “random backend flapping.” By the end, you should be able to hand another engineer five sentences, three command outputs, and one pcap filename that pin the boundary without asking them to repeat your entire scrollback.
 
-## End-to-End Signal Flow: ICMP, TCP, UDP, and DNS
+Operators who debug only from application dashboards often re-learn the same lesson: the kernel exposes cheaper truth than aggregated metrics. A spike in `SYN-SENT` on a node may never appear as a red panel in your APM tool, yet it explains user timeouts precisely. Likewise, a CoreDNS `NXDOMAIN` storm from `ndots` search expansion may look like “the app cannot connect to the database” when the app never reached the database IP at all.
 
-Every network diagnosis should begin by splitting the problem into protocol behavior. ICMP tells you whether low-level path handling is reachable. TCP tells you whether stateful handshakes can complete, fail, or reset. UDP tells you whether one-way or stateless behavior is visible under loss and policy. DNS tells you whether naming is producing usable endpoints. If you mix these together, you lose causality. If you separate them, each command has a single hypothesis and a clear pivot when output contradicts that hypothesis.
+This module assumes you will practice the sequence until it feels boring. Boring during practice means reliable during outages. The Killercoda lab linked in the module metadata mirrors these steps; use it after the hands-on sections here if you want a guided environment with checkpoints.
 
-A practical sequence is to confirm local interface and gateway reachability first, then validate transport by protocol, then validate name resolution independently, then confirm service-plane resolution in Kubernetes. Keep this sequence fixed in notes and runbooks so each incident starts at the same entry point and does not skip evidence. The discipline matters more than knowing any one command, because each command answer should reduce uncertainty by a specific amount.
+## Core Section 1: Diagnose by Layer (ICMP → Transport → DNS → Service Plane)
 
-In Linux and Kubernetes, this sequence often looks like:
-1. Confirm local interface state and route to gateway.
-2. Confirm host and pod-level path selection.
-3. Confirm DNS behavior with known resolvers.
-4. Confirm transport handshake state and process ownership.
-5. Capture packets with minimal scope.
-6. Inspect NAT, conntrack, firewall, and CNI policy where evidence points.
+Every incident gets the same entry point. Split the symptom by protocol responsibility before mixing tools. ICMP and interface state answer “can this host emit and receive IP frames toward the next hop?” TCP and UDP socket state answer “did a listener exist and did the handshake progress?” DNS answers “did the client learn the addresses it will dial?” Only after those three planes are characterized do you inspect ClusterIP DNAT, kube-proxy mode, and conntrack translation for Kubernetes service traffic.
 
-This does not mean all checks happen for every issue. If you already fail step 1, steps 4 through 7 only consume noise. If step 3 succeeds but service access still fails, the network path is likely not your initial issue. The point is to create an evidence graph where each failing branch has a targeted next command.
+The sequence is intentional. Skipping straight to `tcpdump` on `any` often wastes minutes and captures credentials. Skipping DNS while TCP to an IP works wastes hours chasing kube-proxy when the app never learned the right address. Skipping socket inspection while packets look fine on the wire sends you to firewall dumps when the process simply never bound the port.
 
-## Probe Layer 1: ICMP and Transport Path Checks
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant L2 as Link/ICMP
+    participant L4 as TCP/UDP (ss)
+    participant DNS as Resolver/CoreDNS
+    participant Svc as Service plane (kube-proxy/NAT)
 
-`ping` validates basic IPv4/IPv6 reachability behavior, local route policy, and coarse packet loss direction. Even though modern networks may deprioritize ICMP, a failed ping still gives useful meaning when interpreted carefully: repeated request timeouts to a known address often indicate local ACL policy, routing asymmetry, or severe path loss. A response with occasional packet loss still may allow application traffic depending on policy and transport behavior, so do not equate partial success with full health automatically.
+    Op->>L2: ping/tracepath, ip link, ip route get
+    alt ICMP or route fails
+        L2-->>Op: Stop — fix link, MTU, or routing
+    else ICMP/route OK
+        Op->>L4: ss -tanp, probe target port
+        alt No listener or SYN stuck
+            L4-->>Op: Stop — process, policy, or drop before app
+        else Transport OK to IP:port
+            Op->>DNS: dig from pod netns, check ndots/search
+            alt DNS wrong or slow
+                DNS-->>Op: Stop — CoreDNS/upstream/search path
+            else DNS returns expected records
+                Op->>Svc: ClusterIP vs PodIP matrix, conntrack, NAT rules
+                Svc-->>Op: Evidence bundle or targeted capture
+            end
+        end
+    end
+```
 
-Use one destination for deterministic interpretation, then widen outward. Start with gateway or known stable peer, then a host in the same failure domain, then a known external destination. Pair size and count controls with `ping` so MTU probes do not get confused with ordinary reachability checks.
+Write the failing layer on the incident ticket before running the next command. If step two fails, step four is noise until you explain why transport should still be investigated.
+
+| Layer | Primary question | Example falsification command |
+|-------|------------------|------------------------------|
+| ICMP / route | Can this namespace reach the next hop toward the destination? | `ip route get <dst>` then `ping -c 2 <dst>` |
+| Transport | Is a listener present and is handshake progressing? | `ss -tan dst <dst>:<port>` |
+| DNS | Did the client learn the intended address? | `dig +search +time=2 <name>` from the pod |
+| Service plane | Does virtual IP translation match current endpoints? | ClusterIP vs PodIP `curl` matrix + NAT inspection |
+
+**Active learning prompt:** A pod reaches `8.8.8.8` with `curl` but times out calling `https://payments.default.svc.cluster.local`. List the three layers you would prove healthy **in order**, and name one command per layer that could falsify your current guess.
+
+### Worked example: Narrow “works by IP, fails by name” in one pass
+
+Suppose `curl -m 3 https://10.96.0.15:443` succeeds from a debug pod but `curl -m 3 https://kubernetes.default.svc.cluster.local` times out. IP reachability and likely transport toward the ClusterIP are already plausible; your next work belongs in DNS, not kube-proxy.
 
 ```bash
-# 1. Interface and gateway baseline
+# From the failing pod (netshoot or app container)
+kubectl exec -n default deploy/netshoot -- cat /etc/resolv.conf
+kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 kubernetes.default.svc.cluster.local
+kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 kubernetes.default.svc.cluster.local @kube-dns.kube-system.svc.cluster.local
+```
+
+If the direct Service FQDN query succeeds but short names fail, suspect `ndots` and `search` expansion before touching iptables. If both fail while `dig @8.8.8.8` works, suspect CoreDNS upstream or NetworkPolicy to kube-dns, not application TLS.
+
+Document each command’s scope in your notes: `host`, `netns`, destination IP or name, and timestamp. During bridge calls, that single habit prevents arguing about results gathered from different namespaces.
+
+## Core Section 2: ICMP, Routes, and Transport Sockets
+
+### Link and ICMP baselines
+
+Start with interface admin state, selected source address, and deterministic routing for the destination under test. `ip route get` is faster than mentally parsing full tables during a bridge call.
+
+```bash
 ip -br addr show
-ip route | head -n 20
 ip route get 8.8.8.8
-
-# 2. Connectivity checks: baseline and repeated loss checks
-ping -c 8 8.8.8.8
-ping -c 8 -i 0.2 8.8.8.8
-
-# 3. MTU probes
-ping -c 3 -M do -s 1472 8.8.8.8
-ping -c 3 -M do -s 1430 8.8.8.8
+ip route get 10.96.0.1 from 10.244.1.5 iif eth0
+ping -c 4 -W 2 10.96.0.1
+ping -c 3 -M do -s 1472 10.244.2.10
+ping -c 3 -M do -s 1400 10.244.2.10
 ```
 
-For transport-level behavior, use the right tool by protocol. `traceroute` is useful when ICMP responses are available, while `tcptraceroute` can traverse firewalled environments where ICMP TTL-expired replies are reduced. `tracepath` is a useful fallback because it performs MTU probing while still showing hops. `mtr` is most useful for persistent instability because it repeatedly samples jitter, loss, and route over time instead of one snapshot.
+Use DF-sized probes deliberately when overlays advertise MTU 1450 on tun/vxlan interfaces while node NICs remain 1500. A classic blackhole shows small pings succeeding and large TCP transfers hanging with retransmits—often misreported as database slowness.
+
+`tracepath` combines hop discovery with PMTU hints; `mtr` helps when loss is intermittent rather than absolute.
 
 ```bash
-# Layered path checks
-traceroute -n 8.8.8.8
-tracepath -n 8.8.8.8
-sudo mtr -rwzc 50 8.8.8.8
-tcptraceroute -n -p 443 8.8.8.8
+tracepath -n 10.244.2.10
+mtr -rwzc 30 10.244.2.10
 ```
 
-When a hop is silent and later hops respond, that pattern usually indicates control-plane filtering for that hop, not necessarily a forwarding break. Silence does become meaningful when it is correlated with increasing latency and no later-hop responses. In contrast, single-layer silence with progressing responses is often benign for path discovery commands. Always anchor interpretation to destination reachability and transport behavior.
+### `ss` as the transport truth lens
 
-For Kubernetes-specific checks, run the same path commands from both host and workload contexts. If host-level traceroute succeeds but in-pod egress fails, you have already narrowed the problem to namespace policy, CNI route tables, kube-proxy, firewall translation, or DNS in pod context.
-
-```bash
-# Compare host and in-pod path behavior
-kubectl -n default run net-debug --rm -it --image=nicolaka/netshoot --restart=Never -- \
-  ping -c 4 8.8.8.8
-```
-
-## UDP and DNS Deep Checks: Resolver, ndots, Search Domains, and CoreDNS
-
-DNS failures are often misread as connectivity failures because applications report generic connection errors. The first mistake is assuming that because ping works, DNS can never be the issue. Many production issues are not route failures but name-resolution behavior changes. A client that resolves a name one second and times out the next can be affected by negative caching, upstream timeout storms, `ndots` behavior, search domain expansion, or local policy changes.
-
-Start by separating the configured resolver behavior from upstream behavior. Always test `/etc/resolv.conf` content first, then query against the configured resolver, then against known public resolvers. Compare result time and response type. A timeout is not the same as `NXDOMAIN`; one indicates response path or service failure, the other indicates a valid negative answer.
+`ss` reads socket tables via netlink and remains usable at high connection counts. Treat states as trends: rising `SYN-SENT` without `ESTABLISHED` implies drops or no listener; rising `CLOSE-WAIT` often points to application shutdown discipline, not external routing.
 
 ```bash
-# Resolver behavior by source and target
-cat /etc/resolv.conf
-dig google.com
-dig +short google.com
-dig @8.8.8.8 google.com
-dig @1.1.1.1 google.com
-dig +trace google.com
-```
-
-The `ndots` setting and search domains decide how Kubernetes clients expand names before sending queries. A low `ndots` like 2 means names without dots can generate multiple search attempts. A high `ndots` can delay valid short names and create extra DNS load under outage stress. In pods, this can amplify timeout behavior because each extra query competes with connection retries.
-
-When `CoreDNS` underperforms, the symptom pattern in many clusters starts as intermittent service resolution, then spikes in upstream DNS query latency, then application cascade failures. Check both CoreDNS pod health and upstream timeouts before changing application code. A quick sequence is: `kubectl get pods -n kube-system -l k8s-app=kube-dns`, then `kubectl get svc -n kube-system kube-dns`, then inspect logs if query latency appears abnormal.
-
-NodeLocal DNSCache can reduce latency and improve locality by colocating DNS caching on nodes, but stale cache and timeout fallback can produce odd behavior if `ndots` is high and upstream is intermittently slow. The debugging goal is still the same: prove where a query is failing, whether locally or upstream, and prove whether the resolver chain has shifted from one nameserver to another during incidents.
-
-```bash
-# Kubernetes DNS layer checks
-kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
-kubectl get svc -n kube-system kube-dns -o yaml
-kubectl logs -n kube-system -l k8s-app=kube-dns --tail=200
-```
-
-## Socket-State Layer: `ss` as the Primary Listener and Transport Lens
-
-The modern replacement for `netstat` in incident workflows is `ss`, because it reads socket state quickly and exposes richer filtering. Use `ss` to confirm whether an endpoint is listening, whether connections are being established, and whether there is queue pressure behind failures. If there is no matching listener, no amount of route tuning can solve a TCP-level service expectation. If listeners are healthy, you move toward network policy, NAT, namespace, or upstream path checks.
-
-```bash
-# Replace netstat: all listening sockets
 ss -tulnp
-
-# Focus on state families
-ss -t state established
-ss -t state syn-sent
-ss -t state close-wait
-ss -t state time-wait
-
-# Filter by process and port
-ss -tlnp sport = :80
-ss -tlnp dport = :443
-ss -tan dst 10.0.0.0/16
+ss -tan state syn-sent
+ss -tan sport = :8080
+ss -tan dst 10.244.2.10:443
 ```
 
-Connection state signals are most useful when treated as a trend, not a single snapshot. `ESTABLISHED` counts tell you active conversation load, but they do not prove healthy latency. `SYN-SENT` with no `SYN-ACK` progression points toward drops, ACL issues, or backend path failure. `CLOSE_WAIT` growth usually points to application close behavior, while `TIME_WAIT` can be normal if traffic is chattery and short-lived.
+Process columns (`-p`) require privileges matching `/proc` access—typically root on the node or `CAP_SYS_ADMIN` in the target namespace. Without them, socket rows still appear but PIDs may be hidden, which is easy to misread as “nothing listening.”
 
-Use `ss` with process context where possible and combine with logs. A clean `ss` outcome can still include process readiness issues that only manifest at the application layer, while a socket problem can be seen quickly and isolated before deeper packet inspection.
+For Kubernetes, run parallel checks on the node and inside the pod network namespace:
 
 ```bash
-# Process-level ownership and queue behavior
-ss -tanp
-ss -tupm
-ss -tuam
+POD=$(kubectl get pod -n default -l app=target -o jsonpath='{.items[0].metadata.name}')
+PID=$(pgrep -f "$POD" | head -n 1)
+sudo nsenter -t "$PID" -n ss -tanp
 ```
 
-For Kubernetes incidents, always compare service-level DNS and endpoint readiness with socket-level evidence. If a pod IP is reachable with `ss` at the node and the same destination fails from another pod, the suspicion shifts toward per-node routing, namespace capture perspective, or firewall/NAT behavior rather than process startup.
-
-## Packet Forensics: `tcpdump`, Filters, and Offline Analysis
-
-Packet capture is required when state machines disagree. If routing and socket inspection show healthy paths but clients still fail, capture confirms where bytes stop. `tcpdump` with a strict filter is mandatory in production because unscoped captures become too large and may leak sensitive data. Use host-level filters first, then move to namespace-level captures when needed.
+Compare with the service Endpoints before concluding kube-proxy is broken:
 
 ```bash
-# Host-scoped base capture patterns
-sudo tcpdump -i any -n -c 200 host 203.0.113.20
-sudo tcpdump -i any -n -c 200 port 443
-sudo tcpdump -i any -n -c 200 proto tcp
-sudo tcpdump -i any -n -c 200 'ip proto \\\\(tcp or udp\\\\)'
-
-# Save for later analysis with chain operators
-sudo tcpdump -i any -n -w /tmp/net-debug.pcap 'host 203.0.113.20 and (tcp dst port 443 or udp dst port 53)'
-
-# Focus on SYN path and retries
-sudo tcpdump -i any -nn -c 120 'tcp[tcpflags] & (tcp-syn) != 0 and tcp[tcpflags] & (tcp-ack) = 0'
+kubectl get endpointslices -n default -l kubernetes.io/service-name=target -o wide
 ```
 
-The `host`, `port`, `proto`, and parenthesized protocol chain pattern in one expression is where many operators lose precision. A precise filter reduces noise and makes packet timing readable. For offline analysis, stop at consistent duration first, then inspect with `tcpdump -r` or protocol-aware tools that can search for sequence, retransmissions, and flags.
+**Active learning prompt:** `ss -tan` on a node shows `LISTEN` on `0.0.0.0:8080`, but a cluster client still times out. Name two namespaces or dataplane boundaries where the listener could exist yet the client path never reaches it.
+
+### Path discovery when ICMP is filtered
+
+Many clouds and corporate networks rate-limit or drop ICMP TTL-exceeded messages. A silent `traceroute` does **not** prove the path is broken. Use TCP-shaped probes when policy blocks ICMP but application traffic uses TCP:
 
 ```bash
-# Offline packet review
-tcpdump -r /tmp/net-debug.pcap -nn
-tshark -r /tmp/net-debug.pcap -Y "tcp.flags.syn == 1"
-tshark -r /tmp/net-debug.pcap -Y "dns.flags.rcode == 0"
-tshark -r /tmp/net-debug.pcap -Y "ip.src == 10.42.1.11 && tcp.flags.ack == 1"
+traceroute -n -T -p 443 10.244.2.10 2>/dev/null || tracepath -n 10.244.2.10
+tcptraceroute -n -p 443 10.244.2.10 2>/dev/null || true
 ```
 
-If payloads are clear-text and safe, `tshark -V -x` and Wireshark can quickly validate TLS handshake timing assumptions, retransmission bursts, duplicate ACK behavior, and packet direction. In TLS-heavy environments, you will likely only see handshake envelopes and timing, which is still useful for proving where handshakes stall. When packet direction is uncertain, capture at both egress interfaces and compare sequence progression.
+Interpret hop silence carefully: if the final destination still answers `ss` and bounded `tcpdump` shows SYN/SYN-ACK exchange, middle-hop silence may be cosmetic. If the final destination never completes handshake while SYN repeats in capture, treat transport or policy as failed regardless of traceroute aesthetics.
+
+### Host versus pod checks on kind
 
 ```bash
-# When possible, open this capture in GUI for layered verification
-wireshark /tmp/net-debug.pcap
+# Host (kind node container)
+docker exec netdebug-control-plane ip route get 10.244.1.5
+docker exec netdebug-control-plane ping -c 2 10.244.1.5
+
+# Pod network namespace
+kubectl exec -n default deploy/netshoot -- ip route get 10.244.1.5
+kubectl exec -n default deploy/netshoot -- ping -c 2 10.244.1.5
 ```
 
-## Route, Neighbor, and ARP Truth in Pod and Host Contexts
+When host ping works and pod ping fails, your incident owns CNI routing, network policy, or interface choice—not “the internet is down.” When both fail identically, move down the stack toward physical uplink or cloud security groups before editing Deployments.
 
-`ip route get` gives deterministic next-hop and source selection for a destination and is often better than visually parsing full tables under pressure. `ip neigh` and ARP entries indicate whether the kernel currently has neighbor cache resolution for the destination. `arp` provides legacy compatibility and should still be used where scripts or legacy tooling expect it.
+### UDP and QUIC-shaped symptoms
+
+UDP has no connection state in `ss` comparable to TCP’s handshake, so “UDP works” often means only that something responded once. DNS, DHCP-like bootstrap traffic, and QUIC (HTTP/3) may fail independently of TCP checks.
 
 ```bash
-# Destination route and source behavior
-ip route get 8.8.8.8
-ip route get 10.0.0.25 from 10.0.0.10
-
-# Neighbor cache and ARP checks
-ip neigh show
-ip neigh show dev cni0
-arp -an
+ss -u -a
+kubectl exec deploy/netshoot -- dig +time=2 +tries=1 @kube-dns.kube-system.svc.cluster.local kubernetes.default.svc.cluster.local
+kubectl exec deploy/netshoot -- nc -u -w 2 10.244.2.10 53 </dev/null; echo "nc_udp_exit=$?"
 ```
 
-In Kubernetes, these checks must often be done inside pod namespaces because host routing may look healthy while pod network namespace uses different interface chains. `ip route get` inside namespace and on host can reveal differences caused by CNI, policy routing, and service endpoint forwarding.
+If TCP to port 443 succeeds but UDP/53 fails, suspect DNS policy or conntrack timeouts on DNS flows before replacing ingress controllers. If both TCP and UDP fail toward the same pod IP, return to routing and overlay MTU before blaming application protocols.
+
+## Core Section 3: DNS, `ndots`, CoreDNS, and NodeLocal DNSCache
+
+DNS failures masquerade as “network down” because applications report generic dial errors. Separate **reachability to the resolver** from **answer quality** (`NOERROR`, `NXDOMAIN`, timeout).
 
 ```bash
-# Inspect host and pod routes in parallel
-ip route show table all
-POD_PIDS=$(pgrep -f "kubelet\|containerd")
-for pid in $POD_PIDS; do
-  nsenter -t "$pid" -n ip route get 10.244.0.10
-done
+kubectl exec -n default deploy/netshoot -- cat /etc/resolv.conf
+kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 mysvc.default.svc.cluster.local
+kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 mysvc
+kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 mysvc.default.svc.cluster.local @kube-dns.kube-system.svc.cluster.local
 ```
 
-For deterministic mapping, use `ip netns` where namespaces are visible and labeled.
+`ndots:5` (common in generated pod resolv.conf) is the **dot threshold**, not a query multiplier by itself: when a name has **fewer than five** dots, the resolver tries each `search`-list suffix **before** the absolute query. A default pod search list has three cluster suffixes (`<namespace>.svc.cluster.local`, `svc.cluster.local`, `cluster.local`), so a single-label lookup like `doesnotexist` becomes four candidate FQDNs × two record types (A + AAAA) = **eight** DNS queries before a final `NXDOMAIN` (use a name that genuinely does not exist — `kubernetes` itself resolves at the first cluster suffix because `kubernetes.default.svc.cluster.local` is the API service). A typo like `curl payments` therefore amplifies latency and conntrack load even when the “right” FQDN would have answered immediately.
 
-```bash
-# Namespace-oriented checks
-ip netns list
-ip netns identify $(pgrep -f containerd-shim)
-ip netns identify $(cat /proc/1/ns/net 2>/dev/null | awk -F: '{print $1}')
-```
+`dig +trace` walks delegation from the root downward and **does not apply** `/etc/resolv.conf` `search` or `ndots` behavior. It is excellent for public-zone debugging and misleading for in-cluster names—never use it alone to prove pod resolver health.
 
-The key operational mistake is assuming host route truth applies to pod traffic. In overlay clusters, pod routes can diverge due to bridge forwarding, VXLAN route policy, and endpoint-specific behavior under node churn.
-
-## Firewall, NAT, and Stateful Packet Tracking
-
-Firewall inspection for active dataplanes should begin with policy exports that do not modify state. In older and mixed environments you may see `iptables`; in newer deployments you may see `nftables`. Use the output dumps to map where traffic is dropped, translated, or marked, then correlate with capture and socket evidence.
-
-```bash
-# Read-only policy dumps
-sudo iptables-save | tee /tmp/iptables.txt
-sudo nft list ruleset | tee /tmp/nft.txt
-```
-
-For NAT debugging, identify `SNAT` and `DNAT` chains that match service ranges, node subnets, and pod address spaces. A common incident pattern is stale NAT mappings after endpoint churn. Another is `MASQUERADE` chains that no longer match because CNI subnet changes were partially rolled out.
-
-```bash
-# Track NAT chain shape
-sudo iptables -t nat -L -n --line-numbers | sed -n '1,120p'
-sudo iptables -t nat -S
-sudo nft list chain ip nat PREROUTING
-sudo iptables-save | grep -E "DNAT|SNAT|MASQUERADE"
-```
-
-`conntrack` reveals whether state tables are saturated or leaking stale entries. A saturated conntrack table creates intermittent connection drops that often mimic backend instability. Always capture both table size and per-table counters before making policy changes.
-
-```bash
-# Table sizing and entry inspection
-sysctl net.netfilter.nf_conntrack_max
-cat /proc/sys/net/netfilter/nf_conntrack_max
-conntrack -L | head -n 40
-conntrack -S | head -n 30
-```
-
-When table usage approaches capacity, new outbound and inbound connection attempts can fail with misleading application timeouts, while existing flows continue briefly. In Kubernetes this is often visible as `SYN-SENT` accumulation, timeout bursts from one service consumer set, and normal-looking host CPU with high retry rates.
-
-If `conntrack -L` is too large for manual reading, filter by status or destination and reduce scope to one service IP range. A targeted sample is faster during incidents and avoids exhausting control-plane time.
-
-```bash
-sudo conntrack -L -p tcp --dport 443 | head -n 200
-sudo conntrack -L -s 10.244.0.0/16 | head -n 200
-```
-
-## NIC and Kernel Telemetry for Layer-2 and PMTU Signals
-
-MTU and link statistics are often the least expected root cause and the most expensive to debug if you do not check early. For many overlay stacks, host path MTU can be 1500 while overlay links drop to about 1450, which can cause PMTU blackholes if packets with DF bit are not sized correctly.
-
-`ethtool` gives interface health signals from device firmware and driver context, including ring and offload settings. `-i` shows driver identity, `-S` provides extended counters, and `-k` shows offload state. These fields help identify whether packet behavior changed because of driver negotiation and not route policy.
-
-```bash
-# Interface identity and link features
-ip link
-ip -s link show
-ethtool -i eth0
-ethtool -S eth0 | head -n 40
-ethtool -k eth0
-```
-
-In path MTU incidents, combine interface features with kernel counters from `/proc/net` files to separate transient drop from saturation.
-
-```bash
-# Static kernel interface counters
-cat /proc/net/dev
-cat /proc/net/snmp | sed -n '1,120p'
-cat /proc/net/tcp | head -n 80
-```
-
-If you observe retransmission-like behavior with low CPU and consistent routing, check if PMTU discovery is blocked by middleboxes. A practical sign is successful small probes and repeated blackhole patterns for bigger packets. Lowering probe size is a valid validation step only when you preserve evidence with trace + capture to confirm improvement.
-
-```bash
-ping -M do -c 3 -s 1450 10.0.0.10
-ping -M do -c 3 -s 1400 10.0.0.10
-tracepath 10.0.0.10
-```
-
-## Kubernetes-Specific Routing: Service IP, Pod IP, ClusterIP, kube-proxy, and CNI Data Planes
-
-Service behavior in Kubernetes is multi-layer by design. A `ClusterIP` may exist, endpoint objects may be empty, and pods may still attempt direct destination IP connections. Your debug rule is simple: test each layer explicitly. First resolve and test the service DNS name, then the ClusterIP, then the endpoint pod IP directly, then observe route selection and translation for the same tuple.
-
-```bash
-# Service and pod-level validation
-kubectl get svc -n default
-kubectl describe svc -n default kubernetes
-kubectl get endpoints -n default
-kubectl get endpointslices -n default
-kubectl get pods -n default -o wide
-kubectl exec -n default -it $(kubectl get pod -n default -l app=myapp -o jsonpath='{.items[0].metadata.name}') -- nslookup kubernetes.default || true
-```
-
-Avoid short-circuiting this sequence. If service DNS resolves and endpoints are empty, the issue is service selector or endpoint controller state. If endpoints exist and direct pod IP works, but ClusterIP fails, investigate kube-proxy and cluster service routing. If direct pod IP fails, inspect CNI and host-level policy before replacing service definitions.
-
-`kube-proxy` can run in iptables or IPVS mode depending on configuration. In iptables mode, inspection focuses on `KUBE-SVC`, `KUBE-SEP`, and NAT rules created per service. In IPVS mode, virtual service table behavior and scheduler/state differs. Confirm expected mode to avoid inspecting irrelevant rules.
-
-```bash
-# Determine kube-proxy operating mode and core service chain
-kubectl -n kube-system get ds kube-proxy -o wide
-kubectl -n kube-system describe cm kube-proxy | grep -i mode
-kubectl -n kube-system get configmap kube-proxy -o yaml
-```
-
-For CNI-specific checks, use the specific plugin controls without guessing.
-
-```bash
-# Cilium
-cilium status
-cilium connectivity test --context default
-
-# Calico
-calicoctl node status
-
-# Kube-router
-kubectl -n kube-system get pods -l k8s-app=kube-router -o wide
-kubectl -n kube-system logs -l k8s-app=kube-router --tail=120
-```
-
-If one CNI control plane reports healthy state but Service fails for cross-node traffic, inspect policy tables, node-local caches, and namespace-level route visibility. Mixed CNIs in one cluster are unusual and usually unsupported, so most "works on this node, fails on that node" patterns come from node state mismatch rather than pure plugin health.
-
-## Incident Patterns You Can Practice on Live Signals
-
-The following patterns are practical examples that map to common on-call incidents, and each pattern has a likely pivot command chain.
-
-### rp_filter Asymmetry and Return-Path Rejection
-
-`rp_filter` hardens reverse path checks to reject asymmetric packets. In some environments this is beneficial, but in overlay topologies with asymmetric return handling it can silently drop valid packets that appear normal in source traces. If clients can send and requests arrive but replies never return, check reverse path policy on affected interfaces.
-
-```bash
-sysctl net.ipv4.conf.all.rp_filter
-sysctl net.ipv4.conf.eth0.rp_filter
-sysctl net.ipv4.conf.cni0.rp_filter
-```
-
-You usually tune only with change control and validation, and only when there is confirmed policy evidence. Start by comparing neighboring nodes and namespaces because mixed `rp_filter` settings can create node-specific failures that look like random flapping.
-
-### Conntrack Table Exhaustion During Burst Traffic
-
-When burst traffic arrives or retry loops expand, conntrack can saturate before CPU or memory alarms. This creates a repeating symptom set of timeouts and partial success while service logs show nothing wrong. The signature is often high `SYN` attempts combined with increasing `conntrack` pressure metrics.
-
-```bash
-cat /proc/sys/net/netfilter/nf_conntrack_count
-cat /proc/sys/net/netfilter/nf_conntrack_max
-conntrack -S
-sudo conntrack -L -p tcp | wc -l
-```
-
-Short-term mitigation is often to reduce aggressive retry storms and release unused sessions. Long-term, adjust timeouts and sizing with workload-specific measurement, then verify memory impact and retention behavior.
-
-### Kube-Proxy Stale NAT Rules After Endpoint Churn
-
-Endpoint churn can leave stale NAT translations, especially after rolling upgrades or partial cloud controller recovery. Symptoms usually appear as service-level flaps where direct pod paths seem healthy. The key is to compare current service rules to current endpoints and endpoint sets.
-
-```bash
-kubectl get endpointslice -n default -l kubernetes.io/service-name=some-service -o wide
-sudo iptables-save | grep -E "KUBE-SVC|KUBE-SEP|DNAT|SNAT"
-kubectl -n kube-system get pods -l k8s-app=kube-proxy -o wide
-```
-
-If stale chains remain in dumps and endpoint sets changed, the fix is to confirm kube-proxy reconciliation and then restart only the control plane pieces needed to re-sync rules, not all networking services blindly.
-
-### CoreDNS Upstream Timeout Cascade
-
-CoreDNS timeout spikes usually create a cascade where applications retry rapidly while cluster-wide outbound traffic grows. The pattern includes mixed `NXDOMAIN` and timeout behavior across namespaces and a visible increase in latency across pods that previously resolved quickly.
+CoreDNS logs and upstream timeouts remain the control plane signal when queries reach the cluster DNS Service but answers lag:
 
 ```bash
 kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide
-kubectl -n kube-system top pods -l k8s-app=kube-dns
-kubectl -n kube-system logs -l k8s-app=kube-dns --since=10m --tail=240
-kubectl -n kube-system get svc -n kube-system kube-dns -o yaml
+kubectl -n kube-system logs -l k8s-app=kube-dns --tail=100 --since=5m
+kubectl -n kube-system get svc kube-dns -o yaml
 ```
 
-Mitigation during an active incident usually prioritizes stable upstream resolvers and temporary client backoff, but evidence must confirm whether the issue is resource starvation, query recursion depth, or upstream connectivity. If the service has stable endpoints and increased upstream latency, the fix is often upstream provider/path tuning and resolver cache behavior.
+**NodeLocal DNSCache** (optional DaemonSet) binds a link-local listener (often `169.254.20.10`) on each node so pods avoid extra hop hairpins to cluster DNS. When enabled, pod `nameserver` lines point at that cache IP. Symptoms include fast answers for cached names but confusing upstream behavior if the cache’s upstream list diverges from CoreDNS Service endpoints—debug both the cache listener and CoreDNS, not only one hop.
 
-## End-to-End Architecture View
+Official Kubernetes 1.35 guidance for cluster DNS and troubleshooting lives in the Service/DNS concepts and the dedicated debugging task doc—use those when correlating `resolv.conf` with API objects.
 
-```mermaid
-flowchart TD
-    HostRoute["Host Route (ip route get)"] --> CNI["Pod Namespace / CNI Interface"]
-    CNI --> ServiceLayer["Service DNS + ClusterIP Resolution"]
-    ServiceLayer --> KubeProxy["kube-proxy iptables/IPVS"]
-    KubeProxy --> NAT["NAT/SNAT/DNAT Chains"]
-    NAT --> Conn["conntrack Table"]
-    Conn --> Firewall["iptables / nftables Policy"]
-    Firewall --> Upstream["Target Pod or External Host"]
-    Upstream --> HostTrace["tcpdump + tshark"]
-    HostTrace --> Decision["Decision: Route, DNS, Firewall, Host, or App"]
-```
+### Upstream and policy failures
 
-```mermaid
-flowchart LR
-    A["ICMP Probe (ping)"] --> B["Traceroute / mtr"]
-    B --> C["DNS checks (dig, CoreDNS)"]
-    C --> D["ss process/socket state"]
-    D --> E["Packet capture (tcpdump)"]
-    E --> F["Packet filter review (Wireshark / tshark)"]
-    F --> G["Route + firewall + conntrack + NAT"]
-    G --> H["Hands-on validation in kind"]
-```
-
-The key principle is this sequence maps cleanly to blast radius. You start with the smallest impact commands, then only move deeper where evidence needs more resolution. If each layer verifies correctly except one, that one layer owns most of the incident until you gather a second independent signal.
-
-## Did You Know?
-
-- Overlay deployments often reduce effective data payload size, so probes around 1450 bytes can be normal behavior in clusters where the physical host MTU is 1500.
-- `conntrack` counters can be high in healthy high-QPS environments and still be safe if sizing and timeout behavior match node memory and workload churn.
-- `ss` remains reliable under high socket counts because it queries kernel state through netlink rather than expensive user-space table parsing.
-- `tcpdump` captures are strongest when bounded by precise predicates such as host, port, and protocol, then analyzed later with `tshark` filters.
-
-## Common Mistakes
-
-| Mistake | Why It Happens | How to Fix It |
-|---------|----------------|---------------|
-| Starting with broad tcpdump capture in production without filtering | Operators want to "see everything" but quickly lose signal | Capture only the relevant 5-tuple or protocol slice with short count and timeout limits |
-| Treating DNS timeout and NXDOMAIN as the same symptom | Both interrupt service delivery but require different owners | Differentiate resolver reachability from resolution answer type using multiple resolver queries |
-| Ignoring `ss` evidence because application logs look noisy | Logs appear authoritative but may miss handshake failure patterns | Confirm listener presence and socket state before changing deployment, service objects, or DNS settings |
-| Assuming host routing behavior equals pod routing behavior | Namespaces and CNI overlays separate network context | Always run equivalent checks in host and pod network namespace and compare route tables |
-| Editing service selectors during active DNS failure without endpoint check | Teams chase application-level edits while endpoints may already be empty | Verify endpoints and endpoint slices before touching selectors, readiness, or replica scale |
-| Tuning MTU blindly based on a single ping result | Packet size behavior can vary by destination, path, and PMTU policy | Run repeated probes with path-aware tests and verify with tracepath and packet captures |
-| Clearing firewall chains during every spike | Immediate restore feels fast but destroys stateful evidence | Preserve captures and route snapshots, then only flush minimally with peer approval and rollback readiness |
-| Dismissing `CLOSE_WAIT` as harmless while requests retry | This state is only one signal and can indicate leak risk when rising | Distinguish normal close behavior from accumulation tied to pod lifecycle events |
-
-## Advanced Forensics Playbooks for Linux and kind
-
-This module is practical only when incidents become non-linear, because many outages become non-linear within minutes. A single user report can hide three distinct domains: one host lost route coherence, one namespace had wrong policy, and one DNS fallback path timed out. The first step is to keep each hypothesis explicit and assign a command that can increase or decrease it by a measurable amount. Your incident notes should move from hypothesis statements to measurable observations and then to action criteria.
-
-When incident pressure spikes, the goal is not to prove everything is working, because that is never true in noisy events. The goal is to prove one bound, then quickly move to the next bound. A simple method is to write three columns for each hypothesis: confidence, evidence, and evidence gap. If route checks are stable and socket states are stable but packet traces show retransmits and odd flags, your confidence in transport or MTU policy rises while network path confidence drops. If all path probes are stable and only process sockets show close anomalies, focus the response on application lifecycle and readiness timing.
-
-Start with a baseline timeline in your notes every time you run a command. Include timestamps at the command start, the command scope (host, netns, or workload), and the first unexpected output line. This prevents postmortems from becoming narratives created after the fact. A clean timeline also helps you distinguish correlation from causality. If `mtr` shows rising loss before `kube-proxy` mode mismatch appears, that ordering matters during root cause reasoning and rollback planning.
-
-One repeated failure pattern is pod-to-pod loss in clusters that use host-gateway style paths for some workloads. In those cases, host routing often remains green while pod namespaces can lose overlay forwarding if one node has stale CNI state. The command chain is to run host path checks, then in-pod route and neighbor checks, then capture on pod namespace only. When namespace capture shows dropped handshakes but host capture does not, the boundary is usually between overlay entry and policy enforcement in the pod netns or CNI datapath.
-
-If the namespace capture shows packets leaving but never reaching a pod listener, confirm listener and endpoint truth before touching NAT policy. That means `ss` for local process ownership in the target pod context, `kubectl get endpoints` for service mapping, and `ip route get` in the pod namespace for destination path. If endpoints are correct and listener exists, check kernel state tools because `conntrack` and NAT rules can still drop established flows under timeout, stale state, or resource pressure. This pattern is common after rolling restarts where some kube-proxy objects reconcile slowly.
-
-A durable way to avoid this cycle is to create command bundles that you can reuse across on-call shifts. Bundle one for each suspected plane: host kernel plane, namespace transport plane, and DNS/application plane. Keep these bundles as short as possible and save each output to a shared incident scratch directory if operationally allowed. A small bundle for DNS failures is `dig`, `resolv.conf`, and `CoreDNS` log tailing; for transport, it is `ss`, `tcpdump`, and target endpoint probing; for route and policy, it is `ip route get`, `ip neigh`, and `iptables-save`.
-
-For UDP path failures, operators often forget that some services retry over TCP on fallback while masking upstream UDP loss. Your first evidence should confirm transport expectation from protocol design before widening. For pure DNS service discovery flows, UDP is expected and a high UDP timeout may be normal during rotation. For custom application services that assume TCP only, repeated UDP anomalies may indicate monitoring checks, mTLS bootstrap traffic, or misconfigured clients rather than the service itself. This distinction saves unnecessary kube-proxy rewrites.
-
-When validating MTU and PMTU behavior, avoid one-liners with single packet sizes and assume you found a root cause. Use a sequence that compares normal and bounded probes while inspecting retransmissions, path MTU, and route metadata. If 1500-path tests pass but 1472 tests fail only for specific overlay peers, you can often infer tunnel encapsulation limits or policy that strips ICMP fragment-needed responses. If both sizes fail with similar behavior, route or neighbor policy may be the stronger suspect.
-
-The overlay PMTU failure pattern is especially common where host MTU is 1500 and pod overlay link drops to 1450. In those environments, not all path elements honor PMTU consistently across fragments, and retransmission storms can be interpreted as database or application slowness. The practical fix is to confirm overlay constraints with path probes, verify `tracepath`, then isolate one critical app flow with bounded `tcpdump` around handshake and first data packets. If the path is stable with smaller packets and only larger writes fail, adjust probe behavior and review interface constraints instead of scaling nodes first.
-
-A lot of teams now use `tcptraceroute` only as a connectivity command and miss its value for service-level segmentation. Because it keeps TCP semantics active, it can succeed where ICMP is suppressed by policy. If `tcptraceroute` to port 443 succeeds and `traceroute` is blocked or silent, your next command should not be a random route change. Instead, confirm service listener state, namespace route selection, and any packet filtering applied by CNI policy or host firewall on the exact flow tuple.
-
-`mtr` complements this by showing instability over repeated hops. A one-time `traceroute` snapshot can hide jitter and transient drops. During incident windows, run `mtr` with bounded count and compare against repeated `traceroute` attempts. If both methods show stable latency and route but application still times out, transport queue depth, socket exhaustion, and `conntrack` pressure become the next highest-probability layer. If `mtr` increases loss and a specific hop changes with time, prioritize path policy and MTU checks.
-
-For Service versus PodIP vs ClusterIP confusion, keep one matrix in mind: Service DNS and ClusterIP indicate virtualized load balancing and endpoint selection, while PodIP tests confirm endpoint correctness without service abstraction. PodIP failing after Service DNS and ClusterIP succeed often points to namespace route, endpoint policy, or CNI dataplane mismatch. ClusterIP failure with PodIP working often indicates service translation or kube-proxy path mismatch. If both fail while DNS stays healthy, route and firewall are usually the common plane.
-
-A kube-proxy mode check belongs before rule edits because mode mismatch changes what you inspect. In IPVS mode, service programming and debugging workflows differ significantly from iptables mode, and some packet traces map poorly if you use mode-specific assumptions. Confirm mode via ConfigMap and DaemonSet arguments first, then only inspect matching artifacts. In iptables mode, you expect `KUBE-SVC` and service-specific chains with SNAT/DNAT behavior you can trace. In IPVS mode, you inspect virtual server records and scheduling differently.
-
-When investigating NAT behavior, start with chain-level proof. If direct pod-to-pod or pod-to-service flows fail, list NAT rules and check whether the active tuple appears where expected. If destination port conversions happen before SNAT, you may be observing wrong source path due to stale chain order. If tuples remain absent from `iptables-save` while sockets and routes are healthy, route policy or CNI policy cache may be stale. Avoid broad chain deletion as a first action; snapshot current rules and compare to a known healthy node before changing anything.
-
-`conntrack` saturation is hardest to reason about if you only look at one command once. Track count over time and compare with burst windows. In many incidents, retries inflate session attempts and create an emergency look that looks like application outage. The fix may be shorter-lived session cleanup and backoff enforcement rather than permanent scaling. During live incidents, reduce retry pressure in probes and clients, confirm `conntrack` counters flatten, then restore service traffic for short validation windows. Once counters recover, you can decide whether permanent sizing changes are needed.
-
-DNS incident response should include resolver chain and client library behavior together. Some libraries retry aggressively and add load during DNS turbulence, which can exhaust NodeLocal DNSCache and amplify upstream lag. Use `dig @<resolver> +tries=1 +time=1` style checks to keep tests bounded and reduce additional self-inflicted load. If core DNS pods are healthy yet pods continue timing out, check search domains and `ndots` behavior for clients that repeatedly query short names not resolvable in local suffix policy.
-
-A practical incident handoff summary always contains five sentences and three artifacts: failing hypothesis, failing command output, and rollback-safe next action. This is the same format I recommend for on-call notes, because it keeps the next responder from repeating hypothesis and re-running already-failed commands. Include at least one namespace-level command and one host-level command in that handoff. Include packet capture path and whether it was in pod ns or host ns. Mention MTU and conntrack checks only if they changed state or command outcomes.
-
-In-kind validation is useful because you can simulate node and pod boundary issues in a controlled environment, but still run with production-like namespace discipline. Use one dedicated namespace for debugging, one dedicated namespace for workload traffic, and one dedicated namespace for repeatable traffic capture. This mirrors production scope separation and avoids state leaks between experiments. If a capture from a debug pod reproduces a timeout pattern that host capture cannot see, you now have the boundary statement needed for CNI and policy checks.
-
-The last layer is automation intent. After every incident sequence, add successful command paths to a script or runbook only when command order is stable and side effects are minimal. For example, a successful `tcpdump` filter template with exact host and port selectors can be codified into a one-liner used under escalation playbooks. A deterministic order from interface checks to DNS to `ss` to capture to NAT/conntrack to CNI status often reduces mean-time-to-diagnosis even for engineers new to a specific cluster.
-
-## Quiz
-
-<details><summary>Question 1: Pod-level `ping` succeeds, but the client still gets timeout errors while connecting to a service name. Which layer should you validate first?</summary>
-
-Start with DNS behavior from the pod context, not with service load balancing settings. `ping` only proves a network path for that specific destination and does not confirm application or DNS correctness. Next verify resolver configuration, explicit resolver queries, and upstream fallback behavior so you can distinguish name-resolution failure from endpoint routing failure. If DNS is healthy and returns expected answers, then move to socket and NAT inspection.
-
-</details>
-
-<details><summary>Question 2: `ip route get` shows one source IP on the host and a different source IP from inside a pod namespace for the same destination. What is the strongest interpretation?</summary>
-
-That difference is normal in many containerized hosts and usually indicates namespace-specific policy and interface selection. You should not treat it as an immediate failure until you validate `ss`, CNI paths, and firewall behavior in the same namespace context. The evidence points toward namespace boundary behavior, and a host-only route check is incomplete for pods that depend on overlay interfaces.
-
-</details>
-
-<details><summary>Question 3: A `tcpdump` capture shows repeated SYN packets from a client but no SYN-ACK replies, while `ss` shows the service has a listener. Where is the most likely bottleneck?</summary>
-
-The listener proves local bind and process ownership are present, so the failure is likely in packet forwarding, policy, NAT, or reverse-path filtering between client and server. Focus next on firewall rules, `iptables-save`/`nft` output, and `conntrack` counts for this tuple because those layers control whether SYN packets are accepted and tracked before handshake completion.
-
-</details>
-
-<details><summary>Question 4: `conntrack -S` shows increasing tracking entries with growing drops, and service latency becomes unstable under burst traffic. What should you confirm before changing service replicas?</summary>
-
-Confirm table saturation and retention constraints first by comparing `nf_conntrack_max`, current count, and per-service growth patterns. If saturation correlates with burst periods, add traffic-control steps to reduce retry amplification while you size state tables to observed peak concurrency. Blindly scaling services during conntrack pressure can hide the symptom and preserve the same root cause.
-
-</details>
-
-<details><summary>Question 5: A Kubernetes Service resolves to a ClusterIP and endpoints are present, but direct PodIP tests fail. What is your next high-confidence command chain?</summary>
-
-Check node and namespace route selection and NAT policy for both host and pod view. A successful ClusterIP resolution with failed PodIP often means service object metadata is healthy while dataplane forwarding or policy is failing for direct pod egress paths. Confirm `ip route get`, `ip neigh`, and namespace-based captures before changing service topology.
-
-</details>
-
-<details><summary>Question 6: `tcptraceroute` to port 443 works where ICMP traceroute shows early drops. Which conclusion should you draw?</summary>
-
-Different transport probes can be treated differently by middleboxes. A working TCP trace reduces the chance of complete path loss and shifts the focus toward ICMP filtering or specific load-balancer policies around control-plane probing. You should validate DNS and actual application handshakes before assuming the path is unusable.
-
-</details>
-
-<details><summary>Question 7: `ip neigh` is empty for a destination but `ping` eventually succeeds after retries. What does that indicate about your immediate debug priority?</summary>
-
-It indicates neighbor resolution was either being learned during retries or being resolved by another path policy, so immediate failure may be transient. The next priority is still to capture path packets with bounded filters and check for MTU, drop, or policy-induced delay while continuing retry analysis. Do not force a route rewrite until you confirm repeated `ip neigh` and capture evidence across attempts.
-
-</details>
-
-<details><summary>Question 8: You have `ss` evidence of listeners and queued sockets, but intermittent production failures remain. How do you connect `tcpdump`, `tshark`, and Wireshark without missing packet-time context?</summary>
-
-Keep the incident loop deterministic: capture only a bounded flow on the exact tuple with `tcpdump`, save to pcap, then analyze with `tshark` filters that match observed `ss` state transitions. Compare SYN, retransmits, and teardown markers across both socket and packet views before concluding application failure. Use Wireshark only after the offline slice confirms timing and ownership, then validate the same tuple from pod namespace perspective if host and packet visibility differ. This approach ensures `ss`, `tcpdump`, `tshark`, and Wireshark support each other instead of producing conflicting narratives.
-
-</details>
-
-## Extended Playbook: Policy, Protocol, and Incident Control Plan
-
-When you have enough evidence that a failure is cross-layer, the next step is a minimal control plan. The plan should limit scope to only one hypothesis per validation window and define pass/fail criteria before the next action. In fast incidents this is the difference between targeted recovery and noisy change storms. For example, if packet traces show handshake drops before kube-proxy chains are even consulted, route policy and endpoint checks should pause until you prove stateful NAT is not silently discarding sessions.
-
-A robust control plan starts with a reproducible host baseline check that can be copied from one incident to the next. Keep one script for interface, route, and neighbor truth, and one script for namespace-level protocol traces. In each script, include bounded time and bounded size controls to avoid over-collection and ensure outputs are comparable. If your outputs differ per node or namespace, compare them as evidence lines rather than assuming one command is inherently right.
-
-When MTU and PMTU remain suspect, combine deterministic packet-size tests with route, conntrack, and `tracepath` verification for the same destination. A useful sequence is to check normal payload first, then high payload near tunnel limits, then a reduced payload control. If control packets behave and reduced payload packets remain stable while high payload fails only after overlays, your mitigation sequence is MTU reduction for immediate mitigation and route constraint review for permanent repair. This reduces guesswork and keeps rollback criteria explicit.
-
-For CNI validation, avoid checking plugin status alone. A plugin can report healthy while forwarding still fails for stale host-level translations or node-specific cache drift. Use plugin status as a signal of whether deeper checks are useful, then inspect chain output, route outputs, and namespace captures for data-plane mismatches. If `kube-router`, `cilium`, or `calicoctl` status matches and flow still fails, the issue is frequently in route policy, endpoint cache alignment, or reverse path behavior.
-
-CoreDNS failure simulations should be explicit and bounded, not endless. For suspected upstream timeout cascades, capture query timing in one command slice and compare it against endpoint and service metadata in another. Avoid relying only on one resolver test because some pods cache failures and show stale results during incident windows. If `dig` against the configured resolver times out while a direct resolver responds quickly, the likely boundary is resolver policy; if both time out, you are looking at broader network or upstream path issues.
-
-For conntrack saturation, add a pre-change and post-change comparison window with the same command set. Compare `conntrack -S`, `conntrack -L` filtered by destination, and `ss` state trend under load. If counts fall after traffic-pressure reduction and socket growth stabilizes, you confirmed pressure rather than policy corruption. If counts stay saturated while traffic pressure is low, you likely need to correct cleanup path, timeout settings, or stale service behavior before changing node sizing.
-
-Service versus PodIP testing should be repeated for exactly one traffic mode and one transport expectation before changing any network object. This prevents false positives from mixed protocol paths. Use one service name, one cluster namespace, one destination port, and one client pod for the first pass. If this deterministic pass fails in both service and PodIP directions, move directly to shared firewall and NAT inspection. If one path succeeds and the other fails, avoid changing services until you prove whether kernel path, namespace route, or service abstraction is the boundary.
-
-At the end of every incident, freeze one command bundle as a reusable evidence package with timestamps and owner notes. That package should include at least one packet capture artifact, one socket inspection artifact, one route or namespace artifact, and one NAT or conntrack artifact. In postmortem reviews, that package shortens handoff and preserves the exact decision path your team used during pressure. Without this package, teams often repeat the same command sequence and re-learn the same failure under a new outage.
-
-## Hands-On Practice: Three Linux and kind Investigations
-
-Each lab uses commands with bounded impact and checklists for evidence collection. Run commands in a test cluster or isolated environment, and pause after each step to confirm the diagnostic branch.
-
-### Exercise 1: Route, DNS, and MTU Layer Validation (Linux Host)
+When CoreDNS returns `SERVFAIL` or times out, split the path:
 
 ```bash
-# Baseline route and neighbor truth
-ip -br addr
-ip route
-ip route get 8.8.8.8
-ip neigh show
-cat /proc/net/dev | sed -n '1,5p'
+kubectl -n kube-system get endpoints kube-dns -o wide
+kubectl -n kube-system exec -it deploy/coredns -- wget -qO- --timeout=2 http://127.0.0.1:8080/health 2>/dev/null || true
+kubectl run -n default dns-upstream --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  dig +time=2 +tries=1 @kube-dns.kube-system.svc.cluster.local kubernetes.default.svc.cluster.local
 ```
 
+NetworkPolicy blocking egress from `kube-system` or blocking pod→DNS traffic presents as widespread “app can’t resolve” while node-level `dig @8.8.8.8` still works from the host. Confirm policies with `kubectl describe networkpolicy -A` before editing CoreDNS ConfigMaps.
+
+### Negative answers versus timeouts
+
+| Symptom | Typical meaning | Next command |
+|---------|-----------------|--------------|
+| `NXDOMAIN` quickly | Name truly absent or wrong search suffix | `dig` FQDN; check Service/ExternalName |
+| Repeated timeouts | Resolver unreachable, policy drop, or overload | `dig @kube-dns`; CoreDNS logs; `ss -u` to :53 |
+| Intermittent slow | `ndots` search amplification or upstream cache miss | Compare short vs FQDN; watch CoreDNS metrics |
+
+## Core Section 4: Packet Capture with Bounded `tcpdump`
+
+Capture when socket tables and routing disagree with user-visible failures. Always choose the **interface that actually carries the flow**: `cni0`, `vxlan.calico`, `veth*` peer, or the pod namespace via `nsenter`, not blindly `any` on busy nodes.
+
 ```bash
-# End-to-end diagnostics by protocol class
-ping -M do -c 6 -s 1472 8.8.8.8
-ping -c 6 -s 1400 8.8.8.8
-traceroute -n 8.8.8.8
-sudo mtr -rwzc 40 8.8.8.8
+# Host bridge toward pod CIDR — adjust interface to your CNI
+sudo tcpdump -i cni0 -nn -c 200 host 10.244.2.10 and port 443
+
+# Pod namespace — replace PID with container runtime PID
+sudo nsenter -t "$PID" -n tcpdump -i eth0 -nn -c 200 host 10.244.2.10 and tcp port 443 -w /tmp/pod-flow.pcap
 ```
 
+Unfiltered captures on high-traffic nodes fill disks and may record sensitive payloads. Prefer host + port + protocol predicates; add `-w` only after a short live view confirms the filter hits traffic.
+
+Modern libpcap defaults usually capture full snap length without needing `-s 0`; the flag remains common in runbooks and is harmless on Ubuntu 24.04.
+
+Offline review ties packets back to `ss` timelines:
+
 ```bash
-# DNS and resolver truth
-cat /etc/resolv.conf
-dig google.com
-dig +trace google.com | tail -n 40
+tcpdump -r /tmp/pod-flow.pcap -nn
+tshark -r /tmp/pod-flow.pcap -Y 'tcp.flags.syn==1 && tcp.flags.ack==0'
+tshark -r /tmp/pod-flow.pcap -Y 'dns.flags.response==1'
 ```
 
-### Exercise 2: Packet Capture and In-Pod Namespace Analysis (kind)
+> **Warning:** `conntrack -F` and `iptables -F` destroy **host-wide** state. They can terminate your SSH session, reset unrelated production flows, and erase the evidence you still need. Never use them as a first remediation. Snapshot read-only state (`iptables-save`, `conntrack -S`, pcaps) and agree on blast radius with another operator first.
 
-This exercise requires namespace capture to test behavior where host and pod path diverge. Choose a running pod in your kind cluster and capture from its network namespace.
+### Filter cookbook (copy into runbooks)
+
+| Goal | Example filter |
+|------|----------------|
+| SYN-only handshake | `'tcp[tcpflags] & (tcp-syn\|tcp-ack) == tcp-syn'` |
+| DNS queries | `'udp port 53'` |
+| Pod to Service ClusterIP | `host 10.96.0.20 and port 443` |
+| Drop SSH noise | `not port 22` combined with your host predicate |
+
+Save files with timestamps: `/tmp/incident-$(date +%Y%m%d-%H%M)-svc.pcap`. Postmortems without filenames force the next responder to re-capture under fire.
+
+## Core Section 5: Routes, Neighbors, and Namespace Parity
+
+`ip route get` shows which source address, interface, and next hop the kernel **will** use for a hypothetical packet. Compare host versus pod namespace answers for the same destination; divergence is expected with overlays but must be explained.
 
 ```bash
-kubectl get pods -n default
-POD_NAME=$(kubectl get pod -n default -o jsonpath='{.items[0].metadata.name}')
-POD_PID=$(kubectl get pod -n default "$POD_NAME" -o jsonpath='{.status.containerStatuses[0].containerID}' | sed 's/://g' | cut -d '/' -f2)
+ip route get 10.244.2.10
+sudo nsenter -t "$PID" -n ip route get 10.244.2.10
+ip neigh show dev cni0
+ip neigh show dev vxlan.calico 2>/dev/null || true
 ```
 
+After CNI restarts or node reboots, stale neighbor (ARP/NDP) entries can point at old MAC addresses while control plane objects look fresh. If `ping` eventually succeeds after retries but `ip neigh` was incomplete early, capture neighbor events while reproducing.
+
+Policy routing and multiple tables matter on nodes running advanced CNIs:
+
 ```bash
-# Capture from inside pod network namespace
-PID=$(pgrep -f "$POD_NAME" | head -n 1)
-sudo nsenter -t "$PID" -n tcpdump -i any -n -c 120 host 10.0.0.10 and port 443 -w /tmp/pod.pcap
-sudo nsenter -t "$PID" -n tshark -r /tmp/pod.pcap -Y "tcp.flags.syn == 1"
+ip rule list
+ip route show table all | sed -n '1,80p'
 ```
 
-### Exercise 3: Firewall, NAT, conntrack, and CNI Validation
+List visible network namespaces when debugging sidecars and hostNetwork pods:
 
 ```bash
-# Read-only policy snapshots
-sudo iptables-save | tee /tmp/iptables-before.txt
-sudo nft list ruleset | tee /tmp/nft-before.txt
-sudo iptables -t nat -L -n --line-numbers
-conntrack -S | tee /tmp/conntrack.txt
+ip netns list
+ls -l /var/run/netns/
 ```
 
+### Reverse-path filtering (`rp_filter`)
+
+Asymmetric routing through overlays or multi-homed nodes can interact badly with strict reverse-path filtering. Symptom: packets arrive, replies leave a different interface, and the kernel drops replies.
+
 ```bash
-# Kernel data sources and endpoint validation
-cat /proc/net/snmp | head -n 8
-cat /proc/net/tcp | head -n 40
-kubectl get svc -n default
-kubectl get endpoints -n default
+sysctl net.ipv4.conf.all.rp_filter
+sysctl net.ipv4.conf.default.rp_filter
+for iface in eth0 cni0 flannel.1 vxlan.calico; do
+  sysctl net.ipv4.conf."$iface".rp_filter 2>/dev/null || true
+done
+```
+
+Do not disable `rp_filter` cluster-wide without evidence. Compare a failing node with a healthy peer during the same incident window.
+
+### Sidecar and shared-network-namespace cases
+
+Init containers and sidecars share the pod network namespace. A listener on `127.0.0.1` in the sidecar is reachable only from containers in that same namespace—not from another pod elsewhere in the cluster. Application charts that put TLS proxies in sidecars frequently confuse teams who test Service ClusterIPs but omit loopback scope.
+
+When a pod has `hostNetwork: true`, its sockets appear in the host namespace; `kubectl exec` into a non-hostNetwork debug pod will not reproduce the same `ss` output. Always match the network mode of the failing workload.
+
+## Core Section 6: kube-proxy, NAT, and conntrack on Kubernetes 1.35+
+
+ClusterIPs are virtual destinations. kube-proxy programs Linux forwarding—iptables, nftables backends, or IPVS depending on cluster configuration. The debugging mistake is inspecting iptables chains while the cluster runs IPVS (or vice versa).
+
+```bash
+kubectl -n kube-system get configmap kube-proxy -o yaml | grep -E 'mode:|ipvs'
 kubectl -n kube-system get ds kube-proxy -o wide
 ```
 
-### Exercise 4: K8s Routing Failure Drill Across Service, PodIP, and ClusterIP
+### ASCII: ClusterIP DNAT and conntrack binding
 
-```bash
-# Service -> PodIP -> ClusterIP path matrix
-svc=$(kubectl get svc -n default -o jsonpath='{.items[0].metadata.name}')
-kubectl get svc -n default "$svc" -o wide
-kubectl get endpoints -n default "$svc"
-kubectl get endpointslice -n default -l kubernetes.io/service-name="$svc"
+```text
+ Pod client                         Node (kube-proxy)                    Backend pod
+ 10.244.1.9                         ┌─────────────────────────────┐      10.244.2.37
+     │                              │ PREROUTING / OUTPUT          │
+     │  dst 10.96.0.15:443          │  DNAT → 10.244.2.37:8443   │
+     ├─────────────────────────────►│  conntrack NEW entry         ├────► listener :8443
+     │                              │  reply SNAT uses entry       │
+     │◄─────────────────────────────┤  (must match EndpointSlice)  │
+     │                              └─────────────────────────────┘
+
+ If EndpointSlice changes but stale DNAT/conntrack remains → successful
+ health checks elsewhere, intermittent 503s or SYN timeouts here.
 ```
 
+Validate the three-hop matrix whenever Service traffic misbehaves:
+
+1. DNS name → ClusterIP (control plane)
+2. ClusterIP:port → kube-proxy translation (dataplane)
+3. PodIP:targetPort directly (bypasses virtual IP)
+
 ```bash
-# Validate transport path and socket state
-kubectl run --rm -it net-checker --restart=Never --image=nicolaka/netshoot --namespace default -- \
-  sh -lc "ss -tnlp | head -n 40 && tcpdump -i any -n -c 40 port 53"
-kubectl get pods -n default -l app="$svc" -o wide
+SVC=kubernetes
+kubectl get svc -n default "$SVC" -o wide
+kubectl get endpointslices -n default -l kubernetes.io/service-name="$SVC" -o yaml | sed -n '1,60p'
+EP=$(kubectl get endpointslices -n default -l kubernetes.io/service-name="$SVC" -o jsonpath='{.items[0].endpoints[0].addresses[0]}')
+kubectl run -n default netcheck --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc "curl -m3 -sS -o /dev/null -w '%{http_code}\n' https://${EP}:443 || true"
 ```
 
-### Success Criteria Checklist
+### conntrack saturation
 
-- [ ] I can interpret why ICMP, TCP, UDP, and DNS checks are run in a fixed sequence.
-- [ ] I can run namespace-aware route and neighbor checks and compare host versus pod networking.
-- [ ] I can write bounded `tcpdump` filters and capture packets to `/tmp/*.pcap`.
-- [ ] I can read `ss` output for listener, state, and queue-pressure signals.
-- [ ] I can inspect `iptables-save`, `nft list ruleset`, and identify SNAT/DNAT behavior.
-- [ ] I can read `/proc/net/dev`, `/proc/net/snmp`, and `/proc/net/tcp` for directional clues.
-- [ ] I can identify conntrack saturation signatures and map them to user-visible timeouts.
-- [ ] I can explain the difference between service, pod IP, and ClusterIP behavior in one concrete troubleshooting flow.
+The connection tracker stores state for NATed and tracked flows. When `nf_conntrack_count` approaches `nf_conntrack_max`, **new** flows may be dropped while established SSH or long-lived gRPC streams continue—creating “random” user impact.
+
+```bash
+sysctl net.netfilter.nf_conntrack_max net.netfilter.nf_conntrack_count
+sudo conntrack -S
+sudo conntrack -L -p tcp --dport 443 2>/dev/null | head -20
+```
+
+Read-only inspection is safe; flushing is not. Kernel sysctl documentation describes timeout and bucket tuning; size changes belong in change control with memory headroom validated on canary nodes.
+
+For iptables-mode clusters, correlate `KUBE-SVC` / `KUBE-SEP` chains with EndpointSlice addresses. For IPVS mode, inspect `ipvsadm -Ln` instead of hunting DNAT rules that do not exist.
+
+```bash
+sudo iptables-save -t nat | grep -E 'KUBE-SVC|KUBE-SEP' | head -40
+sudo ipvsadm -Ln 2>/dev/null | head -40 || echo "ipvsadm not installed or not IPVS mode"
+```
+
+Overlay MTU 1450 versus NIC 1500 still appears here as TCP blackholes **after** DNAT succeeds—always correlate with DF ping probes on the same path.
+
+### iptables mode versus IPVS mode (operator comparison)
+
+| Question | iptables mode | IPVS mode |
+|----------|---------------|-----------|
+| Primary inspection tool | `iptables-save -t nat`, `KUBE-*` chains | `ipvsadm -Ln` |
+| Failure after Endpoint churn | Stale DNAT rules or conntrack | Stale real servers / scheduler state |
+| Typical mis-debug action | `iptables -L` on wrong table | Searching `KUBE-SVC` chains that do not exist |
+| Load-balancing behavior | Probabilistic iptables rules | Scheduler (rr, lc, dh, etc.) |
+
+Kubernetes 1.35 documents virtual IPs and proxy implementations in the reference networking section—use that when explaining to application teams why ClusterIP is not a pingable host on the LAN.
+
+### Read-only firewall snapshots before any change
+
+```bash
+sudo iptables-save > "/tmp/iptables-$(date +%s).save"
+sudo nft list ruleset > "/tmp/nft-$(date +%s).txt" 2>/dev/null || true
+```
+
+Compare failing and healthy nodes with `diff -u` on NAT table excerpts focused on the Service CIDR and pod CIDR involved. Broad “restart kube-proxy everywhere” without diffs destroys the very chains you needed to compare.
+
+## Incident Evidence Bundles (copy/paste for on-call)
+
+Package these artifacts before escalating or rolling back:
+
+1. **Route/neighbor slice** — `ip route get <dst>` on host and in pod netns; `ip neigh show` for the egress interface.
+2. **Socket slice** — `ss -tanp` (or `-ulnp` for DNS) filtered to relevant ports.
+3. **DNS slice** — `resolv.conf`, `dig` FQDN, `dig` short name, CoreDNS log excerpt with timestamps.
+4. **Capture slice** — one pcap ≤ few MB with documented filter and interface.
+5. **NAT/conntrack slice** — `conntrack -S`, count vs max, optional `iptables-save`/`ipvsadm` excerpt for the Service.
+
+Five minutes assembling this bundle saves an hour of repeated commands when shifts change. It also satisfies audit questions about why a rollback was safe.
+
+### When to stop capturing and change something
+
+Change controls exist because some actions are irreversible in practice. Acceptable **first** mutations after evidence: scale down a retry storm, temporarily raise `nf_conntrack_max` on a canary node, add a narrow NetworkPolicy allow rule you can remove, or cordon a single bad node. Unacceptable **first** mutations: flushing all iptables/nft rules, `conntrack -F` on shared infrastructure, or deleting CNI interfaces without understanding pod churn impact.
+
+## Did You Know?
+
+- `ss -p` may omit process names without sufficient privilege, even when sockets exist—always note whether the command ran as root in the correct network namespace.
+- `dig +trace` intentionally bypasses `search` and `ndots` in `/etc/resolv.conf`, so it cannot reproduce pod resolver behavior by itself.
+- NodeLocal DNSCache can answer from a node-local cache IP while CoreDNS upstreams are unhealthy, producing “DNS works for some names only” patterns during partial outages.
+- conntrack table exhaustion often preserves long-lived SSH sessions while new HTTP connections fail, which looks like application instability rather than kernel resource pressure.
+
+## Common Mistakes
+
+| Mistake | Why it happens | How to fix it |
+|---------|----------------|---------------|
+| Running `tcpdump` on the wrong interface (`any` on a busy node, or host NIC instead of pod veth) | Quick defaults feel convenient | Identify the egress interface with `ip route get` and capture on that interface or inside `nsenter -n` |
+| Capturing without host/port filters on production nodes | Fear of missing packets | Bound with `host x and port y`, low `-c`, and write pcaps only after a live filter hits |
+| Expecting `ss -p` process names as an unprivileged user | `-p` needs access to `/proc` for mapping | Re-run with appropriate privileges in the **target** namespace, or infer from ports and `kubectl exec` |
+| Using `dig +trace` to debug in-cluster short names | Trace ignores `search`/`ndots` | Test with explicit FQDNs and the pod’s configured `nameserver`; compare `dig +search` behavior |
+| Ignoring conntrack table fullness because CPU is low | Drops affect only new flows | Watch `nf_conntrack_count` vs `nf_conntrack_max` and `conntrack -S` drop counters during spikes |
+| Inspecting iptables NAT chains on an IPVS-mode cluster (or ignoring NodeLocal DNSCache bypass) | Mode or cache path mismatch from outdated runbooks | Read `kube-proxy` `mode` first; query link-local cache IP and `kube-dns` Service separately |
+| Tuning application replicas for overlay MTU issues (1500 vs 1450) | Large TCP segments blackhole when PMTU ICMP is filtered | Validate with DF pings and `tracepath`; fix tunnel MTU or TCP MSS clamp at the right layer |
+| Keeping stale ARP/NDP entries after CNI daemon restarts | Neighbor cache not refreshed immediately | Compare `ip neigh` during failure vs after controlled flush on the affected interface |
+
+## Quiz
+
+Each question describes a production-shaped scenario. Answer with the **next** command or inspection layer—not a generic “check the network.”
+
+**1.** A pod can `curl -m 2 http://1.1.1.1` but `curl -m 2 http://127.0.0.1:8080` to its sidecar times out. The sidecar container listens on `127.0.0.1:8080` only. Which command in the **app container’s network namespace** best shows whether anything arrived at port 8080?
+
+<details><summary>Show answer</summary>
+
+Run `ss -tan sport = :8080` (or `ss -ltn sport = :8080`) inside the app container namespace, optionally paired with a short `tcpdump -i lo port 8080` capture. Routing to `127.0.0.1` stays on loopback; if `ss` shows no SYN received and the capture is empty, the client never reached the sidecar listener—check you are curling from the correct container and not from a different network namespace.
+
+</details>
+
+**2.** ClusterICMP: Nodes can ping pod CIDR gateways, but `curl https://10.96.0.20` from a pod hangs while `curl --resolve svc:443:10.244.2.5 https://svc` works. Where should you focus after confirming DNS returns the ClusterIP?
+
+<details><summary>Show answer</summary>
+
+Focus on kube-proxy dataplane translation and conntrack for ClusterIP→Endpoint DNAT, not CoreDNS. Compare `iptables-save -t nat` or `ipvsadm -Ln` with current EndpointSlices; verify no stale NAT/conntrack entries after recent rollouts.
+
+</details>
+
+**3.** After lowering a kind node’s eth0 MTU to 1450, large uploads to a pod on another node hang while small `curl` bodies succeed. Which two checks confirm PMTU/blackhole behavior fastest?
+
+<details><summary>Show answer</summary>
+
+Use DF ping probes (`ping -M do -s 1472` then smaller sizes) on the path and `tracepath` to the pod IP. Pair with a short `tcpdump` showing large TCP segments without progressing payload ACKs. Fix overlay/tunnel MTU or MSS clamp—not random kube-proxy restarts.
+
+</details>
+
+**4.** `conntrack -S` reports `insert_failed` increasing while `nf_conntrack_count` ≈ `nf_conntrack_max`. SSH to the node still works. What is the most likely user-visible symptom for new web connections?
+
+<details><summary>Show answer</summary>
+
+New TCP connections time out or fail intermittently while established flows (like SSH) continue. Mitigate retry storms first, then raise/table-tune conntrack with measured peaks—avoid `conntrack -F` without an maintenance window.
+
+</details>
+
+**5.** A pod’s `dig payments` times out but `dig payments.default.svc.cluster.local` returns immediately. `resolv.conf` shows `ndots:5` and `search default.svc.cluster.local svc.cluster.local cluster.local`. What happened?
+
+<details><summary>Show answer</summary>
+
+Short names expanded through multiple search domains before the absolute query, amplifying load and latency. Test with FQDNs, adjust application names, or fix `ndots`/search policy deliberately—do not blame kube-proxy when IP-based calls still work.
+
+</details>
+
+**6.** You capture on `eth0` and see SYNs toward a pod IP, but `ss` inside the pod namespace shows no listener on the target port. The Deployment manifest exposes containerPort 8080 and Service port 80. What is the highest-confidence next check?
+
+<details><summary>Show answer</summary>
+
+Confirm the process listens on the **containerPort** inside the pod (`ss -ltnp` via `kubectl exec`), not only that the Service object exists. Service ports map to `targetPort`; missing listeners explain SYNs without handshake completion despite correct routing.
+
+</details>
+
+**7.** `dig +trace cluster.local` from a pod shows unexpected public delegation, but `dig @kube-dns.kube-system.svc.cluster.local kubernetes.default.svc.cluster.local` is fine. Is CoreDNS broken?
+
+<details><summary>Show answer</summary>
+
+Not necessarily—`+trace` ignores pod `search`/`ndots` and is the wrong tool for in-cluster names. Trust resolver-specific queries using the pod’s configured `nameserver` line and CoreDNS logs.
+
+</details>
+
+**8.** After a CNI daemon restart on one node, only pods on that node fail east-west while north-south works. `ip neigh show dev cni0` lists `FAILED` for a peer pod IP. What should you verify before rewriting application code?
+
+<details><summary>Show answer</summary>
+
+Refresh L2/L3 neighbor state: compare `ip neigh` and interface counters on both ends, reproduce with `ping` + `arping`/`ndisc` as appropriate, and capture on the veth pair. Stale ARP after CNI restarts is a common one-node pattern.
+
+</details>
+
+## Hands-On Exercise: Three Incident Classes in kind
+
+Use a disposable kind cluster on Ubuntu 24.04 (kind v0.24+). Export a workspace and tear down when finished. Parts A and B build **evidence bundles** that work on default single-node kind v1.35; they do not require multi-node clusters or sysctl values the kernel rejects. Never run conntrack or MTU experiments on production nodes without change control.
+
+If you already run a personal kind cluster, set `KIND_CLUSTER` instead of creating `netdebug`. The commands below assume a single control-plane node named `${KIND_CLUSTER:-netdebug}-control-plane`; adjust `docker ps` filters to match your environment.
+
+```bash
+export WORKDIR=/tmp/netdebug-lab-$$
+mkdir -p "$WORKDIR"
+kind create cluster --name netdebug 2>/dev/null || kind get clusters | grep -q netdebug
+kubectl cluster-info --context kind-netdebug
+kubectl config use-context kind-netdebug
+```
+
+Deploy a long-lived netshoot pod once so later steps avoid image pull delays:
+
+```bash
+kubectl create deployment netshoot --image=nicolaka/netshoot -- sleep infinity
+kubectl wait --for=condition=available deploy/netshoot --timeout=180s
+```
+
+### Part A: MTU mismatch evidence bundle (single-node kind)
+
+Goal: collect the command outputs you would attach when you **suspect** an overlay or tunnel MTU blackhole—PMTU, interface MTU, and DF-probe behavior toward a pod IP.
+
+> **Why not lower the kind node’s `eth0` MTU?** On default **single-node** kind v1.35, east-west pod traffic stays on local veth/CNI paths and does **not** traverse the node’s `eth0`. Reviewers verified that lowering node `eth0` to 1450 still allows `ping -s 1400` and `curl` to the pod IP. Production blackholes usually need a **cross-node** overlay hop or a tunnel MTU smaller than the TCP MSS path. This lab produces the evidence artifact instead of forcing that failure here.
+
+Deploy a simple server target (skip if you already created it):
+
+```bash
+kubectl create deployment mtu-demo --image=nginx --port=80 2>/dev/null || true
+kubectl expose deployment mtu-demo --port=80 2>/dev/null || true
+kubectl wait --for=condition=available deploy/mtu-demo --timeout=120s
+POD_IP=$(kubectl get pod -l app=mtu-demo -o jsonpath='{.items[0].status.podIP}')
+```
+
+From `netshoot`, capture link state, PMTU discovery, and a DF ping sweep (save this block for your runbook):
+
+```bash
+kubectl exec deploy/netshoot -- sh -lc "
+  echo '=== eth0 link + offload flags ==='
+  ip -br link show eth0
+  ip link show eth0 | head -1
+  ethtool -k eth0 2>/dev/null | head -8 || echo 'ethtool not available'
+  echo '=== tracepath PMTU ==='
+  tracepath -n $POD_IP
+  echo '=== ping -M do sweep (payload sizes) ==='
+  for sz in 600 1200 1400 1472; do
+    echo \"--- size=\$sz ---\"
+    ping -c 1 -M do -s \$sz $POD_IP || true
+  done
+  echo '=== route toward pod ==='
+  ip route get $POD_IP
+"
+```
+
+On single-node kind you should see `pmtu 1500` and successful DF pings in the sweep—that is expected. In a real incident, compare a failing size against `tracepath` output and tunnel interface MTUs on **both** ends of the overlay path.
+
+Optional (lab only, when you have node `docker exec` access): lower the **server pod’s** `eth0` MTU inside its network namespace, then re-run the sweep. Some kernels report `Message too long` or stall large TCP while small probes still work:
+
+```bash
+NODE=$(docker ps --filter "name=${KIND_CLUSTER:-netdebug}-control-plane" -q)
+CONTAINER_ID=$(kubectl get pod -l app=mtu-demo -o jsonpath='{.items[0].status.containerStatuses[0].containerID}' | sed 's|containerd://||')
+PID=$(docker exec "$NODE" crictl inspect "$CONTAINER_ID" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['pid'])")
+docker exec "$NODE" nsenter -t "$PID" -n ip link set dev eth0 mtu 1450
+# re-run the kubectl exec netshoot block above; restore: nsenter ... ip link set dev eth0 mtu 1500
+```
+
+- [ ] You saved `ip link` / `ethtool -k eth0` output for the client pod toward the target.
+- [ ] You captured `tracepath` PMTU and a `ping -M do -s <size>` sweep with at least two payload sizes recorded.
+- [ ] You captured `ip route get` toward the pod IP from the client pod netns.
+- [ ] You can explain why overlay/tunnel MTU must stay consistent end-to-end (MSS clamping), and why single-node kind may not show a blackhole even when production does.
+
+### Part B: conntrack pressure under load (observe counters)
+
+Goal: record how `nf_conntrack_count` moves during a burst of new flows and how to read `conntrack -S` on kind v1.35—without sysctl values the kernel rejects.
+
+> **Warning:** Do **not** run `conntrack -F` on shared hosts.
+>
+> **Why not set `nf_conntrack_max=512`?** On kind v1.35 nodes (`nf_conntrack_buckets=262144` at module load), `sysctl -w net.netfilter.nf_conntrack_max=512` returns **Invalid argument**, and lowering `nf_conntrack_buckets` is also rejected. A flood on the default table therefore will **not** show `insert_failed` in a short lab—but the **count-versus-max** trend is the same signal you watch in production before drops appear.
+
+```bash
+NODE=$(docker ps --filter "name=${KIND_CLUSTER:-netdebug}-control-plane" -q)
+docker exec "$NODE" sysctl net.netfilter.nf_conntrack_max net.netfilter.nf_conntrack_buckets net.netfilter.nf_conntrack_count
+docker exec "$NODE" conntrack -S 2>/dev/null | head -5
+```
+
+Generate many short-lived connections (run in one terminal):
+
+```bash
+kubectl run -n default flood --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'for i in $(seq 1 800); do curl -m1 -s http://mtu-demo.default.svc >/dev/null & done; wait; echo done'
+```
+
+While the flood runs, sample the table in another terminal:
+
+```bash
+watch -n1 "docker exec \"$NODE\" sysctl net.netfilter.nf_conntrack_count"
+```
+
+After the flood completes:
+
+```bash
+docker exec "$NODE" sysctl net.netfilter.nf_conntrack_count net.netfilter.nf_conntrack_max
+docker exec "$NODE" conntrack -S 2>/dev/null | grep -E 'insert_failed|drop' || docker exec "$NODE" conntrack -S 2>/dev/null | head -8
+docker exec "$NODE" ss -s | head -15
+```
+
+- [ ] You recorded baseline `nf_conntrack_max`, `nf_conntrack_buckets`, and `nf_conntrack_count` before the flood.
+- [ ] `nf_conntrack_count` rose during the burst (note the approximate peak and its ratio to `nf_conntrack_max`).
+- [ ] You captured `conntrack -S` output and can name which counters (`insert_failed`, `drop`, `early_drop`) prove **new** flow loss when the table is full—even if this lab node stayed below saturation.
+- [ ] You can explain why existing long-lived flows (SSH-like) can continue while new HTTP connections fail once the table is exhausted.
+
+Optional observation: during the flood, run `kubectl exec deploy/netshoot -- ss -tan state syn-sent | wc -l` to correlate user-visible hangs with client socket state.
+
+### Part C: CoreDNS search-path amplification (`ndots:5`)
+
+Goal: show how a short unqualified name fans out through the pod `search` list and how to observe it with resolver-aware tools.
+
+> **Tooling note:** Plain `dig doesnotexist` does **not** apply the pod `search` list—only `dig +search` or libc lookups (`getent hosts`) do. CoreDNS does **not** log queries unless the `log` plugin is enabled in the Corefile.
+
+Enable query logging for this lab only (back up first; revert after the exercise):
+
+```bash
+kubectl -n kube-system get configmap coredns -o yaml > "$WORKDIR/coredns-backup.yaml"
+# Add a `log` line immediately under `.:53 {` in the Corefile, then apply:
+kubectl -n kube-system edit configmap coredns
+kubectl -n kube-system rollout restart deployment/coredns
+kubectl -n kube-system rollout status deployment/coredns --timeout=120s
+```
+
+The edited stanza should look like `.:53 {` followed by `log` on the next indented line (keep existing `errors`, `kubernetes`, and `forward` plugins).
+
+Resolver behavior from a throwaway pod:
+
+```bash
+kubectl run -n default dns-lab --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'cat /etc/resolv.conf; echo ---; time dig +search +tries=1 +time=2 doesnotexist; echo ---; time getent hosts doesnotexist 2>&1; echo ---; time dig +tries=1 +time=1 doesnotexist.default.svc.cluster.local'
+```
+
+Compare with explicit cluster FQDN (one round trip when the name exists):
+
+```bash
+kubectl run -n default dns-lab2 --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'dig +tries=1 +time=1 kubernetes.default.svc.cluster.local; dig +search +tries=1 +time=1 kubernetes'
+```
+
+Optional: count UDP/53 queries with `tcpdump` while `getent` runs (expect up to eight queries for a missing single-label name with default `search` + A/AAAA):
+
+```bash
+kubectl run -n default dns-cap --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'timeout 6 tcpdump -i eth0 -nn port 53 & sleep 1; getent hosts doesnotexist; wait'
+```
+
+Tail CoreDNS **after** enabling the `log` plugin:
+
+```bash
+kubectl -n kube-system logs -l k8s-app=kube-dns --tail=50 --since=2m
+```
+
+- [ ] You captured pod `resolv.conf` showing `ndots` and `search` lines.
+- [ ] You ran `dig +search` or `getent hosts` (not bare `dig`) for a short name and saw slower failure than the explicit FQDN path.
+- [ ] With the `log` plugin enabled, CoreDNS logs show multiple `NXDOMAIN` lines for the search-suffixed names (or you captured equivalent `tcpdump` evidence).
+- [ ] You can recommend FQDN use or deliberate `ndots`/search policy instead of blaming application HTTP stacks.
+
+Optional extension: create a custom Pod with `dnsConfig` to lower `ndots` for one deployment and compare query volume in CoreDNS logs—this mirrors how platform teams test fixes without cluster-wide changes.
+
+```bash
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dns-ndots-test
+  namespace: default
+spec:
+  containers:
+  - name: c
+    image: nicolaka/netshoot
+    command: ["sleep", "3600"]
+  dnsConfig:
+    options:
+    - name: ndots
+      value: "2"
+EOF
+kubectl exec dns-ndots-test -- dig +search +tries=1 +time=1 payments
+```
+
+- [ ] You compared default pod DNS options with a lowered `ndots` pod (optional).
+
+### Cleanup
+
+```bash
+kind delete cluster --name netdebug
+rm -rf "$WORKDIR"
+```
+
+- [ ] You deleted the kind cluster and removed temporary files.
+- [ ] You reverted the CoreDNS `log` plugin patch (if applied) and no lab MTU or sysctl experiments remain on shared workstations.
+
+### Reflection (post-lab)
+
+Write three sentences answering: which layer falsified your first guess in each part (MTU, conntrack, DNS)? If you had only one minute left on a bridge call, which single command from each part would you re-run? Keep those answers in your team runbook—future you will not remember the details under stress.
 
 ## Next Module
 
 Continue to [Module 7.1: Bash Fundamentals](/linux/shell-scripting/module-7.1-bash-fundamentals/) to automate these diagnostics into reusable checks and incident scripts.
 
+Bridge from [Module 6.3: Process Debugging](../module-6.3-process-debugging/): when `ss` shows a listening socket but the process `wchan` in `/proc` suggests endless `do_epoll_wait`, combine this module’s capture path with process-level `strace` on the same PID in the same network namespace.
+
+Bridge from [Module 3.1: TCP/IP Essentials](/linux/foundations/networking/module-3.1-tcp-ip-essentials/): reuse the conntrack and Service virtual-IP mental model from that module when interpreting kube-proxy evidence here—this lesson focuses on operational command loops, not re-deriving the packet lifecycle.
+
+Keep a personal cheat sheet of interface names your clusters use (`cni0`, `flannel.1`, `vxlan.calico`, etc.) so capture commands in this module need only destination edits during incidents.
+
+Record your cluster’s kube-proxy mode in the same cheat sheet before the first outage.
+
 ## Sources
 
-- <https://man7.org/linux/man-pages/man8/ping.8.html>
-- <https://man7.org/linux/man-pages/man8/traceroute.8.html>
-- <https://manpages.debian.org/bookworm/mtr-tiny/mtr.8.en.html>
-- <https://man7.org/linux/man-pages/man8/ss.8.html>
-- <https://www.tcpdump.org/manpages/tcpdump.1.html>
-- <https://www.tcpdump.org/>
-- <https://www.wireshark.org/docs/wsug_html_chunked/>
-- <https://www.linux.org>
-- <https://man7.org/linux/man-pages/man8/ip-route.8.html>
-- <https://man7.org/linux/man-pages/man8/ip-neighbour.8.html>
-- <https://conntrack-tools.netfilter.org/manual.html>
-- <https://man7.org/linux/man-pages/man8/ethtool.8.html>
-- <https://kubernetes.io/docs/concepts/services-networking/service/>
-- <https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/>
-- <https://coredns.io/manual/toc/>
-- <https://docs.cilium.io/en/stable/operations/troubleshooting/>
-- <https://kubernetes.io/docs/reference/networking/virtual-ips/>
+- [ss(8) — Linux manual page](https://man7.org/linux/man-pages/man8/ss.8.html)
+- [tcpdump(8) — Linux manual page](https://man7.org/linux/man-pages/man8/tcpdump.8.html)
+- [ip-route(8) — Linux manual page](https://man7.org/linux/man-pages/man8/ip-route.8.html)
+- [ip-neighbour(8) — Linux manual page](https://man7.org/linux/man-pages/man8/ip-neighbour.8.html)
+- [conntrack(8) — Ubuntu 24.04 manual page](https://manpages.ubuntu.com/manpages/noble/en/man8/conntrack.8.html) — documents `conntrack -L`, `-S`, and the danger of `-F` on shared hosts
+- [conntrack-tools manual — netfilter.org](https://conntrack-tools.netfilter.org/manual.html) — project reference for userspace connection tracking utilities
+- [nf_conntrack sysctl documentation — kernel.org](https://docs.kernel.org/networking/nf_conntrack-sysctl.html)
+- [DNS for Services and Pods — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+- [Debugging DNS resolution — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/)
+- [Services — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/service/)
+- [Virtual IPs and Service proxies — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/)
