@@ -138,7 +138,7 @@ The briefing API exists so deep file crawls are normally unnecessary.
 
 Cross-family review is mandatory (`docs/review-protocol.md`, AGENTS.md rule 10). Implementation agents open PRs; the **orchestrator merges** after review.
 
-**Reviewer routing (Decision Card C)** — full rationale and updates live in [`docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md`](docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md):
+**Reviewer routing (Decision Card C)** — full rationale and updates live in [`docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md`](../docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md):
 
 | Task class | Primary | Secondary | Notes |
 |---|---|---|---|
