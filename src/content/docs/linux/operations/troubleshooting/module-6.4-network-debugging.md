@@ -206,7 +206,7 @@ kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 mysvc
 kubectl exec -n default deploy/netshoot -- dig +time=2 +tries=1 mysvc.default.svc.cluster.local @kube-dns.kube-system.svc.cluster.local
 ```
 
-`ndots:5` (common in generated pod resolv.conf) means names with fewer than five dots expand through the pod’s `search` list before the “absolute” query. A single typo like `curl payments` can generate five cluster-scoped queries—each consuming time and conntrack entries—before the client tries the FQDN you intended.
+`ndots:5` (common in generated pod resolv.conf) is the **dot threshold**, not a query multiplier by itself: when a name has **fewer than five** dots, the resolver tries each `search`-list suffix **before** the absolute query. A default pod search list has three cluster suffixes (`<namespace>.svc.cluster.local`, `svc.cluster.local`, `cluster.local`), so a single-label lookup like `kubernetes` becomes four candidate FQDNs × two record types (A + AAAA) = **eight** DNS queries before a final `NXDOMAIN`. A typo like `curl payments` therefore amplifies latency and conntrack load even when the “right” FQDN would have answered immediately.
 
 `dig +trace` walks delegation from the root downward and **does not apply** `/etc/resolv.conf` `search` or `ndots` behavior. It is excellent for public-zone debugging and misleading for in-cluster names—never use it alone to prove pod resolver health.
 
@@ -514,9 +514,9 @@ Refresh L2/L3 neighbor state: compare `ip neigh` and interface counters on both 
 
 ## Hands-On Exercise: Three Incident Classes in kind
 
-Use a disposable kind cluster on Ubuntu 24.04 (kind v0.24+). Export a workspace and tear down when finished. These labs intentionally stress node networking—never run conntrack or MTU experiments on production nodes without change control.
+Use a disposable kind cluster on Ubuntu 24.04 (kind v0.24+). Export a workspace and tear down when finished. Parts A and B build **evidence bundles** that work on default single-node kind v1.35; they do not require multi-node clusters or sysctl values the kernel rejects. Never run conntrack or MTU experiments on production nodes without change control.
 
-If you already run a personal kind cluster, set `KIND_CLUSTER` instead of creating `netdebug`. The commands below assume a single control-plane node named `netdebug-control-plane`; adjust `docker ps` filters to match your environment.
+If you already run a personal kind cluster, set `KIND_CLUSTER` instead of creating `netdebug`. The commands below assume a single control-plane node named `${KIND_CLUSTER:-netdebug}-control-plane`; adjust `docker ps` filters to match your environment.
 
 ```bash
 export WORKDIR=/tmp/netdebug-lab-$$
@@ -533,109 +533,151 @@ kubectl create deployment netshoot --image=nicolaka/netshoot -- sleep infinity
 kubectl wait --for=condition=available deploy/netshoot --timeout=180s
 ```
 
-### Part A: Overlay MTU mismatch (large TCP hang)
+### Part A: MTU mismatch evidence bundle (single-node kind)
 
-Goal: observe how reduced node MTU toward an overlay path breaks large segments while small probes succeed.
+Goal: collect the command outputs you would attach when you **suspect** an overlay or tunnel MTU blackhole—PMTU, interface MTU, and DF-probe behavior toward a pod IP.
 
-```bash
-# Identify node container and primary interface
-NODE=$(docker ps --filter "name=netdebug-control-plane" -q)
-docker exec "$NODE" ip -br link
-docker exec "$NODE" ip route get 10.244.0.5 2>/dev/null || true
+> **Why not lower the kind node’s `eth0` MTU?** On default **single-node** kind v1.35, east-west pod traffic stays on local veth/CNI paths and does **not** traverse the node’s `eth0`. Reviewers verified that lowering node `eth0` to 1450 still allows `ping -s 1400` and `curl` to the pod IP. Production blackholes usually need a **cross-node** overlay hop or a tunnel MTU smaller than the TCP MSS path. This lab produces the evidence artifact instead of forcing that failure here.
 
-# Lower MTU on eth0 inside the kind node (lab only)
-docker exec "$NODE" ip link set dev eth0 mtu 1450
-docker exec "$NODE" ip -br link show dev eth0
-```
-
-Deploy a simple server and client:
+Deploy a simple server target (skip if you already created it):
 
 ```bash
 kubectl create deployment mtu-demo --image=nginx --port=80 2>/dev/null || true
-kubectl expose deployment mtu-demo --port=80
+kubectl expose deployment mtu-demo --port=80 2>/dev/null || true
 kubectl wait --for=condition=available deploy/mtu-demo --timeout=120s
 POD_IP=$(kubectl get pod -l app=mtu-demo -o jsonpath='{.items[0].status.podIP}')
 ```
 
-Run probes from another pod:
+From `netshoot`, capture link state, PMTU discovery, and a DF ping sweep (save this block for your runbook):
 
 ```bash
-kubectl run -n default mtu-client --rm -it --restart=Never --image=nicolaka/netshoot -- \
-  sh -lc "ping -c 2 -M do -s 1400 $POD_IP; ping -c 2 -M do -s 600 $POD_IP; curl -m5 -sS -o /dev/null -w '%{http_code}\n' http://$POD_IP/ || echo curl_failed"
+kubectl exec deploy/netshoot -- sh -lc "
+  echo '=== eth0 link + offload flags ==='
+  ip -br link show eth0
+  ip link show eth0 | head -1
+  ethtool -k eth0 2>/dev/null | head -8 || echo 'ethtool not available'
+  echo '=== tracepath PMTU ==='
+  tracepath -n $POD_IP
+  echo '=== ping -M do sweep (payload sizes) ==='
+  for sz in 600 1200 1400 1472; do
+    echo \"--- size=\$sz ---\"
+    ping -c 1 -M do -s \$sz $POD_IP || true
+  done
+  echo '=== route toward pod ==='
+  ip route get $POD_IP
+"
 ```
 
-- [ ] You lowered MTU inside the kind node and confirmed the interface reports MTU 1450.
-- [ ] A large DF ping or large transfer misbehaves while a smaller probe or transfer succeeds.
-- [ ] You captured `ip route get` toward the pod IP from the client pod context.
-- [ ] You can explain why overlay tunnels need consistent MTU/MSS, not only “restart nginx.”
+On single-node kind you should see `pmtu 1500` and successful DF pings in the sweep—that is expected. In a real incident, compare a failing size against `tracepath` output and tunnel interface MTUs on **both** ends of the overlay path.
 
-Restore MTU when done: `docker exec "$NODE" ip link set dev eth0 mtu 1500`.
-
-### Part B: conntrack table saturation (new flow drops)
-
-Goal: watch new TCP flows fail when the conntrack table is artificially small.
-
-> **Warning:** Do **not** run `conntrack -F` on shared hosts. This lab only adjusts `nf_conntrack_max` inside the kind node container.
+Optional (lab only, when you have node `docker exec` access): lower the **server pod’s** `eth0` MTU inside its network namespace, then re-run the sweep. Some kernels report `Message too long` or stall large TCP while small probes still work:
 
 ```bash
-docker exec "$NODE" sysctl net.netfilter.nf_conntrack_max
-docker exec "$NODE" sysctl -w net.netfilter.nf_conntrack_max=512
-docker exec "$NODE" sysctl net.netfilter.nf_conntrack_count
+NODE=$(docker ps --filter "name=${KIND_CLUSTER:-netdebug}-control-plane" -q)
+CONTAINER_ID=$(kubectl get pod -l app=mtu-demo -o jsonpath='{.items[0].status.containerStatuses[0].containerID}' | sed 's|containerd://||')
+PID=$(docker exec "$NODE" crictl inspect "$CONTAINER_ID" | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['pid'])")
+docker exec "$NODE" nsenter -t "$PID" -n ip link set dev eth0 mtu 1450
+# re-run the kubectl exec netshoot block above; restore: nsenter ... ip link set dev eth0 mtu 1500
 ```
 
-Generate many short-lived connections:
+- [ ] You saved `ip link` / `ethtool -k eth0` output for the client pod toward the target.
+- [ ] You captured `tracepath` PMTU and a `ping -M do -s <size>` sweep with at least two payload sizes recorded.
+- [ ] You captured `ip route get` toward the pod IP from the client pod netns.
+- [ ] You can explain why overlay/tunnel MTU must stay consistent end-to-end (MSS clamping), and why single-node kind may not show a blackhole even when production does.
+
+### Part B: conntrack pressure under load (observe counters)
+
+Goal: record how `nf_conntrack_count` moves during a burst of new flows and how to read `conntrack -S` on kind v1.35—without sysctl values the kernel rejects.
+
+> **Warning:** Do **not** run `conntrack -F` on shared hosts.
+>
+> **Why not set `nf_conntrack_max=512`?** On kind v1.35 nodes (`nf_conntrack_buckets=262144` at module load), `sysctl -w net.netfilter.nf_conntrack_max=512` returns **Invalid argument**, and lowering `nf_conntrack_buckets` is also rejected. A flood on the default table therefore will **not** show `insert_failed` in a short lab—but the **count-versus-max** trend is the same signal you watch in production before drops appear.
+
+```bash
+NODE=$(docker ps --filter "name=${KIND_CLUSTER:-netdebug}-control-plane" -q)
+docker exec "$NODE" sysctl net.netfilter.nf_conntrack_max net.netfilter.nf_conntrack_buckets net.netfilter.nf_conntrack_count
+docker exec "$NODE" conntrack -S 2>/dev/null | head -5
+```
+
+Generate many short-lived connections (run in one terminal):
 
 ```bash
 kubectl run -n default flood --rm -it --restart=Never --image=nicolaka/netshoot -- \
-  sh -lc 'for i in $(seq 1 400); do curl -m1 -s http://mtu-demo.default.svc >/dev/null & done; wait; echo done'
+  sh -lc 'for i in $(seq 1 800); do curl -m1 -s http://mtu-demo.default.svc >/dev/null & done; wait; echo done'
 ```
 
-Inspect saturation signals:
+While the flood runs, sample the table in another terminal:
 
 ```bash
-docker exec "$NODE" sysctl net.netfilter.nf_conntrack_count
-docker exec "$NODE" conntrack -S 2>/dev/null || docker exec "$NODE" cat /proc/sys/net/netfilter/nf_conntrack_count
-docker exec "$NODE" ss -s
+watch -n1 "docker exec \"$NODE\" sysctl net.netfilter.nf_conntrack_count"
 ```
 
-- [ ] You reduced `nf_conntrack_max` inside the lab node only.
-- [ ] `nf_conntrack_count` approached the max during the flood.
-- [ ] You observed timeouts or elevated `insert_failed` / drop counters in `conntrack -S`.
-- [ ] You can explain why existing SSH-like flows could continue while new HTTP connections failed.
+After the flood completes:
 
-Restore: `docker exec "$NODE" sysctl -w net.netfilter.nf_conntrack_max=262144` (or the original value you recorded).
+```bash
+docker exec "$NODE" sysctl net.netfilter.nf_conntrack_count net.netfilter.nf_conntrack_max
+docker exec "$NODE" conntrack -S 2>/dev/null | grep -E 'insert_failed|drop' || docker exec "$NODE" conntrack -S 2>/dev/null | head -8
+docker exec "$NODE" ss -s | head -15
+```
 
-Optional observation: while saturated, run `kubectl exec deploy/netshoot -- ss -tan state syn-sent | wc -l` during the flood to correlate user-visible hangs with socket state on the client side.
+- [ ] You recorded baseline `nf_conntrack_max`, `nf_conntrack_buckets`, and `nf_conntrack_count` before the flood.
+- [ ] `nf_conntrack_count` rose during the burst (note the approximate peak and its ratio to `nf_conntrack_max`).
+- [ ] You captured `conntrack -S` output and can name which counters (`insert_failed`, `drop`, `early_drop`) prove **new** flow loss when the table is full—even if this lab node stayed below saturation.
+- [ ] You can explain why existing long-lived flows (SSH-like) can continue while new HTTP connections fail once the table is exhausted.
+
+Optional observation: during the flood, run `kubectl exec deploy/netshoot -- ss -tan state syn-sent | wc -l` to correlate user-visible hangs with client socket state.
 
 ### Part C: CoreDNS search-path amplification (`ndots:5`)
 
-Goal: reproduce slow failures and `NXDOMAIN` noise when short names traverse the default search list.
+Goal: show how a short unqualified name fans out through the pod `search` list and how to observe it with resolver-aware tools.
+
+> **Tooling note:** Plain `dig doesnotexist` does **not** apply the pod `search` list—only `dig +search` or libc lookups (`getent hosts`) do. CoreDNS does **not** log queries unless the `log` plugin is enabled in the Corefile.
+
+Enable query logging for this lab only (back up first; revert after the exercise):
 
 ```bash
-kubectl -n kube-system get configmap coredns -o yaml | sed -n '1,80p'
-kubectl run -n default dns-lab --rm -it --restart=Never --image=nicolaka/netshoot -- \
-  sh -lc 'cat /etc/resolv.conf; echo ---; time dig +tries=1 +time=1 doesnotexist; echo ---; time dig +tries=1 +time=1 doesnotexist.default.svc.cluster.local'
+kubectl -n kube-system get configmap coredns -o yaml > "$WORKDIR/coredns-backup.yaml"
+# Add a `log` line immediately under `.:53 {` in the Corefile, then apply:
+kubectl -n kube-system edit configmap coredns
+kubectl -n kube-system rollout restart deployment/coredns
+kubectl -n kube-system rollout status deployment/coredns --timeout=120s
 ```
 
-Compare with explicit cluster FQDN:
+The edited stanza should look like `.:53 {` followed by `log` on the next indented line (keep existing `errors`, `kubernetes`, and `forward` plugins).
+
+Resolver behavior from a throwaway pod:
+
+```bash
+kubectl run -n default dns-lab --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'cat /etc/resolv.conf; echo ---; time dig +search +tries=1 +time=2 doesnotexist; echo ---; time getent hosts doesnotexist 2>&1; echo ---; time dig +tries=1 +time=1 doesnotexist.default.svc.cluster.local'
+```
+
+Compare with explicit cluster FQDN (one round trip when the name exists):
 
 ```bash
 kubectl run -n default dns-lab2 --rm -it --restart=Never --image=nicolaka/netshoot -- \
-  sh -lc 'dig +tries=1 +time=1 kubernetes.default.svc.cluster.local; dig +tries=1 +time=1 kubernetes'
+  sh -lc 'dig +tries=1 +time=1 kubernetes.default.svc.cluster.local; dig +search +tries=1 +time=1 kubernetes'
 ```
 
-Tail CoreDNS while testing:
+Optional: count UDP/53 queries with `tcpdump` while `getent` runs (expect up to eight queries for a missing single-label name with default `search` + A/AAAA):
+
+```bash
+kubectl run -n default dns-cap --rm -it --restart=Never --image=nicolaka/netshoot -- \
+  sh -lc 'timeout 6 tcpdump -i eth0 -nn port 53 & sleep 1; getent hosts doesnotexist; wait'
+```
+
+Tail CoreDNS **after** enabling the `log` plugin:
 
 ```bash
 kubectl -n kube-system logs -l k8s-app=kube-dns --tail=50 --since=2m
 ```
 
 - [ ] You captured pod `resolv.conf` showing `ndots` and `search` lines.
-- [ ] A short unqualified name generated multiple queries before final resolution behavior.
-- [ ] You correlated timing with CoreDNS logs (timeouts vs `NXDOMAIN`).
+- [ ] You ran `dig +search` or `getent hosts` (not bare `dig`) for a short name and saw slower failure than the explicit FQDN path.
+- [ ] With the `log` plugin enabled, CoreDNS logs show multiple `NXDOMAIN` lines for the search-suffixed names (or you captured equivalent `tcpdump` evidence).
 - [ ] You can recommend FQDN use or deliberate `ndots`/search policy instead of blaming application HTTP stacks.
 
-Optional extension: create a custom Pod with `dnsConfig` to lower `ndots` for one deployment and compare query counts in CoreDNS logs—this mirrors how platform teams test fixes without cluster-wide changes.
+Optional extension: create a custom Pod with `dnsConfig` to lower `ndots` for one deployment and compare query volume in CoreDNS logs—this mirrors how platform teams test fixes without cluster-wide changes.
 
 ```bash
 cat <<'EOF' | kubectl apply -f -
@@ -654,7 +696,7 @@ spec:
     - name: ndots
       value: "2"
 EOF
-kubectl exec dns-ndots-test -- dig +tries=1 +time=1 payments
+kubectl exec dns-ndots-test -- dig +search +tries=1 +time=1 payments
 ```
 
 - [ ] You compared default pod DNS options with a lowered `ndots` pod (optional).
@@ -667,7 +709,7 @@ rm -rf "$WORKDIR"
 ```
 
 - [ ] You deleted the kind cluster and removed temporary files.
-- [ ] No lab sysctl or MTU changes remain on shared workstations.
+- [ ] You reverted the CoreDNS `log` plugin patch (if applied) and no lab MTU or sysctl experiments remain on shared workstations.
 
 ### Reflection (post-lab)
 
@@ -694,7 +736,7 @@ Record your cluster’s kube-proxy mode in the same cheat sheet before the first
 - [conntrack(8) — Ubuntu 24.04 manual page](https://manpages.ubuntu.com/manpages/noble/en/man8/conntrack.8.html) — documents `conntrack -L`, `-S`, and the danger of `-F` on shared hosts
 - [conntrack-tools manual — netfilter.org](https://conntrack-tools.netfilter.org/manual.html) — project reference for userspace connection tracking utilities
 - [nf_conntrack sysctl documentation — kernel.org](https://docs.kernel.org/networking/nf_conntrack-sysctl.html)
-- [DNS for Services and Pods — Kubernetes](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
-- [Debugging DNS resolution — Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/)
+- [DNS for Services and Pods — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
+- [Debugging DNS resolution — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/)
 - [Services — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/concepts/services-networking/service/)
 - [Virtual IPs and Service proxies — Kubernetes 1.35](https://v1-35.docs.kubernetes.io/docs/reference/networking/virtual-ips/)
