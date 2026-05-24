@@ -14,8 +14,8 @@ This skill describes the **review contract**. For pedagogical content scoring ag
 
 | Author family | Cross-family reviewer (primary) | Fallback |
 |---|---|---|
-| claude (orchestrator inline OR headless) | composer-2.5 (cursor IDE) | codex gpt-5.5 |
-| composer-2.5 (cursor IDE) | codex gpt-5.5 (danger mode, worktree) | gemini-3.1-pro-preview |
+| claude (orchestrator inline OR headless) | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 |
+| composer-2.5 (cursor-agent CLI OR cursor IDE) | codex gpt-5.5 (danger mode, worktree) | gemini-3.1-pro-preview |
 | codex (gpt-5.5 / spark / mini) | composer-2.5 | gemini-3.1-pro-preview, agy (Claude tier) |
 | deepseek-v4-pro | composer-2.5 OR codex | gemini-3.1-pro-preview |
 | gemini-3.1-pro-preview | composer-2.5 OR codex | agy |

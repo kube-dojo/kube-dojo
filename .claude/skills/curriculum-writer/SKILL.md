@@ -18,7 +18,7 @@ Author skill for new KubeDojo curriculum modules. Ensures consistent structure, 
 
 | Lane | Agent | When | Notes |
 |---|---|---|---|
-| T0 primary (production-grade prose) | composer-2.5 (cursor IDE) | Default for #1504 review epic, bug fixes, T0 author | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]) |
+| T0 primary (production-grade prose) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Default for #1504 review epic, bug fixes, T0 author | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]) |
 | T0 secondary (writer dispatch) | codex gpt-5.5 (`dispatch_smart draft --agent codex --mode danger --worktree X --search`) | Codex weekly cap allowing | Requires `--search` + writable sandbox for factual content ([[feedback_codex_writer_needs_search]]) |
 | T0 tertiary (off-load author) | deepseek-v4-pro | Spread T0 load off codex weekly cap | Pair with vigilant code-domain reviewer; hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]) |
 | Drafter (needs Claude expansion) | gemini-3.1-pro-preview | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
