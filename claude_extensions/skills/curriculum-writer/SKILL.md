@@ -20,8 +20,9 @@ Author skill for new KubeDojo curriculum modules. Ensures consistent structure, 
 
 | Lane | Agent | When | Notes |
 |---|---|---|---|
-| T0 primary author (codex cap healthy) | codex gpt-5.5 (`.venv/bin/python scripts/dispatch_smart.py draft --agent codex --mode danger --worktree X --search`) | Default when codex weekly cap is not thin | Requires `--search` + writable sandbox for factual content ([[feedback_codex_writer_needs_search]]). Quality-best lane: stronger on factual / version / runnability accuracy than composer-2.5 (session 52 measured 67% first-pass NEEDS_CHANGES on cursor-authored T0). |
-| T0 primary author (codex cap thin / throttle) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Codex weekly cap throttled OR for bug fixes regardless of cap | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]). Strong on bug fixes (3/3 first-commit per [[feedback_cursor_is_strong_bug_fixer]]). |
+| T0 primary author (codex cap healthy) | codex (`.venv/bin/python scripts/dispatch_smart.py draft --agent codex --mode danger --worktree X`) | Default when codex weekly cap is not thin | Default model is `gpt-5.3-codex-spark` (per `TASK_CLASSES["draft"]`); override with `--model gpt-5.5` for top-tier first-pass quality at higher per-call cost. Codex `--search` auto-enables via task-class `codex_search=True` (env export `KUBEDOJO_CODEX_SEARCH=1` to the codex CLI); do NOT pass `--search` to `dispatch_smart.py`. Quality-best lane: stronger on factual / version / runnability accuracy than composer-2.5 (session 52 cursor-authored tooling/api/docs cohort measured 4/7 = 57% first-pass NEEDS_CHANGES — proxy signal, no curriculum-T0 cohort at scale yet). See [[feedback_codex_writer_needs_search]]. |
+| T0 primary author (codex cap thin / throttle) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Codex weekly cap throttled | Pair with codex R1 — composer-2.5 verifier passes ≠ runnability ([[feedback_composer_2_5_viable_for_t0_content]]). |
+| Bug fixer (any cap state) | composer-2.5 (cursor-agent CLI OR cursor IDE) | Bug fix PRs — separate lane from T0 author | Proven 3/3 first-commit on session 51 bug PRs per [[feedback_cursor_is_strong_bug_fixer]]. Use regardless of codex cap state. |
 | T0 off-load (spread author load) | deepseek-v4-pro | When 3+ codex authors already in-flight (parallel-cap discipline per [[feedback_parallel_rewrite_cap_three]]) | Pair with vigilant code-domain reviewer; hallucinates rule attribution ([[feedback_deepseek_v4_pro_viable_for_t0_content]]). |
 | Drafter (needs Claude expansion) | gemini-3.1-pro-preview | When deeper structure scoped but final-form latency cheap | Outputs 350-400 lines, expand to 700-900+ |
 | Source-fidelity expansion | claude opus (post-2026-06-15 inline) OR codex (pre, danger mode) | Strict-source rewrites | [[feedback_codex_default_prose_expander]] |
@@ -438,20 +439,20 @@ When referencing other modules:
 
 When the orchestrator delegates authoring to an agent, the recipe is:
 
-### Codex gpt-5.5 (T0 primary when codex cap healthy)
+### Codex (T0 primary when codex cap healthy)
 ```bash
 .venv/bin/python scripts/dispatch_smart.py draft --agent codex \
-  --mode danger --worktree <module-slug> --search \
-  --prompt-file /tmp/<module-slug>-brief.md
+  --mode danger --worktree .worktrees/<slug> --new-branch feat/codex-<slug> \
+  - < /tmp/<slug>-brief.md
 ```
-The brief MUST include: module spec, density gates, citation discipline rule, target word count, frontmatter requirements. Codex requires `--search` for factual content ([[feedback_codex_writer_needs_search]]). Stronger first-pass quality than cursor — fewer fix-pass cycles per PR. Cross-family reviewer = cursor composer-2.5 per Decision Card C.
+The brief MUST include: module spec, density gates, citation discipline rule, target word count, frontmatter requirements. **No `--search` flag on `dispatch_smart.py`** — `draft` task class auto-sets `codex_search=True` which exports `KUBEDOJO_CODEX_SEARCH=1` to the codex CLI ([[feedback_codex_writer_needs_search]] still applies at the codex layer). Default model is `gpt-5.3-codex-spark`; override with `--model gpt-5.5` when first-pass quality matters more than per-call cost. Cross-family reviewer = cursor composer-2.5 per Decision Card C.
 
-### Cursor composer-2.5 (T0 primary when codex cap thin / throttle; also bug fixer)
+### Cursor composer-2.5 (T0 primary when codex cap thin / throttle)
 1. File a GH issue with the module spec (use [[curriculum-writer]] template + density gates).
-2. Either dispatch headless via `.venv/bin/python scripts/dispatch_smart.py draft --agent cursor --model composer-2.5 --worktree <slug>` OR comment "cursor please claim" so cursor IDE picks it from the queue.
+2. Either dispatch headless via `.venv/bin/python scripts/dispatch_smart.py review --agent cursor --model composer-2.5` (note: `draft` task class also supports `--agent cursor`) OR comment "cursor please claim" so cursor IDE picks it from the queue.
 3. Cursor opens a PR from a worktree.
 4. Orchestrator picks PR up → dispatches codex R1 ([[cross-family-reviewer]]).
-5. On NEEDS_CHANGES (~67% first-pass rate per session-52 measurement), comment with R1 findings; cursor fix-passes.
+5. On NEEDS_CHANGES (session-52 cursor-authored tooling/api/docs cohort measured 4/7 = 57% first-pass NEEDS_CHANGES — proxy signal pending a true curriculum-T0 cohort), comment with R1 findings; cursor fix-passes.
 6. On APPROVE, orchestrator merges (cursor does NOT merge per session-51 directive).
 
 ### Deepseek-v4-pro (off-load when 3+ codex authors in-flight)

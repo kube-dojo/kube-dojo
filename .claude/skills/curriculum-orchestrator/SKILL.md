@@ -71,7 +71,7 @@ Full ritual: [`scripts/prompts/cold-start.md`](../../../scripts/prompts/cold-sta
 
 | Role | Primary | Fallback | Notes |
 |---|---|---|---|
-| T0 content author (codex cap healthy) | **codex gpt-5.5** | composer-2.5 (cursor), deepseek-v4-pro | Quality-best lane: codex stronger on factual/version/runnability accuracy. Session 52 measured cursor-authored T0 at 67% first-pass NEEDS_CHANGES. See [[curriculum-writer]]. |
+| T0 content author (codex cap healthy) | **codex gpt-5.5** | composer-2.5 (cursor), deepseek-v4-pro | Quality-best lane: codex stronger on factual/version/runnability accuracy. Session 52 cursor-authored tooling/api/docs cohort measured 4/7 (57%) first-pass NEEDS_CHANGES — proxy signal, not curriculum-T0 sample. See [[curriculum-writer]]. |
 | T0 content author (codex cap thin / throttle) | composer-2.5 (cursor-agent CLI OR cursor IDE) | deepseek-v4-pro | Verifier-pass ≠ runnability — always pair with codex R1 ([[feedback_composer_2_5_viable_for_t0_content]]). High first-pass NEEDS_CHANGES rate, but fix-pass is reliable. |
 | Bug fixer | composer-2.5 (cursor-agent CLI OR cursor IDE) | codex | Cursor proved 3/3 first-commit on session 51 bug PRs ([[feedback_cursor_is_strong_bug_fixer]]). Use cursor regardless of codex cap state. |
 | Cross-family reviewer of CLAUDE-authored | composer-2.5 (`dispatch_smart review --agent cursor --model composer-2.5`) | codex (fallback) | Decision Card C 2026-05-24 |
