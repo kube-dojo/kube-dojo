@@ -8519,7 +8519,7 @@ def build_api_schema() -> dict[str, Any]:
         },
         "endpoints": [
             {"path": "/", "desc": "HTML dashboard", "content_type": "text/html"},
-            {"path": "/artifacts", "desc": "Browseable HTML and Markdown artifact index", "content_type": "text/html"},
+            {"path": "/artifacts", "desc": "Browseable HTML and Markdown artifact index", "content_type": "text/html", "query": ["include=research", "include_research=1"]},
             {
                 "path": "/artifacts/{rel-path}",
                 "desc": "Static HTML/assets and server-rendered Markdown from approved artifact directories",
@@ -8542,7 +8542,7 @@ def build_api_schema() -> dict[str, Any]:
                 "desc": "Single primary action + up to 3 alternatives + blockers/alerts. Punch-line orientation derived from the session briefing.",
                 "content_type": "application/json",
             },
-            {"path": "/api/artifacts", "desc": "JSON index of HTML and Markdown artifacts served by /artifacts"},
+            {"path": "/api/artifacts", "desc": "JSON index of HTML and Markdown artifacts served by /artifacts. Research category omitted by default for performance; opt in with ?include=research or ?include_research=1.", "query": ["include=research", "include_research=1"]},
             {
                 "path": "/api/briefing/session",
                 "desc": "Agent cold-start orientation snapshot. First call for fresh agents.",
