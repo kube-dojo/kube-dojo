@@ -138,18 +138,30 @@ The briefing API exists so deep file crawls are normally unnecessary.
 
 Cross-family review is mandatory (`docs/review-protocol.md`, AGENTS.md rule 10). Implementation agents open PRs; the **orchestrator merges** after review.
 
-**Pick a reviewer from a different model family than the author** (Codex writes → Claude or Gemini reviews; Claude writes → Gemini or Codex; etc.).
+**Reviewer routing (Decision Card C)** — full rationale and updates live in [`docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md`](docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md):
+
+| Task class | Primary | Secondary | Notes |
+|---|---|---|---|
+| T0 content review (R1 + R2) | composer-2.5 (`cursor`) | codex | deepseek tertiary; bash-runnability brief required |
+| Content authoring | codex / composer-2.5 / deepseek (rotation) | — | — |
+| Code / dispatcher / CI review | codex | composer-2.5 (`cursor`) | unchanged |
+| Lab-runnability + ground-truth | composer-2.5 (`cursor`) | codex | bash-runnability specialty |
+| Translation review (UK) | gemini-cli (when quota back) | codex | unchanged |
+
+**Symmetric rule:** pick a reviewer from a **different model family** than the author (composer-2.5 / Cursor-authored content → **codex** reviews; codex-authored code → **composer-2.5** or Gemini reviews).
 
 | When | Tool | Command |
 |------|------|---------|
 | Headless Gemini (Ultra OAuth) | `dispatch.py` | `KUBEDOJO_GEMINI_SUBSCRIPTION=1 .venv/bin/python scripts/dispatch.py gemini - --review` |
-| Bridge review with `gh pr diff` | `ab ask-gemini` | `scripts/ab ask-gemini --review --allow-write` |
-| Quote verification (always) | `verify_review.py` | `.venv/bin/python scripts/verify_review.py --pr N --branch origin/<branch>` |
+| T0 content / lab-runnability review | `dispatch_smart.py` | `.venv/bin/python scripts/dispatch_smart.py review --agent cursor --model composer-2.5 --task-id review-pr-N -` (stdin brief; see workflow) |
+| Code / dispatcher / CI review | `dispatch_smart.py` | `.venv/bin/python scripts/dispatch_smart.py review --agent codex --worktree .worktrees/<branch> --task-id review-pr-N -` (stdin brief) |
+| Quote verification (always) | `verify_review.py` | `.venv/bin/python scripts/verify_review.py --pr N --from-pr --branch origin/<branch>` |
 
 Workflow:
 
-1. Post the review as `gh pr comment` — not `gh pr review --approve` when the same GitHub identity owns author and reviewer.
-2. Run `verify_review.py` before treating `NEEDS CHANGES` as blocking; ignore `quote_missing` findings unless the verifier confirms them.
-3. Orchestrator merges after an independent-family review is posted; coding agents do not merge their own PRs.
+1. Dispatch the reviewer with a brief that includes `gh pr diff N` and `docs/review-protocol.md` (heredoc on `-` is fine).
+2. Post the review as `gh pr comment` — not `gh pr review --approve` when the same GitHub identity owns author and reviewer.
+3. Run `verify_review.py --from-pr` (or pipe the saved review on stdin) before treating `NEEDS CHANGES` as blocking; ignore `quote_missing` findings unless the verifier confirms them. **Do not** run `--pr` without `--from-pr` and without stdin — that reads empty stdin and falsely reports `0 verified`.
+4. Orchestrator merges after an independent-family review is posted; coding agents do not merge their own PRs.
 
-Smoketest: `bash scripts/ops/smoketest_review_verifier.sh` (fixture with one verified + one quote_missing finding).
+Smoketest: `bash scripts/ops/smoketest_review_verifier.sh` (CLI fixture with one verified + one quote_missing finding).

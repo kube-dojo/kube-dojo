@@ -13,16 +13,27 @@ if [[ ! -x "$PYTHON" ]]; then
   exit 1
 fi
 
-REVIEW="$(cat <<'EOF'
+FIXTURE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/review-verifier-smoke.XXXXXX")"
+trap 'rm -rf "$FIXTURE_DIR"' EXIT
+
+cat >"$FIXTURE_DIR/fixture.py" <<'EOF'
+alpha = 1
+beta = 2
+gamma = 3
+EOF
+
+FIXTURE_PATH="$FIXTURE_DIR/fixture.py"
+
+REVIEW="$(cat <<EOF
 FINDING: verified quote
-FILE:LINE: fixture.py:2
+FILE:LINE: ${FIXTURE_PATH}:2
 CURRENT CODE:
   beta = 2
 WHY: example
 FIX: n/a
 
 FINDING: hallucinated quote
-FILE:LINE: fixture.py:4
+FILE:LINE: ${FIXTURE_PATH}:4
 CURRENT CODE:
   delta = 99
 WHY: example
@@ -30,27 +41,46 @@ FIX: n/a
 EOF
 )"
 
-OUTPUT="$(
-  printf '%s\n' "$REVIEW" | "$PYTHON" -c "
-import sys
-from pathlib import Path
+# Documented runbook path: stdin review + --pr (no --from-pr).
+REVIEW_FILE="$FIXTURE_DIR/review.txt"
+printf '%s\n' "$REVIEW" >"$REVIEW_FILE"
+set +e
+CLI_OUT="$("$PYTHON" scripts/verify_review.py --pr 0 <"$REVIEW_FILE" 2>&1)"
+CLI_RC=$?
+set -e
 
-sys.path.insert(0, str(Path('scripts').resolve()))
-from verify_review import verify_review
-
-review = sys.stdin.read()
-source = 'alpha = 1\nbeta = 2\ngamma = 3\n'
-results = verify_review(review, lambda _path: source)
-statuses = [row['status'] for row in results]
-print(','.join(statuses))
-if statuses != ['verified', 'quote_missing']:
-    raise SystemExit(f'unexpected statuses: {statuses}')
-"
-)"
-
-if [[ "$OUTPUT" != "verified,quote_missing" ]]; then
-  echo "smoketest_review_verifier: expected verified,quote_missing got ${OUTPUT}" >&2
+if [[ "$CLI_RC" -ne 1 ]]; then
+  echo "smoketest_review_verifier: expected exit 1 (quote_missing), got ${CLI_RC}" >&2
   exit 1
 fi
 
-echo "smoketest_review_verifier: ok (${OUTPUT})"
+if ! grep -q '1 verified, 0 line_mismatch, 1 quote_missing' <<<"$CLI_OUT"; then
+  echo "smoketest_review_verifier: unexpected verifier summary:" >&2
+  echo "$CLI_OUT" >&2
+  exit 1
+fi
+
+if ! grep -q '`verified` '"$FIXTURE_PATH"':2' <<<"$CLI_OUT"; then
+  echo "smoketest_review_verifier: missing verified row in output" >&2
+  exit 1
+fi
+
+if ! grep -q '`quote_missing` '"$FIXTURE_PATH"':4' <<<"$CLI_OUT"; then
+  echo "smoketest_review_verifier: missing quote_missing row in output" >&2
+  exit 1
+fi
+
+# Anti-regression: empty stdin must not be mistaken for a clean verification pass.
+EMPTY_OUT="$("$PYTHON" scripts/verify_review.py --pr 0 </dev/null 2>&1 || true)"
+if ! grep -q '0 verified, 0 line_mismatch, 0 quote_missing' <<<"$EMPTY_OUT"; then
+  echo "smoketest_review_verifier: empty stdin did not emit expected zero-count summary" >&2
+  exit 1
+fi
+
+# Parser surface must exist (runbook documents --from-pr).
+if ! "$PYTHON" scripts/verify_review.py --help | grep -q -- '--from-pr'; then
+  echo "smoketest_review_verifier: verify_review.py missing --from-pr flag" >&2
+  exit 1
+fi
+
+echo "smoketest_review_verifier: ok (verified,quote_missing via CLI)"
