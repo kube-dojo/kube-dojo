@@ -104,6 +104,7 @@ def test_benchmarks_page_renders_latest_report_dashboard(tmp_path: Path) -> None
     assert "12 lanes" in body
     assert 'href="/artifacts/calibration/v1/reports/2026-05-21/per-lane/code-review.html"' in body
     assert 'href="/artifacts/calibration/v1/reports/2026-05-21/stability.html"' in body
+    assert 'data-search-widget' in body
 
 
 def test_benchmarks_page_disables_missing_stability_report(tmp_path: Path) -> None:
@@ -116,6 +117,7 @@ def test_benchmarks_page_disables_missing_stability_report(tmp_path: Path) -> No
     assert '<span class="bench-tile disabled">' in body
     assert 'href="/artifacts/calibration/v1/reports/2026-05-21/stability.html"' not in body
     assert "stability-candidates.json" not in body
+    assert 'data-search-widget' in body
 
 
 def test_benchmarks_top_nav_link_appears_on_existing_ui_routes(tmp_path: Path) -> None:
