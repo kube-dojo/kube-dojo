@@ -2452,6 +2452,11 @@ _QUALITY_TITLE_RE = re.compile(r'^title:\s*["\']?(.*?)["\']?\s*$', re.MULTILINE)
 _QUALITY_SOURCES_HEADING_RE = re.compile(r"^##\s+Sources\s*$", re.MULTILINE)
 _QUALITY_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
 _QUALITY_BARE_URL_RE = re.compile(r"https?://\S+")
+_QUALITY_BOX_DRAWING_LINE_RE = re.compile(
+    r"^[^\n]*[─-╿][^\n]*$",
+    re.MULTILINE,
+)
+_QUALITY_BOX_DRAWING_MIN_LINES = 5
 _QUALITY_TRACK_LABELS = {
     "ai": "AI",
     "ai-ml-engineering": "AI/ML Engineering",
@@ -2547,7 +2552,11 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
             )
         )
         has_exercise = bool(re.search(r"^##+\s+(exercise|hands-on|practice|lab)\b", text, re.IGNORECASE | re.MULTILINE))
-        has_diagram = "```mermaid" in text or "<details>" in text
+        has_diagram = (
+            "```mermaid" in text
+            or "<details>" in text
+            or len(_QUALITY_BOX_DRAWING_LINE_RE.findall(text)) >= _QUALITY_BOX_DRAWING_MIN_LINES
+        )
         sources_match = _QUALITY_SOURCES_HEADING_RE.search(text)
         if sources_match:
             after_sources = text[sources_match.end():]
