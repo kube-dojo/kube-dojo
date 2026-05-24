@@ -5508,6 +5508,7 @@ def _render_benchmarks_page(repo_root: Path) -> str:
 </head>
 <body>
 {_render_top_nav("benchmarks")}
+{_render_page_chrome()}
 <main class="wrap">
   <header class="hero">
     <div><h1>Benchmarks</h1><div class="sub">Calibration report dashboard.</div></div>
@@ -5585,6 +5586,7 @@ def _render_benchmarks_page(repo_root: Path) -> str:
 </head>
 <body>
 {_render_top_nav("benchmarks")}
+{_render_page_chrome()}
 <main class="wrap">
   <section class="bench-head">
     <div>
