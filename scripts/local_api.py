@@ -70,6 +70,52 @@ def _load_search_routes_module() -> Any:
     return module
 
 
+def _load_ui_fragments_module() -> Any:
+    module_name = "_local_api_routes_ui_fragments"
+    loaded = sys.modules.get(module_name)
+    if loaded is not None:
+        return loaded
+    module_path = Path(__file__).resolve().with_name("local_api") / "routes" / "ui_fragments.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load ui fragments from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_repo_guard_module() -> Any:
+    module_name = "_local_api_repo_guard"
+    loaded = sys.modules.get(module_name)
+    if loaded is not None:
+        return loaded
+    module_path = Path(__file__).resolve().with_name("local_api") / "repo_guard.py"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load repo guard from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _ui_fragments_module() -> Any:
+    return _load_ui_fragments_module()
+
+
+def _repo_guard_module() -> Any:
+    return _load_repo_guard_module()
+
+
+def _design_system_link() -> str:
+    return _ui_fragments_module().DESIGN_SYSTEM_LINK
+
+
+def _render_page_chrome(*, include_afk: bool = False) -> str:
+    return _ui_fragments_module().render_global_chrome(include_search=True, include_afk=include_afk)
+
+
 _CHANNEL_ROUTES = _load_channel_routes_module()
 _DECISION_ROUTES = _load_decision_routes_module()
 _SEARCH_ROUTES = _load_search_routes_module()
@@ -3274,6 +3320,7 @@ def build_runtime_services_status(repo_root: Path) -> dict[str, Any]:
         "stale": stale,
         "total": running + stopped + stale,
         "services": services,
+        "repo": _repo_guard_module().inspect_repo_root(repo_root),
     }
 
 
@@ -4232,35 +4279,6 @@ def _render_top_nav(active: str) -> str:
 </nav>"""
 
 
-def _render_skeleton_page(title: str, issue_number: int) -> str:
-    active = title.lower()
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title} - KubeDojo Local Monitor</title>
-  <style>
-    :root {{ --bg:#0a0f1a; --surface-0:#111827; --surface-1:#1a2332; --surface-2:#1f2b3d; --text:#e5e7eb; --text-secondary:#9ca3af; --text-dim:#6b7280; --accent:#38bdf8; --accent-muted:rgba(56,189,248,0.12); --border:rgba(255,255,255,0.06); --radius-sm:8px; }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif; background:var(--bg); color:var(--text); line-height:1.5; -webkit-font-smoothing:antialiased; }}
-{_TOP_NAV_CSS}
-    .placeholder {{ max-width: 860px; margin: 0 auto; padding: 48px 24px; }}
-    .placeholder h1 {{ margin: 0 0 12px; font-size: 28px; letter-spacing: 0; }}
-    .placeholder p {{ color: var(--text-secondary); max-width: 720px; }}
-    .placeholder a {{ color: var(--accent); }}
-  </style>
-</head>
-<body>
-{_render_top_nav(active)}
-<main class="placeholder">
-  <h1>{title}</h1>
-  <p>This page is part of the L0-L6 local-API UI split. Detail content lands in <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/{issue_number}">#{issue_number}</a>.</p>
-  <p><a href="/">&larr; Home</a></p>
-</main>
-</body></html>"""
-
-
 _BENCHMARK_REPORTS_REL = "calibration/v1/reports"
 _BENCHMARK_LEDGER_REL = "calibration/v1/ledger.db"
 _BENCHMARK_REPORT_DIR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -4308,6 +4326,9 @@ _ARTIFACT_SECTION_SPECS = (
 )
 _ARTIFACT_TITLE_RE = re.compile(r"<title[^>]*>([^<]+)</title>", re.IGNORECASE)
 _ARTIFACT_MARKDOWN_CACHE: dict[str, tuple[int, int, str]] = {}
+_ARTIFACT_INDEX_CACHE: dict[str, tuple[float, dict[str, list[dict[str, Any]]]]] = {}
+_ARTIFACT_INDEX_CACHE_TTL_SECONDS = 30.0
+_ARTIFACT_DEFERRED_INDEX_CATEGORIES = {"Research"}
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 _MARKDOWN_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
 
@@ -4409,10 +4430,17 @@ def _relative_time(timestamp: float, *, now: float | None = None) -> str:
     return f"{days // 365}y ago"
 
 
-def build_artifacts_index(repo_root: Path) -> dict[str, list[dict[str, Any]]]:
+def _query_is_true(query: dict[str, list[str]], name: str) -> bool:
+    raw = query.get(name, [""])[0].strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def build_artifacts_index(repo_root: Path, *, include_deferred: bool = False) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     allowed_suffixes = {".html", ".md"}
     for category, base_rel, patterns in _ARTIFACT_SECTION_SPECS:
+        if category in _ARTIFACT_DEFERRED_INDEX_CATEGORIES and not include_deferred:
+            continue
         base = repo_root / base_rel
         if not base.is_dir():
             if category in {"Reports", "Migrations", "Handoffs", "References"}:
@@ -4440,11 +4468,51 @@ def build_artifacts_index(repo_root: Path) -> dict[str, list[dict[str, Any]]]:
                         "format": resolved.suffix.lower().lstrip("."),
                         "mtime": stat.st_mtime,
                         "size_bytes": stat.st_size,
+                        "category": category,
                     }
                 )
         if items or category not in {"Briefs", "Bug autopsies", "Dispatch briefs"}:
             grouped[category] = sorted(items, key=lambda item: item["mtime"], reverse=True)
     return grouped
+
+
+def _get_artifacts_index(
+    repo_root: Path,
+    query: dict[str, list[str]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    include_deferred = False
+    if query is not None:
+        include_deferred = _query_is_true(query, "include_research") or (
+            query.get("include", [""])[0].strip().lower() == "research"
+        )
+    cache_key = f"{repo_root.resolve()}::deferred={include_deferred}"
+    now = time.monotonic()
+    cached = _ARTIFACT_INDEX_CACHE.get(cache_key)
+    if cached is not None and now - cached[0] < _ARTIFACT_INDEX_CACHE_TTL_SECONDS:
+        return cached[1]
+    index = build_artifacts_index(repo_root, include_deferred=include_deferred)
+    _ARTIFACT_INDEX_CACHE[cache_key] = (now, index)
+    return index
+
+
+def _latest_handoff_url(repo_root: Path) -> str | None:
+    session = build_current_session(repo_root)
+    latest = session.get("latest")
+    if isinstance(latest, dict):
+        rel = latest.get("path")
+        if isinstance(rel, str) and rel:
+            return f"/artifacts/{rel}"
+    return None
+
+
+def _collect_recent_artifacts(
+    artifacts: dict[str, list[dict[str, Any]]],
+    *,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    flat = [item for items in artifacts.values() for item in items]
+    flat.sort(key=lambda item: float(item.get("mtime", 0)), reverse=True)
+    return flat[:limit]
 
 
 def _strip_markdown_frontmatter(text: str) -> str:
@@ -4674,6 +4742,7 @@ def render_markdown_artifact_html(repo_root: Path, path: Path) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)} - KubeDojo Artifact</title>
+  {_design_system_link()}
   <style>
     :root {{
       --bg:#0e1116; --panel:#161b22; --panel-2:#1c232c; --panel-3:#21262d;
@@ -4730,6 +4799,7 @@ def render_markdown_artifact_html(repo_root: Path, path: Path) -> str:
 </head>
 <body>
 {_render_top_nav("artifacts")}
+{_render_page_chrome()}
 <main class="wrap">
   <nav class="crumbs" aria-label="Breadcrumbs">{_render_artifact_breadcrumbs(rel)}</nav>
   <header class="hero">
@@ -4765,11 +4835,91 @@ def _artifact_category_anchor(category: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", category.lower()).strip("-")
 
 
-def render_artifacts_index_html(repo_root: Path) -> str:
-    artifacts = build_artifacts_index(repo_root)
+def render_html_artifact_shell(repo_root: Path, rel_path: str, raw_bytes: bytes) -> str:
+    candidate = _resolve_artifact_path(repo_root, rel_path)
+    title = _extract_artifact_display_title(candidate) if candidate is not None else Path(rel_path).stem
+    safe_rel = html.escape(rel_path)
+    raw_href = html.escape(f"/artifacts/{rel_path}?raw=1", quote=True)
+    iframe_src = raw_href
+    breadcrumbs = _render_artifact_breadcrumbs(rel_path)
+    benchmarks_action = ""
+    if rel_path.startswith("calibration/v1/reports/"):
+        benchmarks_action = '<a class="shell-action" href="/benchmarks">Benchmarks</a>'
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(title)} - KubeDojo Artifact</title>
+  {_design_system_link()}
+  <style>
+    :root {{ --bg:#0e1116; --panel:#161b22; --border:#30363d; --fg:#e6edf3; --fg-dim:#8b949e; --blue:#58a6ff; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }}
+    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--fg); }}
+{_TOP_NAV_CSS}
+    .wrap {{ max-width:1200px; margin:0 auto; padding:20px 24px 32px; }}
+    .crumbs {{ display:flex; flex-wrap:wrap; gap:7px; color:var(--fg-dim); font-family:var(--mono); font-size:12px; margin-bottom:12px; }}
+    .shell-toolbar {{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }}
+    .shell-action {{ display:inline-flex; align-items:center; padding:6px 10px; border:1px solid var(--border); border-radius:8px; color:var(--fg); font-size:12px; font-weight:700; text-decoration:none; background:var(--panel); }}
+    .shell-action:hover {{ border-color:var(--blue); color:var(--blue); text-decoration:none; }}
+    .artifact-shell {{ border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#070b12; min-height:70vh; }}
+    .artifact-frame {{ display:block; width:100%; min-height:70vh; border:0; background:#fff; }}
+  </style>
+</head>
+<body>
+{_render_top_nav("artifacts")}
+{_render_page_chrome()}
+<main class="wrap">
+  <nav class="crumbs" aria-label="Breadcrumbs">{breadcrumbs}</nav>
+  <div class="shell-toolbar">
+    <a class="shell-action" href="{raw_href}">Open raw (?raw=1)</a>
+    {benchmarks_action}
+    <span class="shell-action" aria-hidden="true">{safe_rel}</span>
+  </div>
+  <section class="artifact-shell">
+    <iframe class="artifact-frame" title="{html.escape(title)}" src="{iframe_src}"></iframe>
+  </section>
+</main>
+</body></html>"""
+
+
+def render_artifacts_index_html(
+    repo_root: Path,
+    query: dict[str, list[str]] | None = None,
+) -> str:
+    artifacts = _get_artifacts_index(repo_root, query)
     generated = time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime())
     total = sum(len(items) for items in artifacts.values())
     format_counts = _artifact_format_counts(artifacts)
+    recent = _collect_recent_artifacts(artifacts)
+    handoff_url = _latest_handoff_url(repo_root)
+    include_research = query is not None and (
+        _query_is_true(query, "include_research") or query.get("include", [""])[0].strip().lower() == "research"
+    )
+    research_query = "?include=research" if not include_research else ""
+
+    recent_rows = []
+    for item in recent:
+        recent_rows.append(
+            f"""<tr data-artifact-row data-title="{html.escape(str(item['title']).lower(), quote=True)}" data-path="{html.escape(str(item['path']).lower(), quote=True)}" data-format="{html.escape(str(item.get('format', 'html')), quote=True)}" data-category="{html.escape(str(item.get('category', '')).lower(), quote=True)}" data-mtime="{float(item['mtime'])}">
+      <td><a href="{html.escape(str(item['url']), quote=True)}">{html.escape(str(item['title']))}</a></td>
+      <td class="mono path">{html.escape(str(item['path']))}</td>
+      <td><span class="pill {'blue' if item.get('format') == 'md' else 'green'}">{html.escape(str(item.get('format', 'html')).upper())}</span></td>
+      <td><span class="pill neutral">{html.escape(_relative_time(float(item['mtime'])))}</span></td>
+    </tr>"""
+        )
+    recent_body = (
+        "\n".join(recent_rows)
+        if recent_rows
+        else '<tr><td colspan="4" class="empty">No artifacts found.</td></tr>'
+    )
+
+    category_pills = ['<a class="pill-pill active" href="#" data-category="">All</a>']
+    for category in artifacts:
+        anchor = _artifact_category_anchor(category)
+        category_pills.append(
+            f'<a class="pill-pill" href="#{html.escape(anchor, quote=True)}" data-category="{html.escape(category.lower(), quote=True)}">{html.escape(category)}</a>'
+        )
+
     section_html = []
     for category, items in artifacts.items():
         if not items and category in {"Briefs", "Bug autopsies", "Dispatch briefs"}:
@@ -4784,7 +4934,7 @@ def render_artifacts_index_html(repo_root: Path) -> str:
             age = html.escape(_relative_time(float(item["mtime"])))
             size_kb = f"{item['size_bytes'] / 1024:.1f} KB"
             rows.append(
-                f"""<tr>
+                f"""<tr data-artifact-row data-title="{title.lower()}" data-path="{rel_path.lower()}" data-format="{html.escape(str(item.get('format', 'html')), quote=True)}" data-category="{html.escape(category.lower(), quote=True)}" data-mtime="{float(item['mtime'])}">
       <td><a href="{url}">{title}</a></td>
       <td class="mono path">{rel_path}</td>
       <td><span class="pill {fmt_class}">{fmt}</span></td>
@@ -4795,7 +4945,7 @@ def render_artifacts_index_html(repo_root: Path) -> str:
         body = "\n".join(rows) if rows else '<tr><td colspan="5" class="empty">No artifacts found.</td></tr>'
         anchor = _artifact_category_anchor(category)
         section_html.append(
-            f"""<section class="panel" id="{html.escape(anchor)}">
+            f"""<section class="panel artifact-section" id="{html.escape(anchor)}" data-category="{html.escape(category.lower(), quote=True)}">
   <details open>
   <summary class="panel-head">
     <h2>{html.escape(category)}</h2>
@@ -4813,12 +4963,25 @@ def render_artifacts_index_html(repo_root: Path) -> str:
 </section>"""
         )
 
+    handoff_cta = ""
+    if handoff_url:
+        handoff_cta = (
+            f'<a class="handoff-cta" href="{html.escape(handoff_url, quote=True)}">Latest handoff &rarr;</a>'
+        )
+    research_note = ""
+    if not include_research:
+        research_note = (
+            f'<p class="research-note">Research artifacts are hidden by default. '
+            f'<a href="/artifacts{research_query}">Include research</a>.</p>'
+        )
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Artifacts - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
     :root {{
       --bg:#0e1116; --panel:#161b22; --panel-2:#1c232c; --panel-3:#21262d;
@@ -4841,6 +5004,13 @@ def render_artifacts_index_html(repo_root: Path) -> str:
     .page-head {{ display:flex; justify-content:space-between; gap:20px; align-items:flex-end; margin-bottom:18px; }}
     h1 {{ margin:0; font-size:30px; letter-spacing:0; }}
     .page-sub {{ margin-top:4px; color:var(--fg-dim); font-size:14px; max-width:780px; }}
+    .handoff-cta {{ display:inline-flex; align-items:center; padding:8px 12px; border-radius:8px; border:1px solid rgba(88,166,255,0.45); background:var(--blue-bg); color:var(--blue); font-size:13px; font-weight:700; text-decoration:none; }}
+    .research-note {{ color:var(--fg-dim); font-size:13px; margin:0 0 12px; }}
+    .artifact-tools {{ display:grid; grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(120px,0.5fr)); gap:10px; margin:16px 0; }}
+    .artifact-tools input,.artifact-tools select {{ width:100%; height:36px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); color:var(--fg); padding:0 10px; font-size:13px; }}
+    .category-pills {{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 18px; }}
+    .pill-pill {{ display:inline-flex; padding:5px 10px; border-radius:999px; border:1px solid var(--border); color:var(--fg-dim); font-size:12px; font-weight:700; text-decoration:none; }}
+    .pill-pill.active,.pill-pill:hover {{ color:var(--blue); border-color:rgba(88,166,255,0.45); background:var(--blue-bg); text-decoration:none; }}
     .kpis {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:18px 0; }}
     .kpi {{ border:1px solid var(--border); border-radius:8px; background:var(--panel); padding:14px 16px; }}
     .kpi .value {{ display:block; font-size:26px; font-weight:600; line-height:1; color:var(--blue); }}
@@ -4867,9 +5037,12 @@ def render_artifacts_index_html(repo_root: Path) -> str:
     .path {{ color:var(--fg-dim); min-width:320px; overflow-wrap:anywhere; }}
     .num {{ text-align:right; white-space:nowrap; }}
     .empty {{ color:var(--text-dim); text-align:center; padding:22px; }}
+    .artifact-section.hidden {{ display:none; }}
+    tr[data-artifact-row].hidden {{ display:none; }}
     @media (max-width: 720px) {{
       .wrap {{ padding:20px 14px 40px; }}
       .page-head {{ display:block; }}
+      .artifact-tools {{ grid-template-columns:1fr; }}
       th,td {{ padding:9px 10px; }}
       .num {{ text-align:left; }}
     }}
@@ -4877,22 +5050,109 @@ def render_artifacts_index_html(repo_root: Path) -> str:
 </head>
 <body>
 {_render_top_nav("artifacts")}
+{_render_page_chrome()}
 <main class="wrap">
   <header class="page-head">
     <div>
       <h1>Artifacts</h1>
       <div class="page-sub">Unified browser for HTML and Markdown orchestrator artifacts served through the local API.</div>
     </div>
-    <span class="pill neutral">Generated {html.escape(generated)}</span>
+    <div>{handoff_cta}<span class="pill neutral">Generated {html.escape(generated)}</span></div>
   </header>
+  {research_note}
+  <section class="artifact-tools" aria-label="Artifact filters">
+    <input id="artifact-search" type="search" placeholder="Filter artifacts by title or path" autocomplete="off">
+    <select id="artifact-format-filter" aria-label="Format filter">
+      <option value="">All formats</option>
+      <option value="html">HTML</option>
+      <option value="md">Markdown</option>
+    </select>
+    <select id="artifact-sort" aria-label="Sort order">
+      <option value="mtime-desc">Newest first</option>
+      <option value="mtime-asc">Oldest first</option>
+      <option value="title-asc">Title A-Z</option>
+    </select>
+    <select id="artifact-category-filter" aria-label="Category filter">
+      <option value="">All categories</option>
+      {"".join(f'<option value="{html.escape(category.lower(), quote=True)}">{html.escape(category)}</option>' for category in artifacts)}
+    </select>
+  </section>
+  <div class="category-pills">{"".join(category_pills)}</div>
   <section class="kpis" aria-label="Artifact summary">
     <div class="kpi"><span class="value">{total}</span><span class="label">Total artifacts</span></div>
     <div class="kpi"><span class="value">{format_counts["html"]}</span><span class="label">HTML files</span></div>
     <div class="kpi"><span class="value">{format_counts["md"]}</span><span class="label">Markdown files</span></div>
     <div class="kpi"><span class="value">{len(artifacts)}</span><span class="label">Sections</span></div>
   </section>
+  <section class="panel" id="recent-artifacts">
+    <div class="panel-head"><h2>Recently updated</h2><span class="pill neutral">{len(recent)}</span></div>
+    <div class="table-wrap">
+      <table class="matrix" id="recent-artifacts-table">
+        <thead><tr><th>Title</th><th>Path</th><th>Type</th><th>Modified</th></tr></thead>
+        <tbody>{recent_body}</tbody>
+      </table>
+    </div>
+  </section>
   {"".join(section_html)}
 </main>
+<script>
+(() => {{
+  const search = document.getElementById("artifact-search");
+  const formatFilter = document.getElementById("artifact-format-filter");
+  const sortSelect = document.getElementById("artifact-sort");
+  const categoryFilter = document.getElementById("artifact-category-filter");
+  const rows = () => Array.from(document.querySelectorAll("[data-artifact-row]"));
+  const sections = () => Array.from(document.querySelectorAll(".artifact-section"));
+  function applyFilters() {{
+    const q = (search?.value || "").trim().toLowerCase();
+    const fmt = formatFilter?.value || "";
+    const category = categoryFilter?.value || "";
+    rows().forEach((row) => {{
+      const title = row.dataset.title || "";
+      const path = row.dataset.path || "";
+      const rowFmt = row.dataset.format || "";
+      const rowCategory = row.dataset.category || "";
+      const visible = (!q || title.includes(q) || path.includes(q))
+        && (!fmt || rowFmt === fmt)
+        && (!category || rowCategory === category);
+      row.classList.toggle("hidden", !visible);
+    }});
+    sections().forEach((section) => {{
+      const sectionCategory = section.dataset.category || "";
+      const hasVisible = Array.from(section.querySelectorAll("[data-artifact-row]:not(.hidden)")).length > 0;
+      section.classList.toggle("hidden", category && sectionCategory !== category ? true : !hasVisible);
+    }});
+    document.querySelectorAll(".pill-pill").forEach((pill) => {{
+      pill.classList.toggle("active", (pill.dataset.category || "") === category);
+    }});
+  }}
+  function applySort() {{
+    const mode = sortSelect?.value || "mtime-desc";
+    document.querySelectorAll("table.matrix tbody").forEach((tbody) => {{
+      const sorted = rows().filter((row) => tbody.contains(row)).sort((a, b) => {{
+        if (mode === "title-asc") return (a.dataset.title || "").localeCompare(b.dataset.title || "");
+        const am = Number(a.dataset.mtime || 0);
+        const bm = Number(b.dataset.mtime || 0);
+        return mode === "mtime-asc" ? am - bm : bm - am;
+      }});
+      sorted.forEach((row) => tbody.appendChild(row));
+    }});
+  }}
+  search?.addEventListener("input", applyFilters);
+  formatFilter?.addEventListener("change", applyFilters);
+  categoryFilter?.addEventListener("change", applyFilters);
+  sortSelect?.addEventListener("change", () => {{ applySort(); applyFilters(); }});
+  document.querySelectorAll(".pill-pill").forEach((pill) => {{
+    pill.addEventListener("click", (event) => {{
+      event.preventDefault();
+      if (categoryFilter) categoryFilter.value = pill.dataset.category || "";
+      applyFilters();
+    }});
+  }});
+  applySort();
+  applyFilters();
+}})();
+</script>
 </body></html>"""
 
 
@@ -5410,6 +5670,25 @@ def build_state_manifest() -> dict[str, Any]:
                     {"name": "Pipeline board", "path": "/pipeline", "purpose": "Pipeline v2 queue and event dashboard.", "type": "html"},
                     {"name": "Activity feed", "path": "/activity", "purpose": "Recent commits, pipeline events, and bridge messages.", "type": "html"},
                     {"name": "Health dashboard", "path": "/health", "purpose": "Runtime services, worktrees, and delivery health.", "type": "html"},
+                    {"name": "Artifacts browser", "path": "/artifacts", "purpose": "Browse HTML and Markdown orchestrator artifacts.", "type": "html_artifact"},
+                    {"name": "Decisions board", "path": "/decisions", "purpose": "Decision cards with lineage and pending status.", "type": "html"},
+                    {"name": "Channels browser", "path": "/channels", "purpose": "Bridge conversations and deliberation threads.", "type": "html"},
+                    {"name": "Benchmarks dashboard", "path": "/benchmarks", "purpose": "Latest calibration run and predecessor history.", "type": "html"},
+                ],
+            },
+            {
+                "category": "collaboration",
+                "entries": [
+                    {"name": "Channels", "path": "/channels", "purpose": "Bridge conversations and live deliberation threads.", "type": "html"},
+                    {"name": "Decisions", "path": "/decisions", "purpose": "Decision cards, pending queue, and lineage.", "type": "html"},
+                    {"name": "Pending decisions API", "path": "/api/decisions/pending", "purpose": "Pending and stale decision files for notifications.", "type": "api"},
+                ],
+            },
+            {
+                "category": "git_and_build",
+                "entries": [
+                    {"name": "Git worktrees", "path": "/api/git/worktrees", "purpose": "Attached worktrees and cleanup candidates.", "type": "api"},
+                    {"name": "Build job status", "path": "/api/build/status", "purpose": "Poll Astro build job progress by job_id.", "type": "api"},
                 ],
             },
             {
@@ -5502,7 +5781,11 @@ def serve_static_file(repo_root: Path, rel_path: str) -> tuple[int, Any, str]:
         return 404, {"error": "not_found"}, "application/json; charset=utf-8"
 
 
-def serve_artifact_file(repo_root: Path, rel_path: str) -> tuple[int, Any, str]:
+def serve_artifact_file(
+    repo_root: Path,
+    rel_path: str,
+    query: dict[str, list[str]] | None = None,
+) -> tuple[int, Any, str]:
     decoded = unquote(rel_path)
     candidate = _resolve_artifact_path(repo_root, decoded)
     if candidate is None:
@@ -5520,9 +5803,12 @@ def serve_artifact_file(repo_root: Path, rel_path: str) -> tuple[int, Any, str]:
     if not candidate.is_file():
         return 404, {"error": "not_found", "path": decoded}, "application/json; charset=utf-8"
     try:
-        return 200, candidate.read_bytes(), content_type
+        raw_bytes = candidate.read_bytes()
     except OSError:
         return 404, {"error": "not_found", "path": decoded}, "application/json; charset=utf-8"
+    if content_type == "text/html; charset=utf-8" and not _query_is_true(query or {}, "raw"):
+        return 200, render_html_artifact_shell(repo_root, decoded, raw_bytes), "text/html; charset=utf-8"
+    return 200, raw_bytes, content_type
 
 
 _OPERATOR_PAGE_CSS = """
@@ -6926,6 +7212,7 @@ def render_operator_page_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Operator - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
 {_TOP_NAV_CSS}
 {_OPERATOR_PAGE_CSS}
@@ -6933,6 +7220,7 @@ def render_operator_page_html() -> str:
 </head>
 <body>
   {_render_top_nav("operator")}
+  {_render_page_chrome()}
   <main class="main">
     <div class="page-head">
       <div>
@@ -6995,6 +7283,7 @@ def render_pipeline_page_html(repo_root: Path, *, tail: int = 30) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pipeline - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
 {_TOP_NAV_CSS}
 {_PIPELINE_PAGE_CSS}
@@ -7002,6 +7291,7 @@ def render_pipeline_page_html(repo_root: Path, *, tail: int = 30) -> str:
 </head>
 <body>
   {_render_top_nav("pipeline")}
+  {_render_page_chrome()}
   <main class="main">
     <div class="page-head">
       <div>
@@ -7110,6 +7400,7 @@ def render_activity_page_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Activity - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
 {_TOP_NAV_CSS}
 {_ACTIVITY_PAGE_CSS}
@@ -7118,6 +7409,7 @@ def render_activity_page_html() -> str:
 </head>
 <body>
   {_render_top_nav("activity")}
+  {_render_page_chrome()}
   <main class="main">
     <div class="page-head">
       <div>
@@ -7146,6 +7438,11 @@ def render_activity_page_html() -> str:
             <option value="claude">claude</option>
             <option value="codex">codex</option>
             <option value="gemini">gemini</option>
+            <option value="grok">grok</option>
+            <option value="deepseek">deepseek</option>
+            <option value="qwen">qwen</option>
+            <option value="cursor">cursor</option>
+            <option value="composer">composer</option>
             <option value="autopilot">autopilot</option>
           </select>
           <span class="panel-badge" id="activity-badge">&nbsp;</span>
@@ -7170,6 +7467,7 @@ def render_health_page_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Health - KubeDojo Local Monitor</title>
+  {_design_system_link()}
   <style>
 {_TOP_NAV_CSS}
 {_HEALTH_PAGE_CSS}
@@ -7177,6 +7475,7 @@ def render_health_page_html() -> str:
 </head>
 <body>
   {_render_top_nav("health")}
+  {_render_page_chrome()}
   <main class="main">
     <div class="page-head">
       <div>
@@ -7269,9 +7568,9 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     .summary-head {{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; border-bottom:1px solid var(--border); }}
     .summary-title {{ display:flex; align-items:center; gap:9px; font-size:13px; font-weight:700; }}
     .summary-icon {{ width:20px; height:20px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; }}
-    .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card {{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; min-height:78px; padding:15px 16px; color:var(--text); text-decoration:none; }}
+    .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card,.artifacts-summary-card,.decisions-summary-card {{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; min-height:78px; padding:15px 16px; color:var(--text); text-decoration:none; }}
     .op-summary-card,.pipeline-summary-card,.benchmarks-summary-card {{ grid-template-columns:repeat(3,minmax(82px,1fr)) auto; }}
-    .op-summary-card:hover,.quality-summary-card:hover,.pipeline-summary-card:hover,.activity-summary-card:hover,.channels-summary-card:hover,.benchmarks-summary-card:hover {{ background:rgba(255,255,255,0.02); }}
+    .op-summary-card:hover,.quality-summary-card:hover,.pipeline-summary-card:hover,.activity-summary-card:hover,.channels-summary-card:hover,.benchmarks-summary-card:hover,.artifacts-summary-card:hover,.decisions-summary-card:hover {{ background:rgba(255,255,255,0.02); }}
     .op-summary-value,.pipeline-summary-value,.summary-value {{ display:block; font-size:23px; line-height:1; font-weight:800; font-variant-numeric:tabular-nums; }}
     .op-summary-label,.pipeline-summary-label,.summary-label {{ display:block; margin-top:5px; color:var(--text-dim); font-size:10px; font-weight:800; letter-spacing:0; text-transform:uppercase; }}
     .quality-summary-title {{ display:block; color:var(--text-dim); font-size:10px; font-weight:800; letter-spacing:0; text-transform:uppercase; margin-bottom:6px; }}
@@ -7285,11 +7584,12 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
     .activity-summary-text {{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
     .op-summary-link,.quality-summary-link,.pipeline-summary-link,.activity-summary-link,.summary-link {{ color:var(--accent); font-size:13px; font-weight:800; white-space:nowrap; }}
     @media (max-width:860px) {{ .summary-grid {{ grid-template-columns:1fr; }} .op-summary-card,.pipeline-summary-card,.benchmarks-summary-card {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .op-summary-link,.pipeline-summary-link {{ justify-self:start; }} }}
-    @media (max-width:640px) {{ .main {{ padding:16px; }} .header-inner {{ padding:16px; align-items:flex-start; flex-direction:column; }} .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card {{ grid-template-columns:1fr; }} .quality-summary-counts,.summary-copy,.health-summary-copy {{ white-space:normal; }} }}
+    @media (max-width:640px) {{ .main {{ padding:16px; }} .header-inner {{ padding:16px; align-items:flex-start; flex-direction:column; }} .op-summary-card,.quality-summary-card,.pipeline-summary-card,.activity-summary-card,.channels-summary-card,.benchmarks-summary-card,.artifacts-summary-card,.decisions-summary-card {{ grid-template-columns:1fr; }} .quality-summary-counts,.summary-copy,.health-summary-copy {{ white-space:normal; }} }}
   </style>
 </head>
 <body>
   {_render_top_nav("home")}
+  {_render_page_chrome()}
   <header class="header">
     <div class="header-inner">
       <div class="header-brand"><div class="logo">K</div><div><div class="title">KubeDojo Local Monitor</div><div class="sub">Overview cards · details live on dedicated routes</div></div></div>
@@ -7327,6 +7627,16 @@ def render_dashboard_html(repo_root: Path = REPO_ROOT, *, issue_number: int = DE
       <section class="summary-shell">
         <div class="summary-head"><div class="summary-title"><span class="summary-icon" style="background:var(--green-muted);color:var(--green);">H</span>Health</div><span class="panel-badge" id="health-summary-state">&nbsp;</span></div>
         <a class="op-summary-card health-summary-card" href="/health"><span class="health-summary-copy" id="health-summary-copy">Services: 0 running / 0 total &middot; Worktrees: 0 &middot; Missing: 0</span><span class="op-summary-link">View health &rarr;</span></a>
+      </section>
+
+      <section class="summary-shell">
+        <div class="summary-head"><div class="summary-title"><span class="summary-icon" style="background:var(--accent-muted);color:var(--accent);">A</span>Artifacts</div><span class="panel-badge">Browse</span></div>
+        <a class="artifacts-summary-card" href="/artifacts"><span><span class="summary-copy">HTML and Markdown orchestrator artifacts, handoffs, audits, and reports.</span></span><span class="summary-link">View artifacts &rarr;</span></a>
+      </section>
+
+      <section class="summary-shell">
+        <div class="summary-head"><div class="summary-title"><span class="summary-icon" style="background:var(--amber-muted);color:var(--amber);">D</span>Decisions</div><span class="panel-badge">Cards</span></div>
+        <a class="decisions-summary-card" href="/decisions"><span><span class="summary-copy">Decision cards with pending/stale status and git lineage.</span></span><span class="summary-link">View decisions &rarr;</span></a>
       </section>
 
       <section class="summary-shell">
@@ -8390,9 +8700,9 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
     if path == "/operator":
         return 200, render_operator_page_html(), "text/html; charset=utf-8"
     if path == "/artifacts":
-        return 200, render_artifacts_index_html(repo_root), "text/html; charset=utf-8"
+        return 200, render_artifacts_index_html(repo_root, query), "text/html; charset=utf-8"
     if path.startswith("/artifacts/"):
-        return serve_artifact_file(repo_root, path[len("/artifacts/"):])
+        return serve_artifact_file(repo_root, path[len("/artifacts/"):], query)
     if path == "/quality":
         return 200, render_quality_board_page_html(), "text/html; charset=utf-8"
     if path.startswith("/quality/"):
@@ -8422,6 +8732,7 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
         path,
         top_nav_css=_TOP_NAV_CSS,
         render_top_nav_fn=_render_top_nav,
+        render_markdown_fn=_render_markdown_body,
     )
     if decision_page is not None:
         return decision_page
@@ -8436,9 +8747,9 @@ def route_request(repo_root: Path, raw_path: str) -> tuple[int, Any, str]:
     if channel_page is not None:
         return channel_page
     if path == "/healthz":
-        return 200, {"ok": True}, "application/json; charset=utf-8"
+        return 200, _repo_guard_module().build_healthz_payload(repo_root), "application/json; charset=utf-8"
     if path == "/api/artifacts":
-        return 200, build_artifacts_index(repo_root), "application/json; charset=utf-8"
+        return 200, _get_artifacts_index(repo_root, query), "application/json; charset=utf-8"
     if path == "/api/status/summary":
         # Dashboard hot path: skip the git-per-file translation + ZTT passes
         # (~2min total). Full versions served by /api/translation/v2/status
@@ -8901,6 +9212,8 @@ def _v_docs_frontmatter(repo_root: Path) -> tuple:
 # (ttl_seconds, version_fn_or_None)
 CACHE_POLICY: dict[str, tuple[float, Callable[[Path], tuple] | None]] = {
     "/healthz": (60.0, None),
+    "/artifacts": (30.0, None),
+    "/api/artifacts": (30.0, None),
     "/api/schema": (600.0, None),
     "/api/state/manifest": (600.0, None),
     "/api/session/current": (30.0, None),
@@ -9126,6 +9439,10 @@ def make_handler(repo_root: Path) -> type[BaseHTTPRequestHandler]:
 
 
 def serve(repo_root: Path, host: str, port: int) -> None:
+    inspection = _repo_guard_module().inspect_repo_root(repo_root)
+    for warning in inspection.get("warnings", []):
+        if isinstance(warning, str):
+            print(warning, file=sys.stderr)
     ThreadingHTTPServer.daemon_threads = True
     ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), make_handler(repo_root))
