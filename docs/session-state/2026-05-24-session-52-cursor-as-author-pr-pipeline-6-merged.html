@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 52 — Cursor-as-author PR pipeline + 6 PRs merged + 388-module review epic filed</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 52 — Cursor-as-author PR pipeline + 6 PRs merged + 388-module composer-2.5 review epic filed</h1>
+<p class="meta">2026-05-24 afternoon, continuing session 51. Cursor IDE delivered 8 PRs (1 for #1505 cold-start ritual + 7 for follow-ups #1495–#1501). Orchestrator role this session: codex cross-family review cycles + merge orchestration. User confirmed cursor "won't merge anymore and respects my authority". Decision Card C symmetric routing fully operational. 6 PRs merged end-to-end through R1→fix-pass→R2 cycles where needed.</p>
+
+<h2>Headline</h2>
+
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1506</td><td><span class="pill merged">MERGED</span></td><td>feat(tooling): cold-start ritual API-first organizer (closes #1505)</td><td>R1 NEEDS_CHANGES (2) → cursor fix-pass → R2 APPROVE_WITH_NITS → nit inline → merged</td></tr>
+<tr><td>#1514</td><td><span class="pill merged">MERGED</span></td><td>fix(local_api): detect ASCII box-drawing diagrams in quality scorer (closes #1503)</td><td>orchestrator-filed bug #1503 → cursor → R1 APPROVE no findings → merged</td></tr>
+<tr><td>#1512</td><td><span class="pill merged">MERGED</span></td><td>docs(api): document deferred Research artifact index in /api/schema (closes #1500)</td><td>R1 PASS no findings → merged</td></tr>
+<tr><td>#1511</td><td><span class="pill merged">MERGED</span></td><td>feat(api): expand repo_guard tests + document /healthz contract (closes #1499)</td><td>R1 NEEDS_CHANGES (3) → cursor fix-pass → R2 APPROVE → merged (tests 6→9)</td></tr>
+<tr><td>#1508</td><td><span class="pill merged">MERGED</span></td><td>feat(api): quality board design-system + global search chrome (closes #1496)</td><td>R1 APPROVE no findings → merged</td></tr>
+<tr><td>#1509</td><td><span class="pill merged">MERGED</span></td><td>feat(api): benchmarks dashboard global search chrome parity (closes #1497)</td><td>R1 PASS no findings → merged</td></tr>
+<tr><td>#1510</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>docs: publish codebase architecture diagram (closes #1498)</td><td>R1 NEEDS_CHANGES (P1: CDN Mermaid breaks offline + executes 3rd-party JS) → cursor fix-pass running</td></tr>
+<tr><td>#1513</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>docs(tooling): cross-family PR review runbook (closes #1501)</td><td>R1 NEEDS_CHANGES (4 findings, all substantive incl. fabricated commands) → fix-pass `cd33041a` → codex R2 running</td></tr>
+<tr><td>#1507</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>feat(api): wire poll-stale indicators on dashboard refresh pages (closes #1495)</td><td>R1 NEEDS_CHANGES (P1: setPollTs() race/flicker on already-stale refresh + test coverage gap) → cursor fix-pass running</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. Cursor "no-merge" arrangement</h3>
+<p>Cursor IDE in PR #1493 (api-dashboard-polish, merged mid-session-51 without orchestrator gate) sparked the rule. User: <em>"cursor won't merge anymore and respect your authority"</em>. Operational shape: cursor creates issues + opens PRs + comments "claiming"; orchestrator picks up PRs from the queue, dispatches codex R1, drives fix-pass cycles, performs the actual merge.</p>
+
+<h3>2. Symmetric cross-family routing operational</h3>
+<p>Decision Card C (accepted session 51 start) defined composer-2.5 as primary T0 content reviewer. User added: <em>"everything not reviewed by composer-2.5 has to be reviewed by [composer-2.5]"</em>. Symmetric rule for composer-2.5-authored: codex reviews. Confirmed routing table:</p>
+
+<table>
+<tr><th>Author</th><th>Reviewer</th></tr>
+<tr><td>codex / deepseek / gemini / claude / agy / anyone else</td><td><strong>composer-2.5</strong></td></tr>
+<tr><td><strong>composer-2.5</strong></td><td>codex</td></tr>
+<tr><td>orchestrator inline edits</td><td>composer-2.5</td></tr>
+</table>
+
+<h3>3. 388-module review epic filed (#1504)</h3>
+<p>User chose Option C for unreviewed-by-composer-2.5 content backlog: actually run composer-2.5 review on each. Scope: <strong>388 modules across 77 sections</strong> in starter tracks (prerequisites, linux, ai, ai-ml-engineering, cloud, k8s). One-section-per-session discipline, per-module re-read freshness, ~58 hours total cursor session time over multi-week campaign. <strong>Explicit model-selection requirement at top of issue: every session MUST use `composer-2.5` (NOT composer-2.5-fast, NOT auto)</strong>.</p>
+
+<h2>Headline data: starter-track quality at session end</h2>
+
+<p>Quality survey after restarting local API to pick up PR #1491 + PR #1514 fixes:</p>
+
+<table>
+<tr><th>Track</th><th>Modules</th><th>At 5.0</th><th>Notes</th></tr>
+<tr><td>prerequisites</td><td>44</td><td>44</td><td>100% green</td></tr>
+<tr><td>linux</td><td>37</td><td>37</td><td>100% green</td></tr>
+<tr><td>ai</td><td>28</td><td>28</td><td>100% green</td></tr>
+<tr><td>ai-ml-engineering</td><td>103</td><td>103</td><td>100% green after #1514 scorer fix</td></tr>
+<tr><td>cloud</td><td>92</td><td>92</td><td>100% green</td></tr>
+<tr><td>k8s (certs)</td><td>195</td><td>195</td><td>100% green</td></tr>
+<tr><td><strong>Starter total</strong></td><td><strong>499</strong></td><td><strong>499</strong></td><td><strong>100% green by heuristic</strong></td></tr>
+<tr><td>on-premises</td><td>55</td><td>42</td><td>13 critical (rewrites needed)</td></tr>
+<tr><td>platform</td><td>230</td><td>121</td><td>108 critical (largest backlog)</td></tr>
+</table>
+
+<p>Heuristic-green ≠ reviewed-by-composer-2.5. The 388 modules still need cross-family review per the user's policy refinement (epic #1504). The 121 platform + 13 on-prem criticals need REWRITES, tracked separately.</p>
+
+<h2>Dashboard /quality dual-axis clarification</h2>
+
+<p>The <code>/quality</code> dashboard mixes (1) heuristic score AND (2) review-pipeline tracking (<code>shipped_unreviewed</code>, <code>needs_review</code>, <code>done</code>). A module scoring 5.0 can still show as <code>shipped_unreviewed</code> if no pipeline record exists. Distribution at session end:</p>
+
+<ul>
+<li><code>done</code>: 209 (score 5.0 AND tracked as fully reviewed)</li>
+<li><code>shipped_unreviewed</code>: 273 (score 5.0 BUT never tracked in pipeline)</li>
+<li><code>needs_review</code>: 117 (score 5.0 BUT <code>revision_pending: true</code> in frontmatter)</li>
+<li><code>needs_rewrite</code>: 185 (score below threshold — the real backlog)</li>
+</ul>
+
+<p>The composer-2.5 review campaign (#1504) will move ~388 modules from <code>shipped_unreviewed</code>+<code>needs_review</code> → <code>done</code> as each section session ticks its checkbox.</p>
+
+<h2>Git hygiene executed mid-session</h2>
+
+<ul>
+<li>Removed 4 stale local branches (<code>feat/api-dashboard-polish</code>, <code>pr-1464</code>, <code>research/long-context-cohort-fact-check</code>, the 3 session-51 ones).</li>
+<li>Removed 4 stale worktrees (PR #1493 + 3 session-51 worktrees).</li>
+<li>Cleaned 3 stale remote-ref pointers via <code>git fetch --prune</code>.</li>
+<li>Deleted untracked <code>pr_diff.txt</code> debug artifact.</li>
+<li>Then 7 cursor-delivered worktrees appeared mid-session for #1507–#1513.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>PR #1506 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES (handoff parser + --issue flag)</td></tr>
+<tr><td>PR #1506 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>OK, both fixed</td></tr>
+<tr><td>PR #1506 R2</td><td>codex gpt-5.5</td><td>review</td><td>APPROVE_WITH_NITS (--manifest missing in Options)</td></tr>
+<tr><td>PR #1506 R2 nit</td><td>orchestrator inline</td><td>edit</td><td>1-line Options block fix</td></tr>
+<tr><td>PR #1514 R1 (scorer #1503)</td><td>codex gpt-5.5</td><td>review</td><td>APPROVE no findings</td></tr>
+<tr><td>PR #1503 cursor fix</td><td>cursor composer-2.5</td><td>edit</td><td>OK, 5.0 verified on data-pipelines</td></tr>
+<tr><td>PR #1512 R1</td><td>codex gpt-5.5</td><td>review</td><td>PASS no findings</td></tr>
+<tr><td>PR #1511 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES (3 findings)</td></tr>
+<tr><td>PR #1511 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>OK, tests 6→9</td></tr>
+<tr><td>PR #1511 R2</td><td>codex gpt-5.5</td><td>review</td><td>APPROVE no findings</td></tr>
+<tr><td>PR #1510 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES (P1: CDN Mermaid)</td></tr>
+<tr><td>PR #1513 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES (4 findings — fabricated commands etc.)</td></tr>
+<tr><td>PR #1513 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>OK, smoketest exit 0</td></tr>
+<tr><td>PR #1513 R2</td><td>codex gpt-5.5</td><td>review</td><td>(in-flight at handoff)</td></tr>
+<tr><td>PR #1508 R1</td><td>codex gpt-5.5</td><td>review</td><td>APPROVE no findings</td></tr>
+<tr><td>PR #1509 R1</td><td>codex gpt-5.5</td><td>review</td><td>PASS no findings</td></tr>
+<tr><td>PR #1507 R1</td><td>codex gpt-5.5</td><td>review</td><td>NEEDS_CHANGES (P1: setPollTs race)</td></tr>
+<tr><td>PR #1510 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>(in-flight at handoff)</td></tr>
+<tr><td>PR #1507 fix-pass</td><td>cursor composer-2.5</td><td>edit</td><td>(in-flight at handoff)</td></tr>
+</table>
+
+<p><strong>Totals: ~19 dispatches</strong> (10 codex review + 8 cursor edit + 1 orchestrator inline). Zero Claude / agy headless dispatches — Claude weekly budget still at 7% reset window. Resets 2026-05-25 morning.</p>
+
+<h2>Operational lessons (new this session)</h2>
+
+<h3>1. The codex review surfaces the real composer-2.5 slip class</h3>
+<p>Out of 7 cursor-authored PRs reviewed by codex this session: 4 came back NEEDS_CHANGES (#1506, #1511, #1510, #1513) and 3 came back PASS/APPROVE (#1512, #1508, #1509). The NEEDS_CHANGES findings included:</p>
+<ul>
+<li><strong>Fabricated CLI commands</strong> documented in a runbook whose <em>whole purpose</em> was to STOP this exact class (#1513 finding 1: <code>ab ask-gemini --review --allow-write</code> doesn't parse).</li>
+<li><strong>Silent false-bless paths</strong> in verifier docs (#1513 finding 2).</li>
+<li><strong>P1 race conditions</strong> in concurrent UI helpers (#1507).</li>
+<li><strong>Broken regex / unmaintained fallback paths</strong> (#1506 HIGH — handoff-path parser).</li>
+<li><strong>Third-party CDN dependencies in artifacts</strong> (#1510 P1 — Mermaid).</li>
+<li><strong>Test coverage that doesn't exercise critical branches</strong> (#1511 finding 2 — repo-mismatch not tested).</li>
+</ul>
+<p>This validates the symmetric cross-family routing rule. Composer-2.5 ships fast but slips on these classes; codex catches them. Inverse is also true (composer-2.5 caught real bash runnability bugs in codex-authored PRs in session 50).</p>
+
+<h3>2. Background-task watcher pattern</h3>
+<p><strong>Don't</strong> use <code>for ... done &</code> to spawn watchers — parent shell exits → orphan children, no notifications. <strong>Do</strong> use individual <code>run_in_background: true</code> per task. Cost: more tool calls; benefit: real notifications.</p>
+
+<h3>3. Auto-merge fails silently when <code>--delete-branch</code> can't delete locally</h3>
+<p><code>gh pr merge N --squash --delete-branch --auto</code> fails the WHOLE command when the local branch is still checked out in a worktree. Workaround: drop <code>--delete-branch</code>, let server-side <code>--delete-branch</code> happen via PR-merge settings, clean up the local branch + worktree manually after merge.</p>
+
+<h2>End state (at handoff write)</h2>
+
+<ul>
+<li>Local main: synced with origin (will sync after in-flight #1510, #1513, #1507 land).</li>
+<li>Worktrees beyond primary: 3 in-flight (<code>arch-diagram</code>, <code>review-runbook</code>, <code>poll-stale</code>) — will clean up when their PRs merge.</li>
+<li>Open PRs: 3 (#1510, #1513, #1507) — all in fix-pass / R2 cycles.</li>
+<li>Open issues: <strong>#1504 epic</strong> (388-module composer-2.5 review campaign, 77 sections, 0 sections checked) + 7 follow-up issues paired to PRs in flight or merged.</li>
+<li>Decision Cards pending: none.</li>
+<li>Claude weekly budget: ~7% (no Claude headless dispatches this session, only orchestrator).</li>
+</ul>
+
+<h2>Next session</h2>
+
+<ol>
+<li><strong>Confirm #1510 / #1513 / #1507 merged.</strong> Cycle should complete autonomously via watchers; check <code>gh pr list --state open</code> at session start to see if anything stalled.</li>
+<li><strong>Cursor starts on epic #1504 (388-module composer-2.5 review).</strong> Standing-watch pattern: when cursor comments "claiming section X" or opens a PR against a section, orchestrator picks up the review queue. First sections to expect: small starter sections (prerequisites/cloud-native-101, prerequisites/philosophy-design — 4–5 modules each) before tackling larger sections.</li>
+<li><strong>121 critical-rubric platform + 13 on-prem REWRITES</strong> (separate workstream from the review epic). Top of briefing.actions.next after API restart. Cursor composer-2.5 author + codex R1 pattern (proven session 51 + 52).</li>
+<li><strong>5 remaining broken-link warnings</strong> in AI/ML tracks (Class B dangling forward-refs; trivial cleanup).</li>
+<li><strong>Claude weekly budget resets 2026-05-25 morning</strong> — Claude headless dispatches return to rotation.</li>
+<li><strong>Date-bound:</strong> 2026-06-08 claude-i wrapper · 2026-06-15 agentic-credit-pool flip · 2026-06-18 drop gemini-cli adapter · 2026-07-13 weekly-double bump expires.</li>
+</ol>
+
+</body></html>
