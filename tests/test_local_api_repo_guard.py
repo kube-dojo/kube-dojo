@@ -15,6 +15,16 @@ def _load_repo_guard():
     return module
 
 
+def _load_local_api():
+    module_path = Path(__file__).resolve().parent.parent / "scripts" / "local_api.py"
+    spec = importlib.util.spec_from_file_location("local_api_repo_guard", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_build_healthz_payload_ok_on_clean_tmp_path(tmp_path: Path) -> None:
     repo_guard = _load_repo_guard()
     payload = repo_guard.build_healthz_payload(tmp_path)
@@ -23,16 +33,54 @@ def test_build_healthz_payload_ok_on_clean_tmp_path(tmp_path: Path) -> None:
     assert not any("dead process" in warning for warning in payload["warnings"])
 
 
-def test_healthz_route_uses_repo_guard(tmp_path: Path) -> None:
-    local_api_path = Path(__file__).resolve().parent.parent / "scripts" / "local_api.py"
-    spec = importlib.util.spec_from_file_location("local_api_healthz", local_api_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
+def test_build_healthz_payload_fails_on_stale_api_pid(tmp_path: Path) -> None:
+    repo_guard = _load_repo_guard()
+    pid_dir = tmp_path / ".pids"
+    pid_dir.mkdir()
+    (pid_dir / "api.pid").write_text("999999999", encoding="utf-8")
 
-    status, body, content_type = module.route_request(tmp_path, "/healthz")
+    payload = repo_guard.build_healthz_payload(tmp_path)
+
+    assert payload["ok"] is False
+    assert any("dead process" in warning for warning in payload["warnings"])
+
+
+def test_build_healthz_payload_warns_on_unreadable_api_pid(tmp_path: Path) -> None:
+    repo_guard = _load_repo_guard()
+    pid_dir = tmp_path / ".pids"
+    pid_dir.mkdir()
+    (pid_dir / "api.pid").write_text("not-a-pid", encoding="utf-8")
+
+    payload = repo_guard.build_healthz_payload(tmp_path)
+
+    assert payload["ok"] is False
+    assert any("unreadable" in warning for warning in payload["warnings"])
+
+
+def test_inspect_repo_root_worktree_cwd_is_informational(tmp_path: Path, monkeypatch) -> None:
+    repo_guard = _load_repo_guard()
+    worktree = tmp_path / ".worktrees" / "sample"
+    worktree.mkdir(parents=True)
+    monkeypatch.chdir(worktree)
+
+    inspection = repo_guard.inspect_repo_root(tmp_path)
+
+    assert any("git worktree" in warning for warning in inspection["warnings"])
+    assert repo_guard.build_healthz_payload(tmp_path)["ok"] is True
+
+
+def test_healthz_route_uses_repo_guard(tmp_path: Path) -> None:
+    local_api = _load_local_api()
+    status, body, content_type = local_api.route_request(tmp_path, "/healthz")
     assert status == 200
     assert content_type == "application/json; charset=utf-8"
     assert body["ok"] is True
     assert "warnings" in body
+
+
+def test_schema_documents_healthz_contract() -> None:
+    local_api = _load_local_api()
+    schema = local_api.build_api_schema()
+    healthz = next(entry for entry in schema["endpoints"] if entry["path"] == "/healthz")
+    assert healthz["fields"] == ["ok", "repo_root", "primary_repo_root", "warnings"]
+    assert "dead/unreadable" in healthz["desc"]

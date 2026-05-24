@@ -8521,7 +8521,11 @@ def build_api_schema() -> dict[str, Any]:
             {"path": "/benchmarks", "desc": "Calibration benchmark dashboard", "content_type": "text/html"},
             {"path": "/activity", "desc": "Activity feed with client-side track and agent filters", "content_type": "text/html"},
             {"path": "/health", "desc": "Runtime services, worktrees, and missing-module operational health", "content_type": "text/html"},
-            {"path": "/healthz", "desc": "Liveness probe"},
+            {
+                "path": "/healthz",
+                "desc": "Liveness probe with repo-root inspection. ok=false when repo_root is not the primary checkout or .pids/api.pid references a dead/unreadable process.",
+                "fields": ["ok", "repo_root", "primary_repo_root", "warnings"],
+            },
             {"path": "/api/schema", "desc": "This document"},
             {
                 "path": "/api/state/manifest",
