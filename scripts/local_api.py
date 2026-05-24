@@ -8530,7 +8530,11 @@ def build_api_schema() -> dict[str, Any]:
             {"path": "/benchmarks", "desc": "Calibration benchmark dashboard", "content_type": "text/html"},
             {"path": "/activity", "desc": "Activity feed with client-side track and agent filters", "content_type": "text/html"},
             {"path": "/health", "desc": "Runtime services, worktrees, and missing-module operational health", "content_type": "text/html"},
-            {"path": "/healthz", "desc": "Liveness probe"},
+            {
+                "path": "/healthz",
+                "desc": "Liveness probe with repo-root inspection. ok=false when repo_root is not the primary checkout or .pids/api.pid references a dead/unreadable process.",
+                "fields": ["ok", "repo_root", "primary_repo_root", "warnings"],
+            },
             {"path": "/api/schema", "desc": "This document"},
             {
                 "path": "/api/state/manifest",
@@ -8580,7 +8584,20 @@ def build_api_schema() -> dict[str, Any]:
                 "path": "/api/tracks/readiness",
                 "desc": "Per-track, per-section production-readiness grid (cleared/in_flight/dead_letter/not_yet_enqueued)",
             },
-            {"path": "/api/runtime/services", "desc": "Runtime services (pids, uptime, ports)"},
+            {
+                "path": "/api/runtime/services",
+                "desc": "Runtime services (pids, uptime, ports) plus repo-root inspection.",
+                "fields": ["running", "stopped", "stale", "total", "services", "repo"],
+                "repo": {
+                    "fields": ["repo_root", "primary_repo_root", "process_cwd", "warnings"],
+                    "desc": (
+                        "inspect_repo_root() output: repo_root is the served checkout; "
+                        "primary_repo_root is git common-dir parent (null when git unavailable); "
+                        "process_cwd is os.getcwd(); warnings when repo_root != primary, "
+                        "cwd is under .worktrees/, or .pids/api.pid is stale/unreadable."
+                    ),
+                },
+            },
             {"path": "/api/build/run", "desc": "Spawn `npm run build` in the background", "method": "POST"},
             {"path": "/api/build/status", "desc": "Build job status + tail + warning diff", "query": ["job_id=..."]},
             {"path": "/api/pipeline/v2/status", "desc": "Pipeline v2 queue + per-track"},
