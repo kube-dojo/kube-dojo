@@ -237,9 +237,9 @@ The scoped constraint layer is anchored in `.claude/rules/*`.
 `module-quality.md` defines structural checks (`Did You Know` count, section count expectations, anti-pseudocode), while the checklist file maps those to concrete command-line gates such as frontmatter checks, health checks, and build steps.
 This keeps high-stability expectations in root files and low-latency operational constraints in scoped rules.
 
-The runtime truth layer sits in scripts and endpoint contracts.
+The runtime truth layer for this lab combines scripts and endpoint contracts.
 `scripts/agent_onboarding.md` provides executable recipes for `curl`ing state (`/api/pipeline/leases`, `/api/module/.../state`, `/api/reviews`) and known failure transitions.
-`scripts/print-run-contract.sh` provides a local, deterministic parser check of contract paths.
+`scripts/print-run-contract.sh` is a lab-created parser script you build in the practical exercise, used to check contract paths deterministically.
 Together these scripts close the bootstrap loop by turning expectations into verifiable state.
 
 The practical design implication is visible in this exact repository.
@@ -1000,7 +1000,7 @@ The exit code is the contract you can wire directly into CI gates or pre-commit 
 - L3: src/content/docs/ai/ai-engineering-foundations/module-2.2-repository-engineering-for-agents.md
 ```
 
-2. Replace `scripts/print-run-contract.sh` with this parser-oriented version, keeping strict outputs and deterministic exit codes so each failure is visible before patch execution starts.
+2. Create `scripts/print-run-contract.sh` with this parser-oriented version, keeping strict outputs and deterministic exit codes so each failure is visible before patch execution starts.
 
 ```bash
 #!/usr/bin/env bash
@@ -1058,7 +1058,7 @@ Suggested extension for lab rigor (optional) is to make stale checks enforceable
 You can add a duplicate L-level key detector, require that every referenced file exists and is non-empty, and emit a deterministic warning for trailing slash normalization.
 These checks are cheap, mechanical, and give you one concrete hook for future "proof of maintenance" tasks in the same module.
 
-Expected failure transcript when `docs/decisions/pending/README.md` disappears:
+Expected failure transcript when `CLAUDE.md` disappears:
 A short failure run should look like:
 
 This pre-write transcript is expected and should stop the task before mutation because stale references are a hard gating condition, not a warning.
@@ -1066,7 +1066,7 @@ This pre-write transcript is expected and should stop the task before mutation b
 
 ```text
 $ scripts/print-run-contract.sh
-MISSING docs/decisions/pending/README.md
+MISSING CLAUDE.md
 contract_check: FAILED with 1 missing references
 ```
 
