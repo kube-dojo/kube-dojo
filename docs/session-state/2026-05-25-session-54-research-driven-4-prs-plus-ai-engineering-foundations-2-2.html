@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 54 — Research-driven 4-PR landing + AI Engineering Foundations 2.2 + CI cross-family review scoped</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.queued { background: #fff3cd; color: #856404 }
+.open { background: #e2e3e5; color: #383d41 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 54 — Research-driven 4-PR landing + AI Engineering Foundations 2.2 + CI cross-family review scoped</h1>
+<p class="meta">2026-05-25 morning–afternoon. Standalone orchestrator session, opus 4.7 (1M context). User went AFK ~2 hours mid-session with "auto-mode" enabled; came back to 4 merged PRs + 2 research artifacts committed. Heaviest session of the week measured by dispatches (~32) — codex burn was real but quality stayed high; every PR shipped after cross-family review approval. Picks up the AI Engineering Foundations build-out that stalled after session 13 Wave 1 in May.</p>
+
+<h2>Headline — 4 PRs merged</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1532</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — Repository Engineering for Agents (closes #1531)</td><td>codex T0 → cursor R1 NEEDS_CHANGES (filler+appendix+missing source) → fix-pass → cursor R2 NEEDS_CHANGES (density 1/5 over-corrected) → fix-pass 2 (real KubeDojo artifacts) → cursor R3 NEEDS_CHANGES (phantom script + transcript mismatch) → fix-pass 3 → cursor R4 APPROVE 5/5/4/5</td></tr>
+<tr><td>#1539</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — Moshi / GPT-4o Realtime section on module-1.1-voice-audio-ai (closes #1533)</td><td>codex T0 → cursor R1 NEEDS_CHANGES (whitespace + OpenAI event name + latency citation) → fix-pass → cursor R2 APPROVE 5/5/5/5/5/5</td></tr>
+<tr><td>#1540</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — ch-73 the algorithmic response (MLA case study) (closes #1536)</td><td>codex T0 → cursor R1 NEEDS_CHANGES (citation §2.2→§2.1, Miller misattribution, body floor, structure) → fix-pass 1 → fix-pass 2 (body expansion + source 404) → cursor R2 APPROVE 5/5/5/5/5/5/5/5</td></tr>
+<tr><td>#1541</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — Modern Transformers module-1.10 (closes #1537)</td><td>codex T0 → cursor R1 NEEDS_CHANGES (ALiBi "learned" wrong + Llama-3.1-8B mislabeled MHA + char-slice prompt + MLA missing decoupled RoPE) → fix-pass → cursor R2 NEEDS_CHANGES (Llama-2 4K window) → fix-pass 2 → cursor R3 NEEDS_CHANGES (4K+128 overflow) → fix-pass 3 → cursor R4 APPROVE 5/5/4</td></tr>
+</table>
+
+<h2>Open / in-flight at session end</h2>
+<table>
+<tr><th>Item</th><th>State</th><th>Notes</th></tr>
+<tr><td>#1530 epic</td><td><span class="pill open">OPEN</span></td><td>AI Engineering Foundations — finish 11 remaining modules + Phase 4 migration. Wave 3 row 2.2 box ticked this session (PR #1532). 14 acceptance boxes remain unchecked. Per <code>feedback_no_premature_issue_close</code>, do NOT close until every box ticked.</td></tr>
+<tr><td>#1538</td><td><span class="pill queued">QUEUED</span></td><td>T0 author: ai-ml-engineering/advanced-genai/module-1.12 — Reasoning-model RL (GRPO / RLVR / DeepSeek-R1). Codex T0 <strong>not dispatched</strong> — held this session for codex burn-rate discipline (32 dispatches already fired). Brief in issue body is ready; pick up first thing next session.</td></tr>
+<tr><td>CI cross-family review workflow</td><td><span class="pill inflight">IN-FLIGHT</span></td><td>Branch <code>feat/ci-cross-family-code-review</code> created. <code>scripts/ci/cross_family_review.sh</code> written (160 lines, comment-only, retries on 5xx, fails-open on API errors). <code>.github/workflows/cross-family-code-review.yml</code> <strong>not yet written</strong>. Three-model design: gemini-3.1-pro-preview baseline + gemini-3.5-flash high-effort + deepseek-v4-pro. Direct APIs (no OpenRouter — user pushback: cost). Secrets needed: <code>GEMINI_API_KEY</code>, <code>DEEPSEEK_API_KEY</code>. Pick up + finish YAML + open PR next session.</td></tr>
+<tr><td>dispatch_smart.py hermes argv bug</td><td><span class="pill open">OPEN</span></td><td>Discovered mid-session: dispatch_smart.py builds hermes argv as <code>-z PROMPT -m MODEL</code> which hermes' argparse misreads (consumed <code>--provider</code> as <code>-z</code>'s value). Direct hermes works when reordered. Send to cursor (bug-fixer routing per <code>feedback_cursor_is_strong_bug_fixer</code>) — task #11 in session task list.</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. Routing pair confirmed for T0 content (2026-05-25 user directive)</h3>
+<p>User explicitly named it mid-session: <em>"codex is the writer. we decided yesterday that codex will be the writer and composer the reviewer. remember this. pls."</em> This complements yesterday's reviewer-side decision (<code>docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md</code>) by locking the author side. Saved as <code>memory/feedback_codex_writer_composer_reviewer_pair.md</code> at TOP PRIORITY.</p>
+
+<h3>2. Issues stay open until quality-gated (2026-05-25)</h3>
+<p>User directive: <em>"we don't close issues unless all the planned actions which should be QG-ed by the acceptance criteria happened."</em> No-bureaucracy ≠ no-discipline. Saved as <code>memory/feedback_no_premature_issue_close.md</code>. Surface in cold-start: scan open epics for unchecked boxes idle ≥7 days. Triggered by the discovery that the session-13 AI Engineering Foundations Wave 2-4 plan silently dropped because no issue carried it forward — same exact failure mode this rule prevents.</p>
+
+<h3>3. curriculum-orchestrator skill auto-invoked at session start</h3>
+<p>Added load-bearing first-action directive to top of <code>CLAUDE.md</code> "Agent Orientation" section: every session must invoke <code>/curriculum-orchestrator</code> via Skill tool before any other work. Belt-and-suspenders: <code>scripts/cold-start.sh</code> also prints the directive in both exit paths (API-up and STATUS.md fallback). User: <em>"your default skill should be curriculum-orchestrator don't you think and loading at start?"</em></p>
+
+<h3>4. Autocompact effectively disabled; statusline migrated</h3>
+<p>Two reinforcing moves, both user-driven:</p>
+<ul>
+<li><code>CLAUDE_CODE_AUTO_COMPACT_WINDOW</code> bumped 750000 → 1000000 in <code>start-claude.sh</code>. Auto-compact is destructive (summarizes context, loses fidelity); durable handoff via <code>docs/session-state/*.html</code> + STATUS.md is strictly better. User: <em>"I never want to auto compact, I want to do session handoff around 500K."</em></li>
+<li>Statusline canonical copy moved to <code>kubedojo/claude_extensions/statusline/statusline.sh</code> (git-tracked); <code>~/.claude/settings.json</code> repointed to that absolute path. Sync of <code>~/.claude/</code> can no longer clobber it. Thresholds: green &lt;300K, yellow 300-400K (early signal), red 400-500K (handoff zone), bold-red 500K+ (write state IMMEDIATELY). User confirmed 500K as sweet spot after I sketched a 4-band model.</li>
+</ul>
+
+<h3>5. Bookwormengr fact-check pattern validated</h3>
+<p>X.com user post claimed DeepSeek invented MLA / DSA / CSA / Engram / mHC / ZERO-bubble / TileLang as algorithmic substitution under China silicon constraints (continuation-of-Chip-War framing). Grok-via-hermes fact-check against primary sources (DeepSeek-V2 paper, GitHub org, V3 search) showed <strong>~75% fabricated</strong>. Only MLA + FlashMLA + TileKernels survived verification. Reframed ch-73 scope from "broad algorithmic response" to "MLA case study"; chapter shipped clean with §2.1 citations and 5.76× throughput claim backed by Abstract/Fig 1. Pattern: bookwormengr-class engagement-bait is a research <em>lead</em>, never a citation. User context: <em>"BE critical, fact check etc, sometimes these writers just want engagements."</em></p>
+
+<h2>Headline data</h2>
+
+<p>Heavy session — second only to session 52 in volume. ~32 dispatches across codex, cursor, gemini, grok-hermes. Codex weekly cap stayed healthy throughout (no rc=-9 spark failures observed today; codex gpt-5.5 took every author + fix-pass).</p>
+
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>PRs merged</td><td>4</td></tr>
+<tr><td>Issues opened</td><td>9 (epic #1530 + 8 children)</td></tr>
+<tr><td>Issues closed</td><td>4 via PR-closes-issue (#1531, #1533, #1536, #1537)</td></tr>
+<tr><td>Research artifacts committed</td><td>2 HTML in <code>docs/research/</code></td></tr>
+<tr><td>Memory entries added</td><td>2 at TOP PRIORITY</td></tr>
+<tr><td>Codex dispatches</td><td>~13 (T0 + fix-passes)</td></tr>
+<tr><td>Cursor dispatches</td><td>~12 (R1/R2/R3/R4 reviews; one model-name reroute via <code>--model composer-2.5</code> after cursor CLI rejected "gpt-5.5")</td></tr>
+<tr><td>Other dispatches</td><td>3 grok-hermes (after argv-order bug worked around) + 1 gemini-3.1-pro-preview + 1 claude WebFetch</td></tr>
+<tr><td>Total R-rounds across 4 PRs</td><td>4+2+2+4 = 12. Two of four PRs landed in 2 rounds; two needed 4. Pattern: large net-new modules need 3-4 rounds, focused gap-fills land in 2.</td></tr>
+</table>
+
+<h2>Dispatch ledger</h2>
+
+<table>
+<tr><th>Dispatch</th><th>Agent / model</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>PR #1532 T0</td><td>codex gpt-5.5</td><td>draft</td><td>1203 lines, density passed (later revealed as padded by 82 repeated filler sentences)</td></tr>
+<tr><td>PR #1532 R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — caught the filler repetition that density verifier missed (key signal: composer-2.5 reads, not just measures)</td></tr>
+<tr><td>PR #1532 fix-pass 1</td><td>codex gpt-5.5</td><td>edit</td><td>1097 lines, all 5 R1 findings closed</td></tr>
+<tr><td>Bookwormengr X fetch</td><td>grok-4.3 via hermes</td><td>search</td><td>Failed first call (dispatch_smart argv-order bug); succeeded on direct invocation. Got synthesized summary (X login wall on verbatim).</td></tr>
+<tr><td>TheAhmadOsman ch5 fetch</td><td>grok-4.3 via hermes</td><td>search</td><td>Same as above — synthesized summary; chapter 4 URL not extractable. Topic list usable as gap-analysis lens.</td></tr>
+<tr><td>Substack Moshi article fetch</td><td>claude WebFetch</td><td>search</td><td>Full article + critical review. 6/10 teaching value; identified gap-fill candidate in module-1.1-voice-audio-ai.md.</td></tr>
+<tr><td>DeepSeek primary-source fact-check</td><td>grok-4.3 via hermes</td><td>search</td><td>Verdict: MLA + FlashMLA + TileKernels safe; all 7 other claims fabricated. Output committed to <code>docs/research/2026-05-25-deepseek-architectural-techniques-factcheck.html</code>.</td></tr>
+<tr><td>Osman 12-week gap-analysis</td><td>gemini-3.1-pro-preview</td><td>search</td><td>Full coverage matrix + 4 module recommendations. Committed to <code>docs/research/2026-05-25-osman-12week-gap-analysis.html</code>.</td></tr>
+<tr><td>Moshi T0</td><td>codex gpt-5.5</td><td>edit</td><td>Section 4.5 added to multimodal-ai/module-1.1; codex didn't push (SSH-key denial in worktree). Orchestrator pushed manually via HTTPS.</td></tr>
+<tr><td>Moshi R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES 4/4/5/5/4/5 — whitespace, OpenAI event name, latency citation. Borderline.</td></tr>
+<tr><td>Moshi fix-pass</td><td>codex gpt-5.5</td><td>edit</td><td>3 fixes + 2 nits. Codex left worktree dirty; orchestrator committed manually.</td></tr>
+<tr><td>PR #1532 R2</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — density 1/5; body_words 2150 below 5000 floor. Filler removal over-corrected the module.</td></tr>
+<tr><td>PR #1532 fix-pass 2</td><td>codex gpt-5.5</td><td>edit</td><td>Expanded with real KubeDojo CLAUDE.md / .claude/rules/ / scripts/local_api.py walkthroughs. body_words now 5837.</td></tr>
+<tr><td>ch-73 T0</td><td>codex gpt-5.5</td><td>draft</td><td>251 → 380 lines; PR opened clean.</td></tr>
+<tr><td>ch-73 R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — citation §2.2 (DeepSeekMoE) wrongly cited for MLA; should be §2.1. Throughput claim uncited. Body floor not met. Miller misattributed.</td></tr>
+<tr><td>ch-73 fix-pass 1</td><td>codex gpt-5.5</td><td>edit</td><td>Citation §2.1, throughput 5.76×, Miller fixed, MLA decoupled RoPE added.</td></tr>
+<tr><td>ch-73 fix-pass 2</td><td>codex gpt-5.5</td><td>edit</td><td>Body expanded to 5005 words, source 404 replaced, 4+ new primary citations.</td></tr>
+<tr><td>ch-73 R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE 5/5/5/5/5/5/5/5 — perfect across all 8 dimensions.</td></tr>
+<tr><td>Modern Transformers T0</td><td>codex gpt-5.5</td><td>draft</td><td>1077 lines. Codex didn't commit ("workflow restriction"). Orchestrator manually committed + pushed + created PR #1541.</td></tr>
+<tr><td>Modern Transformers R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — ALiBi slopes wrongly called "learned" (paper says fixed/geometric). Llama-3.1-8B-Instruct mislabeled MHA (it's GQA). synthetic_prompt char-slicing not tokens. MLA missed §2.1.3 decoupled RoPE cache.</td></tr>
+<tr><td>Modern Transformers fix-pass 1</td><td>codex gpt-5.5</td><td>edit</td><td>All 5 P1+P2 fixed; swap to NousResearch/Llama-2-7b-hf for true MHA contrast.</td></tr>
+<tr><td>PR #1532 R3</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — phantom script reference + lab transcript path mismatch.</td></tr>
+<tr><td>PR #1532 fix-pass 3</td><td>codex gpt-5.5</td><td>edit</td><td>Reframed as lab artifact + transcript aligned to manifest.</td></tr>
+<tr><td>Moshi R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE 5/5/5/5/5/5. Verified Moshi 160 ms / 200 ms against arxiv paper.</td></tr>
+<tr><td>Modern Transformers R2</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — Llama-2-7B max_position 4096 conflicts with 8K/16K/32K lab claims.</td></tr>
+<tr><td>Modern Transformers fix-pass 2</td><td>codex gpt-5.5</td><td>edit</td><td>Contexts scaled to 1K/2K/4K; assert actual_tokens == seq_len.</td></tr>
+<tr><td>PR #1532 R4</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE 5/5/4/5 — finally clean after 4 rounds.</td></tr>
+<tr><td>Modern Transformers R3</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — 4096 + 128 new_tokens = 4224 overflow; success criteria contradicted expected TPS curve.</td></tr>
+<tr><td>Modern Transformers fix-pass 3</td><td>codex gpt-5.5</td><td>edit</td><td>Contexts now 896/1920/3968 (128-token generation headroom under 4096); success criteria aligned.</td></tr>
+<tr><td>Modern Transformers R4 (first attempt)</td><td>cursor</td><td>review</td><td><strong>API ERROR</strong>: "AI Model Not Found Model name is not valid: gpt-5.5". Worked earlier in session as default; cursor CLI started rejecting that model name mid-session.</td></tr>
+<tr><td>Modern Transformers R4 (retry)</td><td>cursor with explicit <code>--model composer-2.5</code></td><td>review</td><td>APPROVE 5/5/4 — workaround locked: always pass <code>--model composer-2.5</code> explicitly for cursor reviewer dispatches going forward.</td></tr>
+</table>
+
+<h2>Research artifacts committed</h2>
+
+<ul>
+<li><code>docs/research/2026-05-25-deepseek-architectural-techniques-factcheck.html</code> — per-technique verifiability matrix. SAFE-to-cite: MLA (§2.1, 93.3% KV reduction), FlashMLA (open CUDA kernel), TileKernels (via TileLang DSL). DROP: DSA, CSA, mHC, Engram, ZERO-bubble, V4-Pro KV GB figures, &lt;3% cost claim, 1T valuation, Jim Simons framing. Gates next-session reuse of bookwormengr-style sources.</li>
+<li><code>docs/research/2026-05-25-osman-12week-gap-analysis.html</code> — Osman's ~30 named projects scored COVERED / PARTIAL / MISSING against kubedojo modules. Missing: position embeddings (RoPE/ALiBi) [closed via #1541 modern-transformers], mechanistic interpretability (SAEs/circuits), GRPO/RLVR [opened as #1538]. Sequencing-gap call: do NOT build a new "12-week LLM stack from scratch" sub-track — current IA isolation of infra vs ML fundamentals is correct.</li>
+</ul>
+
+<h2>Memory entries added</h2>
+
+<ul>
+<li><code>memory/feedback_codex_writer_composer_reviewer_pair.md</code> — Default T0 content pair: codex authors, composer-2.5 reviews. Bumped to TOP PRIORITY in MEMORY.md index.</li>
+<li><code>memory/feedback_no_premature_issue_close.md</code> — Issues/epics stay open until every acceptance-criterion box is QG'd. Surface unchecked boxes idle ≥7 days in cold-start. Bumped to TOP PRIORITY.</li>
+</ul>
+
+<h2>Files touched (outside curriculum content)</h2>
+
+<table>
+<tr><th>File</th><th>Change</th></tr>
+<tr><td><code>~/.claude/settings.json</code></td><td><code>statusLine.command</code> repointed from <code>~/.claude/statusline.sh</code> to <code>/Users/krisztiankoos/projects/kubedojo/claude_extensions/statusline/statusline.sh</code></td></tr>
+<tr><td><code>kubedojo/claude_extensions/statusline/statusline.sh</code></td><td>New canonical copy (from learn-ukrainian + 4-band absolute-token thresholds 300/400/500K)</td></tr>
+<tr><td><code>kubedojo/start-claude.sh</code></td><td><code>CLAUDE_CODE_AUTO_COMPACT_WINDOW</code> 750000 → 1000000</td></tr>
+<tr><td><code>kubedojo/CLAUDE.md</code></td><td>Added "FIRST ACTION every session — invoke /curriculum-orchestrator" directive at top of Agent Orientation</td></tr>
+<tr><td><code>kubedojo/scripts/cold-start.sh</code></td><td>Added <code>kubedojo:next-action</code> output block at both exit paths printing the same directive</td></tr>
+<tr><td><code>kubedojo/docs/research/2026-05-25-deepseek-architectural-techniques-factcheck.html</code></td><td>New (160 lines)</td></tr>
+<tr><td><code>kubedojo/docs/research/2026-05-25-osman-12week-gap-analysis.html</code></td><td>New (gemini-3.1-pro-preview authored, 85 lines)</td></tr>
+<tr><td><code>kubedojo/.worktrees/ci-cross-family-review/scripts/ci/cross_family_review.sh</code></td><td><strong>NOT YET COMMITTED</strong> — 160-line bash script for the comment-only CI cross-family review experiment. Workflow YAML still TBD next session.</td></tr>
+</table>
+
+<h2>What's next</h2>
+
+<ol>
+<li><strong>Finish the CI cross-family review workflow</strong> — branch <code>feat/ci-cross-family-code-review</code> has the bash script committed; write <code>.github/workflows/cross-family-code-review.yml</code> with three jobs (gemini-3.1-pro-preview, gemini-3.5-flash@high, deepseek-v4-pro), all comment-only, direct APIs not OpenRouter. Open PR; document required secrets (GEMINI_API_KEY, DEEPSEEK_API_KEY); user adds them before workflow can run. Designed as a controlled experiment, not a routing change.</li>
+<li><strong>Dispatch #1538 codex T0</strong> — Reasoning-model RL / GRPO / DeepSeek-R1 module. Issue body has full brief. First thing next session if codex cap is healthy.</li>
+<li><strong>File the hermes argv bug</strong> — dispatch_smart.py builds hermes argv as <code>-z PROMPT -m MODEL</code> which hermes' argparse misreads. Fix: reorder. Send to cursor (bug-fixer routing).</li>
+<li><strong>Cursor model-name workaround</strong> — always pass <code>--model composer-2.5</code> explicitly on <code>dispatch_smart.py review --agent cursor</code> dispatches. Cursor CLI rejected the implicit <code>gpt-5.5</code> default mid-session today. Either codify in <code>dispatch_smart.py</code> (set composer-2.5 as the default for cursor reviewer class) or document in a memory entry.</li>
+<li><strong>Drive #1530 epic onward</strong> — 14 acceptance boxes still unchecked. Wave 2 (4 prompt modules), Wave 3 (3 more context modules), Wave 4 (3 harness + 1 capstone), plus Phase 4 migration. At today's burn rate, each module is ~4 rounds = ~5-6 codex dispatches → 60+ dispatches to close. Pace this.</li>
+<li><strong>Read the merged ch-73 + module-1.10 + Moshi + Repo-Eng modules</strong> on the live site (after deploy.yml runs) and sanity-check the rendered output. We've trusted verify_module.py and cursor reviews; visual check on the rendered chapters is the human pass per <code>feedback_dont_block_on_human_pass</code> — happens post-deploy, not pre-merge.</li>
+</ol>
+
+<h2>Caveats / known fragilities surfaced</h2>
+
+<ul>
+<li><strong>Codex frequently confuses DeepSeek-V2 paper sections §2.1 (MLA) vs §2.2 (MoE).</strong> Caught on ch-73 R1; reviewer brief on #1541 prophylactically flagged the same risk and codex avoided it. Worth a memory entry if this recurs.</li>
+<li><strong>Codex sometimes doesn't commit/push from its sandbox.</strong> Twice this session (Moshi T0, modern-transformers T0): work in worktree, no commit. Orchestrator manually committed + pushed. Cause: codex's session-level git availability is non-deterministic. Workaround: include explicit "if you can't commit, STOP and report" clause in briefs (we did, third time onwards).</li>
+<li><strong>Cursor's implicit default model is unstable.</strong> The same dispatch shape that returned "Reviewer: GPT-5.5" earlier in the session bounced with "AI Model Not Found" later. Either cursor's billing/routing changed mid-session or a quota tripped. Workaround: always pass <code>--model composer-2.5</code> explicitly.</li>
+<li><strong>verify_module.py structure gates are wrong-spec for AI-history chapters.</strong> ch-71-the-chip-war.md (production, merged) also reports <code>passed: false</code> on the structure gates (quiz, common-mistakes, DYK, hands-on). The body_words + density gates ARE applicable; the structure gates target T0 technical modules. Cursor R1 on ch-73 wrongly requested quiz/common-mistakes additions; orchestrator caught it before the 2nd fix-pass and instructed codex to skip them. Worth a verifier-side fix: per-tier or per-track structure gates.</li>
+<li><strong>X.com login wall on grok-via-hermes fetches.</strong> Verbatim text not retrievable; only synthesized summaries via x_search. Pattern: any X-sourced research lead gets a "topic list" not a "quotable text", so use as gap-analysis lens not as citation. <code>feedback_grok_for_x_dot_com_links</code> stays valid but with this caveat.</li>
+</ul>
+
+</body></html>

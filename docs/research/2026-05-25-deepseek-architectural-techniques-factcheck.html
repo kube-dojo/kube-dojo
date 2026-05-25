@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek architectural-technique fact-check — 2026-05-25</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.45em 0.75em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.95em; }
+  .meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-safe    { background: #d4edda; color: #155724; }
+  .pill-drop    { background: #f8d7da; color: #721c24; }
+  .pill-partial { background: #fff3cd; color: #856404; }
+  blockquote { border-left: 3px solid #888; padding: 0.4em 0.8em; margin: 0.6em 0; color: #444; background: #f9f9f9; }
+</style>
+</head>
+<body>
+
+<h1>DeepSeek architectural-technique fact-check — 2026-05-25</h1>
+<p class="meta">
+  Source claim: <a href="https://x.com/bookwormengr/status/2057909493250539891">bookwormengr X post</a> (synthesized via grok-4.3, NOT verbatim — X login wall on verbatim).
+  User framing: claimed as "continuation of <em>Chip War</em> (Chris Miller, 2022)" — algorithmic substitution under EUV denial.
+  Fact-checker: grok-4.3 via hermes (closes #1534).
+  Audit context: see <code>memory/feedback_citation_verify_or_remove.md</code>.
+</p>
+
+<h2>Verdict</h2>
+
+<p>
+  <span class="pill pill-safe">3 SAFE to cite</span>
+  <span class="pill pill-drop">7+ DROP — fabricated or unverifiable</span>
+</p>
+
+<p>Bookwormengr's post is ~75% engagement-bait wrapping a verifiable kernel. Only MLA and two associated DeepSeek open-source repositories survive primary-source verification.</p>
+
+<h2>Per-technique matrix</h2>
+
+<table>
+<thead><tr><th>Technique / claim</th><th>Verdict</th><th>Primary source</th><th>Notes</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>MLA (Multi-head Latent Attention)</strong></td>
+  <td><span class="pill pill-safe">SAFE</span></td>
+  <td>DeepSeek-V2 paper (<a href="https://arxiv.org/abs/2405.04434">arXiv:2405.04434</a>), §2.2</td>
+  <td>Paper claims <strong>93.3% KV cache reduction</strong> vs standard MHA at comparable quality. Architecture diagrams + decompression math given. This is the verifiable core of the "algorithmic compensation" thesis.</td>
+</tr>
+<tr>
+  <td><strong>FlashMLA (open-source CUDA kernel)</strong></td>
+  <td><span class="pill pill-safe">SAFE</span></td>
+  <td><a href="https://github.com/deepseek-ai/FlashMLA">github.com/deepseek-ai/FlashMLA</a></td>
+  <td>DeepSeek's open-source MLA kernel for Hopper GPUs. Real repo, active, with benchmarks. Pairs naturally with the MLA citation as the implementation half.</td>
+</tr>
+<tr>
+  <td><strong>TileKernels using TileLang DSL</strong></td>
+  <td><span class="pill pill-safe">SAFE</span></td>
+  <td>DeepSeek GitHub (TileKernels) + TileLang (third-party DSL)</td>
+  <td>TileKernels is DeepSeek's. TileLang is an external DSL DeepSeek consumes — note the distinction in any citation.</td>
+</tr>
+<tr>
+  <td><strong>DSA / CSA</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>No matching technique found in DeepSeek-V2 or V3 papers, GitHub, or arXiv search (303 V3-related results scanned). Either fabricated or a mis-attribution.</td>
+</tr>
+<tr>
+  <td><strong>Engram</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>Claimed to be LPDDR/NAND KV offload. No primary source surfaced in DeepSeek's GitHub or papers.</td>
+</tr>
+<tr>
+  <td><strong>mHC</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>No expansion of the acronym surfaces in any DeepSeek primary source. Treat as fabricated.</td>
+</tr>
+<tr>
+  <td><strong>ZERO-bubble</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>"Zero-bubble" pipeline parallelism is a real concept (Megatron-LM upstream), but DeepSeek's specific implementation is not surfaced in their published papers as a named contribution.</td>
+</tr>
+<tr>
+  <td><strong>V4-Pro: ~5.48 GB KV for 1M ctx @ 8-bit</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>No primary-source model card or benchmark publishes this figure. Not citable as fact.</td>
+</tr>
+<tr>
+  <td><strong>GLM-5: ~60 GB / Qwen3-235B: ~89 GB comparison</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>No primary-source benchmarks at the stated context length + precision. Cross-vendor apples-to-apples comparison not available publicly.</td>
+</tr>
+<tr>
+  <td><strong>"&lt;3% cost of competitors" long-context caching claim</strong></td>
+  <td><span class="pill pill-drop">DROP</span></td>
+  <td>—</td>
+  <td>DeepSeek Platform pricing page is login-walled. No public cache-hit pricing table for direct competitor comparison.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Sources searched</h2>
+<ul>
+  <li>DeepSeek-V2 paper, <a href="https://arxiv.org/abs/2405.04434">arXiv:2405.04434</a> — full PDF + HTML version</li>
+  <li>DeepSeek GitHub org — <a href="https://github.com/deepseek-ai">github.com/deepseek-ai</a>, all pinned repos, especially FlashMLA and TileKernels</li>
+  <li>DeepSeek Platform pricing page (<a href="https://platform.deepseek.com">platform.deepseek.com</a>) — login-walled</li>
+  <li>arXiv search for DeepSeek V3 technical reports (303 results scanned for the named architectural claims)</li>
+</ul>
+
+<h2>Recommendation for ch-73 (algorithmic-response chapter)</h2>
+
+<p><strong>Scope narrows.</strong> The chapter should not attempt to teach "all the named techniques" from bookwormengr's post — most are fabricated or unverifiable. Instead:</p>
+
+<ul>
+  <li><strong>Anchor on MLA as the case study.</strong> 93.3% KV reduction is the dramatic, citable, paper-backed number that ties to <em>Chip War</em>'s closing argument ("export controls redirect incentives").</li>
+  <li><strong>Show the open implementation half via FlashMLA.</strong> The repo's existence + benchmarks demonstrate the technique isn't a paper-only claim.</li>
+  <li><strong>Frame the geopolitical narrative honestly.</strong> Don't repeat bookwormengr's specific (unverified) claims about Chinese silicon constraints driving these designs. The DeepSeek-V2 paper does NOT explicitly attribute MLA to EUV denial. Frame it as: "constrained-hardware regimes tend to produce algorithmic compensation; MLA is a documented example."</li>
+  <li><strong>DROP entirely from the chapter</strong>: DSA, CSA, mHC, Engram, ZERO-bubble, all KV-cache GB figures, the &lt;3% cost claim, the 1T-valuation framing, the Jim-Simons comparison.</li>
+  <li><strong>Cross-link from ch-71 closing paragraph</strong> ("export controls redirect incentives") forward to ch-73; cross-link from <code>ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code> sideways to ch-73 for the technical-implementation angle.</li>
+</ul>
+
+<h2>Operational note on bookwormengr-class engagement-bait</h2>
+
+<blockquote>
+  User context (2026-05-25): "this dude is putting out AI generated content which is not bad but not really learning material" — applies broadly. Use post topic lists as gap-analysis lenses, never as citations. Verify every numerical claim and every named-technique-acronym against primary sources before any module work.
+</blockquote>
+
+</body>
+</html>

@@ -125,6 +125,10 @@ if [[ "$API_OK" -eq 1 ]]; then
     echo ""
   fi
 
+  echo "--- kubedojo:next-action ---"
+  echo "Invoke /curriculum-orchestrator skill via the Skill tool before any other work."
+  echo ""
+
   exit 0
 fi
 
@@ -150,5 +154,9 @@ if [ -z "$handoff_path" ]; then
   handoff_path="(could not parse Latest handoff path from STATUS.md)"
 fi
 echo "$handoff_path"
+echo ""
+
+echo "--- kubedojo:next-action ---"
+echo "Invoke /curriculum-orchestrator skill via the Skill tool before any other work."
 
 exit 0

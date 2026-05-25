@@ -4,6 +4,13 @@ KubeDojo — free, open-source cloud native curriculum.
 
 ## Agent Orientation (first call on a cold start)
 
+**FIRST ACTION, every session — no exceptions:** invoke the
+`curriculum-orchestrator` skill via the Skill tool. This loads the
+orchestrator role into context (queue ownership, dispatch routing, PR
+hygiene, handoff discipline) before any other work. Apply this even on
+issue-driven sessions — the issue is *what* to work on; the skill is
+*how* to drive it.
+
 **Issue-driven sessions:** read the GitHub issue verbatim, then run one script:
 
 ```bash

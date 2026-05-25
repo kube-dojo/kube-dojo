@@ -101,10 +101,13 @@ fi
 
 echo ""
 
-# Autocompact at 75% of 1M context (~750K tokens)
-# Balances: using the 1M window we pay for vs. leaving buffer before degradation
-# Subagents handle isolated work in their own windows, so main thread stays clean
-export CLAUDE_CODE_AUTO_COMPACT_WINDOW=750000
+# Autocompact effectively disabled — set to the full 1M cap so it cannot
+# trigger before the model itself hits the window limit. We never want
+# auto-compact: it is destructive (summarizes context, loses fidelity).
+# Instead, durable session handoff via docs/session-state/YYYY-MM-DD-*.html
+# + STATUS.md happens at ~500K used (statusline goes bold-red at that point;
+# see claude_extensions/statusline/statusline.sh handoff-discipline bands).
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
 
 # Launch via npx to avoid cache bugs (stale binary + prompt caching issues)
 # See: https://reddit.com/r/ClaudeAI/comments/1s7mkn3/

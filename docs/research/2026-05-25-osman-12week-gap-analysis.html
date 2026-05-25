@@ -1,0 +1,86 @@
+<h1>Osman 12-week LLM-engineering roadmap — gap analysis vs kubedojo modules</h1>
+<p>Source: https://x.com/TheAhmadOsman/status/2058745340895870985 (Chapter 5)</p>
+<p>Method: exhaustive grep + module-reading across src/content/docs/ai*/</p>
+
+<h2>Coverage matrix</h2>
+<table>
+<thead><tr><th>Project</th><th>Status</th><th>Modules</th><th>Notes</th></tr></thead>
+<tbody>
+  <tr>
+    <td>Tokenization (BPE tokenizer)</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai-ml-engineering/generative-ai/module-1.2-tokenization-text-processing.md</code></td>
+    <td>Deep theoretical and practical coverage of BPE, WordPiece, and SentencePiece using `tiktoken`. However, it lacks a pure "write a tokenizer from scratch" programming exercise.</td>
+  </tr>
+  <tr>
+    <td>Position embeddings (RoPE, ALiBi)</td>
+    <td>MISSING</td>
+    <td>N/A</td>
+    <td>Only found a passing diagram mention of RoPE in <code>src/content/docs/ai-ml-engineering/advanced-genai/module-1.3-diffusion-models.md</code>. No dedicated technical coverage of modern positional embeddings.</td>
+  </tr>
+  <tr>
+    <td>Attention variants (MQA, GQA, MLA, FlashAttention)</td>
+    <td>PARTIAL</td>
+    <td><code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.6-memory-bandwidth-math.md</code>, <code>src/content/docs/ai-ml-engineering/deep-learning/module-1.6-backpropagation-deep-dive.md</code></td>
+    <td>FlashAttention and GQA are mentioned in the context of memory bandwidth and hardware optimization. MLA and MQA are missing. There is no hands-on architectural deep dive.</td>
+  </tr>
+  <tr>
+    <td>KV cache + serving optimizations (PagedAttention, Speculative decoding, Medusa)</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.3-vllm-sglang-inference.md</code>, <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code></td>
+    <td>Extensively covered. Excellent deep-dives into PagedAttention, Prefix Caching, and Speculative Decoding in the context of vLLM and sglang. Medusa specifically is absent, but the concepts are well represented.</td>
+  </tr>
+  <tr>
+    <td>Mixture-of-Experts (MoE routing, Expert parallelism)</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code>, <code>src/content/docs/ai-ml-engineering/ai-native-development/module-1.7-ai-powered-code-generation.md</code></td>
+    <td>Covered from an infrastructure and serving perspective (e.g., SGLang expert parallelism, dealing with expert imbalance).</td>
+  </tr>
+  <tr>
+    <td>Quantization (GPTQ, AWQ, GGUF)</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai/open-models-local-inference/module-1.3-quantization-and-model-formats.md</code>, <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code>, <code>src/content/docs/ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning.md</code></td>
+    <td>Very strong coverage across local development and production inference contexts.</td>
+  </tr>
+  <tr>
+    <td>Training / RL (GRPO, RLVR)</td>
+    <td>MISSING</td>
+    <td>N/A</td>
+    <td>While DeepSeek-R1's RL approach is briefly mentioned in <code>src/content/docs/ai-ml-engineering/generative-ai/module-1.6-reasoning-models.md</code>, the specific algorithms like GRPO and RLVR are missing. RLHF is covered in <code>advanced-genai/module-1.4-rlhf-alignment.md</code>, but not these modern reasoning-model variants.</td>
+  </tr>
+  <tr>
+    <td>Inference engines (vLLM, TensorRT-LLM, SGLang, ExLlama, MLX)</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.3-vllm-sglang-inference.md</code>, <code>src/content/docs/ai-ml-engineering/ai-infrastructure/module-1.7-production-inference-engines.md</code>, <code>src/content/docs/ai/open-models-local-inference/module-1.4-mlx-on-apple-silicon.md</code></td>
+    <td>Exceptional coverage. This is a core strength of the kubedojo curriculum.</td>
+  </tr>
+  <tr>
+    <td>Interpretability (Circuits, SAEs)</td>
+    <td>MISSING</td>
+    <td>N/A</td>
+    <td>The curriculum covers general ML interpretability (e.g., in <code>machine-learning/module-2.2-interpretability-and-failure-slicing.md</code>), but Mechanistic Interpretability, Circuits, and Sparse Autoencoders are completely missing.</td>
+  </tr>
+  <tr>
+    <td>Plus: RAG, evaluation harnesses</td>
+    <td>COVERED</td>
+    <td><code>src/content/docs/ai-ml-engineering/vector-rag/</code>, <code>src/content/docs/ai-ml-engineering/advanced-genai/module-1.6-llm-evaluation.md</code>, <code>src/content/docs/ai/ai-native-work/module-2.1-harness-engineering.md</code></td>
+    <td>Extensively covered as entire sub-tracks.</td>
+  </tr>
+</tbody>
+</table>
+
+<h2>Sequencing-gap assessment</h2>
+<p>Kubedojo currently approaches AI engineering heavily from a <strong>deployment, infrastructure, and orchestration perspective</strong>. A learner progressing through our modules becomes highly proficient at serving (vLLM/SGLang), quantization, vector databases, and MLOps.</p>
+<p>However, Osman's 12-week roadmap is fundamentally a <strong>"build from scratch" architectural ladder</strong>. Our curriculum has a <code>deep-learning/</code> track that covers backpropagation and neural networks from scratch, but it abruptly stops before building modern Transformer architectures. If a learner follows our natural order, they gain immense practitioner depth in <em>using and serving</em> models, but they will experience a structural gap in understanding the internal architectural wiring (RoPE, MLA, GRPO, SAEs) compared to Osman's curriculum.</p>
+<p>We do not have a comparable end-to-end "build the modern LLM stack" track.</p>
+
+<h2>Recommended additions</h2>
+<ol>
+  <li><strong>Module on Modern Transformer Architecture:</strong> Add <code>src/content/docs/ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code>. This should close the gap on RoPE, ALiBi, and the evolution of MQA/GQA/MLA.</li>
+  <li><strong>Module on Reasoning Model RL (GRPO/RLVR):</strong> Add <code>src/content/docs/ai-ml-engineering/advanced-genai/module-1.12-reasoning-models-and-grpo.md</code> to follow up on RLHF and specifically cover the RL techniques used by DeepSeek-R1 and similar reasoning models.</li>
+  <li><strong>Module on Mechanistic Interpretability:</strong> Add <code>src/content/docs/ai-ml-engineering/advanced-genai/module-1.13-mechanistic-interpretability-and-saes.md</code> to introduce Sparse Autoencoders and circuit analysis.</li>
+  <li><strong>Module Extension - Tokenization:</strong> Update <code>src/content/docs/ai-ml-engineering/generative-ai/module-1.2-tokenization-text-processing.md</code> to include a "build a BPE tokenizer from scratch" hands-on Python exercise to match the pedagogical depth of the roadmap.</li>
+</ol>
+
+<h2>Conclusion: is the 12-week ladder itself a gap?</h2>
+<p>Yes and no. The <em>topics</em> missing from the 12-week ladder (RoPE, SAEs, GRPO) are genuine content gaps that should be backfilled into our <code>deep-learning/</code> and <code>advanced-genai/</code> tracks. However, creating a literal "12-week-llm-stack" sub-track is likely unnecessary and misaligned with kubedojo's pedagogical goals. Kubedojo's current Information Architecture (IA) correctly separates infrastructure (Serving, K8s, Inference) from fundamentals (Deep Learning, Generative AI). Rather than creating a redundant 12-week "build it all" syllabus, we should integrate these missing low-level architectural components as capstone projects within the existing <code>deep-learning</code> track, allowing the synthesis to occur naturally as the learner bridges into <code>advanced-genai</code>.</p>
