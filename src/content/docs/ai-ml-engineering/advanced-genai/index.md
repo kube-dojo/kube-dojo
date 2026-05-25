@@ -26,6 +26,7 @@ This phase is not the best first stop for new learners. It is where you go once 
 | 1.9 | [Modern PEFT: DoRA and PiSSA](/ai-ml-engineering/advanced-genai/module-1.9-modern-peft-dora-pissa/) |
 | 1.10 | [Single-GPU Local Fine-Tuning](/ai-ml-engineering/advanced-genai/module-1.10-single-gpu-local-fine-tuning/) |
 | 1.11 | [Multi-GPU and Home-Lab Fine-Tuning](/ai-ml-engineering/advanced-genai/module-1.11-multi-gpu-home-lab-fine-tuning/) |
+| 1.12 | [Reasoning-Model RL: GRPO, RLVR, and DeepSeek-R1](/ai-ml-engineering/advanced-genai/module-1.12-reasoning-models-and-grpo/) |
 
 ## Before You Start
 
