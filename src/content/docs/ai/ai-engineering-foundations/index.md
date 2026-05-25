@@ -32,7 +32,7 @@ The final module applies those layers to Symphony-style orchestration, where iss
 | 1.4 | [Prompt Libraries and Contracts](module-1.4-prompt-libraries-and-contracts/) | drafting |
 | 2.1 | [Context Engineering Fundamentals](module-2.1-context-fundamentals/) | drafting |
 | 2.2 | [Repository Engineering for Agents](module-2.2-repository-engineering-for-agents/) | drafting |
-| 2.3 | Retrieval, Tools, and Memory Boundaries | planned |
+| 2.3 | [Retrieval, Tools, and Memory Boundaries](module-2.3-retrieval-tools-and-memory-boundaries/) | drafting |
 | 2.4 | Dynamic Context Orchestration | planned |
 | 3.1 | Harness Fundamentals — Layers and System of Record | planned |
 | 3.2 | Guardrails, Gates, and Agent-Legible Apps | planned |
