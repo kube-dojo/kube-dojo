@@ -189,6 +189,40 @@ Capability manifests complement health JSON. Publish a small file listing allowe
 
 Observability vendors are not required for first-step legibility. A structured log line and a JSON health body outperform a expensive APM rollout that still prints `"OK"` to agents. Add vendor exporters later, but never make the vendor UI the only readable surface for autonomous repair loops.
 
+### Telemetry and Health Signals
+
+Guardrails are only real if you measure them after deploy. Track **gate rejection rate** by `code`, **median turns-to-green** per task class, **false pass rate** from canary invalid fixtures, and **time-to-remediate** from first failure JSON to successful re-validation. Dashboards aimed solely at humans will hide agent pain; export the same metrics into the briefing API or structured logs your harness already consumes.
+
+Canary invalid fixtures are negative tests for enforcement. Weekly or daily, CI should attempt to apply manifests that must fail and assert the admission controller or local script rejected them. If a canary suddenly passes, you have enforcement drift, not a lucky model. OWASP's injection guidance is about untrusted content; canaries prove your mechanical layer still treats that content as untrusted even when phrasing changes.
+
+**Hypothetical scenario:** Rejection rate drops to zero after a harmless schema tweak. The team celebrates until audit discovers agents stopped calling the validator to save tokens. Monitor **validator invocations per tool call**, not just rejections. A gate that is never invoked is decorative.
+
+Blast-radius reviews should include guardrail bypass paths. Emergency break-glass roles exist in mature orgs; document how break-glass events emit auditable JSON distinct from agent remediation so post-incident reviews can separate human override from model failure. Break-glass without logging recreates prompt-only safety with extra steps.
+
+Cross-family agents (different model vendors in the same fleet) should share identical mechanical gates. Prompts may differ; schemas must not. When one vendor's structured-output mode is stricter than another's, keep the strictest schema as canonical and let adapters translate, rather than maintaining parallel rules that diverge silently.
+
+Teaching maintainers matters as much as teaching models. New hires should edit a failing golden fixture before they edit a prompt paragraph. That habit keeps enforcement debt visible. Module 3.3 will cover pruning stale rules; this module establishes that those rules must exist as testable artifacts first.
+
+Integration with retrieval and tools from module 2.3 is deliberate: retrieval returns untrusted bytes, tools perform side effects. Guardrails sit between proposed tool input and execution, and again between tool output and the next model turn if output must be schema-shaped. Never chain a high-risk tool after a retrieval step without re-validating combined payloads, because injection can ride inside retrieved snippets into otherwise safe-looking JSON.
+
+Long-horizon sessions stress legibility more than short demos. When cache TTLs expire (Anthropic documents short default ephemeral cache lifetimes for eligible prefixes), agents may reload policy while old remediation JSON still sits in scratch context. Harnesses should expire remediation messages after success or tag them `superseded_by_turn` so models do not re-fix fields that already passed validation.
+
+Finally, document explicit non-goals. Mechanical guardrails will not stop a malicious human with merge rights. They will not replace fraud review for financial products. They will not fix bad product requirements. They **will** stop well-intentioned agents from applying structurally unsafe manifests at machine speed, which is the dominant failure mode in AI-assisted engineering fleets today.
+
+SRE teams can borrow error-budget thinking for guardrails: if rejection rates spike, capacity may be misconfigured, but if rejection rates vanish while incident severity rises, enforcement likely atrophied. Pair guardrail metrics with deployment frequency so you can tell whether agents are actually attempting applies or merely drafting text. Draft-only agents need gates at PR creation; auto-apply agents need gates at every tool invocation without exception.
+
+Security review workshops should include a live demo where participants intentionally feed an injected retrieved paragraph into a test harness and watch mechanical gates reject the resulting manifest. The demo lands harder than slides about LLM01 because attendees see their own repo paths in remediation output. Follow the demo with a PR that adds one golden invalid fixture—small diff, permanent lesson.
+
+Platform engineers should publish a **guardrail catalog** alongside the harness map from module 3.1: each entry lists the gate name, owner team, failure `code`, average remediation turns, and last incident where the gate prevented damage. Catalogs turn informal heroics into maintained infrastructure. New agents load the catalog path from `AGENTS.md` instead of inferring checks from tribal memory.
+
+When models propose multi-file changes, run gates per artifact before evaluating the batch narrative summary. Summaries are semantic; files are mechanical. A glowing summary with an unsafe manifest is worse than an honest failure JSON because reviewers relax early. CI parallelism helps: lint and schema jobs can fan out per path while keeping a single remediation stream ordered by severity.
+
+Educational modules often stop at theory; your production obligation is to ship at least one gate your fleet agents hit this week. If no gate exists, this module is unimplemented regardless of quiz scores. Start with the manifest validator from the hands-on lab, promote it into `scripts/`, wire pre-commit, and only then expand to admission policies and sandbox runners.
+
+Reviewers grading agent pull requests should ask for the validator log artifact the same way they ask for test output. Without that artifact, approvals are guessing whether mechanical gates ran. A one-line CI link or pasted JSON success object is enough evidence when it includes the manifest path and schema version.
+
+Treat guardrail bypass attempts as security incidents even when the actor is internal automation. Uninstrumented auto-merge paths are attractive during deadlines; resist merging them without the same JSON evidence production agents must produce. Small evidence habits prevent large fleet surprises.
+
 ## Errors as Deterministic Remediation Paths
 
 An error message to a human can be narrative; an error message to an agent must be **actionable and stable**. Treat remediation payloads like an internal API: version the schema, document fields, and test golden failure cases the same way you test happy paths. When `validate_manifest.sh` rejects a file, it should not print `Error: invalid manifest` to stderr. It should print one JSON object per failure with `code`, `field`, `remediation`, and optional `doc_href` pointing into the repo map.
@@ -295,40 +329,6 @@ flowchart TD
 When in doubt, add the mechanical gate first and measure agent turn count to repair failures. If turns drop and unsafe applies go to zero, the gate earned its place. If turns explode because messages are vague, fix legibility before weakening security.
 
 Escalation paths belong in the matrix, not in ad-hoc Slack urgency. Define numeric thresholds: three identical `SCHEMA_VIOLATION` codes on the same field escalate to a human; one `MISSING_PYYAML` infrastructure failure triggers a platform ticket instead of asking the model to pip install. Agents should read those thresholds from `docs/harness/escalation.yaml` so behavior stays consistent across model families.
-
-## Measuring Guardrail Health in Production Fleets
-
-Guardrails are only real if you measure them after deploy. Track **gate rejection rate** by `code`, **median turns-to-green** per task class, **false pass rate** from canary invalid fixtures, and **time-to-remediate** from first failure JSON to successful re-validation. Dashboards aimed solely at humans will hide agent pain; export the same metrics into the briefing API or structured logs your harness already consumes.
-
-Canary invalid fixtures are negative tests for enforcement. Weekly or daily, CI should attempt to apply manifests that must fail and assert the admission controller or local script rejected them. If a canary suddenly passes, you have enforcement drift, not a lucky model. OWASP's injection guidance is about untrusted content; canaries prove your mechanical layer still treats that content as untrusted even when phrasing changes.
-
-**Hypothetical scenario:** Rejection rate drops to zero after a harmless schema tweak. The team celebrates until audit discovers agents stopped calling the validator to save tokens. Monitor **validator invocations per tool call**, not just rejections. A gate that is never invoked is decorative.
-
-Blast-radius reviews should include guardrail bypass paths. Emergency break-glass roles exist in mature orgs; document how break-glass events emit auditable JSON distinct from agent remediation so post-incident reviews can separate human override from model failure. Break-glass without logging recreates prompt-only safety with extra steps.
-
-Cross-family agents (different model vendors in the same fleet) should share identical mechanical gates. Prompts may differ; schemas must not. When one vendor's structured-output mode is stricter than another's, keep the strictest schema as canonical and let adapters translate, rather than maintaining parallel rules that diverge silently.
-
-Teaching maintainers matters as much as teaching models. New hires should edit a failing golden fixture before they edit a prompt paragraph. That habit keeps enforcement debt visible. Module 3.3 will cover pruning stale rules; this module establishes that those rules must exist as testable artifacts first.
-
-Integration with retrieval and tools from module 2.3 is deliberate: retrieval returns untrusted bytes, tools perform side effects. Guardrails sit between proposed tool input and execution, and again between tool output and the next model turn if output must be schema-shaped. Never chain a high-risk tool after a retrieval step without re-validating combined payloads, because injection can ride inside retrieved snippets into otherwise safe-looking JSON.
-
-Long-horizon sessions stress legibility more than short demos. When cache TTLs expire (Anthropic documents short default ephemeral cache lifetimes for eligible prefixes), agents may reload policy while old remediation JSON still sits in scratch context. Harnesses should expire remediation messages after success or tag them `superseded_by_turn` so models do not re-fix fields that already passed validation.
-
-Finally, document explicit non-goals. Mechanical guardrails will not stop a malicious human with merge rights. They will not replace fraud review for financial products. They will not fix bad product requirements. They **will** stop well-intentioned agents from applying structurally unsafe manifests at machine speed, which is the dominant failure mode in AI-assisted engineering fleets today.
-
-SRE teams can borrow error-budget thinking for guardrails: if rejection rates spike, capacity may be misconfigured, but if rejection rates vanish while incident severity rises, enforcement likely atrophied. Pair guardrail metrics with deployment frequency so you can tell whether agents are actually attempting applies or merely drafting text. Draft-only agents need gates at PR creation; auto-apply agents need gates at every tool invocation without exception.
-
-Security review workshops should include a live demo where participants intentionally feed an injected retrieved paragraph into a test harness and watch mechanical gates reject the resulting manifest. The demo lands harder than slides about LLM01 because attendees see their own repo paths in remediation output. Follow the demo with a PR that adds one golden invalid fixture—small diff, permanent lesson.
-
-Platform engineers should publish a **guardrail catalog** alongside the harness map from module 3.1: each entry lists the gate name, owner team, failure `code`, average remediation turns, and last incident where the gate prevented damage. Catalogs turn informal heroics into maintained infrastructure. New agents load the catalog path from `AGENTS.md` instead of inferring checks from tribal memory.
-
-When models propose multi-file changes, run gates per artifact before evaluating the batch narrative summary. Summaries are semantic; files are mechanical. A glowing summary with an unsafe manifest is worse than an honest failure JSON because reviewers relax early. CI parallelism helps: lint and schema jobs can fan out per path while keeping a single remediation stream ordered by severity.
-
-Educational modules often stop at theory; your production obligation is to ship at least one gate your fleet agents hit this week. If no gate exists, this module is unimplemented regardless of quiz scores. Start with the manifest validator from the hands-on lab, promote it into `scripts/`, wire pre-commit, and only then expand to admission policies and sandbox runners.
-
-Reviewers grading agent pull requests should ask for the validator log artifact the same way they ask for test output. Without that artifact, approvals are guessing whether mechanical gates ran. A one-line CI link or pasted JSON success object is enough evidence when it includes the manifest path and schema version.
-
-Treat guardrail bypass attempts as security incidents even when the actor is internal automation. Uninstrumented auto-merge paths are attractive during deadlines; resist merging them without the same JSON evidence production agents must produce. Small evidence habits prevent large fleet surprises.
 
 ## Did You Know?
 
@@ -538,16 +538,13 @@ validate-manifests:
 - [ ] Append `doc_href` to failures pointing at your repo policy path (use a placeholder path if this lab is standalone).
 - [ ] Document the JSON schema for both shapes in `scripts/README-gate.md` (five lines minimum).
 
-### Task 6 — Turn budget reflection
+### Task 6 — Turn budget reflection and admission-policy mirror
 
-- [ ] Record how many simulated agent turns were needed from first failure to pass.
-- [ ] Write three sentences on whether returning only the first failure beat returning all failures at once.
-
-### Task 7 — Optional admission-policy mirror
-
-- [ ] Skim Kubernetes `ValidatingAdmissionPolicy` documentation and list one CEL expression you would add as a cluster backstop for `runAsNonRoot`.
-- [ ] Explain in two sentences why cluster gates still matter if local bash validation passes.
-- [ ] Note how you would log admission denials so agents see the same `code` vocabulary as local scripts.
+- [ ] **(a)** Record how many simulated agent turns were needed from first failure to pass.
+- [ ] **(a)** Write three sentences on whether returning only the first failure beat returning all failures at once.
+- [ ] **(b)** Skim Kubernetes `ValidatingAdmissionPolicy` documentation and list one CEL expression you would add as a cluster backstop for `runAsNonRoot`.
+- [ ] **(b)** Explain in two sentences why cluster gates still matter if local bash validation passes.
+- [ ] **(b)** Note how you would log admission denials so agents see the same `code` vocabulary as local scripts.
 
 <details>
 <summary>Solution sketch (cluster backstop rationale)</summary>
@@ -563,6 +560,7 @@ Local validation protects Git and CI before changes reach the API server. Admiss
 - [ ] Remediation output is single-line JSON suitable for tool result injection.
 - [ ] `make validate-manifests` fails fast on any bad manifest.
 - [ ] You recorded turn count and a short reflection on failure ordering.
+- [ ] You listed a cluster admission backstop and aligned denial logging with local `code` vocabulary.
 
 ## Sources
 
