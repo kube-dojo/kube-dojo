@@ -429,4 +429,4 @@ Success criteria:
 
 ## Next Module
 
-Next, continue to [Module 1.5: Reviewing AI Output](./module-1.5-reviewing-ai-output/), where you will practice turning review habits into concrete checks for generated work.
+*Next module coming soon.*

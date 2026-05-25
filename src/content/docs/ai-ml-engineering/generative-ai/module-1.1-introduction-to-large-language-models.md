@@ -713,7 +713,7 @@ Success criteria for this step:
 
 ## Next Module
 
-Next: [Tokenization & Text Processing](./module-1.2-tokenization-and-text-processing/)
+Next: [Tokenization & Text Processing](./module-1.2-tokenization-text-processing/)
 
 ---
 
