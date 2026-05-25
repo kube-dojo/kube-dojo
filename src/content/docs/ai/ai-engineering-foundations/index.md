@@ -31,7 +31,7 @@ The final module applies those layers to Symphony-style orchestration, where iss
 | 1.3 | Prompt Safety and Evaluation | planned |
 | 1.4 | Prompt Libraries and Contracts | planned |
 | 2.1 | [Context Engineering Fundamentals](module-2.1-context-fundamentals/) | drafting |
-| 2.2 | Repository Engineering for Agents | planned |
+| 2.2 | [Repository Engineering for Agents](module-2.2-repository-engineering-for-agents/) | drafting |
 | 2.3 | Retrieval, Tools, and Memory Boundaries | planned |
 | 2.4 | Dynamic Context Orchestration | planned |
 | 3.1 | Harness Fundamentals — Layers and System of Record | planned |
