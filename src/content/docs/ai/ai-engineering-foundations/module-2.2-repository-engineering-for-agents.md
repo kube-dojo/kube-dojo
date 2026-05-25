@@ -1194,7 +1194,7 @@ D) Root ownership is enough for all scoped folders.
 
 ## Next Module
 
-Next module: [Semantic vs Lexical Context](module-2.3-semantic-vs-lexical-context/) for deeper context design patterns that build on this contract-first approach and continue the work on enforceable repository communication.
+*Next module coming soon.*
 
 ## Sources
 

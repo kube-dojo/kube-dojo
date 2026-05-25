@@ -813,7 +813,7 @@ Document the baseline metric, the change you made, the new metric, and two failu
 
 ## Next Module
 
-Next module: [Vector Databases and Retrieval Indexes](./module-1.5-vector-databases-and-retrieval-indexes/)
+Next module: [Vector Space Visualization](./module-1.5-vector-space-visualization/)
 
 ## Sources
 
