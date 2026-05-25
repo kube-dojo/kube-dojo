@@ -21,8 +21,9 @@ Kubernetes networking gets you pod-to-pod communication. But production traffic 
 | 1.5 | [Cloud Load Balancing Deep Dive](module-1.5-load-balancing/) | 3h | L4/L7, Proxy Protocol, session affinity |
 | 1.6 | [Zero Trust Networking & VPN Alternatives](module-1.6-zero-trust/) | 2.5h | BeyondCorp, IAP, Tailscale, mTLS |
 | 1.7 | [IPv6 Fundamentals](module-1.7-ipv6-fundamentals/) | 3.5h | Address families, SLAAC, NDP, DNS, hands-on IPv6 troubleshooting |
+| 1.8 | [Dual-Stack Kubernetes Setup & Operations](module-1.8-dual-stack-k8s/) | 3.5h | Control-plane flags, CNI dual-stack setup, Service IP families, EndpointSlices |
 
-**Total time**: ~20.5 hours
+**Total time**: ~24 hours
 
 ---
 
