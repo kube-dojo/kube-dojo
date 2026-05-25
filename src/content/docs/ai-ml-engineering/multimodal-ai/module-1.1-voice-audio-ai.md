@@ -6,10 +6,8 @@ sidebar:
   order: 902
 ---
 
-# Voice & Audio AI: Teaching Computers to Listen and Speak
-
 **Complexity**: Intermediate to Advanced  
-**Reading Time**: 6-7 hours  
+**Reading Time**: 7-8 hours
 **Prerequisites**: Phase 4 complete, basic Python, HTTP APIs, container images, and Kubernetes v1.35+ deployment knowledge.
 
 ## Learning Outcomes
@@ -331,6 +329,210 @@ async def play_with_barge_in(audio_stream, detect_user_speech, stop_playback):
 > **Active check**: A demo assistant responds accurately but feels slow. Logs show STT takes 180 ms, the LLM takes 900 ms to finish, and TTS takes 700 ms to generate a full file. What change would improve perceived latency without changing any model?
 
 The best first change is streaming. Start rendering the LLM response as it arrives, synthesize the first complete sentence, and begin playback before the full answer is complete. This does not reduce total compute time, but it reduces time-to-first-audio, which is what the user perceives during a turn. The same principle applies across distributed systems: overlap independent work instead of waiting for every stage to finish.
+
+## Section 4.5: Real-Time Conversational Voice Architectures
+
+The difference between a working voice assistant and a conversational voice system is latency strategy. The pipeline model is technically correct and easier to reason about, but a production product is judged by when the user hears the first useful audio and whether interruption semantics feel natural.
+
+### 4.5.1 The latency floor in cascaded STT-LM-TTS architectures
+
+The classic stack is usually `Audio -> STT service -> LLM -> TTS service -> Audio output`, and even when every component streams, each boundary is a potential latency floor. The system must complete enough of one stage before the next stage can safely advance.
+
+1. **Boundary synchronization**: STT can stream hypotheses, but it still needs a token- or chunk-level boundary before LLM input is safe.
+2. **Reasoning serialization**: The LLM is a second model hop that must ingest transcribed evidence, apply policy, and emit text (streamed by token).
+3. **Synthesis boundary**: TTS still needs enough text context to begin synthesis, then produces speech chunks under its own model and buffering constraints.
+
+In real systems this appears as a hard floor, not a soft one. The module's own active-check sample already demonstrates this shape: `180 ms STT + 900 ms LLM + 700 ms TTS`, where the perceived floor is effectively the sum of partial readiness points plus scheduling overhead. That pattern is exactly why production teams that measured first-audio in realistic stacks often compare cascaded stacks against Moshi's reported latency profile.
+
+The Moshi paper reports a theoretical **160 ms** one-pass delay and about **~200 ms** practical latency, while cascaded stacks can land in a several-second envelope due to handoffs. That mismatch is why architectures for real-time voice should optimize for **time-to-first-audio** before optimizing final answer throughput.
+
+#### Why token-boundary buffering dominates
+
+Token-level handoffs are where latency compounds. STT providers can hold back partial text to reduce instability, and upstream ambiguity often means you cannot let the LLM consume everything as soon as it arrives. LLM token streams are usually emitted before semantic closure, so the first tokens may need repair handling before synthesis confidence is acceptable. TTS itself still needs phrase-level context to avoid discontinuities, so it cannot always stream from the first token. This is the real reason cascaded voice systems often feel conversationally late even when each model is heavily optimized.
+
+This does not make cascaded systems wrong. It makes them predictable, debuggable, and easier to replace model-by-model, but you pay for orchestration. The upside is strong observability and composability; the downside is a hard turn-taking penalty.
+
+### 4.5.2 Moshi: dual-stream speech-text as single-pass inference
+
+The Kyutai Moshi paper defines a speech-text foundation model where both user and assistant speech are modeled in parallel streams, with text tokens predicted as a parallel stream for inner reasoning and quality control. The model is described as a “real-time full-duplex spoken large language model,” with a **theoretical latency of 160 ms** and about **200 ms in practice** when operationalized. Its abstract also states that this single-pass design is intended to remove the explicit turn segmentation bottleneck and overlap perception, language, and audio generation in one autoregressive loop.
+
+#### The architecture in practical terms
+
+Inside the published architecture, user audio and model output are represented as explicit concurrent channels, and inner text reasoning runs as a companion stream that can condition future audio tokens. Moshi uses a hierarchical streaming codec (`Mimi`) with a **12.5 Hz** operational cadence and around an **80 ms frame latency** at the codec level. Combined with an end-to-end single graph, this makes practical micro-turns around the **~200 ms** cadence feasible when the deployment stack is tuned correctly.
+
+That combination gives Moshi the “single-pass” property: the same model state advances audio understanding and response synthesis in one loop without STT and TTS RPC handoffs.
+
+```text
+╔══════════════════════════════════════════════════════════════════╗
+║  Audio_in ──► [User stream encoder] ──┐                    ▼     ║
+║                                       │     ┌───── Text-prefix  │     ║
+║  Model hidden state / memory ──────────┼──► Hierarchical   ───► Speaker stream audio out
+║                                       │     │ speech decoder     │     ║
+║                                       └──► Inner Monologue tokens      ║
+╚══════════════════════════════════════════════════════════════════╝
+```
+
+The design trades architecture complexity for a stricter model-runtime profile: one real-time graph, fewer RPC edges, and fewer distributed failure domains. In exchange, you inherit the full model stack and all the tuning burden that normally sits in STT or TTS wrappers.
+
+#### What to expect on quality
+
+The same paper reports streaming ASR and TTS metrics on LibriSpeech test-clean and explicitly frames current performance as strong but not universally dominant.
+
+That is the crucial teaching point: dual-stream inference can remove turns and reduce first-audio latency, but it can also absorb quality risk in transcription-heavy domains. Moshi shifts architecture pressure toward latency responsiveness while increasing the importance of application-specific quality controls. In practice, this means you should preserve guardrails around confidence, fallback rules, and post-edit loops when replacing ASR-first stacks.
+
+#### Moshi deployment posture
+
+Moshi is an open project with public GitHub and paper references, plus a demo path linked from the repository. For operators this means:
+
+- You can own the full runtime stack and change model/quantization strategy.
+- You inherit model-management burden, including codec/model compatibility, memory planning, and strict GPU scheduling.
+- You likely gain stronger control for regulated environments where all bytes must stay inside your policy boundary.
+
+The practical implication is not that Moshi is “better.” It is that Moshi shifts the trade-off toward in-house control and low-latency behavior at the cost of model quality asymmetry and operational burden.
+
+### 4.5.3 GPT-4o Realtime as a commercial reference baseline
+
+OpenAI’s Realtime docs position `GPT-4o Realtime` as a model capable of text and audio inputs/outputs “in realtime” over **WebRTC or WebSocket**, with a session model built around `session`, `conversation`, and `responses`. From the model pages, this is a speech-to-speech-capable product path where API-level orchestration is managed by the platform, not by your inference graph.
+
+#### Contract and interaction model
+
+- Realtime sessions are stateful (`session`, `conversation`, and `responses`).
+- Clients interact through events, and the model emits lifecycle events such as `response.created`, `response.output_*`, and `response.done`.
+- The API is designed for both WebRTC and WebSocket transports, with specific guidance for each path.
+- Server-side voice activity detection is built in and may be used to trigger responses automatically.
+- Interruption handling exists at the protocol level with event-driven truncation semantics.
+- Function calling is also part of the baseline contract in the Realtime guide: tool definitions can be provided and tool-call events are emitted during generation.
+
+This handler example is illustrative; include `import json` and `import base64` (plus websocket/loop setup) before using this in a runnable lab.
+
+```python
+async def handle_realtime_voice_events(ws):
+    async for raw in ws:
+        event = json.loads(raw)
+        if event["type"] == "rate_limits.updated":
+            update_budget_graph(event["rate_limits"])
+        if event["type"] == "error":
+            log_realtime_error(event)
+        if event["type"] == "response.output_audio.delta":
+            stream_to_player(base64.b64decode(event["delta"]))
+        if event["type"] == "response.done":
+            emit_observability(event["response"])
+```
+
+#### Cost and observability model
+
+The pricing surface has two relevant facts: OpenAI distinguishes modality-specific behavior across input versus output, and the Realtime family uses tokenized accounting, including explicit audio token timing. The public costs page and the Realtime cost guide document timing (`1 token / 100 ms` for user input audio and `1 token / 50 ms` for assistant output audio in responses).
+
+Operationally, this means short interactions are not automatically cheap. Short back-and-forth calls stay cost efficient only when context windows and tool invocation are intentionally constrained. Translation/transcription endpoints are priced differently from speech-to-speech outputs, so teams must separate those flows in budgeting and telemetry.
+
+“Dropout” incidents are usually transport and event-order failures before they become model failures: reconnect storms, invalid session transitions, missed truncation events, and unstable browser/websocket timing.
+
+You should monitor these minimum production metrics in every Realtime rollout:
+
+- Conversation-level token growth (`response.done -> usage`) and truncation behavior.
+- Interrupt rate (`response.cancelled`, truncation events, `input_audio_buffer` lifecycle).
+- Error-rate by transport (`invalid_value`, malformed event flow, transport disconnect/reconnect).
+- Session duration/latency drift against business SLAs (particularly 95th percentile first-audio).
+
+#### Measuring and comparing architectures in one place
+
+To keep architecture choices falsifiable, every deployment should emit a shared event contract even when implementation differs:
+
+```text
+event_type,timestamp_ms,conversation_id,turn_id,latency_ms,token_count,bytes_in,bytes_out,drop_reason
+session.started,1024,call-001,t-0,0,0,0,0,
+stt.ready,1064,call-001,t-0,40,24,,
+llm.first_token,1780,call-001,t-0,716,0,,
+tts.first_audio_delta,1905,call-001,t-0,891,0,,
+response.done,2410,call-001,t-0,1386,1123,,
+```
+
+Cascaded stacks generally emit more span names and therefore more state transitions, for example `asr.partial`, `llm.chunk`, `tts.chunk_ready`, and `tts.audio_playback_start`. Dual-stream speech2speech stacks can keep a tighter trace shape with events like `realtime.first_delta`, `realtime.audio_delta`, and `realtime.turn_done`.
+
+When comparing architectures, compare these values by percentile against the same customer journey instead of raw token counts alone.
+
+#### Interruption as an SLO, not an edge case
+
+Interruption is where many teams get this wrong. If a system is easy to use in clean turn-taking and fails when humans overlap, it is not production-ready. Instrumentation for interruption should include `input_audio_buffer.speech_started`, `response.cancelled`, `audio_end_ms` in truncation paths, last rendered sample index before preemption, and post-interruption recovery latency for the next turn.
+
+This lets you define a clear interruption SLO:
+
+> After user speech starts during model playback, the system should either recover a coherent next turn or emit an explicit recovery signal within a bounded latency envelope.
+
+#### Migration pattern: one service at a time
+
+The most realistic rollout strategy for most teams is a gradual one:
+
+1. Keep cascaded STT→LLM→TTS for fallback.
+2. Move orchestration state into a session-aware coordinator.
+3. Introduce one speech2speech route behind a tenant-level feature flag.
+4. Add parallel metrics dashboards before deprecating any legacy stage.
+
+This keeps rollback simple, keeps call quality safer, and gives you an empirical basis for a dual-stream decision instead of a design-by-assumption migration.
+
+### 4.5.4 Dual-stream vs cascaded: the teaching-layer decision model
+
+No architecture wins all axes. The right decision is contextual.
+
+#### Latency-quality Pareto intuition
+
+Think in three curves: (1) latency, (2) quality, and (3) operating controllability.
+Cascaded streaming is often stronger on replaceability, known-model behavior, and explicit auditing, but typically carries higher end-to-end conversational floor. Moshi-style dual-stream reduces first-audio floor through one-pass progression, but it can move quality risk into the model and raise your platform responsibility. Managed speech2speech services such as GPT-4o Realtime lower implementation friction, provide stable contracts, and support richer production tooling quickly, at the cost of stronger vendor lock-in and less transparent internals.
+
+When your users care most about responsiveness under realistic interruption, this is usually a dual-stream or managed speech2speech stack.
+
+When your users are in regulated transcription-heavy flows or multilingual domains where WER and auditability are your north star, cascaded pipelines still remain a strong baseline despite more latency.
+
+#### Infrastructure shape and GPU reality
+
+**Cascaded streaming deployment** typically decomposes into STT, LLM, and TTS services. It scales through independent microservices, different pod profiles, and stage-specific autoscaling curves. This is why teams often map it cleanly to KServe-style inference graphs where route-level service boundaries match model boundaries.
+
+**Dual-stream or speech2speech deployment** usually prefers one service per conversation stream, with strict GPU locality. Contiguous GPU residency becomes part of correctness because analysis, generation, and synthesis share one model context. This model reduces hops and can simplify runtime behavior, but one overloaded model can stall the whole interaction path.
+
+#### When cascaded is still the right call
+
+Multilingual environments where explicit ASR language switching is required, high-WER-sensitive contexts such as legal support, healthcare transcription, and contact-center QA, and regulatory settings that require separate vendor evidence per stage all remain strong candidates for cascaded designs.
+
+#### When dual-stream is often the better engineering choice
+
+High-frequency voice UIs, interruption-heavy products, and teams already operating custom infra can benefit from dual-stream when low-latency cadence drives customer-perceived quality. If your team already controls model refreshes, GPU policy, and observability pipelines, the operational load is manageable.
+
+> **Active check**: A product team wants to improve a support hotline bot from “technically correct but lifeless” to “natural and fast.”
+>
+> Should you default to a GPT-4o Realtime integration, Moshi-like dual-stream deployment, or a cascaded graph?
+
+Answering this question is a trade-off exercise, not a rule:
+- If they need fastest path-to-production and lower ops risk, start with managed Realtime.
+- If interruption behavior and real-time cadence are the top priority, dual-stream is the stronger long-term architecture.
+- If auditability or WER dominates, keep cascaded and invest in smarter streaming policies first.
+
+### 4.5.5 Deployment-level governance for real-time voice
+
+The most useful artifact in a real architecture review is not a diagram; it is a constraint matrix that includes latency budget, failure semantics, and rollback controls. A robust governance pass should define target SLOs for `first_audio_ms` (median and p95), interruption recovery, context retention under dropout, and sustained audio packet loss. If a design cannot defend those metrics under a 20–30% traffic spike, it is an optimization exercise, not a product architecture.
+
+The second artifact is a migration contract. Teams should define what must remain stable during rollout: conversation ID continuity, fallback destination, and legal logging guarantees. If you run Moshi-style dual-stream and it regresses WER in one cohort, your fallback should be explicit and fast: reroute to cascaded STT→LLM→TTS with a clearly defined exception class, not an implicit “best effort” degrade. This keeps user-facing quality predictable, even when innovation experiments fail.
+
+The third artifact is cost governance. Before adopting a managed Realtime baseline, estimate cost from the worst-case interactive loop, not from clean samples. Use the actual tokenization cadence and expected turn lengths, then convert to minute-equivalent cost and headroom under incident traffic. For dual-stream self-hosted deployments, shift the budget discussion to effective concurrency density per GPU, model residency, queue depth, and preemption policy, because the dominant failure mode is often queue collapse rather than model throughput.
+
+Finally, governance should force a cross-family fallback contract before launch day. Keep a common event schema, common tracing IDs, and a single incident runbook regardless of architecture. That requirement is the biggest difference between teams who claim “real-time” and teams that can actually operate it in production.
+
+#### Implementation starter checklist for real-time production
+
+When you move from a prototype to an operable architecture, your first implementation pass should prove three constraints.
+
+- **Latency constraint**: establish SLOs for first-audio and interruption recovery before tuning model prompts.
+- **Control constraint**: define what changes are self-hosted, managed, or feature-flagged at each stage.
+- **Reliability constraint**: define restart, failover, and migration behavior for dropped websocket sessions.
+
+The team should then run staged experiments:
+
+- Start with a small cohort and measure baseline first-audio plus tokenized cost on fixed scripts.
+- Add interruption-heavy scenarios using realistic turn-taking patterns and silence patterns.
+- Stress packet loss and reconnect, then confirm fallback behavior remains deterministic.
+- Only after these passes are green should you broaden rollout envelopes and reduce guardrails.
+
+Do not treat “works on demo calls” as your production criterion.
+In live voice systems, **production readiness** is the ability to recover gracefully after a failure and keep decision quality stable when users overlap, retry, and speak with emotion.
 
 ## Section 5: Text-to-Speech and Voice Design
 
@@ -1093,6 +1295,8 @@ Now that your AI can hear and speak, the next module adds visual perception. You
 
 ## Sources
 
+- [Moshi: a speech-text foundation model for real-time dialogue](https://arxiv.org/abs/2410.00037) — Primary Kyutai paper describing the dual-stream spoken-dialogue architecture, 12.5 Hz runtime characteristics, theoretical latency (160 ms, ~200 ms in practice), and the full-duplex objective.
+- [github.com: kyutai-labs/moshi](https://github.com/kyutai-labs/moshi) — Primary open-source project reference for Moshi and its associated streaming neural codec integration.
 - [Robust Speech Recognition via Large-Scale Weak Supervision](https://arxiv.org/abs/2212.04356) — Primary paper for Whisper's training data, multilingual scope, and robustness claims.
 - [pyannote speaker-diarization-3.1](https://github.com/pyannote/hf-speaker-diarization-3.1) — Relevant upstream reference for diarization capabilities used later in the module.
 - [github.com: whisper](https://github.com/openai/whisper) — The official Whisper README describes Whisper as a multitasking model that performs multilingual speech recognition, speech translation, and language identification.
@@ -1105,5 +1309,10 @@ Now that your AI can hear and speak, the next module adds visual perception. You
 - [github.com: TTS](https://github.com/coqui-ai/TTS) — The project's GitHub repository describes Coqui TTS as an open-source deep learning toolkit for text-to-speech.
 - [github.com: bark](https://github.com/suno-ai/bark) — The Bark repository describes the project as a text-prompted generative audio model.
 - [kubernetes.io: scheduling gpus](https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/) — The Kubernetes GPU scheduling docs explicitly describe stable GPU support via device plugins and schedulable resources such as `nvidia.com/gpu`.
+- [OpenAI Realtime conversations](https://developers.openai.com/api/docs/guides/realtime-conversations) — Official Realtime API guide for sessions, WebRTC/WebSocket transport, function calling, and interruption/truncation behavior.
+- [OpenAI Realtime costs](https://platform.openai.com/docs/guides/realtime-costs) — Official cost and usage guide for Realtime API token accrual, including audio token timing and transcription session economics.
+- [OpenAI Realtime pricing table](https://platform.openai.com/docs/pricing/) — Official model pricing table for Realtime audio/text outputs and related models.
+- [GPT-4o Realtime model](https://developers.openai.com/api/docs/models/gpt-4o-realtime-preview) — Official model definition for GPT-4o Realtime speech-to-speech baseline.
+- [gpt-realtime model](https://developers.openai.com/api/docs/models/gpt-realtime) — Current Realtime model family details and multimodal audio pricing context.
 - [ibm.com: voice recognition](https://www.ibm.com/history/voice-recognition) — IBM's history page explicitly calls Shoebox the world's first speech-recognition system and lists ten digits plus six command words.
 - [pyannote Speaker Diarization 3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) — Helpful background for the module's multi-speaker section and the practical diarization pipeline used in examples.
