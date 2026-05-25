@@ -203,6 +203,7 @@ from bcc import BPF
 
 PROGRAM = r"""
 #include <uapi/linux/ptrace.h>
+#include <linux/sched.h>
 
 struct event_t {
     u32 pid;
