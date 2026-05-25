@@ -48,6 +48,8 @@ Use [AI Building](../ai-building/) first to learn:
 
 Then continue to [AI/ML Engineering](../../ai-ml-engineering/).
 
+When you are ready to design repeatable automation loops for teams, move to [AI Engineering Foundations](../ai-engineering-foundations/) to learn about prompts, context, and harness operations.
+
 ## What This Section Does Not Repeat
 
 This section does **not** try to reteach:
