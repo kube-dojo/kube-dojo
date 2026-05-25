@@ -29,7 +29,7 @@ The final module applies those layers to Symphony-style orchestration, where iss
 | 1.1 | Prompt Fundamentals | planned |
 | 1.2 | [Reasoning and Logic Prompts](module-1.2-reasoning-and-logic-prompts/) | drafting |
 | 1.3 | [Prompt Safety and Evaluation](module-1.3-prompt-safety-and-evaluation/) | drafting |
-| 1.4 | Prompt Libraries and Contracts | planned |
+| 1.4 | [Prompt Libraries and Contracts](module-1.4-prompt-libraries-and-contracts/) | drafting |
 | 2.1 | [Context Engineering Fundamentals](module-2.1-context-fundamentals/) | drafting |
 | 2.2 | [Repository Engineering for Agents](module-2.2-repository-engineering-for-agents/) | drafting |
 | 2.3 | Retrieval, Tools, and Memory Boundaries | planned |
