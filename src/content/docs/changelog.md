@@ -8,6 +8,8 @@ sidebar:
 
 ## May 2026
 
+- **AI Engineering Foundations prompt-safety module.** [Prompt Safety and Evaluation](/ai/ai-engineering-foundations/module-1.3-prompt-safety-and-evaluation/) adds a prompt-eval harness lesson covering golden-set regression, LLM-as-judge calibration, direct and indirect prompt injection, prompt leakage, jailbreak probes, drift detection, and CI-ready safety gates.
+
 - **Kafka on Kubernetes: MirrorMaker2, partition reassignment, and Cruise Control.** [Module 1.2: Apache Kafka on Kubernetes (Strimzi)](/platform/disciplines/data-ai/data-engineering/module-1.2-kafka/) expanded with three new operator-grade sections covering `KafkaMirrorMaker2` CRD configuration for DR and multi-region topologies (offset translation, heartbeat/checkpoint connectors, active-active vs active-passive patterns), `kafka-reassign-partitions.sh` three-phase workflow (generate/execute/verify with bandwidth throttling), and Cruise Control continuous rebalancing via the `KafkaRebalance` CRD (state machine, goal tiers, self-healing anomaly detection, production tuning). Issue #1324.
 
 - **Operator implementation decision framework.** [Module 7.15: Helm vs Ansible vs Go Operator Decision Framework](/platform/toolkits/infrastructure-networking/iac-tools/module-7.15-helm-ansible-go-operator-decision/) gives platform engineers a 12-axis decision matrix for choosing between Helm, Ansible, and Go operator styles. Covers OperatorHub.io capability levels, three worked examples (AWX Operator + cert-manager + Crossplane), code volume estimates, migration paths, and a hands-on lab that builds all three operator flavors against the same `WebApp` CRD on kind.
