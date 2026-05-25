@@ -485,7 +485,9 @@ The exit predicate was wrong because it tested for the presence of a populated V
 <details>
 <summary>You are designing a ticket-orchestrated loop for a repository that contains both documentation pages and infrastructure-as-code manifests. The documentation changes are low-risk and highly reversible; the manifest changes touch production cluster configuration. How would you configure the workspace, hooks, and exit predicates differently for these two task classes within the same repository?</summary>
 
-For documentation tasks, configure `workspace.clone_template` to a lightweight checkout (shallow clone, no submodules), use standard hooks that validate prose structure and link integrity, and set exit predicates to "CI passes + diff bounded to docs/ directory + link checker reports zero broken." Allow `max_retries: 3` because documentation fixes are fast and cheap to retry. For manifest tasks, configure a full clone with all dependencies, add a `before_run` hook that verifies the target cluster context is set and the credentials are valid, set exit predicates to "CI passes + `kubectl --dry-run` validation passes + admission policy review passes + diff bounded to manifests/ + no `securityContext: {}` empty blocks." Set `max_retries: 1` and force human-in-the-loop merge — the orchestrator should move the issue to `agent:review` rather than `agent:done` so a human must approve before merge. The two task classes can coexist in the same repository by using issue labels to select which hook configuration is applied.
+For documentation tasks, configure `workspace.clone_template` to a lightweight checkout (shallow clone, no submodules), use standard hooks that validate prose structure and link integrity, and set exit predicates to "CI passes + diff bounded to docs/ directory + link checker reports zero broken." Allow `max_retries: 3` because documentation fixes are fast and cheap to retry.
+
+For manifest tasks, configure a full clone with all dependencies, add a `before_run` hook that verifies the target cluster context is set and the credentials are valid, set exit predicates to "CI passes + `kubectl --dry-run` validation passes + admission policy review passes + diff bounded to manifests/ + no `securityContext: {}` empty blocks." Set `max_retries: 1` and force human-in-the-loop merge — the orchestrator should move the issue to `agent:review` rather than `agent:done` so a human must approve before merge. The two task classes can coexist in the same repository by using issue labels to select which hook configuration is applied.
 
 </details>
 
@@ -527,12 +529,21 @@ Create a local directory structure to simulate the fleet environment:
 
 ```bash
 mkdir -p symphony-lab/worktrees
+mkdir -p symphony-lab/workpads
 mkdir -p symphony-lab/hooks
 mkdir -p symphony-lab/mock-api
 cd symphony-lab
 ```
 
-Create a mock tracker that simulates GitHub Issues API responses for a small set of test issues. A mock is used instead of real API calls so the exercise is self-contained and repeatable without network access or API credentials.
+Create the mock issue payload — a JSON file that simulates what the GitHub Issues API would return when the poller queries for issues labeled `agent:active`:
+
+```bash
+cat > mock-api/active-issues.json <<'EOF'
+{"issues": [{"number": 1}, {"number": 2}, {"number": 3}]}
+EOF
+```
+
+A mock is used instead of real API calls so the exercise is self-contained and repeatable without network access or API credentials.
 
 ### Task 1 — Write the minimal WORKFLOW.md contract
 
@@ -555,13 +566,13 @@ polling:
   interval_seconds: 10
   max_concurrent_agents: 2
 workspace:
-  root: ./symphony-lab/worktrees
+  root: worktrees
   clone_template: "worktrees/issue-{{ number }}/"
 hooks:
-  after_create: ./symphony-lab/hooks/after_create.sh
-  before_run: ./symphony-lab/hooks/before_run.sh
-  after_run: ./symphony-lab/hooks/after_run.sh
-  before_remove: ./symphony-lab/hooks/before_remove.sh
+  after_create: hooks/after_create.sh
+  before_run: hooks/before_run.sh
+  after_run: hooks/after_run.sh
+  before_remove: hooks/before_remove.sh
 agent:
   max_turns: 30
   max_retries: 3
@@ -604,7 +615,7 @@ echo "{\"status\":\"ok\"}"
 # hooks/after_run.sh
 set -euo pipefail
 ISSUE_DIR="worktrees/issue-${ISSUE_NUMBER:-0}"
-WORKPAD="$ISSUE_DIR/workpad.md"
+WORKPAD="workpads/issue-${ISSUE_NUMBER:-0}.md"
 ATTEMPT="${ATTEMPT_NUMBER:-0}"
 STATUS="${ATTEMPT_STATUS:-unknown}"
 cat >> "$WORKPAD" <<EOF
@@ -707,7 +718,7 @@ EOF
 fi
 ```
 
-After three cycles, inspect `worktrees/issue-3/workpad.md`. It should contain the failed attempt entry and a subsequent successful attempt entry in the same file, demonstrating that the workpad survives the failing hook and preserves context across retries.
+After three cycles, inspect `workpads/issue-3.md`. It should contain the failed attempt entry and a subsequent successful attempt entry in the same file, demonstrating that the workpad survives the failing hook and preserves context across retries.
 
 </details>
 
@@ -735,7 +746,7 @@ cat > "$POW_DIR/issue-${ISSUE}.md" <<EOF
 ## Proof of Work — Issue #${ISSUE}
 
 ### Workpad
-$(cat "worktrees/issue-${ISSUE}/workpad.md" 2>/dev/null || echo "No workpad found")
+$(cat "workpads/issue-${ISSUE}.md" 2>/dev/null || echo "No workpad found")
 
 ### CI Results
 - Simulated CI: PASS
