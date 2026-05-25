@@ -34,10 +34,10 @@ The final module applies those layers to Symphony-style orchestration, where iss
 | 2.2 | [Repository Engineering for Agents](module-2.2-repository-engineering-for-agents/) | drafting |
 | 2.3 | [Retrieval, Tools, and Memory Boundaries](module-2.3-retrieval-tools-and-memory-boundaries/) | drafting |
 | 2.4 | Dynamic Context Orchestration | planned |
-| 3.1 | Harness Fundamentals — Layers and System of Record | planned |
-| 3.2 | Guardrails, Gates, and Agent-Legible Apps | planned |
-| 3.3 | Operating the Harness | planned |
-| 4.1 | Symphony — Work Orchestration as Applied Harness | planned |
+|| 3.1 | [Harness Fundamentals — Layers and System of Record](module-3.1-harness-fundamentals-layers-and-system-of-record/) | drafting |
+|| 3.2 | [Guardrails, Gates, and Agent-Legible Apps](module-3.2-guardrails-gates-and-agent-legible-apps/) | drafting |
+|| 3.3 | [Operating the Harness](module-3.3-operating-the-harness/) | drafting |
+|| 4.1 | [Symphony — Work Orchestration as Applied Harness](module-4.1-symphony-work-orchestration-as-applied-harness/) | drafting |
 
 ## Reading Path
 
