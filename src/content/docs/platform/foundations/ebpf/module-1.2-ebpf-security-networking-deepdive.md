@@ -178,7 +178,7 @@ The same guide states that Cilium's eBPF kube-proxy replacement **depends on the
 
 ### Incident pattern: peak traffic and iptables choke points
 
-Public write-ups from [Shopify's Black Friday resiliency engineering](https://shopify.engineering/resiliency-planning-how-we-prepared-for-black-friday) and [Datadog's high-scale networking work](https://www.datadoghq.com/blog/engineering/introducing-glommio/) describe operational pressure when connection churn and Service cardinality grow faster than iptables reconciliation can comfortably absorb. The Kubernetes project's [nftables kube-proxy article](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/) documents mechanism: iptables-mode matching cost grows with rule volume, and bulk reprogramming on Endpoint changes can disturb existing flows. The anonymized pattern below is composed from those documented failure modes, not a single named customer outage.
+The Kubernetes project's [nftables kube-proxy article](https://kubernetes.io/blog/2025/02/28/nftables-kube-proxy/) documents the mechanism: iptables-mode matching cost grows with rule volume, and bulk reprogramming on Endpoint changes can disturb existing flows. Cilium's [kube-proxy-free guide](https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/) describes the remediation model — BPF service maps probed on packet/socket paths instead of `KUBE-*` chain rewrites — and the coexistence hazard when both datapaths run in parallel. The anonymized pattern below is composed from those documented failure modes, not a single named customer outage.
 
 A retail-style platform enters peak week with thousands of Services and rapid Endpoint churn. kube-proxy in iptables mode holds very large per-node rule sets. Endpoint updates trigger multi-second `iptables-restore` windows during which new connections to some ClusterIPs fail sporadically while long-lived sessions survive. API server metrics stay green; only cross-Service calls fail. tcpdump shows SYNs arriving; SYN-ACKs for VIP paths do not. The architectural remediation is datapath replacement: program BPF service maps, remove kube-proxy during a maintenance window, validate with `cilium-dbg service list` and empty `KUBE-SVC` chains, and keep Hubble `policy-verdict` visible during pool drains. If the failure mode is instead wrong **identity** membership after a label change, replacing kube-proxy will not help — fix policy selectors and identity maps first.
 
@@ -200,8 +200,8 @@ Pod A --> BPF policy (L4 allow TCP 443) --> if L7 rule exists -->
               redirect to Envoy listener --> match :method :path -->
               forward or deny --> Pod B
 
-A rising hubble_drop_total with flat app errors often means L7 denies
-probes or metrics paths the app never saw (5.1 quiz scenario).
+Proxy/L7 policy denies (HTTP 403, DNS REFUSED per Cilium L7 docs) with
+flat app errors often mean probes or metrics paths the app never saw (5.1 quiz scenario).
 ```
 
 **Design takeaway:** Put port/protocol constraints in BPF. Put HTTP semantics in L7 only when needed. Every L7 rule is a redirection and parsing commitment — not a free extension of `NetworkPolicy`.
@@ -226,7 +226,7 @@ Layer 7 policies in Cilium require parsing HTTP or other application protocols. 
 
 [Module 4.5](/platform/toolkits/security-quality/security-tools/module-4.5-tetragon/) shows `TracingPolicy` with `kprobes` and `action: Sigkill`. This section explains **which kernel attachment implements those actions** and when to prefer LSM hooks — material 4.5 does not cover (no LSM discussion in that module).
 
-Falco (4.5's comparison baseline) typically consumes syscall events from a kernel module or eBPF probe into a userspace engine that parses rules and emits alerts. Even when Falco uses eBPF for collection, the default **enforcement** story is external: Kubernetes admission, SOAR playbooks, or manual response. Tetragon's differentiator is running selectors and actions in the BPF program at the hook so `Sigkill` or `Override` can occur before the syscall returns. Neither approach replaces the other without thought: Falco's rule language and ecosystem integrations are mature for detection; Tetragon's sweet spot is low-latency enforcement on well-scoped policies you are willing to test aggressively in `Post` mode first.
+Falco (4.5's comparison baseline) typically consumes syscall events from a kernel module or eBPF probe into a userspace engine that parses rules and emits alerts. Even when Falco uses eBPF for collection, the default **enforcement** story is external: Kubernetes admission, SOAR playbooks, or manual response. Tetragon's differentiator is running selectors and actions in the BPF program at the hook: `Override` can deny before the syscall completes; `Sigkill` terminates the process synchronously but does not always prevent the triggering operation (see below). Neither approach replaces the other without thought: Falco's rule language and ecosystem integrations are mature for detection; Tetragon's sweet spot is low-latency enforcement on well-scoped policies you are willing to test aggressively in `Post` mode first.
 
 ### kprobes and tracepoints
 
@@ -251,7 +251,9 @@ When `CONFIG_BPF_LSM=y` and `bpf` appears in `/sys/kernel/security/lsm`, Tetrago
 
 **Userspace alert path (Falco-style):** syscall event copied to ring buffer → agent → alert → human or SOAR → maybe kill later.
 
-**Tetragon `action: Sigkill` on a match:** BPF program at hook runs selectors → enforcement sends **SIGKILL** to the process **in the enforcement path** documented for TracingPolicy actions (4.5 describes exit code 137 on blocked exec). The process may be terminated **before the syscall completes** for blocking policies — the timeline diagram in 4.5 is accurate at a high level; the mechanism is kernel-driven kill, not an external `kubectl delete pod`.
+**Tetragon `action: Sigkill` on a match:** BPF program at hook runs selectors → enforcement sends **SIGKILL** to the process in the enforcement path documented for TracingPolicy actions (4.5 describes exit code 137 on blocked exec). The mechanism is kernel-driven kill, not an external `kubectl delete pod`.
+
+**SIGKILL caveat (read before relying on kill for prevention):** Per [Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/), sending a signal terminates the process synchronously but **does not always stop the triggering operation** — for example, a `SIGKILL` on a `write()` syscall does not guarantee the data was not written. **SIGKILL fires after the kernel hook executes**; for `open()`/`exec()`-class syscalls the side effect may have already started before the signal is delivered. To ensure the operation is not completed, combine `Sigkill` with `Override`, or prefer **LSM hooks** (`file_open`, `bprm_check_security`) where the kernel evaluates policy on copied-in kernel objects **before** the syscall returns — stronger for true prevention than syscall kprobes alone.
 
 Other actions (`Post` for observability-only, `Override` returning errors) change whether you block or only record. Production rollouts should start with `Post`, validate selectors, then enable `Sigkill` on narrow policies — the same staged discipline as LSM policies in 1.1.
 
@@ -316,26 +318,50 @@ Use a kind cluster with a recent kernel (5.10+ recommended for full kube-proxy r
 
 Cilium and Tetragon both rely on BTF-backed CO-RE style loading for portability across kernel builds. Tetragon LSM hooks additionally require `CONFIG_BPF_LSM=y` and `bpf` in `/sys/kernel/security/lsm` as documented in [Tetragon hook points](https://tetragon.cilium.io/docs/concepts/tracing-policy/hooks/). Before standardizing a node image, verify those config flags on a sample node. Missing BPF LSM does not block Cilium networking, but it blocks `lsmhooks` enforcement policies you may have planned from this module's Tetragon section.
 
-### Phase 1 — Install Cilium with replacement (greenfield kind)
+### Phase 1 — Create kube-proxy-free kind cluster and install Cilium
+
+kind must disable the default CNI and kube-proxy before Cilium can own Service datapath programming. Per [kind configuration](https://kind.sigs.k8s.io/docs/user/configuration/) and [Cilium kube-proxy-free](https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/), set `networking.disableDefaultCNI: true` and `networking.kubeProxyMode: "none"`, then install Cilium with `kubeProxyReplacement=true` and explicit API server reachability (`k8sServiceHost` / `k8sServicePort`) because no kube-proxy programs the `kubernetes` Service.
 
 ```bash
-kind create cluster --name ebpf-kpr-lab
+cat > kind-ebpf-kpr.yaml << 'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+- role: control-plane
+EOF
+
+kind create cluster --name ebpf-kpr-lab --config kind-ebpf-kpr.yaml
+
+# Control-plane container IP — required when kube-proxy is absent (Cilium agent needs apiserver endpoint)
+API_SERVER_IP=$(docker inspect "ebpf-kpr-lab-control-plane" \
+  -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
 
 cilium install --version 1.16.0 \
-  --set kubeProxyReplacement=true
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost="${API_SERVER_IP}" \
+  --set k8sServicePort=6443
 
 kubectl -n kube-system rollout status ds/cilium --timeout=120s
 ```
 
-### Phase 2 — Validate datapath mode
+### Phase 2 — Validate kube-proxy-free datapath
 
 ```bash
+# kube-proxy must not be running on a greenfield lab cluster
+kubectl -n kube-system get ds kube-proxy 2>&1 | grep -q NotFound && echo "kube-proxy absent: OK"
+
 kubectl -n kube-system exec ds/cilium -- cilium-dbg status | grep -i KubeProxyReplacement
 
 kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -A2 "KubeProxyReplacement Details"
+
+# On the kind node: no KUBE-SVC iptables chains when replacement is active
+docker exec ebpf-kpr-lab-control-plane iptables-save | grep KUBE-SVC || echo "KUBE-SVC chains empty: OK"
 ```
 
-Expect `KubeProxyReplacement: True` and socket LB details per current Cilium version output.
+Expect `KubeProxyReplacement: True`, socket LB details per current Cilium version output, and empty `KUBE-SVC` iptables chains on the node.
 
 ### Phase 3 — Service proof
 
@@ -449,7 +475,7 @@ The four items above are not trivia for certification exams; they are the questi
 
    <details>
    <summary>Answer</summary>
-   `Post` emits events without terminating the workload — suitable for staging policies. `Sigkill` triggers kernel-level process termination (typically observed as exit 137) when selectors match, blocking attacks in the enforcement path rather than only alerting a userspace agent after the fact.
+   `Post` emits events without terminating the workload — suitable for staging policies. `Sigkill` triggers synchronous kernel-level process termination (typically exit 137) when selectors match, but per [Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/) it does not always prevent the triggering syscall side effect — combine with `Override` or use LSM hooks for true deny-before-completion. Falco-style userspace alerting reacts after the fact; Tetragon kill is faster but not equivalent to MAC-style LSM deny.
 
    </details>
 
@@ -487,7 +513,31 @@ The four items above are not trivia for certification exams; they are the questi
 2. Run `kubectl -n kube-system exec ds/cilium -- cilium-dbg bpf lb list` (command name may vary slightly by version; use `cilium-dbg bpf -h` if subcommand differs).
 3. Scale `nginx` to three replicas; re-run `cilium-dbg service list` and note backend count change without `iptables-save` growth for `KUBE-SVC`.
 4. Install Tetragon: `helm repo add cilium https://helm.cilium.io/ && helm install tetragon cilium/tetragon -n kube-system`
-5. Apply a `Post`-only policy watching `sched_process_exec` via tracepoint (from [Tetragon hooks](https://tetragon.cilium.io/docs/concepts/tracing-policy/hooks/)); confirm events with `kubectl exec -n kube-system ds/tetragon -c tetragon -- tetra getevents -o compact | head`
+5. Apply this observe-only `sched_process_exec` tracepoint policy (from [Tetragon hooks](https://tetragon.cilium.io/docs/concepts/tracing-policy/hooks/)):
+
+```yaml
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: lab-exec-observe
+spec:
+  tracepoints:
+    - subsystem: sched
+      event: sched_process_exec
+      raw: true
+      args:
+        - index: 2
+          type: linux_binprm
+      selectors:
+        - matchActions:
+            - action: Post
+```
+
+```bash
+kubectl apply -f lab-exec-observe.yaml
+kubectl run exec-probe --rm -it --restart=Never --image=busybox:1.36 -- /bin/true
+kubectl exec -n kube-system ds/tetragon -c tetragon -- tetra getevents -o compact | grep sched_process_exec | head
+```
 6. Document in three sentences: where Service VIP translation happened (userspace agent → BPF map), and why you used `Post` before `Sigkill`.
 
 Run verification commands after the steps complete:
@@ -526,7 +576,7 @@ Continue to toolkit operations: [Cilium 5.1](/platform/toolkits/infrastructure-n
 - [Cilium issue #11742](https://github.com/cilium/cilium/issues/11742) — BPF CT map pressure example
 - [Tetragon TracingPolicy concepts](https://tetragon.cilium.io/docs/concepts/tracing-policy/) — policy model and enforcement mode
 - [Tetragon hook points](https://tetragon.cilium.io/docs/concepts/tracing-policy/hooks/) — kprobes, tracepoints, LSM BPF, TOCTOU guidance
+- [Tetragon enforcement](https://tetragon.io/docs/concepts/enforcement/) — `Override` vs signal/SIGKILL; signal does not always stop the triggering operation
+- [kind cluster configuration](https://kind.sigs.k8s.io/docs/user/configuration/) — `disableDefaultCNI`, `kubeProxyMode: none`
 - [eBPF tcx program type reference](https://docs.ebpf.io/linux/program-type/BPF_PROG_TYPE_SCHED_CLS/) — tc attachment evolution
-- [Shopify engineering: Black Friday resiliency](https://shopify.engineering/resiliency-planning-how-we-prepared-for-black-friday/) — large-scale traffic operations context
-- [Datadog engineering blog: Glommio](https://www.datadoghq.com/blog/engineering/introducing-glommio/) — high-scale infrastructure context
 - Liz Rice, *Learning eBPF* (O'Reilly) — hook and map mental models for deeper study
