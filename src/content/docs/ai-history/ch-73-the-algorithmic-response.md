@@ -74,27 +74,74 @@ In other words, MLA does not throw context away; it changes where and how that c
 
 ### Low-rank intuition without mathematical overstatement
 
-The historical value of MLA is not just in saying “we reduced memory”; it is in saying **how** memory was reduced.
-In standard MHA, each layer stores per-head K and V structures for each cached token.
-That is already heavy, and in a long-context regime it grows in line with the number of tokens, heads, and model dimension.
-MLA rewrites this by introducing a shared latent representation stage before per-head expansion.
+The historical value of MLA is not just that it reduced memory. It is that it changed what had to be *kept* at serving time.
+In standard MHA, each layer stores per-head key and value tensors for each token.
+That means the cache is repeated in a way that scales with the number of tokens, the number of heads, and each head dimension.
+This shape is what drives practical bottlenecks for long-context inference:
+as soon as context or batch scales, cache memory rises first, often before compute utilization becomes the first visible limiter.
 
-At a reader-friendly level, imagine each token's attention context as a large, head-specific table.
-MLA first compresses that table into a smaller latent object `C_t` for each token.
-Then it keeps small head-specific projection operators that recover the parts needed for each attention head at attention time.
-The paper describes this explicitly in §2.1.2 as “low-rank key-value joint compression,” where one compact state carries the heavy load and per-head operators restore the useful structure.
-That shared latent is why this is more than a cosmetic per-head tweak: it changes the storage plan of inference.
+For a reader-friendly picture, think of one token's context as a set of per-head “sheets,” one sheet per head.
+Each sheet is separate and mostly similar in role, because each head performs its own key/value projection.
+MLA interposes a shared latent table `C_t` first.
+That table is smaller and shared across heads, then head-specific projectors recover what each head needs.
+The paper frames this as low-rank key-value joint compression: move shared structure into one latent object, and keep head specialization in reconstruction steps.
 
-Now compare the economics of memory.
-If the latent rank is much smaller than full per-head dimensions, then each token no longer drags a full per-head K/V cache footprint through every layer and step.
-The chapter's claim is therefore a storage-architecture claim, not only an algorithmic claim:
-capacity constraints are partly moved from raw memory width to a low-rank projection budget plus projection logic.
-That helps explain why this can produce a large end-to-end cache drop while still aiming to preserve quality.
+What this changes is where the bottleneck sits.
+Before, the bottleneck sat in many per-head cache planes.
+After, it sits in two terms:
+- a shared latent term per token,
+- plus per-head reconstruction terms that are no longer as heavy as full K/V storage.
 
-The same architecture also interacts with RoPE handling in the paper.
-MLA splits the position-handling burden so less critical positional channels can be handled separately, while preserving the quality-critical signal needed by attention math.
-This is an implementation detail that matters historically because it shows a strategy not aimed at “quality at any cost.”
-It is a constrained optimization of where memory, positional information, and head reuse meet.
+In a simplified form, this is often written as `(d_c + d_h^R) × l` per token, where `d_c` is shared latent size, `d_h^R` is the per-head reconstruction reserve, and `l` is context length.
+That compares against the broad MHA pressure term in proportional form with full per-head K/V tables.
+So the mechanism is not just a clever rewrite in algebra.
+It is a materially different storage topology.
+
+That topology can be read directly in serving arithmetic.
+In standard MHA, per-layer cache writes scale with the number of head slices that must be preserved per token.
+In MLA, the shared latent is charged once per token per layer, while head-specific reconstruction is applied only through lightweight reconstruction operators.
+This trade is operational: fewer hot cache bytes can unlock concurrency, while the reconstruction path shifts some cost toward compute.
+If memory is the first bottleneck, this generally favors longer windows and higher request density.
+If compute becomes the bottleneck, gains become backend-sensitive and depend on kernel scheduling.
+
+The chapter should therefore frame MLA as a conditional architecture, not a universal replacement.
+The same mechanism that reduces memory pressure can produce different returns across hardware profiles and serving stack choices.
+That is why the RoPE and backend details are narratively paired in the paper.
+
+The paper's RoPE discussion is essential here.
+The same attention model uses positional encodings, and those encodings are not free to be rearranged by arbitrary projection choices.
+If compression were applied through the wrong order, positional structure can be distorted before reconstruction and the downstream attention result changes.
+So MLA decouples position-sensitive channels and compresses the components that remain stable under that separation.
+This is why the positional treatment appears in the same family as compression details in the DeepSeek-V2 write-up: it is not ornamental, it is required for correctness under long-range decoding.
+
+So the key answer is straightforward and checkable.
+MLA reduces memory by changing which representation must be cached for every token.
+Standard MHA stores most of what the model might reuse in duplicated per-head buffers.
+MLA stores less duplication, then pays a reconstruction tax where needed.
+That is the architecture change, not a slogan.
+
+The most useful way to read this in 2026 is as an operational claim about cache shape rather than a generic "compression" slogan.
+Standard attention forces each layer to persist per-head key/value tensors that are mostly similar in purpose but not shared in memory form.
+MLA introduces a shared latent stage first, then reuses lightweight head-specific operators.
+That means every new token now contributes to a smaller set of stored objects and a compact set of head transforms, rather than full per-head K/V tables.
+The practical effect is not that "memory is less."
+The practical effect is that some memory structures become shared and therefore scale with the sequence length in a way that is less expensive for long-context workloads.
+
+This helps separate two common misunderstandings.
+One is to treat MLA as only a clever linear algebra maneuver.
+The second is to assume it only helps model-level parameter efficiency.
+In the chapter's terms, the mechanism is mostly about serving-state geometry, not raw parameter count.
+The paper ties this explicitly to inference behavior in the MLA formulation and to where the context state must be retained during decoding.
+
+In standard MHA, each head owns a larger slice of cache.
+In MLA, the shared latent (`d_c`) holds the common content structure and each head needs only a small reconstruction channel (`d_h^R`), which is why the memory budget expression is written in terms of `(d_c + d_h^R) × l`.
+In concrete terms: each token still needs storage over context steps (`l`), but each step is represented by fewer bytes in the part that was duplicated across heads.
+This is where the memory benefit is located.
+
+The conceptual error to avoid is saying this is a complete removal of head-specific structure.
+It is not.
+MLA keeps the head-level specialization, but moves the expensive common part out of per-head repetition.
+In the DeepSeek framing, the method is therefore conditional: where memory is the choke point, this redesign can materially improve serving headroom; where memory is not first in the bottleneck order, gains become mixed.
 
 ### Why this changes serving geometry
 
@@ -107,6 +154,31 @@ That is not a free win, so DeepSeek's own paper still frames the method as a des
 The paper's own wording in the abstract says MLA “guarantees efficient inference through significantly compressing the KV cache,” and Figure 1 plus Section 1 quantify this effect with explicit reported numbers.
 In the documented DeepSeek-V2 setting, the authors report a **93.3% KV-cache reduction** and **5.76× maximum generation throughput** (arXiv:2405.04434, Abstract and §1 / Figure 1; MLA architecture details are in §2.1).
 That numerical claim is the strongest place where we can say “documented effect” rather than “inferred adaptation.”
+
+That reduction is most visible in production where context length and concurrent sequences are directly competing for memory capacity.
+Holding hardware and serving policy fixed, a 93.3% KV reduction means the cache budget for one serving profile can be redistributed at scale.
+In the simplest case, this enables longer contexts, larger concurrency, or lower reclaim pressure before paging-like fragmentation and throttling begin to dominate.
+The chapter should preserve this conditional shape: this is a feasibility shift in the cache plane.
+
+The production translation is therefore not just “less memory,” but more stable planning at model boundaries.
+When one stack was previously forced to choose between context and throughput, MLA can change that trade-off frontier.
+Even the paper's paired 5.76× throughput signal matters because it shows this is not only an accounting trick in a table; it is a deployment effect when the memory budget is the blocking variable.
+
+This is also where the linear term `(d_c + d_h^R) × l` does real design work.
+Every extra context token increases memory at a constant per-token cost in that reduced representation, rather than through duplicated per-head tables.
+When memory pressure dominates, that linear reduction often shows up as fewer preemption events, fewer cache churn events, and more predictable scheduling under high concurrency.
+Those are not headline benchmarks, but they are the things that matter to service reliability.
+
+Read another way, the 93.3% figure is the gate opening statement.
+The rest of the engineering is choosing what the platform gets after that gate opens:
+longer effective context, higher concurrency, or tighter token-per-dollar envelopes.
+DeepSeek's own 5.76× throughput signal gives one public anchor that this opened gate is meaningful in at least one operational profile.
+The chapter should stay with conditional language here:
+the mechanism improves one slice of the system envelope, and the exact win appears only if a deployment is actually memory-bound.
+
+At the same time, this does not grant universal claims.
+The same 93.3% number applies to the published DeepSeek-V2 architecture slice, not all checkpoints, not all hardware, and not all long-context workloads.
+So the chapter stays correct by saying this is a narrow and strong documented data point, and then tracing where diffusion happened beyond DeepSeek's internal stack.
 
 The architecture in the paper is not an isolated software patch.
 It sits in the same section family that compares attention variants and discusses cache size in operational terms.
@@ -126,60 +198,67 @@ That is where constraints stop sounding like policy prose and start sounding lik
 
 ## Open implementation half: what became materially shared
 
-DeepSeek's own open publication path matters.
-FlashMLA is a DeepSeek-maintained repository of CUDA attention kernels, including dense and sparse variants, that includes the architecture in a form people outside DeepSeek can run, evaluate, and inspect.
-Its repository status as an open CUDA project means the design is no longer a hidden internal artifact.
-The diffusion point is clear: the optimization becomes part of the ecosystem, not just a model card claim.
+DeepSeek's open publication path matters because it changes how a mechanism exits the paper.
+FlashMLA is a public repository of CUDA kernels for DeepSeek-style attention, and it is written to be reused across model-serving teams, not merely read as a proof-of-concept artifact.
+That is the first signal of architectural diffusion: implementation choices are exposed to inspection and adaptation.
 
-The README-level claim is practical rather than declarative.
-The project is explicit about kernel implementations for different GPU modes and attention paths, and it includes example usage that maps directly onto LLM serving flow.
-That is historically meaningful because it lowers the distance between research design and real system adoption.
-A result announced in a paper becomes a kernel someone can test.
+At runtime, the value is where memory geometry and kernel layout meet.
+FlashMLA's architecture is not an isolated function; it is organized around serving realities:
+- prefill versus decode trajectories,
+- block and shared-memory tiling to control data movement,
+- and warp-level reductions that keep score and normalization steps locally efficient.
 
-At the kernel level, this is where the architecture's practical value is converted into adoptable machinery.
-In FlashMLA, the practical levers are in how the attention math is tiled, staged, and reduced under serving workloads.
-Even when described narratively rather than as a benchmark postmortem, three patterns matter most:
-1) memory-aware tiling of prefill/decoding blocks,
-2) reuse of shared-memory-resident fragments to avoid redundant global reads,
-3) warp-level reduction steps for normalization and score accumulation.
-These are the common workhorses of high-performance CUDA attention systems, and they shape whether a theoretical reduction appears as real throughput in deployment.
-For this reason, cross-linking to implementation-level reading belongs at a more technical layer.
-For deeper implementation depth, continue to [AI Infrastructure](/platform/disciplines/data-ai/ai-infrastructure/).
+Those implementation choices are a structural truth about production inference.
+They determine whether a lower-memory formula becomes sustained throughput and usable concurrency.
+This chapter does not need kernel source detail;
+it needs to show that the low-rank idea is carried through into an attention stack with real constraints.
 
-This implementation path has a second, more political lesson.
-Even when a method is strong in one lab, adoption still depends on stack compatibility.
-The release point does not erase unevenness, but it does alter the route through which capability can spread.
-A design can still be constrained by driver stacks, kernel compatibility, and serving integration; yet now those constraints are, in principle, inspectable and composable by a wider set of teams.
-That is a major difference between a memoized internal optimization and a public kernel contract.
+The concrete next layer is framework integration.
+vLLM documents MLA variants in its attention-backend matrix and exposes them as selectable runtime backends, including DeepSeek-style MLA paths.
+That matters because the integration is at server-level configuration, where teams trade models, hardware, and latency/throughput strategy without rewriting the whole serving stack.
+SGLang likewise publishes DeepSeek-facing serving guidance and attention-backend documentation, which makes MLA one addressable variant inside the same inference architecture families.
 
-The practical implication is uneven and important.
-A released kernel cannot erase inequality in memory-stack access.
-A Hopper-era implementation does not automatically rescue actors with older memory ecosystems or weaker manufacturing depth.
-But it does mean the pattern is portable: actors constrained by supply and policy can benchmark the same mechanism without waiting for closed internal branches.
-It also means competition among platforms becomes less about proprietary secrecy at the attention layer and more about deployment maturity, integration discipline, and maintenance speed.
+The integration matters at three levels that go beyond kernel publication.
+First, serving frameworks are where operators choose attention strategy at runtime.
+Second, they provide observability points to compare those strategies under identical traffic conditions.
+Third, they make it possible to revert or fallback when a new kernel path fails at scale.
+That third point matters historically because production adoption is often decided by how gracefully a system can switch off a failure mode.
 
-At this level, the history is no longer “who invented” MLA in the abstract.
-It is “who could operationalize cache compression under real constraints.”
-FlashMLA changes the story from design-only to design-plus-distribution.
-That is exactly the chapter's inflection point from policy pressure to architectural response.
+In this sense, vLLM and SGLang illustrate the same pattern with different mechanics:
+a kernel-level innovation enters the stack only when a framework offers a stable backend abstraction.
+Without that abstraction, kernels remain attractive code but do not become operational capability.
+With it, a stack can evaluate, compare, and eventually standardize the method.
 
-One can also see this in the broader DeepSeek tooling ecosystem.
-TileKernels, built with TileLang, appears as another path for shipping kernel-level experimentation into reusable code.
-The safe historical point is not that TileKernels proves all MLA deployment outcomes;
-it is that DeepSeek's stack is being moved into shared tooling and not left behind as one closed implementation.
-That matters for the book's thesis of substitution under constraint.
+A useful framing for this chapter is:
+the claim moved from paper to module-level code (FlashMLA),
+then to transport-level integration (backend APIs),
+then to operational routine (configuration and benchmarking).
+That three-step route is the diffusion path that is verifiable in public documentation.
 
-A concrete diffusion pattern appears in serving frameworks.
-vLLM documents explicit attention-backend support for MLA-style paths (including DeepSeek-style attention backends), which signals that the mechanism has moved from a model paper into production inference configuration.
-SGLang's DeepSeek documentation also treats MLA as a dedicated optimization path in serving guidance.
-Neither framework alone proves universal success.
-Together they show that the design has crossed into open serving infrastructure and now participates in framework-level adoption, not model-author-only adaptation.
+### What this does and does not prove about open-source adoption
 
-This is the right place to connect architecture to the chapter's global claim.
-A mechanism invented under constraint can be globally portable when implementation paths are open, but portable does not mean immediate.
-The spread depends on talent, hardware profile, framework maturity, and operational discipline.
+Open-source visibility is not the same as adoption depth.
+Diffusion can be read in this case by who can route through the new path:
+independent maintainers can integrate the same model path into test harnesses,
+framework operators can switch MLA on the same inference workloads,
+and production teams can compare performance behavior without switching models.
 
-This chapter therefore keeps MLA as a documented case of constrained innovation that becomes legible through open diffusion, not a myth of moral determinism.
+The practical consequence is an expanded candidate set, not universal equivalence.
+The model family that published the optimization is not the only site that can benefit.
+But each adopter still inherits migration cost: compiler flags, backend versioning, and observability policy.
+So the chapter should explicitly state that “open” is a lower entry barrier, not a guaranteed outcome.
+
+For this chapter, the strongest claim is narrower and more defensible:
+MLA became materially reusable because a public kernel path was joined by backend paths in major serving systems.
+That is a stronger empirical claim than "it was open," and avoids deterministic language about global parity.
+
+The case therefore has two layers of adoption evidence:
+1) public kernels and documentation;
+2) backend-level support in mainstream serving frameworks.
+
+What we should not overstate is that this automatically implies broad parity.
+Diffusion in infrastructure is still uneven because each stack pays migration cost in compilers, scheduling assumptions, and deployment observability.
+In that sense, open-source diffusion appears as a widening of the candidate set, not a collapse of friction.
 
 ## Honest framing: causation versus correlation
 
@@ -207,6 +286,82 @@ One layer says policy can influence what architectures are financially and opera
 The second says architecture can then diffuse through open kernels and widen who can benefit from those same constraints.
 The direction is not a single line.
 It is a loop.
+
+## Limits and counter-examples: where adaptation is not automatic
+
+The previous sections stay close to what the public record supports, but they also need a reverse edge.
+Algorithmic substitution does not erase constraints; it reorders them.
+Chapter 71’s uneven adaptation frame predicts this shape:
+actors with more mature tooling and integration depth can often convert policy pressure into architectural advantage,
+while others face a longer lag even if the idea is visible.
+
+The direct counter-example in the same direction is simple: reducing KV cache does not solve compute-bound or bandwidth-bound deployment.
+If a stack is already dominated by scheduler contention, quantization overhead, network latency, or I/O bottlenecks, a cache reduction alone does not produce proportional gains.
+A second counter-example is quality sensitivity.
+MLA is an optimization design with explicit quality-preservation assumptions.
+It is not a free option for every precision target, training stage, or evaluation regime.
+
+There are also policy-level limits.
+This chapter shows that policy can make architectural responses more likely and potentially more valuable.
+It cannot prove a one-to-one causal line from every legal control to every design detail.
+The stronger claim would be stronger than the sources can bear, and it would become deterministic where history should remain structural.
+
+This uncertainty is not weakness.
+It is the honest edge of causal method.
+
+What the case does not tell us is just as important as what it does:
+- it does not prove MLA was globally optimal, only that it was a workable constrained substitute in one documented release,
+- it does not measure training-time impact across all domains,
+- it does not prove that open publication alone guarantees broad parity,
+- and it does not claim that open-source diffusion by itself overcomes unequal hardware and maintenance environments.
+
+The practical implication of that boundary is simple:
+this chapter demonstrates a transfer mechanism under one hardware-pressure profile, not an irreversible template for all pressure profiles.
+
+Those are not caveats added for balance language only.
+They are the actual epistemic boundary of what this chapter can infer from the public record.
+A robust historical claim needs to tell the reader what can be generalized and what cannot.
+Here we can generalize that memory-aware design can be an adaptation path; we cannot generalize that every constraint produces the same design priority.
+
+That distinction is why this chapter's strongest claim remains procedural:
+identify bottleneck geometry, test architecture-level substitution, and then test whether the substitution is deployable in an ecosystem with its own compatibility limits.
+The evidence supports that sequence and does not support a more sweeping deterministic narrative.
+
+A useful way to keep this chapter honest is to treat this as a structured claim set with explicit boundaries.
+The chapter's first claim is empirical and narrow: MLA compresses KV state through a low-rank decomposition and the paper reports strong cache gains.
+The second claim is architectural: those gains were implemented in a way that made the design runnable through public kernels and serving backends.
+The third claim is historical: this created one concrete route for constrained teams to adapt architecture without waiting for entirely new silicon.
+The temptation is to collapse all three into a single political causation sentence.
+The stronger argument avoids that collapse.
+
+So the case does not license a simple timeline where policy pressure directly writes a kernel architecture, and architecture then instantly levels global capability.
+At best, policy alters the optimization surface.
+Then design teams test alternatives.
+Then infrastructure choices determine whether alternatives are absorbable.
+Only after these steps does observed adoption occur.
+That sequence is why this chapter is intentionally modest, and why it aligns with the uneven adaptation argument instead of replacing it.
+
+So the chapter's thesis remains modest and strong.
+The mechanism is real, documented, and materially integrated.
+But Chip War-level unevenness still predicts uneven benefits.
+Some stacks convert policy pressure into architecture quickly;
+others convert it only partially, or with delay, while waiting for stack maturity.
+
+The counter-question from Chip War is therefore not “does constraint create a single innovation?” but “where does constraint move capability formation?”
+In this case, it moved capability formation into a narrow layer that had previously been framed mainly as deployment engineering.
+If this pattern generalizes, then future constraint episodes will also show design moves at the infrastructure margin.
+That is not a deterministic prediction.
+It is a pattern-level prediction conditioned on where bottlenecks sit and which actors can afford compatibility work.
+
+What the chapter should therefore not do is imply that every architecture tweak produces broad strategic balance.
+It is possible for two designs to be equally clever and still unequally consequential because one design fits available compiler and runtime ecosystems better.
+It is also possible for one design to open memory for one workload profile and close it for another.
+These are the kinds of boundary conditions that keep infrastructure history from becoming a single story of winners and losers.
+
+For readers mapping this to the prior chapter, the strongest takeaway is to treat adaptation as a layered process.
+Chapter 71 described where policy pressure fell hardest and where institutions diverged.
+Chapter 73 should show one instance where that same pressure shaped a memory strategy and then shifted who can implement that strategy.
+That keeps causation explicit and bounded: policy pressure matters, but stack compatibility decides where that pressure translates into durable change.
 
 ## What this changes in the series narrative
 
@@ -244,6 +399,15 @@ The AI system will continue to evolve in the space between laws, materials, and 
 And in this space, Chapter 73 leaves us with one durable lesson.
 As with earlier episodes, the machine did not retreat to neutrality under pressure.
 It moved sideways.
+
+At the same time, this chapter's own limits should be read forward.
+We do not claim exhaustive impact.
+We claim a verified sequence: constrained inference context -> low-rank KV memory redesign -> open implementation pathway -> conditional operational reuse.
+That sequence is testable, bounded, and still open-ended.
+
+The next chapter in the series inherits a cleaner problem statement:
+how do design substitutions in one layer propagate backward into procurement, compiler stack maturity, and eventually competitive positioning?
+If the series keeps this thread explicit, it will avoid the common failure mode of turning each policy shock into a myth of deterministic causation.
 
 ## Common mistakes / misconceptions
 
@@ -331,12 +495,12 @@ Everything else is context.
 ### Primary
 
 - [DeepSeek-AI. "DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model." arXiv:2405.04434, 2024.](https://arxiv.org/abs/2405.04434)
+- [DeepSeek-AI. "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning." arXiv:2501.12948, 2025.](https://arxiv.org/abs/2501.12948)
 - [DeepSeek-AI. FlashMLA repository (CUDA kernels for DeepSeek attention and related paths).](https://github.com/deepseek-ai/FlashMLA)
 - [DeepSeek-AI. TileKernels repository (GPU kernel project using TileLang).](https://github.com/deepseek-ai/TileKernels)
 - [TileLang. TileLang DSL repository.](https://github.com/tile-ai/tilelang)
-- [SGLang DeepSeek usage and attention backend references (MLA optimization and model support).](https://docs.sglang.ai/basic_usage/deepseek.html)
-- [vLLM attention backend documentation (MLA attention and DeepSeek backend support).](https://docs.vllm.ai/en/v0.18.1/design/attention_backends/)
-
-### Secondary
-
-- [Chris Miller, *Chip War: The Quest to Control the Semiconductors That Power Everything* (Scribner, 2022).]
+- [SGLang. Attention backend documentation (including DeepSeek optimization path references).](https://docs.sglang.ai/advanced_features/attention_backend.html)
+- [vLLM. Attention-backend design documentation (including MLA/DeepSeek backends and selection).](https://docs.vllm.ai/en/latest/design/attention_backends/)
+- [BIS. Export Controls for Certain Electronic Devices, Computers, and Advanced Computing Items.](https://www.federalregister.gov/citation/87-FR-62186)
+- [Chris Miller, *Chip War: The Fight for the World's Most Critical Technology* (Scribner, 2022).](https://books.google.com/books/about/Chip_War.html?id=fUVdEAAAQBAJ)
+- [A Survey on Transformer Compression (arXiv:2402.05964).](https://arxiv.org/abs/2402.05964v2)
