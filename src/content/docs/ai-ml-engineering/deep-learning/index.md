@@ -20,3 +20,4 @@ sidebar:
 | 1.7 | [Backpropagation and Autograd from Scratch](/ai-ml-engineering/deep-learning/module-1.7-backpropagation-and-autograd-from-scratch/) |
 | 1.8 | [Self-Supervised Learning](/ai-ml-engineering/deep-learning/module-1.8-self-supervised-learning/) |
 | 1.9 | [Graph Neural Networks](/ai-ml-engineering/deep-learning/module-1.9-graph-neural-networks/) |
+| 1.10 | [Modern Transformers: RoPE, ALiBi, and Attention Variants](/ai-ml-engineering/deep-learning/module-1.10-modern-transformers-rope-and-attention/) |
