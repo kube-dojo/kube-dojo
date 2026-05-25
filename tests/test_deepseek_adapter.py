@@ -22,16 +22,16 @@ def test_build_invocation_read_only(monkeypatch) -> None:
     cmd = plan.cmd
     assert cmd == [
         "hermes",
-        "-z",
-        "p",
         "-m",
         "deepseek-v4-pro",
         "--provider",
         "deepseek",
         "-t",
         "web",
+        "--oneshot=p",
     ]
     assert "--yolo" not in cmd
+    assert "-z" not in cmd
 
 
 def test_build_invocation_workspace_write(monkeypatch) -> None:
@@ -154,3 +154,42 @@ def test_parse_response_long_response_with_bash_codeblock_still_passes() -> None
 
     assert result.ok is True
     assert result.response.startswith("VERDICT: APPROVE")
+
+
+def test_deepseek_hermes_argv_puts_oneshot_last(monkeypatch) -> None:
+    """Hermes --oneshot=<prompt> must follow --provider and -m (equals-form)."""
+    monkeypatch.setattr("agent_runtime.adapters.deepseek.shutil.which", lambda _: "hermes")
+    adapter = DeepSeekAdapter()
+    plan = adapter.build_invocation(
+        prompt="hello",
+        mode="read-only",
+        cwd=Path("/tmp"),
+        model=None,
+        task_id=None,
+        session_id=None,
+        tool_config=None,
+    )
+    cmd = plan.cmd
+    assert cmd[-1] == "--oneshot=hello"
+    assert "-z" not in cmd
+    assert cmd[0] == "hermes"
+    assert cmd[cmd.index("-m") + 1] == "deepseek-v4-pro"
+    assert cmd[cmd.index("--provider") + 1] == "deepseek"
+
+
+def test_deepseek_hermes_argv_handles_flag_like_prompt(monkeypatch) -> None:
+    """Flag-like prompts bind via --oneshot= so argparse never treats them as flags."""
+    monkeypatch.setattr("agent_runtime.adapters.deepseek.shutil.which", lambda _: "hermes")
+    adapter = DeepSeekAdapter()
+    plan = adapter.build_invocation(
+        prompt="--provider",
+        mode="read-only",
+        cwd=Path("/tmp"),
+        model=None,
+        task_id=None,
+        session_id=None,
+        tool_config=None,
+    )
+    cmd = plan.cmd
+    assert "--oneshot=--provider" in cmd
+    assert "-z" not in cmd

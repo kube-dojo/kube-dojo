@@ -762,11 +762,13 @@ def dispatch_qwen(prompt: str, model: str = QWEN_DEFAULT_MODEL,
     if effort and effort != "default":
         final_prompt = f"[Reasoning effort hint: {effort}]\n\n{prompt}"
 
-    # IMPORTANT: pass prompt via argv, NOT stdin. `hermes -z -` is interpreted
-    # as "no prompt, project-introspection mode" — see comment in
-    # scripts/agent_runtime/adapters/qwen.py for the empirical evidence.
+    # --oneshot (-z): one-shot mode; PROMPT must be a single argv token.
+    # Use ``--oneshot=<prompt>`` so flag-like prompts (e.g. ``--provider``)
+    # are bound as the flag value, not parsed as a separate CLI flag.
+    # Do NOT use stdin (``hermes -z -``) — that is interpreted as
+    # "no prompt, project-introspection mode" (see agent_runtime/adapters/qwen.py).
     cmd = [
-        "hermes", "-z", final_prompt,
+        "hermes",
         "-m", model,
         "--provider", QWEN_PROVIDER,
         "-t", toolsets,
@@ -775,6 +777,7 @@ def dispatch_qwen(prompt: str, model: str = QWEN_DEFAULT_MODEL,
         cmd.append("--yolo")
     if isolated:
         cmd.extend(["--ignore-user-config", "--ignore-rules"])
+    cmd.append(f"--oneshot={final_prompt}")
 
     t0 = time.time()
     try:
