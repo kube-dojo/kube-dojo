@@ -14,7 +14,7 @@ revision_pending: false
 
 ## Learning Outcomes
 
-By the end of this module, you will be able to: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+By the end of this module, you will be able to:
 
 - **Design** a repository-level agent legibility stack and justify where each layer lives.
 - **Differentiate** system-of-record files from ephemeral task memory and ephemeral execution logs.
@@ -45,7 +45,7 @@ In this module, you will learn how to satisfy all three while avoiding the class
 
 ## The Problem We Keep Solving in Long AI-Work
 
-Team-level AI workflows usually break in one of four recurring ways. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Team-level AI workflows usually break in one of four recurring ways.
 
 ### 1) The one-file monolith
 
@@ -73,14 +73,14 @@ The repo returns no structured signals beyond a final success line.
 It might compile but still violate governance.
 An agent cannot “learn” repo expectations if the repo does not expose what was expected or what failed.
 
-If you can prevent these four modes, you dramatically improve correctness, review quality, and merge predictability. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If you can prevent these four modes, you dramatically improve correctness, review quality, and merge predictability.
 
 ## What AGENTS.md and CLAUDE.md actually become in agent engineering
 
 AGENTS.md and CLAUDE.md are not the system itself.
-They are the repository front-door summary and route map. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+They are the repository front-door summary and route map.
 
-In practical terms: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+In practical terms:
 
 - They establish *what to read first*.
 - They establish *where the stable norms live*.
@@ -135,7 +135,7 @@ The third layer should stay narrow and time-bound.
 ### L0: Always-loaded map files
 
 L0 includes your highest-level bootstrap files.
-If every agent starts with your repository, this layer should include: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+If every agent starts with your repository, this layer should include:
 
 - one path to the main workflow contract,
 - one path to safety and branch policy,
@@ -149,19 +149,19 @@ A compact L0 means 100-250 high-leverage lines, not a 3,000-line instruction boo
 ### L1: Repository-locally discoverable slices
 
 L1 should include scoped rules and recurring playbooks.
-In this layer: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+In this layer:
 
 - rules apply to common workflows,
 - changes are infrequent,
 - text should be stable across many tasks,
 - examples should be durable and explicit.
 
-This is where `.claude/rules`, architecture notes, and recurring task-runbooks usually live. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+This is where `.claude/rules`, architecture notes, and recurring task-runbooks usually live.
 
 ### L2: Role-specific and workflow-specific documents
 
 L2 holds targeted instructions tied to roles, features, or recurring domains.
-A few examples: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A few examples:
 
 - docs for onboarding,
 - docs for PR review,
@@ -184,7 +184,7 @@ Examples include:
 - open warnings from local APIs,
 - and review history for this module.
 
-For L3, the repository becomes operational, not only descriptive. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+For L3, the repository becomes operational, not only descriptive.
 
 ## The bootstrap stack for this repository
 
@@ -197,26 +197,26 @@ That means the root instructions are not just helpful prose.
 They are a real first-run contract.
 Agents are expected to consume this as the base layer.
 
-A useful design rule for any repo is this: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A useful design rule for any repo is this:
 
 - if a policy is required before any tool call, it belongs in bootstrap or always-on layer,
 - if policy is only needed for one domain, keep it in scoped docs,
 - if a requirement is temporary, keep it in the task layer.
 
-## The “docs/` as system of record” model
+## The docs-as-system-of-record model
 
 A well-engineered repository treats `docs/` as the durable interface between humans and agents.
 Humans maintain structure.
 Agents consume structure.
 When both sides align, the repo becomes easier to operate.
 
-For this model to work, documentation has to meet three criteria: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For this model to work, documentation has to meet three criteria:
 
 1. **Stable authority**: statements should be true for the module until intentionally revised.
 2. **Machine readability**: enough section headings, anchors, and predictable names for tooling and retrieval.
 3. **Review pressure**: every change to docs should be reflected in checklists, PR templates, or state surfaces.
 
-A practical pattern is to separate docs by intent. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A practical pattern is to separate docs by intent.
 
 ```text
 +----------------------+----------------------------------------------+
@@ -241,7 +241,7 @@ Here is a reliable sequence:
 
 ### Step 1: root bootstrap card
 
-Create or verify a short root file that answers: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Create or verify a short root file that answers:
 
 - where checks live,
 - what command order governs each run,
@@ -261,7 +261,7 @@ Every scoped file should point to deeper documents rather than duplicate them.
 
 ### Step 4: periodic audits
 
-Every quarter, read and prune: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Every quarter, read and prune:
 
 - stale process calls,
 - outdated tools,
@@ -283,14 +283,14 @@ Agents use the file system to inherit higher-level and lower-level instructions 
 That makes CLAUDE.md a strong candidate for one part of L0 or L1.
 
 It must not absorb every policy.
-For robust stacks: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For robust stacks:
 
 - root CLAUDE.md: startup posture and cross-project conventions,
 - nested CLAUDE.md: domain-specific context,
 - references to `docs/` pages for durable design and policy,
 - links to local endpoints for current state.
 
-The important distinction: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+The important distinction:
 
 - CLAUDE.md is memory bootstrap.
 - AGENTS.md is often ecosystem-level bootstrap and agent-facing index.
@@ -305,7 +305,7 @@ A repository that teaches passively only lowers confidence.
 A repository that teaches interactively improves agent behavior.
 “Talking back” means the repo emits structured signals during and after each run.
 
-For KubeDojo, three signal classes are especially useful. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+For KubeDojo, three signal classes are especially useful.
 
 ### Structural signals
 
@@ -313,7 +313,7 @@ The API exposes module and lease state.
 Before touching a module, check live state and active constraints.
 This reduces duplicate work, conflicting edits, and stale assumptions.
 
-Examples: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Examples:
 
 - `GET /api/pipeline/leases`
 - `GET /api/module/{key}/state`
@@ -341,7 +341,7 @@ The goal is not only readable text.
 An instruction surface must become executable checks.
 The most common failure is static prose with no mechanical hook.
 
-A minimal contract pattern: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A minimal contract pattern:
 
 1. Statement in instruction file.
 2. Corresponding command in `scripts/*`.
@@ -351,7 +351,7 @@ A minimal contract pattern: This keeps the repository contract observable and lo
 
 ## Repository interface for agents: a design framework
 
-Use this architecture lens when auditing a repository. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Use this architecture lens when auditing a repository.
 
 ```text
 +----------------------+---------------------------+-------------------------------+
@@ -365,30 +365,30 @@ Use this architecture lens when auditing a repository. This keeps the repository
 +----------------------+---------------------------+-------------------------------+
 ```
 
-Your design objective is to maximize positive findings in all five columns. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Your design objective is to maximize positive findings in all five columns.
 
 ## Four mandatory design questions
 
-Before writing any instruction file, ask and answer: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Before writing any instruction file, ask and answer:
 
 1. What is always true for this repository?
 2. What is usually true but subject to change?
 3. What is temporary for this specific work?
 4. What does the repo report after each run?
 
-If you cannot answer these quickly, your instructions are too broad. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If you cannot answer these quickly, your instructions are too broad.
 
 ## The repository as a contract with multiple readers
 
 Different readers extract different meaning from the same files.
-Agents and humans need aligned grammar. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Agents and humans need aligned grammar.
 
 - **Humans** want rationale and narrative.
 - **Agents** want stable extraction points.
 - **CI** wants commandable invariants.
 - **Reviewers** want auditability and deterministic checklists.
 
-A single section can serve all if authored with this principle: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A single section can serve all if authored with this principle:
 
 - first line states policy,
 - second line states why,
@@ -397,7 +397,7 @@ A single section can serve all if authored with this principle: This keeps the r
 
 ## Layered instruction pattern for real modules
 
-A practical scaffold for module authoring: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A practical scaffold for module authoring:
 
 ```text
 ModuleRoot/
@@ -419,14 +419,14 @@ Do require each module to state at least one stable path to:
 ## What should not go into AGENTS.md
 
 A strong anti-pattern is loading AGENTS.md with one-time or rapidly changing instructions.
-Use targeted docs instead. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Use targeted docs instead.
 
 - PR-specific reviewer names,
 - one-off issue details,
 - temporary local branch naming experiments,
 - unresolved design drafts.
 
-If this content becomes frequent, move it into: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+If this content becomes frequent, move it into:
 
 - task prompt,
 - issue comments,
@@ -435,7 +435,7 @@ If this content becomes frequent, move it into: This keeps the repository contra
 
 ## When CLAUDE.md should be split
 
-A single CLAUDE.md becomes fragile when: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A single CLAUDE.md becomes fragile when:
 
 - it contains unrelated instructions for distinct domains,
 - multiple teams modify it without ownership boundaries,
@@ -448,20 +448,20 @@ That split may mirror source structure, team boundaries, or subsystem ownership.
 ## Repository anti-fragility: stale-aware design
 
 Every repository instruction system ages.
-A strong pattern is a simple stale policy. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A strong pattern is a simple stale policy.
 
 ### Staleness policy sample
 
-For every instruction file: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For every instruction file:
 
 - define an owner,
 - define expected review cadence,
 - define a deprecation note,
 - define migration target.
 
-If a file fails cadence twice in a row, move it into task-local scope or delete it. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If a file fails cadence twice in a row, move it into task-local scope or delete it.
 
-A stale-file score can be calculated manually. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A stale-file score can be calculated manually.
 
 ```text
 +-------------------+----------------+------------------+--------------------------+
@@ -476,7 +476,7 @@ A stale-file score can be calculated manually. This keeps the repository contrac
 
 ## Repository surfaces in practice: a blueprint
 
-A repository that can be used by agents should expose four primary documents: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A repository that can be used by agents should expose four primary documents:
 
 1. Orientation document.
 2. Standards and review document.
@@ -491,7 +491,7 @@ In KubeDojo, root `CLAUDE.md` and scripts entrypoints serve this role.
 ### Standards and review document
 
 This is where long-lived behavior rules live.
-For example: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For example:
 
 - issue-first workflow,
 - branch expectations,
@@ -500,7 +500,7 @@ For example: This keeps the repository contract observable and lowers onboarding
 ### State and health document
 
 This is where current conditions are exposed.
-For example: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For example:
 
 - module-level pipeline state,
 - quality state,
@@ -509,7 +509,7 @@ For example: This keeps the repository contract observable and lowers onboarding
 
 ### Escalation and override document
 
-This is where conflict resolution is described: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+This is where conflict resolution is described:
 
 - which guidance wins at conflict,
 - what manual checks are mandatory,
@@ -520,7 +520,7 @@ This is where conflict resolution is described: This keeps the repository contra
 Agents do poorly when asked to reason over generated files, vendor directories, and throwaway outputs without explicit exclusions.
 Include explicit exclusions in bootstrap and in task checklists.
 
-Examples of exclusions: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Examples of exclusions:
 
 - build directories,
 - dist artifacts,
@@ -535,7 +535,7 @@ The same idea should appear in your own project.
 ## Designing repo legibility with file-level contracts
 
 File-level contracts are specific statements attached to known files.
-A few patterns: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A few patterns:
 
 ```text
 # Contract pattern A — Immutable baseline
@@ -562,7 +562,7 @@ For each file, state both “what it does” and “why it does it,” then link
 ## Hands-on checklist design for repository authors
 
 Your module should teach action, not only theory.
-A practical authoring cycle: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A practical authoring cycle:
 
 1. Start from the issue.
 2. Draft the contract surfaces.
@@ -572,11 +572,11 @@ A practical authoring cycle: This keeps the repository contract observable and l
 6. Run checks.
 7. Update index.
 
-Each step should include owner and next state. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Each step should include owner and next state.
 
 ## The minimal contract set for a healthy repo
 
-An effective minimum set in this model has seven files/components. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+An effective minimum set in this model has seven files/components.
 
 - `AGENTS.md` or equivalent.
 - `CLAUDE.md` or equivalent.
@@ -586,27 +586,27 @@ An effective minimum set in this model has seven files/components. This keeps th
 - one quality entrypoint check.
 - one health check.
 
-If a repository lacks at least one component, the repo is not currently “agent-friendly.” This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+If a repository lacks at least one component, the repo is not currently “agent-friendly.”
 
 ## Worked example: repository design walkthrough
 
-Below is a worked walkthrough for a hypothetical repository. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Below is a worked walkthrough for a hypothetical repository.
 
 ### Step A: Start from breakage
 
-The repo often fails because agents miss branch constraints and run commands in the wrong order. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+The repo often fails because agents miss branch constraints and run commands in the wrong order.
 
 ### Step B: Choose L0 files
 
-The team adds a compact root AGENTS-like file listing required preflight checks and links. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+The team adds a compact root AGENTS-like file listing required preflight checks and links.
 
 ### Step C: Add memory links
 
-A root CLAUDE.md entry points to scoped rule files for API, docs, and deployments. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A root CLAUDE.md entry points to scoped rule files for API, docs, and deployments.
 
 ### Step D: Build docs map
 
-`docs/` contains a “for AGENTS and agents” subsection with: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+`docs/` contains a “for AGENTS and agents” subsection with:
 
 - system map,
 - review invariants,
@@ -615,7 +615,7 @@ A root CLAUDE.md entry points to scoped rule files for API, docs, and deployment
 
 ### Step E: Add talkback endpoints
 
-A local API endpoint now exposes: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A local API endpoint now exposes:
 
 - active module,
 - required checks,
@@ -624,7 +624,7 @@ A local API endpoint now exposes: This keeps the repository contract observable 
 
 ### Step F: Introduce stale checks
 
-A periodic checklist now asks owners to trim outdated instructions every 30 days. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A periodic checklist now asks owners to trim outdated instructions every 30 days.
 
 ### Step G: Validate
 
@@ -633,7 +633,7 @@ Context quality improves, and the same task is less sensitive to chat window age
 
 ## Layer-by-layer design rubric
 
-You can evaluate your repository design with this matrix. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+You can evaluate your repository design with this matrix.
 
 ```text
 +--------------------+-------------------------+--------------------------+-------------------+
@@ -650,7 +650,7 @@ You can evaluate your repository design with this matrix. This keeps the reposit
 ## Designing for scale across many issue types
 
 Small repos can get away with one file.
-Large repos need more shape. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Large repos need more shape.
 
 ### Multi-team pattern
 
@@ -673,7 +673,7 @@ The repository should emit the same expected state to each runtime.
 
 ## Practical contract artifacts you should build
 
-A mature repository has at least these artifacts: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A mature repository has at least these artifacts:
 
 1. **Navigation card**: where to start.
 2. **Execution card**: what to run and when.
@@ -681,11 +681,11 @@ A mature repository has at least these artifacts: This keeps the repository cont
 4. **Recovery card**: where to check failures and how to restart.
 5. **Closure card**: what constitutes a successful run.
 
-Each card can live in docs or in command output, but links should exist from bootstrap files. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Each card can live in docs or in command output, but links should exist from bootstrap files.
 
 ## Avoiding instruction debt
 
-Instruction debt accumulates in three ways. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Instruction debt accumulates in three ways.
 
 - one-time task assumptions copied into baseline rules,
 - outdated historical incident notes left in bootstrap,
@@ -695,7 +695,7 @@ When debt is high, agents do not get confused because they cannot parse ambiguit
 They act on ambiguity.
 
 To prevent debt, require ownership tags.
-For example: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For example:
 
 - Owner: module maintainer,
 - Reviewer: quality reviewer,
@@ -709,7 +709,7 @@ Agents are not replaced by this process.
 Humans still decide architecture, ownership, and quality.
 The engineering work is to let humans make those decisions once and let agents execute repeatedly.
 
-A repo that talks back to an agent creates better collaboration because: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A repo that talks back to an agent creates better collaboration because:
 
 - humans spend less time repeating context,
 - agents spend less time rediscovering policy,
@@ -718,14 +718,14 @@ A repo that talks back to an agent creates better collaboration because: This ke
 ## The design exercise: map this repo to four layers
 
 Try this for your own repository.
-For each layer, fill one sentence. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+For each layer, fill one sentence.
 
 - **Layer 0**: what file always loads and why.
 - **Layer 1**: what file scopes by folder and who owns it.
 - **Layer 2**: where role-specific behavior and tool choices live.
 - **Layer 3**: where current-run state and telemetry are published.
 
-Then add at least one check command per layer. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Then add at least one check command per layer.
 
 ## Did You Know
 
@@ -736,7 +736,7 @@ Then add at least one check command per layer. This keeps the repository contrac
 
 ## Common repository mistakes and anti-patterns
 
-The following table is diagnostic. Use it while auditing your own files. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+The following table is diagnostic. Use it while auditing your own files.
 
 ## Common Mistakes
 
@@ -752,14 +752,14 @@ The following table is diagnostic. Use it while auditing your own files. This ke
 
 ## What a repo surface should contain in this module’s scope
 
-This module focuses on a practical design bundle: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+This module focuses on a practical design bundle:
 
 - a compact repository-level map,
 - a scoped memory hierarchy,
 - structured `docs/` records,
 - and operational feedback endpoints.
 
-For learning, this means the minimum implementation is: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For learning, this means the minimum implementation is:
 
 - one root bootstrap file,
 - one hierarchical memory file,
@@ -770,7 +770,7 @@ For learning, this means the minimum implementation is: This keeps the repositor
 
 ## Design patterns for AGENTS-like files
 
-Use the following layout pattern. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+Use the following layout pattern.
 
 ```text
 # Root map
@@ -790,7 +790,7 @@ Use the following layout pattern. This keeps the repository contract observable 
 - review path.
 ```
 
-Do not include: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Do not include:
 
 - ephemeral one-off issue details,
 - deep technical history,
@@ -798,7 +798,7 @@ Do not include: This keeps the repository contract observable and lowers onboard
 
 ## Checklist design for maintainers
 
-A concise maintainability checklist for repository engineering: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+A concise maintainability checklist for repository engineering:
 
 1. Is the entrypoint short enough to read quickly?
 2. Are command paths explicit and deterministic?
@@ -808,11 +808,11 @@ A concise maintainability checklist for repository engineering: This keeps the r
 6. Is the docs index discoverable from bootstrap files?
 7. Are layered files mutually consistent?
 
-If any answer is no, file triage is required. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If any answer is no, file triage is required.
 
 ## How to design this for a real team in one week
 
-Week 1: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Week 1:
 
 - Day 1: inventory existing rules and duplicates.
 - Day 2: define map-only root AGENTS/CLAUDE.
@@ -822,7 +822,7 @@ Week 1: This keeps the repository contract observable and lowers onboarding cost
 - Day 6: add missing review surfaces.
 - Day 7: run checks and collect first failure pattern.
 
-Week 2 and beyond: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Week 2 and beyond:
 
 - add stale checks,
 - add ownership metadata,
@@ -834,14 +834,14 @@ A repository designed for agents should support both quick start and deep dives.
 A quick start path gives short-term speed.
 A deep-dive path gives long-term correctness.
 
-Quick-start path: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Quick-start path:
 
 - run cold-start,
 - review state,
 - open module index,
 - run module checks.
 
-Deep-dive path: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Deep-dive path:
 
 - inspect review history,
 - inspect instruction deltas,
@@ -853,12 +853,12 @@ Deep-dive path: This keeps the repository contract observable and lowers onboard
 If an expectation affects behavior, and the repo cannot represent it in a file or command, the expectation is probably not enforceable.
 Enforceability is what turns human preferences into machine trust.
 
-A non-enforced expectation is still useful context but not operational truth. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+A non-enforced expectation is still useful context but not operational truth.
 
 ## Designing for portability across model families
 
 Different models and frameworks load context differently.
-You can reduce variance by using: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+You can reduce variance by using:
 
 - concise L0 instructions,
 - stable file names,
@@ -866,7 +866,7 @@ You can reduce variance by using: This keeps the repository contract observable 
 - deterministic check commands,
 - and explicit state surfaces.
 
-This matters in mixed-model workflows and in multi-tool review loops. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+This matters in mixed-model workflows and in multi-tool review loops.
 
 ## How to express model-agnostic contracts
 
@@ -874,19 +874,19 @@ Do not write instructions as one tool’s command syntax.
 Write them as behavior expectations and expected states.
 For tool specifics, provide per-tool examples as examples, not as only definitions.
 
-For example: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+For example:
 
 - “Do not run commands that mutate hidden state without a rollback plan.”
 - then optionally:
   - “For Git, use standard commands in review mode.”
   - “For local APIs, use explicit endpoints.”
 
-The behavioral contract stays model-agnostic. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+The behavioral contract stays model-agnostic.
 
 ## Operationally safe defaults
 
 The safest defaults for repository engineering are conservative.
-If uncertain, prefer explicitness over coverage. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If uncertain, prefer explicitness over coverage.
 
 - explicit exclusions,
 - explicit scopes,
@@ -895,26 +895,90 @@ If uncertain, prefer explicitness over coverage. This keeps the repository contr
 
 ## Practical lab: design a two-layer bootstrap for this module
 
-1. Write one root map section that answers start state and run order.
-2. Write one scoped section under a dedicated directory for this module.
-3. Add one command that prints the current run contract.
-4. Add one check that fails on stale or conflicting instructions.
-5. Add one link from the module back to the parent contract.
+1. Create `repo-contract.md` in your repository root with an explicit L0/L1/L2/L3 map.
+
+```md
+# Repository Run Contract
+
+- L0: `AGENTS.md`
+- L1: `docs/` (navigation and long-form architecture notes)
+- L2: `.claude/rules/` (scoped run constraints)
+- L3: `module-2.2-repository-engineering-for-agents.md` (current task-local context)
+```
+
+2. Add `scripts/print-run-contract.sh` with the following script:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_CONTRACT="${ROOT_DIR}/repo-contract.md"
+
+CHECK_PATHS=(
+  "AGENTS.md"
+  "docs/"
+  ".claude/rules/"
+  "src/content/docs/ai/ai-engineering-foundations/module-2.2-repository-engineering-for-agents.md"
+)
+
+echo "L0 paths:"
+grep -E '^-[[:space:]]*L0:' "${REPO_CONTRACT}" | sed 's/^- [Ll]0:/  -/'
+echo
+
+echo "L1 paths:"
+grep -E '^-[[:space:]]*L1:' "${REPO_CONTRACT}" | sed 's/^- [Ll]1:/  -/'
+echo
+
+echo "L2 paths:"
+grep -E '^-[[:space:]]*L2:' "${REPO_CONTRACT}" | sed 's/^- [Ll]2:/  -/'
+echo
+
+echo "L3 paths:"
+grep -E '^-[[:space:]]*L3:' "${REPO_CONTRACT}" | sed 's/^- [Ll]3:/  -/'
+echo
+
+for candidate in "${CHECK_PATHS[@]}"; do
+  if [[ -e "${ROOT_DIR}/${candidate}" ]]; then
+    echo "OK EXISTS ${candidate}"
+  else
+    echo "MISSING ${candidate}" >&2
+    exit 1
+  fi
+done
+echo "All contract paths are present."
+```
+
+3. Define one stale-rule check:
+
+- A path listed under L0/L1/L2/L3 is considered stale if it is missing from disk at the start of a new run.
+- Add that rule to your root contract workflow:
+  - `scripts/print-run-contract.sh` must run before any task-write step.
+  - If it exits non-zero, stop the workflow and fix references before continuing.
+
+4. Verify with these expected results:
+
+- Success output: `L0 paths:`, `L1 paths:`, `L2 paths:`, `L3 paths:` plus all `OK EXISTS` lines and final `All contract paths are present.`
+- Failure output: at least one `MISSING <path>` line, non-zero exit code, and task paused until contract files are corrected.
+
+5. Add one back-link in the module:
+
+- Add one sentence in `## Sources` saying this module’s contract lives in `repo-contract.md`, so the check script has a stable target and failure path.
 
 ## Design challenge: avoiding false safety in instructions
 
 A false-safe instruction is one that looks strict but does not stop bad outcomes.
-That happens when: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+That happens when:
 
 - constraints reference files that no longer exist,
 - examples show only happy path,
 - and checks are not wired.
 
-Use this audit phrase while reviewing any instruction layer: This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Use this audit phrase while reviewing any instruction layer:
 
-“Can this rule be violated without failing a check?” This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+“Can this rule be violated without failing a check?”
 
-If yes, it is informative but not enforceable. This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle.
+If yes, it is informative but not enforceable.
 
 ## Knowledge Check
 
@@ -1012,13 +1076,14 @@ D) Root ownership is enough for all scoped folders.
 
 ## Next Module
 
-Next module: [Semantic vs Lexical Context](module-2.3-semantic-vs-lexical-context/) This keeps the repository contract observable and lowers onboarding costs while preserving auditable behavior for each new agent cycle..
+Next module: [Semantic vs Lexical Context](module-2.3-semantic-vs-lexical-context/)
 
 ## Sources
 
 - [Harness engineering (OpenAI)](https://openai.com/index/harness-engineering/)
 - [Give Claude context with CLAUDE.md (Anthropic Support)](https://support.claude.com/en/articles/14553240-give-claude-context-claude-md-and-better-prompts)
 - [Claude Code memory model (Anthropic docs)](https://docs.anthropic.com/en/docs/claude-code/memory)
+- [Custom instructions with AGENTS.md — Codex (OpenAI Developers)](https://developers.openai.com/codex/guides/agents-md)
 - [AGENTS.md project format](https://agents.md/)
 - [AGENTS.md repository (GitHub)](https://github.com/agentsmd/agents.md)
 - [AGENTS.md example source file](https://raw.githubusercontent.com/agentsmd/agents.md/main/AGENTS.md)
@@ -1029,176 +1094,4 @@ Next module: [Semantic vs Lexical Context](module-2.3-semantic-vs-lexical-contex
 - [Starlight frontmatter reference](https://starlight.astro.build/reference/frontmatter/)
 - [Astro routing guide](https://docs.astro.build/en/guides/routing/)
 - [KubeDojo configuration file](https://raw.githubusercontent.com/kube-dojo/kube-dojo.github.io/main/astro.config.mjs)
-
-## Repository Engineering Deepening Appendix
-
-The previous sections gave you a practical map.
-This appendix is the operational expansion.
-We move from a descriptive understanding to an engineering implementation model you can apply to any repository that wants reliable agent behavior over time.
-
-A strong repository contract always starts with a map, because map quality determines execution quality.
-If you know where to go first, you can avoid random context reads and stop mixing temporary intent with durable policy.
-Agents still need task memory, but the first step is always to distinguish what is permanently true from what is true only for this issue.
-A repo that gets this distinction wrong does not fail because the model is wrong; it fails because the context system is wrong.
-
-The same principle applies to every file.
-One file should represent durable assumptions.
-Another file should represent scoped practice.
-A third file should represent temporary state.
-When those files are mixed, the repo no longer has a contract surface and becomes a pile of reminders.
-
-In enterprise settings, teams often call this “governance debt.”
-In practical engineering, it is simply missing layered boundaries.
-Boundaries are cheap to define and expensive to rebuild after repeated confusion.
-Once a boundary is defined, each layer can be reviewed by a different team with different ownership, and that separation keeps both speed and control.
-
-A disciplined pattern is to separate four planes: bootstrap, knowledge, feedback, and operations.
-Bootstrap is where the agent knows the initial posture.
-Knowledge is where design and conventions live.
-Feedback is where state and outcomes are returned.
-Operations is where tasks are executed and observed.
-Those four planes are often documented in separate file families and linked in one compact route.
-If you remove one plane, execution still happens but with more failures.
-If you duplicate one plane, failures become harder to diagnose.
-
-Bootstrap can be as short as 120 lines.
-That is often enough to state startup commands, branch policy, and check order.
-Longer bootstrap files might still work if they remain clean, but they usually drift quickly.
-For this reason, bootstrap files should optimize for discoverability and determinism.
-A good bootstrap file should answer two questions quickly: where do I start, and what must I verify.
-If it does not answer those questions under 30 seconds, it is too long for repeated usage.
-
-Knowledge surfaces should be modular, linked, and versioned.
-A module should own one coherent topic, not one broad behavior.
-If a topic grows into multiple responsibilities, split it early.
-This is especially true when teams expand from manual to issue-driven agent workflows.
-You need a place where architecture decisions, process decisions, and review expectations are each separate enough to evolve without breaking the others.
-Cross-linking this structure matters.
-If links break or become stale, your feedback quality drops because agents cannot trust navigation.
-
-Feedback should be explicit and machine-consumable.
-Human language is still useful, but machine checks let you detect divergence quickly.
-A few concrete feedback signals are enough: active lease state, module pipeline state, review state, and health state.
-Every signal should include severity.
-If a warning indicates missing checks, it should not look like success.
-If the repo enters a failing state, this state should be visible before the next write.
-That principle is what separates robust agent systems from random automation.
-
-Operations should record where tasks begin and where they finish.
-A simple operational loop uses command traces, review logs, and outcome status files.
-This loop does not require heavyweight tooling.
-It requires consistency.
-When every run outputs a short state block, maintainers can reason about failure patterns and agents can self-adjust.
-The better the state signal, the less post-hoc triage is needed.
-
-To make these planes practical, map each plane to owners and refresh policies.
-Ownership should match team structure.
-If a single person owns everything, latency rises and conflict increases.
-If no one owns anything, drift is inevitable.
-In both cases, the repo is effectively unmaintained.
-A minimal policy is one owner, one review owner, and one escalation owner.
-For small teams, these roles can be combined.
-For larger teams, roles should be distinct.
-
-A robust repository contract also needs explicit scope tags.
-A scope tag is not just a folder.
-It is a statement that says who edits what and why.
-For example:
-root instructions can define branch strategy.
-Team folders can define review details.
-Issue folders can define temporary constraints.
-Runbooks can define operational defaults.
-Scope tags keep teams from accidentally editing the wrong layer.
-
-Another practical point is exception handling.
-Instruction stacks break when exception policy is missing.
-Without exception policy, every edge case becomes a permanent exception.
-With exception policy, edge cases are bounded to explicit tasks and are eventually retired.
-For every exception you add, define expected closure conditions.
-If no one defines closure, the exception becomes permanent by default.
-That is how stale rules appear in a few cycles.
-
-The goal is not to eliminate all exceptions.
-The goal is to ensure every exception has a life cycle.
-A useful cycle has three stages:
-intent, execution window, and retirement.
-If retirement is never scheduled, the cycle is incomplete.
-If execution windows remain open for too long, intent turns into noise.
-A project with 10 clean cycles for every one broken cycle scales significantly better than one with no cycle model.
-
-You can implement this directly in documentation style.
-At each scoped file, add a short “lifecycle” block.
-One block for when this file is authoritative.
-One block for when it must be reviewed.
-One block for when it will be retired or merged.
-This is a low-cost addition with high operational payback.
-
-A major failure mode is “task leakage.”
-Task leakage happens when one-off issue details stay in bootstrap or rules.
-The fix is simple and immediate.
-Create a task-local section and keep it small.
-Move issue context to the task issue or task log.
-Do not let it replace stable contract.
-When a task note is moved into permanent files, it usually returns as stale and harmful guidance.
-
-Instruction drift is easier to control if you automate detection.
-A few checks can catch drift before agents execute:
-
-- missing links,
-- expired references,
-- moved files with stale anchors,
-- and unknown required check names.
-
-These checks do not solve human judgment.
-They do solve mechanical rot.
-Mechanical rot is the easier category to fix.
-Human judgment should remain explicit and intentional.
-
-When a repo starts acting like a learning system, teams should use feedback data to improve rules.
-Do not wait for a major outage to rewrite instructions.
-Use weekly or per-release review windows.
-Collect one small signal at a time.
-If a command is repeatedly bypassed, either the command is wrong or the contract is unclear.
-If a signal is repeatedly ignored, add a concrete reason and fallback.
-If a check cannot be interpreted quickly, shorten it and split it.
-
-Now compare two approaches.
-Approach A writes a single monolithic file with all rules, checklists, and examples.
-Approach B uses bootstrap, scoped files, and machine checks.
-Approach B almost always outperforms A for long-term agent operations.
-Approach A requires the agent to parse more data than needed and cannot represent temporary state safely.
-Approach B allows each layer to evolve without causing cross-layer ambiguity.
-The difference is not just cleanliness.
-The difference is operational resilience.
-
-A compact example of this difference is the following progression.
-A beginner might start with one instruction block.
-At first this works.
-As tasks multiply, contradictions appear.
-At that point, the layer model adds explicit scopes.
-If scoped layers are added without tests, the model still fails.
-If scoped layers are added with checks, the model stabilizes.
-
-For every new module, ask: does this rule belong in bootstrap, docs, or runtime state?
-If uncertain, run a small decision test.
-If a human must read the rule in every run, it is likely bootstrap.
-If only one subdomain needs it, it is likely scoped docs.
-If it only applies to one issue, it belongs to task context.
-If it should trigger automatically, it belongs to runtime state.
-When this decision test is followed consistently, instruction quality improves quickly.
-
-Finally, think about onboarding.
-A strong onboarding path is short, deterministic, and repetitive.
-A weak onboarding path is broad and narrative heavy.
-Agents work best with deterministic onboarding because it is easier to validate.
-Humans also work better when they can point to one line and know what changed.
-This is where this module’s practical goal meets real repo engineering: every decision should become discoverable, auditable, and executable.
-
-You now have enough structure to inspect a repository and design a full contract.
-If your audit reveals fewer than four high-signal files and no automated state signals, start there before adding more complexity.
-If your audit reveals many rules but no ownership map, add owners before adding rules.
-If your audit reveals stale rules, retire them before adding new ones.
-If your contract remains confusing, split layers before expanding content.
-
-By applying these practices, you move from “agent instructions are mostly prose” to “agent instructions are a layered operating system.”
-That shift is the essence of repository engineering for agents.
+- The lab script in this module points to `repo-contract.md` as the root contract file.
