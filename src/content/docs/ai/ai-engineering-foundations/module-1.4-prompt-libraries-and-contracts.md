@@ -264,8 +264,8 @@ The same documentation states that prompt templates can be versioned and used wi
 Teams already standardized on Google Cloud may value that integration more than a provider-neutral store.
 
 Anthropic's public documentation should be read more carefully for this module.
-Anthropic documents Console prompting tools, including prompt generation, prompt templates and variables, prompt improver, and evaluation tooling, and its prompt tools API page states that prompt-tools APIs are in a closed research preview.
-That is useful prompting infrastructure, but it should not be cited as a generally available managed prompt registry unless the current Anthropic docs for your account explicitly expose that capability.
+Anthropic documents Console prompting tools — prompt generation, prompt templates and variables, prompt improver, and evaluation tooling — as part of the Build with Claude prompt-engineering surface.
+That is useful prompting infrastructure, but Anthropic does not expose a broadly-available managed prompt registry as a standalone API surface today, so it should not be cited as one unless the current Anthropic docs for your account explicitly expose that capability.
 
 A repository-as-truth approach is still a serious option.
 It works best when prompt changes should go through the same pull-request path as code, when compliance teams prefer Git audit history, when local CI is the release gate, or when the application must keep running if an external prompt store is unavailable.
@@ -767,7 +767,6 @@ Continue through the [AI Engineering Foundations index](../#planned-modules) tow
 - [Helicone docs: Prompt Assembly](https://docs.helicone.ai/features/advanced-usage/prompts/assembly)
 - [Google Cloud docs: Vertex AI prompt management](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/prompt-classes)
 - [Anthropic docs: Console prompting tools](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-templates-and-variables)
-- [Anthropic API docs: Generate a prompt](https://docs.anthropic.com/en/api/prompt-tools-generate)
 - [promptfoo docs: Assertions and metrics](https://www.promptfoo.dev/docs/configuration/expected-outputs/)
 - [OWASP Cheat Sheet Series: LLM Prompt Injection Prevention](https://cheatsheetseries.owasp.org/cheatsheets/LLM_Prompt_Injection_Prevention_Cheat_Sheet.html)
 - [Jinja documentation: API and autoescaping](https://jinja.palletsprojects.com/en/stable/api/)
