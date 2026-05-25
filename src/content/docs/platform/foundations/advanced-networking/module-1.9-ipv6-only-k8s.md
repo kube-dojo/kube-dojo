@@ -7,7 +7,7 @@ sidebar:
 
 > **Complexity**: `[COMPLEX]`
 >
-> **Time to Complete**: 55 minutes
+> **Time to Complete**: 3 hours
 >
 > **Prerequisites**: [Module 1.7: IPv6 Fundamentals](module-1.7-ipv6-fundamentals/), [Module 1.8: Dual-Stack Kubernetes Setup & Operations](module-1.8-dual-stack-k8s/), comfort with CNI configuration, and familiarity with NAT concepts
 >
@@ -21,7 +21,7 @@ After completing this module, you will be able to:
 
 1. **Evaluate** when an IPv6-only Kubernetes deployment makes operational and cost sense by weighing NAT64/DNS64 complexity against NAT gateway expense and address scarcity constraints.
 2. **Design** a NAT64/DNS64 translation layer using Jool and CoreDNS that provides reliable IPv4 reachability for IPv6-only cluster workloads without introducing asymmetric routing or state exhaustion.
-3. **Implement** an IPv6-only kind cluster with Cilium, validate the control-plane address-family configuration, and prove that a migrated dual-stack workload functions correctly after IPv4 deprovisioning.
+3. **Implement** an IPv6-only kind cluster, validate the control-plane address-family configuration, and prove that DNS64 synthesis and NAT64 translation provide IPv4 reachability for cluster workloads.
 4. **Diagnose** application failures unique to IPv6-only environments, including IPv4-mapped address surprises in socket APIs, hardcoded IPv4 health checks, and Java runtime dual-stack defaults.
 5. **Construct** a four-phase migration playbook for a brownfield dual-stack cluster that preserves service availability while systematically removing IPv4 dependencies from Pods, Services, and external integrations.
 
@@ -114,8 +114,7 @@ Jool is the reference open-source implementation of both Stateful NAT64 (RFC 614
 A minimal Jool stateful NAT64 configuration on the gateway node:
 
 ```bash
-# Load the kernel module
-modprobe jool_siit
+# Load the kernel module (stateful NAT64 uses jool, not jool_siit)
 modprobe jool
 
 # Create a NAT64 instance with the well-known prefix
@@ -124,6 +123,10 @@ jool -i "kube-nat64" global update pool6 64:ff9b::/96
 
 # Define the IPv4 address pool for outbound translation
 jool -i "kube-nat64" pool4 add 198.51.100.1 198.51.100.254
+
+# Add iptables hooks so the instance actually translates traffic
+ip6tables -t mangle -A PREROUTING -j JOOL --instance "kube-nat64"
+iptables  -t mangle -A PREROUTING -j JOOL --instance "kube-nat64"
 
 # Enable the instance
 jool -i "kube-nat64" global update enabled true
@@ -179,7 +182,7 @@ AWS also supports IPv6-only subnets natively. An IPv6-only subnet has no IPv4 CI
 
 Google Cloud's Cloud NAT supports NAT64 as a sub-feature. When you create a Cloud NAT gateway and enable NAT64, the gateway assigns a `/96` NAT64 prefix and advertises it to your VPC network. IPv6-only VMs can then use this prefix to reach IPv4 destinations without any per-VM configuration. The Cloud NAT gateway handles the translation automatically, and Cloud DNS can be configured as a DNS64 resolver.
 
-The GCP model is operationally simpler than AWS: you enable one checkbox on the Cloud NAT gateway, announce the `/96` prefix, and configure Cloud DNS for DNS64 synthesis. The pricing is the same as regular Cloud NAT: you pay per gateway-hour and per GB of data processed. As of 2026-05-26, Cloud NAT with NAT64 is available in all GCP regions.
+The GCP model is operationally simpler than AWS but still requires two steps: enable NAT64 on the Cloud NAT gateway and configure Cloud DNS for DNS64 synthesis. Once enabled, Cloud NAT announces the `/96` prefix to your VPC and Cloud DNS synthesizes AAAA records automatically. The pricing is the same as regular Cloud NAT: you pay per gateway-hour and per GB of data processed. As of 2026-05-26, Cloud NAT with NAT64 is available in all GCP regions.
 
 ### Azure: Dual-Stack Only (No Native IPv6-Only Subnet)
 
@@ -203,7 +206,7 @@ DigitalOcean supports IPv6 on Droplets and Kubernetes clusters, but like Azure, 
 
 An IPv6-only Kubernetes cluster is fundamentally different from a dual-stack cluster, not just a dual-stack cluster with IPv4 "turned off." The control plane components, CNI, kube-proxy, CoreDNS, and every Service object must be explicitly configured for a single address family, and most of these settings are immutable after cluster creation.
 
-### CNC Control-Plane Flags
+### Control-Plane Flags
 
 When bootstrapping with kubeadm, you specify the address family at cluster initialization:
 
@@ -308,7 +311,9 @@ A minimal CoreDNS Corefile for IPv6-only with DNS64:
 
 The `dns64` plugin ensures that any Service or Pod query for an external name that only has an A record gets a synthesized AAAA answer using the NAT64 prefix. Without this plugin, external IPv4-only services are unreachable from Pods.
 
-One subtle behavior of the `dns64` plugin deserves attention in migration scenarios. When `translate_all` is set, CoreDNS synthesizes AAAA answers even when a real AAAA record exists for the queried name. This is intentional in an IPv6-only cluster because the cluster has no IPv4 route, so the real AAAA (if it points to a globally routable IPv6 address) is preferred over a synthesized one for services that have native IPv6. However, `translate_all` also synthesizes AAAA for names that already have a real AAAA pointing to an internal IPv6 address — which means two different AAAA records exist: the real one and the synthesized one. Most DNS resolvers prefer the real AAAA over the synthesized one because the real record has a higher priority under RFC 6724 source-address selection rules, but the behavior depends on the client's resolver library. Test AAAA resolution behavior from your actual application runtime, not just from `dig` or `nslookup`, because the application's HTTP client may use a different resolution strategy than the command-line tools.
+One subtle behavior of the `dns64` plugin deserves attention in migration scenarios. When `translate_all` is set, CoreDNS synthesizes AAAA answers even when a real AAAA record exists for the queried name. This is intentional in an IPv6-only cluster because the cluster has no IPv4 route, so the real AAAA (if it points to a globally routable IPv6 address) is preferred over a synthesized one for services that have native IPv6. However, `translate_all` also synthesizes AAAA for names that already have a real AAAA pointing to an internal IPv6 address — which means two different AAAA records exist: the real one and the synthesized one. Most DNS resolvers prefer the real AAAA over the synthesized one because the real record has a higher priority under RFC 6724 source-address selection rules, but the behavior depends on the client's resolver library.
+
+Test AAAA resolution behavior from your actual application runtime, not just from `dig` or `nslookup`, because the application's HTTP client may use a different resolution strategy than the command-line tools.
 
 ## Application Gotchas Under IPv6-Only
 
@@ -550,7 +555,7 @@ The core tradeoff is between operational simplicity (cloud-managed NAT64 where a
 
 3. An IPv6 header is only 40 bytes, compared to 20 bytes for an IPv4 header without options. However, the 128-bit source and destination addresses mean the full IPv6 header is always 40 bytes (fixed length), while IPv4 headers are variable (20-60 bytes depending on options). In practice, the per-packet overhead difference is small enough that IPv6 performs within 2-3% of IPv4 on equivalent hardware, and the absence of NAT processing overhead often gives IPv6 a measurable latency advantage on the first packet of a connection.
 
-4. Cilium's eBPF-based implementation of kube-proxy replacement can operate in pure IPv6 mode without any IPv4 netfilter rules. In this mode, the eBPF programs attach to IPv6-specific hooks and the entire service load-balancing path — from Pod egress to NodePort to ClusterIP — runs through eBPF maps keyed on IPv6 addresses. The result is measurable: in benchmarks comparing IPv4 iptables-mode kube-proxy to IPv6 eBPF-mode, service-to-service connection latency drops by roughly 15-30% because eBPF eliminates the O(n) rule traversal of iptables.
+4. Cilium's eBPF-based implementation of kube-proxy replacement can operate in pure IPv6 mode without any IPv4 netfilter rules. In this mode, the eBPF programs attach to IPv6-specific hooks and the entire service load-balancing path — from Pod egress to NodePort to ClusterIP — runs through eBPF maps keyed on IPv6 addresses. The result is measurable: in vendor and community benchmarks comparing IPv4 iptables-mode kube-proxy to IPv6 eBPF-mode, service-to-service connection latency reductions on the order of 15-30% have been reported, attributed to eBPF eliminating the O(n) rule traversal of iptables.
 
 ## Common Mistakes
 
@@ -570,7 +575,7 @@ The core tradeoff is between operational simplicity (cloud-managed NAT64 where a
 <details>
 <summary>A Platform team migrates their cluster to IPv6-only but reports that their Java-based order-service can no longer connect to an IPv4-only inventory API. DNS64 and Jool are operational with verified traffic from a test Pod. Which JVM flag is the likely culprit?</summary>
 
-The default `-Djava.net.preferIPv6Addresses=false` means the JVM still treats IPv4 as the default address family for new connections, even on an IPv6-only host. When the JVM resolves the inventory API hostname and receives the synthesized `64:ff9b::/96` address, it may still try to connect using an IPv4-mapped socket that fails because the host has no IPv4 interface. The fix is `-Djava.net.preferIPv6Addresses=true`, which tells the JVM to use native IPv6 sockets for all connections. This flag must be set in the container's `JAVA_TOOL_OPTIONS` environment variable or in the application startup script, not only in the IDE, because the default behavior changes when IPv4 disappears from the host.
+The default `-Djava.net.preferIPv6Addresses=false` means the JVM prefers IPv4 addresses over IPv6 when both are available — on an IPv6-only host this preference persists, causing the JVM to attempt IPv4-mapped socket connections that fail because the host has no IPv4 interface. When the JVM resolves the inventory API hostname and receives the synthesized `64:ff9b::/96` address, it may still try to connect using an IPv4-mapped socket that fails because the host has no IPv4 interface. The fix is `-Djava.net.preferIPv6Addresses=true`, which tells the JVM to use native IPv6 sockets for all connections. This flag must be set in the container's `JAVA_TOOL_OPTIONS` environment variable or in the application startup script, not only in the IDE, because the default behavior changes when IPv4 disappears from the host.
 </details>
 
 <details>
@@ -605,7 +610,7 @@ The direct comparison of Elastic IP savings vs. NAT Gateway cost is incomplete. 
 
 ## Hands-On Exercise
 
-This exercise deploys the full IPv6-only stack in a local kind cluster: IPv6-only CNI, DNS64 with CoreDNS, Jool NAT64 on a container, and an observable packet flow from an IPv6-only Pod to an IPv4-only external service. It assumes `kind`, `kubectl`, and Docker or a compatible container runtime are installed.
+This exercise deploys the full IPv6-only stack in a local kind cluster: IPv6-only networking, DNS64 with CoreDNS, Jool NAT64 on a container, and an observable packet flow from an IPv6-only Pod to an IPv4-only external service. It assumes `kind`, `kubectl`, and Docker or a compatible container runtime are installed.
 
 ### Goal
 
@@ -662,7 +667,7 @@ The default CoreDNS in an IPv6-only kind cluster does not include the `dns64` pl
 
 ```bash
 kubectl -n kube-system get configmap coredns -o yaml > coredns-original.yaml
-kubectl -n kube-system create configmap coredns-dns64 \
+kubectl -n kube-system create configmap coredns \
   --from-literal=Corefile=".:53 {
     errors
     health
@@ -727,12 +732,14 @@ Now configure Jool inside the container:
 
 ```bash
 kubectl exec -it jool-gateway -- bash -c '
-modprobe jool_siit 2>/dev/null || true
 modprobe jool 2>/dev/null || true
 jool instance add "kube-nat64" --iptables 2>/dev/null || true
 jool -i "kube-nat64" global update pool6 64:ff9b::/96
 # Add an IPv4 pool using the docker bridge network range
 jool -i "kube-nat64" pool4 add 172.18.0.200 172.18.0.210
+# Add iptables hooks to capture traffic for translation
+ip6tables -t mangle -A PREROUTING -j JOOL --instance "kube-nat64" 2>/dev/null || true
+iptables  -t mangle -A PREROUTING -j JOOL --instance "kube-nat64" 2>/dev/null || true
 jool -i "kube-nat64" global update enabled true
 jool -i "kube-nat64" session display --tcp
 '
