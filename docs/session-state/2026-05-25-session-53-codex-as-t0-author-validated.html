@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 53 — Codex-as-T0-author pipeline validated; 5 PRs merged including 3 Phase E.1 residual modules</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.queued { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+</style></head><body>
+
+<h1>Session 53 — Codex-as-T0-author pipeline validated; 5 PRs merged including 3 Phase E.1 residual modules</h1>
+<p class="meta">2026-05-24 evening → 2026-05-25 (spans midnight). Standalone orchestrator session, opus 4.7. Two policy locks (orchestrator role-slate skills + condition-dependent T0 routing) followed by three end-to-end Phase E.1 curriculum-T0 modules through the codex-author + cursor-reviewer pipeline. First measured validation of codex gpt-5.5 as T0 primary now that codex weekly cap reset.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1515</td><td><span class="pill merged">MERGED</span></td><td>docs(skills): add agent-orchestrator role slate (orchestrator, dispatch-router, cross-family-reviewer, session-handoff-writer + writer/reviewer refresh)</td><td>cursor R1 APPROVE_WITH_NITS (5 P2 + 5 nits) → fix-pass → merged</td></tr>
+<tr><td>#1525</td><td><span class="pill merged">MERGED</span></td><td>docs(skills): T0 author is condition-dependent (codex when cap healthy)</td><td>cursor R1 NEEDS_CHANGES (3 P2 + 3 nits) → fix-pass → merged</td></tr>
+<tr><td>#1527</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — Edge K8s Distros Landscape (closes #1519)</td><td>codex gpt-5.5 author → cursor R1 APPROVE_WITH_NITS (0 P1, 2 P2, 5 nits) → merge-with-note</td></tr>
+<tr><td>#1528</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — eBPF Fundamentals (closes #1516)</td><td>codex gpt-5.5 author (after spark died rc=-9 at 95s) → cursor R1 APPROVE_WITH_NITS (4 P2 kernel-version) → codex fix-pass → cursor R2 APPROVE → merged</td></tr>
+<tr><td>#1526</td><td><span class="pill merged">MERGED</span></td><td>feat(content): T0 author — IPv6 Fundamentals for K8s (closes #1522)</td><td>codex spark author (succeeded clean first try) → cursor R1 NEEDS_CHANGES (1 P1 broken host syntax + 5 P2) → codex fix-pass → cursor R2 APPROVE → merged</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. Agent-orchestrator skill slate (PR #1515)</h3>
+<p>Mirrored the learn-ukrainian <code>.claude/agents/curriculum-orchestrator.md</code> pattern but kubedojo lives in <code>claude_extensions/skills/</code>. Six skills now agent-agnostic so cursor / agy / codex / composer-2.5 / any Claude-family agent can cold-start the orchestrator playbook. New: <code>curriculum-orchestrator</code>, <code>cross-family-reviewer</code>, <code>dispatch-router</code>, <code>session-handoff-writer</code>. Refreshed: <code>curriculum-writer</code>, <code>module-quality-reviewer</code>. Decision Card C symmetric routing encoded as the load-bearing table in 3 of them. All skills carry <code>last_calibrated:</code> frontmatter so future readers know how stale the roster snapshot is.</p>
+
+<h3>2. Condition-dependent T0 author lane (PR #1525)</h3>
+<p>PR #1515 hardcoded <em>"T0 primary = cursor composer-2.5"</em> because codex cap was thin (sessions 47-50). User direction this session: <em>"we have lots of codex credit, they reset it"</em> and then <em>"i think codex should write them"</em>. Three skills (<code>curriculum-writer</code>, <code>curriculum-orchestrator</code>, <code>dispatch-router</code>) now split T0-author lanes by codex-cap state:</p>
+<ul>
+<li><strong>Codex cap healthy (default)</strong> → codex gpt-5.5 is T0 primary (quality-best per <code>feedback_quality_over_budget_in_role_allocation</code>).</li>
+<li><strong>Codex cap thin / throttle</strong> → cursor composer-2.5 takes over T0 primary.</li>
+<li><strong>3+ codex authors in-flight</strong> → deepseek-v4-pro off-load.</li>
+<li><strong>Bug fixes (any state)</strong> → cursor composer-2.5 (different lane, proven 3/3 first-commit in session 51).</li>
+</ul>
+<p>Reviewer side (Decision Card C symmetric routing) untouched: composer-2.5 reviews codex-authored regardless of cap state.</p>
+
+<h3>3. 9 new issues filed + 1 umbrella closed</h3>
+<p>Issue #384 (<em>"Phase E.1: Verify-and-fill the 2026-03-24 expansion plan"</em>) was reopened 2026-05-05 after premature-close audit; this session verified the 3 named residuals are still gaps and replaced the umbrella with 9 scoped follow-ups (#1516-#1524) — 3 per theme (eBPF, Edge K8s, IPv6/dual-stack). Each issue carries the full Author Contract (density gates + 7-dim rubric + structural requirements). Initially tagged cursor composer-2.5; re-tagged to codex gpt-5.5 mid-session after codex-cap reset.</p>
+
+<h3>4. cursor-agent CLI is headless-dispatchable (factual correction during PR #1515)</h3>
+<p>Initial skill drafts wrongly framed cursor as IDE-only. User pushed back: <em>"why can you not ask the cursor cli? why do i have to do it in the ide?"</em> Verified: <code>cursor-agent</code> CLI lives at <code>~/.local/bin/cursor-agent</code> and <code>dispatch_smart.py --agent cursor</code> supports composer-2.5 / -fast / gpt-5.5 models. Skills corrected to read "cursor-agent CLI OR cursor IDE" everywhere. This session used the headless CLI exclusively (4 cursor reviews) — worked end-to-end every time.</p>
+
+<h3>5. Skill source-of-truth correction (factual catch during PR #1515)</h3>
+<p>First drop of skills landed in <code>.claude/skills/</code> (deploy target). User: <em>"you know that we have to work in the claude_extensions folder and not in .claude and we deploy from claude_extensions to the different agents"</em>. Moved to <code>claude_extensions/skills/</code> in same PR; <code>deploy.sh</code> handles propagation.</p>
+
+<h2>Headline data — pipeline performance (first codex-T0 cohort measured)</h2>
+
+<p>Five PRs merged via the codex-author + cursor-reviewer pipeline. First time the codex T0 lane was measured end-to-end since codex cap healed.</p>
+
+<table>
+<tr><th>Metric</th><th>Value</th><th>Note</th></tr>
+<tr><td>Codex gpt-5.5 retry success rate</td><td>3/3 (100%)</td><td>After spark dispatches died rc=-9</td></tr>
+<tr><td>Codex gpt-5.3-codex-spark first-try success</td><td>1/3 (33%)</td><td>#1522 IPv6 only; #1516 + #1519 both rc=-9 at ~95s</td></tr>
+<tr><td>Cursor R1 verdict distribution</td><td>1 NEEDS_CHANGES, 2 APPROVE_WITH_NITS</td><td>#1526 had P1 (broken <code>host ip6.arpa</code>); #1527, #1528 zero P1</td></tr>
+<tr><td>Cursor R1 quality-catch rate</td><td>10/10 substantive</td><td>Across PR #1515, #1525, #1527, #1528 R1 + PR #1526, #1528 R2</td></tr>
+<tr><td>Median density (median_wpp)</td><td>35–94 across 3 modules</td><td>Gate ≥28 — passing trivially</td></tr>
+<tr><td>7-dim rubric scores</td><td>3.6, 4.3, 4.4</td><td>IPv6 / eBPF / Edge K8s</td></tr>
+<tr><td>Average end-to-end cycle</td><td>~30–45 min per PR</td><td>Author → R1 → fix-pass → R2 → merge</td></tr>
+</table>
+
+<p>Disk hygiene mid-session: reclaimed ~7 GB (1.6 GB → 8.5 GB free) by deleting <code>dist/</code>, <code>~/.codex/sessions/ &gt;7d</code> (~2 GB), <code>~/.codex/.tmp/ &gt;1d</code>, <code>~/.codex/archived_sessions/</code>, and old <code>~/.codex/log/</code>. Active codex sessions untouched.</p>
+
+<h2>Dispatch ledger</h2>
+
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>PR #1515 R1</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE_WITH_NITS (5 P2 + 5 nits — all factually correct)</td></tr>
+<tr><td>PR #1525 R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES (3 P2: 67%→57% stat, cohort mislabel, fictional <code>--search</code> flag)</td></tr>
+<tr><td>#1516 eBPF draft (first try)</td><td>codex gpt-5.3-codex-spark</td><td>draft</td><td>FAILED rc=-9 at 95s, empty output</td></tr>
+<tr><td>#1519 Edge K8s draft (first try)</td><td>codex gpt-5.3-codex-spark</td><td>draft</td><td>FAILED rc=-9 mid-session, salvaged garbage from concurrent #1522 session</td></tr>
+<tr><td>#1522 IPv6 draft (first try)</td><td>codex gpt-5.3-codex-spark</td><td>draft</td><td>OK — committed, PR #1526 opened</td></tr>
+<tr><td>#1516 eBPF draft (retry)</td><td>codex gpt-5.5</td><td>draft</td><td>OK — committed, PR #1528 opened</td></tr>
+<tr><td>#1519 Edge K8s draft (retry)</td><td>codex gpt-5.5</td><td>draft</td><td>OK — committed, PR #1527 opened</td></tr>
+<tr><td>PR #1527 R1</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE_WITH_NITS (0 P1, 2 P2, 5 nits)</td></tr>
+<tr><td>PR #1526 R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES (1 P1 broken <code>host … ip6.arpa</code>, 5 P2)</td></tr>
+<tr><td>PR #1528 R1</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE_WITH_NITS (0 P1, 4 P2 kernel-version caveats)</td></tr>
+<tr><td>PR #1526 fix-pass</td><td>codex gpt-5.5</td><td>edit</td><td>OK — all P1+P2 addressed, 1013→806 lines, K8s drift removed</td></tr>
+<tr><td>PR #1528 fix-pass</td><td>codex gpt-5.5</td><td>edit</td><td>OK — tcx 6.6+, fentry BTF/5.5+, CO-RE matrix, 4096 cap nuance</td></tr>
+<tr><td>PR #1528 R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE — all 4 P2s verified fixed, no regressions</td></tr>
+<tr><td>PR #1526 R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE — P1 + 5 P2 verified fixed, no regressions</td></tr>
+</table>
+
+<h2>Issues moved this session</h2>
+
+<table>
+<tr><th>Issue</th><th>State</th><th>Note</th></tr>
+<tr><td>#384 Phase E.1 umbrella</td><td>CLOSED</td><td>Replaced with 9 scoped follow-ups</td></tr>
+<tr><td>#1516 eBPF Fundamentals</td><td>CLOSED via PR #1528</td><td>codex gpt-5.5 → cursor R1+R2 → merged</td></tr>
+<tr><td>#1519 Edge K8s Distros Landscape</td><td>CLOSED via PR #1527</td><td>codex gpt-5.5 → cursor R1 APPROVE_WITH_NITS → merged</td></tr>
+<tr><td>#1522 IPv6 Fundamentals for K8s</td><td>CLOSED via PR #1526</td><td>codex spark → cursor R1+R2 → merged</td></tr>
+<tr><td>#1517 eBPF Observability</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5; Reviewer: cursor composer-2.5 (re-tagged 2026-05-24)</td></tr>
+<tr><td>#1518 eBPF Cilium + Tetragon deep-dive</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5</td></tr>
+<tr><td>#1520 Fleet Management at Edge</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5</td></tr>
+<tr><td>#1521 Disconnected & Air-gapped K8s Ops</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5</td></tr>
+<tr><td>#1523 Dual-stack K8s Setup & Operations</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5; PR #1526 explicitly Next-Module-links here</td></tr>
+<tr><td>#1524 IPv6-only K8s & Migration</td><td><span class="pill queued">QUEUED</span></td><td>Owner: codex gpt-5.5</td></tr>
+</table>
+
+<h2>Key learnings</h2>
+
+<ul>
+<li><strong>Codex gpt-5.5 over gpt-5.3-codex-spark for T0 author.</strong> Spark died rc=-9 on 2 of 3 first-try T0 drafts at ~95s with empty output. gpt-5.5 succeeded 3/3 retries on the same prompts. The <code>--model gpt-5.5</code> override should likely become a stronger recommendation than the current curriculum-writer language ("override when first-pass quality matters more than per-call cost"). Reality: spark <em>fails</em>, not just slips quality.</li>
+<li><strong>Cursor composer-2.5 R1 is the load-bearing quality gate.</strong> Caught real factual errors at every R1: broken <code>host ip6.arpa</code> command (PR #1526 P1), wrong kernel-version pinning on tcx/fentry (PR #1528), 67%→57% stat error in our own skills (PR #1525), fictional <code>--search</code> flag (PR #1525), K8s scope drift (PR #1526). Without cross-family review, all of these would have shipped.</li>
+<li><strong>The Learner-check hook works.</strong> <code>.claude/hooks/block-content-merge-without-learner-check.sh</code> blocked the first merge attempts on #1527 and #1526 and forced a verbatim module quote in the PR body before allowing merge. Mild friction, real value — orchestrator literally cannot merge without having read the module.</li>
+<li><strong>Disk hygiene as orchestrator concern.</strong> Hit 100% full mid-session; codex sessions and tmp files dominated. Cleanup pattern documented in dispatch ledger — runnable from any session that notices disk pressure.</li>
+<li><strong>Statusline broken after settings edit.</strong> User reported invisible statusline (they are blind, no context-usage visibility). Script tested clean (<code>bash ~/.claude/statusline.sh</code> outputs colored text), but Claude Code reads <code>statusLine</code> config at session start. Likely fix: exit + relaunch. Logged for next session to verify.</li>
+</ul>
+
+<h2>What's next</h2>
+
+<ul>
+<li><strong>6 codex T0 author dispatches queued</strong> (#1517 eBPF Observability, #1518 eBPF Cilium/Tetragon deep-dive, #1520 Fleet Mgmt at Edge, #1521 Disconnected K8s Ops, #1523 Dual-stack K8s Setup, #1524 IPv6-only Migration). Recommend firing in batches of 3 with <code>--model gpt-5.5</code> (NOT spark default — see above lesson). Each pair should be different themes to spread codex session contention.</li>
+<li><strong>388-module composer-2.5 review epic #1504</strong> still top of standing-watch priorities. Not addressed this session because codex T0 cycle absorbed the bandwidth.</li>
+<li><strong>121 critical platform + 13 on-prem REWRITES</strong> still queued at top of <code>briefing.actions.next</code>.</li>
+<li><strong>Statusline fix verification</strong>: user reported invisible. Confirm next session that exit+relaunch restored it.</li>
+<li><strong>Codex weekly budget reset 2026-05-25 morning</strong> — codex headless lane is now the T0 author per the skill update; this session already used it.</li>
+<li><strong>Date-bound</strong>: 2026-06-08 claude-i wrapper pilot · 2026-06-15 agentic-credit-pool flip · 2026-06-18 drop gemini-cli adapter (agy Phase 3 cutover, #1350) · 2026-07-13 weekly-double bump expires.</li>
+<li><strong>Long-running epics</strong>: #197 On-Premises track expansion · #143 Ukrainian full-coverage · #14 monitoring · #393 AI history depth · #386 lab quality audit · #1299 gap analysis · #1413 calibration single-fixture lanes · #1416 calibration auto-render hook.</li>
+</ul>
+
+<h2>Files touched</h2>
+
+<ul>
+<li><code>claude_extensions/skills/curriculum-orchestrator/SKILL.md</code> — NEW; senior orchestrator role + roster + Decision Card C.</li>
+<li><code>claude_extensions/skills/cross-family-reviewer/SKILL.md</code> — NEW; review contract + per-reviewer hallucination watchlist.</li>
+<li><code>claude_extensions/skills/dispatch-router/SKILL.md</code> — NEW; agent picking decision tree with codex-cap-state branches.</li>
+<li><code>claude_extensions/skills/session-handoff-writer/SKILL.md</code> — NEW; HTML-first handoff template (the skill this very file uses).</li>
+<li><code>claude_extensions/skills/curriculum-writer/SKILL.md</code> — REFRESHED; condition-dependent T0 author lanes, density gates.</li>
+<li><code>claude_extensions/skills/module-quality-reviewer/SKILL.md</code> — REFRESHED; Decision Card C routing, reviewer-self-hallucination watchlist.</li>
+<li><code>src/content/docs/platform/foundations/ebpf/module-1.1-ebpf-fundamentals.md</code> — NEW; 377 lines, density median 77.</li>
+<li><code>src/content/docs/platform/foundations/ebpf/index.md</code> — NEW; section landing.</li>
+<li><code>src/content/docs/platform/foundations/advanced-networking/module-1.7-ipv6-fundamentals.md</code> — NEW; 806 lines post-fix-pass, density median 43.5.</li>
+<li><code>src/content/docs/platform/foundations/advanced-networking/index.md</code> — row added.</li>
+<li><code>src/content/docs/platform/toolkits/infrastructure-networking/k8s-distributions/module-14.8-edge-distros-landscape.md</code> — NEW; 480 lines, density median 94.5.</li>
+<li><code>src/content/docs/platform/toolkits/infrastructure-networking/k8s-distributions/index.md</code> — NEW; section landing.</li>
+<li>STATUS.md — index updated by this commit.</li>
+<li>This handoff HTML.</li>
+</ul>
+
+<h2>Memory entries to add (deferred — flagging for next session)</h2>
+
+<p>Two observations worth saving but not yet written:</p>
+<ul>
+<li>Codex spark (<code>gpt-5.3-codex-spark</code>) is unreliable for T0-author at our prompt sizes (~80-line briefs, 1000-line targets). 2 of 3 first-try drafts died rc=-9 silently. <code>--model gpt-5.5</code> override should be the default for <code>draft</code> task class when first-pass quality matters. Worth a follow-up to <code>scripts/dispatch_smart.py</code> TASK_CLASSES["draft"]["codex"] flip.</li>
+<li>The Learner-check hook caught us twice and was right both times. Worth a small <code>feedback_learner_check_hook_works.md</code> noting: don't try to dodge it; quote a real module line in <code># Learner check</code> section of PR body before merging content PRs.</li>
+</ul>
+
+</body></html>
