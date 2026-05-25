@@ -27,7 +27,7 @@ The final module applies those layers to Symphony-style orchestration, where iss
 | Module | Topic | Status |
 |---|---|---|
 | 1.1 | Prompt Fundamentals | planned |
-| 1.2 | Reasoning and Logic Prompts | planned |
+| 1.2 | [Reasoning and Logic Prompts](module-1.2-reasoning-and-logic-prompts/) | drafting |
 | 1.3 | Prompt Safety and Evaluation | planned |
 | 1.4 | Prompt Libraries and Contracts | planned |
 | 2.1 | [Context Engineering Fundamentals](module-2.1-context-fundamentals/) | drafting |
