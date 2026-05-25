@@ -22,8 +22,9 @@ Kubernetes networking gets you pod-to-pod communication. But production traffic 
 | 1.6 | [Zero Trust Networking & VPN Alternatives](module-1.6-zero-trust/) | 2.5h | BeyondCorp, IAP, Tailscale, mTLS |
 | 1.7 | [IPv6 Fundamentals](module-1.7-ipv6-fundamentals/) | 3.5h | Address families, SLAAC, NDP, DNS, hands-on IPv6 troubleshooting |
 | 1.8 | [Dual-Stack Kubernetes Setup & Operations](module-1.8-dual-stack-k8s/) | 3.5h | Control-plane flags, CNI dual-stack setup, Service IP families, EndpointSlices |
+| 1.9 | [IPv6-Only Kubernetes & Brownfield Migration](module-1.9-ipv6-only-k8s/) | 55m | NAT64/DNS64, Jool, cloud IPv4-as-a-Service, IPv6-only CNI, migration playbook |
 
-**Total time**: ~24 hours
+**Total time**: ~25 hours
 
 ---
 
