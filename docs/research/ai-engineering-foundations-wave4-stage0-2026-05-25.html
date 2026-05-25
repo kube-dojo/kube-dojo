@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Engineering Foundations Wave 4 — Stage-0 research brief (2026-05-25)</title>
+<style>
+  :root {
+    --bg: #fafbfc; --fg: #1a1d23; --muted: #5b6573; --accent: #0057B7;
+    --good: #0d8a4a; --partial: #b45c00; --gap: #b8001f; --card: #ffffff;
+    --border: #e2e6eb; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+         font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { margin: 0 0 8px; font-size: 28px; }
+  h2 { margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); font-size: 22px; }
+  h3 { margin: 24px 0 8px; font-size: 17px; }
+  .meta { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .tldr { background: var(--card); border-left: 4px solid var(--accent);
+          padding: 14px 18px; margin: 16px 0 28px; border-radius: 0 6px 6px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0;
+          background: var(--card); border: 1px solid var(--border); }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--border);
+           text-align: left; vertical-align: top; font-size: 13px; }
+  th { background: #eef2f6; font-weight: 600; }
+  code { background: #eef2f6; padding: 1px 6px; border-radius: 3px;
+         font-family: var(--mono); font-size: 12px; }
+  pre { background: var(--card); border: 1px solid var(--border); padding: 14px;
+        border-radius: 6px; overflow-x: auto; font-size: 12px; }
+  .phase { background: var(--card); border: 1px solid var(--border);
+           border-left: 4px solid var(--accent); padding: 12px 16px; margin: 10px 0;
+           border-radius: 0 6px 6px 0; }
+  .phase h3 { margin: 0 0 6px; color: var(--accent); }
+  .src { color: var(--muted); font-size: 12px; }
+  .status-good { color: var(--good); font-weight: 600; }
+  .status-gap { color: var(--gap); font-weight: 600; }
+  .status-partial { color: var(--partial); font-weight: 600; }
+  blockquote { border-left: 3px solid var(--accent); margin: 12px 0;
+               padding: 4px 14px; color: var(--muted); font-style: italic; }
+  ul.compact { margin: 6px 0; padding-left: 22px; }
+  ul.compact li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>AI Engineering Foundations Wave 4 — Stage-0 research brief</h1>
+<p class="meta">Date: 2026-05-25 · Author: orchestrator · Predecessor: <code>docs/research/ai-engineering-foundations-stage0-2026-05-15.html</code></p>
+
+<div class="tldr">
+<strong>Recommendation:</strong> Create the final 4 modules of the AI Engineering Foundations curriculum (Wave 4), completing the Harness arc and the Symphony capstone. This brief specifies the structural requirements for T0 content authors to produce Bloom L3+ modules covering layers and maps, mechanical guardrails, operational processes, and applied work orchestration. 
+</div>
+
+<h2>1. Avoiding duplication (The Orphan Modules)</h2>
+<p>Wave 4 replaces and heavily expands upon three older, overloaded modules that previously carried the burden of teaching prompts, harness, and orchestration together. Writers must read these legacy modules to understand the learner's baseline vocabulary, but MUST NOT simply restate their contents.</p>
+
+<div class="phase">
+<h3>Module 1.6: Prompt Engineering Fundamentals</h3>
+<p><strong>What it covers:</strong> Introduces prompting as an interface contract, separating system/developer instructions from untrusted data, applying few-shot vs zero-shot techniques, and evaluating prompts like engineering artifacts with test cases. It handles basic API structuring, message roles, and prompt schemas.</p>
+<p><strong>What NOT to restate:</strong> Do not re-teach basic prompt formatting, message hierarchies (system/user), prompt debugging loops, or how to write basic examples. The learner already knows prompts are API boundaries.</p>
+<p><strong>How to reframe:</strong> Wave 4 (specifically Module 3.2 Guardrails) must reframe safety from "writing defensive prompts" into "building mechanical execution rails and platform-level schemas" that operate completely outside the prompt window.</p>
+</div>
+
+<div class="phase">
+<h3>Module 2.1: Harness Engineering (Legacy)</h3>
+<p><strong>What it covers:</strong> The foundational seven principles of harness engineering by Lopopolo, distinguishing platform defaults from project advisory and enforcement layers. It introduces local branch policies, manifest invariant checks, and trace observability via local hooks.</p>
+<p><strong>What NOT to restate:</strong> Do not re-teach the high-level justification for the 7 principles, the basic explanation of "map over manual," or simple introductory bash invariant checks. The learner already accepts that harness is necessary.</p>
+<p><strong>How to deepen:</strong> Wave 4 splits this into three concrete operational modules. <strong>3.1</strong> deepens the system of record and mapping architecture. <strong>3.2</strong> corrects the assumption that simple linting is enough by exploring agent-legible observability, devtools wiring, and complex structural guardrails. <strong>3.3</strong> reframes the harness from a static setup into a continuous lifecycle (doc-gardening, exception drift management, and garbage collection).</p>
+</div>
+
+<div class="phase">
+<h3>Module 2.2: Orchestrating Fleets: Symphony (Legacy)</h3>
+<p><strong>What it covers:</strong> The pivot from session-centric control to ticket-centric project management, detailing the <code>WORKFLOW.md</code> contract, the four lifecycle hooks (after_create, before_run, after_run, before_remove), and the separation of internal claim states from tracker states.</p>
+<p><strong>What NOT to restate:</strong> The basic argument for why issue-first orchestration is better than session-first, the basic YAML structure of <code>WORKFLOW.md</code>, or the names of the four baseline lifecycle hooks.</p>
+<p><strong>How to apply:</strong> Module <strong>4.1</strong> must take these structural concepts and apply them operationally. It should deepen how to manage state machine transitions dynamically (e.g., using objective-driven tasks instead of rigid transitions), how to hot-reload configurations safely, and how to build verifiable evidence packages (Proof of Work) for human reviewers when the agent completes its run.</p>
+</div>
+
+<h2>2. Module Specifications</h2>
+
+<h3>Module 3.1: Harness Fundamentals — Layers and System of Record</h3>
+<p><strong>Why this module exists:</strong> After mastering dynamic context orchestration (Module 2.4), an engineer can manage ephemeral turn state efficiently but still lacks a persistent control plane to govern agent behavior across independent sessions. This module bridges that gap by establishing the repository itself as the system of record. It defines exactly where platform defaults end and project enforcement begins, ensuring every agent starts with a stable, machine-readable map rather than ambiguous ad-hoc instructions.</p>
+<p><strong>Learning Outcomes:</strong></p>
+<ul class="compact">
+<li><strong>Design</strong> a three-tier harness architecture that correctly classifies rules into platform defaults, project advisory, and project enforcement layers.</li>
+<li><strong>Evaluate</strong> repository structures to separate durable policy (System of Record) from transient session evidence.</li>
+<li><strong>Implement</strong> an agent-facing map (e.g., <code>AGENTS.md</code>) that deterministically routes agents to authoritative policy paths without manual search.</li>
+<li><strong>Compare</strong> instruction-driven compliance with architectural constraint compliance when mitigating recurring agent failures.</li>
+</ul>
+<p><strong>Topic Bullets:</strong></p>
+<ul class="compact">
+<li>The limitations of prompt-level instructions for durable policy enforcement across fleets.</li>
+<li>The three-layer harness model: platform runtime, project advisory docs, and hard project enforcement.</li>
+<li>The repository as the ultimate System of Record (SoR) for autonomous agents.</li>
+<li>Structuring maps (e.g., <code>AGENTS.md</code> and <code>CLAUDE.md</code>) as control artifacts, not prose manuals.</li>
+<li>Progressive disclosure: anchoring specific paths rather than dumping massive context blocks.</li>
+<li>Reducing semantic ambiguity in the first 30 seconds of an agent task loop.</li>
+<li>Boring tech bias: prefer static markdown files and simple shell scripts over complex databases for policy control.</li>
+</ul>
+<p><strong>Primary References:</strong></p>
+<ul class="compact">
+<li><code>https://openai.com/index/harness-engineering/</code> (Lopopolo's core harness post)</li>
+<li><code>https://model-spec.openai.com/2025-09-12.html</code> (OpenAI Model Spec for platform layer constraints)</li>
+</ul>
+<p><strong>Hands-on exercise:</strong> Learners design a mock repository layout defining a 3-tier harness. They create an <code>AGENTS.md</code> map and a set of interconnected policy files, then simulate an agent traversal using basic CLI tools to prove the map resolves ambiguity for a specific deployment failure scenario.</p>
+
+<h3>Module 3.2: Guardrails, Gates, and Agent-Legible Apps</h3>
+<p><strong>Why this module exists:</strong> While Module 3.1 builds the map, an agent must still execute actions within an environment that can silently fail or allow dangerous operations. Engineers need to know how to build mechanical boundaries that reject unsafe outputs and expose internal app states clearly. This module shifts focus from advising the model (via prompts) to explicitly hard-gating its execution and providing deterministic error telemetry for autonomous remediation.</p>
+<p><strong>Learning Outcomes:</strong></p>
+<ul class="compact">
+<li><strong>Implement</strong> structural guardrails (e.g., schema validators, syntax linters) that enforce output contracts strictly outside the prompt window.</li>
+<li><strong>Design</strong> agent-legible observability surfaces that emit deterministic trace state, health metrics, and bounded JSON logs.</li>
+<li><strong>Diagnose</strong> execution loops by treating application errors as actionable remediation signals.</li>
+<li><strong>Compare</strong> the blast radius and reversibility of specific operations to determine which actions require hard blocking gates versus automated retries.</li>
+</ul>
+<p><strong>Topic Bullets:</strong></p>
+<ul class="compact">
+<li>The systemic failure of "prompt-only" safety in production agent fleets.</li>
+<li>Mechanical guardrails vs. semantic guardrails.</li>
+<li>Output schema validation and structured data enforcement as the primary execution gate.</li>
+<li>Making applications "agent-legible": emitting structured, predictable state rather than human-readable noise.</li>
+<li>Designing errors as remediation paths (actionable, deterministic error messages).</li>
+<li>Devtools wiring: connecting linters, tests, and pre-commit hooks directly to the agent's feedback loop.</li>
+<li>Least privilege execution, sandboxing principles, and environment variables as boundaries.</li>
+</ul>
+<p><strong>Primary References:</strong></p>
+<ul class="compact">
+<li><code>https://genai.owasp.org/llmrisk/llm01-prompt-injection/</code> (OWASP LLM01 on untrusted data boundaries)</li>
+<li><code>https://docs.anthropic.com/en/docs/build-with-claude/tool-use</code> (Anthropic Tool Use and structured constraints)</li>
+</ul>
+<p><strong>Hands-on exercise:</strong> Learners build a local invariant bash script that parses an agent's proposed YAML manifest. They configure the script to fail deterministically with a structured remediation message when a required security context block is missing, forcing the agent into a closed-loop repair cycle.</p>
+
+<h3>Module 3.3: Operating the Harness</h3>
+<p><strong>Why this module exists:</strong> A static harness configuration degrades rapidly under high-throughput autonomous workloads, resulting in exception drift and stale policies. Engineers need to learn how to operate, maintain, and prune the harness over time. This module teaches the day-two operations of an AI-native workspace, moving from building checks to governing the lifecycle of those checks, managing merge velocity, and continuously garbage-collecting obsolete agent rules.</p>
+<p><strong>Learning Outcomes:</strong></p>
+<ul class="compact">
+<li><strong>Diagnose</strong> exception drift by identifying temporary workaround policies that have calcified into invisible technical debt.</li>
+<li><strong>Implement</strong> a continuous garbage collection process to prune stale map links, obsolete exception entries, and duplicated hook logic.</li>
+<li><strong>Design</strong> an escalation matrix to route agent failures to human review based on retry limits and cost-of-bad-output.</li>
+<li><strong>Compare</strong> high-velocity merge philosophies, identifying when to automate retries versus when to force human confirmation gates.</li>
+</ul>
+<p><strong>Topic Bullets:</strong></p>
+<ul class="compact">
+<li>The operational decay of agent harnesses: instruction debt versus enforcement debt.</li>
+<li>Exception drift and managing the danger of permanent "temporary" incident workarounds.</li>
+<li>Continuous garbage collection (GC) of <code>AGENTS.md</code>, stale prompt templates, and old validation scripts.</li>
+<li>Doc-gardening as a first-class, scheduled engineering maintenance task.</li>
+<li>Adapting merge philosophy for AI scale: separating deterministic low-risk paths from high-risk manual review paths.</li>
+<li>Managing human-in-the-loop escalation thresholds.</li>
+<li>Synchronizing the three operational clocks: policy freshness, enforcement freshness, and recovery freshness.</li>
+</ul>
+<p><strong>Primary References:</strong></p>
+<ul class="compact">
+<li><code>https://openai.com/index/harness-engineering/</code> (Harness lifecycle and operational maintenance sections)</li>
+<li><code>https://linear.app/developers</code> (Linear API documentation as an example of operational issue state modeling)</li>
+</ul>
+<p><strong>Hands-on exercise:</strong> Learners audit a synthetic repository containing conflicting policies, stale incident exceptions, and broken map targets. They perform a rigorous doc-gardening sweep to prune the obsolete artifacts and update the harness map to a single source of truth without breaking existing integration test scripts.</p>
+
+<h3>Module 4.1: Symphony — Work Orchestration as Applied Harness</h3>
+<p><strong>Why this module exists:</strong> Modules 3.1-3.3 secure the repository environment, but do not schedule or track asynchronous agent workloads across a team. This capstone applies the entire harness framework to the project management layer. It teaches engineers how to orchestrate fleets of agents using issue trackers (like Linear or GitHub) as the definitive control plane, ensuring that agent activity translates into verifiable, human-reviewable progress without overwhelming human operators.</p>
+<p><strong>Learning Outcomes:</strong></p>
+<ul class="compact">
+<li><strong>Implement</strong> an issue-first orchestration loop that delegates control state to a project management tracker instead of a local ephemeral session.</li>
+<li><strong>Design</strong> a dynamic <code>WORKFLOW.md</code> contract that governs workspace cloning, hook execution, and polling behavior via hot-reload.</li>
+<li><strong>Compare</strong> rigid state machine transitions with objective-driven progression to determine the safest automation strategy for a given class of task.</li>
+<li><strong>Evaluate</strong> a "Proof of Work" package generated by an autonomous run to make safe, confident merge and release decisions.</li>
+</ul>
+<p><strong>Topic Bullets:</strong></p>
+<ul class="compact">
+<li>The conceptual pivot from terminal-session metrics to ticket-completion metrics.</li>
+<li>The PM tracker (GitHub Issues/Linear) as the ultimate control plane for fleet orchestration.
+<li>Practical application of the 4 lifecycle hooks (<code>after_create</code>, <code>before_run</code>, <code>after_run</code>, <code>before_remove</code>) and their specific failure semantics.</li>
+<li>Building persistent workpad comments to survive attempt retries, preserve context, and prevent timeline spam.</li>
+<li>Dynamic <code>WORKFLOW.md</code> adjustments: hot-reloading configurations to manage concurrency limits and blast radius during incidents.</li>
+<li>Transitioning from strict state choreography to objective-driven thresholds (e.g., KubeDojo's <code>/goal</code> paradigm).</li>
+<li>Assembling "Proof of Work" artifacts (CI results, diff analysis, objective completion checks) for human handoff.</li>
+</ul>
+<p><strong>Primary References:</strong></p>
+<ul class="compact">
+<li><code>https://github.com/openai/symphony/blob/main/SPEC.md</code> (Symphony Specification Document)</li>
+<li><code>https://github.com/openai/symphony/blob/main/README.md</code> (Symphony architectural overview)</li>
+</ul>
+<p><strong>Hands-on exercise:</strong> Learners configure a minimal <code>WORKFLOW.md</code> file and a polling bash script that reads issues from a mock GitHub repository via the CLI. They simulate a failing <code>after_run</code> hook to observe how the orchestrator gracefully preserves the ticket state in a "RetryQueued" mode without losing the persistent workpad evidence.</p>
+
+</main>
+</body>
+</html>
