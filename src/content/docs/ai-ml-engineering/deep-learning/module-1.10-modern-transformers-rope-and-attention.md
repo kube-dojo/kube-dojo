@@ -34,7 +34,7 @@ A model that is stable at moderate context can become unserviceable at high cont
 This is exactly where modern transformer implementation details become first-class engineering decisions.
 
 The module is designed as a technical bridge.
-The historical context for MLA and attention compression appears in [The Algorithmic Response in AI History (ch-73)](/ai-history/ch-73-the-algorithmic-response/) in the AI History track (landing in parallel), and this module is the implementation-side companion.
+The historical context for MLA and attention compression appears in [The Algorithmic Response in AI History (ch-73)](/ai-history/ch-73-the-algorithmic-response/) in the AI History track, and this module is the implementation-side companion.
 That means we focus on math, kernels, and service-level outcomes, then map each design to production cost and quality risk.
 
 To stay practical, we do three things.
@@ -476,6 +476,9 @@ Many failures come from skipping this and launching a benchmark that never reach
 
 ### 12.4 Benchmark script with vLLM
 
+For this lab, use prompt sizes that fit under a 4096-token model limit while generating 128 output tokens: 896, 1920, and 3968 token prompts.
+This leaves a consistent 128-token generation headroom under `max_model_len=4096`.
+
 ```python
 import argparse
 import time
@@ -555,12 +558,17 @@ if __name__ == "__main__":
 
     model = build_model(specs[args.model])
     tokenizer = AutoTokenizer.from_pretrained(specs[args.model].model)
-    for seq_len in [1024, 2048, 4096]:
+    benchmark_contexts = [
+        (896, "1K-128"),
+        (1920, "2K-128"),
+        (3968, "4K-128"),
+    ]
+    for seq_len, context_label in benchmark_contexts:
         prompt, actual_tokens = synthetic_prompt(tokenizer, seq_len)
         torch.cuda.synchronize()
         elapsed, tokens, tps = benchmark(model, prompt, new_tokens=128)
         torch.cuda.synchronize()
-        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{actual_tokens},{elapsed:.2f},{tokens},{tps:.2f},{actual_tokens}")
+        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{context_label},{actual_tokens},{elapsed:.2f},{tokens},{tps:.2f},{actual_tokens}")
 ```
 
 ### 12.5 Expected measured shape and interpretation
@@ -570,12 +578,12 @@ Use it as a sanity envelope rather than a target score.
 
 | Model | Attention Variant | Context | KV estimate (GiB) | Decode TPS (1-user, batch=1) | TTFT (ms) | Practical comment |
 |---|---|---:|---:|---:|---|
-| `NousResearch/Llama-2-7b-hf` | MHA | 1K | 0.50 | 62 | 260 | Quality baseline is clear; KV pressure starts to become visible past 2K |
-| `NousResearch/Llama-2-7b-hf` | MHA | 2K | 1.00 | 54 | 340 | KV and softmax costs rise together; quality and latency trade-off becomes visible |
-| `NousResearch/Llama-2-7b-hf` | MHA | 4K | 2.00 | 46 | 420 | Still operational, but expect occupancy stress and less stable tails by 4K |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 1K | 0.13 | 78 | 230 | Better cache profile with earlier headroom at short-to-mid context |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 2K | 0.25 | 70 | 320 | Longer-context stability gains start to appear while quality usually remains close |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 4K | 0.50 | 62 | 400 | Often better than MHA for sustained 4K and above at equal SLO targets |
+| `NousResearch/Llama-2-7b-hf` | MHA | 896 (1K-128) | 0.50 | 62 | 260 | Quality baseline is clear; KV pressure starts to become visible past 2K |
+| `NousResearch/Llama-2-7b-hf` | MHA | 1920 (2K-128) | 1.00 | 54 | 340 | KV and softmax costs rise together; quality and latency trade-off becomes visible |
+| `NousResearch/Llama-2-7b-hf` | MHA | 3968 (4K-128) | 2.00 | 46 | 420 | Still operational, but expect occupancy stress and less stable tails by 4K |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 896 (1K-128) | 0.13 | 78 | 230 | Better cache profile with earlier headroom at short-to-mid context |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 1920 (2K-128) | 0.25 | 70 | 320 | Longer-context stability gains start to appear while quality usually remains close |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 3968 (4K-128) | 0.50 | 62 | 400 | Often better than MHA for sustained 4K and above at equal SLO targets |
 
 You should read those numbers as a comparison curve.
 If MQA or MLA are in scope in your infrastructure, you can add them to the same table with the same prompt family and observe where each line bends.
@@ -821,7 +829,7 @@ Only compare within the same hardware and sampling strategy.
 
 Success criteria:
 
-- [ ] The measured KV estimate and measured TPS trend both increase with context in a consistent curve.
+- [ ] KV estimate increases with context while TPS and TTFT follow the expected trend (TPS decreases as KV cache and prefill pressure rise).
 - [ ] 1K/2K/4K measurements are present for both attention families.
 - [ ] The chosen architecture is justified by measured bottleneck shape, not by benchmark one-line output.
 - [ ] A fallback architecture is explicitly documented.
