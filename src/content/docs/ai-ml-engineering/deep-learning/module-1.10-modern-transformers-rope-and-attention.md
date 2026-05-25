@@ -34,7 +34,7 @@ A model that is stable at moderate context can become unserviceable at high cont
 This is exactly where modern transformer implementation details become first-class engineering decisions.
 
 The module is designed as a technical bridge.
-The historical context for MLA and attention compression appears in [The Algorithmic Response in AI History (ch-73)](/ai-history/ch-73-the-algorithmic-response/), and this module is the implementation-side companion.
+The historical context for MLA and attention compression appears in [The Algorithmic Response in AI History (ch-73)](/ai-history/ch-73-the-algorithmic-response/) in the AI History track (landing in parallel), and this module is the implementation-side companion.
 That means we focus on math, kernels, and service-level outcomes, then map each design to production cost and quality risk.
 
 To stay practical, we do three things.
@@ -104,7 +104,7 @@ RoPE mostly reduces positional brittleness.
 
 ALiBi takes a different route.
 Instead of changing vector spaces, it injects a linear penalty directly into attention logits.
-For token positions $i$ (query) and $j$ (key), each head has a learned slope $m_h$, and the logit becomes
+For token positions $i$ (query) and $j$ (key), each head has a fixed, head-specific slope $m_h$ set from a geometric schedule, and the logit becomes
  $\text{logit}^{(h)}_{i,j} = \frac{q^{(h)}_i k^{(h)\top}_j}{\sqrt{d_k}} - m_h (i-j)$, where $i \ge j$ for causal decoding.
 The larger the distance, the stronger the subtraction.
 Unlike RoPE, ALiBi does not add a positional vector.
@@ -124,7 +124,8 @@ When slopes are too shallow, you recover less local focus and may get attention 
 
 In practice, ALiBi’s geometric per-head slopes are a compact way to encode head specialization.
 Some heads stay conservative and local, others remain global.
-The module implementation style often keeps these slopes fixed once configured because this is a serving concern as much as a training concern.
+The module implementation style keeps these slopes fixed once configured because this is a serving concern as much as a training concern.
+The ALiBi paper (§3) states head slopes are fixed (not learned) during training.
 
 ## Section 4: YaRN (arXiv 2309.00071) and NTK-Aware Scaling
 
@@ -227,7 +228,7 @@ That makes it a strong bridge architecture for teams that cannot adopt MLA yet.
 
 ## Section 8: MLA — Multi-Head Latent Attention (DeepSeek-V2 arXiv 2405.04434)
 
-DeepSeek-V2 introduces MLA by splitting the caching path into low-rank latent projections and per-head reconstruction.
+A key point in DeepSeek-V2 §2.1 is that MLA splits the caching path into low-rank latent projections and per-head reconstruction.
 Instead of storing full per-head key and value tensors for every token in cache, MLA stores compact latents.
 A simplified view is:
 - map hidden state to a latent K-latent and V-latent
@@ -238,6 +239,18 @@ In practice this is implemented with low-rank projection matrices.
 The latent dimension is much smaller than $H \times d_k$, and that is where the KV reduction comes from.
 The paper reports a headline 93.3% KV reduction versus naive dense baselines for comparable settings.
 The effect is most noticeable when context grows into tens of thousands of tokens.
+
+DeepSeek-V2 uses a decoupled RoPE path because standard RoPE on compressed keys/values does not commute with the low-rank decomposition used by MLA.
+If RoPE were applied before decomposition, it would break that decomposition and force recomputation of full keys during decoding.
+So MLA keeps two cache components:
+- the latent KV cache $c_t^{KV}$ with dimension $d_c$
+- a separate decoupled RoPE component $k_t^R$ with dimension $d_h^R$.
+
+For sequence-wise cache accounting, DeepSeek-V2 describes the per-layer per-token cache as
+$\text{KV}_{\text{MLA}} \propto d_c + d_h^R$.
+Across $l$ layers, this is
+$$\text{KV}_{\text{MLA}} = (d_c + d_h^R)\cdot l$$
+(up to dtype and projection constants), as introduced in §2.1.3.
 
 Think of MLA as turning KV into a compressed “source manifold” plus lightweight view-dependent decoders.
 You pay extra projection work during attention but move the dominant memory burden out of cache growth.
@@ -422,8 +435,8 @@ Use any available GPU-capable host.
 If you already have a vLLM environment, use it.
 The default pair is:
 
-- Llama-class MHA baseline (for example, Llama-3 style dense attention)
-- Mistral-style model with GQA
+- Llama-2-style MHA baseline: `NousResearch/Llama-2-7b-hf` (MHA, `num_attention_heads = 32`, `num_key_value_heads = 32`)
+- Mistral-style model with GQA: `mistralai/Mistral-7B-Instruct-v0.3` (`num_attention_heads = 32`, `num_key_value_heads = 8`)
 
 Expected shape is: GQA should show lower KV growth and better long-context decode stability under equal serving configuration,
 with a small or moderate quality tradeoff depending on your benchmark corpus.
@@ -470,6 +483,7 @@ from dataclasses import dataclass
 
 import torch
 from vllm import LLM, SamplingParams
+from transformers import AutoTokenizer
 
 
 @dataclass
@@ -508,9 +522,12 @@ def benchmark(model: LLM, prompt: str, new_tokens: int = 128):
     return elapsed, total_tokens, tps
 
 
-def synthetic_prompt(seq_len: int) -> str:
-    base = "The architecture of modern transformers balances memory and reasoning. "
-    return (base * 200)[: seq_len]
+def synthetic_prompt(tokenizer: AutoTokenizer, seq_len: int) -> tuple[str, int]:
+    base_prompt = "A long story about software architecture, memory systems, and software engineering patterns. " * 1000
+    tokens = tokenizer.encode(base_prompt, add_special_tokens=False)
+    truncated = tokens[:seq_len]
+    prompt = tokenizer.decode(truncated)
+    return prompt, len(truncated)
 
 
 if __name__ == "__main__":
@@ -521,7 +538,7 @@ if __name__ == "__main__":
     specs = {
         "mha": ModelSpec(
             name="Llama_MHA",
-            model="meta-llama/Llama-3.1-8B-Instruct",
+            model="NousResearch/Llama-2-7b-hf",
             architecture_note="MHA",
             kv_heads=32,
         ),
@@ -534,12 +551,13 @@ if __name__ == "__main__":
     }
 
     model = build_model(specs[args.model])
+    tokenizer = AutoTokenizer.from_pretrained(specs[args.model].model)
     for seq_len in [8192, 16384, 32768]:
-        prompt = synthetic_prompt(seq_len)
+        prompt, actual_tokens = synthetic_prompt(tokenizer, seq_len)
         torch.cuda.synchronize()
         elapsed, tokens, tps = benchmark(model, prompt, new_tokens=128)
         torch.cuda.synchronize()
-        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{seq_len},{elapsed:.2f},{tokens},{tps:.2f}")
+        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{seq_len},{elapsed:.2f},{tokens},{tps:.2f},{actual_tokens}")
 ```
 
 ### 12.5 Expected measured shape and interpretation
@@ -549,9 +567,9 @@ Use it as a sanity envelope rather than a target score.
 
 | Model | Attention Variant | Context | KV estimate (GiB) | Decode TPS (1-user, batch=1) | TTFT (ms) | Practical comment |
 |---|---|---:|---:|---:|---|
-| `meta-llama/Llama-3.1-8B` | MHA | 8K | 4.00 | 46 | 420 | Good quality baseline, KV dominates beyond short prompts |
-| `meta-llama/Llama-3.1-8B` | MHA | 16K | 8.00 | 37 | 560 | KV and softmax cost push latency and occupancy down |
-| `meta-llama/Llama-3.1-8B` | MHA | 32K | 16.00 | 28 | 760 | Throughput still workable for selective workloads, fragile under concurrency |
+| `NousResearch/Llama-2-7b-hf` | MHA | 8K | 4.00 | 46 | 420 | Good quality baseline, KV dominates beyond short prompts |
+| `NousResearch/Llama-2-7b-hf` | MHA | 16K | 8.00 | 37 | 560 | KV and softmax cost push latency and occupancy down |
+| `NousResearch/Llama-2-7b-hf` | MHA | 32K | 16.00 | 28 | 760 | Throughput still workable for selective workloads, fragile under concurrency |
 | `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 8K | 1.00 | 58 | 360 | Better cache profile, quality difference should be validated by retrieval probes |
 | `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 16K | 2.00 | 49 | 460 | Stability benefits typically scale with context |
 | `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 32K | 4.00 | 39 | 590 | Often better than MHA for sustained long prompts at equal SLOs |
