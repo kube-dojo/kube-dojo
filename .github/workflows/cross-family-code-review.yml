@@ -39,33 +39,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/ci/cross_family_review.sh
 
-  review-gemini-3-5-flash-high:
-    name: Review (gemini-3.5-flash@high)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Run cross-family review
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.base_ref }}
-          MODEL_TAG: gemini-3.5-flash@high
-          API_ENDPOINT: https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
-          API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          API_MODEL: gemini-3.5-flash
-          REASONING_EFFORT: high
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/ci/cross_family_review.sh
-
   review-deepseek-v4-pro:
     name: Review (deepseek-v4-pro)
     runs-on: ubuntu-latest
