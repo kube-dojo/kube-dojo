@@ -28,6 +28,8 @@ Hypothetical scenario: your team has a useful internal assistant running on a wo
 
 This is the point where "use vLLM" is helpful but incomplete. vLLM is often the right first production answer, but it is not the only production answer. SGLang may be better when the workload has structured outputs, repeated prompt prefixes, or large MoE routing pressure. TensorRT-LLM may be the NVIDIA-max path when the model is supported and the team can afford compilation, tuning, and a narrower hardware target. ExLlamaV2 and ExLlamaV3 may be the correct local CUDA answer for a two-card workstation serving a small group, while NVIDIA Dynamo is not an engine replacement so much as the orchestration layer above engines when prefill, decode, KV routing, and cluster scheduling become the actual problem.
 
+For the historical angle on why architectural constraints around KV memory matter for infrastructure choices, see [Chapter 73: The Algorithmic Response](../../ai-history/ch-73-the-algorithmic-response/) in the AI-history sequence.
+
 The previous module taught you to ask whether the workload is constrained by memory capacity, memory bandwidth, interconnect, or scheduler behavior before you buy hardware. This module turns that diagnosis into an engine decision. You will build a deterministic decision flow, compare the engines by their natural habitat, and learn how to migrate from a learner runtime without rewriting the application layer. The outcome is not a memorized ranking. The outcome is a design review habit: name the workload, name the hardware tier, name the failure mode, then choose the smallest production engine that solves that specific constraint.
 
 ## 1. Production Engine Selection Starts After Bandwidth Math

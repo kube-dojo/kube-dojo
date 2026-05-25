@@ -151,7 +151,8 @@ Consumer adoption, edge constraints, and AI transitioning to heavy industry.
 | 70 | [The Energy Grid Collision](./ch-70-the-energy-grid-collision/) |
 | 71 | [The Chip War](./ch-71-the-chip-war/) |
 | 72 | [The Infinite Datacenter](./ch-72-the-infinite-datacenter/) |
+| 73 | [The Algorithmic Response](./ch-73-the-algorithmic-response/) |
 
 ---
 
-72 of 72 chapters published.
+73 of 73 chapters published.
