@@ -906,11 +906,6 @@ Each item should be answerable from code, configuration, traces, or a documented
 - [ ] Memory conflicts produce reconciliation events instead of silent merges.
 - [ ] Forward orchestration logic can choose retrieval, tools, or memory at request time.
 
-## Next Module
-
-Next module: Dynamic Context Orchestration.
-That module will tie retrieval, tools, and memory together at request time so an agent can choose the right context source dynamically instead of following one fixed context recipe for every task.
-
 ## Sources
 
 - Model Context Protocol, "Specification 2025-11-25": [https://modelcontextprotocol.io/specification/2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25)
@@ -933,3 +928,9 @@ That module will tie retrieval, tools, and memory together at request time so an
 - California Office of the Attorney General, "California Consumer Privacy Act": [https://oag.ca.gov/privacy/ccpa](https://oag.ca.gov/privacy/ccpa)
 - KubeDojo, "Building RAG Systems": [/ai-ml-engineering/vector-rag/module-1.2-building-rag-systems/](/ai-ml-engineering/vector-rag/module-1.2-building-rag-systems/)
 - KubeDojo, "RAG Evaluation & Optimization": [/ai-ml-engineering/vector-rag/module-1.4-rag-evaluation-optimization/](/ai-ml-engineering/vector-rag/module-1.4-rag-evaluation-optimization/)
+
+## Next Module
+
+Next module: [Dynamic Context Orchestration](module-2.4-dynamic-context-orchestration/).
+
+That module ties retrieval, tools, and memory together at request time so a harness can choose what to load, evict, summarize, or refresh on each turn instead of following one fixed context recipe for every task.
