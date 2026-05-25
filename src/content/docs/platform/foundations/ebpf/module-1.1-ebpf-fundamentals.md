@@ -367,7 +367,7 @@ The refinement demonstrates the production principle from this module: filter ea
 
 ## Next Module
 
-Continue to [Cilium - The Kernel-Powered Network Revolution](/platform/toolkits/infrastructure-networking/networking/module-5.1-cilium/) to see how eBPF programs, maps, helper calls, and hook choices become a Kubernetes networking datapath with policy, service load balancing, and observability.
+Continue to [eBPF Security & Networking Deep-Dive](module-1.2-ebpf-security-networking-deepdive/) for Cilium datapath mechanics (XDP, tc, socket LB, kube-proxy replacement maps) and Tetragon kernel enforcement (kprobes, LSM, Sigkill). Then use [Cilium - The Kernel-Powered Network Revolution](/platform/toolkits/infrastructure-networking/networking/module-5.1-cilium/) for day-two operations, Hubble debugging, and policy authoring.
 
 ---
 
