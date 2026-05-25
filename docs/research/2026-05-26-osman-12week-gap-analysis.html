@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Osman 12-week LLM-engineering roadmap — coverage matrix (2026-05-26)</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 1080px; margin: 2em auto; padding: 0 1em; color: #1a1a1a; line-height: 1.55; }
+  h1 { border-bottom: 2px solid #333; padding-bottom: 0.3em; }
+  h2 { margin-top: 1.8em; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { padding: 0.45em 0.75em; border: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f5; }
+  tr:nth-child(even) { background: #fafafa; }
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.95em; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.85em; font-weight: bold; }
+  .pill-covered  { background: #d4edda; color: #155724; }
+  .pill-partial  { background: #fff3cd; color: #856404; }
+  .pill-missing  { background: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+
+<h1>Osman 12-week LLM-engineering roadmap — coverage matrix (2026-05-26)</h1>
+
+<h2>Context</h2>
+<p>Following KubeDojo issue #1535 and the predecessor analysis of chapters 1-3 (2026-05-21), we audited KubeDojo's AI/ML engineering curriculum against Ahmad Osman's chapter 5 roadmap. Osman's roadmap details a 12-week "build → plot → break → explain → ship" practitioner journey, encompassing ~30 distinct topics ranging from tokenization and positioning to serving optimizations and mechanistic interpretability.</p>
+<p>While KubeDojo does not map 1:1 to external social-media content, Osman's sequencing serves as an excellent stress-test for KubeDojo's internal Information Architecture (IA). The goal of this analysis is to identify both <strong>topic gaps</strong> (where technical concepts are missing) and <strong>sequencing gaps</strong> (where topics exist but are scattered and inaccessible as a unified practitioner journey).</p>
+
+<h2>Coverage matrix</h2>
+<table>
+  <tr><th>Osman project</th><th>Category</th><th>Status</th><th>Existing module (if any)</th><th>Notes</th></tr>
+  <tr><td>VRAM Capacity Math</td><td>Infrastructure</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.6-memory-bandwidth-math.md</code></td><td>Strong foundational coverage.</td></tr>
+  <tr><td>Memory Bandwidth</td><td>Infrastructure</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.6-memory-bandwidth-math.md</code></td><td>Strong foundational coverage.</td></tr>
+  <tr><td>Prefill vs Decode</td><td>Inference</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Taught as a core load-bearing concept.</td></tr>
+  <tr><td>KV Cache / PagedAttention</td><td>Inference</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Detailed within vLLM ecosystem context.</td></tr>
+  <tr><td>Learner Engine Selection</td><td>Tooling</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai/open-models-local-inference/module-1.6-choosing-between-ollama-mlx-transformers-vllm.md</code></td><td>Decision tree mapped properly.</td></tr>
+  <tr><td>Production Engine Selection</td><td>Tooling</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.7-production-inference-engines.md</code></td><td>Decision tree mapped properly.</td></tr>
+  <tr><td>Inference Benchmarking</td><td>Ops</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.8-inference-benchmarking.md</code></td><td>TTFT, TPOT covered explicitly.</td></tr>
+  <tr><td>Tokenization: BPE</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>generative-ai/module-1.2-tokenization-text-processing.md</code></td><td>Theoretical foundations covered.</td></tr>
+  <tr><td>Position Embeddings: RoPE</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Taught alongside attention mechanisms.</td></tr>
+  <tr><td>Position Embeddings: ALiBi</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Also touched upon in failure slicing.</td></tr>
+  <tr><td>Attention: MQA</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Covered as an attention variant.</td></tr>
+  <tr><td>Attention: GQA</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Covered as an attention variant.</td></tr>
+  <tr><td>Attention: MLA</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Covered as an attention variant.</td></tr>
+  <tr><td>Attention: FlashAttention</td><td>Architecture</td><td><span class="pill pill-covered">COVERED</span></td><td><code>deep-learning/module-1.10-modern-transformers-rope-and-attention.md</code></td><td>Crucial optimization covered.</td></tr>
+  <tr><td>Context Caching (RadixAttention)</td><td>Inference</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Key component of modern serving.</td></tr>
+  <tr><td>Serving: vLLM</td><td>Serving</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Deep dive provided.</td></tr>
+  <tr><td>Serving: SGLang</td><td>Serving</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Deep dive provided.</td></tr>
+  <tr><td>Serving: TensorRT-LLM</td><td>Serving</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.7-production-inference-engines.md</code></td><td>Evaluated for production environments.</td></tr>
+  <tr><td>Multi-GPU / Tensor Parallelism</td><td>Ops</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai-infrastructure/module-1.7-production-inference-engines.md</code></td><td>Taught for scaling out.</td></tr>
+  <tr><td>Distributed Serving (NVIDIA Dynamo)</td><td>Serving</td><td><span class="pill pill-partial">PARTIAL</span></td><td><code>ai-infrastructure/module-1.7-production-inference-engines.md</code></td><td>Mentioned but lacks a deep technical implementation guide.</td></tr>
+  <tr><td>Inference Opt: Speculative Decoding</td><td>Inference</td><td><span class="pill pill-partial">PARTIAL</span></td><td><code>ai-infrastructure/module-1.3-vllm-sglang-inference.md</code></td><td>Briefly mentioned; needs dedicated algorithmic project treatment.</td></tr>
+  <tr><td>Inference Opt: Medusa Variants</td><td>Inference</td><td><span class="pill pill-missing">MISSING</span></td><td>—</td><td>Gap in the advanced serving optimization tier.</td></tr>
+  <tr><td>Architecture: MoE</td><td>Architecture</td><td><span class="pill pill-partial">PARTIAL</span></td><td><code>ai-infrastructure/module-1.7-production-inference-engines.md</code></td><td>Mentioned in scaling, but missing deep-learning theory module on MoE routers.</td></tr>
+  <tr><td>Quantization: GPTQ</td><td>Optimization</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai/open-models-local-inference/module-1.3-quantization-and-model-formats.md</code></td><td>Formats and constraints handled properly.</td></tr>
+  <tr><td>Quantization: AWQ</td><td>Optimization</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai/open-models-local-inference/module-1.3-quantization-and-model-formats.md</code></td><td>Formats and constraints handled properly.</td></tr>
+  <tr><td>Quantization: GGUF</td><td>Optimization</td><td><span class="pill pill-covered">COVERED</span></td><td><code>ai/open-models-local-inference/module-1.3-quantization-and-model-formats.md</code></td><td>Local execution models well covered.</td></tr>
+  <tr><td>Training: GRPO</td><td>Training</td><td><span class="pill pill-covered">COVERED</span></td><td><code>advanced-genai/module-1.12-reasoning-models-and-grpo.md</code></td><td>Recent addition; aligns well.</td></tr>
+  <tr><td>Training: RLVR</td><td>Training</td><td><span class="pill pill-covered">COVERED</span></td><td><code>advanced-genai/module-1.12-reasoning-models-and-grpo.md</code></td><td>Recent addition; aligns well.</td></tr>
+  <tr><td>Interpretability: Circuits</td><td>Interpretability</td><td><span class="pill pill-missing">MISSING</span></td><td>—</td><td>Mechanistic interpretability is entirely absent.</td></tr>
+  <tr><td>Interpretability: SAEs</td><td>Interpretability</td><td><span class="pill pill-missing">MISSING</span></td><td>—</td><td>Sparse Autoencoders represent a major curriculum gap.</td></tr>
+</table>
+
+<h2>Sequencing gaps</h2>
+<p>While the topic coverage is statistically excellent (24 Covered, 3 Partial, 3 Missing), a profound sequencing gap exists. Osman's true pedagogical value is the integrated, step-by-step nature of building an LLM skillset. Currently, a KubeDojo learner must manually bounce across <strong>five separate tracks</strong> (<code>generative-ai</code>, <code>deep-learning</code>, <code>ai-infrastructure</code>, <code>advanced-genai</code>, and <code>ai/open-models-local-inference</code>) to absorb this stack. There is no central narrative that weaves these isolated primitives into a cohesive engineering system.</p>
+
+<h2>Recommended net-new modules (3)</h2>
+<ol>
+  <li><strong>Module 1.13 — Advanced Inference: Speculative Decoding and Medusa Heads</strong> 
+    <br><em>Placement:</em> <code>ai-ml-engineering/ai-infrastructure/</code> 
+    <br><em>Scope:</em> Draft models vs target models, acceptance criteria, Medusa multi-head draft generation, and hands-on tuning of a speculative loop in vLLM. 
+    <br><em>Prerequisite chain:</em> module-1.3-vllm-sglang-inference.md
+  </li>
+  <li><strong>Module 1.11 — Mixture of Experts (MoE) Architectures</strong>
+    <br><em>Placement:</em> <code>ai-ml-engineering/deep-learning/</code>
+    <br><em>Scope:</em> Deep dive into MoE architectures: Routers, expert selection algorithms (Top-K, Sinkhorn), capacity factors, load balancing loss functions, and tradeoffs of sparse vs dense scaling.
+    <br><em>Prerequisite chain:</em> module-1.10-modern-transformers-rope-and-attention.md
+  </li>
+  <li><strong>Module 1.13 — Mechanistic Interpretability: SAEs and Circuits</strong>
+    <br><em>Placement:</em> <code>ai-ml-engineering/advanced-genai/</code>
+    <br><em>Scope:</em> Fundamentals of dictionary learning, identifying monosemantic features using Sparse Autoencoders (SAEs), mapping attention circuits (e.g., induction heads), and editing model representations.
+    <br><em>Prerequisite chain:</em> module-1.10-modern-transformers-rope-and-attention.md
+  </li>
+</ol>
+
+<h2>Recommendation: explicit project-ladder sub-track?</h2>
+<p><strong>YES.</strong> We strongly recommend building <code>ai-ml-engineering/synthesis-apps/the-12-week-llm-stack/</code> as a capstone project ladder. Instead of rewriting the theory taught in the core modules, this sub-track should serve as a practical, week-by-week shipping guide that links directly back to the scattered theory files. This preserves KubeDojo's robust academic taxonomy while providing the highly sought-after, linear "builder's journey" that makes roadmaps like Osman's so popular.</p>
+
+<h2>Sources verified</h2>
+<ul>
+  <li><strong>FlashAttention:</strong> Dao, T., et al. (2022). "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness." (arXiv:2205.14135)</li>
+  <li><strong>Medusa:</strong> Cai, J., et al. (2024). "Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads." (arXiv:2401.10774)</li>
+  <li><strong>GPTQ:</strong> Frantar, E., et al. (2022). "GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers." (arXiv:2210.17323)</li>
+  <li><strong>GRPO:</strong> Shao, Z., et al. (2024). "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models." (arXiv:2402.03300)</li>
+  <li><strong>SAEs:</strong> Bricken, T., et al. (2023). "Towards Monosemanticity: Decomposing Language Models with Dictionary Learning." (Anthropic)</li>
+</ul>
+
+</body>
+</html>
