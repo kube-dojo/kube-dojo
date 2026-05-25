@@ -170,7 +170,7 @@ ipam:
   assign_ipv6: "true"
 ```
 
-Calico IP pools describe the address space from which workload addresses are allocated. The following examples show the shape only; replace the documentation CIDRs with ranges from your address plan.
+Calico IP pools describe the address space from which workload addresses are allocated. The `projectcalico.org/v3` `IPPool` schema uses separate `vxlanMode` and `ipipMode` fields; it does not define the operator `Installation` field named `encapsulation`. The following examples show the shape only; replace the documentation CIDRs with ranges from your address plan.
 
 ```yaml
 apiVersion: projectcalico.org/v3
@@ -179,7 +179,7 @@ metadata:
   name: dojo-ipv4-pool
 spec:
   cidr: 10.244.0.0/16
-  encapsulation: VXLAN
+  vxlanMode: Always
   natOutgoing: true
   nodeSelector: all()
 ---
@@ -189,7 +189,7 @@ metadata:
   name: dojo-ipv6-pool
 spec:
   cidr: fd00:10:244::/56
-  encapsulation: VXLAN
+  vxlanMode: Always
   natOutgoing: true
   nodeSelector: all()
 ```
@@ -646,9 +646,10 @@ Each node should show Pod CIDR evidence from both families. In a kind cluster us
 
 ### Task 2: Deploy a web workload and inspect Pod `status.podIPs`
 
-Apply a Deployment with two replicas so EndpointSlice output has real backend data to show for each address family:
+Write and apply a Deployment with two replicas so EndpointSlice output has real backend data to show for each address family:
 
-```yaml
+```bash
+cat > web-dual-deployment.yaml <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -668,9 +669,8 @@ spec:
           image: nginx:1.27-alpine
           ports:
             - containerPort: 80
-```
+EOF
 
-```bash
 kubectl apply -f web-dual-deployment.yaml
 kubectl rollout status deployment/web-dual
 kubectl get pods -l app=web-dual -o go-template='{{range .items}}{{.metadata.name}}{{"\n"}}{{range .status.podIPs}}{{printf "  %s\n" .ip}}{{end}}{{end}}'
@@ -684,9 +684,10 @@ Each ready Pod should report two entries under `status.podIPs`. If Pods report o
 
 ### Task 3: Create a `RequireDualStack` Service and inspect allocation
 
-Apply a dual-stack Service with `RequireDualStack`; the point is to make cluster misconfiguration fail loudly instead of falling back silently:
+Write and apply a dual-stack Service with `RequireDualStack`; the point is to make cluster misconfiguration fail loudly instead of falling back silently:
 
-```yaml
+```bash
+cat > web-dual-service.yaml <<'EOF'
 apiVersion: v1
 kind: Service
 metadata:
@@ -703,9 +704,8 @@ spec:
     - name: http
       port: 80
       targetPort: 80
-```
+EOF
 
-```bash
 kubectl apply -f web-dual-service.yaml
 kubectl get service web-dual -o yaml
 kubectl get service web-dual -o jsonpath='{.spec.ipFamilyPolicy}{" "}{.spec.ipFamilies}{" "}{.spec.clusterIPs}{"\n"}'
@@ -767,9 +767,10 @@ kubectl exec client -- curl -g -sS "http://[${V6_IP}]"
 
 ### Task 6: Compare Service policy modes
 
-Create two additional Services that select the same Pods, then compare how policy choice changes allocation while the backend Pods remain constant:
+Write and apply two additional Services that select the same Pods, then compare how policy choice changes allocation while the backend Pods remain constant:
 
-```yaml
+```bash
+cat > web-policy-compare.yaml <<'EOF'
 apiVersion: v1
 kind: Service
 metadata:
@@ -802,9 +803,8 @@ spec:
     - name: http
       port: 80
       targetPort: 80
-```
+EOF
 
-```bash
 kubectl apply -f web-policy-compare.yaml
 kubectl get service web-single-v6 web-prefer -o custom-columns=NAME:.metadata.name,POLICY:.spec.ipFamilyPolicy,FAMILIES:.spec.ipFamilies,IPS:.spec.clusterIPs
 ```
