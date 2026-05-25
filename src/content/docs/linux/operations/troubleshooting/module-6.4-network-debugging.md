@@ -717,7 +717,7 @@ Write three sentences answering: which layer falsified your first guess in each 
 
 ## Next Module
 
-Continue to [Module 7.1: Bash Fundamentals](/linux/shell-scripting/module-7.1-bash-fundamentals/) to automate these diagnostics into reusable checks and incident scripts.
+Continue to [Module 7.1: Bash Fundamentals](/linux/operations/shell-scripting/module-7.1-bash-fundamentals/) to automate these diagnostics into reusable checks and incident scripts.
 
 Bridge from [Module 6.3: Process Debugging](../module-6.3-process-debugging/): when `ss` shows a listening socket but the process `wchan` in `/proc` suggests endless `do_epoll_wait`, combine this module’s capture path with process-level `strace` on the same PID in the same network namespace.
 
