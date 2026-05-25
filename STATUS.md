@@ -39,12 +39,12 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (52 dated
 
 ## Current state
 
-- **760 English modules** (753 + 7 new session 55: Wave 2.1 prompt-fundamentals · 2.2 reasoning-and-logic-prompts · 2.3 prompt-safety-and-evaluation · 2.4 prompt-libraries-and-contracts · GRPO/RLVR · dual-stack K8s · eBPF tracing tools · Edge Fleet Patterns · eBPF security & networking deep-dive — Wave 3.1 retrieval-tools in flight at handoff); **312 Ukrainian** (~41%).
+- **761 English modules** (753 + 8 new session 55: Wave 2.1 prompt-fundamentals · 2.2 reasoning-and-logic-prompts · 2.3 prompt-safety-and-evaluation · 2.4 prompt-libraries-and-contracts · GRPO/RLVR · dual-stack K8s · eBPF tracing tools · Edge Fleet Patterns · eBPF security & networking deep-dive · Wave 3.1 retrieval-tools-and-memory-boundaries (PR #1557 merged after handoff)); **312 Ukrainian** (~41%).
 - **Starter tracks 499/499 at heuristic 5.0** (prereqs 44 / linux 37 / ai 28 / ai-ml-engineering 103 / cloud 92 / k8s certs 195).
 - **122 critical-rubric platform + 13 on-prem REWRITES remain** (unchanged session 55).
 - **388 modules need composer-2.5 review** (heuristic-green but not yet composer-2.5-reviewed) — epic #1504, 77 sections, ~58h cursor wall-clock.
 - **2 Phase E.1 residual issues remain open** for codex T0 author: #1521 Disconnected K8s · #1524 IPv6-only K8s. (Session 55 closed #1517/#1518/#1520/#1523.)
-- **#1530 AI Engineering Foundations epic** — 10 boxes remain (1 Wave 3 module-2.4 + 3 Wave 4 + 1 capstone + 5 Phase 4 migration — note Wave 3.1 module-2.3 is in flight at handoff). Wave 2 fully complete pending PR #1554 auto-merge.
+- **#1530 AI Engineering Foundations epic** — 9 boxes remain (1 Wave 3 module-2.4 dynamic-context-orchestration + 3 Wave 4 + 1 capstone + 5 Phase 4 migration). Wave 2 fully complete pending PR #1554 auto-merge; Wave 3.1 module-2.3 retrieval-tools merged in PR #1557 (post-handoff bonus).
 - Site: https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build).
 - Services: `./services.sh {start|stop|restart|status} {dev|api|feedback}` (api on :8768, dev on :4333).
 
@@ -53,8 +53,7 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (52 dated
 **Next session — top priorities:**
 
 - [ ] **Confirm PR #1554 (Wave 2.1) auto-merge landed** — queued for CI at session-55 close; will tick the final Wave 2 box of epic #1530 when it merges. If still stuck on CI, direct-merge (review-job failures are advisory; the 5 Analyze/Incident-dedup checks are the required gate).
-- [ ] **Read Wave 3.1 codex T0 output** when notification fires — `logs/dispatch_responses/t0-1530-w3-1.txt`. Module-2.3 retrieval-tools-and-memory-boundaries (will be PR #1557). Cursor R1 reviewer per Decision Card C.
-- [ ] **Fire Wave 3.2 codex T0** — module-2.4 dynamic-context-orchestration (last Wave-3 module; W3.1 was module-2.2 merged session 54, W3.2 was module-2.3 just dispatched).
+- [ ] **Fire Wave 3.2 codex T0** — module-2.4 dynamic-context-orchestration (last open Wave-3 module; W3 = 2.2 session 54, W3.1 = 2.3 PR #1557 merged post-handoff). Closes Wave 3 of #1530.
 - [ ] **Fire Wave 4 of #1530** — 3 harness modules (module-3.1 fundamentals · 3.2 guardrails · 3.3 operating) + 1 capstone (module-4.1 Symphony). Untouched. ~6-12 dispatches incl. R1/R2 cycles.
 - [ ] **Phase 4 migration** (5 boxes after Wave 4 ships): relocate existing prompt/harness modules from `ai-ml-engineering/` + `ai/ai-native-work/` into new `ai/ai-engineering-foundations/` section; cross-link or deprecate originals.
 - [ ] **Fire 2 remaining Phase E.1 residuals**: #1521 Disconnected & Air-gapped K8s · #1524 IPv6-only K8s. Both need scope-correction investigation first (per session-55 pattern: existing modules may cover parts). Use `--model gpt-5.5` explicit.
