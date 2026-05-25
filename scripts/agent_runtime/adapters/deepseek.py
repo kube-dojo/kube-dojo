@@ -5,8 +5,8 @@ peer to codex / claude / gemini for code review, deliberation, and fix lanes.
 
 Key design points:
 
-- **Transport:** ``hermes`` CLI in oneshot mode (``-z -`` reads prompt
-  from stdin). Hermes proxies to DeepSeek via the ``deepseek`` provider.
+- **Transport:** ``hermes`` CLI in oneshot mode (``--oneshot=<prompt>``
+  argv binding). Hermes proxies to DeepSeek via the ``deepseek`` provider.
 - **Modes:** All three (read-only / workspace-write / danger) supported.
   Mode → hermes toolset mapping is conservative for read-only (no
   terminal/file tools), permissive for workspace-write and danger.
@@ -132,20 +132,11 @@ class DeepSeekAdapter:
         cmd: list[str] = [binary]
 
         # Reasoning effort hint applied first so the final prompt string is
-        # the argv positional we pass to -z.
+        # bound via --oneshot= below.
         effort = tc.get("effort")
         final_prompt = prompt
         if effort and effort != "default":
             final_prompt = f"[Reasoning effort hint: {effort}]\n\n{prompt}"
-
-        # Oneshot mode. Pass the prompt as argv positional, NOT stdin.
-        # ``hermes -z -`` (stdin marker) is interpreted as "no prompt
-        # provided, run in project-introspection mode" — the prompt
-        # piped on stdin is ignored. ARG_MAX is ~1 MB on macOS so the
-        # ~10 KB review prompts fit comfortably; if a caller needs to
-        # pass a multi-megabyte prompt, write it to a temp file and use
-        # a different transport (not the runtime's concern today).
-        cmd.extend(["-z", final_prompt])
 
         # Model
         cmd.extend(["-m", model or self.default_model])
@@ -181,6 +172,13 @@ class DeepSeekAdapter:
         # more important than context awareness.
         if bool(tc.get("isolated", False)):
             cmd.extend(["--ignore-user-config", "--ignore-rules"])
+
+        # --oneshot (-z): one-shot mode; PROMPT must be a single argv token.
+        # Use ``--oneshot=<prompt>`` so flag-like prompts (e.g. ``--provider``)
+        # are bound as the flag value, not parsed as a separate CLI flag.
+        # Do NOT use stdin (``hermes -z -``) — that is interpreted as
+        # "no prompt, project-introspection mode".
+        cmd.append(f"--oneshot={final_prompt}")
 
         # Defensively drop session_id — resume_policy=never.
         _ = session_id

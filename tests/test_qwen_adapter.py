@@ -22,16 +22,16 @@ def test_build_invocation_read_only(monkeypatch) -> None:
     cmd = plan.cmd
     assert cmd == [
         "hermes",
-        "-z",
-        "p",
         "-m",
         "qwen/qwen3.6-plus",
         "--provider",
         "openrouter",
         "-t",
         "web",
+        "--oneshot=p",
     ]
     assert "--yolo" not in cmd
+    assert "-z" not in cmd
 
 
 def test_build_invocation_workspace_write(monkeypatch) -> None:
@@ -115,3 +115,42 @@ def test_parse_response_detects_rate_limit() -> None:
 
     assert result.rate_limited is True
     assert result.ok is False
+
+
+def test_qwen_hermes_argv_puts_oneshot_last(monkeypatch) -> None:
+    """Hermes --oneshot=<prompt> must follow --provider and -m (equals-form)."""
+    monkeypatch.setattr("agent_runtime.adapters.qwen.shutil.which", lambda _: "hermes")
+    adapter = QwenAdapter()
+    plan = adapter.build_invocation(
+        prompt="hello",
+        mode="read-only",
+        cwd=Path("/tmp"),
+        model=None,
+        task_id=None,
+        session_id=None,
+        tool_config=None,
+    )
+    cmd = plan.cmd
+    assert cmd[-1] == "--oneshot=hello"
+    assert "-z" not in cmd
+    assert cmd[0] == "hermes"
+    assert cmd[cmd.index("-m") + 1] == "qwen/qwen3.6-plus"
+    assert cmd[cmd.index("--provider") + 1] == "openrouter"
+
+
+def test_qwen_hermes_argv_handles_flag_like_prompt(monkeypatch) -> None:
+    """Flag-like prompts bind via --oneshot= so argparse never treats them as flags."""
+    monkeypatch.setattr("agent_runtime.adapters.qwen.shutil.which", lambda _: "hermes")
+    adapter = QwenAdapter()
+    plan = adapter.build_invocation(
+        prompt="--provider",
+        mode="read-only",
+        cwd=Path("/tmp"),
+        model=None,
+        task_id=None,
+        session_id=None,
+        tool_config=None,
+    )
+    cmd = plan.cmd
+    assert "--oneshot=--provider" in cmd
+    assert "-z" not in cmd
