@@ -193,20 +193,23 @@ spec:
       name: "baseline-{{.name}}"
     spec:
       project: edge-stores
-      source:
-        repoURL: https://github.com/example/store-platform.git
-        targetRevision: main
-        path: charts/store-baseline
-        helm:
-          valueFiles:
-            - "values.yaml"
-            - "../../edge-fleet-config/clusters/{{.name}}/values.yaml"
+      sources:
+        - repoURL: https://github.com/example/store-platform.git
+          targetRevision: main
+          path: charts/store-baseline
+          helm:
+            valueFiles:
+              - "values.yaml"
+              - "$values/clusters/{{.name}}/values.yaml"
+        - repoURL: https://github.com/example/edge-fleet-config.git
+          targetRevision: main
+          ref: values
       destination:
         server: "{{.server}}"
         namespace: store-platform
 ```
 
-That example is intentionally strict about missing keys. A missing per-site file should fail generation in a visible way rather than silently deploying a default that may be wrong for a store. In production you may separate repository credentials, use multiple sources, or keep values in a different structure. The important point is that the generator input is auditable and the template does not hardcode one-off exceptions inside the controller manifest.
+That example is intentionally strict about missing keys. A missing per-site file should fail generation in a visible way rather than silently deploying a default that may be wrong for a store. The template uses Argo CD's multi-source Application syntax because the Helm chart and the per-site values live in different repositories. The `ref: values` source exposes the config repository as `$values`, and the value file path starts from that repository root. The important point is that the generator input is auditable and the template does not hardcode one-off exceptions inside the controller manifest.
 
 ## Flux Multi-Tenant and Multi-Cluster Patterns at Edge
 
@@ -651,7 +654,7 @@ rolloutStrategy:
 EOF
 
 mkdir -p edge-fleet-lab/repo/baseline/overlays/constrained-network
-cat > edge-fleet-lab/repo/baseline/overlays/constrained-network/config-patch.yaml <<'EOF'
+cat > edge-fleet-lab/repo/baseline/overlays/constrained-network/config_patch.yaml <<'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -751,7 +754,9 @@ Continue to [Module 5.5: Active-Active Multi-Site](../module-5.5-active-active-m
 - [Fleet Register Downstream Clusters](https://fleet.rancher.io/how-tos-for-operators/cluster-registration) - Verifies agent-initiated and manager-initiated cluster registration models and kubeconfig-secret registration.
 - [Fleet Rollout Strategy](https://fleet.rancher.io/how-tos-for-users/rollout) - Verifies rollout partitions, `maxUnavailable`, `maxUnavailablePartitions`, `maxNew`, and image-pull storm guidance.
 - [Fleet fleet.yaml Reference](https://fleet.rancher.io/reference/ref-fleet-yaml) - Verifies target customizations, paused bundle behavior, and rollout strategy fields in `fleet.yaml`.
+- [Fleet Git Repository Contents](https://fleet.rancher.io/explanations/gitrepo-content) - Verifies raw YAML overlay replacement and `_patch` filename behavior.
 - [Argo CD ApplicationSet Generators](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators/) - Verifies the generator model and the cluster, list, and Git generator categories.
+- [Argo CD Multiple Sources for an Application](https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/) - Verifies `spec.sources`, `ref`, and `$values` for Helm value files stored in a separate Git repository.
 - [Argo CD Cluster Generator](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Cluster/) - Verifies cluster-label selection from Argo CD registered clusters.
 - [Argo CD Git Generator](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Git/) - Verifies directory and file generation from Git repositories.
 - [Argo CD List Generator](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-List/) - Verifies explicit list-based generator inputs for ApplicationSets.
