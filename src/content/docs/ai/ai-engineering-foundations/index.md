@@ -48,3 +48,5 @@ Move to context fundamentals when the same prompt behaves differently across fre
 Use the harness modules when good individual sessions need to become repeatable team workflows.
 
 Use the Symphony capstone only after the lower layers feel boring enough to operate.
+
+For operators who need to learn AI tool habits before building systems, see [AI-Native Work](../ai-native-work/). If you are an engineer looking for IDE and CLI tooling, start with [AI-Native Development](../../ai-ml-engineering/ai-native-development/).
