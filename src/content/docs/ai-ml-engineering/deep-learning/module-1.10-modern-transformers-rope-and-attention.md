@@ -15,8 +15,8 @@ citations_verified: true
 - **Diagnose** the limits of absolute positional embeddings and explain why they stop extrapolating cleanly beyond seen sequence lengths.
 - **Implement** a mental model of RoPE and ALiBi that tracks both the algebra and the practical behavior, including why one is stronger for zero-shot long-context transfer and why the other is attractive in inference-constrained services.
 - **Compare** MHA, MQA, GQA, and MLA at the level of kernel activity, KV-cache size, quality drift, and operational burden.
-- **Build** a repeatable architecture decision tree for workload families: long-context inference, multi-GPU throughput, edge/Apple Silicon, and short-context quality-sensitive cases.
-- **Run and interpret** a practical head-to-head attention experiment at 8K/16K/32K context and map measured latency to tradeoffs.
+- **Build** a repeatable architecture decision tree for workload families: long-context inference, multi-GPU throughput, edge/Apple Silicon, and short-context quality-sensitive cases. Include one practical benchmark at 1K, 2K, and 4K context for MHA vs GQA.
+- **Run and interpret** a practical head-to-head attention experiment at 1K/2K/4K context and map measured latency to tradeoffs.
 
 ## Why This Module Matters
 
@@ -426,7 +426,7 @@ The design should therefore include an explicit rollback axis and a benchmark ga
 
 This lab is intentionally operational.
 You will load one MHA-family model and one GQA-family model,
-measure KV cache footprint and decode latency at 8K, 16K, and 32K,
+measure KV cache footprint and decode latency at 1K, 2K, and 4K,
 and then reason through the results.
 
 ### 12.1 Model set and expectation
@@ -465,7 +465,7 @@ variants = {
 }
 
 for model_label, kv_heads in variants.items():
-    for seq_len in [8192, 16384, 32768]:
+    for seq_len in [1024, 2048, 4096]:
         gb = estimate_kv_gb(seq_len=seq_len, layers=32, kv_heads=kv_heads)
         print(model_label, seq_len, round(gb, 2), "GiB")
 ```
@@ -501,7 +501,7 @@ def build_model(spec: ModelSpec, dtype: str = "float16"):
         dtype=dtype,
         trust_remote_code=True,
         enable_prefix_caching=True,
-        max_model_len=32768,
+        max_model_len=4096,
         gpu_memory_utilization=0.85,
     )
 
@@ -523,11 +523,14 @@ def benchmark(model: LLM, prompt: str, new_tokens: int = 128):
 
 
 def synthetic_prompt(tokenizer: AutoTokenizer, seq_len: int) -> tuple[str, int]:
-    base_prompt = "A long story about software architecture, memory systems, and software engineering patterns. " * 1000
-    tokens = tokenizer.encode(base_prompt, add_special_tokens=False)
-    truncated = tokens[:seq_len]
-    prompt = tokenizer.decode(truncated)
-    return prompt, len(truncated)
+    base_prompt = "A long story about software architecture, memory systems, and software engineering patterns. "
+    tokens = []
+    while len(tokens) < seq_len:
+        tokens.extend(tokenizer.encode(base_prompt, add_special_tokens=False))
+    tokens = tokens[:seq_len]
+    assert len(tokens) == seq_len, f"Token count mismatch: {len(tokens)} vs {seq_len}"
+    prompt = tokenizer.decode(tokens)
+    return prompt, seq_len
 
 
 if __name__ == "__main__":
@@ -552,12 +555,12 @@ if __name__ == "__main__":
 
     model = build_model(specs[args.model])
     tokenizer = AutoTokenizer.from_pretrained(specs[args.model].model)
-    for seq_len in [8192, 16384, 32768]:
+    for seq_len in [1024, 2048, 4096]:
         prompt, actual_tokens = synthetic_prompt(tokenizer, seq_len)
         torch.cuda.synchronize()
         elapsed, tokens, tps = benchmark(model, prompt, new_tokens=128)
         torch.cuda.synchronize()
-        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{seq_len},{elapsed:.2f},{tokens},{tps:.2f},{actual_tokens}")
+        print(f"{specs[args.model].name},{specs[args.model].architecture_note},{actual_tokens},{elapsed:.2f},{tokens},{tps:.2f},{actual_tokens}")
 ```
 
 ### 12.5 Expected measured shape and interpretation
@@ -567,12 +570,12 @@ Use it as a sanity envelope rather than a target score.
 
 | Model | Attention Variant | Context | KV estimate (GiB) | Decode TPS (1-user, batch=1) | TTFT (ms) | Practical comment |
 |---|---|---:|---:|---:|---|
-| `NousResearch/Llama-2-7b-hf` | MHA | 8K | 4.00 | 46 | 420 | Good quality baseline, KV dominates beyond short prompts |
-| `NousResearch/Llama-2-7b-hf` | MHA | 16K | 8.00 | 37 | 560 | KV and softmax cost push latency and occupancy down |
-| `NousResearch/Llama-2-7b-hf` | MHA | 32K | 16.00 | 28 | 760 | Throughput still workable for selective workloads, fragile under concurrency |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 8K | 1.00 | 58 | 360 | Better cache profile, quality difference should be validated by retrieval probes |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 16K | 2.00 | 49 | 460 | Stability benefits typically scale with context |
-| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 32K | 4.00 | 39 | 590 | Often better than MHA for sustained long prompts at equal SLOs |
+| `NousResearch/Llama-2-7b-hf` | MHA | 1K | 0.50 | 62 | 260 | Quality baseline is clear; KV pressure starts to become visible past 2K |
+| `NousResearch/Llama-2-7b-hf` | MHA | 2K | 1.00 | 54 | 340 | KV and softmax costs rise together; quality and latency trade-off becomes visible |
+| `NousResearch/Llama-2-7b-hf` | MHA | 4K | 2.00 | 46 | 420 | Still operational, but expect occupancy stress and less stable tails by 4K |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 1K | 0.13 | 78 | 230 | Better cache profile with earlier headroom at short-to-mid context |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 2K | 0.25 | 70 | 320 | Longer-context stability gains start to appear while quality usually remains close |
+| `mistralai/Mistral-7B-Instruct-v0.3` | GQA | 4K | 0.50 | 62 | 400 | Often better than MHA for sustained 4K and above at equal SLO targets |
 
 You should read those numbers as a comparison curve.
 If MQA or MLA are in scope in your infrastructure, you can add them to the same table with the same prompt family and observe where each line bends.
@@ -751,7 +754,7 @@ Record these fields: CPU, GPU, GPU memory, PCIe/NVLink topology, model ids, prec
 Without this metadata, future readers cannot compare benchmarks across runs.
 </details>
 
-- [ ] Run the KV estimator from section 12.3 for MHA and GQA values and compute expected cache growth at 8K/16K/32K.
+- [ ] Run the KV estimator from section 12.3 for MHA and GQA values and compute expected cache growth at 1K/2K/4K.
 
 <details>
 <summary>Solution guidance</summary>
@@ -819,7 +822,7 @@ Only compare within the same hardware and sampling strategy.
 Success criteria:
 
 - [ ] The measured KV estimate and measured TPS trend both increase with context in a consistent curve.
-- [ ] 8K/16K/32K measurements are present for both attention families.
+- [ ] 1K/2K/4K measurements are present for both attention families.
 - [ ] The chosen architecture is justified by measured bottleneck shape, not by benchmark one-line output.
 - [ ] A fallback architecture is explicitly documented.
 - [ ] Quality probes are run at each context point, even if approximate.
