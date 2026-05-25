@@ -16,7 +16,7 @@ jobs:
   review-gemini-3-1-pro:
     name: Review (gemini-3.1-pro-preview)
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read
@@ -42,7 +42,7 @@ jobs:
   review-gemini-3-5-flash-high:
     name: Review (gemini-3.5-flash@high)
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read
@@ -69,7 +69,7 @@ jobs:
   review-deepseek-v4-pro:
     name: Review (deepseek-v4-pro)
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read
