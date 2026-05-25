@@ -7,7 +7,7 @@ sidebar:
 ---
 
 **Complexity**: Intermediate to Advanced  
-**Reading Time**: 6-7 hours  
+**Reading Time**: 7-8 hours
 **Prerequisites**: Phase 4 complete, basic Python, HTTP APIs, container images, and Kubernetes v1.35+ deployment knowledge.
 
 ## Learning Outcomes
@@ -342,9 +342,9 @@ The classic stack is usually `Audio -> STT service -> LLM -> TTS service -> Audi
 2. **Reasoning serialization**: The LLM is a second model hop that must ingest transcribed evidence, apply policy, and emit text (streamed by token).
 3. **Synthesis boundary**: TTS still needs enough text context to begin synthesis, then produces speech chunks under its own model and buffering constraints.
 
-In real systems this appears as a hard floor, not a soft one. The module's own active-check sample already demonstrates this shape: `180 ms STT + 900 ms LLM + 700 ms TTS`, where the perceived floor is effectively the sum of partial readiness points plus scheduling overhead. That pattern is exactly why production teams that measured first-audio in realistic stacks often report practical ranges near **600–1500 ms** under streaming.
+In real systems this appears as a hard floor, not a soft one. The module's own active-check sample already demonstrates this shape: `180 ms STT + 900 ms LLM + 700 ms TTS`, where the perceived floor is effectively the sum of partial readiness points plus scheduling overhead. That pattern is exactly why production teams that measured first-audio in realistic stacks often compare cascaded stacks against Moshi's reported latency profile.
 
-Human turn-taking is less forgiving than total latency. Sub-300ms response starts feel natural, while gaps above roughly 700ms usually feel like dead air. That mismatch is why architectures for real-time voice should optimize for **time-to-first-audio** before optimizing final answer throughput.
+The Moshi paper reports a theoretical **160 ms** one-pass delay and about **~200 ms** practical latency, while cascaded stacks can land in a several-second envelope due to handoffs. That mismatch is why architectures for real-time voice should optimize for **time-to-first-audio** before optimizing final answer throughput.
 
 #### Why token-boundary buffering dominates
 
@@ -403,6 +403,8 @@ OpenAI’s Realtime docs position `GPT-4o Realtime` as a model capable of text a
 - Interruption handling exists at the protocol level with event-driven truncation semantics.
 - Function calling is also part of the baseline contract in the Realtime guide: tool definitions can be provided and tool-call events are emitted during generation.
 
+This handler example is illustrative; include `import json` and `import base64` (plus websocket/loop setup) before using this in a runnable lab.
+
 ```python
 async def handle_realtime_voice_events(ws):
     async for raw in ws:
@@ -451,7 +453,7 @@ When comparing architectures, compare these values by percentile against the sam
 
 #### Interruption as an SLO, not an edge case
 
-Interruption is where many teams get this wrong. If a system is easy to use in clean turn-taking and fails when humans overlap, it is not production-ready. Instrumentation for interruption should include `speech_started`, `response.cancelled`, `audio_end_ms` in truncation paths, last rendered sample index before preemption, and post-interruption recovery latency for the next turn.
+Interruption is where many teams get this wrong. If a system is easy to use in clean turn-taking and fails when humans overlap, it is not production-ready. Instrumentation for interruption should include `input_audio_buffer.speech_started`, `response.cancelled`, `audio_end_ms` in truncation paths, last rendered sample index before preemption, and post-interruption recovery latency for the next turn.
 
 This lets you define a clear interruption SLO:
 
@@ -474,7 +476,7 @@ No architecture wins all axes. The right decision is contextual.
 
 #### Latency-quality Pareto intuition
 
-Think in three curves: (1) latency, (2) quality, and (3) operating controllability.  
+Think in three curves: (1) latency, (2) quality, and (3) operating controllability.
 Cascaded streaming is often stronger on replaceability, known-model behavior, and explicit auditing, but typically carries higher end-to-end conversational floor. Moshi-style dual-stream reduces first-audio floor through one-pass progression, but it can move quality risk into the model and raise your platform responsibility. Managed speech2speech services such as GPT-4o Realtime lower implementation friction, provide stable contracts, and support richer production tooling quickly, at the cost of stronger vendor lock-in and less transparent internals.
 
 When your users care most about responsiveness under realistic interruption, this is usually a dual-stream or managed speech2speech stack.
@@ -495,7 +497,8 @@ Multilingual environments where explicit ASR language switching is required, hig
 
 High-frequency voice UIs, interruption-heavy products, and teams already operating custom infra can benefit from dual-stream when low-latency cadence drives customer-perceived quality. If your team already controls model refreshes, GPU policy, and observability pipelines, the operational load is manageable.
 
-> **Active check**: A product team wants to improve a support hotline bot from “technically correct but lifeless” to “natural and fast.”  
+> **Active check**: A product team wants to improve a support hotline bot from “technically correct but lifeless” to “natural and fast.”
+>
 > Should you default to a GPT-4o Realtime integration, Moshi-like dual-stream deployment, or a cascaded graph?
 
 Answering this question is a trade-off exercise, not a rule:
