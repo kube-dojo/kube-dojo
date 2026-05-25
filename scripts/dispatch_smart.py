@@ -327,14 +327,18 @@ def _router_command(agent: str, model: str, prompt: str) -> list[str]:
         ]
     if agent == "hermes":
         cli_model = _hermes_cli_model(model)
+        # -z/--oneshot: one-shot mode; PROMPT is a single argv token (not stdin).
+        # Flags must precede -z: argparse binds the next token after -z as the
+        # prompt, so ``-z … --provider`` mis-parses when the prompt is empty or
+        # starts with ``-`` (e.g. ``--provider`` becomes -z's value).
         return [
             _hermes_binary(),
-            "-z",
-            prompt,
             "--provider",
             _hermes_provider_for_model(model),
             "-m",
             cli_model,
+            "-z",
+            prompt,
         ]
     raise ValueError(f"unsupported direct router agent: {agent}")
 
@@ -582,6 +586,8 @@ def main() -> int:
         print(f"[dry-run] worktree={_wt_label}")
         print(f"[dry-run] task_id={task_id}")
         print(f"[dry-run] prompt_chars={len(prompt)}")
+        if args.agent in {"cursor", "hermes", "opencode"}:
+            print(f"[dry-run] argv={_router_command(args.agent, model, prompt)!r}")
         return 0
 
     if worktree and mode != "read-only":

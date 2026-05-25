@@ -53,6 +53,16 @@ def test_dispatch_smart_agy_danger_no_worktree_passes_guards() -> None:
     )
 
 
+def test_hermes_router_argv_puts_oneshot_last() -> None:
+    """Hermes -z/--oneshot must follow --provider and -m so flags are not misparsed."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from dispatch_smart import _router_command
+
+    cmd = _router_command("hermes", "qwen-3.6-flash", "hello")
+    assert cmd[-2:] == ["-z", "hello"]
+    assert cmd[1:5] == ["--provider", "openrouter", "-m", "qwen/qwen3.6-flash"]
+
+
 def test_dispatch_smart_codex_danger_still_requires_worktree() -> None:
     """The agy carve-out must NOT loosen the requirement for codex,
     which actually writes under danger mode."""
