@@ -109,12 +109,11 @@ def test_hermes_command_construction(
     assert stderr == ""
     assert captured["cmd"] == [
         "hermes",
-        "-z",
-        "prompt",
         "--provider",
         "anthropic",
         "-m",
         "claude-sonnet-4-6",
+        "--oneshot=prompt",
     ]
     assert captured["kwargs"]["input"] == ""
     assert captured["kwargs"]["cwd"] == tmp_path
@@ -151,14 +150,32 @@ def test_hermes_qwen_route_label_maps_to_cli_model(
     assert stderr == ""
     assert captured["cmd"] == [
         "hermes",
-        "-z",
-        "prompt",
         "--provider",
         "openrouter",
         "-m",
         "qwen/qwen3.6-flash",
+        "--oneshot=prompt",
     ]
     assert captured["kwargs"]["input"] == ""
+
+
+def test_hermes_build_command_puts_oneshot_last() -> None:
+    """Hermes --oneshot=<prompt> must follow --provider and -m (equals-form)."""
+    from ai_agent_bridge import _hermes
+
+    cmd = _hermes._build_command("hello", "qwen-3.6-flash")
+    assert cmd[-1] == "--oneshot=hello"
+    assert "-z" not in cmd
+    assert cmd[1:5] == ["--provider", "openrouter", "-m", "qwen/qwen3.6-flash"]
+
+
+def test_hermes_build_command_handles_flag_like_prompt() -> None:
+    """Flag-like prompts bind via --oneshot= so argparse never treats them as flags."""
+    from ai_agent_bridge import _hermes
+
+    cmd = _hermes._build_command("--provider", "qwen-3.6-flash")
+    assert "--oneshot=--provider" in cmd
+    assert "-z" not in cmd
 
 
 def test_task_classes_include_opencode_and_hermes() -> None:

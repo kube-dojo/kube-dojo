@@ -56,14 +56,16 @@ def _build_command(
     provider: str | None = None,
 ) -> list[str]:
     """Build the hermes one-shot command."""
+    # --oneshot (-z): one-shot mode; PROMPT must be a single argv token.
+    # Use ``--oneshot=<prompt>`` so flag-like prompts (e.g. ``--provider``)
+    # are bound as the flag value, not parsed as a separate CLI flag.
     return [
         _hermes_binary(),
-        "-z",
-        prompt,
         "--provider",
         provider or _detect_provider(model),
         "-m",
         _cli_model(model),
+        f"--oneshot={prompt}",
     ]
 
 
