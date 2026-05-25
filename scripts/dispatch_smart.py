@@ -327,18 +327,16 @@ def _router_command(agent: str, model: str, prompt: str) -> list[str]:
         ]
     if agent == "hermes":
         cli_model = _hermes_cli_model(model)
-        # -z/--oneshot: one-shot mode; PROMPT is a single argv token (not stdin).
-        # Flags must precede -z: argparse binds the next token after -z as the
-        # prompt, so ``-z … --provider`` mis-parses when the prompt is empty or
-        # starts with ``-`` (e.g. ``--provider`` becomes -z's value).
+        # --oneshot (-z): one-shot mode; PROMPT must be a single argv token.
+        # Use ``--oneshot=<prompt>`` so flag-like prompts (e.g. ``--provider``)
+        # are bound as the flag value, not parsed as a separate CLI flag.
         return [
             _hermes_binary(),
             "--provider",
             _hermes_provider_for_model(model),
             "-m",
             cli_model,
-            "-z",
-            prompt,
+            f"--oneshot={prompt}",
         ]
     raise ValueError(f"unsupported direct router agent: {agent}")
 
