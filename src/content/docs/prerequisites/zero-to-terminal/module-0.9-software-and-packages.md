@@ -84,7 +84,7 @@ Once the binary exists, execution is much simpler from the user's point of view.
 
 The terminal might then print the result the program was written to produce. If you compiled the Go example above into `my-program`, the visible output would be the text below, and the program would exit after doing exactly one job.
 
-```bash
+```text
 Hello from Go!
 ```
 
@@ -172,7 +172,7 @@ sudo apt install some-program
 
 A typical package manager output may show additional packages before asking for confirmation. The exact names will vary by distribution, repository state, and package version, but the shape of the message is important: the manager is explaining the dependency chain before it changes the system.
 
-```bash
+```text
 Reading package lists... Done
 The following additional packages will be installed:
   dependency-1 dependency-2 dependency-3
@@ -246,7 +246,7 @@ tree ~/kubedojo-practice
 
 A possible output might look like this. The exact home directory prefix and files depend on your machine, but the visual shape is the point: each branch represents a nested directory or file, so you can inspect structure without clicking through folders one by one.
 
-```bash
+```text
 /home/yourname/kubedojo-practice
 └── recipes
     ├── appetizers
