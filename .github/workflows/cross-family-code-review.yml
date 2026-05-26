@@ -39,28 +39,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/ci/cross_family_review.sh
 
-  review-deepseek-v4-pro:
-    name: Review (deepseek-v4-pro)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Run cross-family review
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.base_ref }}
-          MODEL_TAG: deepseek-v4-pro
-          API_ENDPOINT: https://api.deepseek.com/chat/completions
-          API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          API_MODEL: deepseek-chat
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bash scripts/ci/cross_family_review.sh
+  # deepseek-v4-pro reviewer job removed 2026-05-26 (session 57).
+  # Hypothesis: api.deepseek.com (China-hosted) outbound from CI may have
+  # tripped a GH policy that's preventing checkout on all jobs in this repo
+  # since ~10:50 UTC today. Gemini reviewer retained as the cross-family signal.
+  # If CI resumes after this removal, the hypothesis is confirmed and we keep
+  # deepseek out of CI. Local dispatches via dispatch_smart.py can still use
+  # deepseek as an author/reviewer agent — only the CI-side automation is removed.
