@@ -1,14 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code statusline — kubedojo (ported from learn-ukrainian).
-#
-# Canonical home: kubedojo/claude_extensions/statusline/statusline.sh
-# (git-tracked). ~/.claude/settings.json points its statusLine.command at
-# this absolute path so a sync of ~/.claude/ cannot clobber it.
-#
-# Operating model: auto-compact disabled (CLAUDE_CODE_AUTO_COMPACT_WINDOW=
-# 1000000, effectively never fires); session handoff is durable via
-# docs/session-state/YYYY-MM-DD-<topic>.html + STATUS.md, NOT auto-compact.
-# Handoff-discipline target: write session state at 400-500K used.
+# Claude Code statusline — kubedojo project (mirrors learn-ukrainian).
 #
 # Reads Claude Code status JSON from stdin and renders:
 #   [MODEL] cwd-basename [wt:worktree-name] (branch*) [ctx: N%]
@@ -19,14 +10,8 @@
 #   cwd-basename   basename(.workspace.current_dir), pwd fallback
 #   [wt:...]       basename(.workspace.git_worktree), omitted if not in a worktree
 #   (branch*)      git branch + `*` if dirty
-#   [ctx: UK/BK (N%)] context window — kubedojo handoff-discipline bands:
-#                    green <300K, yellow 300-400K (early signal: identify
-#                    next landing point), red 400-500K (handoff zone: land
-#                    current unit + write session state), bold-red 500K+
-#                    (past target — write state IMMEDIATELY).
-#                    U=used Ktokens, B=budget Ktokens, N=percent.
-#                    Percent-band fallback (30/40/50/50+) applies only when
-#                    no token count is available (Tier 3 path below).
+#   [ctx: UK/BK (N%)] context window — color-coded green<50, yellow 50-79,
+#                    red 80+. U=used Ktokens, B=budget Ktokens, N=percent.
 #                    Used tokens read with three-tier degradation:
 #                      1) PRIMARY: .transcript_path → tail JSONL → sum
 #                         .message.usage.{input_tokens, cache_read_input_tokens,
@@ -162,21 +147,9 @@ fi
 if [ -n "$ctx_pct" ]; then
   ctx_int=$(printf '%.0f' "$ctx_pct" 2>/dev/null) || ctx_int=""
   if [ -n "$ctx_int" ]; then
-    # Absolute-token bands (preferred — tied to handoff discipline, not
-    # to whatever the declared cap happens to be). Fall back to percent
-    # bands only when no token count was resolved (Tier 3 path).
-    if [ -n "$ctx_used" ] && printf '%d' "$ctx_used" >/dev/null 2>&1; then
-      if   [ "$ctx_used" -ge 500000 ]; then ctx_color="\033[1;31m"  # bold red: past handoff target
-      elif [ "$ctx_used" -ge 400000 ]; then ctx_color="\033[31m"    # red: handoff zone
-      elif [ "$ctx_used" -ge 300000 ]; then ctx_color="\033[33m"    # yellow: early signal
-      else                                  ctx_color="\033[32m"    # green: comfortable
-      fi
-    else
-      if   [ "$ctx_int" -ge 50 ]; then ctx_color="\033[1;31m"  # bold red
-      elif [ "$ctx_int" -ge 40 ]; then ctx_color="\033[31m"    # red
-      elif [ "$ctx_int" -ge 30 ]; then ctx_color="\033[33m"    # yellow
-      else                             ctx_color="\033[32m"    # green
-      fi
+    if   [ "$ctx_int" -ge 80 ]; then ctx_color="\033[31m"   # red
+    elif [ "$ctx_int" -ge 50 ]; then ctx_color="\033[33m"   # yellow
+    else                             ctx_color="\033[32m"   # green
     fi
     # Render UK/BK (N%) when we have numeric token counts; else bare N%.
     if [ -n "$ctx_used" ] && printf '%d' "$ctx_used" >/dev/null 2>&1 \

@@ -681,15 +681,15 @@ That means the repository does not merely tell an agent what is wrong; it prescr
 The difference matters because one `state` call can substitute for dozens of tribal-knowledge rules.
 
 A strong contrast is `learn-ukrainian` where the pattern is organized around role-first execution.
-In `claude_extensions/`, role behavior is encoded as data, not prose alone:
-`agents/curriculum-orchestrator.md` sets orchestration posture and monitor API expectations, while `agents/curriculum-writer.md` is intentionally narrow and forbids shell usage to prevent accidental tool drift.
-`rules/model-assignment.md` enforces which tasks can be assigned to which agent model, and `rules/pipeline.md` defines the active pipeline contract for edits.
-Execution boundaries are then made enforceable in `settings.json` and `settings.local.json`, which separate `read`, `write`, `edit`, and `bash` permissions by operation category and route with `allow`/`ask`.
+In KubeDojo's `agents_extensions/` tree (renamed from `claude_extensions/` to reflect multi-agent use), role behavior is encoded as data, not prose alone:
+`shared/skills/` holds agent-agnostic contracts (writers, reviewers, domain experts), while `claude/skills/` holds Claude-orchestrator overlays such as `curriculum-orchestrator` and `dispatch-router`.
+`deploy.sh` merges shared plus per-agent sources into each agent's hidden directory (`.claude/` today; `.codex/`, `.cursor/`, `.gemini/` as those agents gain content).
+Scoped `.claude/rules/` enforce workflow details; execution boundaries are made enforceable in `settings.json` and `settings.local.json`, which separate `read`, `write`, `edit`, and `bash` permissions by operation category and route with `allow`/`ask`.
 This repo does not center role boundaries for their own sake; it does so so role confusion cannot become a silent repository bug.
 
 The contrast is useful because it surfaces two valid design trajectories.
 KubeDojo keeps startup logic and pipeline checks at the repository root and lets scoped rules express workflow details.
-learn-ukrainian keeps role and dispatch policy in `claude_extensions/` and then pushes execution permissions down through `settings.json` and command classes.
+learn-ukrainian keeps role and dispatch policy in its extensions folder and then pushes execution permissions down through `settings.json` and command classes.
 Both can work for large multi-agent systems, and both remain maintainable because each layer stores one kind of truth and exposes failure semantics.
 The deeper design lesson is not choosing one repo over the other; it is selecting where startup, identity, and permission truth lives so that the same endpoint contract can remain stable over time.
 
