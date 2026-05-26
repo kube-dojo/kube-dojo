@@ -33,6 +33,18 @@ Usage:
         --new-branch claude/redesign-pipeline \
         "Redesign the quality pipeline so phase ordering is data-driven."
 
+Skill auto-loading:
+    Role-specific shared skills are prepended to dispatched prompts by task
+    class. ``draft`` and ``edit`` load ``curriculum-writer``; ``review``
+    loads ``cross-family-reviewer``; ``architect`` and ``search`` do not
+    load a skill. Override with ``--skill <name>`` or disable with
+    ``--no-skill`` for narrow mechanical dispatches where the brief is
+    already self-contained::
+
+        .venv/bin/python scripts/dispatch_smart.py review \
+            --agent codex --skill k8s-cert-expert \
+            "Review this Kubernetes certification module."
+
 Task classes — model mapping per agent:
 
     class       claude                       codex
@@ -83,6 +95,18 @@ PRIMARY_REPO = _primary_checkout_root(REPO)
 # fragment the audit trail across .worktrees/*/logs/.
 LOG_PATH = PRIMARY_REPO / "logs" / "smart_dispatch.jsonl"
 RESPONSE_DIR = PRIMARY_REPO / "logs" / "dispatch_responses"
+
+# Skill auto-loading — R2 follow-up to PR #1575 and the agents_extensions/
+# layout introduced there.
+SKILL_FOR_TASK_CLASS: dict[str, str] = {
+    "draft": "curriculum-writer",
+    "edit": "curriculum-writer",
+    "review": "cross-family-reviewer",
+    # architect, search -> no skill
+}
+
+SHARED_SKILLS_DIR = PRIMARY_REPO / "agents_extensions" / "shared" / "skills"
+CLAUDE_SKILLS_DIR = PRIMARY_REPO / "agents_extensions" / "claude" / "skills"
 
 
 SUPPORTED_AGENTS = (
@@ -202,6 +226,61 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
         codex_search=True,
     ),
 }
+
+
+def _resolve_skill_path(skill_name: str) -> Path | None:
+    """Resolve a skill name to its SKILL.md path. Searches shared/ then claude/.
+
+    Returns None if neither location has the skill.
+    """
+    for parent in (SHARED_SKILLS_DIR, CLAUDE_SKILLS_DIR):
+        candidate = parent / skill_name / "SKILL.md"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _load_skill_body(skill_name: str) -> tuple[str, Path] | None:
+    """Read a skill body. Returns (body_text, source_path) or None if missing."""
+    path = _resolve_skill_path(skill_name)
+    if path is None:
+        return None
+    try:
+        return path.read_text(encoding="utf-8"), path
+    except OSError:
+        return None
+
+
+def _wrap_prompt_with_skill(prompt: str, skill_body: str, skill_name: str) -> str:
+    """Prepend the skill body to the prompt with a clear marker."""
+    return (
+        f"<auto-loaded-skill name=\"{skill_name}\">\n"
+        f"{skill_body.rstrip()}\n"
+        f"</auto-loaded-skill>\n\n"
+        f"{prompt}"
+    )
+
+
+def _skill_to_load_for_dispatch(
+    *,
+    task_class: str,
+    explicit_skill: str | None,
+    no_skill: bool,
+) -> str | None:
+    """Return the explicit or task-class-mapped skill name, if enabled."""
+    if explicit_skill is not None:
+        return explicit_skill
+    if no_skill:
+        return None
+    return SKILL_FOR_TASK_CLASS.get(task_class)
+
+
+def _display_path(path: Path) -> Path:
+    """Return a primary-relative path when possible, else the original path."""
+    try:
+        return path.relative_to(PRIMARY_REPO)
+    except ValueError:
+        return path
 
 
 def make_task_id(task_class: str, agent: str) -> str:
@@ -510,6 +589,20 @@ def main() -> int:
                    help="Override auto-generated task_id.")
     p.add_argument("--dry-run", action="store_true",
                    help="Print the resolved plan and exit without firing.")
+    p.add_argument(
+        "--skill",
+        default=None,
+        help=(
+            "Override the auto-mapped skill for the task class. Looks up "
+            "agents_extensions/shared/skills/<name>/SKILL.md first, then "
+            "agents_extensions/claude/skills/<name>/SKILL.md. Fails if not found."
+        ),
+    )
+    p.add_argument(
+        "--no-skill",
+        action="store_true",
+        help="Disable skill auto-loading entirely.",
+    )
     args = p.parse_args()
 
     cfg = TASK_CLASSES[args.task_class]
@@ -556,6 +649,37 @@ def main() -> int:
         sys.stderr.write("[smart] prompt is empty\n")
         return 2
 
+    skill_to_load = _skill_to_load_for_dispatch(
+        task_class=args.task_class,
+        explicit_skill=args.skill,
+        no_skill=args.no_skill,
+    )
+    if skill_to_load is not None:
+        loaded = _load_skill_body(skill_to_load)
+        if loaded is None:
+            if args.skill is not None:
+                print(
+                    f"[dispatch_smart] error: skill '{skill_to_load}' not found in "
+                    "agents_extensions/shared/skills/ or "
+                    "agents_extensions/claude/skills/",
+                    file=sys.stderr,
+                )
+                return 2
+            print(
+                f"[dispatch_smart] warning: auto-mapped skill '{skill_to_load}' "
+                "not found; proceeding without skill context",
+                file=sys.stderr,
+            )
+        else:
+            skill_body, source_path = loaded
+            prompt = _wrap_prompt_with_skill(prompt, skill_body, skill_to_load)
+            rel = _display_path(source_path)
+            print(
+                f"[dispatch_smart] auto-loaded skill: {skill_to_load} "
+                f"(from {rel})",
+                file=sys.stderr,
+            )
+
     if mode == "danger" and not args.worktree and not args.dry_run:
         # agy carve-out: agy under danger mode only suppresses interactive
         # permission prompts (--dangerously-skip-permissions); it does not
@@ -587,6 +711,9 @@ def main() -> int:
         print(f"[dry-run] worktree={_wt_label}")
         print(f"[dry-run] task_id={task_id}")
         print(f"[dry-run] prompt_chars={len(prompt)}")
+        print("[dry-run] prompt_begin")
+        print(prompt)
+        print("[dry-run] prompt_end")
         if args.agent in {"cursor", "hermes", "opencode"}:
             print(f"[dry-run] argv={_router_command(args.agent, model, prompt)!r}")
         return 0
