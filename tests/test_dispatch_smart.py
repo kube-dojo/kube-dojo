@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "dispatch_smart.py"
+SCRIPTS_DIR = SCRIPT.parent
 
 
 def _run_dispatch_smart(args: list[str]) -> subprocess.CompletedProcess:
@@ -72,6 +73,20 @@ def test_hermes_router_argv_handles_flag_like_prompt() -> None:
     argv = _router_command("hermes", "qwen-3.6-flash", "--provider")
     assert "--oneshot=--provider" in argv
     assert "-z" not in argv
+
+
+def test_codex_draft_default_is_gpt_5_5() -> None:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from dispatch_smart import TASK_CLASSES
+
+    assert TASK_CLASSES["draft"].models["codex"] == "gpt-5.5"
+
+
+def test_codex_edit_default_unchanged() -> None:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from dispatch_smart import TASK_CLASSES
+
+    assert TASK_CLASSES["edit"].models["codex"] == "gpt-5.3-codex-spark"
 
 
 def test_dispatch_smart_codex_danger_still_requires_worktree() -> None:

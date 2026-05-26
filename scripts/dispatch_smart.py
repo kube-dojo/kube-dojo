@@ -39,7 +39,7 @@ Task classes — model mapping per agent:
     -------     -------------------------    ----------------------
     search      claude-haiku-4-5-20251001    gpt-5.4-mini
     edit        claude-sonnet-4-6            gpt-5.3-codex-spark
-    draft       claude-sonnet-4-6            gpt-5.3-codex-spark
+    draft       claude-sonnet-4-6            gpt-5.5
     review      claude-sonnet-4-6            gpt-5.5
     architect   claude-opus-4-7              gpt-5.5
 
@@ -154,7 +154,7 @@ TASK_CLASSES: dict[str, TaskClassConfig] = {
         models={
             "agy": "tui-controlled",
             "claude": "claude-sonnet-4-6",
-            "codex": "gpt-5.3-codex-spark",
+            "codex": "gpt-5.5",
             "deepseek": "deepseek-v4-pro",
             "gemini": "gemini-3.1-pro-preview",
             "cursor": "composer-2.5",
@@ -560,9 +560,12 @@ def main() -> int:
         # agy carve-out: agy under danger mode only suppresses interactive
         # permission prompts (--dangerously-skip-permissions); it does not
         # write files. Review-class agy dispatches don't need a worktree.
-        # Codex under danger mode DOES write — its worktree requirement
-        # stays as-is.
-        if args.agent != "agy":
+        # codex review/search carve-out: read-only task classes; no worktree.
+        codex_readonly_class = (
+            args.agent == "codex"
+            and args.task_class in {"review", "search"}
+        )
+        if args.agent != "agy" and not codex_readonly_class:
             p.error("--mode danger requires --worktree (no override)")
 
     worktree: Path | None = None
