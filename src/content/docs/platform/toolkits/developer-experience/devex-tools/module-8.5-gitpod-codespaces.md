@@ -176,7 +176,14 @@ gh codespace delete -c <codespace-name>
 
   "postCreateCommand": "npm install",
 
-  "secrets": ["DATABASE_URL", "API_KEY"],
+  "secrets": {
+    "DATABASE_URL": {
+      "description": "PostgreSQL connection string for local development and tests"
+    },
+    "API_KEY": {
+      "description": "API key injected at workspace start"
+    }
+  },
 
   "hostRequirements": {
     "cpus": 4,
@@ -386,7 +393,8 @@ RUN brew install kubectl helm k9s
 RUN sudo apt-get update && sudo apt-get install -y postgresql-client redis-tools
 
 # Custom binaries
-RUN curl -sSL https://example.com/tool | sudo tar -xzC /usr/local/bin
+# Replace URL below with the real tool release URL before building
+RUN curl -sSL https://REPLACE_WITH_TOOL_RELEASE_TARBALL_URL | sudo tar -xzC /usr/local/bin
 ```
 
 ### Gitpod Prebuilds
@@ -574,7 +582,7 @@ secrets:
 
 ### Gitpod Self-Hosted (Gitpod Flex)
 
-```yaml
+```bash
 # Gitpod Flex installation (Kubernetes)
 # https://www.gitpod.io/docs/flex/getting-started
 
@@ -592,7 +600,9 @@ helm install gitpod gitpod/gitpod \
   --namespace gitpod \
   --create-namespace \
   -f values.yaml
+```
 
+```yaml
 # values.yaml
 domain: gitpod.example.com
 database:
@@ -902,6 +912,7 @@ Before the cloud platforms can build anything, they need something to build. Cre
 ```bash
 mkdir cde-lab && cd cde-lab
 git init
+git branch -M main
 
 cat > package.json << 'EOF'
 {
