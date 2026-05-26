@@ -528,8 +528,7 @@ Do not bake this config file directly into your AMI. Instead, store it centrally
 
 ```bash
 # Write the agent config (same JSON as above) before uploading to SSM
-sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
-sudo tee /opt/aws/amazon-cloudwatch-agent/etc/config.json <<'EOF'
+cat <<'EOF' > cw-config.json
 {
   "agent": {
     "metrics_collection_interval": 60,
@@ -605,7 +604,7 @@ EOF
 aws ssm put-parameter \
   --name "AmazonCloudWatch-linux-config" \
   --type String \
-  --value file:///opt/aws/amazon-cloudwatch-agent/etc/config.json
+  --value "file://cw-config.json"
 
 # Fetch config from SSM and start the agent
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
@@ -1065,10 +1064,12 @@ aws cloudwatch put-metric-alarm \
 ```
 
 ```bash
-# Run on the EC2 instance (via SSH):
+# Run from your local machine to open an SSH session to the EC2 instance:
 ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
+```
 
-# Install and run stress-ng to drive CPU above the alarm threshold
+```bash
+# Run on the EC2 instance (after the ssh prompt opens):
 sudo yum install -y stress-ng
 stress-ng --cpu 2 --timeout 300
 ```
