@@ -269,7 +269,7 @@ Tetragon can export to stdout, files, or gRPC consumers. Kernel `Sigkill` events
 
 | Requirement | Prefer | Avoid |
 |-------------|--------|-------|
-| Block execution of `/tmp/evil` at exec time | LSM `bprm_check_security` or stable exec tracepoint | Bare `sys_execve` kprobe with path pointer only |
+| Block execution of `/tmp/evil` before exec completes | LSM `bprm_check_security` via `bpf_lsm` (Linux 5.7+) | `sched_process_exec` tracepoint (post-event: observe or kill-after only, not pre-block); bare `sys_execve` kprobe with path pointer only |
 | Kill cryptominer by binary name | kprobe/tracepoint on `sched_process_exec` with vetted args | Over-broad `Sigkill` on `sys_openat` |
 | Audit only | tracepoint + `Post` | `Sigkill` on noisy hooks |
 | Block connect to IP | kprobe `security_socket_connect` with BTF types | Userspace-only IP sets without kernel enforcement |
@@ -534,6 +534,23 @@ spec:
 ```
 
 ```bash
+cat <<'EOF' > lab-exec-observe.yaml
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: lab-exec-observe
+spec:
+  tracepoints:
+    - subsystem: sched
+      event: sched_process_exec
+      raw: true
+      args:
+        - index: 2
+          type: linux_binprm
+      selectors:
+        - matchActions:
+            - action: Post
+EOF
 kubectl apply -f lab-exec-observe.yaml
 kubectl run exec-probe --rm -it --restart=Never --image=busybox:1.36 -- /bin/true
 kubectl exec -n kube-system ds/tetragon -c tetragon -- tetra getevents -o compact | grep sched_process_exec | head
