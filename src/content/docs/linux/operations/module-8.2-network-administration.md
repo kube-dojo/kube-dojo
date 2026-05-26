@@ -876,7 +876,10 @@ sudo sed -i 's/X11Forwarding yes/X11Forwarding no/' /etc/ssh/sshd_config
 sudo sshd -t
 
 # Restart
-sudo systemctl restart sshd
+# Ubuntu/Debian:
+sudo systemctl restart ssh
+# RHEL/CentOS:
+# sudo systemctl restart sshd
 ```
 
 <details>
@@ -951,7 +954,10 @@ The profile should show the address, gateway, DNS servers, and manual IPv4 metho
 ```bash
 # Restore SSH config
 sudo cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config
-sudo systemctl restart sshd
+# Ubuntu/Debian:
+sudo systemctl restart ssh
+# RHEL/CentOS:
+# sudo systemctl restart sshd
 
 # Remove firewalld test rules
 sudo firewall-cmd --remove-service=https --permanent
