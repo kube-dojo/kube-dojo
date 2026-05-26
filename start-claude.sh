@@ -106,7 +106,7 @@ echo ""
 # auto-compact: it is destructive (summarizes context, loses fidelity).
 # Instead, durable session handoff via docs/session-state/YYYY-MM-DD-*.html
 # + STATUS.md happens at ~500K used (statusline goes bold-red at that point;
-# see claude_extensions/statusline/statusline.sh handoff-discipline bands).
+# see agents_extensions/claude/statusline/statusline.sh handoff-discipline bands).
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
 
 # Launch via npx to avoid cache bugs (stale binary + prompt caching issues)

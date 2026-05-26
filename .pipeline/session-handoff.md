@@ -48,7 +48,7 @@
    - PostToolUse hook fires after every tool, estimates context vs `autoCompactWindow`
    - Tiers: 75% heads-up, 85% critical, 95% emergency
    - `autoCompactWindow: 1000000` (max) for runway
-   - Source in `claude_extensions/hooks/`, deploys via `deploy.sh`
+   - Source in `agents_extensions/claude/hooks/`, deploys via `deploy.sh`
 
 ## Current pipeline state
 
