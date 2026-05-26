@@ -1,12 +1,13 @@
-"""Unit tests for scripts.dispatch.livenessprobe primitives."""
+"""Unit tests for scripts.dispatch_livenessprobe primitives."""
 from __future__ import annotations
 
 import os
 import subprocess
+from unittest.mock import patch
 
 import pytest
 
-from scripts.dispatch.livenessprobe import (
+from scripts.dispatch_livenessprobe import (
     CompositeProbe,
     FileMTimeSignal,
     FileSizeGrowthSignal,
@@ -153,9 +154,10 @@ def test_proc_cpu_signal_returns_false_for_sleeping_subprocess():
         text=True,
     )
     try:
-        signal = ProcCpuSignal(proc.pid, min_percent=1.0, sample_window_s=0.2)
+        with patch("psutil.Process.cpu_percent", return_value=0.0):
+            signal = ProcCpuSignal(proc.pid, min_percent=1.0, sample_window_s=0.2)
 
-        assert signal.evaluate() is False
+            assert signal.evaluate() is False
     finally:
         _stop_process(proc)
 
@@ -238,7 +240,7 @@ def test_composite_probe_in_initial_grace_correctly_gates_on_started_at(
     now: float,
     expected: bool,
 ):
-    probe = CompositeProbe(signals=[], initialDelaySeconds=90)
+    probe = CompositeProbe(signals=[], initial_delay_s=90)
     probe._started_at = started_at
 
     assert probe.in_initial_grace(now) is expected
@@ -250,9 +252,9 @@ def test_composite_probe_accepts_issue_shape_parameters():
         signals=[],
         periodSeconds=30,
         failureThreshold=3,
-        initialDelaySeconds=90,
+        initial_delay_s=90,
     )
 
     assert probe.periodSeconds == 30
     assert probe.failureThreshold == 3
-    assert probe.initialDelaySeconds == 90
+    assert probe.initial_delay_s == 90
