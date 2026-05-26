@@ -2474,6 +2474,10 @@ _QUALITY_TRACK_LABELS = {
     "platform": "Platform",
     "prerequisites": "Prerequisites",
 }
+_QUALITY_REDIRECT_STUB_RE = re.compile(
+    r"^\s*this module has moved\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _quality_severity(score: float) -> str:
@@ -2499,6 +2503,18 @@ def _quality_track_label(rel: Path) -> str:
     if len(parts) >= 2 and not parts[1].startswith(("module-", "part")):
         return f"{top} {parts[1].replace('-', ' ').title()}"
     return top
+
+
+def _quality_body_without_frontmatter(text: str) -> str:
+    if text.startswith("---\n") and "\n---\n" in text[4:]:
+        return text[4:].split("\n---\n", 1)[1]
+    return text
+
+
+def _quality_is_redirect_stub(text: str) -> bool:
+    body = _quality_body_without_frontmatter(text)
+    non_blank_lines = [line for line in body.splitlines() if line.strip()]
+    return len(non_blank_lines) < 30 and bool(_QUALITY_REDIRECT_STUB_RE.search(body))
 
 
 def _quality_title_and_label(rel: Path, text: str) -> tuple[str, str]:
@@ -2549,6 +2565,8 @@ def build_quality_scores(repo_root: Path) -> dict[str, Any]:
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
+            continue
+        if _quality_is_redirect_stub(text):
             continue
         lines_count = len(text.splitlines())
         has_title = text.startswith("---\n") and bool(_QUALITY_TITLE_RE.search(text[4:].split("\n---\n", 1)[0]))
@@ -2652,6 +2670,7 @@ def build_quality_upgrade_plan(repo_root: Path, *, target: float = 4.0) -> dict[
     except Exception as exc:  # noqa: BLE001
         return {
             "exists": False,
+            "generated_at": int(time.time()),
             "error": f"quality_scores_failed: {type(exc).__name__}",
             "target": target,
         }
@@ -2698,6 +2717,7 @@ def build_quality_upgrade_plan(repo_root: Path, *, target: float = 4.0) -> dict[
     epic_issue = 181 if target >= 5.0 else 180
     return {
         "exists": bool(quality.get("exists")),
+        "generated_at": int(time.time()),
         "source": quality.get("source"),
         "target": target,
         "epic_issue": epic_issue,
@@ -3666,7 +3686,7 @@ def _quality_board_has_revision_banner(text: str) -> bool:
     return bool(_QUALITY_BOARD_REVISION_RE.search(head))
 
 
-def _quality_board_load_states(repo_root: Path) -> dict[str, dict[str, Any]]:
+def _quality_board_load_states(repo_root: Path, *, exclude_slugs: set[str] | None = None) -> dict[str, dict[str, Any]]:
     """Load every ``.pipeline/quality-pipeline/<slug>.json`` (skip
     ``*.lock`` siblings). Indexed by slug. Malformed files are silently
     skipped — the board has to keep rendering even if one state file is
@@ -3685,6 +3705,8 @@ def _quality_board_load_states(repo_root: Path) -> dict[str, dict[str, Any]]:
         if not isinstance(data, dict):
             continue
         slug = str(data.get("slug") or path.stem)
+        if exclude_slugs and slug in exclude_slugs:
+            continue
         out[slug] = data
     return out
 
@@ -3829,10 +3851,6 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         if rel:
             score_by_path[rel] = entry
 
-    states = _quality_board_load_states(repo_root)
-    post_review_queue = _quality_board_load_post_review_queue(repo_root)
-    latest_review_verdicts = _quality_board_latest_review_verdicts(repo_root)
-
     # Iterate every EN module on disk so we cover modules with no state
     # file (e.g. UNAUDITED) and modules with no review log yet.
     paths = sorted(
@@ -3841,6 +3859,19 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         if ".staging." not in path.name
         and not path.relative_to(docs_root).as_posix().startswith("uk/")
     )
+    redirect_stub_slugs: set[str] = set()
+    for path in paths:
+        rel_str = path.relative_to(docs_root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if _quality_is_redirect_stub(text):
+            redirect_stub_slugs.add(_quality_board_slug_for_path(rel_str))
+
+    states = _quality_board_load_states(repo_root, exclude_slugs=redirect_stub_slugs)
+    post_review_queue = _quality_board_load_post_review_queue(repo_root) - redirect_stub_slugs
+    latest_review_verdicts = _quality_board_latest_review_verdicts(repo_root)
 
     modules: list[dict[str, Any]] = []
     track_buckets: dict[str, dict[str, Any]] = {}
@@ -3862,6 +3893,8 @@ def build_quality_board(repo_root: Path) -> dict[str, Any]:
         rel = path.relative_to(docs_root)
         rel_str = rel.as_posix()
         slug = _quality_board_slug_for_path(rel_str)
+        if slug in redirect_stub_slugs:
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
