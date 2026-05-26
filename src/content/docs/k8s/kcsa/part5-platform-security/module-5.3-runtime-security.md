@@ -742,7 +742,7 @@ spec:
 
   containers:
   - name: api-service
-    image: my-company/backend-api:v2.4.1
+    image: nginx:1.27-alpine
     ports:
     - containerPort: 8080
 
