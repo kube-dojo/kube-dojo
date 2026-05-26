@@ -379,9 +379,9 @@ The missing action is a reviewed change to the infrastructure repository that re
 </details>
 
 <details>
-<summary>2. A junior engineer accidentally creates a public NodePort Service during an incident. The Service is not declared in Git, pruning is enabled, and the GitOps operator is healthy. What should happen, and what should you verify afterward?</summary>
+<summary>2. A junior engineer accidentally creates a public NodePort Service during an incident. The Service is not declared in Git, was never managed by the GitOps operator, pruning is enabled, and the operator is healthy. What happens, and what should you do?</summary>
 
-The operator should delete the unmanaged Service during reconciliation because it does not exist in the desired state. Afterward, you should verify the operator event history, confirm no other public Service remains, and review why the engineer had permission to create it. The technical self-heal is useful, but the durable fix is tightening routine write access and documenting a safer incident path. GitOps corrects drift, while process changes reduce how often drift is introduced.
+The operator will not delete the Service. Pruning only removes resources that were previously managed by GitOps (tracked via owner labels or annotations) and whose declaration was subsequently deleted from Git — it does not touch objects GitOps never owned. You should manually delete the unmanaged Service, verify no other unowned public Service remains, and review why the engineer had permission to create it. The durable fix is tightening routine write access and documenting a safer incident path.
 
 </details>
 
