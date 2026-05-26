@@ -773,7 +773,7 @@ spec:
     emptyDir: {}
 ```
 
-This configuration layers several independent protections. The process runs as user 10001 rather than root, cannot gain new privileges through setuid execution, cannot write into the image filesystem, and has no Linux capabilities left to spend after compromise. The Pod also declares the runtime default seccomp filter and refuses host namespaces, so an attacker who reaches the Go process cannot casually inspect host processes, use broad kernel privileges, or persist changes into the container image layer.
+This configuration layers several independent protections. The process runs as user 10001 rather than root, cannot gain new privileges through setuid execution, cannot write into the image filesystem, and has no Linux capabilities left to spend after compromise. The Pod also declares the runtime default seccomp filter and refuses host namespaces, so an attacker who reaches the **Python process** cannot casually inspect host processes, use broad kernel privileges, or persist changes into the container image layer.
 
 The manifest is intentionally strict but not magical. If the application expects to write under `/var/cache`, it will fail until you either change the application path or mount a deliberate writable volume there. If the image requires root during startup, the non-root setting will expose that packaging problem. Those failures are useful because they move privilege decisions into reviewable YAML instead of leaving them hidden inside a container startup script.
 </details>
