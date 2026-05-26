@@ -872,10 +872,13 @@ Extract the instance IP automatically, SSH into the instance, and install the ag
 <summary>Solution</summary>
 
 ```bash
-# SSH into the instance
+# Run from your local machine (AWS CLI):
 INSTANCE_PUBLIC_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
+```
 
+```bash
+# Run on the EC2 instance (after the ssh prompt opens):
 # Install the CloudWatch Agent
 sudo yum install -y amazon-cloudwatch-agent
 
