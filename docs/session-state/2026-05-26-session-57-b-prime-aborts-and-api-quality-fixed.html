@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 57 — B′ aborts and /api/quality fixed</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.filed { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+.numtable td:first-child { font-family: ui-monospace, monospace; font-size: 90% }
+</style></head><body>
+
+<h1>Session 57 — B′ aborts, /api/quality fixed, agents_extensions/ split</h1>
+<p class="meta">
+2026-05-26, ~3 hours interactive (opus 4.7, 1M context). User-driven session with two strong directives mid-flight:
+"focus on tech debt before content" and "discuss this with the colleges, then do what the majority votes for."
+The deliberation produced a unanimous B′ vote; the validation sample (n=15) then aborted B′ at universal stratum
+failure — the converged decision rule's negative branch fired cleanly. /quality dashboard cleaned of phantom
+redirect-stub criticals. claude_extensions/ renamed to agents_extensions/ with shared/per-agent split.
+Dispatch-time skill auto-loading shipped.
+</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR / Issue</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1574</td><td><span class="pill merged">MERGED</span></td><td>chore(quality): filter redirect stubs, add upgrade-plan timestamp, add stratified back-catalog review sampler</td><td>codex architect + composer-2.5/gemini/deepseek CI review × 2 cycles (1 fix-pass on eligibility false-positive)</td></tr>
+<tr><td>#1575</td><td><span class="pill merged">MERGED</span></td><td>chore(extensions): rename claude_extensions → agents_extensions with shared/per-agent split</td><td>cursor edit + gemini/deepseek CI review; learner-check hook fired (PR body had to quote a module blockquote)</td></tr>
+<tr><td>#1576</td><td><span class="pill inflight">AUTO-MERGE</span></td><td>docs(decisions): B′ result section — universal stratum failure, reverted to A</td><td>direct commit via worktree; required checks not yet fired (GH Actions delayed)</td></tr>
+<tr><td>#1577</td><td><span class="pill filed">FILED</span></td><td>Class A learner-blocker defects from 2026-05-26 back-catalog sample (n=15, 24 defects)</td><td>Tracking issue for downstream fix-pass routing; 12 modules × 1-4 Class A each</td></tr>
+<tr><td>#1578</td><td><span class="pill inflight">AUTO-MERGE</span></td><td>feat(dispatch): auto-load role-specific skill into headless agent prompts</td><td>codex architect (gpt-5.5) + composer-2.5 local R1 approved; CI delayed same as #1576</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. Decision Card B′ aborted — full backfill reinstated</h3>
+<p>
+The session-56 question "should we run the full 277-module composer-2.5 backfill (#1504), or auto-approve high-rubric
+established modules?" went to <code>ab discuss --with claude,codex,gemini</code> per the deliberation protocol.
+All three converged on <strong>Option B′ (stratified Option B)</strong>: sample 30 modules first, classify findings
+A/B/C, then either build a <code>heuristic_auto</code> stamping schema or fallback to Option A per failing stratum.
+</p>
+
+<p>
+The sample stopped at n=15 (signal conclusive earlier than budget). Verdicts:
+<strong>80% NEEDS_CHANGES, 80% modules with at least one Class A learner-blocker, 24 Class A defects across 12 of 15
+modules, ALL 7 strata triggered fallback.</strong> Per the converged rule's all-strata-fail clause: revert cleanly to
+Decision Card C. Zero artifact debt — <code>heuristic_auto</code> schema was never built.
+</p>
+
+<p>
+The win: sample-first ordering caught a wrong optimistic assumption before any stamping happened. The deliberation
+protocol's "sample first, schema after" framing is the load-bearing property for future similar bets.
+The rubric heuristic (line count + has-quiz + has-exercise + has-citations) cannot detect title-content mismatch,
+mislabeled bash blocks, hallucinated tech, broken multi-step labs, or wrong service names. 80% of high-rubric
+back-catalog modules have at least one of those.
+</p>
+
+<p>Decision record: <code>docs/decisions/2026-05-26-tiered-back-catalog-review-policy.md</code> with full Result section.
+Memory: <code>feedback_back_catalog_full_review_required</code>.</p>
+
+<h3>2. claude_extensions/ → agents_extensions/ rename</h3>
+<p>
+User signal: "all agent extensions skills etc in hidden dirs are gitignored but we want to maintain them in git for
+all of our agents. maybe claude_extension is a bad name now and should be restructured to agents_extensions."
+Rename + restructure shipped in PR #1575. Layout:
+</p>
+<ul>
+<li><code>agents_extensions/shared/skills/</code> — 6 agent-agnostic skills (curriculum-writer, cross-family-reviewer, module-quality-reviewer, session-handoff-writer, k8s-cert-expert, platform-expert)</li>
+<li><code>agents_extensions/claude/{skills,hooks,statusline}/</code> — Claude-specific (curriculum-orchestrator, dispatch-router, cold-start + Claude hooks + statusline)</li>
+<li><code>agents_extensions/{codex,cursor,gemini}/</code> — placeholder dirs for future per-agent extensions</li>
+<li><code>deploy.sh</code> — <code>--target claude|codex|cursor|gemini|all</code>; merges shared + per-agent → that agent's hidden dir</li>
+</ul>
+<p>Cursor refactor caught a drift: <code>context-monitor.sh</code> and <code>statusline.sh</code> in the old
+<code>claude_extensions/</code> tree had drifted from committed <code>.claude/</code>; source was synced to match committed
+state so deploy produces no runtime change.</p>
+
+<h3>3. Dispatch-time skill auto-loading (PR #1578)</h3>
+<p>
+Headless agents (codex, cursor, gemini, deepseek) now auto-load the appropriate role skill into their prompt based on
+task class. Mapping:
+</p>
+<ul>
+<li><code>draft</code>, <code>edit</code> → <code>curriculum-writer</code></li>
+<li><code>review</code> → <code>cross-family-reviewer</code></li>
+<li><code>architect</code>, <code>search</code> → no skill</li>
+</ul>
+<p>CLI flags: <code>--skill &lt;name&gt;</code> override; <code>--no-skill</code> disable. 10 new tests in
+<code>tests/dispatch_smart/test_skill_autoload.py</code>. This closes the gap that the orchestrator (claude) loads
+curriculum-orchestrator skill at session start via CLAUDE.md instruction, but headless agents had no equivalent
+mechanism — they got cold prompts without role discipline.</p>
+
+<h2>Headline data</h2>
+
+<table class="numtable">
+<tr><th>/api/quality endpoint</th><th>Before</th><th>After</th></tr>
+<tr><td>count</td><td>806</td><td>803</td></tr>
+<tr><td>critical_count</td><td>120</td><td>117</td></tr>
+<tr><td>stubs in critical[]</td><td>3 (8-line redirect stubs)</td><td>0</td></tr>
+<tr><td>/api/quality/upgrade-plan generated_at</td><td>missing</td><td>integer epoch</td></tr>
+</table>
+
+<table class="numtable">
+<tr><th>Back-catalog sample</th><th>Value</th></tr>
+<tr><td>Sample size</td><td>15 of planned 30 (stopped early — signal conclusive)</td></tr>
+<tr><td>Eligible pool</td><td>429 modules</td></tr>
+<tr><td>NEEDS_CHANGES verdicts</td><td>12 / 15 (80%)</td></tr>
+<tr><td>Modules with ≥1 Class A</td><td>12 / 15 (80%)</td></tr>
+<tr><td>Total Class A defects</td><td>24</td></tr>
+<tr><td>Strata in fallback (any Class A)</td><td>7 / 7 — universal</td></tr>
+</table>
+
+<h2>Per-stratum verdict</h2>
+<table>
+<tr><th>Stratum</th><th>n</th><th>NEEDS_CHANGES</th><th>Class A modules</th><th>Class A defects</th></tr>
+<tr><td>prereqs</td><td>3</td><td>2</td><td>2</td><td>4</td></tr>
+<tr><td>AI/ML</td><td>1</td><td>1</td><td>1</td><td>2</td></tr>
+<tr><td>linux</td><td>2</td><td>2</td><td>2</td><td>5</td></tr>
+<tr><td>cloud</td><td>1</td><td>1</td><td>1</td><td>3</td></tr>
+<tr><td>k8s</td><td>1</td><td>1</td><td>1</td><td>1</td></tr>
+<tr><td>on-premises</td><td>3</td><td>2</td><td>2</td><td>2</td></tr>
+<tr><td>platform</td><td>4</td><td>3</td><td>3</td><td>7</td></tr>
+<tr><th>TOTAL</th><th>15</th><th>12</th><th>12</th><th>24</th></tr>
+</table>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>PR #1574 author</td><td>codex gpt-5.5</td><td>architect</td><td>Initial: 4 files, 41 tests pass. Found sampler bug in dry-run (k8s+platform only).</td></tr>
+<tr><td>PR #1574 fix-pass</td><td>codex gpt-5.5</td><td>edit</td><td>gh issue search meta-epic filter + drop strict age. 7 tracks, 429 eligible.</td></tr>
+<tr><td>PR #1575 author</td><td>cursor composer-2.5</td><td>edit</td><td>Rename + restructure. Drift fix on hooks/statusline (source was stale vs .claude/).</td></tr>
+<tr><td>3-module pilot (batch 1)</td><td>cursor composer-2.5 ×3</td><td>review</td><td>5 Class A in 2 modules; on-prem case-for-on-prem clean (3 C only)</td></tr>
+<tr><td>3-module batch 2</td><td>cursor composer-2.5 ×3</td><td>review</td><td>7 Class A in 3 modules across prereqs/linux/cloud</td></tr>
+<tr><td>3-module batch 3</td><td>cursor composer-2.5 ×3</td><td>review</td><td>1 APPROVE (git-deep-dive/8-scale) + 4 Class A across 2 NC</td></tr>
+<tr><td>6-module batch 4 (mixed)</td><td>cursor + codex + gemini ×2 each</td><td>review</td><td>4 successes + 2 codex failures (inject-codex-danger-mode hook + no worktree)</td></tr>
+<tr><td>2-module batch 4 retry</td><td>cursor + gemini</td><td>review</td><td>1 NEEDS_CHANGES, 1 APPROVE_WITH_NITS (cosmetic only)</td></tr>
+<tr><td>PR #1578 author (R2)</td><td>codex gpt-5.5</td><td>architect</td><td>--auto-skill flag, --skill override, --no-skill disable, 10 tests pass</td></tr>
+<tr><td>Issue #1577 creation</td><td>orchestrator (gh CLI)</td><td>—</td><td>Tracking issue with all 24 Class A defects, per-module checklists</td></tr>
+</table>
+
+<h2>What's next</h2>
+<ul>
+<li><strong>Top priority for next session:</strong> wait for PR #1576 + #1578 to merge (CI was delayed — GH Actions backlog on this batch), then start dispatching fix-pass PRs for the 12 Class A modules in #1577. Recommended rotation: codex / cursor / deepseek / gemini-3.1-pro one module at a time, codex/composer-2.5 cross-family R1 each.</li>
+<li><strong>Worst Class A offenders (fix first):</strong> platform/toolkits/devex/8.5-gitpod-codespaces (4 A — broken devcontainer secrets shape + fake install pipes), cloud/aws-essentials/1.10-cloudwatch (3 A — lab broken 3 ways), linux/operations/8.2-network-administration (3 A — bash mislabel + wrong service name), prereqs/zero-to-terminal/0.9-software-and-packages (3 A — output labeled bash).</li>
+<li><strong>#1504 backfill is the big work:</strong> still 277 shipped_unreviewed modules. With universal fallback in effect, the full systematic composer-2.5 review is the long-running multi-week project. Recommended cadence: ~3-5 reviews per session in the background while doing other work.</li>
+<li><strong>Codex review fallback gotcha:</strong> <code>dispatch_smart.py review --agent codex</code> auto-injects <code>--mode danger</code> via <code>inject-codex-danger-mode.sh</code>, which requires <code>--worktree</code>. For read-only reviews, route to cursor/gemini instead, or fix the hook to skip read-only task classes.</li>
+<li><strong>Codex spark default still broken</strong> (carried over from session 56) — patch <code>scripts/dispatch_smart.py</code> to default codex draft to gpt-5.5 (PR #1521 first attempt 65s empty response showed this).</li>
+<li><strong>Tech debt remaining:</strong> <code>structure_core_sections_4_6</code> verifier gate (4-6 hard cap); #1350 agy migration deadline 2026-06-18; #1502 calibration dashboard.</li>
+</ul>
+
+<h2>Files touched</h2>
+<ul>
+<li><code>scripts/local_api.py</code> — added <code>_quality_is_redirect_stub</code> + <code>_QUALITY_REDIRECT_STUB_RE</code>; both <code>build_quality_scores</code> and <code>build_quality_board</code> skip stubs (PR #1574)</li>
+<li><code>scripts/quality/sample_back_catalog_review.py</code> — new file; stratified sampler with eligibility filter + GhIssueChecker (PR #1574)</li>
+<li><code>scripts/dispatch_smart.py</code> — skill auto-loading: SKILL_FOR_TASK_CLASS map + <code>--skill</code> / <code>--no-skill</code> flags (PR #1578)</li>
+<li><code>tests/quality/test_quality_scores_filters_stubs.py</code> — new file; 45 quality tests (PR #1574)</li>
+<li><code>tests/dispatch_smart/test_skill_autoload.py</code> — new file; 10 dispatch tests (PR #1578)</li>
+<li><code>agents_extensions/</code> — new directory; <code>shared/skills/</code> + <code>claude/</code> + <code>codex/</code> + <code>cursor/</code> + <code>gemini/</code> (PR #1575)</li>
+<li><code>claude_extensions/</code> — DELETED, contents moved to <code>agents_extensions/</code> (PR #1575)</li>
+<li><code>docs/decisions/2026-05-26-tiered-back-catalog-review-policy.md</code> — full Decision Card B′ + Result section (PR #1576)</li>
+<li><code>src/content/docs/ai/ai-engineering-foundations/module-2.2-repository-engineering-for-agents.md</code> — prose updated for claude_extensions/ → agents_extensions/ path refs (PR #1575)</li>
+<li><code>logs/quality/back_catalog_sample_2026-05-26.json</code> — sample output (30 modules × 7 tracks, seed=2026)</li>
+<li><code>logs/dispatch_responses/r-*.txt</code> — 15 review verdicts</li>
+</ul>
+
+<h2>Memory entries added</h2>
+<ul>
+<li><code>feedback_back_catalog_full_review_required.md</code> — B′ aborted, rubric+no-issues is NOT a sufficient proxy. 80% NEEDS_CHANGES across all 7 strata.</li>
+<li><code>feedback_background_snapshot_stale_after_reload.md</code> — After editing scripts/local_api.py, stop → sleep 2 → start → sleep 3 + verify generated_at timestamp.</li>
+<li><code>feedback_gh_issue_search_meta_epic_filter.md</code> — Filter <code>gh issue list --search &lt;slug&gt;</code> results to slug-in-TITLE plus ignore-list (#1504, #1502 known meta-epics).</li>
+</ul>
+
+<h2>Open items in flight at handoff write</h2>
+<ul>
+<li>PR #1576 (decision result section) — auto-merge enabled, awaiting CI fire</li>
+<li>PR #1578 (skill auto-load) — auto-merge enabled, awaiting CI fire</li>
+<li>Issue #1577 (24 Class A defects) — open, awaiting fix-pass dispatches in next session</li>
+<li>#1504 (back-catalog 277-module review epic) — reinstated as universal-fallback work; long-running</li>
+</ul>
+
+<h2>Lessons</h2>
+<ol>
+<li><strong>Sample-first ordering is load-bearing.</strong> The B′ deliberation outcome turned out to be wrong, but the framework caught it before stamping. The protocol's "sample, then schema" is the property to carry forward — applies to any future "skip the gate for proven-stable items" pitch.</li>
+<li><strong>Rubric heuristic is structural-only.</strong> Lines + has-quiz + has-exercise + has-citations cannot detect title-content mismatch, mislabeled bash blocks, fake image refs, hallucinated tech, broken multi-step labs. A module can have perfect 5.0/5.0 rubric and 4 Class A defects.</li>
+<li><strong>"No GitHub issues filed" is a weak proxy for "validated by real users."</strong> Most learners hit a broken example, get frustrated, and switch sites — they don't file issues. Zero-issues ≠ correctness.</li>
+<li><strong>BackgroundSnapshot caches survive restart.</strong> Edit scripts/local_api.py, restart api, still see stale data. Use stop → sleep → start sequence; verify <code>generated_at</code> is AFTER the edit.</li>
+<li><strong>gh issue search matches body too.</strong> Meta-epics (#1504-ish) match every module slug in starter tracks. Filter to title-only + ignore-list when using slug-in-search-results as an eligibility signal.</li>
+</ol>
+
+</body></html>
