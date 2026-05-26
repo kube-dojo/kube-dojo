@@ -145,10 +145,10 @@ processors:
     auth_type: serviceAccount
     extract:
       metadata:
-        - k8s.cluster.uid
         - k8s.namespace.name
         - k8s.pod.name
-        - k8s.container.name
+        - k8s.pod.uid
+        - k8s.node.name
   resource/no_egress_labels:
     attributes:
       - key: deployment.environment.name
