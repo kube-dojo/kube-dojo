@@ -81,9 +81,9 @@ Comparing protocol choices is necessary to optimize throughput and limit protoco
 > **Pause and predict**: WireGuard uses ~4,000 lines of code while IPsec uses ~400,000. Both encrypt traffic. Why would the smaller codebase matter for a security-critical component like a VPN tunnel?
 
 Beyond the software choices, cloud providers apply hard bandwidth caps on managed VPN instances:
-- **AWS Site-to-Site VPN** supports a maximum tunnel bandwidth of 5 Gbps (upgraded from the previous 1.25 Gbps limit) for workloads requiring high throughput. Each connection consists of two IPsec tunnels for high availability. Note that AWS Transit Gateway VPN attachments remain limited to 1.25 Gbps per VPN connection.
-- **Azure Virtual WAN** Site-to-Site VPN gateway aggregate throughput is 20 Gbps, delivering 2 Gbps per VPN connection (with 1 Gbps per tunnel). Be mindful that single TCP flows exceeding 1.50 Gbps may degrade.
-- **GCP HA VPN** tunnels support a maximum throughput of approximately 3 Gbps (250,000 packets per second) per tunnel. While community documentation cites GCP HA VPN provides a 99.99% SLA when configured with two HA VPN gateways and four tunnels, always verify this against official Google SLA records before production commitments.
+- **AWS Site-to-Site VPN** [supports a maximum tunnel bandwidth of 5 Gbps](https://docs.aws.amazon.com/vpn/latest/s2svpn/vpn-limits.html) (upgraded from the previous 1.25 Gbps limit) for workloads requiring high throughput. Each connection consists of two IPsec tunnels for high availability. Note that AWS Transit Gateway VPN attachments remain limited to 1.25 Gbps per VPN connection.
+- **Azure Virtual WAN** [Site-to-Site VPN gateway aggregate throughput is 20 Gbps, delivering 2 Gbps per VPN connection (with 1 Gbps per tunnel)](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits). Be mindful that single TCP flows exceeding 1.50 Gbps may degrade.
+- **GCP HA VPN** [tunnels support a maximum throughput of approximately 3 Gbps (250,000 packets per second) per tunnel](https://cloud.google.com/network-connectivity/docs/vpn/concepts/topologies). While community documentation cites GCP HA VPN provides a 99.99% SLA when configured with two HA VPN gateways and four tunnels, always verify this against official Google SLA records before production commitments.
 
 ### Implementing Encrypted Tunnels
 
@@ -116,7 +116,7 @@ ip route add 10.100.0.0/16 via 10.200.0.1 dev wg0
 ip route add 172.20.0.0/16 via 10.200.0.1 dev wg0
 ```
 
-Network constraints: Proper tunnel performance requires strict MTU considerations. AWS Site-to-Site VPN MTU is restricted to 1446 bytes (MSS 1406 bytes). Internal AWS Transit Gateway MTU for inter-VPC and Direct Connect traffic is much larger at 8500 bytes. 
+Network constraints: Proper tunnel performance requires strict MTU considerations. [AWS Site-to-Site VPN MTU is restricted to 1446 bytes (MSS 1406 bytes)](https://docs.aws.amazon.com/vpn/latest/s2svpn/cgw-best-practice.html). Internal AWS Transit Gateway MTU for inter-VPC and Direct Connect traffic is much larger at 8500 bytes. 
 
 ---
 
@@ -149,17 +149,17 @@ flowchart LR
 **Use interconnect** when: >1 Gbps sustained traffic, <5ms latency required, or compliance demands a private path. **Use VPN** for <100 Mbps, non-critical, or DR-only traffic.
 
 **AWS Direct Connect Architecture**
-AWS Direct Connect dedicated connections are available at 1 Gbps, 10 Gbps, 100 Gbps, and 400 Gbps port speeds over single-mode fiber, while hosted connections (via APN partners) range from 50 Mbps to 25 Gbps. 
-Data transfer inbound into AWS is charged at $0.00/GB in all locations.
-AWS Direct Connect supports MACsec encryption on 10 Gbps, 100 Gbps, and 400 Gbps dedicated connections at select PoPs. For AWS Direct Connect 100 Gbps and 400 Gbps connections, the only supported MACsec cipher suite is GCM-AES-XPN-256, which uses Extended Packet Numbering (XPN).
-AWS Direct Connect SiteLink enables private, low-latency connectivity between any two Direct Connect PoPs, routing traffic over the AWS backbone without transiting an AWS Region. AWS Transit Gateway supports a maximum burst bandwidth of 50 Gbps per VPC, Direct Connect gateway, or peered Transit Gateway connection.
+AWS Direct Connect [dedicated connections are available at 1 Gbps, 10 Gbps, 100 Gbps, and 400 Gbps port speeds over single-mode fiber, while hosted connections (via APN partners) range from 50 Mbps to 25 Gbps](https://docs.aws.amazon.com/directconnect/latest/UserGuide/connection_options.html). 
+[Data transfer inbound into AWS is charged at $0.00/GB in all locations](https://aws.amazon.com/directconnect/pricing/).
+AWS Direct Connect [supports MACsec encryption on 10 Gbps, 100 Gbps, and 400 Gbps dedicated connections at select PoPs](https://docs.aws.amazon.com/directconnect/latest/UserGuide/MACsec.html). For AWS Direct Connect 100 Gbps and 400 Gbps connections, the only supported MACsec cipher suite is GCM-AES-XPN-256, which uses Extended Packet Numbering (XPN).
+AWS Direct Connect SiteLink enables private, low-latency connectivity between any two Direct Connect PoPs, [routing traffic over the AWS backbone without transiting an AWS Region](https://docs.aws.amazon.com/prescriptive-guidance/latest/designing-control-tower-landing-zone/sitelink.html). AWS Transit Gateway supports a maximum burst bandwidth of 50 Gbps per VPC, Direct Connect gateway, or peered Transit Gateway connection.
 
 **Azure ExpressRoute Characteristics**
-Azure ExpressRoute standard circuits offer bandwidths from 50 Mbps up to 10 Gbps; ExpressRoute Direct offers 10, 100, and potentially 400 Gbps port speeds (Microsoft documentation lists 400 Gbps, though it requires specific subscription enrollment and is limited in regional availability). 
-Circuits come in three SKUs: Local (same-region VNETs), Standard (same geopolitical region), and Premium (global VNET access). Azure ExpressRoute Global Reach allows linking two ExpressRoute circuits to create a private network between on-premises sites; data transfer is billed separately and is not covered by the Unlimited Data plan. Azure Virtual WAN virtual hub router supports an aggregate throughput of up to 50 Gbps by default with 2 routing infrastructure units (3 Gbps, 2,000 VMs). Azure Virtual WAN Point-to-Site VPN gateway aggregate throughput scales up to 200 Gbps.
+Azure ExpressRoute standard circuits offer bandwidths from 50 Mbps up to 10 Gbps; [ExpressRoute Direct offers 10, 100, and potentially 400 Gbps port speeds](https://learn.microsoft.com/en-us/azure/expressroute/expressroute-erdirect-about) (Microsoft documentation lists 400 Gbps, though it requires specific subscription enrollment and is limited in regional availability). 
+[Circuits come in three SKUs: Local (same-region VNETs), Standard (same geopolitical region), and Premium (global VNET access)](https://learn.microsoft.com/en-us/azure/expressroute/plan-manage-cost). Azure ExpressRoute Global Reach allows linking two ExpressRoute circuits to create a private network between on-premises sites; data transfer is billed separately and is not covered by the Unlimited Data plan. [Azure Virtual WAN virtual hub router supports an aggregate throughput of up to 50 Gbps by default with 2 routing infrastructure units (3 Gbps, 2,000 VMs)](https://learn.microsoft.com/en-us/azure/virtual-wan/virtual-wan-about). Azure Virtual WAN Point-to-Site VPN gateway aggregate throughput scales up to 200 Gbps.
 
 **Google Cloud Interconnect Topologies**
-GCP Dedicated Interconnect links are available at 10 Gbps or 100 Gbps; up to 8 links can be bundled in a Link Aggregation Group (LAG) for up to 800 Gbps. GCP Partner Interconnect VLAN attachments support capacities from 50 Mbps up to 50 Gbps. The GCP Network Connectivity Center (NCC) provides a hub-and-spoke architecture for connecting on-premises and cloud networks with BGP route exchange support.
+GCP Dedicated Interconnect links are available at 10 Gbps or 100 Gbps; up to 8 links can be bundled in a Link Aggregation Group (LAG) for up to 800 Gbps. [GCP Partner Interconnect VLAN attachments support capacities from 50 Mbps up to 50 Gbps](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/overview). The GCP Network Connectivity Center (NCC) provides a hub-and-spoke architecture for connecting on-premises and cloud networks with BGP route exchange support.
 
 ### Multi-Cloud Interconnectivity
 Direct, backbone-to-backbone multicloud connectivity eliminates intermediary colocation complexity. AWS Interconnect – multicloud (in partnership with Google Cloud) entered preview in November 2025, offering 1 Gbps connections during preview at no cost across five AWS–GCP region pairs. It targets 100 Gbps at general availability. While Azure is announced as a future partner, it has no firm GA date as of early 2026. Correspondingly, GCP Cross-Cloud Interconnect supports direct private connections to AWS through this same partnership, but the Azure topology remains ambiguously documented and lacks a confirmed deployment timeline.
@@ -168,7 +168,7 @@ Direct, backbone-to-backbone multicloud connectivity eliminates intermediary col
 
 ## Submariner: Multi-Cluster Networking
 
-Submariner connects Kubernetes clusters so pods and services in one cluster can reach those in another, handling cross-cluster DNS, encrypted tunnels, and service discovery. It is a CNCF Sandbox project that enables Layer 3 cross-cluster pod and service connectivity for Kubernetes; it is CNI-agnostic. Note: Validate any third-party claims that Submariner has graduated to Incubating status, as CNCF official landscape metrics classify it under Sandbox.
+Submariner connects Kubernetes clusters so pods and services in one cluster can reach those in another, handling cross-cluster DNS, encrypted tunnels, and service discovery. [It is a CNCF Sandbox project that enables Layer 3 cross-cluster pod and service connectivity for Kubernetes](https://www.cncf.io/projects/submariner/); it is CNI-agnostic. Note: Validate any third-party claims that Submariner has graduated to Incubating status, as CNCF official landscape metrics classify it under Sandbox.
 
 ```mermaid
 flowchart LR
@@ -234,7 +234,7 @@ Linkerd multi-cluster connectivity has been available since Linkerd 2.8 (June 20
 
 ## Unified Service Mesh with Istio
 
-Istio adds traffic management, observability, and mTLS security across clusters. Istio supports two primary multi-cluster deployment models: multi-primary (shared control plane per cluster) and primary-remote (remote clusters share a control plane from a primary cluster). Istio Ambient mesh multi-cluster support (multi-network topology) reached beta status in March 2026; single-network multicluster remains alpha. Istio's latest stable release is v1.29.1 (March 10, 2026).
+Istio adds traffic management, observability, and mTLS security across clusters. [Istio supports two primary multi-cluster deployment models: multi-primary (shared control plane per cluster) and primary-remote (remote clusters share a control plane from a primary cluster)](https://istio.io/latest/docs/setup/install/multicluster/). Istio Ambient mesh multi-cluster support (multi-network topology) reached beta status in March 2026; single-network multicluster remains alpha. Istio's latest stable release is v1.29.1 (March 10, 2026).
 
 ```mermaid
 flowchart LR
@@ -334,7 +334,7 @@ spec:
 ## Consistent Policy with OPA/Gatekeeper
 
 When workloads span environments, policy drift is inevitable without enforcement.
-- Consistent policy enforcement with OPA/Gatekeeper across environments establishes a standardized security posture across your entire fleet, neutralizing deviations applied manually by local administrators.
+- Consistent policy enforcement with [OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper) across environments establishes a standardized security posture across your entire fleet, neutralizing deviations applied manually by local administrators.
 
 ```mermaid
 flowchart TD
@@ -413,7 +413,7 @@ Sync policies to all clusters via ArgoCD Applications pointing to the same Git r
 
 ## Did You Know?
 
-1. **WireGuard is in the Linux kernel since 5.6** (March 2020). Linus Torvalds called it a "work of art" compared to IPsec. At ~4,000 lines of code versus IPsec's ~400,000, its attack surface is dramatically smaller.
+1. **[WireGuard is in the Linux kernel since 5.6](https://github.com/torvalds/linux/releases/tag/v5.6)** (March 2020). Linus Torvalds called it a "work of art" compared to IPsec. At ~4,000 lines of code versus IPsec's ~400,000, its attack surface is dramatically smaller.
 2. **AWS Direct Connect locations are not AWS datacenters.** They are colocation facilities (Equinix, CoreSite). Your router connects to an AWS router via a physical fiber patch cable in a shared "meet-me room."
 3. **AWS Interconnect – multicloud preview launched in November 2025.** By providing native 1 Gbps multicloud tunnels directly over the backbone, it proves native cloud-to-cloud integrations are expanding.
 4. **Submariner's name references submarine cables** connecting continents. Created by Rancher Labs (now SUSE), it is a CNCF Sandbox project supporting both IPsec and WireGuard as cable drivers. It was officially accepted into the CNCF on April 28, 2021.
@@ -428,7 +428,7 @@ Sync policies to all clusters via ArgoCD Applications pointing to the same Git r
 | Overlapping pod CIDRs | Default CNIs use 10.244.0.0/16 | Plan unique CIDRs per cluster before deployment |
 | Single VPN gateway | "We'll add HA later" | Deploy gateways in active-passive pairs from day one |
 | Ignoring MTU in tunnels | Encapsulation adds 50-70 bytes | Set MTU to 1400 on tunnel interfaces |
-| No encryption between clusters | "Private network" | Always encrypt; even private networks can be compromised |
+| No encryption between clusters | "Private network" | Always encrypt; [even private networks can be compromised](https://www.nist.gov/publications/zero-trust-architecture) |
 | No shared root CA for Istio | Each cluster auto-generates its own | Create shared root CA before installing Istio |
 | Manual per-cluster policies | "Only two clusters" | Use GitOps; drift begins with the first manual change |
 
@@ -604,3 +604,23 @@ kubectl run test --rm -it --image=curlimages/curl --restart=Never -- \
 ## Next Module
 
 Continue to [Module 8.3: Cloud Repatriation & Migration](/on-premises/resilience/module-8.3-cloud-repatriation/) to learn how to move workloads from cloud to on-premises, translating cloud services to their on-prem equivalents.
+
+## Sources
+
+- [docs.aws.amazon.com: vpn limits.html](https://docs.aws.amazon.com/vpn/latest/s2svpn/vpn-limits.html) — AWS VPN quotas document standard and large-bandwidth tunnel limits and related tunnel quotas.
+- [learn.microsoft.com: azure subscription service limits](https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits) — Azure service limits list Virtual WAN VPN aggregate and per-connection throughput limits.
+- [cloud.google.com: topologies](https://cloud.google.com/network-connectivity/docs/vpn/concepts/topologies) — Google Cloud HA VPN topology and bandwidth documentation covers tunnel throughput and SLA topology requirements.
+- [docs.aws.amazon.com: cgw best practice.html](https://docs.aws.amazon.com/vpn/latest/s2svpn/cgw-best-practice.html) — AWS customer gateway best practices document the VPN MTU/MSS values; Transit Gateway MTU is documented in AWS Transit Gateway concepts.
+- [aws.amazon.com: pricing](https://aws.amazon.com/directconnect/pricing/) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: connection options.html](https://docs.aws.amazon.com/directconnect/latest/UserGuide/connection_options.html) — AWS Direct Connect connection options list the dedicated and hosted connection speed ranges.
+- [docs.aws.amazon.com: MACsec.html](https://docs.aws.amazon.com/directconnect/latest/UserGuide/MACsec.html) — AWS Direct Connect MACsec documentation lists supported speeds and cipher suite requirements.
+- [docs.aws.amazon.com: sitelink.html](https://docs.aws.amazon.com/prescriptive-guidance/latest/designing-control-tower-landing-zone/sitelink.html) — AWS Prescriptive Guidance describes SiteLink routing between Direct Connect locations without entering AWS Regions.
+- [learn.microsoft.com: expressroute erdirect about](https://learn.microsoft.com/en-us/azure/expressroute/expressroute-erdirect-about) — Microsoft ExpressRoute Direct documentation lists direct port speeds and circuit SKU ranges.
+- [learn.microsoft.com: plan manage cost](https://learn.microsoft.com/en-us/azure/expressroute/plan-manage-cost) — Microsoft cost planning documentation states Global Reach data transfer is charged per GB separately.
+- [learn.microsoft.com: virtual wan about](https://learn.microsoft.com/en-us/azure/virtual-wan/virtual-wan-about) — Azure Virtual WAN overview and hub settings documentation cover router throughput, default capacity, and gateway throughput.
+- [cloud.google.com: overview](https://cloud.google.com/network-connectivity/docs/interconnect/concepts/overview) — Google Cloud Interconnect and Network Connectivity Center documentation cover Partner Interconnect capacities and NCC route exchange.
+- [cncf.io: submariner](https://www.cncf.io/projects/submariner/) — The CNCF project page states Submariner's function, Sandbox maturity, and acceptance date.
+- [istio.io: multicluster](https://istio.io/latest/docs/setup/install/multicluster/) — Istio's multicluster installation docs list multi-primary and primary-remote topologies.
+- [github.com: gatekeeper](https://github.com/open-policy-agent/gatekeeper) — The Gatekeeper repository describes it as a Kubernetes policy controller using OPA.
+- [github.com: v5.6](https://github.com/torvalds/linux/releases/tag/v5.6) — The Linux v5.6 release tag provides the release reference for the kernel version.
+- [nist.gov: zero trust architecture](https://www.nist.gov/publications/zero-trust-architecture) — NIST SP 800-207 states that no implicit trust should be granted based solely on physical or network location.
