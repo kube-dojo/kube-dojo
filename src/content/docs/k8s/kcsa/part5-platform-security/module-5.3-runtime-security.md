@@ -742,7 +742,8 @@ spec:
 
   containers:
   - name: api-service
-    image: nginx:1.27-alpine
+    image: docker.io/library/python:3.12-slim
+    command: ["python", "-m", "http.server", "8080", "--bind", "0.0.0.0"]
     ports:
     - containerPort: 8080
 
