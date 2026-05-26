@@ -527,6 +527,80 @@ The agent is governed by a JSON file that explicitly declares which metrics to s
 Do not bake this config file directly into your AMI. Instead, store it centrally in Systems Manager (SSM).
 
 ```bash
+# Write the agent config (same JSON as above) before uploading to SSM
+sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+sudo tee /opt/aws/amazon-cloudwatch-agent/etc/config.json <<'EOF'
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "cwagent"
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}",
+      "AutoScalingGroupName": "${aws:AutoScalingGroupName}"
+    },
+    "aggregation_dimensions": [
+      ["InstanceId"],
+      ["AutoScalingGroupName"]
+    ],
+    "metrics_collected": {
+      "mem": {
+        "measurement": [
+          "mem_used_percent",
+          "mem_available_percent",
+          "mem_total"
+        ],
+        "metrics_collection_interval": 60
+      },
+      "disk": {
+        "measurement": [
+          "disk_used_percent",
+          "disk_free"
+        ],
+        "resources": ["/", "/data"],
+        "metrics_collection_interval": 60
+      },
+      "swap": {
+        "measurement": ["swap_used_percent"]
+      },
+      "cpu": {
+        "measurement": [
+          "cpu_usage_idle",
+          "cpu_usage_user",
+          "cpu_usage_system",
+          "cpu_usage_iowait"
+        ],
+        "totalcpu": true,
+        "metrics_collection_interval": 60
+      }
+    }
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/myapp/application.log",
+            "log_group_name": "/myapp/production/api",
+            "log_stream_name": "{instance_id}/application.log",
+            "retention_in_days": 30,
+            "timestamp_format": "%Y-%m-%dT%H:%M:%S"
+          },
+          {
+            "file_path": "/var/log/syslog",
+            "log_group_name": "/myapp/production/system",
+            "log_stream_name": "{instance_id}/syslog",
+            "retention_in_days": 14
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
 # Store the config in SSM Parameter Store
 aws ssm put-parameter \
   --name "AmazonCloudWatch-linux-config" \
@@ -784,6 +858,7 @@ aws iam add-role-to-instance-profile \
 aws ec2 run-instances \
   --image-id resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
   --instance-type t3.micro \
+  --monitoring Enabled=true \
   --iam-instance-profile Name=cw-lab-profile \
   --key-name YOUR_KEY_PAIR \
   --security-group-ids sg-YOUR_SG \
@@ -958,6 +1033,7 @@ Create a proactive alarm that triggers an SNS notification when CPU load exceeds
 <summary>Solution</summary>
 
 ```bash
+# Run from your local machine (AWS CLI):
 INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].InstanceId" --output text)
 INSTANCE_PUBLIC_IP=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cw-lab" --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
 
@@ -986,15 +1062,20 @@ aws cloudwatch put-metric-alarm \
   --alarm-actions $TOPIC_ARN \
   --ok-actions $TOPIC_ARN \
   --treat-missing-data missing
+```
 
-# SSH into the instance and stress the CPU
+```bash
+# Run on the EC2 instance (via SSH):
 ssh -i your-key.pem ec2-user@$INSTANCE_PUBLIC_IP
 
-# Inside the EC2 instance, install and run stress-ng
+# Install and run stress-ng to drive CPU above the alarm threshold
 sudo yum install -y stress-ng
 stress-ng --cpu 2 --timeout 300
+```
 
-# After 2-3 minutes, check alarm state from your local machine
+```bash
+# Run from your local machine (AWS CLI):
+# After 2-3 minutes, check alarm state
 aws cloudwatch describe-alarms \
   --alarm-names "cw-lab-high-cpu" \
   --query 'MetricAlarms[0].[AlarmName,StateValue,StateReason]' \
