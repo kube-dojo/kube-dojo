@@ -16,15 +16,20 @@
 
 | Date | Session | Summary | Handoff |
 |------|---------|---------|---------|
-| 2026-05-25 | **55** | 15-PR flood. CI cross-family review workflow shipped + operational on every subsequent PR (#1542). Hermes argv bug class fully eradicated across 4 PRs (#1543/#1547/#1549) — 5 call-sites switched to `--oneshot=<prompt>` equals-form, regression tests for all incl. flag-like-prompt edge case. 5 issues closed: #1517 #1518 #1520 #1523 #1538. #1530 Wave 2 author phase complete: all 4 PRs (#1552 #1553 #1554 #1556) merged (1554 auto-queued for CI). Cross-family review chain caught 6 real bugs (CI timeout · Calico v3 IPPool schema · BCC missing include · kind lab not kube-proxy-free · Shopify/Datadog citation breaks · Tetragon SIGKILL caveat). Wave 3.1 codex T0 in-flight at handoff write. | [session-55](./docs/session-state/2026-05-25-session-55-fifteen-pr-flood-wave-2-complete-plus-hermes-eradication.html) |
-| 2026-05-25 | 54 | Research-driven 4-PR landing (#1532 Repository Engineering for Agents · #1539 Moshi/GPT-4o Realtime gap-fill · #1540 ch-73 The Algorithmic Response · #1541 module-1.10 Modern Transformers) + 2 research artifacts + 2 memory locks (codex-writer/composer-reviewer pair, no-premature-issue-close). #1530 reopened (Wave 3 row 2.2 ticked). CI cross-family review workflow scoped (branch `feat/ci-cross-family-code-review` — landed session 55). | [session-54](./docs/session-state/2026-05-25-session-54-research-driven-4-prs-plus-ai-engineering-foundations-2-2.html) |
-| 2026-05-25 | 53 | Codex-as-T0-author pipeline validated; 5 PRs merged including 3 Phase E.1 residual modules (#1527 Edge K8s Distros, #1528 eBPF Fundamentals, #1526 IPv6 Fundamentals) + 2 orchestrator-skill policy locks. Issue #384 closed and replaced with 9 scoped follow-ups (#1516-#1524). Codex gpt-5.5 retry success 3/3; spark first-try 1/3 (rc=-9). Disk hygiene reclaimed 7 GB. | [session-53](./docs/session-state/2026-05-25-session-53-codex-as-t0-author-validated.html) |
+| 2026-05-26 | **56** | 15-PR batch. Epic #1530 AI Engineering Foundations fully closed (Wave 2 + Wave 3 + Wave 4 + Phase 4 — all 12 modules of the new section shipped + ADR + 3 orphan redirect stubs + 3 cross-link additions). Critical-rubric drain begun: 5 of 122 on-prem modules rewritten to T0 in this batch (modules 7.4, 1.3, 1.5, 2.2, 2.3 + Phase E.1 #1521 + #1524). **gemini-3.1-pro-preview proved viable as full T0 author** on first trial (PR #1569 — 5034 body_words, T0 first-pass) — now the 4th T0 author option alongside codex/cursor/deepseek. CI cross-family review workflow end-to-end functional after user added API keys (PR #1564 dropped redundant gemini-3.5-flash@high). 5 issues closed (#1521 #1524 #1530 #1534 #1535). Repo hygiene: 35 prunable worktrees + 42 prunable branches → 0. 13 new memory entries. | [session-56](./docs/session-state/2026-05-26-session-56-fifteen-prs-plus-gemini-t0-trial-plus-phase4-close.html) |
+| 2026-05-25 | 55 | 15-PR flood. CI cross-family review workflow shipped + operational on every subsequent PR (#1542). Hermes argv bug class fully eradicated across 4 PRs. 5 issues closed (#1517/#1518/#1520/#1523/#1538). #1530 Wave 2 author phase complete (4 PRs merged). Cross-family review chain caught 6 real bugs. Wave 3.1 codex T0 in-flight at handoff write. | [session-55](./docs/session-state/2026-05-25-session-55-fifteen-pr-flood-wave-2-complete-plus-hermes-eradication.html) |
+| 2026-05-25 | 54 | Research-driven 4-PR landing (#1532/#1539/#1540/#1541) + 2 research artifacts + 2 memory locks (codex-writer/composer-reviewer pair, no-premature-issue-close). #1530 reopened. CI cross-family review workflow scoped. | [session-54](./docs/session-state/2026-05-25-session-54-research-driven-4-prs-plus-ai-engineering-foundations-2-2.html) |
 
-Older predecessors: see [`docs/session-state/`](./docs/session-state/) (52 dated handoff files, sessions 13-52).
+Older predecessors: see [`docs/session-state/`](./docs/session-state/) (53 dated handoff files, sessions 13-55).
 
 ## Active policies
 
 - **Decision Card C (accepted 2026-05-24)**: composer-2.5 = primary cross-family T0 content reviewer; codex = secondary. Symmetric routing: composer-2.5-authored content → codex reviews. Source: [`docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md`](./docs/decisions/2026-05-24-reviewer-routing-composer-2-5.md).
+- **gemini-3.1-pro-preview is 4th T0 author option (locked 2026-05-26 PR #1569 trial)**: T0 rotation now codex / cursor composer-2.5 / deepseek-v4-pro / **gemini-3.1-pro-preview**. Reviewer-of-gemini stays composer-2.5 (cursor) per Decision Card C. Watch 3x weekly buff burnable in ~2hrs of heavy use. Memory: `feedback_gemini_3_1_pro_viable_t0_author`.
+- **MAX 6 core sections is HARD CAP — agent-class-wide overshoot pattern (session 55 + 56)**: cursor, gemini, and occasionally codex default to 7 H2 core sections when brief lists 7+ topic bullets. Brief language locked: "MAX 6 (HARD CAP) — fold the two most-related topic bullets into one H2 with H3 subsections" + post-write count step. Three-way-rule fix candidate: add `structure_core_sections_4_6` deterministic gate to `verify_module.py`. Memory: `feedback_cursor_overshoots_core_section_limit`.
+- **deepseek review requires `--mode workspace-write`**: `dispatch_smart.py review --agent deepseek --mode read-only` fails in ~31s ("tool-use intent without execution"). Mode upgrade is required. cursor + gemini work fine with read-only. Memory: `feedback_deepseek_review_needs_workspace_write_mode`.
+- **agy + deepseek review-class hallucination patterns**: agy invents fix-pass narratives during review (claims to have "applied changes" not in git log); deepseek invents fake verifier gate names. Mitigation: include actual `verify_module.py` output in deepseek brief; cross-check agy claimed-fixes against git log. Memory: `feedback_agy_and_deepseek_hallucinate_reviews`.
+- **agy unsafe for clean-branch T0 authoring (session 56 PR #1559 closed)**: agy TUI persists branch state across dispatches → ignores `--new-branch` + `--worktree`. STAYS approved for review/architect/edit-on-existing-branch. Memory: `feedback_agy_tui_session_bleed_t0_author`.
 - **Condition-dependent T0 author lane (locked 2026-05-25, PR #1525)**: codex gpt-5.5 is T0 primary when codex cap healthy; cursor composer-2.5 takes over during throttle. Reviewer side unchanged. Use `--model gpt-5.5` explicitly (spark dies rc=-9 at our prompt sizes — 2/3 first-tries failed session 53).
 - **Codex-writer / composer-2.5-reviewer pair (locked 2026-05-25 user directive, session 54)**: default T0 content shape — codex authors, composer-2.5 reviews. Memory: `feedback_codex_writer_composer_reviewer_pair.md`.
 - **Cursor reviewer must use explicit `--model composer-2.5`**: cursor CLI rejected implicit `gpt-5.5` model name mid-session 54 with "AI Model Not Found". Workaround locked: every `dispatch_smart.py review --agent cursor` call passes `--model composer-2.5` explicitly.
@@ -39,12 +44,12 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (52 dated
 
 ## Current state
 
-- **761 English modules** (753 + 8 new session 55: Wave 2.1 prompt-fundamentals · 2.2 reasoning-and-logic-prompts · 2.3 prompt-safety-and-evaluation · 2.4 prompt-libraries-and-contracts · GRPO/RLVR · dual-stack K8s · eBPF tracing tools · Edge Fleet Patterns · eBPF security & networking deep-dive · Wave 3.1 retrieval-tools-and-memory-boundaries (PR #1557 merged after handoff)); **312 Ukrainian** (~41%).
-- **Starter tracks 499/499 at heuristic 5.0** (prereqs 44 / linux 37 / ai 28 / ai-ml-engineering 103 / cloud 92 / k8s certs 195).
-- **122 critical-rubric platform + 13 on-prem REWRITES remain** (unchanged session 55).
+- **~776 English modules** (761 + 15 new session 56: Wave 3.2 module-2.4 dynamic-context-orchestration · Wave 4 harness-fundamentals/guardrails/operating/Symphony · #1521 Disconnected K8s · #1524 IPv6-only K8s + 5 critical-rubric rewrites + Phase 4 stubs); **312 Ukrainian** (~40%).
+- **Starter tracks 499/499 at heuristic 5.0** (unchanged).
+- **~115 critical-rubric REWRITES remain** (was 122 — session 56 closed 7: modules 7.4 observability, 1.3 cluster-topology, 1.5 onprem-finops, 2.2 PXE, 2.3 immutable-OS, plus #1521 + #1524 new-modules-not-strictly-rewrites).
 - **388 modules need composer-2.5 review** (heuristic-green but not yet composer-2.5-reviewed) — epic #1504, 77 sections, ~58h cursor wall-clock.
-- **2 Phase E.1 residual issues remain open** for codex T0 author: #1521 Disconnected K8s · #1524 IPv6-only K8s. (Session 55 closed #1517/#1518/#1520/#1523.)
-- **#1530 AI Engineering Foundations epic** — 9 boxes remain (1 Wave 3 module-2.4 dynamic-context-orchestration + 3 Wave 4 + 1 capstone + 5 Phase 4 migration). Wave 2 fully complete pending PR #1554 auto-merge; Wave 3.1 module-2.3 retrieval-tools merged in PR #1557 (post-handoff bonus).
+- **All Phase E.1 residual issues closed** (#1521 + #1524 merged via PR #1566 + PR #1567).
+- **#1530 AI Engineering Foundations epic FULLY CLOSED** via PR #1565 (Phase 4 cleanup). All 12 modules of the new section shipped + ADR + 3 orphan-redirect stubs + bidirectional cross-links.
 - Site: https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build).
 - Services: `./services.sh {start|stop|restart|status} {dev|api|feedback}` (api on :8768, dev on :4333).
 
@@ -52,16 +57,14 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (52 dated
 
 **Next session — top priorities:**
 
-- [ ] **Confirm PR #1554 (Wave 2.1) auto-merge landed** — queued for CI at session-55 close; will tick the final Wave 2 box of epic #1530 when it merges. If still stuck on CI, direct-merge (review-job failures are advisory; the 5 Analyze/Incident-dedup checks are the required gate).
-- [ ] **Fire Wave 3.2 codex T0** — module-2.4 dynamic-context-orchestration (last open Wave-3 module; W3 = 2.2 session 54, W3.1 = 2.3 PR #1557 merged post-handoff). Closes Wave 3 of #1530.
-- [ ] **Fire Wave 4 of #1530** — 3 harness modules (module-3.1 fundamentals · 3.2 guardrails · 3.3 operating) + 1 capstone (module-4.1 Symphony). Untouched. ~6-12 dispatches incl. R1/R2 cycles.
-- [ ] **Phase 4 migration** (5 boxes after Wave 4 ships): relocate existing prompt/harness modules from `ai-ml-engineering/` + `ai/ai-native-work/` into new `ai/ai-engineering-foundations/` section; cross-link or deprecate originals.
-- [ ] **Fire 2 remaining Phase E.1 residuals**: #1521 Disconnected & Air-gapped K8s · #1524 IPv6-only K8s. Both need scope-correction investigation first (per session-55 pattern: existing modules may cover parts). Use `--model gpt-5.5` explicit.
-- [ ] **122 critical platform + 13 on-prem REWRITES** — top of `briefing.actions.next`. Codex gpt-5.5 author + cursor R1. Untouched session 55.
-- [ ] **388-module composer-2.5 review epic #1504** — standing-watch: cursor comments "claiming section X" or opens a PR; orchestrator picks up the review queue.
-- [ ] **Visual sanity-check the 14 merged session-55 modules** on the live site after deploy.yml runs (`feedback_dont_block_on_human_pass`).
-- [ ] **User: add repo secrets `GEMINI_API_KEY` + `DEEPSEEK_API_KEY`** so the new CI cross-family review workflow can actually post comments. Without secrets, the 3 review jobs fail in 8-10s (HTTP 401); workflow stays comment-only/continue-on-error so merges still flow, but no useful review signal.
-- [ ] **Save 5 memory entries from session-55 bug autopsies**: (1) `feedback_t0_length_target_use_words_not_lines` — Wave 2.1 cycle wasted 3 dispatches on lines-vs-words ambiguity; (2) `feedback_trust_code_not_comments_in_scope_investigation` — deepseek docstring misled my hermes-scope check, codex caught the actual code; (3) `feedback_chore_vs_fix_prefix_for_bugfix_hook` — link-cleanup PRs use chore() prefix; (4) `feedback_wave_cohort_index_conflict` — 4 PRs editing same index.md guarantee rebase conflicts; (5) `feedback_dispatch_smart_stale_branch_check_is_advisory` — codex review exit 1 with "branch missing remote" is the wrapper sanity check, not a real failure. Details in session-55 handoff.
+- [ ] **Continue the 122 critical-rubric drain** — 7 closed session 56 (modules 7.4, 1.3, 1.5, 2.2, 2.3 on-prem + #1521 + #1524). ~115 remain. Briefing API surfaces top-5 in `actions.next`. Rotate across all 4 T0 authors (codex / cursor / deepseek / gemini-3.1-pro). Watch gemini quota (3x buff burns in ~2hrs of heavy use).
+- [ ] **Visual sanity-check the 15 merged session-56 modules** on the live site after `deploy.yml` runs (`feedback_dont_block_on_human_pass`).
+- [ ] **388-module composer-2.5 review epic #1504** — standing-watch unchanged: cursor comments "claiming section X" or opens a PR; orchestrator picks up the review queue.
+- [ ] **Phase 4 follow-up verification**: after deploy, visually confirm the 3 orphan-redirect stubs (prompt 1.6, harness 2.1, Symphony 2.2 in legacy locations) actually render the "moved to" link correctly in Starlight. Mixed path styles used (absolute `/ai/...` vs relative `../../ai-engineering-foundations/...`) — both should resolve but worth a check.
+- [ ] **Codex spark default broken** for our prompt sizes (PR #1521 first attempt 65s empty response). Either (a) patch `scripts/dispatch_smart.py` to default codex draft to gpt-5.5, OR (b) keep passing `--model gpt-5.5` explicitly. Patch is the better fix.
+- [ ] **Three-way-rule fix** for the 4-6 core-section overshoot pattern: add `structure_core_sections_4_6` deterministic gate to `scripts/quality/verify_module.py` so the verifier catches overshoots before reviewer.
+- [ ] **9 issues still open**: #14 monitoring · #143 Ukrainian full-coverage · #373 liveness probes · #383 UK re-sync · #386 lab quality · #393 AI history depth · #1299 gap analysis · #1350 gemini-cli → agy migration (deadline 2026-06-18) · #1401/#1402/#1404 calibration · #1502 calibration dashboard · #1504 review epic. None are top-of-queue.
+- [ ] **Build the 12-week LLM-engineering sub-track** (Osman gap analysis recommended in #1535 close comment): 3 net-new modules (Speculative Decoding+Medusa, MoE Architectures, Mechanistic Interpretability) + `ai-ml-engineering/synthesis-apps/the-12-week-llm-stack/` index threading existing scattered modules.
 
 **Date-bound:**
 
@@ -86,6 +89,7 @@ _None._
 - 2026-04-28: STATUS.md migrated to index pattern (was a 1,623-line forever-growing log).
 - 2026-05-24: STATUS.md re-compressed to ~100 lines; sessions 13-51 narrative moved to [`docs/session-state/`](./docs/session-state/) HTMLs.
 - 2026-05-25 session 55: Hermes argv bug class fully eradicated (5 call-sites, all to `--oneshot=<prompt>` equals-form); CI cross-family review workflow operational on every PR.
+- 2026-05-26 session 56: Epic #1530 AI Engineering Foundations fully closed (Wave 2 + Wave 3 + Wave 4 + Phase 4 all shipped). gemini-3.1-pro-preview promoted to 4th T0 author option after first-trial success on PR #1569. Critical-rubric drain begun (7 of 122 closed). CI cross-family review workflow end-to-end functional after user added API keys.
 
 ## End-of-session ritual
 
