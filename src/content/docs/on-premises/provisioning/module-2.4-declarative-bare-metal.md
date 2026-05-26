@@ -33,9 +33,9 @@ Cluster API fundamentally changes this narrative. By extending Kubernetes to man
 
 ## The Core Architecture of Cluster API
 
-Cluster API is a Kubernetes sub-project that provides declarative APIs and tooling to simplify provisioning, upgrading, and operating Kubernetes clusters. Cluster API was started by Kubernetes SIG Cluster Lifecycle and remains a SIG Cluster Lifecycle project. It introduces a paradigm shift by utilizing Kubernetes itself to manage the infrastructure that runs Kubernetes.
+[Cluster API is a Kubernetes sub-project that provides declarative APIs and tooling to simplify provisioning, upgrading, and operating Kubernetes clusters](https://cluster-api.sigs.k8s.io/). Cluster API was started by Kubernetes SIG Cluster Lifecycle and remains a SIG Cluster Lifecycle project. It introduces a paradigm shift by utilizing Kubernetes itself to manage the infrastructure that runs Kubernetes.
 
-At its heart, Cluster API utilizes a "management cluster" to oversee the lifecycle of one or more "workload clusters." The management cluster runs specific controllers—such as the core provider, the bootstrap provider, and the infrastructure provider—that read custom resources to enforce the desired state of downstream clusters. This separation of concerns ensures that the lifecycle of the infrastructure is strictly managed by dedicated operators, allowing workload clusters to remain lightweight and focused entirely on running application workloads.
+At its heart, [Cluster API utilizes a "management cluster" to oversee the lifecycle of one or more "workload clusters." The management cluster runs specific controllers—such as the core provider, the bootstrap provider, and the infrastructure provider—that read custom resources to enforce the desired state of downstream clusters](https://cluster-api.sigs.k8s.io/user/concepts.html). This separation of concerns ensures that the lifecycle of the infrastructure is strictly managed by dedicated operators, allowing workload clusters to remain lightweight and focused entirely on running application workloads.
 
 ```mermaid
 graph TD
@@ -71,13 +71,13 @@ To understand how the declarative model functions, you must understand the prima
 | `BareMetalHost` (Metal3) | Represents a physical server |
 | `ServerClass` (Sidero) | Groups servers by hardware capabilities |
 
-The core provider establishes the fundamental abstractions (like Machine and Cluster) required by all other controllers. When initializing an environment using the `clusterctl init` command, Cluster API automatically installs the core provider, kubeadm bootstrap provider, and kubeadm control-plane provider unless those providers are explicitly controlled by flags. Furthermore, `clusterctl init` always installs the latest available provider versions for explicitly selected providers, and does not install pre-release provider versions unless requested by tag.
+The core provider establishes the fundamental abstractions (like Machine and Cluster) required by all other controllers. When initializing an environment using the [`clusterctl init` command, Cluster API automatically installs the core provider, kubeadm bootstrap provider, and kubeadm control-plane provider unless those providers are explicitly controlled by flags](https://cluster-api.sigs.k8s.io/clusterctl/commands/init.html). Furthermore, `clusterctl init` always installs the latest available provider versions for explicitly selected providers, and does not install pre-release provider versions unless requested by tag.
 
 When bootstrapping an environment, operators sometimes wonder if they can bypass certain components to save resources or memory. Cluster API does not support skipping the core provider install from `clusterctl init`; skipping is only available for bootstrap/control-plane with `-` placeholders. The core controller is the absolute foundation of the ecosystem, as it is responsible for the top-level orchestration of the cluster lifecycle.
 
 ## Metal3 (CAPM3) Infrastructure and Ecosystem
 
-CAPM3 is a Cluster API infrastructure provider that enables deploying Kubernetes clusters on bare-metal via Metal3. By leveraging out-of-band management protocols, CAPM3 bridges the gap between cloud-native declarative logic and physical, tangible hardware. It effectively acts as the translation layer between Kubernetes API requests and the physical signals required to boot, wipe, and configure actual datacenter hardware.
+[CAPM3 is a Cluster API infrastructure provider that enables deploying Kubernetes clusters on bare-metal via Metal3](https://github.com/metal3-io/cluster-api-provider-metal3). By leveraging out-of-band management protocols, CAPM3 bridges the gap between cloud-native declarative logic and physical, tangible hardware. It effectively acts as the translation layer between Kubernetes API requests and the physical signals required to boot, wipe, and configure actual datacenter hardware.
 
 Metal3 requires physical machines with BMC access (e.g., Redfish/iDRAC/IPMI), an Ironic instance, and a Kubernetes management cluster (Kind is acceptable for development). A Metal3/Cluster API environment maps user-facing Kubernetes workload infrastructure to `Metal3Machine` and `BareMetalHost` objects, with BMO exposing Ironic capabilities via `BareMetalHost` CRDs.
 
@@ -115,13 +115,13 @@ graph TD
 
 ### Decoupled Components and Installation Flow
 
-Architectural shifts in the Metal3 project have refined how the components interact. Starting from CAPM3 release version 0.5.0, Baremetal Operator is decoupled from CAPM3 `clusterctl` deployment, so CAPM3 init must be accompanied by separate BMO/Ironic installation. 
+Architectural shifts in the Metal3 project have refined how the components interact. [Starting from CAPM3 release version 0.5.0, Baremetal Operator is decoupled from CAPM3 `clusterctl` deployment, so CAPM3 init must be accompanied by separate BMO/Ironic installation](https://github.com/metal3-io/cluster-api-provider-metal3). 
 
 To ensure a stable foundation, CAPM3 installation docs show example pinned versions and recommend a dependency flow: install clusterctl, kustomize, Ironic, Baremetal Operator, then core/bootstrap/control-plane providers before `clusterctl init --infrastructure metal3`. Establishing this exact order guarantees that the Ironic backend is actively listening before the controllers attempt to reconcile physical hosts. Failing to adhere to this order can result in reconciliation loops timing out or controllers entering a crash loop because their necessary physical backends are unreachable.
 
 ### BareMetalHost Definition
 
-The `BareMetalHost` CRD is how Metal3 identifies physical servers. By abstracting the server's MAC addresses and Baseboard Management Controller specifications into a manifest, operators can track their physical inventory within etcd. This resource provides a centralized, universally accessible inventory of all available physical resources within the environment. Below are the separate manifests required to define a host and its secure BMC credentials.
+[The `BareMetalHost` CRD is how Metal3 identifies physical servers](https://github.com/metal3-io/baremetal-operator). By abstracting the server's MAC addresses and Baseboard Management Controller specifications into a manifest, operators can track their physical inventory within etcd. This resource provides a centralized, universally accessible inventory of all available physical resources within the environment. Below are the separate manifests required to define a host and its secure BMC credentials.
 
 ```yaml
 apiVersion: metal3.io/v1alpha1
@@ -275,7 +275,7 @@ spec:
       generateType: controlplane
 ```
 
-Worker nodes are defined via a `MachineDeployment`, which mirrors the behavior of a standard Kubernetes `Deployment` but operates on physical servers instead of Pods. This enables rolling updates of entire physical nodes simply by changing the version field.
+[Worker nodes are defined via a `MachineDeployment`, which mirrors the behavior of a standard Kubernetes `Deployment` but operates on physical servers instead of Pods. This enables rolling updates of entire physical nodes simply by changing the version field](https://cluster-api.sigs.k8s.io/tasks/upgrading-clusters.html).
 
 ```yaml
 # Worker machines (5 nodes from 'worker-large' server class)
@@ -354,7 +354,7 @@ kubectl --kubeconfig production.kubeconfig get nodes
 
 ## Automated Remediation and Machine Health
 
-One of the most powerful features of Cluster API is the ability to automatically remediate failed nodes by replacing them with fresh hardware from the pool. This drastically reduces the mean time to recovery (MTTR) during hardware failures. The `MachineHealthCheck` resource monitors the status of individual machines and aggressively evicts and replaces nodes that fall out of compliance.
+One of the most powerful features of Cluster API is the ability to automatically remediate failed nodes by replacing them with fresh hardware from the pool. This drastically reduces the mean time to recovery (MTTR) during hardware failures. [The `MachineHealthCheck` resource monitors the status of individual machines and aggressively evicts and replaces nodes that fall out of compliance](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html).
 
 ```yaml
 apiVersion: cluster.x-k8s.io/v1beta1
@@ -426,19 +426,19 @@ To create a cluster, simply author the declarative manifests and commit them. To
 
 A critical operational requirement is transferring the management of workload clusters from a temporary bootstrap cluster (like Kind) to a persistent management cluster, or migrating between datacenters. This is known as "pivoting." The pivot process requires carefully transferring the active CRDs from one cluster to another without disrupting the underlying workloads.
 
-The `clusterctl move` command is for moving workload Cluster API objects between management clusters and requires source/target provider compatibility; status subresources are not restored. Because the status fields are ephemeral state maintained by active controllers, they are deliberately excluded and subsequently rebuilt by the newly activated target controllers once the move is complete.
+[The `clusterctl move` command is for moving workload Cluster API objects between management clusters and requires source/target provider compatibility; status subresources are not restored](https://cluster-api.sigs.k8s.io/clusterctl/commands/move). Because the status fields are ephemeral state maintained by active controllers, they are deliberately excluded and subsequently rebuilt by the newly activated target controllers once the move is complete.
 
-In move operations, objects outside the default discovery graph move only when labeled for move (e.g., `clusterctl.cluster.x-k8s.io/move` or `.../move-hierarchy`) or otherwise linked by discovery rules. For CAPM3-specific pivoting, the CAPM3 docs state that moving non-standard CRDs/objects (e.g., `BareMetalHost`) requires explicit labeling so `clusterctl move` includes them. Failing to label your physical host definitions will result in orphaned hardware that the new management cluster cannot see or control, requiring manual recovery.
+In move operations, objects outside the default discovery graph move only when labeled for move (e.g., `clusterctl.cluster.x-k8s.io/move` or `.../move-hierarchy`) or otherwise linked by discovery rules. [For CAPM3-specific pivoting, the CAPM3 docs state that moving non-standard CRDs/objects (e.g., `BareMetalHost`) requires explicit labeling so `clusterctl move` includes them](https://github.com/metal3-io/cluster-api-provider-metal3). Failing to label your physical host definitions will result in orphaned hardware that the new management cluster cannot see or control, requiring manual recovery.
 
 ## Release Support and Version Matrices
 
-Maintaining a fleet of bare-metal clusters requires rigorous adherence to version compatibility matrices. Cluster API documents a multi-provider release-support policy: support and lifecycle decisions are based on tracked releases rather than implicit long-term retention. Operators must continuously plan upgrades to avoid falling out of the supported window.
+Maintaining a fleet of bare-metal clusters requires rigorous adherence to version compatibility matrices. [Cluster API documents a multi-provider release-support policy: support and lifecycle decisions are based on tracked releases rather than implicit long-term retention](https://cluster-api.sigs.k8s.io/reference/versions.html). Operators must continuously plan upgrades to avoid falling out of the supported window.
 
 As documented, Cluster API maintained versions include a release timeline where N and N-1 are active, N-2 may be kept for emergency maintenance, with explicit EOL/maintenance dates per minor release. It applies Kubernetes-version compatibility rules with release-dependent matrices. For example, as of the version 1.13 pre-release documentation, Kubernetes support for management clusters is version 1.31.x–1.35.x and workload clusters are version 1.29.x–1.35.x.
 
-CAPM3 versioning also enforces strict boundaries. CAPM3 release compatibility includes a release 1.12.X line: CAPM3 API `v1beta1`, Cluster API contract `v1beta2`, and CAPI release 1.12.X. API versions and deprecations are strictly staged across the ecosystem: v1alpha3 and v1alpha4 are not served, v1beta1 is deprecated, and will be unserved in the version 1.14 line. Attempting to deploy an unsupported CRD version against an upgraded controller will result in immediate rejection by the API server.
+CAPM3 versioning also enforces strict boundaries. [CAPM3 release compatibility includes a release 1.12.X line: CAPM3 API `v1beta1`, Cluster API contract `v1beta2`, and CAPI release 1.12.X](https://github.com/metal3-io/cluster-api-provider-metal3). API versions and deprecations are strictly staged across the ecosystem: v1alpha3 and v1alpha4 are not served, v1beta1 is deprecated, and will be unserved in the version 1.14 line. Attempting to deploy an unsupported CRD version against an upgraded controller will result in immediate rejection by the API server.
 
-When performing upgrades, changing the version initiates a carefully orchestrated rollout. Cluster API version 1.12 introduced in-place updates and chained upgrades, including an update-extension model for in-place machine changes, drastically reducing the overhead of completely rebuilding bare-metal nodes for minor configuration tweaks. This innovation dramatically speeds up the delivery of minor configuration changes across massive hardware fleets.
+When performing upgrades, changing the version initiates a carefully orchestrated rollout. [Cluster API version 1.12 introduced in-place updates and chained upgrades, including an update-extension model for in-place machine changes](https://kubernetes.io/blog/2026/01/27/cluster-api-v1-12-release/), drastically reducing the overhead of completely rebuilding bare-metal nodes for minor configuration tweaks. This innovation dramatically speeds up the delivery of minor configuration changes across massive hardware fleets.
 
 ```yaml
    # TalosControlPlane — version is at spec.version
@@ -455,10 +455,10 @@ When performing upgrades, changing the version initiates a carefully orchestrate
 ## Did You Know?
 
 1. See the Knight Capital 2012 <!-- incident-xref: knight-capital-2012 --> reference in *Infrastructure as Code* for the canonical bare-metal-level lesson on why fleet consistency has to be declarative.
-2. The Metal3 project was officially accepted into the CNCF sandbox on 2020-09-08 and officially promoted to CNCF incubation status on 2025-08-14. Metal3 stands for "Metal Kubed" (Metal^3). It was created by Red Hat and is the bare metal infrastructure provider used by OpenShift's Assisted Installer for on-premises deployments.
+2. [The Metal3 project was officially accepted into the CNCF sandbox on 2020-09-08 and officially promoted to CNCF incubation status on 2025-08-14](https://www.cncf.io/projects/metal3-io/). Metal3 stands for "Metal Kubed" (Metal^3). It was created by Red Hat and is the bare metal infrastructure provider used by OpenShift's Assisted Installer for on-premises deployments.
 3. Cluster API release 1.12.0 fundamentally changed node lifecycle management by officially introducing in-place updates and chained upgrades.
 4. As of the version 1.13.0 pre-release, Cluster API officially supports Kubernetes workload clusters running versions 1.29.x through 1.35.x.
-5. Cluster API was created by Kubernetes SIG Cluster Lifecycle specifically because every cloud provider had built their own incompatible cluster management tooling. CAPI provides a single API that works across AWS, Azure, GCP, vSphere, and bare metal.
+5. Cluster API was created by Kubernetes SIG Cluster Lifecycle specifically because every cloud provider had built their own incompatible cluster management tooling. [CAPI provides a single API that works across AWS, Azure, GCP, vSphere, and bare metal](https://cluster-api.sigs.k8s.io/).
 6. Sidero was created by the same team that built Talos Linux (Sidero Labs). The name comes from the Greek word for "iron" — fitting for bare metal management.
 7. The largest known Cluster API deployment manages over 4,000 clusters across multiple infrastructure providers. Organizations like Deutsche Telekom and SAP use CAPI to manage their multi-cluster Kubernetes platforms at enterprise scale.
 
@@ -476,7 +476,7 @@ When performing upgrades, changing the version initiates a carefully orchestrate
 
 ## Hands-On Exercise: Cluster API with Docker (Simulation)
 
-**Task**: Use Cluster API with the Docker provider to simulate the bare metal workflow. The Docker provider is CAPI's testing/development provider. It creates "machines" as Docker containers. The workflow is identical to bare metal — only the infrastructure layer differs.
+**Task**: Use Cluster API with the Docker provider to simulate the bare metal workflow. [The Docker provider is CAPI's testing/development provider. It creates "machines" as Docker containers](https://cluster-api.sigs.k8s.io/user/quick-start.html). The workflow is identical to bare metal — only the infrastructure layer differs.
 
 ```bash
 # Install clusterctl
@@ -607,3 +607,18 @@ To optimize resource utilization on a highly constrained edge management cluster
 ## Next Module
 
 Continue to [Module 3.1: Datacenter Network Architecture](/on-premises/networking/module-3.1-datacenter-networking/) to learn about spine-leaf topology, VLANs, and network design for on-premises Kubernetes.
+
+## Sources
+
+- [cluster-api.sigs.k8s.io](https://cluster-api.sigs.k8s.io/) — The Cluster API book describes the project, its SIG ownership, and its declarative lifecycle-management purpose.
+- [cluster-api.sigs.k8s.io: concepts.html](https://cluster-api.sigs.k8s.io/user/concepts.html) — The Cluster API concepts documentation defines management clusters, workload clusters, providers, Machines, and reconciliation responsibilities.
+- [cluster-api.sigs.k8s.io: init.html](https://cluster-api.sigs.k8s.io/clusterctl/commands/init.html) — The clusterctl init command reference documents default provider installation, version selection, prerelease behavior, and skip semantics.
+- [github.com: cluster api provider metal3](https://github.com/metal3-io/cluster-api-provider-metal3) — The CAPM3 repository identifies the project as the Cluster API provider for Metal3 bare-metal infrastructure.
+- [github.com: baremetal operator](https://github.com/metal3-io/baremetal-operator) — The Bare Metal Operator repository documents BareMetalHost as the CRD for host enrollment, inspection, provisioning, and cleaning.
+- [cluster-api.sigs.k8s.io: upgrading clusters.html](https://cluster-api.sigs.k8s.io/tasks/upgrading-clusters.html) — Cluster API upgrade documentation covers MachineDeployment-driven rollouts and Kubernetes version changes.
+- [cluster-api.sigs.k8s.io: healthchecking.html](https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/healthchecking.html) — The Cluster API MachineHealthCheck documentation directly describes unhealthy conditions, remediation, and maxUnhealthy safeguards.
+- [cluster-api.sigs.k8s.io: move](https://cluster-api.sigs.k8s.io/clusterctl/commands/move) — The clusterctl move command reference documents object movement, provider compatibility requirements, and status behavior.
+- [cluster-api.sigs.k8s.io: versions.html](https://cluster-api.sigs.k8s.io/reference/versions.html) — The Cluster API version support page documents maintained releases, emergency maintenance, EOL dates, and Kubernetes compatibility matrices.
+- [kubernetes.io: cluster api v1 12 release](https://kubernetes.io/blog/2026/01/27/cluster-api-v1-12-release/) — The Kubernetes release blog for Cluster API v1.12 discusses in-place updates, chained upgrades, and the update-extension model.
+- [cncf.io: metal3 io](https://www.cncf.io/projects/metal3-io/) — The CNCF project page records Metal3's sandbox and incubation dates.
+- [cluster-api.sigs.k8s.io: quick start.html](https://cluster-api.sigs.k8s.io/user/quick-start.html) — The Cluster API quick start documents the Docker infrastructure provider as the local development/test path.
