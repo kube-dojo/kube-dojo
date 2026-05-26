@@ -120,7 +120,7 @@ spec:
 
 ---
 
-## RTO and RPO
+## [RTO and RPO](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html)
 
 ```
   Disaster       RPO Window           Recovery      RTO Window
@@ -157,7 +157,7 @@ spec:
 
 ### Install and Configure
 
-Velero uses the S3 API to store backups on MinIO at the DR site. The `--use-node-agent` flag enables file-system-level PV backups, and `--default-volumes-to-fs-backup` ensures PersistentVolume data is included in every backup.
+Velero uses the [S3 API to store backups on MinIO](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/contributions/minio.md) at the DR site. The `--use-node-agent` flag enables [file-system-level PV backups](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/file-system-backup.md), and `--default-volumes-to-fs-backup` ensures PersistentVolume data is included in every backup.
 
 ```bash
 # Create Velero credentials
@@ -195,11 +195,11 @@ velero restore create --from-backup full-cluster-20260325060000
 
 ## etcd Snapshot Backup and Restore
 
-Velero backs up at the API level. etcd snapshots capture the entire cluster state at the storage level. Use both -- they serve different recovery scenarios. Velero lets you restore individual namespaces or resources. etcd snapshots restore the entire cluster state in one operation.
+Velero backs up at the API level. etcd snapshots capture the entire cluster state at the storage level. Use both -- they serve different recovery scenarios. Velero lets you [restore individual namespaces or resources](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/how-velero-works.md). etcd snapshots restore the entire cluster state in one operation.
 
 ### Taking and Verifying Snapshots
 
-Always verify snapshot integrity immediately after creation. A corrupt snapshot is worse than no snapshot -- it gives a false sense of security. The `snapshot status` command confirms the hash, revision, key count, and size.
+Always verify snapshot integrity immediately after creation. A corrupt snapshot is worse than no snapshot -- it gives a false sense of security. The [`snapshot status` command confirms the hash, revision, key count, and size](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/).
 
 ```bash
 # Take a snapshot on a control plane node
@@ -340,7 +340,7 @@ Always document lessons learned from drills and update the runbook immediately.
 
 2. **The largest known stretched Kubernetes cluster** spans two datacenters 40km apart on dark fiber with 0.8ms RTT, running over 2,000 nodes. The team spent six months tuning before production. Most organizations that attempt this scale fail within the first year.
 
-3. **Velero was originally "Heptio Ark"**, created by the company founded by Kubernetes co-creators Joe Beda and Craig McLuckie. Renamed after VMware's 2018 acquisition, "Velero" is Spanish for "sailboat."
+3. **[Velero was originally "Heptio Ark"](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/v0.11.0/migrating-to-velero.md)**, created by the company founded by [Kubernetes co-creators Joe Beda and Craig McLuckie](https://kubernetes.io/blog/2018/06/06/4-years-of-k8s/). Renamed after [VMware's 2018 acquisition](https://blogs.vmware.com/tanzu/vmware-completes-heptio-acquisition/), "Velero" is Spanish for "sailboat."
 
 4. **A 500-node cluster's etcd snapshot** is typically 50-150MB yet contains every Kubernetes resource. This compact size makes etcd snapshots the fastest restore path, often completing in under 30 seconds.
 
@@ -493,3 +493,15 @@ kubectl get pods -n demo-app
 ## Next Module
 
 Continue to [Module 8.2: Hybrid Cloud Connectivity](/on-premises/resilience/module-8.2-hybrid-connectivity/) to learn how to connect on-premises clusters to cloud environments using VPNs, direct interconnects, and multi-cluster networking.
+
+## Sources
+
+- [docs.aws.amazon.com: rel planning for recovery disaster recovery.html](https://docs.aws.amazon.com/wellarchitected/2025-02-25/framework/rel_planning_for_recovery_disaster_recovery.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: disaster recovery dr objectives.html](https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/disaster-recovery-dr-objectives.html) — The AWS Well-Architected DR objectives page directly defines RTO and RPO.
+- [github.com: minio.md](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/contributions/minio.md) — Velero's MinIO documentation shows S3-compatible configuration using the AWS provider, s3Url, and path-style access.
+- [github.com: file system backup.md](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/file-system-backup.md) — Velero's file-system backup documentation directly describes node-agent setup and the default-volumes-to-fs-backup behavior.
+- [github.com: how velero works.md](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/main/how-velero-works.md) — The Velero architecture documentation describes backing up and restoring Kubernetes resources through the API.
+- [kubernetes.io: configure upgrade etcd](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) — The Kubernetes etcd administration page directly states etcd stores all cluster data and documents snapshot save and restore.
+- [github.com: migrating to velero.md](https://github.com/vmware-tanzu/velero/blob/main/site/content/docs/v0.11.0/migrating-to-velero.md) — The Velero migration documentation directly states that Heptio Ark was renamed Velero.
+- [blogs.vmware.com: vmware completes heptio acquisition](https://blogs.vmware.com/tanzu/vmware-completes-heptio-acquisition/) — VMware's acquisition announcement directly confirms the acquisition and leadership names.
+- [kubernetes.io: 4 years of k8s](https://kubernetes.io/blog/2018/06/06/4-years-of-k8s/) — The Kubernetes anniversary post discusses the original creation of Kubernetes and names Joe Beda and Craig McLuckie in that origin story.
