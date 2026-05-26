@@ -397,24 +397,24 @@ The phrase "BestEffort pods die first" is a simplification, but it is a useful o
 
 Container memory accounting can also surprise application teams because the limit is not just the language heap. Cgroup v2 tracks anonymous memory, file cache, kernel stack, slab usage, and events under the cgroup hierarchy. A process can appear below its heap target while the cgroup crosses the limit because file-backed cache or other charged memory grew inside the same boundary.
 
-```bash
+```text
 # cgroup v2 is the standard for modern Kubernetes 1.35+
 
 # cgroup memory stats
-cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.stat
+Pattern: /sys/fs/cgroup/kubepods.slice/kubepods-pod<UID>.slice/memory.stat
 # anon 209715200       # Anonymous memory (heap, stack)
 # file 104857600       # Page cache
 # kernel_stack 36864
 # slab 165432
 
 # Current usage
-cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.current
+Pattern: /sys/fs/cgroup/kubepods.slice/kubepods-pod<UID>.slice/memory.current
 
 # Limit
-cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.max
+Pattern: /sys/fs/cgroup/kubepods.slice/kubepods-pod<UID>.slice/memory.max
 
 # OOM events
-cat /sys/fs/cgroup/kubepods.slice/kubepods-pod...slice/memory.events
+Pattern: /sys/fs/cgroup/kubepods.slice/kubepods-pod<UID>.slice/memory.events
 # oom 1
 # oom_kill 1
 ```
@@ -440,7 +440,7 @@ cat /proc/pressure/memory
 # Higher values = more pressure
 
 # Node conditions in Kubernetes
-k describe node | grep -A 5 Conditions
+kubectl describe node | grep -A 5 Conditions
 # MemoryPressure   False   # Becomes True under pressure
 ```
 
@@ -515,10 +515,10 @@ Container diagnosis adds one more layer because the pod status, kubelet events, 
 docker stats --no-stream
 
 # Kubernetes equivalent
-k top pod
+kubectl top pod
 
 # Check if container was OOM killed
-k describe pod <pod> | grep -A 10 "Last State"
+kubectl describe pod <pod> | grep -A 10 "Last State"
 # Reason:   OOMKilled
 
 # Increase memory limit or fix the application
