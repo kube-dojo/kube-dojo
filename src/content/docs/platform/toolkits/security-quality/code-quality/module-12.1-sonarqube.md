@@ -298,7 +298,7 @@ sonar.exclusions=\
 
 ```bash
 # Example test command that creates the reports referenced above.
-.venv/bin/python -m pytest \
+python3 -m pytest \
   --junitxml=pytest-report.xml \
   --cov=src \
   --cov-report=xml:coverage.xml
@@ -1098,7 +1098,7 @@ This sample intentionally contains several findings: [command execution through 
 ### Part 3: Generate Test and Coverage Reports
 
 ```bash
-.venv/bin/python -m venv .venv
+python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install pytest pytest-cov
 
