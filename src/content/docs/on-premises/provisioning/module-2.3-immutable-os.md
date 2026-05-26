@@ -1,5 +1,5 @@
 ---
-revision_pending: true
+revision_pending: false
 title: "Module 2.3: Immutable OS for Kubernetes"
 slug: on-premises/provisioning/module-2.3-immutable-os
 sidebar:
@@ -130,12 +130,34 @@ Talos is purpose-built for Kubernetes and nothing else. It has no SSH daemon, no
 
 The Talos machine configuration is a single YAML document that defines everything: network interfaces, disk layout, kernel parameters, kubelet arguments, cluster certificates, and the container runtime. There is no separate cloud-init, no Ignition, no kickstart — one file is the entire node definition.
 
+```yaml
+# Minimal Talos MachineConfig showing immutable-OS configuration pattern
+version: v1alpha1
+machine:
+  type: controlplane           # or worker
+  token: "auto-generated"
+  certSANs:
+    - 10.0.0.1
+    - k8s-api.example.com
+  kubelet:
+    image: ghcr.io/siderolabs/kubelet:v1.31.0
+    extraArgs:
+      node-ip: 0.0.0.0
+  sysctls:
+    vm.overcommit_memory: "1"
+    kernel.panic: "10"
+  install:
+    disk: /dev/sda
+    wipe: false
+    bootloader: true
+```
+
 Talos is also the only immutable OS where Kubernetes components (kubelet, etcd, kube-apiserver) run as system services managed by the OS init process (`machined`), not as static pods or systemd units. This means Talos can manage the full lifecycle of Kubernetes components atomically: when you upgrade Talos, the bundled Kubernetes version upgrades in lockstep, and vice versa.
 
 Operational implications of the no-SSH model:
 
 - You cannot "just SSH in and check." Every diagnostic action must go through the API (`talosctl logs`, `talosctl pcap`, `talosctl dashboard`, `talosctl services`).
-- Debugging containers: you use `kubectl debug node/<name> -it --image=nicolaka/netshoot` to launch an ephemeral privileged pod on the node if you need shell-based tools.
+- Debugging containers: you use `kubectl debug node/worker-01 -it --image=nicolaka/netshoot` to launch an ephemeral privileged pod on the node if you need shell-based tools.
 - Configuration management tools like Ansible are incompatible — there is no Python runtime, no SSH transport, and no writable filesystem for Ansible to manage.
 
 ### Bottlerocket: AWS-Born, Rust-Core, Variant Model
@@ -171,7 +193,7 @@ Kairos takes the most unconventional approach: the OS itself is an OCI container
 What makes Kairos distinctive:
 
 - **Distribution-agnostic**: You can build a Kairos image on top of Ubuntu 22.04, Alpine 3.19, or openSUSE Leap — the immutability framework is layered on top of an existing distribution's userspace. This means teams can keep their familiar package ecosystem while gaining immutability.
-- **A/B atomic upgrades**: Kairos writes updates to a passive partition and reboots. The bootloader (`GRUB` or `systemd-boot`) automatically falls back to the previous partition if the new one fails to boot.
+- **A/B atomic upgrades**: Kairos writes updates to a passive partition and reboots. The bootloader (`GRUB` or `systemd-boot`) automatically falls back to the previous partition if the new one fails to boot. For embedded and IoT use cases where bootc or Kairos are not a fit, **RAUC** (Robust Auto-Update Controller) provides a lightweight, distribution-agnostic A/B update framework for embedded Linux — it handles partition management, boot selection, and fallback logic at the bootloader level with signed update bundles.
 - **Kubernetes-native lifecycle**: Kairos has a native Cluster API provider, meaning you can manage Kairos nodes through the same declarative API as any other CAPI infrastructure.
 - **Edge and air-gap focus**: Kairos emphasizes operation in disconnected, edge, and IoT environments. It supports QR-code-based pairing, local OCI registries, and manual USB-based updates — important for environments without always-on network connectivity.
 
@@ -330,7 +352,7 @@ A/B partitions protect against bad *software*; TUF protects against bad *actors*
 - **Authenticity**: The update was signed by a key you trust.
 - **Compromise resilience**: If a single signing key is compromised, the attacker cannot unilaterally push malicious updates (threshold signatures require multiple keys).
 
-Flatcar's Nebraska update server implements TUF internally. Talos uses a simplified signing model (Ed25519 signatures on machine configs and installer images) but the TUF concepts of trusted metadata and threshold signatures apply. Bottlerocket updates are signed and verified through the TUF-compatible `updog` update agent.
+Flatcar's Nebraska update server uses the Omaha protocol for signed, channel-aware rollouts — it provides cryptographic signing and group-based rollout control but is not a TUF implementation. For full TUF compliance with Flatcar, organizations typically layer a TUF mirror (such as `python-tuf` or the TUF reference implementation) in front of Nebraska. Talos uses a simplified signing model (Ed25519 signatures on machine configs and installer images) but the TUF concepts of trusted metadata and threshold signatures apply. Bottlerocket is the only distribution covered here that implements full TUF natively: its `updog` agent validates TUF metadata, and its `tough` library implements the complete four-role TUF specification (Root, Targets, Snapshot, Timestamp).
 
 The practical implication of TUF for a platform team is that you can run an update server inside your network boundary that nodes trust, and even if the upstream image registry is compromised, your nodes will reject any update that isn't signed by your keys. This is not theoretical — software supply chain attacks against update infrastructure have been documented since at least 2015. TUF was designed specifically to make these attacks detectable and recoverable. The four-role model means that even if an attacker compromises the timestamp key (the most exposed key, used frequently for short-lived metadata), they cannot serve malicious targets because only the targets role can list valid update files, and the targets key can be kept offline.
 
@@ -627,7 +649,7 @@ Your security team mandates that every OS update must be cryptographically verif
 
 The key property is threshold signatures: the Root role requires a quorum of keys (e.g., 3 of 5) to sign new Targets metadata. If a single key is compromised, the attacker cannot sign valid Targets metadata because they lack the threshold. A client verifies that each piece of metadata is signed by the required number of trusted keys before accepting an update.
 
-In practice: Flatcar's Nebraska update server implements TUF internally. Bottlerocket's `updog` agent validates TUF metadata before applying an update. Talos uses a simpler Ed25519 signing model for installer images, but the same principle applies — a single key compromise does not grant unilateral push access if you configure multi-key verification.
+In practice: Bottlerocket's `updog` agent validates full TUF metadata (four-role model via the `tough` library) before applying an update — this is the native TUF implementation in the immutable-Kubernetes-OS space. Flatcar's Nebraska uses the Omaha protocol for signed, channel-aware rollouts, which provides signing and rollout control but does not implement the full TUF specification; for TUF compliance, organizations layer a TUF mirror in front of Nebraska. Talos uses a simpler Ed25519 signing model for installer images, but the same principle applies — a single key compromise does not grant unilateral push access if you configure multi-key verification.
 
 TUF also prevents freeze attacks (serving an old, vulnerable version as if it were current) and mix-and-match attacks (serving an old kernel with a new kubelet that has a security hole in that combination) through the chained, versioned metadata model.
 </details>
