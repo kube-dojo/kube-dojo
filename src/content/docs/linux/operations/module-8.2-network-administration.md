@@ -558,7 +558,7 @@ ssh -i ~/.ssh/id_ed25519 user@server
 
 Edit `/etc/ssh/sshd_config` deliberately, because every directive below changes either who may authenticate or what a successful SSH session may do:
 
-```bash
+```text
 # Disable password authentication (key-only)
 PasswordAuthentication no
 
@@ -598,7 +598,10 @@ sudo sshd -t
 # No output = no errors
 
 # Restart SSH
-sudo systemctl restart sshd
+# Ubuntu/Debian:
+sudo systemctl restart ssh
+# RHEL/CentOS:
+# sudo systemctl restart sshd
 
 # CRITICAL: Test from another terminal BEFORE closing your current session
 # If config is wrong, you can still fix it from the existing session
@@ -682,7 +685,7 @@ The ordered approach is not academic OSI-model theater; it prevents destructive 
 5. **Firewall (Layer 4)**: Is a firewall blocking the traffic locally or remotely?
    ```bash
    sudo firewall-cmd --list-all
-   telnet destination_ip port  # Test if the port is open
+   telnet portquiz.net 80
    ```
 
 Here is a worked example. A developer says a new host cannot clone from a Git server by hostname. You check `ip link show eth0` and see the interface is up with carrier. `ip addr show eth0` shows the expected address and prefix. `ip route show` includes a default route, and `ping -c 4 8.8.8.8` succeeds, proving general outbound routing. `resolvectl status` then shows the profile still points at a retired DNS server, which explains why the hostname fails while the network path itself is healthy.
