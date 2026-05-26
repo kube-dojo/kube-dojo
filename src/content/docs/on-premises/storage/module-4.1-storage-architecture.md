@@ -16,7 +16,7 @@ sidebar:
 
 A data analytics company deployed a 40-node Kubernetes cluster on bare metal with local SATA SSDs in each server. For the first six months, everything worked. Then they deployed Apache Kafka, which needed persistent storage that survived node rescheduling. When a worker node failed, Kafka brokers were rescheduled to new nodes — but their data was on the dead node's local SSDs. They lost 4 hours of event data and spent 3 days manually rebalancing partitions.
 
-They then deployed Ceph via Rook on the same SSDs. Performance dropped 60%. Ceph's replication tripled the write load on drives that were already serving application I/O. The OSD processes competed with Kubernetes workloads for CPU and memory. Their monitoring showed that Ceph rebalancing after a node failure consumed 80% of cluster I/O bandwidth for 4 hours, making all applications sluggish.
+They then deployed Ceph via Rook on the same SSDs. Performance dropped 60%. [Ceph's replication tripled the write load](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) on drives that were already serving application I/O. The OSD processes competed with Kubernetes workloads for CPU and memory. Their monitoring showed that Ceph rebalancing after a node failure consumed 80% of cluster I/O bandwidth for 4 hours, making all applications sluggish.
 
 The fix was dedicating 6 servers as Ceph OSD nodes with NVMe drives, separated from the Kubernetes worker nodes. Storage traffic ran on a dedicated VLAN with jumbo frames. The lesson: **storage architecture decisions must be made before you buy hardware, not after you deploy workloads.**
 
@@ -48,15 +48,15 @@ After completing this module, you will be able to:
 ## Storage Options for On-Premises K8s
 
 ### Modern Kubernetes Storage Architecture (v1.35+)
-As of Kubernetes v1.35, the storage landscape for on-premises clusters relies heavily on the **Container Storage Interface (CSI)** (currently at spec v1.12.0). When architecting storage, keep these native capabilities in mind:
+As of Kubernetes v1.35, the storage landscape for on-premises clusters relies heavily on the **Container Storage Interface (CSI)** ([currently at spec v1.12.0](https://github.com/container-storage-interface/spec/releases/tag/v1.12.0)). When architecting storage, keep these native capabilities in mind:
 
-- **CSI is Mandatory**: In-tree plugins for storage systems like CephFS and Ceph RBD were permanently removed from the core in v1.31. The legacy FlexVolume API is fully deprecated. You must use CSI drivers (which have been GA since v1.13).
-- **Access Modes**: In addition to standard access modes (RWO, ROX, RWX), modern CSI drivers support **ReadWriteOncePod (RWOP)** (GA in v1.29), guaranteeing that only a single Pod cluster-wide can read or write to the volume.
-- **Volume Binding**: For bare-metal, always set your `StorageClass` (API `storage.k8s.io/v1`) to use `volumeBindingMode: WaitForFirstConsumer`. This ensures the PV is provisioned in the same availability zone as the scheduled Pod. The default is `Immediate`, which can cause topology mismatches.
-- **Volume Modes and Protection**: Kubernetes supports `Filesystem` (default) and raw `Block` volume modes (GA since v1.18). It also features built-in Storage Object in Use Protection, preventing the deletion of PVCs and PVs actively bound or in use by a Pod.
-- **Reclaim Policies**: The default policy for dynamic provisioning is `Delete`. Use `Retain` if data preservation is required. 
-- **Advanced Features**: Newer stable features include Volume Expansion (GA in v1.24), CSI Storage Capacity Tracking (GA in v1.24), Generic Ephemeral Volumes (GA in v1.23), Volume Snapshots (GA in v1.20), Volume Populators (GA in v1.33), VolumeAttributesClass for modifying attributes without recreation (GA in v1.34), and OCI image volumes (GA in v1.35). *(Note: Volume Group Snapshots remain in beta as of v1.34, and CSI Volume Health Monitoring is still alpha).*
-- **Cloud/Legacy Migration**: The in-tree CSI migration framework reached GA in v1.25, transparently redirecting legacy calls. Note that legacy cloud plugins for AWS EBS were removed entirely (unverified sources point to v1.27, but the specific removal release lacks official changelog confirmation). The `Recycle` reclaim policy is fully deprecated and unsupported by CSI (GitHub issue #59060 confirms deprecation, though the exact version—rumored to be v1.11—remains unverified in authoritative release notes).
+- **CSI is Mandatory**: [In-tree plugins for storage systems like CephFS and Ceph RBD were permanently removed from the core in v1.31](https://kubernetes.io/docs/concepts/storage/persistent-volumes/). The legacy FlexVolume API is fully deprecated. You must use CSI drivers (which have been [GA since v1.13](https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/)).
+- **Access Modes**: In addition to standard access modes (RWO, ROX, RWX), modern CSI drivers support [**ReadWriteOncePod (RWOP)** (GA in v1.29), guaranteeing that only a single Pod cluster-wide can read or write to the volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/).
+- **Volume Binding**: For bare-metal, always set your `StorageClass` (API `storage.k8s.io/v1`) to use [`volumeBindingMode: WaitForFirstConsumer`](https://kubernetes.io/docs/concepts/storage/storage-classes/). This ensures the PV is provisioned in the same availability zone as the scheduled Pod. The default is `Immediate`, which can cause topology mismatches.
+- **Volume Modes and Protection**: [Kubernetes supports `Filesystem` (default) and raw `Block` volume modes (GA since v1.18)](https://kubernetes.io/docs/concepts/storage/persistent-volumes/). It also features built-in [Storage Object in Use Protection, preventing the deletion of PVCs and PVs actively bound or in use by a Pod](https://kubernetes.io/docs/concepts/storage/persistent-volumes/).
+- **Reclaim Policies**: [The default policy for dynamic provisioning is `Delete`. Use `Retain` if data preservation is required](https://kubernetes.io/docs/concepts/storage/storage-classes/). 
+- **Advanced Features**: Newer stable features include [Volume Expansion (GA in v1.24)](https://kubernetes.io/docs/concepts/storage/persistent-volumes/), [CSI Storage Capacity Tracking (GA in v1.24)](https://kubernetes.io/docs/concepts/storage/storage-capacity/), [Generic Ephemeral Volumes (GA in v1.23)](https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/), [Volume Snapshots (GA in v1.20)](https://kubernetes.io/blog/2020/12/10/kubernetes-1.20-volume-snapshot-moves-to-ga/), [Volume Populators (GA in v1.33)](https://kubernetes.io/blog/2025/05/08/kubernetes-v1-33-volume-populators-ga/), [VolumeAttributesClass for modifying attributes without recreation (GA in v1.34)](https://kubernetes.io/blog/2025/09/08/kubernetes-v1-34-volume-attributes-class/), and OCI image volumes (GA in v1.35). *(Note: [Volume Group Snapshots remain in beta as of v1.34](https://kubernetes.io/blog/2026/05/08/kubernetes-v1-36-volume-group-snapshot-ga/), and [CSI Volume Health Monitoring is still alpha](https://kubernetes.io/docs/concepts/storage/volume-health-monitoring/)).*
+- **Cloud/Legacy Migration**: [The in-tree CSI migration framework reached GA in v1.25](https://kubernetes.io/blog/2022/09/26/storage-in-tree-to-csi-migration-status-update-1.25/), transparently redirecting legacy calls. Note that legacy cloud plugins for AWS EBS were removed entirely (unverified sources point to v1.27, but the specific removal release lacks official changelog confirmation). The `Recycle` reclaim policy is fully deprecated and unsupported by CSI (GitHub issue #59060 confirms deprecation, though the exact version—rumored to be v1.11—remains unverified in authoritative release notes).
 
 ### The Three Storage Models
 
@@ -108,7 +108,7 @@ flowchart TD
 | **etcd** | DAS (NVMe) | Requires <10ms p99 fsync; network storage too slow |
 | **PostgreSQL** (with streaming replication) | DAS (NVMe) | App handles replication; local NVMe gives best latency |
 | **PostgreSQL** (single instance) | Ceph RBD | Needs to survive node failure; no app-level replication |
-| **Kafka** | DAS or Ceph | Kafka replicates data; DAS is faster but Ceph is safer |
+| **Kafka** | DAS or Ceph | [Kafka replicates data](https://kafka.apache.org/documentation/#replication); DAS is faster but Ceph is safer |
 | **Prometheus TSDB** | DAS (NVMe) | Write-heavy, latency-sensitive; Thanos handles replication |
 | **ML training data** | NFS / CephFS | Large datasets, read-heavy, shared access needed |
 | **CI/CD workspace** | DAS (SSD) | Ephemeral, high IOPS for builds, data is disposable |
@@ -251,7 +251,7 @@ fio --name=etcd-wal \
 | SATA SSD for etcd | Leader elections under load | NVMe only for etcd (Tier 0 or 1) |
 | Hyper-converged without resource limits | Ceph OSD steals CPU/RAM from pods | Use cgroup limits: `2 cores + 4GB per OSD` |
 | No separate storage network | Ceph replication competes with pod traffic | Dedicated VLAN with jumbo frames for storage |
-| Single replication factor | Data loss on node failure | Ceph replication factor 3 (tolerates 1 failure) |
+| Single replication factor | Data loss on node failure | [Ceph replication factor 3](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) (tolerates 1 failure) |
 | Ceph on worker nodes at scale | Rebalancing kills application performance | Dedicated storage nodes above 100 nodes |
 | Not benchmarking before deploy | Discover performance issues in production | fio benchmark on every storage tier before use |
 | Mixing drive types in one pool | Inconsistent performance across PVs | Separate storage classes per tier |
@@ -379,3 +379,22 @@ rm -rf /mnt/storage-benchmark
 ## Next Module
 
 Continue to [Module 4.2: Software-Defined Storage (Ceph/Rook)](../module-4.2-ceph-rook/) to learn how to deploy and operate Ceph as distributed storage for Kubernetes.
+
+## Sources
+
+- [cephdocs.readthedocs.io: pool pg config ref](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) — Ceph documentation explains the common three-replica pool configuration that creates three stored copies.
+- [github.com: v1.12.0](https://github.com/container-storage-interface/spec/releases/tag/v1.12.0) — The CSI GitHub release page directly identifies v1.12.0.
+- [kubernetes.io: container storage interface ga](https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/) — The Kubernetes blog announcement states CSI was promoted to GA in v1.13.
+- [kubernetes.io: persistent volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) — The PersistentVolumes documentation lists cephfs and rbd as unavailable starting v1.31 and FlexVolume as deprecated.
+- [kubernetes.io: storage classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) — The StorageClass documentation directly explains Immediate and WaitForFirstConsumer behavior.
+- [kubernetes.io: storage capacity](https://kubernetes.io/docs/concepts/storage/storage-capacity/) — The Storage Capacity documentation marks the feature as Kubernetes v1.24 stable.
+- [kubernetes.io: ephemeral volumes](https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/) — The Ephemeral Volumes documentation marks generic ephemeral volumes stable in v1.23.
+- [kubernetes.io: kubernetes 1.20 volume snapshot moves to ga](https://kubernetes.io/blog/2020/12/10/kubernetes-1.20-volume-snapshot-moves-to-ga/) — The Kubernetes announcement states Volume Snapshot moved to GA in v1.20.
+- [kubernetes.io: kubernetes v1 33 volume populators ga](https://kubernetes.io/blog/2025/05/08/kubernetes-v1-33-volume-populators-ga/) — The Kubernetes v1.33 blog post announces Volume Populators GA.
+- [kubernetes.io: kubernetes v1 34 volume attributes class](https://kubernetes.io/blog/2025/09/08/kubernetes-v1-34-volume-attributes-class/) — The Kubernetes v1.34 blog post announces VolumeAttributesClass GA.
+- [kubernetes.io: kubernetes v1 36 volume group snapshot ga](https://kubernetes.io/blog/2026/05/08/kubernetes-v1-36-volume-group-snapshot-ga/) — The Kubernetes v1.36 announcement gives the feature's alpha, beta, second beta, and GA timeline.
+- [kubernetes.io: volume health monitoring](https://kubernetes.io/docs/concepts/storage/volume-health-monitoring/) — The Kubernetes Volume Health Monitoring page marks the feature as alpha.
+- [kubernetes.io: storage in tree to csi migration status update 1.25](https://kubernetes.io/blog/2022/09/26/storage-in-tree-to-csi-migration-status-update-1.25/) — The Kubernetes v1.25 CSI migration status update states the core migration framework is GA.
+- [kafka.apache.org: documentation](https://kafka.apache.org/documentation/#replication) — The Apache Kafka documentation directly describes Kafka replication.
+- [Rook: Storage Orchestration for Kubernetes](https://github.com/rook/rook) — Primary project source for running and operating Ceph through Kubernetes primitives.
+- [Operating etcd Clusters for Kubernetes](https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/) — Covers why etcd stability is sensitive to disk and network I/O in Kubernetes control planes.
