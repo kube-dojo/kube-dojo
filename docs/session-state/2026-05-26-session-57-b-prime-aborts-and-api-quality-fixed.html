@@ -194,4 +194,40 @@ mechanism — they got cold prompts without role discipline.</p>
 <li><strong>gh issue search matches body too.</strong> Meta-epics (#1504-ish) match every module slug in starter tracks. Filter to title-only + ignore-list when using slug-in-search-results as an eligibility signal.</li>
 </ol>
 
+<h2>Post-handoff addendum (2026-05-26 PT afternoon, same session) — Deepseek-CI discovery</h2>
+
+<p><strong>Diagnosis:</strong> while waiting for the 4 in-flight PRs (#1576/#1578/#1579/#1580) to merge, all CI runs on subsequent PRs began failing with <code>remote: Your account is suspended. ... 403</code> at the <code>actions/checkout</code> step. Initial misdiagnosis: full account / org suspension. User pushed back ("are you sure? I am logged in"). Re-verified:</p>
+<ul>
+<li>User account (<code>krisztiankoos</code>) — fine, all <code>gh</code> CLI ops worked</li>
+<li>Repo — public, not archived/disabled (unlimited Actions minutes on Linux runners)</li>
+<li>Same actor on succeeded earlier runs (PR #1575 at 10:36 UTC) and failed later runs (PR #1580 at 12:40 UTC)</li>
+<li>"Suspended" came from git server perspective on the runner's token, NOT the user's session</li>
+</ul>
+
+<p><strong>User hypothesis:</strong> "maybe they don't want me to use a chinese model? let's remove deepseek" — referring to <code>review-deepseek-v4-pro</code> job in <code>cross-family-code-review.yml</code> that calls <code>api.deepseek.com</code> (China-jurisdiction endpoint).</p>
+
+<p><strong>Test:</strong> PR #1581 removed the deepseek-v4-pro job; gemini-3.1-pro-preview retained as cross-family reviewer.</p>
+
+<p><strong>Result:</strong> CI immediately resumed on PR #1581. All 6 required + safety-net checks (Analyze actions/javascript/python, Incident dedup gate, gemini-3.1-pro reviewer, zizmor) COMPLETED SUCCESS. PR #1581 merged at 13:30 UTC. Stuck PRs #1576/#1578/#1579/#1580 were rebased onto the new main to pick up the deepseek-free workflow; CI re-fired cleanly on all four; all 5 PRs (including #1581) ultimately merged.</p>
+
+<table>
+<tr><th>PR</th><th>Title</th><th>Status</th></tr>
+<tr><td>#1581</td><td><span class="pill merged">MERGED</span> chore(ci): remove deepseek-v4-pro reviewer job — hypothesis test</td><td>Hypothesis confirmed; ~3-hour CI blockage diagnosed</td></tr>
+<tr><td>#1576</td><td><span class="pill merged">MERGED</span> docs(decisions): B′ result section</td><td>Rebased onto post-#1581 main, CI fired clean</td></tr>
+<tr><td>#1578</td><td><span class="pill merged">MERGED</span> feat(dispatch): auto-load role-specific skill</td><td>Rebased, CI clean</td></tr>
+<tr><td>#1579</td><td><span class="pill merged">MERGED</span> docs(status): session 57 handoff (this file)</td><td>Rebased, CI clean</td></tr>
+<tr><td>#1580</td><td><span class="pill merged">MERGED</span> fix(dispatch): codex draft default + hook fix</td><td>Rebased, CI clean</td></tr>
+</table>
+
+<p><strong>Policy lock:</strong> CI cross-family review workflow now <code>Review (gemini-3.1-pro-preview)</code> ONLY. Local dispatches via <code>dispatch_smart.py --agent deepseek</code> are unaffected — deepseek stays a viable T0 author + local reviewer per <code>feedback_deepseek_v4_pro_viable_for_t0_content</code>. Future cross-family CI reviewers must use Western-jurisdiction endpoints only (Google gemini, Anthropic claude API, OpenAI gpt-*, xAI grok via x.com).</p>
+
+<p><strong>Lesson 6 (added to the list above):</strong> Do NOT call China-hosted AI APIs (<code>api.deepseek.com</code>, and presumably similar PRC-jurisdiction endpoints) from GitHub Actions runners on a public repo. The trigger appears to be repeated outbound calls (succeeded for first ~3 hours at session 55-56, then suspension kicked in mid-session 57). Local CLI dispatches are unaffected — only the GH-hosted runner is the surveillance surface. Memory: <code>feedback_no_china_apis_from_gh_actions</code>.</p>
+
+<p><strong>What's also resolved this slot</strong> (post-handoff productivity, while waiting for CI):</p>
+<ul>
+<li>8 stale issues triaged with status comments: #1350 (agy migration partial step), #1577 (Class A fix order), #393 (KEEP-or-CLOSE question), #373 (tactical-coverage question), #1502 (calibration dashboard deferred), #386 (fold into #1504), #1299 (gap analysis status), #14 (monitoring state)</li>
+<li>PR #1580 — codex draft default → gpt-5.5 + inject-codex-danger-mode hook now skips read-only task classes (fixes 2 codex-review-dispatch failures from earlier this session)</li>
+<li>3 new top-priority memory entries written + MEMORY.md index updated to include this addendum's <code>feedback_no_china_apis_from_gh_actions</code></li>
+</ul>
+
 </body></html>
