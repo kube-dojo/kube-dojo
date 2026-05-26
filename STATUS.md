@@ -16,14 +16,18 @@
 
 | Date | Session | Summary | Handoff |
 |------|---------|---------|---------|
-| 2026-05-26 | **57** | Tech-debt focus + multi-agent deliberation. 2 PRs merged (#1574 /api/quality redirect-stub filter + upgrade-plan timestamp + stratified sampler; #1575 `claude_extensions/` → `agents_extensions/` rename with shared/per-agent split). 2 PRs in flight auto-merge (#1576 B′ decision result section; #1578 dispatch_smart `--auto-skill` flag, 10 tests). 1 tracking issue filed (#1577 24 Class A defects across 12 modules from back-catalog sample). **Decision Card B′ deliberation executed and aborted properly**: stratified n=15 sample found 80% NEEDS_CHANGES with at least one Class A learner-blocker across ALL 7 strata → reverted to Option A / Decision Card C / full #1504 backfill. Sample-first ordering caught the wrong assumption before stamping happened — zero artifact debt. 3 new top-priority memory entries. | [session-57](./docs/session-state/2026-05-26-session-57-b-prime-aborts-and-api-quality-fixed.html) |
+| 2026-05-26 | **58** | Class A drain + #373 Phase 1. 4 PRs merged: #1583 (gitpod-codespaces 4 Class A), #1584 (cloudwatch 3 Class A + 2 fix-passes), #1585 (network-admin 3 Class A + sibling fix), #1588 (#373 Phase 1 livenessprobe primitives). 2 issues filed (#1586 dispatch_smart codex-review --worktree bug, #1587 density follow-up). #1577 auto-closed twice + reopened twice from `fix #1577` commit subjects (new memory). Mid-session user pivot to **oldest-first triage, skipping Ukrainian + deferring #386 until content/gaps complete**. 3 new memories (learner-check brief mandate, sibling-grep brief mandate, commit-subject avoid-fix-N pattern). | [session-58](./docs/session-state/2026-05-26-session-58-class-a-drain-plus-373-phase1.html) |
+| 2026-05-26 | 57 | Tech-debt focus + multi-agent deliberation. 2 PRs merged (#1574 /api/quality redirect-stub filter + upgrade-plan timestamp + stratified sampler; #1575 `claude_extensions/` → `agents_extensions/` rename with shared/per-agent split). 2 PRs in flight auto-merge (#1576 B′ decision result section; #1578 dispatch_smart `--auto-skill` flag, 10 tests). 1 tracking issue filed (#1577 24 Class A defects across 12 modules from back-catalog sample). **Decision Card B′ deliberation executed and aborted properly**: stratified n=15 sample found 80% NEEDS_CHANGES with at least one Class A learner-blocker across ALL 7 strata → reverted to Option A / Decision Card C / full #1504 backfill. Sample-first ordering caught the wrong assumption before stamping happened — zero artifact debt. 3 new top-priority memory entries. | [session-57](./docs/session-state/2026-05-26-session-57-b-prime-aborts-and-api-quality-fixed.html) |
 | 2026-05-26 | 56 | 15-PR batch. Epic #1530 AI Engineering Foundations fully closed (Wave 2 + Wave 3 + Wave 4 + Phase 4). Critical-rubric drain begun: 5 of 122 on-prem modules rewritten to T0. **gemini-3.1-pro-preview proved viable as full T0 author** on first trial (PR #1569) — now the 4th T0 author option. CI cross-family review workflow end-to-end functional after user added API keys. 5 issues closed. Repo hygiene: 35 prunable worktrees + 42 prunable branches → 0. 13 new memory entries. | [session-56](./docs/session-state/2026-05-26-session-56-fifteen-prs-plus-gemini-t0-trial-plus-phase4-close.html) |
-| 2026-05-25 | 55 | 15-PR flood. CI cross-family review workflow shipped (#1542). Hermes argv bug class fully eradicated. 5 issues closed. #1530 Wave 2 author phase complete. Cross-family review chain caught 6 real bugs. | [session-55](./docs/session-state/2026-05-25-session-55-fifteen-pr-flood-wave-2-complete-plus-hermes-eradication.html) |
 
-Older predecessors: see [`docs/session-state/`](./docs/session-state/) (54 dated handoff files, sessions 13-56).
+Older predecessors: see [`docs/session-state/`](./docs/session-state/) (55 dated handoff files, sessions 13-57).
 
 ## Active policies
 
+- **Oldest-first triage; Ukrainian + #386 deferred (locked 2026-05-26, session 58 user directive)**: work through open tickets oldest-first; Ukrainian translation epics (#143, #383) defer until EN modules production-ready; #386 lab audit + expansion defers until all gaps filled and all content written. Source: session-58 handoff "Policy moves" section. Operational consequence — active queue is #1577 → critical-rubric drain → #1299 gap-fill → #393 anchor depth → #1350 (deadline 2026-06-18) → #1504 backfill cadence; do NOT dispatch #386 lab rewrites until critical-count drops and #1577 finishes.
+- **Content-fix briefs MUST mandate `## Learner check` blockquote (locked 2026-05-26, session 58)**: `.claude/hooks/block-content-merge-without-learner-check.sh` blocks merge on any PR touching `src/content/docs/**` without a verbatim-quote blockquote ≥30 chars from a touched module. Briefs sent to authors must include the requirement; orchestrator uses `gh pr edit --body-file` (heredoc chained with `&&` is flaky). Memory: `feedback_content_fix_brief_includes_learner_check`.
+- **Class A fix briefs MUST mandate sibling-grep before changes (locked 2026-05-26, session 58)**: issue listings are sampled, not exhaustive. Roughly 1-in-3 Class A defects had siblings in the same module on session 58. Brief author to grep for the same anti-pattern across the full file FIRST and fix all occurrences in the same commit. Memory: `feedback_class_a_fix_includes_sibling_grep`.
+- **Commit subjects MUST avoid `fix/closes/resolves #N` for epics that must stay open (locked 2026-05-26, session 58)**: #1577 auto-closed twice this session from `chore(content): fix #1577 module X` subjects despite `Refs #1577` in PR body. PR body `Refs` does NOT override the commit-subject auto-close. Use `chore(content): #N module X — defects fixed` or `module X refresh per #N`. Memory: `feedback_commit_subject_avoid_fix_n_pattern`.
 - **Decision Card B′ aborted; Decision Card C reinstated for the back-catalog (locked 2026-05-26, session 57)**: stratified n=15 sample found 80% NEEDS_CHANGES with Class A learner-blockers across ALL 7 strata. Rubric+no-issues is NOT a sufficient proxy for semantic correctness. The full 277-module composer-2.5 backfill via #1504 is reinstated. DO NOT repropose "skip cross-family review for high-rubric established modules" without naming what's different from this sample. Source: [`docs/decisions/2026-05-26-tiered-back-catalog-review-policy.md`](./docs/decisions/2026-05-26-tiered-back-catalog-review-policy.md). Memory: `feedback_back_catalog_full_review_required`.
 - **agents_extensions/ replaces claude_extensions/ (locked 2026-05-26, PR #1575)**: source-of-truth dir for skills/hooks/statusline + per-agent extensions. `shared/skills/` is loaded by ANY agent; `claude/` materializes to `.claude/`; `codex/`/`cursor/`/`gemini/` placeholders for future. `deploy.sh --target claude|codex|cursor|gemini|all`. Dispatch-time auto-load (PR #1578) reads from `agents_extensions/shared/skills/<name>/SKILL.md`.
 - **Skill auto-loading in dispatch_smart (locked 2026-05-26, PR #1578)**: `draft`/`edit` → curriculum-writer; `review` → cross-family-reviewer; `architect`/`search` → none. `--skill <name>` override, `--no-skill` disable. Headless agents (codex/cursor/gemini/deepseek) now get role discipline automatically.
@@ -47,28 +51,31 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (54 dated
 
 ## Current state
 
-- **803 English modules** (down from 806 reported — 3 redirect stubs now excluded by `/api/quality` scorer; see PR #1574); **312 Ukrainian** (~40%).
+- **803 English modules**; **312 Ukrainian** (~40%, deferred per user until EN production-ready).
 - **Starter tracks 499/499 at heuristic 5.0** (unchanged).
-- **117 critical-rubric REWRITES remain** (was 120 reported — 3 phantom redirect-stub criticals dropped after the scorer fix; ~115 real critical modules to drain).
-- **277 modules still need composer-2.5 review** (#1504 epic reinstated as full backfill after B′ abort; sample-first proved auto-approve unsafe).
-- **24 Class A learner-blockers documented** in #1577 across 12 modules — immediate-fix candidates regardless of policy outcome.
-- **`/api/quality` endpoints validated correct** (count 803, critical_count 117, upgrade-plan now has `generated_at`).
+- **117 critical-rubric REWRITES remain** at <2.0 rubric (unchanged from session 57; session 58 worked on Class A correctness, not rubric criticals).
+- **277 modules still need composer-2.5 review** (#1504 epic full backfill). Session 58 cadence: **0 reviews**.
+- **#1577 Class A epic**: 3 of 12 modules merged this session (#1583 gitpod, #1584 cloudwatch, #1585 network-admin). **9 modules remain**. Epic reopened twice — see policy on commit-subject convention.
+- **#373 Phase 1 livenessprobe primitives shipped** (PR #1588, `scripts/dispatch_livenessprobe.py` + 25 tests). Phase 2 (dispatch.py wiring) + Phase 3 (citation_backfill) still future.
+- **#386 lab audit refreshed** (`docs/lab-audit-2026-05-26.md`, 269 labs scored, avg 2.25/5) — baseline for when #386 unlocks post-content-gaps.
 - Site: https://kube-dojo.github.io/ (Starlight/Astro, ~1,350 pages, ~30-40s build).
 - Services: `./services.sh {start|stop|restart|status} {dev|api|feedback}` (api on :8768, dev on :4333).
 
 ## TODO
 
-**Next session — top priorities:**
+**Next session — top priorities (oldest-first per user, skipping UK + #386):**
 
-- [ ] **Verify PR #1576 + #1578 merged** (auto-merge was enabled but CI was delayed at session 57 end). If still BLOCKED, push a no-op trigger commit or use `--admin` if you have it.
-- [ ] **Fix the 12 Class A modules from #1577** — start with worst offenders (4 A: platform/toolkits/devex/8.5-gitpod-codespaces; 3 A: cloud/aws-essentials/1.10-cloudwatch, linux/operations/8.2-network-administration, prereqs/zero-to-terminal/0.9-software-and-packages). One module per PR, codex/cursor/deepseek/gemini-3.1-pro rotation, cross-family R1 each. Issue body has per-module checklist.
-- [ ] **Continue critical-rubric drain** — ~115 remain. Briefing API surfaces top-5 in `actions.next`. Rotate all 4 T0 authors. Watch gemini quota.
-- [ ] **#1504 backfill is the long-running work** — full 277-module composer-2.5 review reinstated after B′ abort. Recommended cadence: 3-5 reviews per session in background.
-- [ ] **Codex review fallback gotcha**: `dispatch_smart.py review --agent codex` fails because `inject-codex-danger-mode.sh` hook injects `--mode danger` which requires `--worktree`. For read-only review dispatches, route to cursor/gemini, OR fix the hook to skip read-only task classes.
-- [ ] **Codex spark default broken** for our prompt sizes (carried from session 56). Patch `scripts/dispatch_smart.py` draft task class to default to `gpt-5.5`.
+- [ ] **#1577 remaining 9 modules** — neural-network-fundamentals, kcsa/5.3-runtime-security, performance/5.3-memory-management, on-prem/5.4-fleet-management, on-prem/7.4-observability, ebpf/1.2-deepdive, sonarqube, git-deep-dive/10-gitops-bridge, zero-to-terminal/0.9-software-and-packages. Rotate codex/cursor/deepseek/gemini-3.1-pro. **CRITICAL: commit subjects MUST avoid `fix #1577` token** (auto-closes the epic — happened TWICE in session 58). Use `chore(content): #1577 module X — N defects fixed`. Briefs MUST also mandate `## Learner check` section + sibling-grep before changes.
+- [ ] **Critical-rubric drain (117 at <2.0)** — briefing API surfaces top-5 in `actions.next`. Rotate all 4 T0 authors. Watch gemini quota.
+- [ ] **#1504 backfill cadence** — 3-5 composer-2.5 cross-family reviews per session. ZERO this session; resume in parallel with content dispatches.
+- [ ] **#393 AI/ML history depth pass UNBLOCKED** (#388 closed 2026-05-12). 4 of 6 anchor modules located: `ai/foundations/module-1.1-what-is-ai.md`, `module-1.2-what-are-llms.md`, `ai-ml-engineering/deep-learning/module-1.3-training-neural-networks.md`, `module-1.7-backpropagation-and-autograd-from-scratch.md`. Locate Transformers from Scratch + Single-GPU Fine-tuning. Codex suggested owner.
+- [ ] **#1299 gap analysis** — quality-floor gate ("track critical-count < 50") currently closed. Survey state of per-module gap-fill issues; downstream of rubric drain.
+- [ ] **#1350 agy migration (23 days to 2026-06-18 deadline)** — 30+ gemini-cli touchpoints. Untouched this session. Surface early next session.
+- [ ] **#1586 dispatch_smart codex-review --worktree bug** — small code fix, unblocks codex as cross-family reviewer. Carve out review/search from the danger-mode forcing block at `scripts/dispatch_smart.py:619-627`.
+- [ ] **#1587 density follow-up for #1577 modules** — 8.5-gitpod (1102 words) and 1.10-cloudwatch (1506 words) are rubric 5.0 but failing body_words floor. Filed; awaits prioritization.
+- [ ] **#373 Phase 2 (dispatch.py wiring) + Phase 3 (citation_backfill integration)** — defer until content work clears.
+- [ ] **Codex spark default broken** for our prompt sizes (carried from session 56-57). Patch `scripts/dispatch_smart.py` draft task class to default to `gpt-5.5`.
 - [ ] **Three-way-rule fix**: add `structure_core_sections_4_6` deterministic gate to `scripts/quality/verify_module.py`.
-- [ ] **9 issues still open**: #14 monitoring · #143 Ukrainian full-coverage · #373 liveness probes · #383 UK re-sync · #386 lab quality · #393 AI history depth · #1299 gap analysis · #1350 gemini-cli → agy migration (deadline 2026-06-18) · #1401/#1402/#1404 calibration · #1502 calibration dashboard · #1504 review epic. None top-of-queue.
-- [ ] **Visual sanity-check the merged session-56/57 modules** on live site after `deploy.yml` runs.
 
 **Date-bound:**
 
@@ -77,9 +84,14 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (54 dated
 - 2026-06-18: drop gemini-cli adapter (agy Phase 3 cutover) — see issue #1350.
 - 2026-07-13: weekly-double bump expires.
 
+**Deferred per user (session 58 directive):**
+
+- #143 Ukrainian full-coverage · #383 UK re-sync — until EN modules production-ready.
+- #386 Phase F lab quality audit + expansion — until all gaps filled and content written. Re-run `score_labs.py` at that point; baseline is `docs/lab-audit-2026-05-26.md`.
+
 **Long-running epics (not currently top-of-queue):**
 
-- #197 On-Premises track expansion · #143 Ukrainian full-coverage · #14 monitoring (permanent) · #393 AI history depth · #386 lab quality audit · #1299 gap analysis · #1413 calibration single-fixture lanes · #1416 calibration auto-render hook.
+- #197 On-Premises track expansion · #14 monitoring (permanent) · #1401/#1402/#1404 calibration · #1413 calibration single-fixture lanes · #1416 calibration auto-render hook · #1502 calibration dashboard.
 
 ## Blockers
 
@@ -95,6 +107,7 @@ _None._
 - 2026-05-25 session 55: Hermes argv bug class fully eradicated (5 call-sites, all to `--oneshot=<prompt>` equals-form); CI cross-family review workflow operational on every PR.
 - 2026-05-26 session 56: Epic #1530 AI Engineering Foundations fully closed. gemini-3.1-pro-preview promoted to 4th T0 author option. Critical-rubric drain begun (7 of 122 closed). CI cross-family review workflow end-to-end functional after user added API keys.
 - 2026-05-26 session 57: Decision Card B′ deliberation executed and aborted properly. n=15 stratified back-catalog sample → 80% NEEDS_CHANGES with Class A learner-blockers across ALL 7 strata → reverted to Option A / Decision Card C / #1504 full backfill. Sample-first ordering caught wrong assumption before stamping; zero artifact debt. `claude_extensions/` → `agents_extensions/` rename (shared + per-agent split). Dispatch-time skill auto-loading shipped (`dispatch_smart.py --auto-skill`). 24 Class A defects filed as #1577.
+- 2026-05-26 session 58: 4 PRs merged (3 of 12 #1577 Class A modules + #373 Phase 1 livenessprobe primitives). Discovered + fixed 3 new orchestration failure modes (commit-subject auto-close pattern, missing learner-check brief instruction, missing sibling-grep brief instruction) → 3 new memories locked. PR #1588 R1 caught real package/module shadowing bug (`scripts/dispatch/` would have broken pipeline_v2 worker imports). User redirected mid-session to oldest-first triage, Ukrainian deferred, #386 deferred until content/gaps complete.
 
 ## End-of-session ritual
 

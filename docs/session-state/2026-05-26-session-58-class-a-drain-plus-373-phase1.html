@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 58 — Class A drain (3 PRs) + #373 Phase 1 livenessprobe</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.deferred { background: #f1f3f5; color: #495057 }
+.warn { background: #fff3cd; color: #856404 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+.user-quote { background: #fffae0; border-left: 3px solid #d4ac0d; padding: 4px 12px; margin: 6px 0 10px 0 }
+</style></head><body>
+
+<h1>Session 58 — Class A drain (3 PRs) + #373 Phase 1 livenessprobe</h1>
+<p class="meta">2026-05-26, ~4 hours interactive (opus 4.7, 1M context). User-driven session. Started narrow on #1577 Class A backlog drain; mid-session the user pushed back on "why are you not solving other open tickets" and redirected to <strong>oldest-first triage, skipping Ukrainian (#143, #383) until EN production-ready, and deferring #386 (lab quality) until all gaps filled and all content written</strong>. Drained 3 of 12 #1577 modules through 6 cross-family review rounds, shipped #373 Phase 1 livenessprobe primitives (after catching a real package-collision bug in R1), and recorded 3 new memories from concrete failures encountered this session.</p>
+
+<h2>Headline</h2>
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th><th>Cycle</th></tr>
+<tr><td>#1583</td><td><span class="pill merged">MERGED</span></td><td>chore(content): fix #1577 module 8.5-gitpod-codespaces — 4 Class A defects</td><td>codex author → composer-2.5 R1 APPROVE → rebase-merge (sha <code>bd86204e</code>)</td></tr>
+<tr><td>#1584</td><td><span class="pill merged">MERGED</span></td><td>chore(content): fix #1577 module 1.10-cloudwatch — 3 Class A defects (+2 fix-passes)</td><td>cursor author → gemini R1 NEEDS_CHANGES (sudo /opt/aws/ + ssh-grouping) → fixpass1 (a92998a1) → gemini R2 NEEDS_CHANGES (Task 1 sibling SSH block) → fixpass2 (e2d9809c) → claude R3 + gemini R3 both APPROVE → rebase-merge (sha <code>50573003</code>)</td></tr>
+<tr><td>#1585</td><td><span class="pill merged">MERGED</span></td><td>chore(content): fix #1577 module 8.2-network-administration — 3 Class A defects (+ sibling fix)</td><td>deepseek author → composer-2.5 R1 APPROVE_WITH_NITS (sibling sshd at 879/954 caught) → nit-fixpass (d2ffca99) → composer-2.5 R2 APPROVE → rebase-merge (sha <code>833c78ae</code>)</td></tr>
+<tr><td>#1588</td><td><span class="pill merged">MERGED</span></td><td>feat(dispatch): #373 Phase 1 — port liveness-probe primitives from learn-ukrainian</td><td>codex Phase 1 author → composer-2.5 R1 NEEDS_CHANGES (P1: <code>scripts/dispatch/</code> package shadows existing <code>scripts/dispatch.py</code> 49KB module, breaks pipeline_v2 worker imports) → fixpass (53f2b304) → composer-2.5 R2 APPROVE → rebase-merge (sha <code>dcd1ac85</code>). Issue #373 STAYS OPEN for Phase 2 (dispatch.py wiring) and Phase 3 (citation_backfill integration).</td></tr>
+</table>
+
+<h2>Policy moves locked this session</h2>
+
+<h3>1. User directive: oldest-first triage; defer #386 and Ukrainian</h3>
+<div class="user-quote">"start from the begining from the oldest. ukrainian transaltions we will stat only whne all modules are ready for production."</div>
+<div class="user-quote">"lets wait with the 386 until we finish all gaps and write all content. then we review 386 and expand it."</div>
+<p>Operational consequence:</p>
+<ul>
+<li>#143 + #383 (Ukrainian translation epics) — <span class="pill deferred">DEFERRED</span> until EN modules production-ready.</li>
+<li>#386 (lab quality audit + expansion) — <span class="pill deferred">DEFERRED</span> until #1577 + #1299 + other content gaps closed. Re-run <code>scripts/quality/score_labs.py</code> for fresh audit at that point. The 2026-05-26 audit at <code>docs/lab-audit-2026-05-26.md</code> stays as baseline.</li>
+<li>Active queue: <strong>#1577 remaining 9 modules → critical-rubric drain (117) → #1299 gap-fill → #393 anchor depth → #1350 (deadline 2026-06-18) → #1504 backfill cadence</strong>.</li>
+</ul>
+
+<h3>2. #1577 commit-subject convention (the "fix #N" auto-close bug, twice)</h3>
+<p>Issue #1577 (the Class A epic, 12 modules) was auto-closed by GitHub <strong>twice</strong> this session despite every PR body using <code>Refs #1577</code> (not <code>Closes</code>). Root cause: every commit subject started with <code>chore(content): fix #1577 module X...</code>, and GitHub's auto-closer regex matches the <code>fix #N</code> pattern in the commit message, not just the PR body. PR body <code>Refs</code> does <strong>not</strong> override.</p>
+<p>Reopened twice; closed for the second time when PR #1584's rebase-merge brought the original "fix #1577" commit subject onto main. Final reopen comment is on the issue. Going forward, every #1577 dispatch brief must instruct: commit subjects use phrasing without close-keywords, e.g. <code>chore(content): #1577 module X-Y — N defects fixed</code> or <code>module X-Y refresh per #1577</code>. Locked as <code>feedback_commit_subject_avoid_fix_n_pattern</code> memory.</p>
+
+<h3>3. Content-fix briefs must include the Learner-check section requirement</h3>
+<p>The <code>.claude/hooks/block-content-merge-without-learner-check.sh</code> pre-merge hook blocks <code>gh pr merge</code> on any PR touching <code>src/content/docs/**</code> unless the PR body has a <code>## Learner check</code> section with a ≥30-char blockquote copied verbatim from a touched module. Codex's #1583 brief didn't include this requirement; I had to retry <code>gh pr edit</code> three times before the substring matched (first attempt had a trailing period mismatch vs source colon; second never propagated through chained <code>&&</code>). Use <code>gh pr edit --body-file /tmp/pr-X-body.md</code> (heredoc form is flaky). Locked as <code>feedback_content_fix_brief_includes_learner_check</code> memory.</p>
+
+<h3>4. Class A fix briefs must mandate sibling-grep BEFORE making changes</h3>
+<p>Two of the three #1577 PRs caught sibling defects during R1/R2 that the original issue body missed — same anti-pattern, additional lines:</p>
+<ul>
+<li>#1584 cloudwatch: original brief said "fix Task 5 SSH-grouping"; R2 caught identical anti-pattern in Task 1 (line 874). Needed a second fix-pass.</li>
+<li>#1585 network-admin: original brief said "fix line 601 sshd"; R1 caught siblings at 879 and 954 on the same Ubuntu lab path. Needed a nit-fix-pass.</li>
+</ul>
+<p>Sibling-rate observation: roughly 1 in 3 Class A defects had at least one sibling in the same module. Briefs must instruct the author to grep for the same anti-pattern across the file BEFORE making changes. Locked as <code>feedback_class_a_fix_includes_sibling_grep</code> memory. Same class as <code>code-editing-safety §4</code> applied to defect-fix dispatches.</p>
+
+<h3>5. #1577 reopen mechanics</h3>
+<p>Two reopens this session — once by me after PR #1583 merge, once after #1584 merge. The third potential close didn't happen because subsequent commit subjects (the fix-passes) used <code>chore(content): #1577 module X fix-pass — ...</code> form (no <code>fix #N</code>). The auto-close trigger is the PRESENCE of the <code>fix #N</code> token; if no merged commit in this push has it, no close fires.</p>
+
+<h2>Headline data (from /api/briefing/session at start of session)</h2>
+<ul>
+<li><strong>117 modules at &lt;2.0 rubric critical</strong> — unchanged from session 57.</li>
+<li><strong>277 modules</strong> still need composer-2.5 cross-family review (#1504 backfill).</li>
+<li><strong>9 of 12 #1577 modules</strong> remain unfixed after this session (3 merged: 8.5-gitpod, 1.10-cloudwatch, 8.2-network-admin).</li>
+<li><strong>15 open issues</strong> as of session start; +2 filed (#1586, #1587); -1 (no closes from this session's PRs — #1577 reopened).</li>
+<li><strong>0 active pipeline_v2 leases</strong>; <strong>9 worktrees</strong> at start (8 stale from session 57) — pruned to 2 by session end.</li>
+</ul>
+
+<h2>Dispatch ledger</h2>
+<table>
+<tr><th>Dispatch</th><th>Agent</th><th>Class</th><th>Outcome</th></tr>
+<tr><td>#1583 author</td><td>codex gpt-5.5</td><td>edit</td><td>OK 4 fixes + PR open</td></tr>
+<tr><td>#1584 author</td><td>cursor composer-2.5</td><td>edit</td><td>OK 3 fixes + PR open</td></tr>
+<tr><td>#1585 author</td><td>deepseek v4-pro</td><td>edit</td><td>OK 3 fixes + PR open</td></tr>
+<tr><td>#1583 R1</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE</td></tr>
+<tr><td>#1584 R1 (first attempt)</td><td>codex gpt-5.5</td><td>review</td><td>FAIL — <code>mode=danger requires --worktree</code>. Wrapper unconditionally forces danger mode on codex. Rerouted.</td></tr>
+<tr><td>#1584 R1 (reroute)</td><td>gemini-3.1-pro-preview</td><td>review</td><td>NEEDS_CHANGES (P1.1 sudo path, P1.2 Task 5 SSH-grouping)</td></tr>
+<tr><td>#1584 fixpass1</td><td>cursor composer-2.5</td><td>edit</td><td>OK</td></tr>
+<tr><td>#1584 R2</td><td>gemini-3.1-pro-preview</td><td>review</td><td>NEEDS_CHANGES (Task 1 sibling SSH block missed)</td></tr>
+<tr><td>#1584 fixpass2</td><td>cursor composer-2.5</td><td>edit</td><td>OK</td></tr>
+<tr><td>#1584 R3 (claude reroute)</td><td>claude sonnet-4-6</td><td>review</td><td>APPROVE (gemini R3 background also ran later, also APPROVE)</td></tr>
+<tr><td>#1585 R1</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE_WITH_NITS (sibling sshd at 879/954)</td></tr>
+<tr><td>#1585 nit-fixpass</td><td>deepseek v4-pro</td><td>edit</td><td>OK</td></tr>
+<tr><td>#1585 R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE</td></tr>
+<tr><td>#1588 author (#373 Phase 1)</td><td>codex gpt-5.5</td><td>edit</td><td>OK, but my brief mandated colliding path <code>scripts/dispatch/livenessprobe.py</code> (P1 caught downstream)</td></tr>
+<tr><td>#1588 R1</td><td>cursor composer-2.5</td><td>review</td><td>NEEDS_CHANGES — caught P1 package-collision with existing 49KB <code>scripts/dispatch.py</code> module + P2 flaky cpu_percent + P2 naming inconsistency</td></tr>
+<tr><td>#1588 fixpass</td><td>codex gpt-5.5</td><td>edit</td><td>OK, but did NOT commit/push — orchestrator committed inline (53f2b304)</td></tr>
+<tr><td>#1588 R2</td><td>cursor composer-2.5</td><td>review</td><td>APPROVE</td></tr>
+</table>
+
+<h2>Bugs caught + filed</h2>
+
+<h3>#1586 — dispatch_smart.py forces --worktree on codex review</h3>
+<p><code>scripts/dispatch_smart.py:619-627</code> unconditionally sets <code>mode=danger</code> for <code>--agent codex</code> regardless of task class. The wrapper then refuses to dispatch without <code>--worktree</code>. Session 57's hook fix to <code>.claude/hooks/inject-codex-danger-mode.sh</code> correctly skips <code>review</code>/<code>search</code> task classes, but only covers the hook path; the wrapper itself still enforces. Workaround used this session: route to gemini-3.1-pro-preview or claude headless for codex-author cross-family reviews. Proposed fixes in issue body.</p>
+
+<h3>#1587 — density-floor expansion follow-up for #1577 modules</h3>
+<p>Two of three #1577 modules touched this session are rubric 5.0 but failing density gates (body_words floor + short-paragraph-rate). 8.5-gitpod has 1102 body_words (floor 5000), 1.10-cloudwatch 1506. This is the verifier-vs-rubric mismatch documented in <code>feedback_teaching_not_listicles</code>. #1587 tracks the density-expansion work as a separate follow-up so #1577 fix-passes stay scope-tight (Class A only).</p>
+
+<h2>Memory entries added this session</h2>
+<table>
+<tr><th>Memory</th><th>Why</th></tr>
+<tr><td><code>feedback_content_fix_brief_includes_learner_check</code></td><td>Every content-fix dispatch brief must mandate the <code>## Learner check</code> blockquote in PR body — the pre-merge hook is non-negotiable. 8 minutes lost on PR #1583 retries before this was internalized.</td></tr>
+<tr><td><code>feedback_class_a_fix_includes_sibling_grep</code></td><td>Class A fix briefs must instruct author to grep for sibling occurrences BEFORE making changes. Issue listings are sampled, not exhaustive. PR #1585 (and arguably #1584 fixpass2) needed extra cycles because the original brief didn't ask for sibling-grep.</td></tr>
+<tr><td><code>feedback_commit_subject_avoid_fix_n_pattern</code></td><td>Commit subjects must NOT contain <code>fix #N</code> / <code>closes #N</code> / <code>resolves #N</code> for epics that must stay open. PR body <code>Refs</code> does NOT override. #1577 auto-closed twice this session.</td></tr>
+</table>
+
+<h2>Files touched (curriculum + code)</h2>
+<ul>
+<li><code>src/content/docs/platform/toolkits/developer-experience/devex-tools/module-8.5-gitpod-codespaces.md</code> — 4 Class A defects: devcontainer.json <code>secrets</code> object shape, fake <code>curl|tar</code> pipe replaced with labeled placeholder, Helm bash/yaml fence split, <code>git branch -M main</code> after <code>git init</code>. Density gaps remain (body_words=1102, short-rate=30.6%, sources=5) — tracked in #1587.</li>
+<li><code>src/content/docs/cloud/aws-essentials/module-1.10-cloudwatch.md</code> — 3 Class A defects + 2 fix-passes (sudo/opt path → local <code>cw-config.json</code>; <code>--monitoring Enabled=true</code> on run-instances; both Task 1 and Task 5 SSH/remote command blocks split). Density still failing (body_words=1506, median_wpp=20.5, short-rate=41%) — tracked in #1587.</li>
+<li><code>src/content/docs/linux/operations/module-8.2-network-administration.md</code> — 3 Class A + 2 sibling sshd-restart fixes at lines 879 and 954 (in addition to the listed 601). Module's gates all pass except pre-existing <code>gate_no_source_h1</code> at line 15 (out of scope).</li>
+<li><code>scripts/dispatch_livenessprobe.py</code> (new, 144 lines) — port of <code>learn-ukrainian/scripts/agent_runtime/livenessprobe.py</code>: <code>Signal</code> protocol, <code>StdoutStreamedSignal</code>, <code>ProcCpuSignal</code>, <code>FileMTimeSignal</code>, <code>CompositeProbe</code> (ANY mode + failureThreshold counter).</li>
+<li><code>tests/test_livenessprobe.py</code> (new) — 25 tests passing, including mocked-psutil negative cases.</li>
+<li><code>scripts/dispatch/livenessprobe.py</code> + <code>scripts/dispatch/__init__.py</code> — created by codex initial port, then DELETED by fix-pass after R1 caught the package/module shadowing collision with the existing <code>scripts/dispatch.py</code>.</li>
+<li><code>docs/lab-audit-2026-05-26.md</code> — fresh #386 audit, 269 labs scored, avg 2.25/5. Will be the baseline when #386 unlocks post-content-gaps.</li>
+<li>STATUS.md + this handoff — updated.</li>
+</ul>
+
+<h2>What's next (oldest-first per user directive; skipping #143/#383/#386)</h2>
+<ol>
+<li><strong>#1577 remaining 9 modules</strong> — neural-network-fundamentals, kcsa/5.3-runtime-security, performance/5.3-memory-management, on-prem/5.4-fleet-management, on-prem/7.4-observability, ebpf/1.2-deepdive, sonarqube, git-deep-dive/10-gitops-bridge, zero-to-terminal/0.9-software-and-packages. Per issue body each has a per-module checklist. <strong>Critical brief constraint</strong>: commit subjects must NOT contain <code>fix #1577</code> (auto-closes the epic). Use <code>chore(content): #1577 module X — N defects fixed</code> instead.</li>
+<li><strong>Critical-rubric drain (117 modules at &lt;2.0)</strong> — briefing API surfaces top 5 in <code>actions.next</code>. Rotate codex/cursor/deepseek/gemini-3.1-pro. Watch gemini quota (3x weekly buff burnable in ~2hrs heavy use per <code>feedback_gemini_quota_burnable_even_with_3x_buff</code>).</li>
+<li><strong>#1504 backfill cadence</strong> — 3-5 composer-2.5 cross-family reviews per session of the 277-module back-catalog. ZERO progress this session. Easy parallel-slot work alongside content dispatches.</li>
+<li><strong>#1299 gap analysis follow-through</strong> — quality-floor gate is "track critical-count &lt; 50". Currently 117 globally; new-module writes from the gap-fill list stay BLOCKED until critical-count drops. So #1299 progress is downstream of #1577 + critical-rubric drain. Survey state of per-module gap-fill issues at start of next session.</li>
+<li><strong>#393 ML/AI history depth (unblocked — #388 closed 2026-05-12)</strong> — 4-6 anchor modules: <code>ai/foundations/module-1.1-what-is-ai.md</code>, <code>ai/foundations/module-1.2-what-are-llms.md</code>, <code>ai-ml-engineering/deep-learning/module-1.3-training-neural-networks.md</code>, <code>ai-ml-engineering/deep-learning/module-1.7-backpropagation-and-autograd-from-scratch.md</code>, plus Transformers from Scratch and Single-GPU Fine-tuning (locate). Expand to 1000-1200 lines with narrative beats, primary sources, counterfactuals. Codex suggested owner per issue body.</li>
+<li><strong>#373 Phase 2 (dispatch.py wiring) + Phase 3 (citation_backfill)</strong> — Phase 1 primitives merged this session. Phase 2 is more invasive (wires into <code>scripts/dispatch.py</code>). Defer until at least the most pressing content work clears.</li>
+<li><strong>#1350 agy migration (23 days to deadline 2026-06-18)</strong> — 30+ gemini-cli touchpoints to migrate. Surface at start of next session even if oldest-first sequencing puts it lower.</li>
+<li><strong>#1586 dispatch_smart codex-review bug</strong> — low-effort code fix, would un-block codex as a cross-family reviewer for cursor-authored work. Carve out review/search from the codex danger-mode forcing block.</li>
+</ol>
+
+<h2>Notable session-ops observations</h2>
+<ul>
+<li><strong>cursor-agent dispatches sometimes hang silently then complete</strong> — R2 #1584 took ~10 min with 0-byte stdout, then suddenly completed and wrote the full response. Don't kill cursor dispatches prematurely. (Re-firing R3 #1584 on claude inline was harmless because the original gemini R3 also eventually finished — both APPROVE.)</li>
+<li><strong><code>gh pr edit --body</code> with heredoc (chained <code>&&</code>) is unreliable</strong> — happened multiple times. Always: (1) <code>Write</code> tool to <code>/tmp/pr-NNNN-body.md</code>, (2) <code>gh pr edit --body-file /tmp/pr-NNNN-body.md</code> as its own bash call, (3) verify with <code>gh pr view ... --json body</code> before merging.</li>
+<li><strong>Bash heredocs to <code>/tmp/</code> don't persist between Bash tool calls</strong> — use <code>Write</code> tool instead (those files persist).</li>
+<li><strong>Codex's #1588 fixpass did all the work but stopped before committing</strong> — brief said "Add ONE new commit. Push." Codex did the edits + ran validation + then asked "If you want, I can provide the commit/push commands." Orchestrator committed/pushed inline (small deterministic op). Tighten brief to "REQUIRED: commit + push" for next-time.</li>
+</ul>
+
+<h2>Decisions/Cards moved</h2>
+<p>No new Decision Cards opened or moved this session. Existing locks (Decision Card B′ aborted in session 57 → Decision Card C reinstated; Codex-writer/Composer-reviewer pair; agents_extensions/ rename) all hold. The session-58 user directives on Ukrainian/#386 sequencing are recorded as policy moves in this handoff but did not require a Decision Card (single-stakeholder, non-contested, scope-only).</p>
+
+<h2>Open issues snapshot (15)</h2>
+<table>
+<tr><th>#</th><th>Title</th><th>State this session</th></tr>
+<tr><td>14</td><td>Curriculum Monitoring &amp; Official Sources</td><td>SKIP — permanent tracker, not due (quarterly check 2026-05-13)</td></tr>
+<tr><td>143</td><td>Ukrainian full coverage</td><td>DEFERRED per user — until EN production-ready</td></tr>
+<tr><td>373</td><td>LLM-dispatch liveness probes</td><td>Phase 1 merged (PR #1588); Phase 2/3 future</td></tr>
+<tr><td>383</td><td>UK re-sync debt</td><td>DEFERRED per user</td></tr>
+<tr><td>386</td><td>Phase F lab quality audit</td><td>DEFERRED per user — until content gaps closed</td></tr>
+<tr><td>393</td><td>AI/ML history depth pass</td><td>UNBLOCKED (#388 closed 2026-05-12). 4 of 6 anchor modules located.</td></tr>
+<tr><td>1299</td><td>Independent gap analysis → fill modules</td><td>Quality-floor gate closed (117 critical &gt; 50/track). Downstream of rubric drain.</td></tr>
+<tr><td>1350</td><td>gemini-cli → agy migration</td><td>23-day deadline (2026-06-18). Untouched this session.</td></tr>
+<tr><td>1401/1402/1404</td><td>calibration v1 follow-ups</td><td>Untouched.</td></tr>
+<tr><td>1502</td><td>calibration dashboard</td><td>Untouched.</td></tr>
+<tr><td>1504</td><td>composer-2.5 back-catalog review (277 modules)</td><td>0 reviews this session (cadence was 3-5/session per session-57 handoff).</td></tr>
+<tr><td>1577</td><td>Class A defects (12 modules)</td><td>3 merged (8.5-gitpod, 1.10-cloudwatch, 8.2-network-admin); 9 remain. Auto-closed twice, reopened twice.</td></tr>
+<tr><td>1586</td><td>(filed today) dispatch_smart codex --worktree bug</td><td>Open, has proposed fix in body.</td></tr>
+<tr><td>1587</td><td>(filed today) density-floor follow-up for #1577 modules</td><td>Open. Tracks the verifier-vs-rubric gap.</td></tr>
+</table>
+
+</body></html>
