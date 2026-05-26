@@ -133,9 +133,24 @@ class CompositeProbe:
     _failure_count: int = 0
     _started_at: float | None = None
 
-    def __post_init__(self) -> None:
-        if self.mode != "ANY":
+    def __init__(
+        self,
+        signals: list[Signal],
+        mode: str = "ANY",
+        periodSeconds: int = 30,
+        failureThreshold: int = 3,
+        initial_delay_s: int = 90,
+    ) -> None:
+        if mode != "ANY":
             raise ValueError("CompositeProbe currently supports mode='ANY' only")
+
+        self.signals = signals
+        self.mode = mode
+        self.periodSeconds = periodSeconds
+        self.failureThreshold = failureThreshold
+        self.initialDelaySeconds = initial_delay_s
+        self._failure_count = 0
+        self._started_at = None
 
     @property
     def period_s(self) -> int:
@@ -146,7 +161,7 @@ class CompositeProbe:
         return self.failureThreshold
 
     @property
-    def initial_delay_seconds(self) -> int:
+    def initial_delay_s(self) -> int:
         return self.initialDelaySeconds
 
     def evaluate_once(self) -> bool:
