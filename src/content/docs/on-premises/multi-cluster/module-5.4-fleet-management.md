@@ -558,6 +558,7 @@ spec:
   paths:
     - multi-cluster/helm
 EOF
+python3 -m pip install pyyaml
 python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/gitrepo.yaml'))" && echo "GitRepo YAML OK"
 python3 -c "import yaml; yaml.safe_load(open('/tmp/fleet-lab/baseline/fleet.yaml'))" && echo "fleet.yaml OK"
 grep -E 'kind:|repo:|paths:' /tmp/fleet-lab/gitrepo.yaml
@@ -648,6 +649,7 @@ spec:
         server: '{{.server}}'
         namespace: '{{.app}}'
 EOF
+python3 -m pip install pyyaml
 python3 -c "import yaml; yaml.safe_load(open('/tmp/appset-lab/appset.yaml'))" && echo "ApplicationSet YAML OK"
 grep -c 'generators:' /tmp/appset-lab/appset.yaml
 grep 'matchLabels' /tmp/appset-lab/appset.yaml
