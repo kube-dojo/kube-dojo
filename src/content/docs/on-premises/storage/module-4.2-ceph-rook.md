@@ -14,11 +14,11 @@ sidebar:
 
 ## Why This Module Matters
 
-In 2017, GitLab suffered a catastrophic outage when an engineer accidentally executed `rm -rf` on their primary database server. Because their architecture relied heavily on local storage and had silent failures in their snapshot pipelines, they permanently lost nearly 300GB of production data and faced 18 hours of grueling downtime. The incident severely damaged their reputation and caused significant financial impact. If their critical databases had been backed by a robust, software-defined distributed storage system capable of instantaneous block-level snapshots and cross-node replication, recovery would have been a simple command taking mere seconds.
+In 2017, GitLab suffered a catastrophic outage when an engineer accidentally executed `rm -rf` on their primary database server. Because their architecture relied heavily on local storage and had silent failures in their snapshot pipelines, they [permanently lost nearly 300GB of production data](https://about.gitlab.com/blog/gitlab-dot-com-database-incident/) and [faced 18 hours of grueling downtime](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/). The incident severely damaged their reputation and caused significant financial impact. If their critical databases had been backed by a robust, software-defined distributed storage system capable of instantaneous block-level snapshots and cross-node replication, recovery would have been a simple command taking mere seconds.
 
-Software-defined storage (SDS) is the backbone of resilient infrastructure. Ceph is the undisputed dominant distributed storage system for on-premises Kubernetes environments. It transforms a scattered collection of local disks across multiple servers into a unified, highly replicated, self-healing storage pool that Kubernetes can dynamically consume via the Container Storage Interface (CSI). When a physical disk fails, Ceph automatically redistributes the data. When an entire node goes offline, Ceph continues serving requests from replicas located on surviving nodes. When you add new servers to the rack, Ceph rebalances the cluster automatically, distributing the I/O load transparently.
+Software-defined storage (SDS) is the backbone of resilient infrastructure. Ceph is the undisputed dominant distributed storage system for on-premises Kubernetes environments. It transforms a scattered collection of local disks across multiple servers into [a unified, highly replicated, self-healing storage pool](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst) that Kubernetes can dynamically consume via the Container Storage Interface (CSI). When a physical disk fails, Ceph automatically redistributes the data. When an entire node goes offline, Ceph continues serving requests from replicas located on surviving nodes. When you add new servers to the rack, Ceph rebalances the cluster automatically, distributing the I/O load transparently.
 
-But Ceph is not a simple black box. It operates its own daemons, utilizes its own distributed consensus protocol, demands strict networking topologies, and exhibits unique failure modes. Running Ceph poorly is often worse than not running it at all—a misconfigured Ceph cluster can amplify failures, saturate your network, and bring down your entire environment. Rook is the Kubernetes operator that manages Ceph, turning a complex, multi-day manual deployment into declarative YAML. Understanding what Rook does under the hood, and how Ceph manages data, is essential for engineering resilient, production-grade storage architectures.
+But Ceph is not a simple black box. It operates its own daemons, utilizes its own distributed consensus protocol, demands strict networking topologies, and exhibits unique failure modes. Running Ceph poorly is often worse than not running it at all—a misconfigured Ceph cluster can amplify failures, saturate your network, and bring down your entire environment. [Rook is the Kubernetes operator that manages Ceph](https://github.com/rook/rook), turning a complex, multi-day manual deployment into declarative YAML. Understanding what Rook does under the hood, and how Ceph manages data, is essential for engineering resilient, production-grade storage architectures.
 
 ---
 
@@ -49,14 +49,14 @@ After completing this module, you will be able to:
 
 Before diving into the architecture, it is important to understand the lifecycle of the tools managing your data. 
 
-Rook is a premier CNCF project that has reached the highest level of maturity. Rook was accepted to the CNCF on 2018-01-29 and moved to incubation on 2018-09-25. It officially moved to Graduated maturity on 2020-10-07, cementing its place as the standard for Kubernetes-native storage orchestration.
+Rook is a premier CNCF project that has reached the highest level of maturity. Rook was [accepted to the CNCF on 2018-01-29 and moved to incubation on 2018-09-25](https://www.cncf.io/projects/rook/). It officially moved to Graduated maturity on 2020-10-07, cementing its place as the standard for Kubernetes-native storage orchestration.
 
-Ceph itself follows a strict release lifecycle using marine animal names. Staying on supported versions is a hard requirement for production clusters, as archived Ceph releases are explicitly not maintained and no longer receive bug fixes or backports. As of our current timeline:
+Ceph itself follows a strict release lifecycle using marine animal names. Staying on supported versions is a hard requirement for production clusters, as [archived Ceph releases are explicitly not maintained and no longer receive bug fixes or backports](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/index.rst). As of our current timeline:
 - The **Tentacle** release is part of the active release train, with its latest version being 20.2.1 and an initial release date of 2026-04-06.
-- The **Squid** release is also active, with its latest version at 19.2.3 and an expected end-of-life (EOL) of 2026-09-19.
+- The **Squid** release is also active, with its [latest version at 19.2.3 and an expected end-of-life (EOL) of 2026-09-19](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/releases.yml).
 - The **Reef** release remains active but is nearing the end of its cycle. Its latest release, 18.2.8, is expected to be the eighth and final backport release in Reef, with an EOL of 2026-03-31.
 
-Rook's upgrade procedures are strictly sequential. Rook 1.19 upgrade documentation defines support for upgrading from 1.18.x to 1.19.x and explicitly states that upgrades are only supported between official releases. Rook marks master/unreleased builds as unsupported—you should never run a master build in production or attempt to skip minor versions during an upgrade.
+Rook's upgrade procedures are strictly sequential. Rook 1.19 upgrade documentation defines [support for upgrading from 1.18.x to 1.19.x](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Upgrade/rook-upgrade.md) and explicitly states that upgrades are only supported between official releases. Rook marks master/unreleased builds as unsupported—you should never run a master build in production or attempt to skip minor versions during an upgrade.
 
 ---
 
@@ -160,7 +160,7 @@ flowchart TD
 
 ### Ceph Networking
 
-A proper Ceph deployment relies heavily on network segregation. Because data replication multiplies the amount of traffic flowing across the network, failing to separate client traffic from replication traffic can cause storage operations to saturate your interfaces and impact your application pods.
+A proper Ceph deployment relies heavily on network segregation. Because data replication multiplies the amount of traffic flowing across the network, [failing to separate client traffic from replication traffic](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/CRDs/Cluster/network-providers.md) can cause storage operations to saturate your interfaces and impact your application pods.
 
 #### Legacy ASCII Network Design
 
@@ -215,14 +215,14 @@ Before deploying Rook and Ceph, you must ensure your environment meets strict pr
 
 ### Hardware and OS Requirements
 - **CPU:** Rook currently supports only amd64/x86_64 and arm64 CPU architectures.
-- **Kernel Versions:** Rook requires kernel/RBD support. It recommends kernel minimums of 5.4+ for expanded RBD image features, and 4.17+ for CephFS RWX PVC size enforcement. Running older kernels can lead to degraded features or failed quota enforcement.
+- **Kernel Versions:** Rook requires kernel/RBD support. It recommends [kernel minimums of 5.4+ for expanded RBD image features, and 4.17+ for CephFS RWX PVC size enforcement](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Getting-Started/Prerequisites/prerequisites.md). Running older kernels can lead to degraded features or failed quota enforcement.
 - **Local Storage:** Rook requires at least one local storage source such as raw devices/partitions, LVM logical volumes without filesystem, or block PVCs for Ceph OSD use. You cannot use a formatted filesystem partition for an OSD.
 
 ### Kubernetes Compatibility
-Rook's compatibility matrix shifts with each release. For example, Rook v1.18 documentation still references Kubernetes support as v1.29 through v1.34. However, the subsequent Rook v1.19 introduces a minimum supported Kubernetes version of v1.30 and a minimum supported Ceph version of v19.2.0. Looking at the broader picture, Rook latest-release documentation lists Kubernetes support as v1.30 through v1.35. Always verify your control plane version before initiating a Rook upgrade.
+Rook's compatibility matrix shifts with each release. For example, [Rook v1.18 documentation still references Kubernetes support as v1.29 through v1.34](https://raw.githubusercontent.com/rook/rook/release-1.18/Documentation/Getting-Started/Prerequisites/prerequisites.md). However, the subsequent Rook v1.19 introduces a minimum supported Kubernetes version of v1.30 and a minimum supported Ceph version of v19.2.0. Looking at the broader picture, [Rook latest-release documentation lists Kubernetes support as v1.30 through v1.35](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Getting-Started/Prerequisites/prerequisites.md). Always verify your control plane version before initiating a Rook upgrade.
 
 ### CSI Drivers
-Rook acts as the bridge between Kubernetes and Ceph by integrating Container Storage Interface (CSI) drivers. Specifically, Rook integrates three CSI drivers: RBD (block), CephFS (file), and NFS (experimental). Within Rook, the RBD and CephFS CSI drivers are enabled automatically by the operator, while NFS is disabled by default. When planning upgrades, note that the Rook Ceph CSI support policy in the latest docs is to support only the two most recent ceph-csi versions.
+Rook acts as the bridge between Kubernetes and Ceph by integrating Container Storage Interface (CSI) drivers. Specifically, [Rook integrates three CSI drivers: RBD (block), CephFS (file), and NFS (experimental)](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Storage-Configuration/Ceph-CSI/ceph-csi-drivers.md). Within Rook, the RBD and CephFS CSI drivers are enabled automatically by the operator, while NFS is disabled by default. When planning upgrades, note that the Rook Ceph CSI support policy in the latest docs is to support only the two most recent ceph-csi versions.
 
 ---
 
@@ -252,7 +252,7 @@ kubectl -n rook-ceph wait --for=condition=Ready pod \
 
 ### Step 2: Create CephCluster
 
-The CephCluster CRD below configures a production-grade Ceph deployment. Notice three critical design decisions: (1) `allowMultiplePerNode: false` for MONs ensures that a single node failure cannot lose quorum, (2) `provider: host` for networking bypasses container networking overhead for storage I/O, and (3) resource limits on OSDs prevent them from consuming all CPU and memory during recovery operations.
+The CephCluster CRD below configures a production-grade Ceph deployment. Notice three critical design decisions: (1) `allowMultiplePerNode: false` for MONs ensures that a single node failure cannot lose quorum, (2) [`provider: host` for networking bypasses container networking overhead for storage I/O](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/CRDs/Cluster/network-providers.md), and (3) resource limits on OSDs prevent them from consuming all CPU and memory during recovery operations.
 
 ```yaml
 apiVersion: ceph.rook.io/v1
@@ -328,7 +328,7 @@ spec:
                   values: ["storage"]
 ```
 
-> **Stop and think**: The CephBlockPool below sets `failureDomain: host` with `replicated.size: 3`. This means each block is copied to 3 different servers. If you accidentally set `failureDomain: osd` instead of `host`, two replicas could land on different drives of the same server. What happens when that server loses power?
+> **Stop and think**: The CephBlockPool below sets `failureDomain: host` with `replicated.size: 3`. This means [each block is copied to 3 different servers](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/CRDs/Block-Storage/ceph-block-pool-crd.md). If you accidentally set `failureDomain: osd` instead of `host`, two replicas could land on different drives of the same server. What happens when that server loses power?
 
 ### Step 3: Create StorageClasses
 
@@ -483,13 +483,13 @@ ceph config set osd osd_scrub_end_hour 6     # End at 6 AM
 
 ## Did You Know?
 
-- **Ceph's CRUSH algorithm** (Controlled Replication Under Scalable Hashing) determines where data is stored without a central lookup table. This means Ceph can scale to thousands of OSDs without a metadata bottleneck — any client can calculate the location of any object independently.
+- **Ceph's CRUSH algorithm** (Controlled Replication Under Scalable Hashing) [determines where data is stored without a central lookup table](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst). This means Ceph can scale to thousands of OSDs without a metadata bottleneck — any client can calculate the location of any object independently.
 
-- **Ceph monitors use Paxos consensus**, not Raft. Paxos predates Raft by 20 years (1989 vs 2013) and is mathematically equivalent but harder to implement. The Ceph team chose Paxos because Raft did not exist when Ceph was designed.
+- **[Ceph monitors use Paxos consensus](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst)**, not Raft. Paxos predates Raft by 20 years (1989 vs 2013) and is mathematically equivalent but harder to implement. The Ceph team chose Paxos because Raft did not exist when Ceph was designed.
 
-- **A single Ceph cluster can scale to exabytes.** CERN runs one of the largest Ceph deployments: 30+ PB across thousands of OSDs, storing physics experiment data from the Large Hadron Collider.
+- **[A single Ceph cluster can scale to exabytes](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst).** CERN runs one of the largest Ceph deployments: 30+ PB across thousands of OSDs, storing physics experiment data from the Large Hadron Collider.
 
-- **BlueStore replaced FileStore as the default OSD backend** in Ceph Luminous (2017). BlueStore writes directly to raw block devices, bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance by 2x.
+- **[BlueStore replaced FileStore as the default OSD backend](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst)** in Ceph Luminous (2017). [BlueStore writes directly to raw block devices](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst), bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance by 2x.
 
 - Rook is a fully matured CNCF project; it was accepted to the CNCF on **2018-01-29**, moved to incubation on **2018-09-25**, and achieved Graduated maturity on **2020-10-07**.
 
@@ -854,3 +854,22 @@ kind delete cluster
 ## Next Module
 
 Continue to [Module 4.3: Local Storage & Alternatives](../module-4.3-local-storage/) to learn about lightweight storage options that do not require a distributed storage system, perfect for ephemeral edge caches or simple bare-metal database nodes.
+
+## Sources
+
+- [about.gitlab.com: postmortem of database outage of january 31](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/) — GitLab's official postmortem directly describes the accidental primary database data removal, service outage duration, and unrecovered production data.
+- [about.gitlab.com: gitlab dot com database incident](https://about.gitlab.com/blog/gitlab-dot-com-database-incident/) — GitLab's incident update reports that only about 4.5GB remained from around 300GB and describes the lost database time window.
+- [raw.githubusercontent.com: architecture.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst) — The upstream Ceph architecture documentation directly describes unified object/block/file storage, core daemons, CRUSH placement, replication, self-healing, and dynamic rebalancing.
+- [github.com: rook](https://github.com/rook/rook) — The Rook project description states that the operator builds on Kubernetes resources to deploy, configure, provision, scale, upgrade, and monitor Ceph.
+- [cncf.io: rook](https://www.cncf.io/projects/rook/) — The CNCF Rook project page directly lists the accepted, incubating, and graduated dates.
+- [raw.githubusercontent.com: index.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/index.rst) — The upstream Ceph releases index states the maintenance behavior for active and archived releases.
+- [raw.githubusercontent.com: releases.yml](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/releases.yml) — The Ceph releases YAML lists Squid 19.2.3 and target EOL 2026-09-19.
+- [raw.githubusercontent.com: rook upgrade.md](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Upgrade/rook-upgrade.md) — The Rook v1.19 upgrade guide directly states the supported upgrade path, official-release-only support, master-build warning, and v1.19 minimum Kubernetes and Ceph versions.
+- [raw.githubusercontent.com: network providers.md](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/CRDs/Cluster/network-providers.md) — The Rook network providers documentation defines Ceph public and cluster networks and explains their use for client, replication, and recovery traffic.
+- [raw.githubusercontent.com: prerequisites.md](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Getting-Started/Prerequisites/prerequisites.md) — Rook's v1.19 prerequisites document lists supported CPU architectures, RBD/CephFS kernel requirements, and accepted OSD storage sources.
+- [raw.githubusercontent.com: prerequisites.md](https://raw.githubusercontent.com/rook/rook/release-1.18/Documentation/Getting-Started/Prerequisites/prerequisites.md) — The Rook v1.18 prerequisites page is the primary source for its Kubernetes support range.
+- [raw.githubusercontent.com: ceph csi drivers.md](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Storage-Configuration/Ceph-CSI/ceph-csi-drivers.md) — The Rook Ceph CSI drivers documentation directly states the integrated drivers, default enablement, and supported ceph-csi version policy.
+- [raw.githubusercontent.com: ceph block pool crd.md](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/CRDs/Block-Storage/ceph-block-pool-crd.md) — The Rook CephBlockPool CRD documentation directly explains failureDomain host with replicated.size 3 and its node-failure availability behavior.
+- [raw.githubusercontent.com: osd config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/osd-config-ref.rst) — General lesson point for an illustrative rewrite.
+- [raw.githubusercontent.com: luminous.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst) — The Luminous release notes document BlueStore as the stable default backend for newly created OSDs.
+- [raw.githubusercontent.com: bluestore config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst) — The BlueStore configuration reference directly states that BlueStore reads and writes devices directly without a conventional mounted filesystem.
