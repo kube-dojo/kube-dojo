@@ -29,7 +29,7 @@ After completing this module, you will be able to:
 
 - **Implement External Secrets Operator to sync Vault secrets into Kubernetes Secrets automatically**
 - **Configure Vault's Kubernetes authentication and dynamic secret generation for database credentials**
-- **Secure secret rotation workflows with zero-downtime deployment patterns using ESO refresh intervals**
+- **Secure secret rotation with zero-downtime patterns: `refreshInterval` on ExternalSecrets for KV sync, and `VaultDynamicSecret` generators for Vault dynamic engines (database, PKI, cloud)**
 
 
 ## Why This Module Matters
@@ -553,7 +553,7 @@ metadata:
 spec:
   path: "/database/creds/app"
   method: "GET"
-  resultType: "Auth"
+  resultType: "Data"
   provider:
     server: "https://vault.example.com"
     auth:
@@ -777,9 +777,9 @@ vault kv put secret/myapp/config \
        kind: SecretStore
      target:
        name: myapp-config
-  dataFrom:
-  - extract:
-      key: myapp/config
+     dataFrom:
+     - extract:
+         key: myapp/config
    ```
 
 4. **Verify** the Kubernetes Secret was created:
@@ -814,6 +814,10 @@ Continue to [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) to lea
 ---
 
 *"The only secure secret is the one that doesn't exist. For everything else, there's Vault."*
+
+## Learner check
+
+> Secure secret rotation with zero-downtime patterns: `refreshInterval` on ExternalSecrets for KV sync, and `VaultDynamicSecret` generators for Vault dynamic engines (database, PKI, cloud)
 
 ## Sources
 
