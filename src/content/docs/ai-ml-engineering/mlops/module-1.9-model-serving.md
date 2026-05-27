@@ -6,13 +6,13 @@ sidebar:
 ---
 > **AI/ML Engineering Track** | Complexity: `[COMPLEX]` | Time: 5-6
 ---
-**Prerequisites**: Module 50 (ML Pipeline Orchestration)
+**Prerequisites**: [Module 1.8: ML Pipelines](./module-1.8-ml-pipelines/)
 
 Seattle. November 2021. The Zillow Offers division, previously hailed as the vanguard of algorithmic real estate, was in systemic freefall. Their sophisticated home price prediction model—the foundational core of their iBuying business—was generating systematically flawed appraisals. The machine learning model failed to account for a rapid, unforeseen cooldown in the housing market, leading the company to dramatically overpay for thousands of properties across the country.
 
 The catastrophic failure wasn't isolated to the model's statistical predictive capabilities; it was a fundamental breakdown of model serving, observability, and automated deployment guardrails. Zillow had deployed a powerful machine learning engine but completely lacked the rapid feedback loops and progressive canary deployment strategies required to safely throttle the system when real-world market conditions diverged from the training data distributions. Without a mature serving layer, there was no automated circuit breaker to halt the runaway algorithms.
 
-Because the engineering teams could not quickly identify the severe data drift or safely roll back to a more conservative pricing algorithm without paralyzing their core operations, the financial losses cascaded uncontrollably. By the end of the quarter, Zillow lost over $500 million, shuttered the entire iBuying division, and laid off 2,000 employees. This incident perfectly illustrates that deploying a model to production without an escape hatch is an unacceptable existential risk to the business.
+Because the engineering teams could not quickly identify the severe data drift or safely roll back to a more conservative pricing algorithm without paralyzing their core operations, the financial losses cascaded uncontrollably. By the end of the quarter, Zillow lost over $500 million, shuttered the entire iBuying division, and laid off 2,000 employees, as documented in the official wind-down filing around the November 2021 pause. [(Zillow Group November 2021 wind-down)](https://www.prnewswire.com/news-releases/zillow-group-reports-third-quarter-2021-financial-results--shares-plan-to-wind-down-zillow-offers-operations-301414460.html) This incident perfectly illustrates that deploying a model to production without an escape hatch is an unacceptable existential risk to the business.
 
 ## What You'll Be Able to Do
 
@@ -43,7 +43,7 @@ Manual updates                     Automated rollouts
 No monitoring                      Full observability
 ```
 
-> **Did You Know?** According to a 2022 Gartner report, only 54% of machine learning models ever make it to a production environment, primarily due to extreme deployment complexity and a lack of mature MLOps pipelines within organizations.
+> **Did You Know?** Industry surveys consistently show that a large share of machine-learning pilots never make it to production because deployment complexity and operational maturity are often underprepared.
 
 ## 2. Serving Architecture and Web Frameworks
 
@@ -85,50 +85,62 @@ flowchart TD
 FastAPI has emerged as the premier framework for writing custom ML model serving layers in Python. It offers asynchronous execution by default and strict type validation out of the box via Pydantic, ensuring that malformed tensors do not crash your backend inference engines.
 
 ```python
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
+import joblib
 import numpy as np
+import time
+from uuid import uuid4
 
-app = FastAPI(
-    title="ML Model API",
-    description="Production model serving API",
-    version="1.0.0"
-)
+MODEL_PATH = "models/production/model.pkl"
+MODEL_VERSION = "1.2.0"
 
-# Request/Response Models
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model
+    model = joblib.load(MODEL_PATH)
+    try:
+        yield
+    finally:
+        model = None
+
 class PredictionRequest(BaseModel):
-    features: List[float] = Field(..., min_items=1, max_items=100)
-    model_version: Optional[str] = "latest"
+    features: list[float] = Field(..., min_length=1, max_length=100)
+    model_version: str = "latest"
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "features": [0.5, 0.3, 0.8, 0.2],
                 "model_version": "v1.2.0"
             }
         }
+    )
 
 class PredictionResponse(BaseModel):
     prediction: float
-    confidence: float
+    confidence: float | None = None
     model_version: str
     latency_ms: float
 
-# Load model (in production, use proper model registry)
-model = None  # Your trained model
+app = FastAPI(
+    title="ML Model API",
+    description="Production model serving API",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
-@app.on_event("startup")
-async def load_model():
-    global model
-    model = load_trained_model("models/production/model.pkl")
+model = None
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: PredictionRequest):
     """
     Generate prediction for input features.
     """
-    import time
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
     start = time.time()
 
     try:
@@ -137,14 +149,19 @@ async def predict(request: PredictionRequest):
 
         # Predict
         prediction = model.predict(features)[0]
-        confidence = model.predict_proba(features).max()
+        confidence = None
+        if hasattr(model, "predict_proba"):
+            confidence_score = model.predict_proba(features)
+            if hasattr(confidence_score, "__len__"):
+                confidence = float(confidence_score.max())
 
         latency = (time.time() - start) * 1000
+        model_version = MODEL_VERSION if request.model_version == "latest" else request.model_version
 
         return PredictionResponse(
             prediction=float(prediction),
-            confidence=float(confidence),
-            model_version=request.model_version,
+            confidence=confidence,
+            model_version=model_version,
             latency_ms=latency
         )
 
@@ -175,7 +192,9 @@ Hardware accelerators like GPUs are drastically underutilized when processing si
 ```python
 from fastapi import BackgroundTasks
 from typing import List
-import asyncio
+from uuid import uuid4
+
+from datetime import datetime
 
 class BatchRequest(BaseModel):
     instances: List[List[float]]
@@ -192,6 +211,9 @@ async def predict_batch(request: BatchRequest):
     Batch prediction for multiple instances.
     More efficient than individual calls.
     """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+
     start = time.time()
 
     features = np.array(request.instances)
@@ -203,7 +225,32 @@ async def predict_batch(request: BatchRequest):
         total_latency_ms=(time.time() - start) * 1000
     )
 
+def generate_job_id() -> str:
+    """Generate a deterministic-friendly request identifier."""
+    return f"job-{uuid4()}"
+
+
+def process_batch_async(job_id: str, instances: list[list[float]]) -> None:
+    """Background worker for offline batch predictions."""
+    try:
+        if model is None:
+            batch_jobs[job_id] = {"status": "failed", "error": "model not loaded"}
+            return
+
+        features = np.array(instances)
+        predictions = model.predict(features).tolist()
+        batch_jobs[job_id] = {
+            "status": "completed",
+            "predictions": predictions,
+            "batch_size": len(instances),
+            "completed_at": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as e:
+        batch_jobs[job_id] = {"status": "failed", "error": str(e)}
+
 # Async batch processing
+batch_jobs: dict[str, dict] = {}
+
 @app.post("/predict/async")
 async def predict_async(
     request: BatchRequest,
@@ -220,6 +267,13 @@ async def predict_async(
         request.instances
     )
     return {"job_id": job_id, "status": "processing"}
+
+
+@app.get("/predict/async/{job_id}")
+async def predict_async_status(job_id: str):
+    if job_id not in batch_jobs:
+        raise HTTPException(status_code=404, detail="Unknown job id")
+    return batch_jobs[job_id]
 ```
 
 ## 3. High-Performance Serving with gRPC
@@ -558,9 +612,11 @@ flowchart TD
 
 ### A/B Testing
 
-A/B testing. Canary deployment focuses strictly on operational system safety by gradually shifting traffic. A/B testing is explicitly designed to measure long-term business outcomes by splitting traffic deterministically (via hashing) and statistically comparing the resulting engagement metrics.
+Canary deployment and A/B testing are often confused because both route subsets of traffic, but they serve different goals. Canary deployment is an operational safety pattern: you shift a tiny, controlled slice of users while watching error budgets, SLOs, and rollback signals. A/B testing is a statistical product strategy: deterministic user segmentation allows you to compare business outcomes between control and treatment groups without contamination across variants.
 
 ```python
+import hashlib
+
 class ABTestRouter:
     """
     Route requests to different model versions for A/B testing.
@@ -591,8 +647,10 @@ class ABTestRouter:
         """
         experiment = self.experiments[experiment_id]
 
-        # Hash user_id for deterministic assignment
-        hash_value = hash(f"{experiment_id}:{user_id}") % 100
+        # Use hashlib for deterministic assignment across workers/pod restarts.
+        # Python's hash() is randomized per-process by design, so it cannot be trusted.
+        digest = hashlib.sha256(f"{experiment_id}:{user_id}".encode("utf-8")).hexdigest()
+        hash_value = int(digest, 16) % 100
         is_treatment = hash_value < (experiment["split"] * 100)
 
         return experiment["treatment"] if is_treatment else experiment["control"]
@@ -761,12 +819,14 @@ def optimize_with_tensorrt(onnx_path: str, engine_path: str):
     if builder.platform_has_fast_fp16:
         config.set_flag(trt.BuilderFlag.FP16)
 
-    # Build engine
-    engine = builder.build_engine(network, config)
+    # Build engine (TensorRT 8+)
+    serialized_engine = builder.build_serialized_network(network, config)
+    if serialized_engine is None:
+        raise RuntimeError("TensorRT build failed")
 
     # Save
     with open(engine_path, 'wb') as f:
-        f.write(engine.serialize())
+        f.write(serialized_engine)
 
     print(f"TensorRT engine saved to {engine_path}")
 ```
@@ -781,6 +841,8 @@ def optimize_with_tensorrt(onnx_path: str, engine_path: str):
 | TensorRT FP32 | 4.1 | 244 |
 | TensorRT FP16 | 2.3 | 435 |
 | TensorRT INT8 | 1.5 | 667 |
+
+> **Note**: Numbers in this table are illustrative and depend heavily on hardware generation, batch profile, and operator settings; treat these as directional examples rather than guaranteed production baselines.
 
 ## 7. Best Practices for Reliability
 
@@ -799,13 +861,17 @@ async def ready():
     """Readiness check - is the model loaded?"""
     if model is None:
         raise HTTPException(503, "Model not loaded")
-    return {"status": "ready", "model_version": model.version}
+    return {"status": "ready", "model_version": "1.2.0"}
 ```
 
 ### Graceful Shutdowns
 
 ```python
+import asyncio
 import signal
+import time
+
+active_requests = 0
 
 class GracefulShutdown:
     def __init__(self):
@@ -827,13 +893,14 @@ class GracefulShutdown:
 ### Aggressive Request Validation
 
 ```python
-from pydantic import validator
+from pydantic import BaseModel, Field, field_validator
 
 class PredictionRequest(BaseModel):
-    features: List[float]
+    features: list[float] = Field(..., min_length=10, max_length=10)
 
-    @validator('features')
-    def validate_features(cls, v):
+    @field_validator("features")
+    @classmethod
+    def validate_features(cls, v: list[float]) -> list[float]:
         if len(v) != 10:
             raise ValueError(f"Expected 10 features, got {len(v)}")
         if any(not (-100 <= f <= 100) for f in v):
@@ -846,6 +913,10 @@ class PredictionRequest(BaseModel):
 A centralized model registry serves as the system of record. Reverting to a previous state must be a fast, automated API call, not an archaeological expedition through an S3 bucket.
 
 ```python
+import json
+from datetime import datetime
+from pathlib import Path
+
 class ModelRegistry:
     """
     Simple model registry for version management.
@@ -925,9 +996,9 @@ class ModelRegistry:
 
 ## 8. Common Mistakes and The Economics of Inference
 
-> **Did You Know?** OpenAI reportedly spends over $700,000 per day on inference compute for ChatGPT as of early 2023, which is why a mere 1% optimization in model serving can save over $2.5 million annually.
+> **Did You Know?** Even small improvements in model-serving efficiency compound quickly at scale by reducing infrastructure and cloud costs.
 
-> **Did You Know?** In 2012, Amazon found that every 100ms of latency cost them 1% in sales, a metric that remains foundational in modern ML serving architectures where inference targets often sit below 50ms.
+> **Did You Know?** In latency-sensitive applications, teams treat tail-latency targets as a hard product metric because small user-experience regressions can materially affect adoption and trust.
 
 If you don't track your serving costs, your successful model will bankrupt the engineering department.
 
@@ -1030,7 +1101,12 @@ GPUs are specifically designed for massive parallel processing. Processing a bat
 
 <details>
 <summary>6. Scenario: You need to deploy multiple iterations of a pricing model to measure which one generates higher overall user conversion rates over a 2-week period. Should you use Canary deployment or A/B testing?</summary>
-A/B testing. Canary deployment focuses strictly on operational system safety by gradually shifting traffic. A/B testing is explicitly designed to measure long-term business outcomes by splitting traffic deterministically (via hashing) and statistically comparing the resulting engagement metrics.
+A/B testing. Canary deployment primarily protects operational stability by exposing new behavior to small, tightly monitored traffic windows. A/B testing is built for product learning: you compare long-horizon business outcomes across deterministic, hash-stable cohorts to avoid cross-contamination between cohorts.
+</details>
+
+<details>
+<summary>8. Framework choice: You need to serve a high-throughput recommendation model and frequently test model architecture variants. Which serving stack is the better baseline to support dynamic batching and mixed precision across multiple frameworks, and when is TorchServe preferable?</summary>
+Triton is the better baseline when you need cross-framework flexibility, advanced tensor engine features, and aggressive batching optimizations across mixed model types. TorchServe is preferable when the stack is primarily PyTorch-native, you want a simpler setup with built-in model versioning, and your workload doesn’t require complex multi-framework scheduling in the same serving cluster.
 </details>
 
 <details>
@@ -1087,24 +1163,40 @@ Create the REST interface that implements liveness and readiness logic.
 
 Create a file named `server.py`:
 ```python
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import joblib
 import numpy as np
 
-app = FastAPI()
+MODEL_PATH = "model.joblib"
+MODEL_PATH_INFO = "1.0.0"
 model = None
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global model
+    model = joblib.load(MODEL_PATH)
+    try:
+        yield
+    finally:
+        model = None
+
+
+app = FastAPI(lifespan=lifespan)
 
 class PredictRequest(BaseModel):
     features: list[float]
 
-@app.on_event("startup")
-async def load_model():
-    global model
-    model = joblib.load('model.joblib')
+def _model_version() -> str:
+    return MODEL_PATH_INFO
 
 @app.post("/predict")
 async def predict(req: PredictRequest):
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
     if len(req.features) != 4:
         raise HTTPException(status_code=400, detail="Require exactly 4 features")
     pred = model.predict(np.array([req.features]))
@@ -1118,7 +1210,7 @@ async def health():
 async def ready():
     if model is None:
         raise HTTPException(status_code=503, detail="Model loading")
-    return {"status": "ready"}
+    return {"status": "ready", "model_version": _model_version()}
 ```
 
 **Execution:**
@@ -1205,9 +1297,13 @@ spec:
             port: 8000
           initialDelaySeconds: 2
           periodSeconds: 5
-```
-
-```yaml
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 2
+          periodSeconds: 10
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -1224,20 +1320,93 @@ spec:
 **Execution:**
 ```bash
 kubectl apply -f deployment.yaml
+kubectl rollout status deployment/churn-api-v1
 ```
 
 - [ ] Checkpoint: Run `kubectl get pods -l app=churn-api` and verify both replicas reach the `Running` state and `1/1` readiness.
+- [ ] Validation drill: run a readiness failure simulation and confirm recovery:
+  ```bash
+  kubectl patch deployment churn-api-v1 --type='json' -p='[{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/httpGet/path","value":"/not-ready"}]'
+  kubectl wait --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=False pod -l app=churn-api,version=v1 --timeout=90s
+  kubectl patch deployment churn-api-v1 --type='json' -p='[{"op":"replace","path":"/spec/template/spec/containers/0/readinessProbe/httpGet/path","value":"/ready"}]'
+  kubectl wait --for=condition=ready pod -l app=churn-api,version=v1 --timeout=90s
+  ```
 </details>
 
 ### Task 5: Implement Nginx Canary Routing
 
-Simulate a risky rollout of v2 by routing precisely 10% of traffic to a new canary deployment utilizing standard Ingress annotations.
+Simulate a risky rollout of v2 by deploying a canary stack and applying a weighted Ingress.
 
 <details>
 <summary>Solution & Checkpoint</summary>
 
 Create a file named `ingress-canary.yaml`:
 ```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-api-v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: churn-api
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: churn-api
+        version: v2
+    spec:
+      containers:
+      - name: api
+        image: local-registry/churn-api:v2
+        imagePullPolicy: Never # For local testing
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 2
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-api-service-v2
+spec:
+  selector:
+    app: churn-api
+    version: v2
+  ports:
+  - port: 80
+    targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: churn-api-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /predict
+        pathType: Prefix
+        backend:
+          service:
+            name: churn-api-service-v1
+            port:
+              number: 80
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -1255,17 +1424,18 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: churn-api-service-v2 # Assume v2 service is deployed
+            name: churn-api-service-v2
             port:
               number: 80
 ```
 
 **Execution:**
 ```bash
+docker tag local-registry/churn-api:v1 local-registry/churn-api:v2
 kubectl apply -f ingress-canary.yaml
 ```
 
-- [ ] Checkpoint: Use a bash loop `for i in {1..100}; do curl -H "Host: api.example.com" http://<ingress-ip>/predict -s; done` to validate that exactly ~10% of the traffic routes to the canary pods while the rest hits the stable v1 service.
+- [ ] Checkpoint: Use a bash loop `for i in {1..100}; do curl -H "Host: api.example.com" http://<ingress-ip>/predict -s; done` to validate that approximately 10% of the traffic routes to the canary pods while the rest hits the stable v1 service.
 </details>
 
 ---
