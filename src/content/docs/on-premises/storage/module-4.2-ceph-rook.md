@@ -875,7 +875,3 @@ Continue to [Module 4.3: Local Storage & Alternatives](../module-4.3-local-stora
 - [raw.githubusercontent.com: osd config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/osd-config-ref.rst) — General lesson point for an illustrative rewrite.
 - [raw.githubusercontent.com: luminous.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst) — The Luminous release notes document BlueStore as the stable default backend for newly created OSDs.
 - [raw.githubusercontent.com: bluestore config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst) — The BlueStore configuration reference directly states that BlueStore reads and writes devices directly without a conventional mounted filesystem.
-
-## Learner Check
-
-> This eliminates the double-write penalty that FileStore suffered and improves write performance.
