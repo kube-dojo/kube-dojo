@@ -485,11 +485,11 @@ ceph config set osd osd_scrub_end_hour 6     # End at 6 AM
 
 - **Ceph's CRUSH algorithm** (Controlled Replication Under Scalable Hashing) [determines where data is stored without a central lookup table](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst). This means Ceph can scale to thousands of OSDs without a metadata bottleneck — any client can calculate the location of any object independently.
 
-- **[Ceph monitors use Paxos consensus](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst)**, not Raft. Paxos predates Raft by 20 years (1989 vs 2013) and is mathematically equivalent but harder to implement. The Ceph team chose Paxos because Raft did not exist when Ceph was designed.
+- **[Ceph monitors use Paxos consensus](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst)**, not Raft.
 
 - **[A single Ceph cluster can scale to exabytes](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst).** CERN runs one of the largest Ceph deployments: 30+ PB across thousands of OSDs, storing physics experiment data from the Large Hadron Collider.
 
-- **[BlueStore replaced FileStore as the default OSD backend](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst)** in Ceph Luminous (2017). [BlueStore writes directly to raw block devices](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst), bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance by 2x.
+- **[BlueStore replaced FileStore as the default OSD backend](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst)** in Ceph Luminous (2017). [BlueStore writes directly to raw block devices](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst), bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance significantly.
 
 - Rook is a fully matured CNCF project; it was accepted to the CNCF on **2018-01-29**, moved to incubation on **2018-09-25**, and achieved Graduated maturity on **2020-10-07**.
 
@@ -601,7 +601,7 @@ storageClassName: ceph-filesystem
 
 This exercise walks you through creating a local test environment and deploying Rook-Ceph using a PVC-backed storage mechanism.
 
-> **Note**: Rook removed support for directory-backed OSDs in v1.4. This exercise
+> **Note**: Rook no longer supports directory-backed OSDs. This exercise
 > uses PVC-based OSDs with Kind's default `standard` StorageClass (local-path
 > provisioner), which is the recommended approach for test clusters.
 
