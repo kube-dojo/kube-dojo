@@ -15,10 +15,22 @@ When `--thread new` (or omitted) is passed, we first call `cursor-agent
 create-chat`, capture the new chat id from stdout, and resume into it. This
 keeps the orchestration shape identical to Codex/Agy.
 
-The same chat id is the directory name under `~/.cursor/chats/<workspace>/
-<CHAT_ID>/store.db`, which we surface as `session_file` so callers can verify
-the session landed on disk regardless of whether the Cursor Desktop window
-displays the new turn live (an open question — see issue #2285).
+## Storage — two locations, both real (verified 2026-05-27)
+
+Every chat is persisted in two places, and the bridge surfaces both:
+
+- `~/.cursor/chats/<workspace_hash>/<CHAT_ID>/store.db` — cursor-agent's
+  CLI session state (binary SQLite). Surfaced as `session_file`.
+- `~/.cursor/projects/<workspace_slug>/agent-transcripts/<CHAT_ID>/<CHAT_ID>.jsonl`
+  — the human-readable JSONL transcript that Cursor Desktop indexes for
+  its agent-transcripts surface. Surfaced as `transcript_file`. This is
+  what other in-Cursor agents (Composer chat, the in-IDE assistant) can
+  grep to find bridge-delivered work.
+
+The `workspace_hash` / `workspace_slug` is derived from the cwd that
+cursor-agent saw at create-chat time. Pass `--cwd <repo-root>` to keep all
+bridge chats in the same workspace; otherwise a chat may end up bifurcated
+across multiple workspace_hash directories.
 
 ## Event shape (empirical, cursor-agent 2026.05.x)
 
@@ -61,6 +73,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 CURSOR_CHATS_ROOT = Path.home() / ".cursor" / "chats"
+CURSOR_PROJECTS_ROOT = Path.home() / ".cursor" / "projects"
 DEFAULT_TIMEOUT_S = 1800  # 30 min — covers most multi-turn dispatches
 DEFAULT_MODEL = os.environ.get("AB_CURSOR_UI_MODEL", "composer-2.5")
 _NEW_THREAD_SENTINELS = {"", "-", "new", "fresh", "none", "null"}
@@ -79,14 +92,37 @@ def _cursor_binary() -> str:
 def find_session_file(thread_id: str) -> Path | None:
     """Locate the cursor chat store.db for a given chat id.
 
-    Cursor stores per-chat state at
-    `~/.cursor/chats/<workspace_hash>/<CHAT_ID>/store.db`. There is exactly
-    one such directory per chat across all workspaces.
+    Cursor stores per-chat CLI state at
+    `~/.cursor/chats/<workspace_hash>/<CHAT_ID>/store.db`. The same chat
+    may have store.db copies under multiple workspace_hash directories
+    (one per cwd cursor-agent has seen the chat from); we return the
+    most recently modified.
     """
     if not thread_id:
         return None
     matches = sorted(
         CURSOR_CHATS_ROOT.glob(f"*/{thread_id}/store.db"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return matches[0] if matches else None
+
+
+def find_transcript_file(thread_id: str) -> Path | None:
+    """Locate the Cursor Desktop agent-transcripts jsonl for a given chat id.
+
+    cursor-agent mirrors each chat to
+    `~/.cursor/projects/<workspace_slug>/agent-transcripts/<CHAT_ID>/<CHAT_ID>.jsonl`.
+    This is the surface Cursor Desktop indexes for its agent-transcripts /
+    "Background Agents" view — the user-facing artifact, distinct from the
+    raw CLI store.db. Empirically verified 2026-05-27 (kubedojo PR #1613).
+    """
+    if not thread_id:
+        return None
+    matches = sorted(
+        CURSOR_PROJECTS_ROOT.glob(
+            f"*/agent-transcripts/{thread_id}/{thread_id}.jsonl"
+        ),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -251,6 +287,7 @@ def send(
     # store.db should exist.
     if session_file is None and resolved_thread_id:
         session_file = find_session_file(resolved_thread_id)
+    transcript_file = find_transcript_file(resolved_thread_id or "")
 
     return {
         "bridge_id": bridge_id,
@@ -260,6 +297,7 @@ def send(
         "final_message": _extract_final_message(events),
         "duration_s": duration_s,
         "session_file": str(session_file) if session_file else None,
+        "transcript_file": str(transcript_file) if transcript_file else None,
         "stderr": stderr,
     }
 
@@ -360,6 +398,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         print(f"duration_s:   {result['duration_s']:.2f}")
         print(f"events:       {len(result['events'])}")
         print(f"session_file: {result['session_file']}")
+        print(f"transcript:   {result['transcript_file']}")
         if result["final_message"]:
             print()
             print("=== final message ===")
