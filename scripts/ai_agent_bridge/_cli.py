@@ -660,6 +660,114 @@ def _build_parser() -> argparse.ArgumentParser:
     # interactive
     subparsers.add_parser("interactive", help="Interactive mode")
 
+    # send-codex-ui — drives a running Codex Desktop UI session via
+    # `codex exec resume <UUID> --json -`. Port from learn-ukrainian #2285.
+    send_codex_ui_parser = subparsers.add_parser(
+        "send-codex-ui",
+        help="Send a prompt to a running Codex Desktop UI session via `codex exec resume`",
+    )
+    send_codex_ui_parser.add_argument(
+        "--thread", required=True,
+        help="Codex thread UUID (find via `codex sessions list --last` or ~/.codex/sessions/)",
+    )
+    send_codex_ui_parser.add_argument(
+        "--bridge-id", default=None,
+        help="Correlation id (auto-generated if not given)",
+    )
+    send_codex_ui_parser.add_argument(
+        "--cwd", default=None,
+        help="Working directory for the codex subprocess (default: caller's cwd)",
+    )
+    send_codex_ui_parser.add_argument(
+        "--timeout", type=int, default=1800,
+        help="Max wall-clock seconds (default 1800 = 30min)",
+    )
+    send_codex_ui_parser.add_argument(
+        "--from-file", default=None,
+        help="Read message body from a file (use '-' for stdin)",
+    )
+    send_codex_ui_parser.add_argument(
+        "--json", action="store_true",
+        help="Print result as compact JSON (excludes verbose events list)",
+    )
+    send_codex_ui_parser.add_argument(
+        "message", nargs="?",
+        help="Inline message text. Mutually exclusive with --from-file.",
+    )
+
+    # send-cursor-ui — Cursor Desktop bridge via `cursor-agent --resume`.
+    # New for kubedojo; learn-ukrainian deferred the cursor adapter in #2285.
+    send_cursor_ui_parser = subparsers.add_parser(
+        "send-cursor-ui",
+        help="Send a prompt to a running Cursor Desktop chat via `cursor-agent --resume`",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--thread", default=None,
+        help="Cursor chat id. Omit or pass 'new' to create a fresh chat via `cursor-agent create-chat`",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--bridge-id", default=None,
+        help="Correlation id (auto-generated if not given)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--cwd", default=None,
+        help="Working directory for the cursor-agent subprocess (default: caller's cwd)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--timeout", type=int, default=1800,
+        help="Max wall-clock seconds (default 1800 = 30min)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--model", default=None,
+        help="Model override (default composer-2.5 or $AB_CURSOR_UI_MODEL)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--from-file", default=None,
+        help="Read message body from a file (use '-' for stdin)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "--json", action="store_true",
+        help="Print result as compact JSON (excludes verbose events list)",
+    )
+    send_cursor_ui_parser.add_argument(
+        "message", nargs="?",
+        help="Inline message text. Mutually exclusive with --from-file.",
+    )
+
+    # send-agy-ui — Antigravity UI bridge via `agy --conversation ... --print`.
+    send_agy_ui_parser = subparsers.add_parser(
+        "send-agy-ui",
+        help="Send a prompt to an Antigravity UI conversation via `agy --print`",
+    )
+    send_agy_ui_parser.add_argument(
+        "--thread", default=None,
+        help="Antigravity conversation id (omit or pass 'new' for a fresh conversation)",
+    )
+    send_agy_ui_parser.add_argument(
+        "--bridge-id", default=None,
+        help="Correlation id (auto-generated if not given)",
+    )
+    send_agy_ui_parser.add_argument(
+        "--cwd", default=None,
+        help="Working directory for the agy subprocess (default: caller's cwd)",
+    )
+    send_agy_ui_parser.add_argument(
+        "--timeout", type=int, default=1800,
+        help="Max wall-clock seconds (default 1800 = 30min)",
+    )
+    send_agy_ui_parser.add_argument(
+        "--from-file", default=None,
+        help="Read message body from a file (use '-' for stdin)",
+    )
+    send_agy_ui_parser.add_argument(
+        "--json", action="store_true",
+        help="Print result as compact JSON (excludes verbose events list)",
+    )
+    send_agy_ui_parser.add_argument(
+        "message", nargs="?",
+        help="Inline message text. Mutually exclusive with --from-file.",
+    )
+
     # Channel bridge commands (#1190) — registered in _channels_cli
     from ._channels_cli import register_channel_commands
     register_channel_commands(subparsers)
@@ -734,6 +842,60 @@ def _dispatch_command(args):
         bridge_status()
     elif args.command == "interactive":
         interactive_mode()
+    elif args.command == "send-codex-ui":
+        from ._ui_codex import cli_main as _ui_codex_cli_main
+        argv: list[str] = ["--thread", args.thread]
+        if args.bridge_id:
+            argv += ["--bridge-id", args.bridge_id]
+        if args.cwd:
+            argv += ["--cwd", args.cwd]
+        if args.timeout != 1800:
+            argv += ["--timeout", str(args.timeout)]
+        if getattr(args, "json", False):
+            argv += ["--json"]
+        if args.from_file:
+            argv += ["--from-file", args.from_file]
+        if args.message:
+            argv += [args.message]
+        sys.exit(_ui_codex_cli_main(argv))
+    elif args.command == "send-cursor-ui":
+        from ._ui_cursor import cli_main as _ui_cursor_cli_main
+        argv = []
+        if args.thread:
+            argv += ["--thread", args.thread]
+        if args.bridge_id:
+            argv += ["--bridge-id", args.bridge_id]
+        if args.cwd:
+            argv += ["--cwd", args.cwd]
+        if args.timeout != 1800:
+            argv += ["--timeout", str(args.timeout)]
+        if args.model:
+            argv += ["--model", args.model]
+        if getattr(args, "json", False):
+            argv += ["--json"]
+        if args.from_file:
+            argv += ["--from-file", args.from_file]
+        if args.message is not None:
+            argv += [args.message]
+        sys.exit(_ui_cursor_cli_main(argv))
+    elif args.command == "send-agy-ui":
+        from ._ui_agy import cli_main as _ui_agy_cli_main
+        argv = []
+        if args.thread:
+            argv += ["--thread", args.thread]
+        if args.bridge_id:
+            argv += ["--bridge-id", args.bridge_id]
+        if args.cwd:
+            argv += ["--cwd", args.cwd]
+        if args.timeout != 1800:
+            argv += ["--timeout", str(args.timeout)]
+        if getattr(args, "json", False):
+            argv += ["--json"]
+        if args.from_file:
+            argv += ["--from-file", args.from_file]
+        if args.message is not None:
+            argv += [args.message]
+        sys.exit(_ui_agy_cli_main(argv))
     elif args.command in ("channel", "post", "p", "sync", "discuss"):
         # Channel bridge commands (#1190)
         from ._channels_cli import dispatch_channel_command
