@@ -27,7 +27,6 @@ Hardcoded secrets in Git are a security incident waiting to happen. This module 
 
 After completing this module, you will be able to:
 
-- **Deploy HashiCorp Vault with auto-unseal and configure secret engines for Kubernetes workloads**
 - **Implement External Secrets Operator to sync Vault secrets into Kubernetes Secrets automatically**
 - **Configure Vault's Kubernetes authentication and dynamic secret generation for database credentials**
 - **Secure secret rotation workflows with zero-downtime deployment patterns using ESO refresh intervals**
@@ -37,7 +36,7 @@ After completing this module, you will be able to:
 
 Every production breach post-mortem includes "we found credentials in..." somewhere. Secrets sprawl is inevitable without proper tooling. Vault and ESO provide the infrastructure to manage secrets at scale—centralized storage, automatic rotation, audit trails, and least-privilege access.
 
-> 💡 **Did You Know?** HashiCorp Vault was open-sourced in 2015 and now manages secrets for most Fortune 500 companies. Its design philosophy of "secrets as a service" fundamentally changed how organizations think about credential management.
+> 💡 **Did You Know?** Vault has long been a core secrets platform in many enterprise environments. Its design philosophy of "secrets as a service" fundamentally changed how organizations think about credential lifecycle and access.
 
 ---
 
@@ -228,9 +227,12 @@ vault write auth/kubernetes/config \
 vault write auth/kubernetes/role/myapp \
   bound_service_account_names=myapp \
   bound_service_account_namespaces=production \
+  audiences=vault \
   policies=app-readonly \
   ttl=1h
 ```
+
+> **Note:** Vault 1.21+ validates token `aud` claims for Kubernetes auth roles. Ensure `audiences` matches the service account token audience claim (commonly `vault` in managed clusters).
 
 ---
 
@@ -347,11 +349,11 @@ spec:
   data:
   - secretKey: username         # Key in K8s Secret
     remoteRef:
-      key: secret/data/production/database
+      key: production/database
       property: username        # Key in Vault
   - secretKey: password
     remoteRef:
-      key: secret/data/production/database
+      key: production/database
       property: password
 ---
 # Sync entire secret (all keys)
@@ -368,7 +370,7 @@ spec:
     name: app-config
   dataFrom:
   - extract:
-      key: secret/data/production/app-config
+      key: production/app-config
 ---
 # Template the secret
 apiVersion: external-secrets.io/v1beta1
@@ -389,11 +391,11 @@ spec:
   data:
   - secretKey: username
     remoteRef:
-      key: secret/data/production/database
+      key: production/database
       property: username
   - secretKey: password
     remoteRef:
-      key: secret/data/production/database
+      key: production/database
       property: password
 ```
 
@@ -507,11 +509,11 @@ spec:
   data:
   - secretKey: tls.crt
     remoteRef:
-      key: secret/data/shared/certificates/wildcard
+      key: shared/certificates/wildcard
       property: certificate
   - secretKey: tls.key
     remoteRef:
-      key: secret/data/shared/certificates/wildcard
+      key: shared/certificates/wildcard
       property: private_key
 ```
 
@@ -541,9 +543,26 @@ vault write database/roles/app \
   max_ttl="24h"
 ```
 
-### ESO Refresh and Push
+### Dynamic rotation with VaultDynamicSecret
 
 ```yaml
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: VaultDynamicSecret
+metadata:
+  name: dynamic-db-credentials
+spec:
+  path: "/database/creds/app"
+  method: "GET"
+  resultType: "Auth"
+  provider:
+    server: "https://vault.example.com"
+    auth:
+      kubernetes:
+        mountPath: "kubernetes"
+        role: "external-secrets-operator"
+        serviceAccountRef:
+          name: "external-secrets"
+---
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
@@ -557,16 +576,15 @@ spec:
     name: db-credentials
     creationPolicy: Owner
     deletionPolicy: Retain  # Keep secret if ExternalSecret deleted
-  data:
-  - secretKey: username
-    remoteRef:
-      key: database/creds/app  # Dynamic secret path
-      property: username
-  - secretKey: password
-    remoteRef:
-      key: database/creds/app
-      property: password
+  dataFrom:
+  - sourceRef:
+      generatorRef:
+        apiVersion: generators.external-secrets.io/v1alpha1
+        kind: VaultDynamicSecret
+        name: dynamic-db-credentials
 ```
+
+Use a static `ExternalSecret` with `refreshInterval` for KV secrets (example: `myapp/config` from Vault KV). For Vault dynamic engines such as database credentials, AWS STS, or PKI, use `VaultDynamicSecret` generators so new values are minted per secret engine semantics rather than merely polling a static key.
 
 ### Handling Rotation in Applications
 
@@ -614,7 +632,7 @@ helm install reloader stakater/reloader -n kube-system
 
 ## War Story: The Great Secret Migration
 
-*A team migrated 200+ Kubernetes Secrets to Vault+ESO over a weekend. Monday morning, half the apps were down.*
+*A platform team moved a large batch of Kubernetes Secrets to Vault+ESO during a staged migration. The transition initially caused partial outages because validation was rushed.*
 
 **What went wrong**: They deleted the old Kubernetes Secrets before verifying ESO had synced successfully. Several ExternalSecrets had typos in the `remoteRef.key` paths.
 
@@ -685,7 +703,7 @@ kubectl logs -n external-secrets -l app.kubernetes.io/name=external-secrets
 kubectl describe secretstore <store-name>
 
 # 4. Common causes:
-# - Wrong Vault path (secret/myapp vs secret/data/myapp for KV v2)
+# - Wrong remoteRef key path (use `myapp/config`, not `secret/myapp` or `secret/data/myapp`)
 # - Auth issues (service account, role binding)
 # - Network (can ESO reach Vault?)
 # - Policy (does Vault policy allow read?)
@@ -759,9 +777,9 @@ vault kv put secret/myapp/config \
        kind: SecretStore
      target:
        name: myapp-config
-     dataFrom:
-     - extract:
-         key: secret/data/myapp/config
+  dataFrom:
+  - extract:
+      key: myapp/config
    ```
 
 4. **Verify** the Kubernetes Secret was created:
