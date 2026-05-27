@@ -815,10 +815,6 @@ Continue to [Module 4.2: OPA & Gatekeeper](../module-4.2-opa-gatekeeper/) to lea
 
 *"The only secure secret is the one that doesn't exist. For everything else, there's Vault."*
 
-## Learner check
-
-> Secure secret rotation with zero-downtime patterns: `refreshInterval` on ExternalSecrets for KV sync, and `VaultDynamicSecret` generators for Vault dynamic engines (database, PKI, cloud)
-
 ## Sources
 
 - [Vault: How Vault Works](https://developer.hashicorp.com/vault/docs/about-vault/how-vault-works) — Best primary source for Vault architecture, auth, policies, audit logging, seals, and secret engines.
