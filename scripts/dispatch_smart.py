@@ -611,14 +611,9 @@ def main() -> int:
     timeout_s = args.timeout or cfg.default_timeout_s
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
 
-    # Codex always runs in danger mode for write classes — read-only starves it
-    # of network/filesystem and produces garbage (rc=-9 stale-rollout salvage).
-    # Review/search are read-only by design and must keep default mode.
-    if (
-        args.agent == "codex"
-        and args.task_class not in ("review", "search")
-        and mode != "danger"
-    ):
+    # Codex always runs in danger mode — read-only starves it of
+    # network/filesystem and produces garbage (rc=-9 stale-rollout salvage).
+    if args.agent == "codex" and mode != "danger":
         if args.mode is not None and args.mode != "danger":
             p.error(
                 f"--agent codex always runs in danger mode (you passed "
@@ -646,6 +641,13 @@ def main() -> int:
                 f"interactive permission prompts. Drop --mode to use the default."
             )
         mode = "danger"
+
+    # Read-only task classes for codex run in danger mode, but they do not
+    # require a worktree.
+    codex_readonly_class = (
+        args.agent == "codex"
+        and args.task_class in {"review", "search"}
+    )
 
     if args.prompt is None:
         sys.stderr.write("[smart] no prompt — pass as arg or `-` for stdin\n")
@@ -691,10 +693,6 @@ def main() -> int:
         # permission prompts (--dangerously-skip-permissions); it does not
         # write files. Review-class agy dispatches don't need a worktree.
         # codex review/search carve-out: read-only task classes; no worktree.
-        codex_readonly_class = (
-            args.agent == "codex"
-            and args.task_class in {"review", "search"}
-        )
         if args.agent != "agy" and not codex_readonly_class:
             p.error("--mode danger requires --worktree (no override)")
 
@@ -703,7 +701,12 @@ def main() -> int:
         worktree = Path(args.worktree)
         if not worktree.is_absolute():
             worktree = PRIMARY_REPO / worktree
-    elif mode != "read-only" and not args.dry_run and args.agent != "agy":
+    elif (
+        mode != "read-only"
+        and not args.dry_run
+        and args.agent != "agy"
+        and not codex_readonly_class
+    ):
         sys.stderr.write(
             f"[smart] mode={mode} requires --worktree to avoid trampling "
             "the main checkout\n"
