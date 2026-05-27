@@ -101,7 +101,13 @@ def test_dispatch_smart_codex_forces_danger_mode() -> None:
 
 
 def test_dispatch_smart_codex_review_no_worktree_required() -> None:
-    """Codex review/search remain runtime-necessary in danger mode but do not need a worktree."""
+    """Codex review/search remain runtime-necessary in danger mode but do not need a worktree.
+
+    Regression test for #1586: dispatch_smart.py previously forced --worktree for any
+    codex dispatch because mode=danger required it; that broke Decision Card C codex-as-reviewer
+    pairings. The fix carves out the worktree REQUIREMENT for codex review/search while keeping
+    codex in danger mode (codex adapter needs network+FS for tool-calls).
+    """
     result = _run_dispatch_smart(["review", "--agent", "codex", "--dry-run", "x"])
     assert result.returncode == 0
     assert "mode=danger" in result.stdout
