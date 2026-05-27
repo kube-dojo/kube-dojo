@@ -611,12 +611,14 @@ def main() -> int:
     timeout_s = args.timeout or cfg.default_timeout_s
     task_id = args.task_id or make_task_id(args.task_class, args.agent)
 
-    # Codex always runs in danger mode — read-only starves it of network/
-    # filesystem and produces garbage (rc=-9 stale-rollout salvage). Three
-    # failures in a single session 2026-05-07. This override fires before
-    # the worktree validation below so that the worktree requirement still
-    # applies to all non-dry-run codex dispatches.
-    if args.agent == "codex" and mode != "danger":
+    # Codex always runs in danger mode for write classes — read-only starves it
+    # of network/filesystem and produces garbage (rc=-9 stale-rollout salvage).
+    # Review/search are read-only by design and must keep default mode.
+    if (
+        args.agent == "codex"
+        and args.task_class not in ("review", "search")
+        and mode != "danger"
+    ):
         if args.mode is not None and args.mode != "danger":
             p.error(
                 f"--agent codex always runs in danger mode (you passed "
@@ -626,12 +628,16 @@ def main() -> int:
             )
         mode = "danger"
 
-    # Agy always runs in danger mode for the same reason — read-only would
-    # cause its tool-permission prompts to hang waiting for human input in
-    # a headless dispatch, since the runtime cannot answer the prompt.
+    # Agy always runs in danger mode for write classes — read-only would cause
+    # tool-permission prompts to hang waiting for human input in a headless
+    # dispatch, since the runtime cannot answer the prompt.
     # `--dangerously-skip-permissions` is the equivalent of codex's danger
     # sandbox: auto-approve all tool calls. User direction 2026-05-19.
-    if args.agent == "agy" and mode != "danger":
+    if (
+        args.agent == "agy"
+        and args.task_class not in ("review", "search")
+        and mode != "danger"
+    ):
         if args.mode is not None and args.mode != "danger":
             p.error(
                 f"--agent agy always runs in danger mode (you passed "
