@@ -11,7 +11,7 @@ sidebar:
 
 | # | Module |
 |---|--------|
-| 1.1 | [Neural Network Fundamentals](/ai-ml-engineering/deep-learning/module-1.1-neural-network-fundamentals/) |
+| 1.1 | [NumPy, Pandas & Data Tooling for ML](/ai-ml-engineering/deep-learning/module-1.1-numpy-pandas-data-tooling/) |
 | 1.2 | [PyTorch Fundamentals](/ai-ml-engineering/deep-learning/module-1.2-pytorch-fundamentals/) |
 | 1.3 | [Training Neural Networks](/ai-ml-engineering/deep-learning/module-1.3-training-neural-networks/) |
 | 1.4 | [CNNs & Computer Vision](/ai-ml-engineering/deep-learning/module-1.4-cnns-computer-vision/) |

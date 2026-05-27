@@ -1,6 +1,6 @@
 ---
-title: "Neural Network Fundamentals"
-slug: ai-ml-engineering/deep-learning/module-1.1-neural-network-fundamentals
+title: "NumPy, Pandas & Data Tooling for ML"
+slug: ai-ml-engineering/deep-learning/module-1.1-numpy-pandas-data-tooling
 sidebar:
   order: 1002
 ---
