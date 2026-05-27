@@ -487,11 +487,11 @@ ceph config set osd osd_scrub_end_hour 6     # End at 6 AM
 
 - **Ceph's CRUSH algorithm** (Controlled Replication Under Scalable Hashing) [determines where data is stored without a central lookup table](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst). This means Ceph can scale to thousands of OSDs without a metadata bottleneck — any client can calculate the location of any object independently.
 
-- **[Ceph monitors use Paxos consensus](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst)**, not Raft.
+- **[Ceph monitors use Paxos consensus](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst)**.
 
 - **[A single Ceph cluster can scale to exabytes](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst).** CERN runs one of the largest Ceph deployments: 30+ PB across thousands of OSDs, storing physics experiment data from the Large Hadron Collider.
 
-- **[BlueStore replaced FileStore as the default OSD backend](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst)** in Ceph Luminous (2017). [BlueStore writes directly to raw block devices](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst), bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance significantly.
+- **[BlueStore replaced FileStore as the default OSD backend](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst)** in Ceph Luminous (2017). [BlueStore writes directly to raw block devices](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst), bypassing the Linux filesystem entirely. This eliminates the double-write penalty that FileStore suffered and improves write performance.
 
 - Rook is a fully matured CNCF project; it was accepted to the CNCF on **2018-01-29**, moved to incubation on **2018-09-25**, and achieved Graduated maturity on **2020-10-07**.
 
@@ -875,3 +875,7 @@ Continue to [Module 4.3: Local Storage & Alternatives](../module-4.3-local-stora
 - [raw.githubusercontent.com: osd config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/osd-config-ref.rst) — General lesson point for an illustrative rewrite.
 - [raw.githubusercontent.com: luminous.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/releases/luminous.rst) — The Luminous release notes document BlueStore as the stable default backend for newly created OSDs.
 - [raw.githubusercontent.com: bluestore config ref.rst](https://raw.githubusercontent.com/ceph/ceph/main/doc/rados/configuration/bluestore-config-ref.rst) — The BlueStore configuration reference directly states that BlueStore reads and writes devices directly without a conventional mounted filesystem.
+
+## Learner Check
+
+> This eliminates the double-write penalty that FileStore suffered and improves write performance.
