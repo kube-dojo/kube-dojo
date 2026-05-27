@@ -14,6 +14,7 @@ sidebar:
 
 ## Why This Module Matters
 
+<!-- incident-xref: gitlab-2017-db1 -->
 In 2017, GitLab suffered a catastrophic outage when an engineer accidentally executed `rm -rf` on their primary database server. Because their architecture relied heavily on local storage and had silent failures in their snapshot pipelines, they [permanently lost nearly 300GB of production data](https://about.gitlab.com/blog/gitlab-dot-com-database-incident/) and [faced 18 hours of grueling downtime](https://about.gitlab.com/blog/postmortem-of-database-outage-of-january-31/). The incident severely damaged their reputation and caused significant financial impact. If their critical databases had been backed by a robust, software-defined distributed storage system capable of instantaneous block-level snapshots and cross-node replication, recovery would have been a simple command taking mere seconds.
 
 Software-defined storage (SDS) is the backbone of resilient infrastructure. Ceph is the undisputed dominant distributed storage system for on-premises Kubernetes environments. It transforms a scattered collection of local disks across multiple servers into [a unified, highly replicated, self-healing storage pool](https://raw.githubusercontent.com/ceph/ceph/main/doc/architecture.rst) that Kubernetes can dynamically consume via the Container Storage Interface (CSI). When a physical disk fails, Ceph automatically redistributes the data. When an entire node goes offline, Ceph continues serving requests from replicas located on surviving nodes. When you add new servers to the rack, Ceph rebalances the cluster automatically, distributing the I/O load transparently.
@@ -215,7 +216,8 @@ Before deploying Rook and Ceph, you must ensure your environment meets strict pr
 
 ### Hardware and OS Requirements
 - **CPU:** Rook currently supports only amd64/x86_64 and arm64 CPU architectures.
-- **Kernel Versions:** Rook requires kernel/RBD support. It recommends [kernel minimums of 5.4+ for expanded RBD image features, and 4.17+ for CephFS RWX PVC size enforcement](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Getting-Started/Prerequisites/prerequisites.md). Running older kernels can lead to degraded features or failed quota enforcement.
+<!-- incident-xref: github-august-2021-mysql -->
+- **Kernel Versions:** Rook requires kernel/RBD support. It recommends [kernel minimums of 5.4+ for expanded RBD image features, and 4.17+ for CephFS RWX PVC size enforcement](https://raw.githubusercontent.com/rook/rook/release-1.19/Documentation/Getting-Started/Prerequisites/prerequisites.md). Running older kernels can lead to reduced features or failed quota enforcement.
 - **Local Storage:** Rook requires at least one local storage source such as raw devices/partitions, LVM logical volumes without filesystem, or block PVCs for Ceph OSD use. You cannot use a formatted filesystem partition for an OSD.
 
 ### Kubernetes Compatibility
