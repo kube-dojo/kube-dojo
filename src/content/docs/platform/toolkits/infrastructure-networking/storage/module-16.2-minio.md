@@ -782,7 +782,7 @@ When you design alerts, pair symptoms with operator actions. An alert for offlin
 
 MinIO is a strong option, but it is not automatically the right answer. Platform engineering is mostly trade-off management: who operates the service, where the data path lives, what failure domains are acceptable, and which API the application expects. The best design may use MinIO for local hot-path artifacts and cloud S3 for off-site retention, or Ceph for block storage and MinIO for S3-compatible workloads.
 
-Cloud S3 is usually the right default when you want a managed global object store, broad ecosystem integration, and minimal operational ownership. MinIO is attractive when you need local performance, air-gapped operation, predictable internal traffic, S3 compatibility, or control over data placement. Ceph is attractive when you need a broader storage system that can provide [block, file, and object interfaces](https://cephdocs.readthedocs.io/en/latest/rbd/index.html), though that breadth comes with operational complexity.
+Cloud S3 is usually the right default when you want a managed global object store, broad ecosystem integration, and minimal operational ownership. MinIO is attractive when you need local performance, air-gapped operation, predictable internal traffic, S3 compatibility, or control over data placement. Ceph is attractive when you need a broader storage system that can provide [block, file, and object interfaces](https://docs.ceph.com/en/latest/rbd/index.html), though that breadth comes with operational complexity.
 
 | Requirement | MinIO | Cloud S3 | Ceph |
 |-------------|-------|----------|------|
@@ -1161,4 +1161,4 @@ Next: [Module 16.3: Longhorn](../module-16.3-longhorn/) - lightweight distribute
 - [github.com: backupstoragelocation.md](https://github.com/velero-io/velero-plugin-for-aws/blob/main/backupstoragelocation.md) — The Velero AWS plugin documentation directly describes backup object storage, s3ForcePathStyle, s3Url for MinIO/local storage services, and the README compatibility table documents v1.10.x to Velero v1.14.x.
 - [docs.docker.com: s3](https://docs.docker.com/build/cache/backends/s3/) — The Docker Build cache S3 backend documentation directly defines the use_path_style option this way.
 - [github.com: list.md](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/list.md) — The upstream MinIO metrics list directly documents the cluster endpoint and the named metric families.
-- [cephdocs.readthedocs.io: index.html](https://cephdocs.readthedocs.io/en/latest/rbd/index.html) — The Ceph documentation mirrored on readthedocs.io directly states that the same cluster can operate RGW, CephFS, and Ceph block devices.
+- [docs.ceph.com: index.html](https://docs.ceph.com/en/latest/rbd/index.html) — The Ceph documentation on docs.ceph.com directly states that the same cluster can operate RGW, CephFS, and Ceph block devices.

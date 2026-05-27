@@ -16,7 +16,7 @@ sidebar:
 
 A data analytics company deployed a 40-node Kubernetes cluster on bare metal with local SATA SSDs in each server. For the first six months, everything worked. Then they deployed Apache Kafka, which needed persistent storage that survived node rescheduling. When a worker node failed, Kafka brokers were rescheduled to new nodes — but their data was on the dead node's local SSDs. They lost 4 hours of event data and spent 3 days manually rebalancing partitions.
 
-They then deployed Ceph via Rook on the same SSDs. Performance dropped 60%. [Ceph's replication tripled the write load](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) on drives that were already serving application I/O. The OSD processes competed with Kubernetes workloads for CPU and memory. Their monitoring showed that Ceph rebalancing after a node failure consumed 80% of cluster I/O bandwidth for 4 hours, making all applications sluggish.
+They then deployed Ceph via Rook on the same SSDs. Performance dropped 60%. A default three-replica pool (`osd_pool_default_size = 3`) can add significant write amplification on drives already serving application I/O. This behavior is documented in the [default pool size](https://docs.ceph.com/en/stable/rados/configuration/pool-pg-config-ref/) reference. The OSD processes competed with Kubernetes workloads for CPU and memory. Their monitoring showed that Ceph rebalancing after a node failure consumed 80% of cluster I/O bandwidth for 4 hours, making all applications sluggish.
 
 The fix was dedicating 6 servers as Ceph OSD nodes with NVMe drives, separated from the Kubernetes worker nodes. Storage traffic ran on a dedicated VLAN with jumbo frames. The lesson: **storage architecture decisions must be made before you buy hardware, not after you deploy workloads.**
 
@@ -251,7 +251,7 @@ fio --name=etcd-wal \
 | SATA SSD for etcd | Leader elections under load | NVMe only for etcd (Tier 0 or 1) |
 | Hyper-converged without resource limits | Ceph OSD steals CPU/RAM from pods | Use cgroup limits: `2 cores + 4GB per OSD` |
 | No separate storage network | Ceph replication competes with pod traffic | Dedicated VLAN with jumbo frames for storage |
-| Single replication factor | Data loss on node failure | [Ceph replication factor 3](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) (tolerates 1 failure) |
+| Single replication factor | Data loss on node failure | [Ceph replication factor 3](https://docs.ceph.com/en/stable/rados/configuration/pool-pg-config-ref/) (tolerates 1 failure) |
 | Ceph on worker nodes at scale | Rebalancing kills application performance | Dedicated storage nodes above 100 nodes |
 | Not benchmarking before deploy | Discover performance issues in production | fio benchmark on every storage tier before use |
 | Mixing drive types in one pool | Inconsistent performance across PVs | Separate storage classes per tier |
@@ -382,7 +382,11 @@ Continue to [Module 4.2: Software-Defined Storage (Ceph/Rook)](../module-4.2-cep
 
 ## Sources
 
-- [cephdocs.readthedocs.io: pool pg config ref](https://cephdocs.readthedocs.io/en/stable/rados/configuration/pool-pg-config-ref/) — Ceph documentation explains the common three-replica pool configuration that creates three stored copies.
+- [docs.ceph.com: pool pg config ref](https://docs.ceph.com/en/stable/rados/configuration/pool-pg-config-ref/) — Ceph documentation explains the common three-replica pool configuration that creates three stored copies.
+
+## Learner check
+
+> Use docs.ceph.com (official) over cephdocs.readthedocs.io for Ceph configuration references.
 - [github.com: v1.12.0](https://github.com/container-storage-interface/spec/releases/tag/v1.12.0) — The CSI GitHub release page directly identifies v1.12.0.
 - [kubernetes.io: container storage interface ga](https://kubernetes.io/blog/2019/01/15/container-storage-interface-ga/) — The Kubernetes blog announcement states CSI was promoted to GA in v1.13.
 - [kubernetes.io: persistent volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/) — The PersistentVolumes documentation lists cephfs and rbd as unavailable starting v1.31 and FlexVolume as deprecated.
