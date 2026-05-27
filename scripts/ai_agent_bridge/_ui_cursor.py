@@ -32,6 +32,29 @@ cursor-agent saw at create-chat time. Pass `--cwd <repo-root>` to keep all
 bridge chats in the same workspace; otherwise a chat may end up bifurcated
 across multiple workspace_hash directories.
 
+## Scope: agent-routing only, NOT visible-Composer driving
+
+Verified 2026-05-27 (inverse-direction probe against IDE Composer chat
+`88876106-8229-4fc3-86cf-7a67c80756f7`): cursor-agent --resume against
+an IDE Composer chat id forks a parallel headless agent run that writes
+to the transcript surface. The IDE Composer pane is NOT driven.
+
+Use this bridge for:
+- Agent-to-agent orchestration (Claude / codex / gemini → composer-2.5)
+- Durable work products that another agent (or grep / bridge polling)
+  picks up from the agent-transcripts JSONL.
+
+Do NOT use it for:
+- "Drive the user's open Composer chat from the orchestrator." The CLI
+  cannot reach the IDE Composer's cloud-backed state even when given
+  the IDE-visible chat id.
+
+Cursor's own `cursor-app-control` MCP exposes workspace/environment
+steering (move_agent_to_root, open_resource, rename_chat) but no
+"send to active Composer" tool. AppleScript paste (Lane 2 from
+learn-ukrainian #2285) is the only known path to drive visible
+Composer, and it is out of scope here.
+
 ## Event shape (empirical, cursor-agent 2026.05.x)
 
     {"type":"system","subtype":"init","session_id":"...","model":"Composer 2.5", ...}
