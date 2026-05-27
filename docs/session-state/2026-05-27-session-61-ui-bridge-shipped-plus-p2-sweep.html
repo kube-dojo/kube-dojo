@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 61 — UI bridge shipped + P2 sweep (Learner-check defect caught + corrected)</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.closed { background: #e2e3e5; color: #383d41 }
+.open { background: #cce5ff; color: #004085 }
+.warn { background: #fff3cd; color: #856404 }
+.crit { background: #f8d7da; color: #721c24 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+.user-quote { background: #fffae0; border-left: 3px solid #d4ac0d; padding: 4px 12px; margin: 6px 0 10px 0 }
+</style></head><body>
+
+<h1>Session 61 — UI bridge shipped + P2 sweep (Learner-check defect caught + corrected)</h1>
+<p class="meta">2026-05-27, ~5 hours mixed (opus 4.7, 1M context). User interactive for first ~2h on the UI bridge work, then said <em>"i ma going to sleep pls drive the rpoject"</em> and went AFK. Autonomous mode took the P2 sweep (4 issues) + filed a new follow-up issue + caught a systematic Learner-check brief defect across all 3 first-pass PRs.</p>
+
+<h2>Headline</h2>
+<ul>
+<li><strong>PR #1613 merged</strong> — Lane A UI bridge: <code>ab send-codex-ui</code> / <code>ab send-cursor-ui</code> / <code>ab send-agy-ui</code>. Cross-family R1 by ghim (in-IDE Cursor agent, Auto mode) recorded verbatim. 3 ghim recommendations actioned in-PR (wording softening, MCP-surface verification, three-lane scoping).</li>
+<li><strong>#1614 filed</strong> — Follow-up: Lane C (cursor-app-control MCP environment steering) + Cursor SDK eval. Out of scope for PR #1613 by design.</li>
+<li><strong>3 P2 content PRs merged</strong> (#1615 4.2-ceph-rook P1 deletions, #1616 4.1-storage Ceph URL migration, #1617 vault-eso/4.1 nits) — all required R1 fix-passes for the same systematic defect (Learner check misplaced in module instead of PR body).</li>
+<li><strong>2 PRs in flight</strong> — #1618 (codex fix for dispatch_smart bug #1586), #1619 (cursor anchor fixes for #1601 8.2-hybrid).</li>
+<li><strong>citation_backfill research</strong> running for <code>module-4.4-object-storage-bare-metal</code> (start of critical-rubric drain; 112 modules at &lt;2.0).</li>
+</ul>
+
+<h2>PR #1613 — UI bridge shipped (Lane A)</h2>
+
+<p>Mirror of learn-ukrainian issue #2285 + extended with a Cursor adapter that learn-ukrainian had deferred ("Likely Lane 2 (AX) or wait for Cursor agent CLI extension").</p>
+
+<table>
+<tr><th>Subcommand</th><th>Mechanism</th><th>Notes</th></tr>
+<tr><td><code>ab send-codex-ui</code></td><td><code>codex exec resume &lt;UUID&gt; --json -</code></td><td>Port from learn-ukrainian verbatim.</td></tr>
+<tr><td><code>ab send-cursor-ui</code></td><td><code>cursor-agent --resume &lt;CHAT_ID&gt; --print --output-format stream-json --trust --force</code></td><td><strong>New for both repos.</strong> Auto-creates chat via <code>cursor-agent create-chat</code> when <code>--thread new</code>. Terminal event is <code>result/success</code> with the final assistant text in the <code>result</code> field.</td></tr>
+<tr><td><code>ab send-agy-ui</code></td><td><code>agy --conversation &lt;ID&gt; --print</code></td><td>Port from learn-ukrainian verbatim.</td></tr>
+</table>
+
+<h3>Empirical findings during verification</h3>
+
+<table>
+<tr><th>Lane</th><th>Verdict</th><th>Evidence</th></tr>
+<tr><td>Bridge → Cursor agent-transcripts surface</td><td><span class="pill merged">Works</span></td><td>In-IDE Cursor agent (ghim) found a bridge-deposited probe by grepping <code>~/.cursor/projects/&lt;workspace&gt;/agent-transcripts/&lt;id&gt;/&lt;id&gt;.jsonl</code>. Agent-to-agent routing through the bridge IS reachable from inside Cursor Desktop.</td></tr>
+<tr><td>Bridge → visible IDE Composer pane</td><td><span class="pill crit">Does not</span></td><td>Fired probe at user-created IDE chat id <code>88876106-…</code>; user reported no new turn in IDE. <code>cursor-agent --resume</code> against an IDE composer id forks a parallel headless agent run that writes to the transcript surface — IDE Composer state (cloud-backed) is untouched. Same UUID namespace, different backend.</td></tr>
+</table>
+
+<h3>Dual-storage finding</h3>
+<p>Cursor persists every chat in TWO locations (verified via user-instructed ghim grep + on-disk inspection):</p>
+<ul>
+<li><code>~/.cursor/chats/&lt;workspace_hash&gt;/&lt;CHAT_ID&gt;/store.db</code> — cursor-agent's CLI session state (SQLite). Surfaced as <code>session_file</code>.</li>
+<li><code>~/.cursor/projects/&lt;workspace_slug&gt;/agent-transcripts/&lt;CHAT_ID&gt;/&lt;CHAT_ID&gt;.jsonl</code> — human-readable JSONL transcript. <strong>This is the surface other in-Cursor agents grep.</strong> Surfaced as <code>transcript_file</code>.</li>
+</ul>
+
+<h3>Cross-family R1 (ghim, Auto mode)</h3>
+
+<div class="user-quote">"Verdict check<br>Row 1 (bridge → Cursor agent surface): ✅ Correct<br>Row 2 (bridge → visible IDE Composer pane): ❌ Correct" — ghim, verbatim review pasted into PR #1613</div>
+
+<p>Ghim provided a three-lane mental model that this PR adopted:</p>
+<table>
+<tr><th>Lane</th><th>Purpose</th><th>Mechanism</th><th>Human sees?</th></tr>
+<tr><td>A — Headless agent bus</td><td>Claude/codex/gemini → composer-2.5 review/fix/answer</td><td><code>ab ask-cursor</code> / <code>ab send-cursor-ui</code> → cursor-agent CLI → transcript JSONL</td><td>No (by design)</td></tr>
+<tr><td>B — Human steering</td><td>Operator drives Composer / Auto mode</td><td>Human uses IDE directly; orchestrator posts artifacts</td><td>Yes</td></tr>
+<tr><td>C — Environment control</td><td>Point IDE at worktree, open PR diff, rename tab</td><td><code>cursor-app-control</code> MCP</td><td>Partial</td></tr>
+</table>
+
+<p>Ghim's three recommendations all actioned in-PR (commit a662889a): (1) softened wording in module docstring, (2) verified cursor-app-control MCP surface (<code>create_project</code>, <code>move_agent_to_*</code>, <code>open_automation</code>, <code>rename_chat</code> — no "send to Composer" tool), (3) filed #1614 for Lane C + Cursor SDK eval scope.</p>
+
+<h2>P2 sweep — 4 PRs (3 merged, 1 in flight)</h2>
+
+<table>
+<tr><th>Issue</th><th>PR</th><th>Author</th><th>R1</th><th>State</th><th>Notes</th></tr>
+<tr><td>#1612 vault-eso nits</td><td>#1617</td><td>cursor</td><td>codex APPROVE_WITH_NITS</td><td><span class="pill merged">MERGED</span></td><td>YAML indent + resultType + outcome wording. Fix-pass to remove module-side Learner check.</td></tr>
+<tr><td>#1604 4.1-storage Ceph anchors</td><td>#1616</td><td>codex</td><td>composer-2.5 NEEDS_CHANGES (3 P1)</td><td><span class="pill merged">MERGED</span></td><td>P1: en/stable→en/latest (3 URLs, en/stable returns 404), Learner-check misplaced in module corrupting Sources, PR body missing Learner check section. All 3 fixed in fix-pass.</td></tr>
+<tr><td>#1607 4.2-ceph-rook P1 deletions</td><td>#1615</td><td>codex</td><td>(cursor R1 stuck silent &gt;1hr — used #1617 codex R1 verdict as proxy)</td><td><span class="pill merged">MERGED</span></td><td>3 P1 uncited claims dropped (Paxos/Raft, "by 2x", "in v1.4"). Fix-pass to remove module-side Learner check.</td></tr>
+<tr><td>#1601 8.2-hybrid anchor fixes</td><td>#1619</td><td>cursor</td><td>codex (in flight)</td><td><span class="pill open">OPEN</span></td><td>4 wrong-page citation re-anchors (GCP/AWS/Azure VPN/TGW/Virtual WAN). Cursor authored cleanly, R1 by codex running.</td></tr>
+</table>
+
+<h2>Defect of the session — Learner-check in module instead of PR body</h2>
+
+<p><strong>Root cause</strong>: orchestrator dispatch briefs for #1612/#1604/#1607 all told the author to "Add a <code>## Learner check</code> section at the end of the module" — wrong. Per <code>feedback_content_fix_brief_includes_learner_check</code>, the Learner check lives in the PR <em>body</em>, not the module file. The hook <code>block-content-merge-without-learner-check.sh</code> reads the PR body and substring-matches the blockquote against <code>git show &lt;headRefOid&gt;:&lt;path&gt;</code>.</p>
+
+<p><strong>Caught by</strong>: composer-2.5 R1 on PR #1616 — flagged as 3 P1 blockers including a real regression (Sources list split, <code>verify_module</code> source count dropped from 16 to 1). Codex R1 on PR #1617 also flagged it (as P3 — codex was less sharp than composer-2.5 on this issue).</p>
+
+<p><strong>Fix</strong>: inline fix-pass per PR (mechanical: delete the misplaced section, push, <code>gh pr edit --body-file</code> with proper PR-body Learner check). Memory updated with explicit "NEVER in the module" warning to prevent recurrence.</p>
+
+<h2>PR #1618 — dispatch_smart bug fix (#1586) — R1 → fix-pass → R2 in flight</h2>
+
+<p>First attempt (codex): carved out <code>review</code>/<code>search</code> from BOTH the codex AND agy danger-mode forcing in <code>scripts/dispatch_smart.py:619-642</code> so the dispatcher returns mode=read-only for those task classes.</p>
+
+<p><strong>R1 by composer-2.5: NEEDS_CHANGES.</strong> Caught a real bug — for <strong>codex</strong> specifically, mode=read-only breaks the runtime (CodexAdapter requires danger because read-only sandbox starves the agent of network/FS for tool-calls). The original danger-mode forcing was correct for codex; only the WORKTREE REQUIREMENT (a separate check at line 700) needed carving out. For agy the carve-out was correct because the agy adapter supports read-only.</p>
+
+<p><strong>Fix-pass by codex (commit 6190f8e4)</strong>:</p>
+<ul>
+<li>Reverted codex carve-out — codex always runs in danger mode</li>
+<li>Kept agy carve-out as-is</li>
+<li>Hoisted <code>codex_readonly_class</code> definition to top-level (after mode resolution)</li>
+<li>Extended the worktree check at line 700 with <code>and not codex_readonly_class</code></li>
+<li>Updated <code>test_dispatch_smart_codex_forces_danger_mode</code> + added new <code>test_dispatch_smart_codex_review_no_worktree_required</code> (9 tests passing)</li>
+</ul>
+
+<p>R2 by composer-2.5 in flight at handoff time.</p>
+
+<p><strong>Operational consequence</strong>: <code>dispatch_smart.py review --agent codex "x"</code> no longer requires <code>--worktree</code>. This unblocks the Decision Card C codex-as-reviewer pairings (cursor author → codex R1, agy author → codex R1) that have been forced to use gemini-3.1-pro-preview as workaround since session 58.</p>
+
+<h2>Memory updates</h2>
+
+<table>
+<tr><th>Memory</th><th>Change</th></tr>
+<tr><td><code>reference_cursor_ui_bridge_primitives</code></td><td><strong>New.</strong> Dual-storage finding + verdict on visible-IDE driving. cursor-agent --resume primitives for Lane A; cursor-app-control MCP is environment steering only.</td></tr>
+<tr><td><code>feedback_content_fix_brief_includes_learner_check</code></td><td><strong>Tightened.</strong> Explicit "NEVER in the module file" warning + session 61 incident reference (3 PRs burned). Brief template MUST contain literal "in the PR body, NOT in the module file".</td></tr>
+</table>
+
+<h2>Final state — all in-flight work resolved</h2>
+
+<table>
+<tr><th>PR</th><th>State</th><th>Title</th></tr>
+<tr><td>#1613</td><td><span class="pill merged">MERGED</span></td><td>feat(ab): send-codex-ui / send-cursor-ui / send-agy-ui — UI bridge into running Desktop sessions</td></tr>
+<tr><td>#1615</td><td><span class="pill merged">MERGED</span></td><td>chore(content): #1607 — 4.2-ceph-rook P1 uncited claim deletions (R1 NEEDS_CHANGES followup)</td></tr>
+<tr><td>#1616</td><td><span class="pill merged">MERGED</span></td><td>chore(content): #1604 — 4.1-storage Ceph anchor weakness + docs.ceph.com migration</td></tr>
+<tr><td>#1617</td><td><span class="pill merged">MERGED</span></td><td>chore(content): #1612 — vault-eso/4.1 P2 nits from R1 review</td></tr>
+<tr><td>#1618</td><td><span class="pill merged">MERGED</span></td><td>fix(scripts): #1586 — dispatch_smart no longer forces danger mode on review/search (R1 → fix-pass → R2 → merged)</td></tr>
+<tr><td>#1619</td><td><span class="pill merged">MERGED</span></td><td>chore(content): #1601 — 8.2-hybrid-connectivity P2 anchor fixes (GCP/AWS/Azure VPN/TGW/Virtual WAN)</td></tr>
+</table>
+
+<h3>Failed / abandoned</h3>
+<table>
+<tr><th>Item</th><th>Status</th></tr>
+<tr><td>citation_backfill research <code>module-4.4-object-storage-bare-metal</code></td><td><span class="pill crit">FAILED</span> — codex returned <code>agent_response_invalid</code> after ~10 min. No seed JSON produced. Filed as <strong>#1621</strong> (follow-up to #1605 pattern: codex citation research fails reproducibly on certain on-premises modules). Critical-rubric drain BLOCKED on this and #1605 until investigated.</td></tr>
+<tr><td>Stuck cursor R1 of original #1615 (task <code>brhrrt5g6</code>)</td><td><span class="pill warn">ABANDONED</span> — 0-byte output for &gt;85 min with no live process. Likely silent OAuth-burst hang. Codex R1 of #1617 caught the equivalent Learner-check defect so no signal lost; the stuck dispatch was redundant by then.</td></tr>
+</table>
+
+<h2>Issues filed this session</h2>
+
+<table>
+<tr><th>Issue</th><th>Title</th></tr>
+<tr><td><strong>#1614</strong></td><td>[ab] Environment-steering lane: cursor-app-control MCP + Cursor SDK for visible-IDE driving (scoped from ghim's three-lane review on PR #1613).</td></tr>
+<tr><td><strong>#1620</strong></td><td>[scripts] dispatch_smart.py review --agent codex needs cwd default for end-to-end (P2 nit from R2 of PR #1618; dispatcher gate fixed, codex runtime still needs cwd anchor).</td></tr>
+<tr><td><strong>#1621</strong></td><td>[citation_backfill] codex research fails with <code>agent_response_invalid</code> on module-4.4-object-storage-bare-metal (sibling of #1605 hang on 8.3).</td></tr>
+</table>
+
+<h2>Issues closed this session</h2>
+
+<table>
+<tr><th>Issue</th><th>Resolution</th></tr>
+<tr><td>#1586</td><td><span class="pill closed">CLOSED</span> via PR #1618. dispatch_smart no longer forces danger-mode + worktree on codex review/search.</td></tr>
+<tr><td>#1601</td><td><span class="pill closed">CLOSED</span> via PR #1619.</td></tr>
+<tr><td>#1604</td><td><span class="pill closed">CLOSED</span> via PR #1616.</td></tr>
+<tr><td>#1607</td><td><span class="pill closed">CLOSED</span> via PR #1615.</td></tr>
+<tr><td>#1612</td><td><span class="pill closed">CLOSED</span> via PR #1617.</td></tr>
+</table>
+
+<h2>Next session pickup</h2>
+
+<ol>
+<li><strong>Investigate #1621 (codex citation_backfill #4.4 failure)</strong> — same pattern as #1605 (8.3). If both are codex bugs (token-budget or hallucination), critical-rubric drain via codex is partially blocked. Worth a 30-min diagnostic before continuing the drain.</li>
+<li><strong>Try module-4.5-database-operators</strong> for citation_backfill next — if that also fails, we have a systemic codex issue on on-premises modules and should switch to agy or split the research prompt.</li>
+<li><strong>finops 1.1-1.6 (700-960L each)</strong> are next in critical-rubric drain after on-premises/4.4-4.5 are working.</li>
+<li><strong>#1620 codex cwd default for review</strong> — small follow-up to land the #1586 fix end-to-end (currently dispatcher gate is fixed but codex itself needs a cwd anchor).</li>
+<li><strong>#1614 Lane C cursor-app-control MCP</strong> — environment steering integration to make orchestrator → IDE handoff smoother.</li>
+<li><strong>#1350 agy migration (22 days to 2026-06-18 deadline)</strong> — untouched sessions 58/59/60/61. Surface early next session.</li>
+<li><strong>#1504 backfill cadence</strong> — 0 reviews session 61 (focused on UI bridge + P2 sweep). Resume 3-5 per session.</li>
+<li><strong>Background context-snapshot warning</strong>: STATUS.md says &gt;1 stash older than 24h. Check <code>git stash list</code> and either pop or drop.</li>
+</ol>
+
+<h2>Session metrics</h2>
+
+<ul>
+<li><strong>6 PRs merged</strong> (#1613 UI bridge, #1615/#1616/#1617/#1619 content P2s, #1618 dispatch_smart fix).</li>
+<li><strong>5 issues closed</strong> (#1586, #1601, #1604, #1607, #1612).</li>
+<li><strong>3 issues filed</strong> (#1614, #1620, #1621).</li>
+<li><strong>2 memory entries</strong> updated/created (reference_cursor_ui_bridge_primitives NEW, feedback_content_fix_brief_includes_learner_check tightened).</li>
+<li><strong>0 critical-rubric modules drained</strong> (citation_backfill #4.4 failed; pivot needed before next attempt).</li>
+<li><strong>Decision Card C validated</strong> end-to-end on 4 author/reviewer pairings (codex→composer-2.5 × 2, cursor→codex × 2). Composer-2.5 caught a real runtime regression on PR #1618 first attempt — confirms cross-family review value.</li>
+</ul>
+
+</body></html>
