@@ -358,248 +358,77 @@ A stronger design separates those meanings. Store independent fields with indepe
 
 ## Hands-On Exercise
 
-**Task**: Run a deterministic kind lab that simulates two pods with different timestamp sources, observes last-writer-wins selecting the wrong write, and fixes the outcome with a Lamport-style logical timestamp carried by the client workflow.
+**Task**: Reinforce clock skew, last-writer-wins hazards, and ordering choices through observation and design — without deploying custom services or verifier Jobs.
 
-The lab creates two writer pods. `writer-a` has a wall-clock offset of +120 seconds. `writer-b` has no offset. A client Job writes to `writer-a` first, then writes to `writer-b` second. Because `writer-a` is fast by two minutes, wall-clock LWW chooses the first write even though the second write happened later. The same client also carries Lamport counters `1` and `2`, so logical ordering correctly chooses the second write.
+**Prerequisites**: Any existing Kubernetes cluster (kind, minikube, or a test cluster) with `kubectl` configured. Commands below use the `default` namespace; adjust if your environment restricts it.
 
-**Prerequisites**: Docker, `kind`, and `kubectl` installed locally. The commands create or reuse a kind cluster named `clock-skew-lab` and clean only the namespace named `clock-skew-lab`.
+**Task 1: Wall-clock timestamps as evidence, not truth**
 
-### Step 1: Create the kind cluster
-
-```bash
-kind get clusters | grep -qx clock-skew-lab || kind create cluster --name clock-skew-lab --image kindest/node:v1.35.0
-kubectl config use-context kind-clock-skew-lab
-```
-
-### Step 2: Deploy the skewed writer pods and the verifier Job
+Create a short burst of API activity, then list cluster Events sorted by wall-clock time. Notice that `lastTimestamp` is a label each apiserver or component recorded locally — not proof of global order.
 
 ```bash
-kubectl delete namespace clock-skew-lab --ignore-not-found --wait=true
-kubectl create namespace clock-skew-lab
+kubectl create configmap clock-skew-observe --from-literal=phase=1
+kubectl patch configmap clock-skew-observe -p '{"data":{"phase":"2"}}'
+kubectl delete configmap clock-skew-observe
 
-cat <<'YAML' | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: clock-demo-code
-  namespace: clock-skew-lab
-data:
-  writer.py: |
-    import json
-    import os
-    import time
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-    from urllib.parse import parse_qs, urlparse
-
-    NODE_ID = os.environ["NODE_ID"]
-    OFFSET_SECONDS = float(os.environ["CLOCK_OFFSET_SECONDS"])
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            parsed = urlparse(self.path)
-            if parsed.path != "/write":
-                self.send_response(404)
-                self.end_headers()
-                return
-            query = parse_qs(parsed.query)
-            value = query.get("value", ["missing"])[0]
-            lamport = int(query.get("lamport", ["0"])[0])
-            payload = {
-                "node": NODE_ID,
-                "value": value,
-                "wall_ms": int((time.time() + OFFSET_SECONDS) * 1000),
-                "monotonic_ms": int(time.monotonic() * 1000),
-                "offset_seconds": OFFSET_SECONDS,
-                "lamport": lamport,
-            }
-            body = json.dumps(payload, sort_keys=True).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, format, *args):
-            return
-
-    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
-  client.py: |
-    import json
-    import sys
-    import time
-    import urllib.parse
-    import urllib.request
-
-    def fetch(url, value, lamport):
-        encoded_value = urllib.parse.quote(value)
-        target = f"{url}/write?value={encoded_value}&lamport={lamport}"
-        deadline = time.monotonic() + 45
-        last_error = None
-        while time.monotonic() < deadline:
-            try:
-                with urllib.request.urlopen(target, timeout=3) as response:
-                    return json.loads(response.read().decode())
-            except Exception as exc:
-                last_error = exc
-                time.sleep(1)
-        raise RuntimeError(f"could not reach {target}: {last_error}")
-
-    first = fetch("http://writer-a:8080", "A-first-write-from-fast-clock", 1)
-    time.sleep(0.25)
-    second = fetch("http://writer-b:8080", "B-second-write-from-correct-clock", 2)
-    events = [first, second]
-
-    lww_winner = max(events, key=lambda event: event["wall_ms"])
-    lamport_winner = max(events, key=lambda event: (event["lamport"], event["node"]))
-
-    print("Observed writes in real execution order:")
-    for event in events:
-        print(json.dumps(event, sort_keys=True))
-    print(f"LWW winner: {lww_winner['node']} -> {lww_winner['value']}")
-    print(f"Lamport winner: {lamport_winner['node']} -> {lamport_winner['value']}")
-
-    if lww_winner["node"] != "writer-a":
-        print("ERROR: expected wall-clock LWW to choose writer-a because its clock is fast")
-        sys.exit(1)
-    if lamport_winner["node"] != "writer-b":
-        print("ERROR: expected Lamport ordering to choose writer-b because it is the second causal write")
-        sys.exit(1)
-
-    print("RESULT: wall-clock LWW lost the later write; logical ordering preserved it.")
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: writer-a
-  namespace: clock-skew-lab
-  labels:
-    app: writer-a
-spec:
-  containers:
-    - name: writer
-      image: python:3.12-alpine
-      imagePullPolicy: IfNotPresent
-      command: ["/usr/local/bin/python", "/demo/writer.py"]
-      env:
-        - name: NODE_ID
-          value: writer-a
-        - name: CLOCK_OFFSET_SECONDS
-          value: "120"
-      ports:
-        - containerPort: 8080
-      volumeMounts:
-        - name: code
-          mountPath: /demo
-  volumes:
-    - name: code
-      configMap:
-        name: clock-demo-code
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: writer-a
-  namespace: clock-skew-lab
-spec:
-  selector:
-    app: writer-a
-  ports:
-    - port: 8080
-      targetPort: 8080
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: writer-b
-  namespace: clock-skew-lab
-  labels:
-    app: writer-b
-spec:
-  containers:
-    - name: writer
-      image: python:3.12-alpine
-      imagePullPolicy: IfNotPresent
-      command: ["/usr/local/bin/python", "/demo/writer.py"]
-      env:
-        - name: NODE_ID
-          value: writer-b
-        - name: CLOCK_OFFSET_SECONDS
-          value: "0"
-      ports:
-        - containerPort: 8080
-      volumeMounts:
-        - name: code
-          mountPath: /demo
-  volumes:
-    - name: code
-      configMap:
-        name: clock-demo-code
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: writer-b
-  namespace: clock-skew-lab
-spec:
-  selector:
-    app: writer-b
-  ports:
-    - port: 8080
-      targetPort: 8080
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: clock-client
-  namespace: clock-skew-lab
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: client
-          image: python:3.12-alpine
-          imagePullPolicy: IfNotPresent
-          command: ["/usr/local/bin/python", "/demo/client.py"]
-          volumeMounts:
-            - name: code
-              mountPath: /demo
-      volumes:
-        - name: code
-          configMap:
-            name: clock-demo-code
-YAML
+kubectl get events -A --sort-by=.lastTimestamp | tail -20
 ```
 
-### Step 3: Wait for the deterministic result and read the output
+In your notes, answer: (a) Do the Events appear in strict causal order of your three commands? (b) Could two Events from different nodes share the same second but reflect different real-time instants?
 
-```bash
-kubectl -n clock-skew-lab wait --for=condition=Ready pod/writer-a pod/writer-b --timeout=120s
-kubectl -n clock-skew-lab wait --for=condition=complete job/clock-client --timeout=120s
-kubectl -n clock-skew-lab logs job/clock-client
-```
+<details>
+<summary>Solution & Explanation</summary>
+Sorted Events show **when each component chose to record** an observation, not a single shared "now." Your ConfigMap create, patch, and delete may interleave with unrelated Events (scheduling, image pulls, other namespaces). Two Events can share an identical `lastTimestamp` second while originating from hosts whose wall clocks differ by hundreds of milliseconds — or more under skew. Treat wall-clock fields as **audit evidence**: useful for humans correlating logs, unsafe as the sole arbiter of which distributed write happened first.
+</details>
 
-The output includes dynamic timestamp values because the pods generate fresh event payloads during the run, but the winner lines below are deterministic because `writer-a` is always offset by two minutes and `writer-b` always carries the larger Lamport counter.
+**Task 2: Last-writer-wins under clock skew (pen-and-paper)**
 
-```text
-LWW winner: writer-a -> A-first-write-from-fast-clock
-Lamport winner: writer-b -> B-second-write-from-correct-clock
-RESULT: wall-clock LWW lost the later write; logical ordering preserved it.
-```
+A multi-region settings row stores `{theme: "dark"}`. Two writers update the same key:
 
-### Step 4: Clean up the lab namespace when finished
+| Step | Writer | Real execution order | Wall-clock timestamp on write | Value |
+|------|--------|----------------------|-------------------------------|-------|
+| 1 | Region A (clock +90s fast) | First | `2026-05-29T12:05:00Z` | `theme=light` |
+| 2 | Region B (NTP-correct) | Second | `2026-05-29T12:03:30Z` | `theme=dark` |
 
-```bash
-kubectl delete namespace clock-skew-lab --wait=true
-```
+The store resolves conflicts with **last-writer-wins by wall-clock timestamp**. Which value survives after both writes succeed? What did the user who received `200 OK` from Region B actually lose?
 
-### Success Criteria
+<details>
+<summary>Solution & Explanation</summary>
+LWW keeps **Region A's** `theme=light` because `12:05:00Z` > `12:03:30Z` even though Region B's write happened second in real time. The user who got `200 OK` from Region B believed their preference was stored; after convergence, reads return `light` — a **silent lost update**. No error surfaced because the database did exactly what the policy said: pick the largest timestamp. This is why skew turns LWW from a convenience into an incident class, and why operators ask whether timestamps are server-assigned, client-supplied, or replaced by logical versions.
+</details>
 
-- [ ] You created or reused a local kind cluster and deployed two writer pods with different timestamp offsets.
-- [ ] You observed LWW choose `writer-a`, the first real write, because its wall-clock timestamp was artificially ahead.
-- [ ] You observed Lamport ordering choose `writer-b`, the second causal write, because the client carried a larger logical counter.
-- [ ] You can explain why the monotonic timestamp in the payload is useful for local elapsed time but not for cross-pod conflict resolution.
+**Task 3: Pick an ordering strategy (pen-and-paper)**
+
+For each requirement, choose **one primary** mechanism: wall-clock LWW, Lamport timestamps, version vectors, or quorum/consensus (e.g. etcd/Raft). Briefly justify the trade-off.
+
+1. **Collaborative document title** — concurrent offline edits must surface as conflicts, not silent merges.
+2. **Global payment ledger** — no two clients may observe different committed balances for the same account.
+3. **Metrics batch idempotency** — duplicate delivery of the same sample must not double-count; causal order among related samples is enough.
+4. **Kubernetes object updates** — controllers must not clobber each other's optimistic patches.
+
+<details>
+<summary>Solution & Explanation</summary>
+1. **Version vectors** (or explicit conflict branches) — detect concurrent edits so the product can merge or ask the user; LWW would hide concurrency.
+2. **Quorum/consensus** — financial invariants need one agreed history; latency cost is acceptable.
+3. **Lamport timestamps** (or idempotent keys + monotonic sequence per series) — preserve causal direction without requiring physical clock agreement across regions.
+4. **Resource-version / compare-and-swap** — the API already exposes version-based optimistic concurrency instead of wall-clock overwrite; this matches the control-plane pattern in Part 4 of this module.
+</details>
+
+**Task 4: Design a skew-tolerant user-preference service**
+
+Sketch (bullet list is fine) a design for `user_id → {locale, theme}` replicated to three regions. Constraints: reads should be low-latency; **no acknowledged write may be silently discarded**; operators run NTP but do not assume perfect sync. Specify: (1) what you store per write besides the payload, (2) how replicas merge on sync, (3) what the client sees when two regions edit offline concurrently.
+
+<details>
+<summary>Solution & Explanation</summary>
+Store each write with a **version vector** or hybrid logical clock plus the payload — not wall-clock LWW alone. On sync, if one version dominates another (all counters ≥ and at least one >), keep the dominator; if vectors are concurrent, **flag a conflict** and return both variants (or a CRDT merge for commutative fields like `theme` if the product defines merge rules). Clients read from the nearest replica but must send their last-seen vector on write; concurrent offline edits yield `409 Conflict` or a merge UI, never a silent revert. For `locale` (non-commutative), force explicit resolution; for `theme` you might allow a defined merge policy. Optional: use **monotonic deadlines** locally for timeouts while keeping wall clocks only in audit logs.
+</details>
+
+**Success Criteria**:
+
+- [ ] You listed Events with `kubectl get events` and explained why sort-by timestamp is not global causal order.
+- [ ] You identified the LWW survivor and the lost write in Task 2 without relying on a custom lab.
+- [ ] You matched each Task 3 scenario to a defensible ordering mechanism and stated the trade-off.
+- [ ] Your Task 4 design names a non-wall-clock ordering or conflict signal and avoids silent discard of acknowledged writes.
 
 ---
 
