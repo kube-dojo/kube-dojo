@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Session 63 — Autonomous gap-fill wave start: G1 NATS JetStream + diagnostic + hook fix</title>
+<style>
+body { font: 14px/1.55 -apple-system, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+h1 { margin-bottom: 0.2rem }
+.meta { color: #555; margin-bottom: 1.5rem }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 2rem }
+h3 { margin-top: 1.4rem }
+code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 90% }
+table { border-collapse: collapse; margin: 0.5rem 0; width: 100% }
+td, th { padding: 4px 10px; border-bottom: 1px solid #eee; vertical-align: top; text-align: left }
+th { background: #f8f8f8 }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 80%; font-weight: bold; }
+.merged { background: #d4edda; color: #155724 }
+.inflight { background: #cce5ff; color: #004085 }
+.warn { background: #fff3cd; color: #856404 }
+.crit { background: #f8d7da; color: #721c24 }
+blockquote { border-left: 3px solid #ccc; padding-left: 1rem; color: #555 }
+.user-quote { background: #fffae0; border-left: 3px solid #d4ac0d; padding: 4px 12px; margin: 6px 0 10px 0 }
+</style></head><body>
+
+<h1>Session 63 — Autonomous gap-fill wave starts: G1 NATS JetStream + diagnostic + hook fix</h1>
+<p class="meta">2026-05-28 (early morning, continued from session 62 — user went to sleep ~02:30 and asked the orchestrator to go autonomous). User awake-on-wake to find: synthesis written, gap-fill issues filed, G1 (NATS JetStream) written + R1'd + ready to merge, citation_backfill diagnostic patch merged, Bash hook noise fixed and merged, FinOps 1.1 citation backfill in flight. Two codex slot bug findings to root-cause next session.</p>
+
+<h2>What the user said (load-bearing)</h2>
+
+<div class="user-quote">"i am going to sleep , can you go auto ?"</div>
+<div class="user-quote">"codex has should be loaded heavily until reset: Weekly limit: 55% left (resets 23:53 on 30 May)"</div>
+<div class="user-quote">"i ma not a fan of fanning out" — followed minutes later by "go with 2, serial is too slow"</div>
+<div class="user-quote">"th dik is ruuning full maybe we need to do git hygene with the worktrees"</div>
+<div class="user-quote">"fix the PreToolUse:Bash hook error"</div>
+
+<p>Operating constraints learned: max 2 concurrent agents, codex weekly cap healthy (no need to ration), keep disk under 95%, fix harness noise when it shows up.</p>
+
+<h2>What landed (PRs merged)</h2>
+
+<table>
+<tr><th>PR</th><th>Title</th><th>Author</th><th>R1</th><th>Status</th></tr>
+<tr><td>#1625</td><td>fix(citation_backfill): preserve raw response on agent_response_invalid</td><td>cursor composer-2.5</td><td>codex APPROVE</td><td><span class="pill merged">MERGED</span></td></tr>
+<tr><td>#1629</td><td>fix(hooks): silence grep-no-match pipefail in inject-codex-danger-mode</td><td>claude opus (inline)</td><td>cursor composer-2.5 APPROVE</td><td><span class="pill merged">MERGED</span></td></tr>
+<tr><td>#1630</td><td>chore(content): #1622 G1 — NATS JetStream on Kubernetes (module 1.9)</td><td>codex gpt-5.5</td><td>cursor composer-2.5 — NEEDS_CHANGES → orchestrator inline fix-pass → re-verify T0 → CI green</td><td><span class="pill merged">MERGED</span></td></tr>
+</table>
+
+<p><strong>G1 ships</strong>: Module 1.9 NATS JetStream on Kubernetes is on main. T0 quality, 5157 body words, all 21 verifier gates green, 21/21 sources reachable. Issue #1622 closed. Last remaining Tier-1 content gap from the 2026-05-28 synthesis is filled.</p>
+
+<h2>Gap-fill issues filed under #1299</h2>
+
+<table>
+<tr><th>Issue</th><th>Gap</th><th>Modules</th><th>Tier</th><th>State</th></tr>
+<tr><td>#1622</td><td>G1 — NATS JetStream on K8s (NACK operator)</td><td>1</td><td>1</td><td><span class="pill inflight">PR #1630 awaiting R1 merge</span></td></tr>
+<tr><td>#1623</td><td>G2 — Software engineering craft (Stage-1 brief first)</td><td>4-5</td><td>2</td><td>OPEN, blocked until Platform Foundations critical &lt; 20 (currently 28)</td></tr>
+<tr><td>#1624</td><td>G3 — Distributed-systems mental models (practice labs)</td><td>2-3</td><td>2</td><td>OPEN, ready to dispatch after G1 merges</td></tr>
+<tr><td>#1626</td><td>G4 — LLM service golden path on K8s (production depth)</td><td>2-3</td><td>2</td><td>OPEN, gated on existing modules ≥3 rubric</td></tr>
+<tr><td>#1627</td><td>G5 — Cross-cloud workload identity rosetta</td><td>1</td><td>2</td><td>OPEN, ready to dispatch after G3</td></tr>
+<tr><td>#1628</td><td>G6 — OTEL Collector at production scale</td><td>1-2</td><td>2</td><td>OPEN, ready to dispatch after G5</td></tr>
+</table>
+
+<p>All filed under umbrella <code>#1299</code> with label <code>gap-fill-2026-05</code> (reused the existing label rather than creating a new <code>gap-fill-2026-05-28</code>).</p>
+
+<h2>Lane A — citation backfill: BLOCKED (codex bridge issue)</h2>
+
+<p>Tried FinOps 1.1 citation_backfill (codex). Result: <strong>same 0-bytes-runtime hang as 4.4/8.3</strong>, killed after 7+ minutes. This confirms the failure mode is NOT module-specific — different track, different content type, same hang. The bug lives in <code>scripts/ab ask-codex</code> bridge path that <code>citation_backfill.py</code> uses.</p>
+
+<p>Contrast: codex on other dispatch paths worked fine tonight —</p>
+<ul>
+<li><code>dispatch_smart.py review --agent codex</code> → PR #1625 R1 completed in 145s ✓</li>
+<li><code>dispatch_smart.py draft --agent codex</code> → G1 module wrote 5157 words successfully, only hung POST-write before commit ✗</li>
+<li><code>scripts/ab ask-codex</code> → FinOps 1.1 + earlier 4.4 + 8.3 all hang at 0 bytes ✗</li>
+</ul>
+
+<p>Recommended next-session action: run a minimal <code>ab ask-codex</code> probe with a tiny prompt; if it hangs, the bridge is the issue and citation_backfill needs to route through <code>dispatch_smart.py</code> instead, or fall back to gemini/agy until the bridge is fixed.</p>
+
+<p>Posted as comment on #1605: https://github.com/kube-dojo/kube-dojo.github.io/issues/1605#issuecomment-4559944489</p>
+
+<h2>Findings for next session</h2>
+
+<h3>1. Codex T0 author post-write hang (G1)</h3>
+<p>Codex wrote the full 6186-word module to disk (T0 verifier pass, all 21 gates), then froze. <code>ps</code> showed the codex subprocess in <code>S</code> (sleeping) state with 0% CPU and 2 ESTABLISHED TCP connections to its backend. After 10+ minutes with no progress and no commit, orchestrator killed it and did the close-out inline: <code>git commit</code>, push, open PR. The pre-write phase appears healthy; the post-write commit-prep phase is where it stuck. <strong>Worth tracing on the next codex T0 dispatch</strong> — same pattern would block G3/G5/G6 if reproducible.</p>
+
+<h3>2. block-branch-create hook failed to catch primary-dir checkout</h3>
+<p><code>git reflog</code> shows: <code>HEAD@{1}: checkout: moving from main to build/g1-nats-jetstream</code>. The PRIMARY repo dir was somehow switched to a branch named <code>build/g1-nats-jetstream</code> (different from the worktree's <code>gap-fill-g1-nats-jetstream</code>) during the codex G1 dispatch. The <code>block-branch-create-in-primary.sh</code> hook should have denied this. Hypothesis: the hook's <code>detect_primary_dir</code> in <code>.claude/hooks/_lib.sh</code> returned wrong path, or the operation came through a code path the hook didn't match. Reproduce + fix.</p>
+
+<h3>3. Citation_backfill diagnostic now preserves raw output</h3>
+<p>PR #1625 added <code>raw_head</code> + <code>raw_tail</code> to the <code>agent_response_invalid</code> error path. Next failure on module-4.4 will tell us what codex actually returned (was it prose, truncated JSON, or schema-incomplete JSON). Three possible outcomes, each implying a different fix. See comments on <code>#1621</code> + <code>#1605</code>.</p>
+
+<h3>4. Token-shape comparison of failing vs working modules ruled out "many sources" hypothesis</h3>
+<p>The original #1621 hypothesis was "module-4.4 mentions many primary sources". Data: 4.4 has only <strong>6 existing URLs</strong>; working sibling modules have <strong>28-41 URLs already cited</strong>. The "no citations" failure mode is precisely the modules with the FEWEST citations, not the most. Stronger hypotheses (4.4 has 42 code fences vs 14-24 in working modules; 8.3 is the longest by words) are documented in the issue comments.</p>
+
+<h2>Disk hygiene</h2>
+
+<p>Disk hit 94% at one point (likely cumulative npm/codex caches). Freed ~6GB by clearing <code>~/.cache/puppeteer</code> + <code>~/.cache/pre-commit</code> + <code>~/.cache/uv</code> (all regenerable). User declined to nuke <code>~/.cache/huggingface</code> (9.7GB — RAG/embeddings models). 22GB free after cleanup, plenty for tonight's work. Also removed 3 stale gap-analysis worktrees from session 62.</p>
+
+<h2>Bash hook noise — root cause and fix</h2>
+
+<p>Harness was surfacing <code>"PreToolUse:Bash hook error — Failed with non-blocking status code: No stderr output"</code> on every plain Bash call. Traced to <code>.claude/hooks/inject-codex-danger-mode.sh:19</code>:</p>
+
+<pre><code>TASK_CLASS=$(echo "$COMMAND" | grep -oE 'dispatch_smart\.py[[:space:]]+[a-z]+' | awk '{print $NF}')</code></pre>
+
+<p>When grep finds no match (every non-dispatch_smart Bash call), the pipeline exits 1 via <code>pipefail</code>. <code>set -euo pipefail</code> then killed the hook silently. Fixed with <code>|| true</code> appended (PR #1629, merged).</p>
+
+<h2>Files written / modified this session</h2>
+
+<ul>
+<li><code>docs/research/gap-plan-2026-05-28.html</code> — 3-way synthesis (deepseek baseline + cursor x2)</li>
+<li><code>src/content/docs/platform/disciplines/data-ai/data-engineering/module-1.9-nats-jetstream.md</code> — NEW (codex G1, T0)</li>
+<li><code>src/content/docs/platform/disciplines/data-ai/data-engineering/index.md</code> — added 1.9 entry</li>
+<li><code>scripts/citation_backfill.py</code> — raw_head/raw_tail diagnostic (PR #1625)</li>
+<li><code>tests/test_citation_backfill.py</code> — regression test (PR #1625)</li>
+<li><code>.claude/hooks/inject-codex-danger-mode.sh</code> — silence-grep fix (PR #1629)</li>
+<li><code>STATUS.md</code> — TODO + Blockers updated</li>
+<li><code>docs/session-state/2026-05-28-session-63-autonomous-gap-fill-g1-and-hook-fix.html</code> — this handoff</li>
+</ul>
+
+<h2>Comments posted</h2>
+
+<ul>
+<li><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1621">#1621</a> — diagnostic update + token-shape investigation</li>
+<li><a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1605">#1605</a> — diagnostic update + 8.3-specific hypothesis</li>
+</ul>
+
+<h2>What's next when user returns</h2>
+
+<ol>
+<li><strong>Diagnose <code>scripts/ab ask-codex</code> bridge</strong> — citation_backfill blocked on this. Probe with a minimal prompt; if hung, route citation_backfill through <code>dispatch_smart.py</code> instead, or fall back to gemini/agy. PR #1625 (merged tonight) already preserves <code>raw_head</code>/<code>raw_tail</code> for diagnostics — but the hang is BEFORE any response, so the new fields won't help on the hang case (they'll help on future agent_response_invalid cases).</li>
+<li><strong>Dispatch G3 codex T0 writer</strong> (#1624 distributed-systems labs, 2-3 modules). Codex `dispatch_smart.py draft` path worked fine for G1 — just hung post-write. Orchestrator can inline the post-write close-out (build/verify/commit/push/PR) if it hangs again. Single dispatch, no fan-out.</li>
+<li><strong>Decide on G2</strong> — Stage-1 brief gated on Platform Foundations critical &lt; 20 (currently 28). If user wants to push Foundations burndown first via Lane A (once bridge is fixed), this unlocks G2.</li>
+<li><strong>Investigate codex post-write hang on T0 author</strong> — G1 hung after writing 5157 words. Orchestrator killed + did inline close-out. Should be reproducible. Worth tracing the codex CLI post-write phase under <code>--mode danger</code>.</li>
+<li><strong>Investigate block-branch-create hook miss</strong> — during G1 dispatch, primary repo got switched to a new branch <code>build/g1-nats-jetstream</code> (NOT the worktree's branch <code>gap-fill-g1-nats-jetstream</code>). The hook should have denied this. See reflog HEAD@{1}.</li>
+<li><strong>Resume #1504 cross-family review backfill cadence</strong> — 277 shipped_unreviewed modules. 3-5 reviews per session via composer-2.5. Skipped tonight to honor "no fan-out" + 2-concurrent cap.</li>
+<li><strong>Optional: rerun codex 4th-opinion gap analysis</strong> — sanity check on the 6 convergent picks. Skipped tonight (cursor twin convergence sufficient; codex bridge flaky).</li>
+</ol>
+
+</body></html>
