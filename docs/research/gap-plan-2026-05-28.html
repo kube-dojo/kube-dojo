@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gap-fill plan — synthesis of deepseek + cursor x2 (2026-05-28)</title>
+<style>
+  :root { --bg:#fafbfc; --fg:#1a1d23; --muted:#5b6573; --accent:#0057B7; --good:#0d8a4a; --partial:#b45c00; --gap:#b8001f; --card:#ffffff; --border:#e2e6eb; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  main{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+  h1{margin:0 0 8px;font-size:28px;}
+  h2{margin:40px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--accent);font-size:22px;}
+  h3{margin:22px 0 8px;font-size:17px;}
+  .meta{color:var(--muted);margin:0 0 24px;font-size:14px;}
+  .tldr{background:var(--card);border-left:4px solid var(--accent);padding:14px 18px;margin:16px 0 28px;border-radius:0 6px 6px 0;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:var(--card);border:1px solid var(--border);font-size:13px;}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;}
+  th{background:#eef2f6;font-weight:600;}
+  code{background:#eef2f6;padding:1px 6px;border-radius:3px;font-family:var(--mono);font-size:12px;}
+  pre{background:var(--card);border:1px solid var(--border);padding:12px;border-radius:6px;overflow-x:auto;font-size:12px;}
+  ol.tight,ul.tight{margin:6px 0;padding-left:22px;}
+  ol.tight li,ul.tight li{margin:4px 0;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;}
+  .pill-good{background:#d8f0e2;color:var(--good);}
+  .pill-partial{background:#fce7c8;color:var(--partial);}
+  .pill-gap{background:#fbd5db;color:var(--gap);}
+  .pill-new{background:#e3edf9;color:var(--accent);}
+  .high{background:#eef9f1;border-left:3px solid var(--good);padding:8px 14px;margin:6px 0;}
+  .low{background:#fff7e6;border-left:3px solid var(--partial);padding:8px 14px;margin:6px 0;}
+  .cut{background:#fbf0f0;border-left:3px solid var(--gap);padding:8px 14px;margin:6px 0;}
+  .decide{background:#fff7e6;border:1px solid #f0d9a8;padding:12px 16px;border-radius:6px;margin:18px 0;}
+  .num{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Gap-fill plan — three-way synthesis (2026-05-28)</h1>
+<p class="meta">
+  Synthesizer: claude opus 4.7 (orchestrator, inline) · GH umbrella: <a href="https://github.com/kube-dojo/kube-dojo.github.io/issues/1299">#1299</a> · Label: <code>gap-fill-2026-05-28</code><br>
+  Inputs:
+  <a href="/artifacts/docs/research/gap-plan-2026-05-17.html"><code>gap-plan-2026-05-17.html</code></a> (deepseek-trusted baseline) ·
+  <a href="/artifacts/audit/gap-analysis-2026-05-28/cursor-composer-2.5-report.html"><code>cursor-composer-2.5-report.html</code></a> ·
+  <a href="/artifacts/audit/gap-analysis-2026-05-28/cursor-auto-report.html"><code>cursor-auto-report.html</code></a><br>
+  Codex 4th opinion: not on disk (dispatch died with prior harness; cursor-twin convergence makes re-fire optional).
+</p>
+
+<div class="tldr">
+<strong>TL;DR (plain English).</strong> The May-17 gap roadmap is now mostly stale — 16-18 of its 24 rows are <strong>already shipped</strong> as part of Wave 2. Both fresh cursor reviewers and the May-17 deepseek baseline converge on one move: <strong>stop chasing more breadth and finish the quality work in the three Platform tracks</strong>. 803 modules scored, average 4.51, 112 critical (down from 249). All 112 critical modules live in Platform-family tracks (45 Disciplines + 36 Toolkits + 28 Foundations) plus 3 in on-premises. <strong>106 of the 112 critical modules fail on the same primary issue: "no citations".</strong> Cert tracks (CKA/CKAD/CKS/KCNA/KCSA) are clean. Six convergent net-new gaps are worth filing now (most-confident: NATS JetStream operator); single-flagged candidates from any one reviewer go to a "needs more thought" bucket and won't be filed yet.
+</div>
+
+<h2>1. Live quality state (verified 2026-05-28)</h2>
+
+<table>
+<tr><th>Metric</th><th>Roadmap (2026-05)</th><th>Deepseek (May 17)</th><th>Live API (May 28)</th></tr>
+<tr><td>Scored modules</td><td>754</td><td>757</td><td><strong>803</strong></td></tr>
+<tr><td>Average rubric score</td><td>3.84</td><td>4.27</td><td><strong>4.51</strong></td></tr>
+<tr><td>Critical (&lt;2.0)</td><td>249</td><td>157</td><td><strong>112</strong></td></tr>
+<tr><td>Platform Disciplines critical</td><td>65</td><td>44</td><td><strong>45</strong> <span class="pill pill-good">UNLOCKED</span></td></tr>
+<tr><td>Platform Toolkits critical</td><td>52</td><td>35</td><td><strong>36</strong> <span class="pill pill-good">UNLOCKED</span></td></tr>
+<tr><td>Platform Foundations critical</td><td>31</td><td>28</td><td><strong>28</strong> <span class="pill pill-good">UNLOCKED</span></td></tr>
+<tr><td>Cert tracks (CKA/CKAD/CKS/KCNA/KCSA) critical</td><td>52+</td><td>~11 (CKS)</td><td><strong>0</strong></td></tr>
+<tr><td>On-premises critical</td><td>—</td><td>—</td><td>3 (Storage 2, Resilience 1)</td></tr>
+</table>
+
+<p><strong>Primary issue distribution (live API):</strong></p>
+<pre>106  no citations
+  3  no citations, thin
+  2  no citations, no quiz
+  1  no citations, no exercise</pre>
+
+<p>Citation backfill, not greenfield rewrite, is the dominant work. That's exactly what <code>citation_backfill</code> codex jobs were built for — but #1605 and #1621 mean two of those modules currently fail the lane (hang on <code>module-8.3-cloud-repatriation</code>; <code>agent_response_invalid</code> on <code>module-4.4-object-storage-bare-metal</code>). Diagnosing those is a separate workstream that runs in parallel with this gap-fill plan.</p>
+
+<h2>2. Roadmap row dispositions — convergent across all 3 reviewers</h2>
+
+<p>Of the 24 Tier 1+2 rows in the May-17 triangulation roadmap, here are the dispositions all three reviewers agree on (or where one reviewer's status-lag is later corrected by the next). <strong>Where deepseek (May 17) said "ratify, write" and cursor (May 28) says "already-covered", the cursor verdict wins — it reflects what's actually on disk now.</strong></p>
+
+<table>
+<tr><th>#</th><th>Row</th><th>Deepseek 2026-05-17</th><th>Composer-2.5 2026-05-28</th><th>Cursor-auto 2026-05-28</th><th>Locked verdict</th></tr>
+<tr><td class="num">T1-1</td><td>Azure Application Gateway</td><td>ratify</td><td>already-covered</td><td>already-covered</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T1-2</td><td>Azure App Service operations</td><td>ratify</td><td>already-covered</td><td>already-covered</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T1-3</td><td>Streaming (NATS+Strimzi+CloudEvents)</td><td>ratify, unblocked</td><td>nuance — NATS only</td><td>nuance — NATS only</td><td><span class="pill pill-new">split: close Strimzi+CloudEvents, file NATS as 1-module gap-fill</span></td></tr>
+<tr><td class="num">T1-4</td><td>Cloud Custodian</td><td>ratify, highest signal</td><td>already-covered</td><td>already-covered</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-5</td><td>Harness + Symphony</td><td>status-lag (shipped)</td><td>already-covered</td><td>already-covered</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-6</td><td>Software engineering craft</td><td>ratify</td><td>ratify (Tier 2)</td><td>ratify (Tier 2, 4-5 modules)</td><td><span class="pill pill-new">file Stage-1 brief; full arc post-burndown</span></td></tr>
+<tr><td class="num">T2-7</td><td>LLM-native app engineering on K8s</td><td>ratify</td><td>nuance (2-3 depth)</td><td>nuance (2-3 depth, not 7)</td><td><span class="pill pill-new">file 2-3 depth modules (eval-in-CI, agent OTel, multi-tenant serving)</span></td></tr>
+<tr><td class="num">T2-8</td><td>Distributed-systems mental models</td><td>ratify</td><td>ratify (2-3 modules)</td><td>nuance (practice labs)</td><td><span class="pill pill-new">file 2-3 practice-lab modules</span></td></tr>
+<tr><td class="num">T2-9</td><td>Cost lens cross-cutting</td><td>checklist-only (D4)</td><td>mis-prioritized</td><td>mis-prioritized</td><td><span class="pill pill-good">D4 stands — checklist-only, no new modules</span></td></tr>
+<tr><td class="num">T2-10</td><td>DVC data versioning</td><td>ratify</td><td>already-covered (5.7)</td><td>already-covered (5.7)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-11</td><td>Great Expectations</td><td>ratify</td><td>already-covered (5.8)</td><td>already-covered (5.8)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-12</td><td>GitHub Actions module</td><td>nuance (listicle risk)</td><td>over-scoped</td><td>over-scoped (D1 cut)</td><td><span class="pill pill-gap">stay cut</span></td></tr>
+<tr><td class="num">T2-13</td><td>Ansible operator arc</td><td>ratify</td><td>already-covered (7.12-7.17)</td><td>already-covered</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-14</td><td>ML repository hygiene</td><td>ratify</td><td>already-covered (5.9)</td><td>already-covered (5.9)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-15</td><td>Azure Event Hub + Event Grid</td><td>ratify</td><td>already-covered (3.15)</td><td>already-covered (3.15)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-16</td><td>Azure SQL Database</td><td>ratify</td><td>already-covered (3.16)</td><td>already-covered (3.16)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-17</td><td>Production model-serving traffic</td><td>ratify</td><td>already-covered (5.10)</td><td>already-covered (5.10)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-18</td><td>Drift-triggered retraining</td><td>ratify</td><td>already-covered (5.11)</td><td>already-covered (5.11)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-19</td><td>CML for ML CI</td><td>ratify</td><td>mis-prioritized (5.12 covers)</td><td>already-covered (5.12)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-20</td><td>Dapr + Buildpacks</td><td>nuance — D2 combined</td><td>already-covered (2.5)</td><td>already-covered (2.5)</td><td><span class="pill pill-good">close issue — D2 stands</span></td></tr>
+<tr><td class="num">T2-21</td><td>gRPC + Envoy arc</td><td>downgrade to T3</td><td>mis-prioritized → T3</td><td>mis-prioritized → T3</td><td><span class="pill pill-gap">downgrade T3, no module</span></td></tr>
+<tr><td class="num">T2-22</td><td>AWS data ingestion</td><td>ratify</td><td>already-covered (1.13)</td><td>already-covered (1.13)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-23</td><td>HCP Terraform workflows</td><td>ratify</td><td>already-covered (7.11)</td><td>already-covered (7.11)</td><td><span class="pill pill-good">close issue</span></td></tr>
+<tr><td class="num">T2-24</td><td>Azure Backup + Site Recovery</td><td>ratify, low urgency</td><td>already-covered (3.17)</td><td>already-covered (3.17)</td><td><span class="pill pill-good">close issue</span></td></tr>
+</table>
+
+<p><strong>Net.</strong> 18 of 24 rows have nothing to do but close the GitHub-side bookkeeping. 1 row (Streaming) gets split — close two-thirds, file one new gap-fill issue for NATS JetStream. 3 rows survive as gap-fill work (software craft, LLM-native depth, distributed-systems mental models). 1 row stays cut (GitHub Actions). 1 row stays T3-downgrade (gRPC/Envoy). 1 row stays checklist-only (cost lens / D4).</p>
+
+<h2>3. Convergent net-new gaps — file as gap-fill-2026-05-28 issues</h2>
+
+<p>These are gaps flagged by <strong>at least two of the three reviewers</strong>. High-confidence pickups.</p>
+
+<table>
+<tr><th>#</th><th>Gap</th><th>Sources</th><th>Track placement</th><th>Est. modules</th><th>Priority</th></tr>
+<tr><td>G1</td><td><strong>NATS JetStream on Kubernetes (NACK operator)</strong></td><td>deepseek (inside streaming epic), composer-2.5, cursor-auto</td><td><code>platform/disciplines/data-ai/data-engineering/</code> → module 1.9</td><td>1</td><td><span class="pill pill-good">Tier 1</span> — last Tier-1 content gap; Strimzi/CloudEvents already shipped</td></tr>
+<tr><td>G2</td><td><strong>Software engineering craft for operators</strong> (reading code, debugging discipline, code review practice, RFC/ADR writing, technical writing)</td><td>deepseek, composer-2.5, cursor-auto</td><td><code>prerequisites/engineering-craft/</code> (new tree)</td><td>4-5</td><td><span class="pill pill-new">Tier 2 — Stage 1 brief first</span></td></tr>
+<tr><td>G3</td><td><strong>Distributed-systems mental models — practice labs</strong> (idempotency / clock skew / partial failure / backpressure as operator habits, tied to incident scenarios, not just theory)</td><td>deepseek, composer-2.5, cursor-auto</td><td><code>prerequisites/</code> or <code>platform/foundations/systems-thinking/</code></td><td>2-3</td><td><span class="pill pill-new">Tier 2</span></td></tr>
+<tr><td>G4</td><td><strong>LLM service golden path on Kubernetes (production depth)</strong> — pieces exist (vLLM 9.4, llm-serving 1.5, vector-rag, synthesis 3.1). Gap is production eval-in-CI gates, agent OTel, multi-tenant serving.</td><td>composer-2.5, cursor-auto</td><td><code>platform/disciplines/data-ai/ai-infrastructure/</code> + <code>ai-ml-engineering/synthesis-apps/</code></td><td>2-3</td><td><span class="pill pill-new">Tier 2</span></td></tr>
+<tr><td>G5</td><td><strong>Cross-cloud workload identity rosetta</strong> (IRSA · GKE Workload Identity · Azure Workload Identity · SPIFFE bridge as one mental model)</td><td>composer-2.5, cursor-auto</td><td><code>cloud/architecture-patterns/</code> or hyperscaler rosetta addendum</td><td>1</td><td><span class="pill pill-new">Tier 2</span></td></tr>
+<tr><td>G6</td><td><strong>OpenTelemetry production pipeline / Collector at scale</strong> (operator-managed daemonsets, tail sampling pipelines, cardinality control at fleet scale)</td><td>deepseek (production pipeline framing), cursor-auto (Collector operator at scale)</td><td><code>platform/toolkits/observability-intelligence/observability/</code></td><td>1-2</td><td><span class="pill pill-new">Tier 2</span></td></tr>
+</table>
+
+<h2>4. Single-flagged candidates — needs more thought, do not file yet</h2>
+
+<p>Each of these came from only one reviewer. They might be real gaps, but a one-vendor signal is weaker — would benefit from a tiebreaker (codex 4th opinion or <code>ab discuss</code>) before consuming codex weekly cap.</p>
+
+<table>
+<tr><th>Candidate</th><th>Source</th><th>Why deferred</th></tr>
+<tr><td>Gateway API production ops (beyond CKA intro)</td><td>cursor-auto only</td><td>Real signal but CKA module 3.5 may suffice; needs scope analysis</td></tr>
+<tr><td>Wasm/WASI workloads on K8s (hands-on Spin/wasmCloud)</td><td>cursor-auto only</td><td>Adoption still niche; KCNA 3.9 survey-level exists; tier debatable</td></tr>
+<tr><td>SLSA L3 attestation lab</td><td>cursor-auto only</td><td>Adjacent to existing supply-chain modules; depth-vs-overlap unclear</td></tr>
+<tr><td>Prefect on Kubernetes</td><td>cursor-auto only</td><td>Airflow + Argo Workflows already cover orchestration narrative</td></tr>
+<tr><td>Compliance-aware platform engineering (HIPAA/PCI/SOC2/FedRAMP patterns)</td><td>composer-2.5 only</td><td>Real but niche; Tier 3 placement contested</td></tr>
+<tr><td>Platform API design + lifecycle (Backstage/Crossplane IDP APIs, versioning, deprecation)</td><td>deepseek only</td><td>Not re-flagged by either cursor reviewer; may have been absorbed by IDP modules</td></tr>
+<tr><td>K8s operators end-to-end lifecycle arc</td><td>deepseek only</td><td>Ansible operator arc + Operator SDK modules already shipped (7.12-7.17)</td></tr>
+<tr><td>Incident response automation (Falco → action → post-incident auto-doc)</td><td>deepseek only</td><td>Adjacent to existing security automation modules</td></tr>
+<tr><td>Policy engine selection (OPA vs Kyverno vs jsPolicy decision guide)</td><td>deepseek only</td><td>Tooling decision; could be a sidebar in existing policy modules</td></tr>
+<tr><td>Secrets-management decision framework (Vault vs ESO vs Sealed Secrets vs cloud KMS)</td><td>deepseek only</td><td>Tooling decision; existing Vault + secrets modules may suffice</td></tr>
+<tr><td>GCP Essentials parity (12 modules to match AWS depth)</td><td>deepseek — already rejected D5 (May 17)</td><td>D5 stands: 12 GCP modules at AWS parity (~10K lines) shipped</td></tr>
+</table>
+
+<h2>5. Standing decisions that stay locked</h2>
+
+<table>
+<tr><th>Decision</th><th>From</th><th>Status</th></tr>
+<tr><td>D1 — GitHub Actions standalone module: cut</td><td>2026-05-17 gap-fill-decisions.md</td><td><strong>STAYS CUT</strong> — both fresh reviewers agree (listicle risk; Modern DevOps 1.3 covers mental model)</td></tr>
+<tr><td>D2 — Dapr + Buildpacks: combined as one module</td><td>2026-05-17</td><td><strong>STAYS COMBINED</strong> — module 2.5 shipped at ~2189 lines</td></tr>
+<tr><td>D3 — Docker absolute-beginner arc: cut</td><td>2026-05-17</td><td><strong>STAYS CUT</strong> — cloud-native-101 1.1/1.2 cover the path</td></tr>
+<tr><td>D4 — Cost lens: checklist-only, no new modules</td><td>2026-05-17</td><td><strong>STAYS CHECKLIST-ONLY</strong> — both fresh reviewers ratify; FinOps rewrite is the proper vehicle</td></tr>
+<tr><td>D5 — GCP Essentials at AWS parity</td><td>2026-05-17</td><td><strong>STAYS DONE</strong> — 12 GCP modules shipped</td></tr>
+<tr><td>Decision Card C — composer-2.5 cross-family reviewer for codex-authored content</td><td>2026-05-24</td><td><strong>STANDS</strong> — applies to every codex writer dispatched from this plan</td></tr>
+</table>
+
+<h2>6. Recommended dispatch sequence</h2>
+
+<p>Two lanes run in parallel, capped at 3 concurrent codex rewrites per <code>feedback_parallel_rewrite_cap_three</code>:</p>
+
+<h3>Lane A — Platform critical-rubric burndown (citation backfill)</h3>
+
+<ol class="tight">
+<li><strong>Diagnose #1605 + #1621</strong> first — citation_backfill is broken on at least 2 known modules. Without root-causing this, the lane is a coin-flip per module. Possible causes: token-budget per request, hallucinated citations getting rejected, prompt-shape mismatch. <strong>Owner: claude orchestrator (this session) + agy/codex consult.</strong></li>
+<li>Once the lane is healthy, drain by track in this order: <strong>FinOps 1.1-1.6</strong> (highest-leverage, both cursor reports name it) → other Platform Disciplines critical → Platform Toolkits critical → Platform Foundations critical → on-premises (3 modules).</li>
+<li>Reviewer cascade per Decision Card C: codex authors, composer-2.5 (cursor) reviews.</li>
+</ol>
+
+<h3>Lane B — Gap-fill new-module dispatches</h3>
+
+<p>File the 6 convergent gap-fill issues (G1-G6) under #1299 with label <code>gap-fill-2026-05-28</code>. Dispatch codex T0 writers in priority order, capped at 3 concurrent. <strong>Default author = codex gpt-5.5, danger mode, per-issue worktree.</strong> Reviewer = composer-2.5 (cursor).</p>
+
+<ol class="tight">
+<li><strong>G1 — NATS JetStream operator (1 module)</strong> — Tier 1, last remaining Tier-1 content item. Smallest scope; quickest validation that the new dispatch chain is healthy.</li>
+<li><strong>G3 — Distributed-systems mental models, 2-3 practice labs</strong> — broad-impact pedagogical foundation; unblocks downstream cert-prep and platform modules.</li>
+<li><strong>G5 — Cross-cloud workload identity rosetta (1 module)</strong> — small, high-leverage synthesis. Prereqs (EKS 5.3, GKE 6.3, AKS 7.3 identity modules) verified.</li>
+<li><strong>G6 — OTEL Collector at production scale (1-2 modules)</strong> — Platform Toolkits placement; checks observability arc coherence.</li>
+<li><strong>G4 — LLM service golden path (2-3 depth modules)</strong> — depends on existing modules ≥3 rubric; sequence after the burndown lane lifts those scores.</li>
+<li><strong>G2 — Software engineering craft (4-5 modules)</strong> — biggest scope; both cursor reviewers say defer to "Platform Foundations critical &lt; 20" milestone. Currently 28 → not ready. Stage-1 brief only, no codex writer yet.</li>
+</ol>
+
+<h2>7. Bookkeeping cleanup (orchestrator, 0 codex calls)</h2>
+
+<ol class="tight">
+<li><strong>Close any open GH issues</strong> tracking the 18 already-shipped roadmap rows from §2. Most are likely already closed; verify and close stragglers.</li>
+<li><strong>Annotate <code>docs/research/gap-triangulation-roadmap-2026-05.html</code></strong> as SUPERSEDED by this plan, with link forward. Don't delete — keep as historical appendix.</li>
+<li><strong>Confirm <code>docs/research/content-gaps-2026-05.md</code></strong> is already marked DEPRECATED per the composer-2.5 audit; no further action if so.</li>
+<li><strong>File the 6 convergent gap-fill issues (G1-G6)</strong> under <code>#1299</code>, label <code>gap-fill-2026-05-28</code>, each with: writer brief, track, prereqs, source citations from this synthesis.</li>
+</ol>
+
+<h2>8. Confidence + what could change this plan</h2>
+
+<h3>High-confidence (all 3 reviewers convergent)</h3>
+<ul class="tight">
+<li>Quality debt has consolidated into Platform — top priority is burndown.</li>
+<li>16-18 roadmap rows are already-covered; cert tracks at zero critical.</li>
+<li>The 6 gaps in §3 are real and worth filing as issues.</li>
+<li>D1 (GHA cut), D4 (cost-lens checklist-only), gRPC/Envoy T3 downgrade stand.</li>
+</ul>
+
+<h3>Medium-confidence (2 of 3 reviewers)</h3>
+<ul class="tight">
+<li>NATS JetStream as its own module (1 module) vs folding into existing modules — composer + cursor-auto agree on 1-module scope; deepseek (May 17) saw it inside a 2-3 module streaming epic that's now mostly shipped.</li>
+<li>LLM-native depth scope (2-3 modules, not 7) — both cursor reviewers agree; deepseek brief was broader pre-Wave 2.</li>
+</ul>
+
+<h3>What could change this plan</h3>
+<ul class="tight">
+<li><strong>Codex 4th opinion lands</strong> — if a re-fired codex gap analysis surfaces a gap none of the others caught and ≥2-reviewer-strong, add to §3.</li>
+<li><strong>#1605 / #1621 root cause</strong> — if citation_backfill is systemically broken (not just two unlucky modules), Lane A shifts to per-module manual rewrites and burns much more codex budget.</li>
+<li><strong>User answer to "stop drafting vs keep draining"</strong> — cursor-auto explicitly flagged this for <code>ab discuss</code>: Platform tracks are individually &lt;50 critical but 109/112 global critical are Platform-family. Is the gate per-track or global? If global, Lane B pauses until burndown finishes.</li>
+</ul>
+
+<h2>9. What I'll do once you approve the issue list</h2>
+
+<ol class="tight">
+<li>Open <code>#1605</code> + <code>#1621</code> diagnostic — one-shot root-cause attempt before continuing Lane A.</li>
+<li>File 6 gap-fill issues (G1-G6) under <code>#1299</code> with the writer briefs, prereqs, and citations from this synthesis.</li>
+<li>Annotate the 2026-05 triangulation roadmap as superseded.</li>
+<li>Optional: re-fire codex 4th-opinion gap analysis as a sanity check on the 6 convergent picks (~5-15 min wall, one codex call).</li>
+<li>Dispatch G1 (NATS JetStream) as the first codex writer — smallest scope, fastest signal that the new gap-fill pipeline is healthy.</li>
+<li>After G1 round-trips clean, fan out to G3 + G5 + G6 (capped at 3 concurrent).</li>
+</ol>
+
+<p class="meta">Synthesis written inline by claude opus 4.7 (orchestrator) — orchestrator HTML-first artifact per <code>feedback_html_over_markdown_for_artifacts</code>. Served via <code>http://127.0.0.1:8768/artifacts/docs/research/gap-plan-2026-05-28.html</code>.</p>
+
+</main>
+</body>
+</html>

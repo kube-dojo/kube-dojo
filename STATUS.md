@@ -69,14 +69,13 @@ Older predecessors: see [`docs/session-state/`](./docs/session-state/) (57 dated
 
 ## TODO
 
-**Next session — top priorities (the gap-fill workflow is the user's stated priority; #1299 was unblocked once cursor + codex reports are in):**
+**Next session — top priorities (autonomous session 63 in progress; synthesis landed):**
 
-- [ ] **Pick up codex gap-analysis report** at `audit/gap-analysis-2026-05-28/codex-report.html` (in flight at session 62 handoff). May or may not be on disk depending on when it lands.
-- [ ] **Synthesize all 4 gap-analysis reports** (deepseek 2026-05-17 trusted baseline + cursor-composer-2.5 + cursor-auto + codex) into `docs/research/gap-plan-2026-05-28.html`. Mark convergent findings as high-confidence; single-flagged ones go to a needs-more-thought bucket.
-- [ ] **File per-track gap-fill issues** for the convergent picks. Label `gap-fill-2026-05-28`. Link all to #1299.
-- [ ] **Dispatch codex writers per filed issue** — gpt-5.5 high, danger mode, per-issue worktree. Decision Card C: composer-2.5 (cursor) reviews. The quality-floor gate is open across the entire curriculum now — no per-track blocker.
-- [ ] **Platform critical-rubric burndown in parallel** — both cursor reports name FinOps 1.1-1.6 as highest-leverage. 700-960 lines each, currently scored at 1.5. Run via citation_backfill where it works.
-- [ ] **Investigate #1621 + #1605 (codex citation_backfill failures)** — 2 known broken modules so far (#4.4 returns agent_response_invalid; #8.3 hangs at 0 bytes). Worth a focused diagnostic — could be token-budget, hallucination, or prompt-shape issue. If systemic, switch lane to agy or split research prompt.
+- [ ] **Gap-plan synthesis written** at `docs/research/gap-plan-2026-05-28.html` (session 63). 6 convergent gap-fill picks (G1-G6) ready to file as issues. Codex 4th opinion skipped (cursor twin-convergence sufficient; sanity-check re-fire optional).
+- [ ] **File per-track gap-fill issues G1-G6** under #1299, label `gap-fill-2026-05-28`. (in flight session 63)
+- [ ] **Dispatch G1 NATS JetStream codex writer first** — smallest scope, validates new pipeline. Then fan out G3/G5/G6 capped at 3 concurrent.
+- [ ] **Platform critical-rubric burndown in parallel** — FinOps 1.1-1.6 highest-leverage. Gated on #1605/#1621 root-cause.
+- [ ] **Investigate #1621 + #1605 (codex citation_backfill failures)** — diagnostic in flight session 63.
 - [ ] **#1620 dispatch_smart cwd default for codex review** — small follow-up to land #1586 fix end-to-end.
 - [ ] **#1614 Lane C cursor-app-control MCP + Cursor SDK eval** — environment-steering integration; out-of-scope for PR #1613 (Lane A only).
 - [ ] **#1609 author real Neural Network Fundamentals module** — T0 codex dispatch for new module at deep-learning/1.1.5. ~5000-7000 words.
