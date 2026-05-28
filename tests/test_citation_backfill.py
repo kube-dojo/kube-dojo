@@ -449,3 +449,41 @@ def test_run_inject_soft_skips_codex_dropped_cited_claims(
     assert c003[0]["kind"] == "inline"
     assert c003[0]["status"] == "skipped"
     assert c003[0]["reason"] == "not_addressed_by_agent"
+
+
+def test_run_research_agent_response_invalid_preserves_raw_snippets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Regression for #1621: invalid agent JSON must retain raw_head/raw_tail."""
+    module_path = tmp_path / "on-premises" / "storage" / "module-4.4-object-storage.md"
+    module_path.parent.mkdir(parents=True)
+    module_path.write_text("# Object storage\n\nBare-metal object storage notes.\n", encoding="utf-8")
+
+    monkeypatch.setattr(citation_backfill, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(citation_backfill, "DOCS_ROOT", tmp_path)
+    monkeypatch.setattr(citation_backfill, "resolve_module_path", lambda _key: module_path)
+    monkeypatch.setattr(citation_backfill, "load_section_pool", lambda *a, **kw: None)
+
+    pad_head = "HEAD-" * 80
+    pad_tail = "TAIL-" * 80
+    inner = json.dumps({"foo": "bar"})
+    raw = f"{pad_head}{inner}{pad_tail}"
+
+    def fake_dispatch(_prompt: str, *, task_id: str) -> tuple[bool, str]:
+        del task_id
+        return True, raw
+
+    monkeypatch.setattr(citation_backfill, "dispatch_codex", fake_dispatch)
+
+    result = citation_backfill.run_research(
+        "on-premises/storage/module-4.4-object-storage-bare-metal",
+        agent="codex",
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "agent_response_invalid"
+    assert result["detail"] == (
+        "agent response missing claims/schema_version or bridge error payload"
+    )
+    assert result["raw_head"] == raw[:400]
+    assert result["raw_tail"] == raw[-400:]

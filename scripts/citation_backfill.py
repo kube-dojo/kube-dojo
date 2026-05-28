@@ -1182,6 +1182,8 @@ def run_research(
             "ok": False,
             "error": "agent_response_invalid",
             "detail": "agent response missing claims/schema_version or bridge error payload",
+            "raw_head": raw[:400],
+            "raw_tail": raw[-400:],
         }
 
     seed.setdefault("module_key", normalized_key)
