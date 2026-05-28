@@ -95,19 +95,19 @@ Full bare-metal repatriation—where you purchase servers, configure top-of-rack
 
 Major cloud providers have acknowledged the desire for hybrid infrastructure and developed robust, generally available product lines:
 
-- **AWS Outposts Family**: This hardware suite is generally available in two primary form factors: massive 42U Outposts Racks for large deployments, and smaller 1U/2U Outposts Servers for edge locations. Second-generation Outposts racks expanded to over 20 additional countries in January 2026. These physical devices run directly in your datacenter, but the control plane remains entirely managed by AWS.
-- **Google Distributed Cloud (GDC)**: Formerly known by the brand name Anthos (which has been officially retired across all Google documentation and partner programs), GDC provides comprehensive hardware and software solutions to execute Google Cloud services securely at the edge or deep within your private datacenter infrastructure.
-- **Azure Arc**: Microsoft's management plane is generally available across multiple critical components, including Arc-enabled Servers, Arc-enabled Kubernetes, Arc-enabled SQL, and the highly anticipated Arc Gateway (which reached GA for Arc-enabled Kubernetes in early 2026). Azure Arc allows you to project on-premises resources into the centralized Azure control plane for unified management, observability, and policy enforcement.
+- **AWS Outposts Family**: This hardware suite is generally available in [two primary form factors: massive 42U Outposts Racks for large deployments, and smaller 1U/2U Outposts Servers for edge locations](https://docs.aws.amazon.com/outposts/latest/userguide/what-is-outposts.html). Second-generation Outposts racks expanded to over 20 additional countries in January 2026. These physical devices run directly in your datacenter, but the control plane remains entirely managed by AWS.
+- **Google Distributed Cloud (GDC)**: Formerly known by the brand name Anthos (which has been officially retired across all Google documentation and partner programs), [GDC provides comprehensive hardware and software solutions to execute Google Cloud services securely at the edge or deep within your private datacenter infrastructure](https://cloud.google.com/distributed-cloud/docs).
+- **Azure Arc**: Microsoft's management plane is generally available across multiple critical components, including Arc-enabled Servers, Arc-enabled Kubernetes, Arc-enabled SQL, and the highly anticipated [Arc Gateway (which reached GA for Arc-enabled Kubernetes in early 2026)](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/release-notes). [Azure Arc allows you to project on-premises resources into the centralized Azure control plane for unified management, observability, and policy enforcement](https://learn.microsoft.com/en-us/azure/azure-arc/overview).
 
 ### Virtualization in the Container Era
 
 If your organizational goal involves migrating legacy monolithic virtual machines directly into your new, pristine containerized environment alongside your microservices, the CNCF ecosystem offers robust, production-ready solutions. 
 
-For managing on-premises infrastructure using declarative infrastructure-as-code paradigms, **Crossplane** is highly recommended. It is a mature CNCF Graduated project, with its current stable version v2.2.0 released on February 17, 2025. 
+For managing on-premises infrastructure using declarative infrastructure-as-code paradigms, **Crossplane** is highly recommended. [It is a mature CNCF Graduated project](https://www.cncf.io/projects/crossplane/), with its current stable version v2.2.0 released on February 17, 2025. 
 
-To execute full virtual machines natively inside Kubernetes pods—sharing the exact same network overlay and RBAC controls as your containers—**KubeVirt** is the industry standard. It is a CNCF Incubating project that is rapidly approaching graduation. KubeVirt v1.8.0 was released on March 25, 2026, aligning seamlessly with the Kubernetes v1.35 release cycle.
+To execute full virtual machines natively inside Kubernetes pods—sharing the exact same network overlay and RBAC controls as your containers—**KubeVirt** is the industry standard. It is a CNCF Incubating project that is rapidly approaching graduation. [KubeVirt v1.8.0 was released on March 25, 2026, aligning seamlessly with the Kubernetes v1.35 release cycle](https://www.cncf.io/blog/2026/03/25/announcing-the-release-of-kubevirt-v1-8/).
 
-Alternatively, if you require a commercial, heavily supported enterprise platform, **Red Hat OpenShift Virtualization** (formerly Container Native Virtualization) is generally available and offers a polished experience. The latest stable release is OpenShift Virtualization 4.21, providing profound VM-centric features integrated natively into the OpenShift dashboard.
+Alternatively, if you require a commercial, heavily supported enterprise platform, **Red Hat OpenShift Virtualization** (formerly Container Native Virtualization) is generally available and offers a polished experience. The latest stable release is [OpenShift Virtualization 4.21, providing profound VM-centric features integrated natively into the OpenShift dashboard](https://www.redhat.com/en/blog/whats-new-red-hat-openshift-virtualization-421).
 
 *An important distinction must be made regarding vendor claims in the virtualization space: Sources frequently conflate Harvester being 'built on CNCF projects' with it being a CNCF project itself. According to the official CNCF project landscape, SUSE/Rancher's Harvester HCI (current stable v1.7.1, released February 10, 2025) does not appear as a named project and does not have an official CNCF maturity level, despite utilizing CNCF projects like KubeVirt and Longhorn under the hood.*
 
@@ -181,7 +181,7 @@ spec:
 
 ### AWS ALB Annotation Translation
 
-Cloud load balancers simplify operations by bundling multiple distinct network functions—such as Transport Layer Security (TLS) termination, Web Application Firewall (WAF) execution, and complex path-based routing—into a few declarative annotations. On-premises, these monolithic responsibilities are fractured and split across multiple independent, self-managed open-source tools.
+Cloud load balancers simplify operations by bundling multiple distinct network functions—such as Transport Layer Security (TLS) termination, Web Application Firewall (WAF) execution, and complex path-based routing—into [a few declarative annotations](https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/guide/ingress/annotations.md). On-premises, these monolithic responsibilities are fractured and split across multiple independent, self-managed open-source tools.
 
 | AWS Annotation | On-Prem Equivalent |
 |---------------|-------------------|
@@ -192,7 +192,7 @@ Cloud load balancers simplify operations by bundling multiple distinct network f
 | `healthcheck-path` | NGINX Ingress `health-check-path` annotation |
 | `ssl-redirect: "443"` | `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"` |
 
-Migrating an application relies heavily on translating these annotations flawlessly; missing a WAF annotation could expose your migrated application to severe security vulnerabilities on day one of your on-premises deployment.
+Migrating an application relies heavily on translating these annotations flawlessly; [missing a WAF annotation could expose your migrated application to severe security vulnerabilities](https://owasp.org/www-community/Web_Application_Firewall) on day one of your on-premises deployment.
 
 ---
 
@@ -274,7 +274,7 @@ EOF
 
 ### S3 to Ceph RGW
 
-For highly concurrent object storage migration, traditional tools like `rsync` fall short due to their reliance on file system tree walking. Instead, `rclone` is the industry standard. It provides an idempotent synchronization operation utilizing the S3 API directly. It can gracefully resume after network interruptions and run rapid, incremental nightly syncs to quickly catch up with new data written by the live application during the extended migration window.
+For highly concurrent object storage migration, traditional tools like `rsync` fall short due to their reliance on file system tree walking. Instead, `rclone` is the industry standard. [It provides an idempotent synchronization operation utilizing the S3 API directly](https://github.com/rclone/rclone). It can gracefully resume after network interruptions and run rapid, incremental nightly syncs to quickly catch up with new data written by the live application during the extended migration window.
 
 ```bash
 # Configure rclone for both endpoints
@@ -287,9 +287,9 @@ rclone sync aws-s3:app-assets ceph-rgw:app-assets --progress --transfers 16
 rclone check aws-s3:app-assets ceph-rgw:app-assets
 ```
 
-For comprehensive state migration of native Kubernetes resources (such as CustomResourceDefinitions, Secrets, and ConfigMaps) alongside persistent volumes, **Velero** is the undisputed industry standard tool. As of its v1.18.0 release in March 2025, Velero introduced highly anticipated concurrent backup processing and sophisticated cache volume support, drastically reducing recovery time objectives (RTO). Recognizing its critical role in the ecosystem, Broadcom officially donated Velero to the CNCF Sandbox in April 2026.
+For [comprehensive state migration of native Kubernetes resources (such as CustomResourceDefinitions, Secrets, and ConfigMaps) alongside persistent volumes](https://github.com/vmware-tanzu/velero), **Velero** is the undisputed industry standard tool. As of its v1.18.0 release in March 2025, [Velero introduced highly anticipated concurrent backup processing and sophisticated cache volume support](https://github.com/vmware-tanzu/velero/releases/tag/v1.18.0), drastically reducing recovery time objectives (RTO). Recognizing its critical role in the ecosystem, [Broadcom officially donated Velero to the CNCF Sandbox in April 2026](https://www.cncf.io/news/2026/04/02/the-new-stack-why-broadcom-gave-velero-to-the-cncf-sandbox-and-what-it-means-for-kubernetes-data-protection/).
 
-If your organization prefers managed enterprise tooling over composing bash scripts, options include **AWS Application Migration Service (MGN)** (recently updated with agentless vCenter support), **Azure Migrate** (which deprecated its classic project version in Feb 2024), or Google's **Migrate to Containers**. The latter released v1.15.0 in May 2024, notably deprecating the console UI and `migctl` tooling in favor of a strictly local CLI workflow.
+If your organization prefers managed enterprise tooling over composing bash scripts, options include **[AWS Application Migration Service (MGN)** (recently updated with agentless vCenter support)](https://docs.aws.amazon.com/mgn/latest/ug/installing-vcenter-appliance-mgn.html), **[Azure Migrate** (which deprecated its classic project version in Feb 2024)](https://learn.microsoft.com/en-us/azure/migrate/create-manage-projects), or Google's **Migrate to Containers**. The latter released v1.15.0 in May 2024, notably deprecating the console UI and `migctl` tooling in favor of a strictly local CLI workflow.
 
 ---
 
@@ -309,7 +309,7 @@ flowchart LR
 
 ### Kubernetes OIDC with Keycloak
 
-When you leave the public cloud, you completely lose the IAM control plane. To replace this functionality for cluster authentication, you must stand up an OpenID Connect (OIDC) Identity Provider (IdP) like Keycloak. You then configure the core Kubernetes API server to implicitly trust Keycloak's cryptographic signatures via OIDC.
+When you leave the public cloud, you completely lose the IAM control plane. To replace this functionality for cluster authentication, you must stand up an OpenID Connect (OIDC) Identity Provider (IdP) like Keycloak. You then [configure the core Kubernetes API server to implicitly trust Keycloak's cryptographic signatures via OIDC](https://kubernetes.io/docs/reference/access-authn-authz/authentication/).
 
 ```yaml
 # kube-apiserver flags
@@ -355,7 +355,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-> **Warning**: The utilization of IRSA is deeply, fundamentally AWS-specific. Any application pod utilizing IRSA relies on an AWS mutating admission webhook to function. Therefore, any pod carrying the `eks.amazonaws.com/role-arn` annotation requires significant fundamental configuration changes to authenticate securely on-premises against self-managed databases. You must exhaustively audit your clusters for these annotations prior to executing any migration effort.
+> **Warning**: The utilization of IRSA is deeply, fundamentally AWS-specific. [Any application pod utilizing IRSA relies on an AWS mutating admission webhook to function](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html). Therefore, any pod carrying the `eks.amazonaws.com/role-arn` annotation requires significant fundamental configuration changes to authenticate securely on-premises against self-managed databases. You must exhaustively audit your clusters for these annotations prior to executing any migration effort.
 
 ---
 
@@ -363,7 +363,7 @@ roleRef:
 
 For massive stateful data transfers, attempting to route traffic over the unpredictable public internet is an exercise in futility. As of 2026, the primary, enterprise-grade dedicated connectivity options for cloud-to-on-prem migration networking remain strictly dedicated circuits: **Site-to-Site VPN** (only suitable for low-bandwidth environments), **AWS Direct Connect**, and **Azure ExpressRoute** (with **Google Cloud Interconnect** serving the exact equivalent role for GCP workloads).
 
-Microsoft's own architectural documentation explicitly ranks ExpressRoute as the preferred networking choice for achieving the absolute highest bandwidth and lowest latency during migration, explicitly relegating traditional IPsec VPNs to a secondary backup or failover role due to their inherent protocol overhead and susceptibility to internet routing fluctuations. Establishing these dedicated circuits early in your preparation phase is non-negotiable for a successful data transfer timeline.
+Microsoft's own architectural documentation explicitly ranks [ExpressRoute as the preferred networking choice for achieving the absolute highest bandwidth and lowest latency during migration](https://learn.microsoft.com/en-us/azure/storage-mover/cloud-to-cloud-private-network-configs), explicitly relegating traditional IPsec VPNs to a secondary backup or failover role due to their inherent protocol overhead and susceptibility to internet routing fluctuations. Establishing these dedicated circuits early in your preparation phase is non-negotiable for a successful data transfer timeline.
 
 ---
 
@@ -444,7 +444,7 @@ Ensure your target on-premises infrastructure is actively running a modern, supp
 |---------|---------------|-------------------|
 | Big-bang migration | Impatience | Migrate in phases: non-critical first, production last |
 | Ignoring data egress costs | Focus on destination | Budget $0.09/GB for AWS egress upfront |
-| Forgetting managed service deps | Developers use services silently | Audit all AWS API calls via CloudTrail |
+| Forgetting managed service deps | Developers use services silently | [Audit all AWS API calls via CloudTrail](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html) |
 | No parallel running period | "We tested in staging" | Run both environments 2-4 weeks with shadow traffic |
 | Hardcoded cloud endpoints | SDK defaults (s3.amazonaws.com) | Use env vars for all endpoints; grep for cloud URLs |
 | No rollback plan | Optimism bias | Document and rehearse rollback; keep cloud running 30 days |
@@ -571,3 +571,27 @@ This proposal is highly risky and mathematically likely to fail due to the inher
 This formally concludes the final, culminating module in the comprehensive Resilience & Migration section. Your extensive technical journey—from establishing core fault tolerance patterns to architecting massive, multi-petabyte full cloud exits—is fundamentally complete. 
 
 Return directly to the [Resilience & Migration overview](/on-premises/resilience/) to review the full section architecture, or continue your deep technical dive by stepping forward into the extraordinarily complex routing challenges presented in the upcoming bare-metal networking track.
+
+## Sources
+
+- [docs.aws.amazon.com: welcome.html](https://docs.aws.amazon.com/wellarchitected/latest/cost-optimization-pillar/welcome.html) — General lesson point for an illustrative rewrite.
+- [docs.aws.amazon.com: what is outposts.html](https://docs.aws.amazon.com/outposts/latest/userguide/what-is-outposts.html) — The AWS Outposts user guide documents 42U racks, 1U/2U servers, AWS-managed hardware, and the service link to an AWS Region.
+- [cloud.google.com: docs](https://cloud.google.com/distributed-cloud/docs) — The Google Distributed Cloud documentation describes connected, air-gapped, and software-only components for edge and data-center use.
+- [learn.microsoft.com: overview](https://learn.microsoft.com/en-us/azure/azure-arc/overview) — Microsoft's Azure Arc overview directly lists servers, Kubernetes clusters, Azure data services, and SQL Server as supported resource types.
+- [learn.microsoft.com: release notes](https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/release-notes) — The Azure Arc-enabled Kubernetes release notes list the general availability of Azure Arc gateway for Kubernetes.
+- [cncf.io: crossplane](https://www.cncf.io/projects/crossplane/) — The CNCF project page lists Crossplane as Graduated and describes its control-plane role.
+- [cncf.io: announcing the release of kubevirt v1 8](https://www.cncf.io/blog/2026/03/25/announcing-the-release-of-kubevirt-v1-8/) — The CNCF KubeVirt v1.8 announcement states the March 25, 2026 release and alignment with Kubernetes v1.35.
+- [redhat.com: whats new red hat openshift virtualization 421](https://www.redhat.com/en/blog/whats-new-red-hat-openshift-virtualization-421) — Red Hat's release post states that OpenShift Virtualization 4.21 is generally available and summarizes new VM management capabilities.
+- [github.com: annotations.md](https://github.com/kubernetes-sigs/aws-load-balancer-controller/blob/main/docs/guide/ingress/annotations.md) — The AWS Load Balancer Controller annotation reference documents the ALB annotations named in the module.
+- [owasp.org: Web Application Firewall](https://owasp.org/www-community/Web_Application_Firewall) — OWASP describes WAFs as application-layer controls that filter, monitor, and block HTTP traffic.
+- [github.com: rclone](https://github.com/rclone/rclone) — The upstream rclone repository describes rclone as a tool for syncing files with cloud storage and includes S3-compatible backend support.
+- [github.com: velero](https://github.com/vmware-tanzu/velero) — The upstream Velero repository describes backup, restore, disaster recovery, and Kubernetes cluster resource migration use cases.
+- [github.com: v1.18.0](https://github.com/vmware-tanzu/velero/releases/tag/v1.18.0) — The upstream v1.18 release notes list concurrent backup processing and cache-volume/data-movement changes.
+- [cncf.io: the new stack why broadcom gave velero to the cncf sandbox and what it means for kubernetes data protection](https://www.cncf.io/news/2026/04/02/the-new-stack-why-broadcom-gave-velero-to-the-cncf-sandbox-and-what-it-means-for-kubernetes-data-protection/) — The CNCF news item discusses Broadcom donating Velero to CNCF Sandbox.
+- [docs.aws.amazon.com: installing vcenter appliance mgn.html](https://docs.aws.amazon.com/mgn/latest/ug/installing-vcenter-appliance-mgn.html) — The AWS MGN documentation describes installing the MGN vCenter Client for agentless migration.
+- [learn.microsoft.com: create manage projects](https://learn.microsoft.com/en-us/azure/migrate/create-manage-projects) — Microsoft's Azure Migrate project documentation states that classic Azure Migrate retired in February 2024 and classic metadata would be deleted.
+- [kubernetes.io: authentication](https://kubernetes.io/docs/reference/access-authn-authz/authentication/) — The Kubernetes authentication reference documents OIDC issuer, client ID, username claim, groups claim, and CA options.
+- [docs.aws.amazon.com: iamserviceaccounts.html](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html) — The EKS IRSA documentation describes the role annotation, OIDC provider, admission controller, and injected AWS credential environment.
+- [learn.microsoft.com: cloud to cloud private network configs](https://learn.microsoft.com/en-us/azure/storage-mover/cloud-to-cloud-private-network-configs) — Microsoft's private connectivity documentation states that ExpressRoute is generally preferred for highest bandwidth and lowest latency.
+- [docs.aws.amazon.com: cloudtrail user guide.html](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html) — The AWS CloudTrail user guide describes CloudTrail as recording AWS API calls and account activity.
+- [Azure ExpressRoute hybrid networking reference architecture](https://learn.microsoft.com/en-us/azure/architecture/reference-architectures/hybrid-networking/expressroute) — Explains dedicated private connectivity patterns and VPN failover considerations for migration networks.
